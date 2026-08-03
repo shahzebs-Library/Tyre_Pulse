@@ -192,6 +192,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Reconciliation, Pipeline Monitor, Correction Center). Next free migration **V475**. STILL OPEN (Phase 3):
   visual + column-level lineage, downstream impact analysis, release/release_impacts, dashboard_registry/
   widget_bindings, cross-layer trace/correlation IDs, advanced alerting on quality/reconciliation breaches.
+- **DATA TRUST PROGRAM - PHASE 3 DONE = PROGRAM COMPLETE (V475, applied live, 2-agent build).** Additive. Lineage:
+  `data_assets` + `lineage_edges` + `dashboard_registry` + `widget_bindings` (GLOBAL, authenticated read/super-Admin
+  write; SEEDED FROM metric_registry = 34 assets / 36 edges / 15 dashboards / 24 widget bindings). RPCs
+  `get_lineage_graph(asset,direction,depth)` (upstream+downstream traversal -> nodes+edges) + `get_downstream_impact
+  (asset)` (everything affected if it changes; e.g. table:tyre_records -> 9 assets). Alerts: `trust_alerts`
+  (org-scoped, deduped on open) + `scan_data_trust(country)` (runs run_quality_checks + run_reconciliation and
+  raises alerts from fails/variances) + `ack_trust_alert(id,status)`. Releases: `releases` + `release_impacts` +
+  `record_release`/`add_release_impact` (super/Admin). Client: `src/lib/api/lineageOps.js` + pure
+  `src/lib/lineageOps.js` (shapeGraph splits upstream/downstream, shapeImpact, alertSummary) + `src/lib/traceId.js`
+  (per-tab correlation id) + 7 tests. Console pages **/console/lineage** (Lineage Explorer), **/console/trust-alerts**
+  (Trust Alerts), **/console/releases** (Release & Impact). Next free migration **V476**. THE WHOLE DATA TRUST /
+  LINEAGE / DIAGNOSTICS PROGRAM (Phases 1-3) IS NOW COMPLETE: Metric Registry + Explain This Number (V473),
+  quality/reconciliation/monitors/correction cases (V474), lineage graph + downstream impact + alerts + releases
+  (V475). Console nav "Data Trust" cluster: Metric Catalogue, Data Quality, Reconciliation, Pipeline Monitor,
+  Correction Center, Lineage Explorer, Trust Alerts, Releases (+ the older Control Center V458). RULE: register a
+  new KPI in metric_registry (Phase 1) and it auto-flows into lineage seeds on the next reseed; extend
+  run_quality_checks/run_reconciliation for a new check; the correction case records decisions + keeps the original
+  value but the actual fix still goes through the existing undoable tools.
 - **STILL OPEN (offered):** a per-column completeness report on the 48-col master file; extending learning to
   repair-reason normalization + the old/new serial chain; switching CPK onto the odometer basis for the 362
   odometer-only assets.

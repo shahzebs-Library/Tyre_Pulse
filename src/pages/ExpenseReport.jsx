@@ -18,6 +18,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck,
   Package, MapPin, Save, ArrowRight, Gauge, ShieldCheck, Sparkles, Clock, Layers,
+  BarChart3, Search, Image as ImageIcon,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
@@ -38,6 +39,7 @@ import {
   sortByTypeWorstFirst, fleetTiles,
 } from '../lib/fleetCpkView'
 import { stylize, ACCENTS } from '../lib/reportColors'
+import { makeValueLabelsPlugin } from '../lib/accidentReport'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
@@ -59,12 +61,45 @@ const SECTIONS = [
   ['assets', 'Assets', Truck],
   ['items', 'Top Items', Package],
   ['trend', 'Trend', TrendingUp],
+  ['builder', 'Chart Builder', BarChart3],
   ['fleetcpk', 'Fleet CPK', Gauge],
   ['evidence', 'Certainty', ShieldCheck],
 ]
 const SECTION_DEFAULTS = {
   kpis: true, compare: true, cpk: true, why: true, movers: true, categories: true, sites: true,
-  bysite: true, assets: true, items: true, trend: true, fleetcpk: true, evidence: true,
+  bysite: true, assets: true, items: true, trend: true, builder: true, fleetcpk: true, evidence: true,
+}
+
+/* ── Chart Builder config: dimensions the snapshot already carries ─────────── */
+const BUILDER_DIMS = [
+  { key: 'by_asset', label: 'Asset', flat: true },
+  { key: 'by_store', label: 'Site / store', flat: true },
+  { key: 'by_category', label: 'Category', flat: true },
+  { key: 'top_items', label: 'Item', flat: true },
+  { key: 'monthly', label: 'Month', flat: false },
+]
+const BUILDER_TYPES = [
+  { key: 'bar', label: 'Bar' },
+  { key: 'hbar', label: 'Horizontal bar' },
+  { key: 'line', label: 'Line' },
+  { key: 'doughnut', label: 'Doughnut' },
+]
+const BUILDER_MEASURES = [
+  { key: 'total', label: 'Total spend' },
+  { key: 'tyre', label: 'Tyres' },
+  { key: 'spare', label: 'Spare parts' },
+  { key: 'oil', label: 'Oil' },
+  { key: 'split', label: 'Split (tyre / spare / oil)' },
+]
+const BUILDER_TOPN = [10, 15, 20, 30, 50]
+/** Inline value-label plugin (per-instance so it never touches the other charts). */
+const BUILDER_LABEL_PLUGIN = makeValueLabelsPlugin('#94a3b8')
+/** Theme-aware label colour so numbers read on both light and dark app themes. */
+function themeInk() {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim()
+    return v || '#e5e7eb'
+  } catch { return '#e5e7eb' }
 }
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
@@ -180,6 +215,29 @@ function ChartCard({ title, children, refCb }) {
       <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{title}</h3>
       <div style={{ height: 240 }} ref={refCb}>{children}</div>
     </div>
+  )
+}
+
+/** Labelled control wrapper for the Chart Builder toolbar. */
+function BuilderField({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** Themed select for the Chart Builder toolbar. */
+function BuilderSelect({ value, onChange, options }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1.5 text-sm text-[var(--text-primary)]"
+    >
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
   )
 }
 
@@ -360,6 +418,13 @@ export default function ExpenseReport() {
   const chartRefs = useRef({})
   const setRef = (key) => (el) => { chartRefs.current[key] = el }
 
+  // ── Chart Builder: pick your own dimension / measure / type / top-N ──────────
+  const [bld, setBld] = useState({
+    dim: 'by_asset', type: 'bar', topN: 15, measure: 'total', labels: true, legend: false, search: '',
+  })
+  const setBldField = (patch) => setBld((s) => ({ ...s, ...patch }))
+  const builderRef = useRef(null)
+
   const money = useMemo(() => moneyIn(activeCurrency), [activeCurrency])
 
   const load = useCallback(async () => {
@@ -484,6 +549,92 @@ export default function ExpenseReport() {
       ],
     }
   }, [snap])
+
+  // ── Chart Builder data (built live from the same snapshot) ───────────────────
+  const isMonthlyDim = bld.dim === 'monthly'
+  const builderChart = useMemo(() => {
+    if (!snap?.ok) return { labels: [], datasets: [] }
+    if (isMonthlyDim) {
+      const rows = snap.monthly || []
+      const labels = rows.map((r) => monthLabel(r.m))
+      if (bld.measure === 'split') {
+        return {
+          labels,
+          datasets: [
+            { label: 'Tyres', data: rows.map((r) => Number(r.tyre) || 0) },
+            { label: 'Spare Parts', data: rows.map((r) => Number(r.spare) || 0) },
+            { label: 'Oil', data: rows.map((r) => Number(r.oil) || 0) },
+          ],
+        }
+      }
+      const pick = (r) => Number(r[bld.measure === 'total' ? 'total' : bld.measure]) || 0
+      const mLabel = (BUILDER_MEASURES.find((m) => m.key === bld.measure) || {}).label || 'Spend'
+      return { labels, datasets: [{ label: mLabel, data: rows.map(pick) }] }
+    }
+    // Flat dimension: label + spend rows, filtered by search then top-N.
+    const all = snap[bld.dim] || []
+    const q = bld.search.trim().toLowerCase()
+    const filtered = q ? all.filter((r) => String(r.label || '').toLowerCase().includes(q)) : all
+    const rows = filtered.slice(0, bld.topN)
+    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap, bld.dim, bld.measure, bld.topN, bld.search, isMonthlyDim])
+
+  const builderStyleKind = bld.type === 'doughnut'
+    ? 'doughnut'
+    : (isMonthlyDim && (bld.type === 'line')) ? 'line' : 'bar'
+  const builderData = useMemo(() => {
+    // A monthly split has 3 series; colour them per-series (per-point styling would
+    // make the three indistinguishable). Everything else uses the shared palette.
+    if (isMonthlyDim && bld.measure === 'split') {
+      return {
+        labels: builderChart.labels,
+        datasets: (builderChart.datasets || []).map((ds, i) => ({
+          ...ds,
+          backgroundColor: bld.type === 'line' ? undefined : ACCENTS[i % ACCENTS.length],
+          borderColor: ACCENTS[i % ACCENTS.length],
+          fill: false,
+        })),
+      }
+    }
+    return stylize(builderChart, builderStyleKind)
+  }, [builderChart, builderStyleKind, isMonthlyDim, bld.measure, bld.type])
+  const builderOptions = useMemo(() => {
+    const stacked = isMonthlyDim && bld.measure === 'split' && (bld.type === 'bar' || bld.type === 'hbar')
+    const showLabels = bld.labels && bld.type !== 'doughnut'
+    const base = {
+      ...chartBase(bld.legend || (isMonthlyDim && bld.measure === 'split')),
+      indexAxis: bld.type === 'hbar' ? 'y' : 'x',
+      scales: bld.type === 'doughnut' ? {} : {
+        x: { stacked, ticks: { autoSkip: bld.type !== 'hbar', maxRotation: 60 } },
+        y: { stacked, beginAtZero: true },
+      },
+      plugins: {
+        legend: { display: bld.legend || (isMonthlyDim && bld.measure === 'split') || bld.type === 'doughnut' },
+        tooltip: { enabled: true },
+        valueLabels: { enabled: showLabels, color: themeInk(), size: 10 },
+      },
+    }
+    return base
+  }, [bld.type, bld.labels, bld.legend, bld.measure, isMonthlyDim])
+
+  const BuilderChartComp = bld.type === 'doughnut' ? Doughnut : (bld.type === 'line' ? Line : Bar)
+  const builderHasData = (builderChart.datasets || []).some((d) => (d.data || []).some((v) => Number(v)))
+
+  async function downloadBuilderPng() {
+    const canvas = builderRef.current?.querySelector?.('canvas')
+    if (!canvas) return
+    let img
+    try {
+      const { captureChartOnPaper } = await import('../lib/chartCapture')
+      img = captureChartOnPaper(canvas) || canvas.toDataURL('image/png', 1)
+    } catch { img = canvas.toDataURL('image/png', 1) }
+    if (!img) return
+    const dimLabel = (BUILDER_DIMS.find((d) => d.key === bld.dim) || {}).label || 'chart'
+    const a = document.createElement('a')
+    a.href = img
+    a.download = `${reportFileName('Expense', dimLabel, activeCountry || 'All')}.png`
+    document.body.appendChild(a); a.click(); a.remove()
+  }
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
@@ -827,6 +978,94 @@ export default function ExpenseReport() {
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Monthly expense trend</h2>
               <div className="grid grid-cols-1 gap-4">
                 <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
+              </div>
+            </section>
+          )}
+
+          {/* Chart Builder - present your own data as a chart. All client-side over
+              the same snapshot: pick a dimension, measure, type, top-N; toggle data
+              labels; download a PNG for a presentation. Single-country only (the
+              snapshot dimensions are per country). */}
+          {sections.builder && !isAll && (
+            <section className="space-y-3">
+              <div className="flex items-start gap-2">
+                <BarChart3 size={15} className="text-[var(--accent)] mt-0.5 shrink-0" />
+                <div>
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">Chart builder</h2>
+                  <p className="text-xs text-[var(--text-tertiary)]">Present your own data. Pick what to chart, toggle data labels, and download a PNG for a presentation. Values in {activeCurrency}.</p>
+                </div>
+              </div>
+
+              <div className="card space-y-4">
+                {/* controls */}
+                <div className="flex flex-wrap items-end gap-3">
+                  <BuilderField label="Chart">
+                    <BuilderSelect value={bld.dim} onChange={(v) => setBldField({ dim: v })}
+                      options={BUILDER_DIMS.map((d) => ({ value: d.key, label: d.label }))} />
+                  </BuilderField>
+
+                  {isMonthlyDim && (
+                    <BuilderField label="Measure">
+                      <BuilderSelect value={bld.measure} onChange={(v) => setBldField({ measure: v })}
+                        options={BUILDER_MEASURES.map((m) => ({ value: m.key, label: m.label }))} />
+                    </BuilderField>
+                  )}
+
+                  <BuilderField label="Type">
+                    <BuilderSelect value={bld.type} onChange={(v) => setBldField({ type: v })}
+                      options={BUILDER_TYPES.map((t) => ({ value: t.key, label: t.label }))} />
+                  </BuilderField>
+
+                  {!isMonthlyDim && (
+                    <BuilderField label="Show top">
+                      <BuilderSelect value={String(bld.topN)} onChange={(v) => setBldField({ topN: Number(v) })}
+                        options={BUILDER_TOPN.map((n) => ({ value: String(n), label: String(n) }))} />
+                    </BuilderField>
+                  )}
+
+                  {!isMonthlyDim && (
+                    <BuilderField label="Filter">
+                      <div className="relative">
+                        <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                        <input
+                          value={bld.search}
+                          onChange={(e) => setBldField({ search: e.target.value })}
+                          placeholder="name contains..."
+                          className="w-44 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] pl-7 pr-2.5 py-1.5 text-sm text-[var(--text-primary)]"
+                        />
+                      </div>
+                    </BuilderField>
+                  )}
+
+                  <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">
+                    <input type="checkbox" checked={bld.labels} onChange={(e) => setBldField({ labels: e.target.checked })} className="accent-[var(--accent)]" />
+                    Data labels
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">
+                    <input type="checkbox" checked={bld.legend} onChange={(e) => setBldField({ legend: e.target.checked })} className="accent-[var(--accent)]" />
+                    Legend
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={downloadBuilderPng}
+                    disabled={!builderHasData}
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40"
+                  >
+                    <ImageIcon size={14} /> Download PNG
+                  </button>
+                </div>
+
+                {/* chart */}
+                <div ref={builderRef} style={{ height: 360 }}>
+                  {builderHasData ? (
+                    <BuilderChartComp data={builderData} options={builderOptions} plugins={[BUILDER_LABEL_PLUGIN]} />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">
+                      No data for this selection. Try a different chart, widen the period, or clear the filter.
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           )}

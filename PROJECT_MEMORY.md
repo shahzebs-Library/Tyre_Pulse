@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-03 — SANY PROFORMA PDF + SCO VALUES + KSA DELAY PENALTY (V464) + STALE-CHUNK AUTO-RECOVERY. Migrations through **V464**, next free **V465**. Merged to main.
+## SESSION 2026-08-03 — SANY PROFORMA + DELAY PENALTY + CPK STUDIO/BRANCHES/KM-INTELLIGENCE + INSURANCE KB + BRAND BACKFILL. Migrations through **V470**, next free **V471**. All merged to main.
 - **SANY SERVICE-CONTRACT PROFORMA PDF now imports** (`src/lib/import/parsePdf.js` `parseSanyProformaPdf`). This is a
   DIFFERENT format from the existing SANY summary (Region|Date|Quot|Amount SAR): a USD per-machine service invoice with
   one net-of-deductions total. Parser is tolerant of the PDF's split digits ("5 34 , 641 . 02") and a broken "Deduction"
@@ -32,6 +32,65 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   notice, mints no reference id, and does NOT capture it to Sentry (expected deploy artifact). RULE: lazy-route chunk
   failures need the boundary to trigger recovery - the global unhandledrejection listener alone does not catch them.
   Tests: cpkPanels.render (3 panels mount clean on empty+populated), chunkRecovery (detection + one-shot guard).
+- **CPK PAGE CRASH (ERR-2mda1aQE) - a stray `Route` icon ref, fixed.** The CpkIntelligence TABS array used `icon: Route`
+  but the import was renamed to `Milestone` (lucide has NO Route in this version) and the usage was missed -> `Route`
+  undefined at module load -> ReferenceError -> whole page crashed with an error id (NOT a chunk error). Vite has no
+  no-undef check so the build passed clean (the repo's known "ReferenceError ships past a clean build" class). Fixed to
+  Milestone. NEW GUARD: `src/test/cpkIntelligence.render.test.jsx` mounts the full page and CLICKS EVERY tab so a
+  module-load/render crash on any tab fails CI. RULE: after renaming a lucide import, grep the file for the old name;
+  the build will not catch a dangling reference.
+- **CPK INTELLIGENCE DEEPENED (V462/V463 panels wired + V465-V470 new intelligence).** The 3 lazy panels from the prior
+  session (KmSourcePanel, CpkUnitAuditPanel, CpkReportPanel) are now WIRED as tabs. Plus:
+  - **SCENARIO STUDIO** (`src/components/cpk/CpkScenarioStudioPanel.jsx` over pure `src/lib/cpkScenarioStudio.js`,
+    replaced the basic what-if tab). Model any scenario: type a MANUAL km (or hours) TOTAL that overrides the measured
+    distance and CPK recomputes live; scale tyre/maintenance/tyre-price costs; add extra cost; include/exclude assets;
+    live cost/km + cost/hour with delta vs the measured baseline; save named scenarios (localStorage
+    `cpkScenarioStudio.v1`) + compare + Excel/PDF. Engine: buildBaseline/applyLevers/scenarioRows + DEFAULT_LEVERS +
+    dropHoursSide lever + groupByArea/branchImpact/areaExportRows + unitTotals.
+  - **REAL BRANCHES (V465 `get_fleet_area_map`).** sites.region is EMPTY (0/64), so the real area = `vehicle_fleet.site`
+    (29 KSA branches). Studio: By-branch table (cost/km + cost/hour per site) + Compare-branches (branchImpact = price
+    impact of moving assets to another branch's cost rate). getFleetAreaMap service.
+  - **THE KM/HOURS "TOTAL" DOUBT (customer: "you are not taking total sum km and total hours").** Verified: CPK km SOURCE
+    (fleet_tyre_km_by_asset) sums the FULL monthly-consumption km EXACTLY (KSA 12mo = 167,457,434 km / 356 assets). But
+    CPK SPLITS by unit: 151,784,573 km on 281 ROAD assets (the km denominator) + 15,672,861 km on 75 PLANT assets that
+    CPK costs per ENGINE HOUR (their km is real but off the km denominator). Total engine hours 1,003,346. **V467 exposes
+    per-asset `km` AND `hours` on get_fleet_cpk.per_vehicle (+ fleet all_km/all_hours) - additive, every existing key
+    unchanged.** Studio "Fleet totals (km & hours)" panel shows the full total split; the Remove-hours toggle
+    (dropHoursSide) shows km-only cost/km over the FULL km total (folds plant km back). RULE: CPK km is unit-filtered;
+    the displayed km total is the ROAD portion, plant km sits on the hours side - use unitTotals to show the full sum.
+  - **CPK KM INTELLIGENCE (V469/V469b `cpk_asset_meter` + V470 `get_cpk_km_intelligence` + "Km intelligence" tab).** The
+    KSA MASTER UPLOAD `ksa_country_upload_template_staging` (192,198 rows, 47 cols) carries a `Kilometer` (odometer) +
+    `Hour Meter` column. Odometer is 99.94% clean (only 110 date-junk rows) but NOISY (96% of assets show meter resets,
+    e.g. TM634 75399->7174). Built a MONTHLY-SMOOTHED, reset-aware distance (max reading per asset-month, sum positive
+    month-to-month deltas capped) - robust; ~715 KSA assets / ~66M smoothed odometer km. `get_cpk_km_intelligence`
+    reconciles per asset: tyre_km (period, current basis) vs odo_km vs engine-hours, with coverage (both/tyre_only/
+    odo_only), meter quality (readings/resets/months) + an odo confidence (high/medium/low). KEY: **362 KSA assets have
+    odometer km but NO tyre-km** (CPK can't measure them today); 353 both; 451 high-conf. tyre-km 167.5M vs odometer 66M
+    = DIFFERENT MEASURES (tyre-km = sum of tyre lives; odometer = actual vehicle distance). Tab `CpkKmIntelligencePanel`:
+    coverage tiles + per-asset reconciliation table (search/coverage/confidence filters + Excel/PDF). NOT YET: switching
+    CPK onto the odometer basis for the odo-only 362 (offered as next step). getCpkKmIntelligence service.
+- **V468 KSA TYRE BRAND BACKFILL from the master upload (202 filled).** ksa_country_upload_template_staging.tyre_brand
+  matched to blank tyre_records.brand by serial (mode brand/serial). Cleaned the file's traps: embedded TAB chars
+  (TRIANGLE\t) trimmed + uppercased; and the file's LITERAL 'NULL'/'N/A'/'-' blank tokens REJECTED (not written). 202
+  real brands filled (TRIANGLE 68, TEGRYS 37, PIRELLI 24, ERACLE 20, INFINITY 17, SAILUN, BRIDGESTONE, NEXEN...); 207
+  KSA tyres stay honestly blank. Snapshot `_bak.tyre_brand_backfill_v468`. RULE: this master file uses literal 'NULL'
+  text as its blank token AND has tab-polluted values - always trim E' \t\r\n' and exclude the NULL/N-A tokens.
+- **INSURANCE POLICY KNOWLEDGE BASE (ADMIN-ONLY, V466).** 3 real Green Concrete policy PDFs parsed + seeded: Motor
+  Comprehensive (210-AIC-2026-11949342-000, limit SAR 10,000,000, total-loss 60%, deductible on NAJM conviction %),
+  Plant & Equipment (210-PE-2026-11950716-000, sum insured SAR 186,920,953.11, total-loss 65%, deductible 1% min 10k),
+  Motor TPL. Tables `insurance_policies` + `insurance_policy_conditions` (14 conditions: 4 cause rejection, 2 cause
+  delay), RESTRICTIVE org isolation + a permissive Admin/super gate (is_super_admin() OR app_role()='Admin'). Page
+  **`/insurance-policies`** (Accident & Insurance nav, `RoleRoute allowed=['Admin']`): policy list/detail, conditions
+  grouped by category with Rejection/Delay badges, a **Claim scenario checker** (tick case facts -> `assessClaim` cites
+  the exact policy clause for WHY a claim is rejected/delayed), vehicle value + total-loss calculator, admin CRUD,
+  Excel/PDF, and an **Import PDF** button (`src/lib/import/parseInsurancePolicy.js` parses a policy schedule + prefills a
+  new policy). Pure engine `src/lib/insuranceKnowledge.js` (assessClaim/totalLossAssessment) + service
+  `src/lib/api/insurancePolicies.js`. RULE: policies are Admin-only in both RLS and the route.
+- **AGENTS + SESSION-LIMIT NOTE:** most of this was built by parallel general-purpose agents (engine/UI/parser splits,
+  non-conflicting file ownership). Two agent waves hit the shared account session limit mid-build (resets on the hour) -
+  their completed engine/service files were committed WIP and finished after reset. When agents fail on the limit, keep
+  their tested pieces, re-verify the build, and re-spawn to finish. Migrations V464-V470 all applied live + verified;
+  next free **V471**.
 
 ## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF + CONTROL CENTER. Migrations through **V463**, next free **V464**. ALL MERGED to main (PRs #248-#264). ACTIVE.
 - **V460-V463 + CPK DEPTH/TRACEABILITY (applied live, merged).** Customer: "I should be able to know from where CPK

@@ -46,7 +46,7 @@ const MOBILITIES = ['movable', 'non_movable']
 const TABS = [
   { key: 'fleet', label: 'Fleet CPK', icon: Gauge },
   { key: 'vehicles', label: 'Per vehicle', icon: Table2 },
-  { key: 'km_source', label: 'KM source', icon: Route },
+  { key: 'km_source', label: 'KM source', icon: Milestone },
   { key: 'units', label: 'Units & why different', icon: Layers },
   { key: 'report', label: 'Custom report', icon: FileText },
   { key: 'scenario', label: 'What-if scenario', icon: FlaskConical },

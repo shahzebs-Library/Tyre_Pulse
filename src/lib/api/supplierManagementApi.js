@@ -10,14 +10,19 @@
  */
 import { supabase, applyCountry } from './_client'
 
-/** Tyre records for the supplier directory/scorecard, country-scoped, paged range. */
+/**
+ * Tyre records for the supplier directory/scorecard, country-scoped, paged range.
+ * `.order('id')` is a stable unique-key tiebreak: the callers drive this builder
+ * through `fetchAllPages`, and a paged read without a unique sort can drop or
+ * repeat rows at a page boundary (serial/asset are not globally unique).
+ */
 export function listSupplierTyres({ from, to, country } = {}) {
   return applyCountry(
     supabase
       .from('tyre_records')
       .select('id, brand, supplier, qty, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number:serial_no, asset_no'),
     country,
-  ).range(from, to)
+  ).order('id').range(from, to)
 }
 
 /** Supplier ratings/notes rows (per brand), country-scoped. */

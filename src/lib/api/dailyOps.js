@@ -6,18 +6,23 @@
  */
 import { supabase, fetchAllPages } from './_client'
 
-/** Tyre records fitted within [thirtyDaysAgo, wEnd] (paged). */
+/**
+ * Tyre records fitted within [thirtyDaysAgo, wEnd] (paged).
+ * `.order('id')` is a stable unique-key tiebreak: a paged read without a unique
+ * sort can drop or repeat rows at a page boundary. Country scope is applied by
+ * the caller (rows carry a `country` column and are filtered in memory).
+ */
 export function listDailyTyreRecords({ thirtyDaysAgo, wEnd } = {}) {
   return fetchAllPages((from, to) => supabase.from('tyre_records')
     .select('id,asset_no,serial_number:serial_no,position,risk_level,tread_depth,issue_date,cost_per_tyre,site,country,brand,km_at_fitment,km_at_removal,created_at')
-    .gte('issue_date', thirtyDaysAgo).lte('issue_date', wEnd).range(from, to), { max: 200000 })
+    .gte('issue_date', thirtyDaysAgo).lte('issue_date', wEnd).order('id').range(from, to), { max: 200000 })
 }
 
-/** Inspections within [thirtyDaysAgo, wEnd] (paged). */
+/** Inspections within [thirtyDaysAgo, wEnd] (paged, stable id tiebreak). */
 export function listDailyInspections({ thirtyDaysAgo, wEnd } = {}) {
   return fetchAllPages((from, to) => supabase.from('inspections')
     .select('id,asset_no,inspection_date,site,inspector,tyre_conditions,created_at')
-    .gte('inspection_date', thirtyDaysAgo).lte('inspection_date', wEnd).range(from, to), { max: 200000 })
+    .gte('inspection_date', thirtyDaysAgo).lte('inspection_date', wEnd).order('id').range(from, to), { max: 200000 })
 }
 
 /** Work orders opened within the window. */
@@ -34,8 +39,8 @@ export function listDailyAlerts({ thirtyDaysAgo, wEnd } = {}) {
     .gte('created_at', thirtyDaysAgo + 'T00:00:00').lte('created_at', wEnd + 'T23:59:59')
 }
 
-/** Tyre fitments in [thirtyDaysAgo, date] for the day's fitment count (paged). */
+/** Tyre fitments in [thirtyDaysAgo, date] for the day's fitment count (paged, stable id tiebreak). */
 export function listDailyTyreFitments({ thirtyDaysAgo, date } = {}) {
   return fetchAllPages((from, to) => supabase.from('tyre_records')
-    .select('asset_no,issue_date').gte('issue_date', thirtyDaysAgo).lte('issue_date', date).range(from, to), { max: 200000 })
+    .select('asset_no,issue_date').gte('issue_date', thirtyDaysAgo).lte('issue_date', date).order('id').range(from, to), { max: 200000 })
 }

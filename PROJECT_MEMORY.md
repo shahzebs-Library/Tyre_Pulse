@@ -76,6 +76,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   scopes reads to the active country via the null-safe convention (All = no predicate; a country = its rows +
   NULL-country rows; mirrors _client.applyCountry) and shows an amber "mixed currencies, pick a country" note under
   'All'. activeCurrency resolution was already correct; only SCOPE changed, so a single-country view is unchanged rows.
+- **V459 CONTROL CENTER RPCs GATED TO SUPER-ADMIN.** Security review found get_figure_lineage +
+  get_control_center_summary (V458) were callable by any authenticated org user though they power ONLY the
+  super-admin /console/control-center page, leaking diagnostics/lineage metadata (import filenames, volumes,
+  provenance, issue counts). Added in-body `not public.is_super_admin()` guard (kept app_is_active) + revoked
+  EXECUTE from PUBLIC (default grant left anon executable) + re-granted authenticated. Verified anon_exec=false.
+  get_maint_tyre_split (V457) correctly NOT gated (feeds all-role dashboards; org-scope is the boundary). The
+  AuthContext setTimeout deferral + RemediationActions gating reviewed = sound. RULE: a DEFINER RPC that powers a
+  super-admin-only surface must guard `is_super_admin()` in-body AND revoke execute from PUBLIC (not just anon).
 - **SCALE SWEEP WAVE 4 + REGRESSION GUARD.** Last unbounded surfaces bounded: TyreScrapManagement / RetreadManagement
   (fetchAllPages 50k + id-order + note), Accidents (surfaced the existing 100k cap), inspectionIntelligence.js
   service (inspections + fleet were bare .select capped 1000 feeding compliance -> paged, test synced),

@@ -1,0 +1,26 @@
+-- V459 - gate the Control Center read RPCs to super-admin
+-- STATUS: APPLIED LIVE (project jhssdmeruxtrlqnwfksc) + verified.
+--
+-- Security-review finding (MEDIUM): get_figure_lineage + get_control_center_summary
+-- (V458) power ONLY the super-admin /console/control-center page, but were callable
+-- by any authenticated org user, exposing diagnostics/lineage metadata (import file
+-- names, row volumes, classification/provenance breakdowns, data-quality issue counts)
+-- to non-admin roles. The client console gate does not protect the RPC.
+--
+-- FIX: added an in-body guard `not public.is_super_admin()` to both (kept
+-- app_is_active so a locked super-admin is still refused). Bodies otherwise identical
+-- to V458. Also revoked EXECUTE from PUBLIC (the default grant left anon executable via
+-- PUBLIC even after `revoke from anon`; the in-body guard already returned unauthorized
+-- for anon, but this makes it explicit) and re-granted to authenticated.
+--
+-- VERIFIED LIVE: anon_exec=false, auth_exec=true, super-admin guard present in both.
+-- The Control Center page calls these under the super-admin console session, so it is
+-- unaffected. get_maint_tyre_split (V457) was reviewed and correctly NOT gated (it feeds
+-- all-role dashboards; org-scoping is the right boundary).
+--
+-- (Full function bodies applied via apply_migration; the only change vs V458 is the
+--  guard line `if v_org is null or not public.app_is_active() or not
+--  public.is_super_admin() then` plus `revoke execute ... from public`.)
+--
+-- REVERSIBLE: re-apply the V458 bodies (guard `not public.app_is_active()` only) +
+--   grant execute to authenticated.

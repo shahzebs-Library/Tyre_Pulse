@@ -151,6 +151,16 @@ export default function KpiScorecard() {
     [actions, countryChip]
   )
 
+  // Under the 'All' countries view the loaded records span more than one country
+  // (and therefore more than one currency), so the cost KPIs below combine
+  // SAR/AED/EGP under the org default currency. Surface that honestly and point
+  // at the country filter, which de-blends to a single currency.
+  const multiCurrencyBlend = useMemo(() => {
+    if (countryChip !== 'All') return false
+    const set = new Set(records.map(r => r.country).filter(Boolean))
+    return set.size > 1
+  }, [records, countryChip])
+
   const actuals = useMemo(() =>
     months.map(m => computeMonthlyKpiActuals(filteredRecords, filteredActions, m)),
     [filteredRecords, filteredActions, months]
@@ -452,6 +462,16 @@ export default function KpiScorecard() {
           ))}
         </div>
       </div>
+
+      {/* Mixed-currency notice (blended 'All' countries view) */}
+      {multiCurrencyBlend && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2">
+          <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-300">
+            Showing all countries together, so the cost figures below combine multiple currencies. Pick a country above for a single-currency total.
+          </p>
+        </div>
+      )}
 
       {/* Tab navigation */}
       <div className="flex gap-1 border-b border-gray-800">

@@ -22,6 +22,9 @@ import { makeValueLabelsPlugin } from './accidentReport'
 const PAPER_INK = '#0f172a'
 const PAPER_MUTED = '#475569'
 const PAPER_GRID = 'rgba(15,23,42,0.10)'
+// Calibri body font (Carlito = its metric-compatible open substitute) for a
+// clean, presentation-ready look on the exported white-paper image.
+const PAPER_FONT_FAMILY = 'Calibri, Carlito, "Segoe UI", Arial, sans-serif'
 
 // Dark-ink value labels for the white-paper capture.
 const PAPER_VALUE_LABELS = makeValueLabelsPlugin(PAPER_INK)
@@ -75,6 +78,8 @@ export function toPaperOptions(opts, scale = 1) {
   // The canvas is already sized in device pixels by the caller, so a second
   // multiplier here would only inflate the bitmap without adding detail.
   o.devicePixelRatio = 1
+  // Calibri as the default font for every text element on the paper image.
+  o.font = { ...(o.font || {}), family: PAPER_FONT_FAMILY }
   o.plugins = o.plugins || {}
   // The value-label plugin reads its own size from here (default 10px), which at
   // a 3x canvas would print at about 3pt.
@@ -82,6 +87,7 @@ export function toPaperOptions(opts, scale = 1) {
     ...(o.plugins.valueLabels || {}),
     color: PAPER_INK,
     size: px(PAPER_FONT_PT.valueLabel),
+    family: PAPER_FONT_FAMILY,
   }
   if (o.plugins.legend) {
     o.plugins.legend.labels = {

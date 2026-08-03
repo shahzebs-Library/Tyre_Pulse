@@ -57,6 +57,11 @@ const SORTS = [
 ]
 const LABEL_PLUGIN = makeValueLabelsPlugin('#94a3b8')
 
+// Calibri body font (Carlito = its open, metric-compatible substitute).
+const FONT_FAMILY = 'Calibri, Carlito, "Segoe UI", Arial, sans-serif'
+// Trim a long axis label so it does not overflow; the full name stays in the table.
+const shortLabel = (v) => { const s = String(v ?? ''); return s.length > 16 ? `${s.slice(0, 15)}…` : s }
+
 function themeInk() {
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim()
@@ -110,6 +115,7 @@ export default function PresentationStudio({
   })
   const set = (patch) => setSt((s) => ({ ...s, ...patch }))
   const ref = useRef(null)
+  const chartInst = useRef(null)   // live Chart.js instance (react-chartjs-2 ref)
   const [deck, setDeck] = useState([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -179,29 +185,60 @@ export default function PresentationStudio({
     return { labels, datasets: [{ ...ds, backgroundColor: cols, borderColor: cols, borderWidth: st.type === 'doughnut' ? 0 : 1 }] }
   }, [chart, isSplit, st.type, st.palette])
 
+  const valueKind = src?.valueKind || 'money'   // 'money' | 'count'
+  const fmtCell = (v) => {
+    if (st.pct) return `${Number(v).toFixed(1)}%`
+    if (valueKind === 'count') return Number(v).toLocaleString('en-US')
+    return fmtMoney(v)
+  }
+
   const options = useMemo(() => {
     const stacked = isSplit && (st.type === 'bar' || st.type === 'hbar')
     const showLabels = st.labels && st.type !== 'doughnut'
     const showLegend = st.legend || isSplit || st.type === 'doughnut'
-    return {
-      ...chartBase(showLegend),
-      indexAxis: st.type === 'hbar' ? 'y' : 'x',
-      scales: st.type === 'doughnut' ? {} : {
-        x: { stacked, ticks: { color: themeInk(), autoSkip: st.type !== 'hbar', maxRotation: 60 }, grid: { display: false } },
-        y: { stacked, beginAtZero: true, ticks: { color: themeInk() }, grid: { color: 'rgba(148,163,184,0.15)' } },
-      },
-      plugins: {
-        legend: { display: showLegend, labels: { color: themeInk() } },
-        tooltip: { enabled: true },
-        valueLabels: { enabled: showLabels, color: themeInk(), size: 10 },
+    const catTick = {
+      color: themeInk(),
+      font: { family: FONT_FAMILY, size: 11 },
+      autoSkip: true,
+      autoSkipPadding: 8,
+      maxRotation: st.type === 'hbar' ? 0 : 50,
+      minRotation: 0,
+      callback(value) {
+        // On the category axis chart.js passes the tick index; resolve to the label.
+        const raw = this.getLabelForValue ? this.getLabelForValue(value) : value
+        return st.type === 'hbar' ? shortLabel(raw) : shortLabel(raw)
       },
     }
-  }, [isSplit, st.type, st.labels, st.legend])
+    const valTick = { color: themeInk(), font: { family: FONT_FAMILY, size: 11 } }
+    return {
+      ...chartBase(showLegend),
+      font: { family: FONT_FAMILY },
+      indexAxis: st.type === 'hbar' ? 'y' : 'x',
+      layout: { padding: { top: showLabels ? 18 : 6, right: st.type === 'hbar' ? 28 : 8 } },
+      scales: st.type === 'doughnut' ? {} : {
+        x: { stacked, ticks: st.type === 'hbar' ? valTick : catTick, grid: { display: false } },
+        y: { stacked, beginAtZero: true, ticks: st.type === 'hbar' ? catTick : valTick, grid: { color: 'rgba(148,163,184,0.15)' } },
+      },
+      plugins: {
+        legend: { display: showLegend, labels: { color: themeInk(), font: { family: FONT_FAMILY } } },
+        tooltip: {
+          enabled: true, bodyFont: { family: FONT_FAMILY }, titleFont: { family: FONT_FAMILY },
+          // Tooltip shows the FULL label + formatted value (the axis is trimmed).
+          callbacks: { label: (c) => `${c.dataset?.label || ''}: ${fmtCell(Number(c.parsed?.y ?? c.parsed?.x ?? c.parsed) || 0)}` },
+        },
+        valueLabels: { enabled: showLabels, color: themeInk(), size: 11, family: FONT_FAMILY },
+      },
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSplit, st.type, st.labels, st.legend, st.pct, valueKind])
 
   const Comp = st.type === 'doughnut' ? Doughnut : (st.type === 'line' ? Line : Bar)
   const hasData = (chart.datasets || []).some((d) => (d.data || []).some((v) => Number(v)))
+  // Give a crowded horizontal bar / long category list more room so labels breathe.
+  const chartHeight = st.type === 'hbar'
+    ? Math.min(720, Math.max(340, (chart.labels || []).length * 30))
+    : 380
 
-  const valueKind = src?.valueKind || 'money'   // 'money' | 'count'
   const valueHeaders = isSplit ? (chart.datasets || []).map((d) => d.label) : [st.pct ? 'Share %' : (valueKind === 'count' ? 'Count' : 'Value')]
   const tableRows = useMemo(() => {
     const labels = chart.labels || []
@@ -212,19 +249,19 @@ export default function PresentationStudio({
     const ds = chart.datasets?.[0]
     return labels.map((lb, i) => ({ label: lb, cells: [Number(ds?.data?.[i]) || 0] }))
   }, [chart, isSplit])
-  const fmtCell = (v) => {
-    if (st.pct) return `${Number(v).toFixed(1)}%`
-    if (valueKind === 'count') return Number(v).toLocaleString('en-US')
-    return fmtMoney(v)
-  }
 
+  // Presentation-quality PNG: re-render the live Chart INSTANCE onto white paper
+  // at high resolution (2560px wide) with Calibri ink, so slides are crisp and
+  // the text is never invisible-on-white. Falls back to the raw canvas.
   async function png() {
-    const canvas = ref.current?.querySelector?.('canvas')
-    if (!canvas) return null
     try {
       const { captureChartOnPaper } = await import('../../lib/chartCapture')
-      return captureChartOnPaper(canvas) || canvas.toDataURL('image/png', 1)
-    } catch { return canvas.toDataURL('image/png', 1) }
+      const inst = chartInst.current
+      const hd = inst ? captureChartOnPaper(inst, { widthPt: 1280, scale: 2 }) : null
+      if (hd) return hd
+    } catch { /* fall through */ }
+    const canvas = ref.current?.querySelector?.('canvas')
+    return canvas ? canvas.toDataURL('image/png', 1) : null
   }
   async function downloadPng() {
     const img = await png(); if (!img) return
@@ -236,12 +273,12 @@ export default function PresentationStudio({
   async function copyPng() {
     setMsg('')
     try {
-      const canvas = ref.current?.querySelector?.('canvas')
-      if (!canvas || !navigator.clipboard || typeof window.ClipboardItem === 'undefined') {
+      if (!navigator.clipboard || typeof window.ClipboardItem === 'undefined') {
         setMsg('Copy is not supported in this browser. Use Download PNG.'); return
       }
-      const blob = await new Promise((res) => canvas.toBlob(res, 'image/png', 1))
-      if (!blob) { setMsg('Could not read the chart.'); return }
+      const img = await png()
+      if (!img) { setMsg('Could not read the chart.'); return }
+      const blob = await (await fetch(img)).blob()   // the HD white-paper image
       await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })])
       setMsg('Chart copied. Paste it into your slide.')
     } catch { setMsg('Copy failed. Use Download PNG.') }
@@ -346,9 +383,9 @@ export default function PresentationStudio({
 
         <div className="rounded-lg border border-[var(--hairline)] p-3">
           <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">{title}</p>
-          <div ref={ref} style={{ height: 360 }}>
+          <div ref={ref} style={{ height: chartHeight }}>
             {hasData ? (
-              <Comp data={data} options={options} plugins={[LABEL_PLUGIN]} />
+              <Comp ref={chartInst} data={data} options={options} plugins={[LABEL_PLUGIN]} />
             ) : (
               <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No data for this selection.</div>
             )}

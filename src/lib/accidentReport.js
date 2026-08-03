@@ -324,12 +324,16 @@ const fmtLabelNum = (v) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString('
 /** Factory: the same value-labels plugin with a custom label colour, so dark-UI
  *  screens (light ink) and the white-paper report renderer (dark ink) share ONE
  *  implementation. Default keeps the paper-theme ink. */
+// Preferred body font for chart numbers: Calibri, with Carlito (its metric-
+// compatible open substitute) and safe fallbacks so it renders on any machine.
+const LABEL_FONT_FAMILY = 'Calibri, Carlito, "Segoe UI", Arial, sans-serif'
+
 export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
   id: 'valueLabels',
   afterDatasetsDraw(chart) {
     // Per-chart opt-out + styling: preview + PDF set options.plugins.valueLabels =
-    // { enabled, color, size } from the chart block. enabled===false → skip (absent
-    // flag draws, backwards compatible); color/size override the defaults below.
+    // { enabled, color, size, family } from the chart block. enabled===false → skip
+    // (absent flag draws, backwards compatible); color/size/family override below.
     const vl = chart.config?.options?.plugins?.valueLabels
     if (vl?.enabled === false) return
     const type = chart.config?.type
@@ -338,11 +342,41 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
     if (!ctx) return
     const drawColor = (vl && vl.color) || color
     const drawSize = Number(vl?.size) > 0 ? Number(vl.size) : 10
+    const family = (vl && vl.family) || LABEL_FONT_FAMILY
     const horizontal = chart.options?.indexAxis === 'y'
     const stacked = !!(chart.options?.scales?.x?.stacked && chart.options?.scales?.y?.stacked)
+    // Overlap avoidance: keep the boxes we have already drawn and skip any label
+    // whose box would collide with one - this is what stops the numbers piling on
+    // top of each other on a crowded axis.
+    // Overlap avoidance needs real text metrics; when they are unavailable
+    // (headless/test canvas), draw every label as before rather than guess.
+    const hasMeasure = typeof ctx.measureText === 'function'
+    const drawnBoxes = []
+    const collides = (x0, y0, x1, y1) => hasMeasure
+      && drawnBoxes.some((b) => !(x1 < b.x0 || x0 > b.x1 || y1 < b.y0 || y0 > b.y1))
+    const measure = (t) => {
+      try { if (hasMeasure) return ctx.measureText(t).width } catch { /* fall through */ }
+      return String(t).length * drawSize * 0.6 // headless/test fallback
+    }
+    const place = (text, x, y, align, baseline) => {
+      const w = measure(text)
+      const h = drawSize
+      let x0 = x; let x1 = x + w
+      if (align === 'center') { x0 = x - w / 2; x1 = x + w / 2 }
+      else if (align === 'right') { x0 = x - w; x1 = x }
+      let y0 = y - h; let y1 = y
+      if (baseline === 'middle') { y0 = y - h / 2; y1 = y + h / 2 }
+      else if (baseline === 'top') { y0 = y; y1 = y + h }
+      if (collides(x0, y0, x1, y1)) return false
+      drawnBoxes.push({ x0, y0, x1, y1 })
+      ctx.textAlign = align
+      ctx.textBaseline = baseline
+      ctx.fillText(text, x, y)
+      return true
+    }
     ctx.save()
     ctx.fillStyle = drawColor
-    ctx.font = `bold ${drawSize}px helvetica, arial, sans-serif`
+    ctx.font = `bold ${drawSize}px ${family}`
     if (type === 'radar') {
       // Radar: draw each point's raw count just above the vertex.
       chart.data.datasets.forEach((ds, di) => {
@@ -351,9 +385,7 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
         ;(meta?.data || []).forEach((el, i) => {
           const v = Number(ds.data?.[i])
           if (!Number.isFinite(v) || v === 0 || !el) return
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'bottom'
-          ctx.fillText(fmtLabelNum(v), el.x, el.y - 3)
+          place(fmtLabelNum(v), el.x, el.y - 3, 'center', 'bottom')
         })
       })
       ctx.restore()
@@ -374,9 +406,7 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
           if (el && (topEl == null || el.y < topEl.y)) topEl = el
         })
         if (!total || !topEl) continue
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'bottom'
-        ctx.fillText(fmtLabelNum(total), topEl.x, topEl.y - 2)
+        place(fmtLabelNum(total), topEl.x, topEl.y - 2, 'center', 'bottom')
       }
     } else {
       chart.data.datasets.forEach((ds, di) => {
@@ -388,15 +418,8 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
           const v = Array.isArray(raw) ? (N(raw[1]) - N(raw[0])) : Number(raw)
           if (!Number.isFinite(v) || v === 0 || !el) return
           const text = fmtLabelNum(Math.abs(v))
-          if (horizontal) {
-            ctx.textAlign = 'left'
-            ctx.textBaseline = 'middle'
-            ctx.fillText(text, el.x + 4, el.y)
-          } else {
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'bottom'
-            ctx.fillText(text, el.x, el.y - 3)
-          }
+          if (horizontal) place(text, el.x + 4, el.y, 'left', 'middle')
+          else place(text, el.x, el.y - 3, 'center', 'bottom')
         })
       })
     }

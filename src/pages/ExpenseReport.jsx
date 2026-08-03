@@ -100,6 +100,9 @@ export function aggregateTyres(rows = [], fromISO = '', toISO = '') {
   const site = new Map(); const size = new Map(); const brand = new Map(); const month = new Map()
   const siteCost = new Map(); const siteKm = new Map()
   const remSite = new Map(); const remMonth = new Map()
+  // Per-brand: total qty, cost (+ qty priced) for an average cost, km (+ count) for an average life.
+  const brandCost = new Map(); const brandCostQty = new Map()
+  const brandKm = new Map(); const brandKmN = new Map()
   let total = 0; let removed = 0
   for (const r of rows) {
     const s = String(r.site || 'Unspecified')
@@ -121,11 +124,20 @@ export function aggregateTyres(rows = [], fromISO = '', toISO = '') {
     brand.set(b, (brand.get(b) || 0) + qty)
     const mk = String(r.issue_date || '').slice(0, 7)
     if (/^\d{4}-\d{2}$/.test(mk)) month.set(mk, (month.get(mk) || 0) + qty)
-    const cost = (Number(r.cost_per_tyre) || 0) * qty
+    const unitCost = Number(r.cost_per_tyre) || 0
+    const cost = unitCost * qty
     const km = Number(r.total_km) || 0
     if (km > 0 && cost > 0) {
       siteCost.set(s, (siteCost.get(s) || 0) + cost)
       siteKm.set(s, (siteKm.get(s) || 0) + km)
+    }
+    if (unitCost > 0) {
+      brandCost.set(b, (brandCost.get(b) || 0) + cost)
+      brandCostQty.set(b, (brandCostQty.get(b) || 0) + qty)
+    }
+    if (km > 0) {
+      brandKm.set(b, (brandKm.get(b) || 0) + km)
+      brandKmN.set(b, (brandKmN.get(b) || 0) + 1)
     }
   }
   const rowsOf = (m) => [...m.entries()].map(([label, value]) => ({ label, value }))
@@ -134,12 +146,20 @@ export function aggregateTyres(rows = [], fromISO = '', toISO = '') {
     .filter((r) => r.value > 0)
   const months = [...month.keys()].sort()
   const remMonths = [...remMonth.keys()].sort()
+  const avgCostByBrand = [...brandCostQty.entries()]
+    .map(([b, q]) => ({ label: b, value: q > 0 ? (brandCost.get(b) || 0) / q : 0 }))
+    .filter((r) => r.value > 0)
+  const avgKmByBrand = [...brandKmN.entries()]
+    .map(([b, n2]) => ({ label: b, value: n2 > 0 ? (brandKm.get(b) || 0) / n2 : 0 }))
+    .filter((r) => r.value > 0)
   return {
     total,
     removed,
     bySite: rowsOf(site),
     bySize: rowsOf(size),
     byBrand: rowsOf(brand),
+    avgCostByBrand,
+    avgKmByBrand,
     cpkSite,
     removalBySite: rowsOf(remSite),
     monthLabels: months.map((mk) => monthLabel(mk)),
@@ -637,6 +657,8 @@ export default function ExpenseReport() {
       if (tyreAgg.bySite.length) out.push({ key: 'tyre_qty_site', label: 'Tyres used by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySite })
       if (tyreAgg.bySize.length) out.push({ key: 'tyre_qty_size', label: 'Tyres used by size', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySize })
       if (tyreAgg.byBrand.length) out.push({ key: 'tyre_qty_brand', label: 'Tyres used by brand', kind: 'flat', valueKind: 'count', rows: tyreAgg.byBrand })
+      if (tyreAgg.avgCostByBrand.length) out.push({ key: 'tyre_avgcost_brand', label: 'Average cost per tyre by brand', kind: 'flat', valueKind: 'money', rows: tyreAgg.avgCostByBrand })
+      if (tyreAgg.avgKmByBrand.length) out.push({ key: 'tyre_avgkm_brand', label: 'Average km per tyre by brand', kind: 'flat', valueKind: 'count', unitLabel: 'km', format: (v) => `${Math.round(v).toLocaleString('en-US')} km`, rows: tyreAgg.avgKmByBrand })
       if (tyreAgg.cpkSite.length) out.push({ key: 'tyre_cpk_site', label: 'Tyre cost per km by site', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: tyreAgg.cpkSite })
       if (tyreAgg.monthLabels.length) out.push({ key: 'tyre_qty_month', label: 'Tyres used by month', kind: 'series', valueKind: 'count', labels: tyreAgg.monthLabels, series: [{ name: 'Tyres', data: tyreAgg.monthQty }] })
       if (tyreAgg.removalBySite.length) out.push({ key: 'tyre_rem_site', label: 'Tyre removals by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.removalBySite })

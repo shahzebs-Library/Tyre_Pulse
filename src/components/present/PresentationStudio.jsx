@@ -203,7 +203,7 @@ export default function PresentationStudio({
   }
   const headerLabel = usePct ? 'Share %'
     : valueKind === 'percent' ? '%'
-    : valueKind === 'count' ? 'Count'
+    : valueKind === 'count' ? (src?.unitLabel || 'Count')
     : valueKind === 'rate' ? (src?.unitLabel || 'Rate')
     : (src?.unitLabel || 'Value')
 

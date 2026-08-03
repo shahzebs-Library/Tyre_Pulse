@@ -3,7 +3,38 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF + CONTROL CENTER. Migrations through **V458**, next free **V459**. ALL MERGED to main (PRs #248-#264). ACTIVE.
+## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF + CONTROL CENTER. Migrations through **V463**, next free **V464**. ALL MERGED to main (PRs #248-#264). ACTIVE.
+- **V460-V463 + CPK DEPTH/TRACEABILITY (applied live, merged).** Customer: "I should be able to know from where CPK
+  takes those km (always from the monthly tyre consumption's kms)" AND "tell where and why the difference came if we
+  add vehicles measured in hours - how it affects the data." All under the `/cpk-intelligence` module (3 NEW lazy tabs):
+  - **V462 `get_cpk_km_source(country,from,to,asset)`** — traces the CPK km side back to the EXACT tyre rows. Uses the
+    IDENTICAL filter as `fleet_tyre_km_by_asset` (V453: km = SUM of each tyre's total_km, matched to change month by
+    coalesce(removal_date,issue_date)), so the per-asset km RECONCILES to the fleet CPK. asset NULL -> per-asset summary
+    `by_asset:[{asset_no,tyres,km}]`; asset given -> its contributing `tyres:[{serial_no,position,brand,size,job_card,
+    issue_date,fitment_date,removal_date,effective_date,km_at_fitment,km_at_removal,total_km,cost_per_tyre,data_source}]`.
+    Verified: TM634 = 2 tyres / 187,080 km reconciles to CPK. Panel `KmSourcePanel.jsx` ("KM source" tab): per-asset
+    table -> click -> contributing-tyre detail with explicit subtotal + Excel/PDF.
+  - **V463 `get_cpk_hours_source(country,from,to,asset)`** — the NON-MOVABLE mirror (hours = span max-min engine_hours,
+    count>1, same filter as fleet_hours_by_asset). **`get_cpk_unit_audit(country,from,to)`** — per asset the vehicle_type,
+    the unit CPK measures it in (`cpk_unit_for_asset_type`: plant -> engine_hours, else km), has_km / has_hours, and a
+    STATUS flag: `ok`, `both_present` (has km AND hours - CPK uses only its type's unit), `off_unit_only` (its only data
+    is on the OTHER unit - possible mis-classification, CPK ignores it), `used_unit_no_data` (no data for its unit -> CPK
+    N/A). This is the "where and why the difference came" answer: KSA has 356 km-assets, 317 also carry hours
+    (both_present). Panel `CpkUnitAuditPanel.jsx` ("Units & why different" tab): explainer banner + summary tiles
+    (3 info + 3 clickable flag tiles that filter by status) + per-asset table with status badges; row click drills BOTH
+    getCpkKmSource + getCpkHoursSource side-by-side with the CPK-used side highlighted + Excel/PDF.
+  - **Custom CPK report** — pure `src/lib/cpkReport.js` (REPORT_SECTIONS fleet_summary/by_type/per_vehicle/worst_cpk/
+    best_value/km_coverage + PER_VEHICLE_COLUMNS/BY_TYPE_COLUMNS + buildCpkReport + cpkReportExportRows; null CPK->N/A,
+    worst/best exclude nulls; layout persisted `cpkReport.layout.v1`; 18 tests) + `CpkReportPanel.jsx` ("Custom report"
+    tab): toggle sections/columns/top-N + title, live preview, PDF/Excel. Builds from data the page already loaded (no fetch).
+  - **V460 `get_diagnostics_feed(country)`** — Control Center single-round-trip (summary + default tyre_cost lineage);
+    super-admin gated, execute revoked from PUBLIC, granted authenticated. **V461** — country-ABAC guard
+    (`app_can_see_country`) added to the 4 Cost/M3 RPCs. Services: fleetCpk.js (getCpkKmSource/getCpkHoursSource/
+    getCpkUnitAudit), controlCenter.js (getDiagnosticsFeed). RULE: CPK cost RPCs (get_fleet_cpk ~7.9k / get_cpk_drivers
+    ~6.8k plpgsql, get_brand_size_cpk = LANGUAGE sql) deliberately NOT ABAC-guarded - breakage risk vs near-zero
+    exposure (org isolation is the boundary); recorded, not a regression. GOTCHA: `get_cpk_km_source` revoke/grant
+    signature is `(text,date,date,text)` (4-arg) - a 5-arg signature 42883-fails the atomic migration. lucide has NO
+    `Route` icon (build blocker) - used `Milestone` for the KM-source tab/heading.
 - **V456 ENTERPRISE-SCALE INDEXES (applied live + verified with EXPLAIN ANALYZE).** For millions of rows the Cost/M3 +
   CPK hot RPCs must range-scan the exact (org,country,period) slice, not scan wider and filter. Added: (1)
   `production_logs(organisation_id, country, period_date)` for get_cost_per_m3 / _trend / get_production_rejections

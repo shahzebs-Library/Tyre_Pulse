@@ -16,6 +16,7 @@ import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
 import SubscriptionGate from './components/SubscriptionGate'
 import { useFeatureGate } from './hooks/useFeatureFlags'
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
 import ConsoleLayout from './console/components/ConsoleLayout'
@@ -733,6 +734,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
     <LanguageProvider>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <VercelAnalytics />
       <Routes>
         {/* ── System Console - completely isolated from main app ── */}
         <Route path="/console/login" element={

@@ -5,7 +5,7 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
-  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale,
+  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale, GitBranch, Rocket,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -44,6 +44,9 @@ const NAV_GROUPS = [
       { to: '/console/reconciliation', label: 'Reconciliation', icon: Scale },
       { to: '/console/pipeline-monitor', label: 'Pipeline Monitor', icon: Activity },
       { to: '/console/correction-center', label: 'Correction Center', icon: ClipboardList },
+      { to: '/console/lineage', label: 'Lineage Explorer', icon: GitBranch },
+      { to: '/console/trust-alerts', label: 'Trust Alerts', icon: BellRing },
+      { to: '/console/releases', label: 'Releases', icon: Rocket },
       { to: '/console/duplicates',      label: 'Duplicate Control', icon: CopyX },
       { to: '/console/data-browser',    label: 'Data Browser',     icon: Search },
       { to: '/console/data-cleanup',    label: 'Data Cleanup',     icon: Trash2 },

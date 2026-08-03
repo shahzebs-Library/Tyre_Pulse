@@ -51,6 +51,9 @@ const ConsoleDataQuality = lazy(() => import('./console/pages/ConsoleDataQuality
 const ConsoleReconciliation = lazy(() => import('./console/pages/ConsoleReconciliation'))
 const ConsolePipelineMonitor = lazy(() => import('./console/pages/ConsolePipelineMonitor'))
 const ConsoleCorrectionCenter = lazy(() => import('./console/pages/ConsoleCorrectionCenter'))
+const ConsoleLineageExplorer = lazy(() => import('./console/pages/ConsoleLineageExplorer'))
+const ConsoleTrustAlerts = lazy(() => import('./console/pages/ConsoleTrustAlerts'))
+const ConsoleReleases = lazy(() => import('./console/pages/ConsoleReleases'))
 const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
@@ -776,6 +779,9 @@ export default function App() {
           <Route path="reconciliation" element={<ConsoleReconciliation />} />
           <Route path="pipeline-monitor" element={<ConsolePipelineMonitor />} />
           <Route path="correction-center" element={<ConsoleCorrectionCenter />} />
+          <Route path="lineage" element={<ConsoleLineageExplorer />} />
+          <Route path="trust-alerts" element={<ConsoleTrustAlerts />} />
+          <Route path="releases" element={<ConsoleReleases />} />
           <Route path="smart-import"  element={<ConsoleSmartImport />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />

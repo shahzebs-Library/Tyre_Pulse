@@ -20,7 +20,7 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import {
   Gauge, Truck, Factory, FlaskConical, TrendingUp, Table2,
-  FileSpreadsheet, FileText, RefreshCcw, Info,
+  FileSpreadsheet, FileText, RefreshCcw, Info, Milestone, Layers,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -37,12 +37,18 @@ import CpkDataTable from '../components/cpk/CpkDataTable'
 
 const CpkScenarioPanel = lazy(() => import('../components/cpk/CpkScenarioPanel'))
 const CpkDriversPanel = lazy(() => import('../components/cpk/CpkDriversPanel'))
+const KmSourcePanel = lazy(() => import('../components/cpk/KmSourcePanel'))
+const CpkUnitAuditPanel = lazy(() => import('../components/cpk/CpkUnitAuditPanel'))
+const CpkReportPanel = lazy(() => import('../components/cpk/CpkReportPanel'))
 
 const MOBILITIES = ['movable', 'non_movable']
 
 const TABS = [
   { key: 'fleet', label: 'Fleet CPK', icon: Gauge },
   { key: 'vehicles', label: 'Per vehicle', icon: Table2 },
+  { key: 'km_source', label: 'KM source', icon: Route },
+  { key: 'units', label: 'Units & why different', icon: Layers },
+  { key: 'report', label: 'Custom report', icon: FileText },
   { key: 'scenario', label: 'What-if scenario', icon: FlaskConical },
   { key: 'brand', label: 'Brand value', icon: TrendingUp },
   { key: 'drivers', label: 'Why it changed', icon: Info },
@@ -311,6 +317,32 @@ export default function CpkIntelligence() {
             )
           })}
         </div>
+      )}
+
+      {tab === 'km_source' && (
+        <Suspense fallback={<Loading />}>
+          <KmSourcePanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
+        </Suspense>
+      )}
+
+      {tab === 'units' && (
+        <Suspense fallback={<Loading />}>
+          <CpkUnitAuditPanel country={country} from={bounds.from} to={bounds.to} currency={currency} />
+        </Suspense>
+      )}
+
+      {tab === 'report' && (
+        <Suspense fallback={<Loading />}>
+          <CpkReportPanel
+            country={country}
+            from={bounds.from}
+            to={bounds.to}
+            currency={currency}
+            perVehicle={fleetCpk.perVehicle}
+            byType={fleetCpk.byType}
+            fleet={fleetCpk.fleet}
+          />
+        </Suspense>
       )}
 
       {tab === 'scenario' && (

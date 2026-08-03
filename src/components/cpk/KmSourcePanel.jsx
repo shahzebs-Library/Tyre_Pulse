@@ -23,7 +23,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
-  Layers, Route, Search, FileSpreadsheet, FileText, RefreshCcw,
+  Layers, Milestone, Search, FileSpreadsheet, FileText, RefreshCcw,
   Info, X, ChevronRight, AlertCircle,
 } from 'lucide-react'
 import { getCpkKmSource } from '../../lib/api/fleetCpk'
@@ -451,7 +451,7 @@ function AssetDetail({ assetNo, detail, loading, errored, currency, onClose, onR
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h4 className="flex items-center gap-2 text-base font-semibold">
-          <Route size={18} /> Contributing tyres
+          <Milestone size={18} /> Contributing tyres
           <span className="text-sm font-normal" style={{ color: 'var(--text-secondary)' }}>
             (asset {fmtText(assetNo)})
           </span>

@@ -1,0 +1,33 @@
+-- V471 TYRE DATA LEARNING LAYER  (STATUS: APPLIED LIVE on jhssdmeruxtrlqnwfksc)
+--
+-- Confirm a fact ONCE (serial -> brand/size, or a raw-brand ALIAS spelling) and it:
+--   (a) fills every matching CURRENT tyre_records row, and
+--   (b) auto-applies to FUTURE inserts/updates via a BEFORE trigger.
+-- Elevated-gated, org-scoped, undoable. NEVER touches cost.
+--
+-- Objects:
+--   table  public.tyre_learned_facts        - the confirmed rules (RLS: org restrictive + read app_is_active + write app_is_elevated)
+--   table  public.tyre_learn_apply_log       - per-row before/after for undo (definer-written)
+--   fn/trg apply_tyre_learned_facts()         - BEFORE INSERT/UPDATE on tyre_records: fill blank brand/size by serial, normalize brand by alias
+--   rpc    tyre_learn_confirm(...)            - dry-run count OR apply (upsert rule + fill current rows + log)
+--   rpc    tyre_learn_undo(batch)             - deactivate the rule + restore the filled rows
+--   rpc    tyre_learn_suggestions(country,n)  - blank-brand serials recoverable from another row (self) or the master upload
+--
+-- Verified live (rolled back): a serial fact fills a blank row on UPDATE and on a
+-- future INSERT; an alias fact normalizes "TRAINGLE" -> "TRIANGLE" on insert.
+-- Suggestions query returns 131 real KSA fills (89 self, 42 master).
+--
+-- The authoritative body was applied via the Supabase MCP apply_migration
+-- (name v471_tyre_learning_layer). This file is the committed record; re-running
+-- it is idempotent (IF NOT EXISTS / OR REPLACE / DROP POLICY IF EXISTS).
+--
+-- Rollback:
+--   drop trigger if exists trg_apply_tyre_learned_facts on public.tyre_records;
+--   drop function if exists public.apply_tyre_learned_facts();
+--   drop function if exists public.tyre_learn_confirm(text,text,text,text,text,text,boolean);
+--   drop function if exists public.tyre_learn_undo(uuid);
+--   drop function if exists public.tyre_learn_suggestions(text,int);
+--   drop table if exists public.tyre_learn_apply_log;
+--   drop table if exists public.tyre_learned_facts;
+--
+-- See the apply_migration body for the full DDL (mirrored above in the session log).

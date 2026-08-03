@@ -5,6 +5,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import BrandGapSection from '../components/reconciliation/BrandGapSection'
+import TyreLearningSection from '../components/reconciliation/TyreLearningSection'
 import TyrePriceSection from '../components/reconciliation/TyrePriceSection'
 import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
@@ -443,6 +444,9 @@ export default function DataReconciliation() {
 
       {/* ── Completeness: tyres missing a brand ──────────────────────────────── */}
       <BrandGapSection />
+
+      {/* Learn from confirmations: confirm once, fill now + auto-apply to future imports */}
+      <TyreLearningSection />
 
       {/* Tyres with no price - the same completeness question as a missing brand */}
       <TyrePriceSection />

@@ -1,0 +1,29 @@
+-- V475 DATA TRUST PHASE 3 (STATUS: APPLIED LIVE on jhssdmeruxtrlqnwfksc)
+-- Applied via MCP: v475_lineage_graph_registry, v475b_trust_alerts_releases. Additive only.
+--
+-- Lineage + downstream impact:
+--   data_assets      - one node per table/metric/dashboard (GLOBAL; authenticated read, super/Admin write).
+--   lineage_edges    - directed edges (table feeds metric, metric renders dashboard).
+--   dashboard_registry + widget_bindings - dashboards and which metric each widget binds to.
+--   Seeded from metric_registry: 34 assets, 36 edges, 15 dashboards, 24 widget bindings.
+--   rpc get_lineage_graph(asset, direction, depth) - upstream + downstream traversal -> {nodes, edges}.
+--   rpc get_downstream_impact(asset) - everything affected if the asset changes (e.g. tyre_records -> 9 assets).
+--
+-- Alerts + releases:
+--   trust_alerts     - org-scoped alerts raised from quality (fail) + reconciliation (variance) breaches;
+--                      deduped on open status. rpc scan_data_trust(country) runs both scans and raises alerts;
+--                      rpc ack_trust_alert(id, status) acknowledges/resolves.
+--   releases + release_impacts - record a release and the metrics/assets it affects.
+--                      rpc record_release(version, notes) + add_release_impact(...).
+--
+-- All read RPCs gate app_is_active; write/scan RPCs gate app_is_elevated (releases gate super/Admin);
+-- anon/public execute revoked, authenticated granted.
+--
+-- Client: src/lib/api/lineageOps.js + pure src/lib/lineageOps.js (shapeGraph/shapeImpact/alertSummary) +
+-- src/lib/traceId.js (cross-layer correlation id) + 7 tests. Console pages: Data Lineage Explorer
+-- (/console/lineage), Data Trust Alerts (/console/trust-alerts), Release & Impact Center (/console/releases).
+-- Next free migration V476.
+--
+-- Rollback: drop the scan/ack/release RPCs + get_lineage_graph + get_downstream_impact, then trust_alerts,
+-- release_impacts, releases, widget_bindings, dashboard_registry, lineage_edges, data_assets (additive; no data
+-- migration to reverse). See apply_migration bodies for the full DDL + seed.

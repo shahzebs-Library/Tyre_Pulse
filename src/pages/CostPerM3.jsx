@@ -13,15 +13,75 @@
  * /production-m3); Internal reuses parts_consumption (ERP intake).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Gauge, RefreshCcw, FileSpreadsheet, FileText, Layers } from 'lucide-react'
+import { Gauge, RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { getCostPerM3, getCostPerM3Trend } from '../lib/api/costPerM3'
+import { getCostPerM3, getCostPerM3Trend, getProductionRejections } from '../lib/api/costPerM3'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../lib/cpkModule'
 import { fmtMoney, fmtM3, fmtCostPerM3 } from '../lib/costPerM3'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PresentationStudio from '../components/present/PresentationStudio'
+
+/**
+ * Site-manager review: honest, data-derived issues to flag for the period. Sent
+ * weekly so a site manager sees their cost and production by region and the
+ * problems worth acting on. Pure; every line is grounded in the passed data.
+ */
+export function buildSiteManagerReview({ regions = [], total = null, rejections = null, currency = '', label = '' } = {}) {
+  const m = (v) => fmtMoney(v, currency)
+  const withProd = regions.filter((r) => (Number(r.production_m3) || 0) > 0)
+  const lines = []
+  const issues = []
+
+  if (total && (Number(total.grand_total) || Number(total.production_m3))) {
+    const cpm = total.cost_per_m3 != null ? Number(total.cost_per_m3)
+      : (Number(total.production_m3) > 0 ? (Number(total.grand_total) || 0) / Number(total.production_m3) : null)
+    lines.push(`Total cost ${m(total.grand_total)} over ${Math.round(Number(total.production_m3) || 0).toLocaleString('en-US')} m3${cpm != null ? ` = ${m(cpm)} per m3` : ''} for ${label}.`)
+    // Largest cost source.
+    const sources = [
+      ['Internal', Number(total.internal_cost) || 0], ['Tyres', Number(total.tyre_cost) || 0],
+      ['SCO', Number(total.sco_cost) || 0], ['SANY', Number(total.sany_cost) || 0],
+    ].sort((a, b) => b[1] - a[1])
+    const grand = Number(total.grand_total) || sources.reduce((s, x) => s + x[1], 0)
+    if (sources[0] && sources[0][1] > 0 && grand > 0) {
+      lines.push(`Largest cost is ${sources[0][0]} at ${m(sources[0][1])} (${Math.round((sources[0][1] / grand) * 100)}% of total).`)
+    }
+  } else {
+    lines.push(`No cost or approved production was recorded for ${label}.`)
+  }
+
+  // Cost/m3 outliers vs the period average.
+  if (withProd.length >= 2) {
+    const cpmOf = (r) => (r.cost_per_m3 != null ? Number(r.cost_per_m3) : (Number(r.production_m3) > 0 ? (Number(r.grand_total) || 0) / Number(r.production_m3) : null))
+    const avg = withProd.reduce((s, r) => s + (cpmOf(r) || 0), 0) / withProd.length
+    withProd.forEach((r) => {
+      const c = cpmOf(r)
+      if (c != null && avg > 0 && c > avg * 1.15) {
+        issues.push(`${r.region} cost/m3 is ${m(c)}, ${Math.round(((c - avg) / avg) * 100)}% above the ${label} average of ${m(avg)}.`)
+      }
+    })
+  }
+  // Cost recorded with no approved production (a data / production-entry gap).
+  regions.forEach((r) => {
+    if ((Number(r.grand_total) || 0) > 0 && (Number(r.production_m3) || 0) === 0) {
+      issues.push(`${r.region} recorded ${m(r.grand_total)} in cost but no approved production - check the production entries.`)
+    }
+  })
+  // Rejected production.
+  if (rejections && rejections.ok) {
+    const rt = Number(rejections.total) || 0
+    if (rt > 0) {
+      const topSite = [...(rejections.by_site || [])].sort((a, b) => (Number(b.rejected_m3 ?? b.value ?? b.m3) || 0) - (Number(a.rejected_m3 ?? a.value ?? a.m3) || 0))[0]
+      const topReason = [...(rejections.by_reason || [])].sort((a, b) => (Number(b.rejected_m3 ?? b.value ?? b.m3) || 0) - (Number(a.rejected_m3 ?? a.value ?? a.m3) || 0))[0]
+      let s = `Rejected production this period: ${Math.round(rt).toLocaleString('en-US')} m3.`
+      if (topSite) s += ` Most at ${topSite.site || topSite.region || 'a site'}.`
+      if (topReason) s += ` Top reason: ${topReason.reason || 'unspecified'}.`
+      issues.push(s)
+    }
+  }
+  return { lines, issues }
+}
 
 export default function CostPerM3() {
   const { activeCountry } = useSettings()
@@ -34,6 +94,8 @@ export default function CostPerM3() {
   const [loading, setLoading] = useState(true)
   // Date-wise monthly trend (last 12 months, independent of the period chip).
   const [trend, setTrend] = useState({ ok: false, months: [] })
+  const [rejections, setRejections] = useState(null)
+  const [reviewCopied, setReviewCopied] = useState(false)
 
   const load = useCallback(() => {
     let cancelled = false
@@ -41,10 +103,12 @@ export default function CostPerM3() {
     Promise.all([
       getCostPerM3({ country, from: bounds.from, to: bounds.to }).catch(() => null),
       getCostPerM3Trend({ country }).catch(() => ({ ok: false, months: [] })),
-    ]).then(([d, t]) => {
+      getProductionRejections({ country, from: bounds.from, to: bounds.to }).catch(() => null),
+    ]).then(([d, t, rej]) => {
       if (cancelled) return
       setData(d)
       setTrend(t || { ok: false, months: [] })
+      setRejections(rej)
     }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [country, bounds.from, bounds.to])
@@ -54,6 +118,19 @@ export default function CostPerM3() {
   const currency = data?.currency || country
   const total = data?.total || null
   const regions = data?.regions || []
+
+  const review = useMemo(
+    () => buildSiteManagerReview({ regions, total, rejections, currency, label: periodLabel(bounds) }),
+    [regions, total, rejections, currency, bounds],
+  )
+  async function copyReview() {
+    const text = [
+      `Cost per M3 review - ${country} - ${periodLabel(bounds)}`,
+      ...review.lines.map((l) => `- ${l}`),
+      ...(review.issues.length ? ['', 'Issues to action:', ...review.issues.map((i) => `- ${i}`)] : ['', 'No issues to flag this period.']),
+    ].join('\n')
+    try { await navigator.clipboard.writeText(text); setReviewCopied(true); setTimeout(() => setReviewCopied(false), 2000) } catch { /* ignore */ }
+  }
 
   function exportExcel() {
     const rows = [
@@ -311,6 +388,33 @@ export default function CostPerM3() {
         </div>
       </div>
 
+      {/* Site-manager review: cost + production by region and the issues to flag.
+          Follows the period chip, so pick "Last 7 days" for the weekly note. */}
+      {!loading && (review.lines.length > 0 || review.issues.length > 0) && (
+        <div className="mt-6 rounded-xl border border-[var(--border-subtle)] p-4">
+          <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold"><ClipboardCheck size={16} /> Site manager review - {periodLabel(bounds)}</h3>
+            <button type="button" onClick={copyReview}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs hover:bg-[var(--surface-hover)]">
+              <Copy size={12} /> {reviewCopied ? 'Copied' : 'Copy for email'}
+            </button>
+          </div>
+          {review.lines.length > 0 && (
+            <ul className="list-disc pl-5 space-y-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {review.lines.map((l, i) => <li key={i}>{l}</li>)}
+            </ul>
+          )}
+          <p className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Issues to action</p>
+          {review.issues.length > 0 ? (
+            <ul className="list-disc pl-5 space-y-1 text-sm text-amber-300">
+              {review.issues.map((l, i) => <li key={i}>{l}</li>)}
+            </ul>
+          ) : (
+            <p className="text-sm text-emerald-300">No issues to flag this period.</p>
+          )}
+        </div>
+      )}
+
       {/* Chart Builder - present cost / production as a chart or PowerPoint */}
       {!loading && studioCatalog.length > 0 && (
         <div className="mt-6">
@@ -320,7 +424,8 @@ export default function CostPerM3() {
             money={(v) => fmtMoney(v, currency)}
             scope={country}
             filePrefix="Cost per M3"
-            note="Present cost per M3, cost source and production as a chart, then copy, download a PNG, or export a PowerPoint deck."
+            showInsights
+            note="Present cost per M3, cost source and production as a chart, with talking points, then copy, download a PNG, or export a PowerPoint deck."
           />
         </div>
       )}

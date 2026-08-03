@@ -37,6 +37,8 @@ const lastDay = (y, m0) => new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate()
  * page never fetches the full history on open.
  */
 export const CPK_PERIODS = [
+  { key: 'week', label: 'Last 7 days' },
+  { key: 'prev_week', label: 'Previous 7 days' },
   { key: 'current_month', label: 'This month' },
   { key: 'last_month', label: 'Last month' },
   { key: 'quarter', label: 'This quarter' },
@@ -60,10 +62,27 @@ export function periodBounds(key = DEFAULT_PERIOD, anchor = new Date()) {
   const y = a.getUTCFullYear()
   const m = a.getUTCMonth() // 0-based
   const d = a.getUTCDate()
-  const meta = CPK_PERIODS.find((p) => p.key === key) || CPK_PERIODS[0]
+  const meta = CPK_PERIODS.find((p) => p.key === key)
+    || CPK_PERIODS.find((p) => p.key === DEFAULT_PERIOD)
+    || CPK_PERIODS[0]
   let from
   let to
   switch (meta.key) {
+    case 'week': {
+      // Rolling 7-day window ending today (unambiguous for a weekly site report).
+      const back = new Date(Date.UTC(y, m, d))
+      back.setUTCDate(back.getUTCDate() - 6)
+      from = iso(back.getUTCFullYear(), back.getUTCMonth(), back.getUTCDate())
+      to = iso(y, m, d)
+      break
+    }
+    case 'prev_week': {
+      const end = new Date(Date.UTC(y, m, d)); end.setUTCDate(end.getUTCDate() - 7)
+      const start = new Date(Date.UTC(y, m, d)); start.setUTCDate(start.getUTCDate() - 13)
+      from = iso(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+      to = iso(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+      break
+    }
     case 'last_month': {
       const ly = m === 0 ? y - 1 : y
       const lm = m === 0 ? 11 : m - 1

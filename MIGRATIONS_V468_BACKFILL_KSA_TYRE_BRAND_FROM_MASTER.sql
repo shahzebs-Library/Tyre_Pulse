@@ -1,0 +1,15 @@
+-- V468: backfill blank KSA tyre_records.brand from the master upload staging
+-- (ksa_country_upload_template_staging.tyre_brand), matched by serial (mode brand
+-- per serial). APPLIED LIVE 2026-08-03. Non-destructive (only rows with a blank
+-- brand). Cleaned the master file's quirks: embedded TAB chars (TRIANGLE\t) trimmed
+-- + whitespace collapsed + uppercased; and the file's literal 'NULL'/'N/A'/'-' blank
+-- tokens rejected (not written as a brand). Result: 202 real brands filled (TRIANGLE
+-- 68, TEGRYS 37, PIRELLI 24, ERACLE 20, INFINITY 17, SAILUN, BRIDGESTONE, NEXEN, ...);
+-- 207 KSA tyres still blank (the master had no real brand for those - honest).
+-- Snapshot _bak.tyre_brand_backfill_v468 (id + old blank).
+-- ROLLBACK: update public.tyre_records t set brand='' from _bak.tyre_brand_backfill_v468 b where t.id=b.id;
+-- NOTE: the same master file ALSO carries odometer ("Kilometer") + engine-hours
+-- ("Hour Meter") readings (825 / 516 KSA assets; ~238M km / cleaned) - a broader
+-- meter-based km/hours source than the current tyre-km CPK, but the raw columns mix
+-- in dates + NULL/tab tokens, so a validated cleaning pass is required before feeding
+-- CPK. Deferred as a separate "meter-based CPK basis" build pending a customer decision.

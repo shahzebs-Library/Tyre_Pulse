@@ -67,4 +67,26 @@ describe('fetchAllPages', () => {
     const { data } = await fetchAllPages(s.pageFn, { pageSize: 1000, concurrency: 4 })
     expect(data).toHaveLength(2000)
   })
+
+  it('concurrency=1 behaves serially, one page per window, in order', async () => {
+    const s = makeSource(3000, { pageSize: 1000 })
+    const { data, truncated } = await fetchAllPages(s.pageFn, { pageSize: 1000, concurrency: 1 })
+    expect(truncated).toBe(false)
+    expect(data).toHaveLength(3000)
+    expect(data.every((r, idx) => r.i === idx)).toBe(true)
+    // page 0, then one page at a time until a short tail page ends it
+    expect(s.calls).toEqual([
+      [0, 999], [1000, 1999], [2000, 2999], [3000, 3999],
+    ])
+  })
+
+  it('clamps a non-positive concurrency up to a single serial window', async () => {
+    const s = makeSource(2500, { pageSize: 1000 })
+    const { data } = await fetchAllPages(s.pageFn, { pageSize: 1000, concurrency: 0 })
+    expect(data).toHaveLength(2500)
+    // win clamped to 1 => strictly sequential pages
+    expect(s.calls).toEqual([
+      [0, 999], [1000, 1999], [2000, 2999],
+    ])
+  })
 })

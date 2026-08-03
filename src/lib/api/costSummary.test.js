@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 // (real) composes onto it via .or(). Small fixtures (< 1000 rows) resolve in a
 // single page.
 const h = vi.hoisted(() => {
-  const state = { tables: {}, calls: [] }
+  const state = { tables: {}, calls: [], rpc: {}, rpcCalls: [] }
   const METHODS = ['select', 'eq', 'in', 'order', 'limit', 'or', 'range', 'neq']
   function makeBuilder(table) {
     const rec = { table, ops: [] }
@@ -18,7 +18,16 @@ const h = vi.hoisted(() => {
       Promise.resolve(state.tables[table] || { data: null, error: null }).then(resolve, reject)
     return builder
   }
-  return { state, supabase: { from: (t) => makeBuilder(t) } }
+  // rpc: default per-name response is { data:null, error:null } so an
+  // unconfigured RPC falls through exactly like the real "RPC absent" path.
+  // An Error value rejects (simulates a genuine throw / missing function).
+  function rpc(name, args) {
+    state.rpcCalls.push({ name, args })
+    const v = state.rpc[name]
+    if (v instanceof Error) return Promise.reject(v)
+    return Promise.resolve(v || { data: null, error: null })
+  }
+  return { state, supabase: { from: (t) => makeBuilder(t), rpc } }
 })
 
 vi.mock('../supabase', () => ({ supabase: h.supabase }))
@@ -31,6 +40,8 @@ const MISSING = { data: null, error: { message: 'relation "x" does not exist', c
 beforeEach(() => {
   h.state.tables = {}
   h.state.calls = []
+  h.state.rpc = {}
+  h.state.rpcCalls = []
 })
 
 describe('costSummary.loadCostSplit', () => {
@@ -108,5 +119,98 @@ describe('costSummary.loadCostSplit', () => {
     expect(out.byMonth[11].month).toBe('2026-07')
     // every bucket zeroed with the tyre/maintenance shape
     expect(out.byMonth.every((m) => m.tyre === 0 && m.maintenance === 0)).toBe(true)
+  })
+})
+
+// Server-aggregated split path (V457 get_maint_tyre_split). When the RPC returns
+// { ok:true, monthly:[...] } loadCostSplit must build byMonth from it, tag
+// source:'server_rpc', and NEVER touch the legacy raw-row table pulls.
+describe('costSummary.loadCostSplit - server_rpc path', () => {
+  it('uses get_maint_tyre_split when it resolves ok, tagging source:server_rpc', async () => {
+    h.state.rpc.get_maint_tyre_split = {
+      data: {
+        ok: true,
+        monthly: [
+          { m: '2026-07', tyre: 200, maintenance: 500 },
+          { m: '2026-06', tyre: 50, maintenance: 10 },
+          { m: '2020-01', tyre: 9999, maintenance: 9999 }, // out of window -> ignored
+        ],
+      },
+      error: null,
+    }
+    // Legacy fixtures present but must be IGNORED (RPC wins, no table read).
+    h.state.tables.tyre_records = { data: [{ cost_per_tyre: 1, qty: 1, issue_date: '2026-07-01' }], error: null }
+
+    const out = await loadCostSplit({ now: NOW })
+
+    expect(out.source).toBe('server_rpc')
+    expect(out.tyre).toBe(250)
+    expect(out.maintenance).toBe(510)
+    expect(out.totals).toEqual({ tyre: 250, maintenance: 510 })
+    const jul = out.byMonth.find((m) => m.month === '2026-07')
+    const jun = out.byMonth.find((m) => m.month === '2026-06')
+    expect(jul).toEqual({ month: '2026-07', tyre: 200, maintenance: 500 })
+    expect(jun).toEqual({ month: '2026-06', tyre: 50, maintenance: 10 })
+    // out-of-window month contributed nothing
+    expect(out.byMonth).toHaveLength(12)
+    // no legacy table builder was ever created
+    expect(h.state.calls).toHaveLength(0)
+    // the RPC was called with the derived window + null scope
+    const call = h.state.rpcCalls.find((c) => c.name === 'get_maint_tyre_split')
+    expect(call.args).toEqual({ p_country: null, p_site: null, p_from: '2025-08-01', p_to: '2026-07-31' })
+  })
+
+  it('passes country + site scope through to get_maint_tyre_split (site skips the grid snapshot)', async () => {
+    h.state.rpc.get_maint_tyre_split = {
+      data: { ok: true, monthly: [{ m: '2026-07', tyre: 5, maintenance: 7 }] },
+      error: null,
+    }
+    const out = await loadCostSplit({ now: NOW, country: 'KSA', site: 'NHC' })
+    expect(out.source).toBe('server_rpc')
+    // site-scoped: the parts_consumption grid snapshot RPC is skipped entirely
+    expect(h.state.rpcCalls.some((c) => c.name === 'get_parts_expense_snapshot')).toBe(false)
+    const call = h.state.rpcCalls.find((c) => c.name === 'get_maint_tyre_split')
+    expect(call.args).toEqual({ p_country: 'KSA', p_site: 'NHC', p_from: '2025-08-01', p_to: '2026-07-31' })
+  })
+})
+
+// Fall-through: an errored or absent get_maint_tyre_split must NOT tag source and
+// must fall back to the legacy raw-row tyre_records / pm / work_orders pulls.
+describe('costSummary.loadCostSplit - falls through to legacy when the RPC is unavailable', () => {
+  it('RPC returns an error -> legacy raw-row pulls compute the split (no source tag)', async () => {
+    h.state.rpc.get_maint_tyre_split = { data: null, error: { message: 'not found', code: 'PGRST202' } }
+    h.state.tables.tyre_records = { data: [{ cost_per_tyre: 100, qty: 2, issue_date: '2026-07-05' }], error: null }
+    h.state.tables.pm_service_records = { data: [{ total_cost: 300, service_date: '2026-07-01' }], error: null }
+
+    const out = await loadCostSplit({ now: NOW })
+
+    expect(out.source).toBeUndefined()
+    expect(out.tyre).toBe(200)
+    expect(out.maintenance).toBe(300)
+    // legacy path actually queried the tables
+    expect(h.state.calls.some((c) => c.table === 'tyre_records')).toBe(true)
+    expect(h.state.calls.some((c) => c.table === 'work_orders')).toBe(true)
+  })
+
+  it('RPC is absent (rejects) -> still falls through to the legacy pulls', async () => {
+    h.state.rpc.get_maint_tyre_split = new Error('function get_maint_tyre_split does not exist')
+    h.state.tables.tyre_records = { data: [{ cost_per_tyre: 40, qty: 1, issue_date: '2026-06-10' }], error: null }
+
+    const out = await loadCostSplit({ now: NOW })
+
+    expect(out.source).toBeUndefined()
+    expect(out.tyre).toBe(40)
+    expect(h.state.calls.some((c) => c.table === 'tyre_records')).toBe(true)
+  })
+
+  it('RPC returns ok:false -> falls through to legacy (does not trust a non-ok payload)', async () => {
+    h.state.rpc.get_maint_tyre_split = { data: { ok: false, reason: 'unavailable' }, error: null }
+    h.state.tables.tyre_records = { data: [{ cost_per_tyre: 10, qty: 3, issue_date: '2026-07-05' }], error: null }
+
+    const out = await loadCostSplit({ now: NOW })
+
+    expect(out.source).toBeUndefined()
+    expect(out.tyre).toBe(30)
+    expect(h.state.calls.some((c) => c.table === 'tyre_records')).toBe(true)
   })
 })

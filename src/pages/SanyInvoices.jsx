@@ -16,13 +16,15 @@ export default function SanyInvoices() {
       kind="sany"
       service={{ list: listSanyInvoices, create: createSanyInvoice, import: importSanyInvoices, remove: deleteSanyInvoice }}
       columns={[
-        { key: 'doc_type', header: 'Type', render: (r) => (r.doc_type === 'detail' ? 'Detail' : 'Summary') },
+        { key: 'doc_type', header: 'Type', render: (r) => (r.doc_type === 'proforma' ? 'Proforma' : r.doc_type === 'detail' ? 'Detail' : 'Summary') },
         { key: 'invoice_date', header: 'Date' },
         { key: 'region', header: 'Region' },
         { key: 'invoice_no', header: 'Quotation No' },
         { key: 'asset_no', header: 'Asset' },
         { key: 'description', header: 'Parts' },
-        { key: 'amount', header: 'Amount', align: 'right', kind: 'money' },
+        { key: 'amount', header: 'Amount (Cost/M3)', align: 'right', kind: 'money' },
+        { key: 'gross_amount', header: 'Gross USD', align: 'right', render: (r) => (r.gross_amount == null ? '-' : Math.round(r.gross_amount).toLocaleString()) },
+        { key: 'net_amount', header: 'Net USD', align: 'right', render: (r) => (r.net_amount == null ? '-' : Math.round(r.net_amount).toLocaleString()) },
         { key: 'currency', header: 'Cur' },
       ]}
       formFields={[

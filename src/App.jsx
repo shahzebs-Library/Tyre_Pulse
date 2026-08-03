@@ -238,6 +238,7 @@ const CpkIntelligence        = lazy(() => import('./pages/CpkIntelligence'))
 const CostPerM3              = lazy(() => import('./pages/CostPerM3'))
 const ScoCosts               = lazy(() => import('./pages/ScoCosts'))
 const SanyInvoices           = lazy(() => import('./pages/SanyInvoices'))
+const SanyDelayPenalty       = lazy(() => import('./pages/SanyDelayPenalty'))
 const ProductionM3           = lazy(() => import('./pages/ProductionM3'))
 const ErpIntake             = lazy(() => import('./pages/ErpIntake'))
 const ExpenseImport          = lazy(() => import('./pages/ExpenseImport'))
@@ -533,6 +534,7 @@ function MainApp() {
                       <Route path="/cost-per-m3"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CostPerM3 /></RoleRoute></Safe>} />
                       <Route path="/sco-costs"               element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ScoCosts /></RoleRoute></Safe>} />
                       <Route path="/sany-invoices"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyInvoices /></RoleRoute></Safe>} />
+                      <Route path="/sany-delay-penalty"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SanyDelayPenalty /></RoleRoute></Safe>} />
                       <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
                       <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />

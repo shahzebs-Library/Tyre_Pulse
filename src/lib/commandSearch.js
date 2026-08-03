@@ -228,6 +228,8 @@ export const NAV_COMMANDS = [
     keywords: ['sco', 'subcontractor cost', 'sco cost', 'external cost'] },
   { id: 'sany-invoices', label: 'SANY Invoices', path: '/sany-invoices', icon: 'FileText', roles: ANALYTICS_ROLES,
     keywords: ['sany', 'workshop invoice', 'sany workshop', 'oem invoice'] },
+  { id: 'sany-delay-penalty', label: 'SANY Delay Penalty', path: '/sany-delay-penalty', icon: 'Clock', roles: ANALYTICS_ROLES,
+    keywords: ['sany delay', 'delay penalty', 'repair delay', 'deduction', '43 sar', 'downtime penalty'] },
   { id: 'erp-intake', label: 'Data Intake (ERP)', path: '/erp-intake', icon: 'Layers', roles: ANALYTICS_ROLES },
   { id: 'expense-import', label: 'Expense Import', path: '/expense-import', icon: 'Receipt', roles: ANALYTICS_ROLES },
   { id: 'roi-calculator', label: 'ROI Calculator', path: '/roi-calculator', icon: 'DollarSign', roles: ANALYTICS_ROLES },

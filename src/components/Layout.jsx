@@ -293,6 +293,7 @@ const NAV_GROUPS = [
       { to: '/production-m3',     label: 'Production (M3)',    icon: Boxes,      roles: ANALYTICS_ROLES },
       { to: '/sco-costs',         label: 'SCO Cost',          icon: Receipt,    roles: ANALYTICS_ROLES },
       { to: '/sany-invoices',     label: 'SANY Invoices',     icon: FileText,   roles: ANALYTICS_ROLES },
+      { to: '/sany-delay-penalty', label: 'SANY Delay Penalty', icon: Clock,     roles: ANALYTICS_ROLES },
       { to: '/reports',           label: 'Reports',           icon: FileText },
       { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },

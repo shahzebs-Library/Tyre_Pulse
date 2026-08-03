@@ -52,7 +52,7 @@ async function chunkedInsert(table, rows, onProgress) {
 }
 
 const SCO_COLS = 'id, country, region, site, period_date, cost_center, description, amount, currency, ref_no, source, notes, created_at'
-const SANY_COLS = 'id, country, region, site, asset_code, asset_no, invoice_no, invoice_date, period_date, description, amount, currency, status, doc_type, fleet_remarks, maintenance_remarks, source, notes, created_at'
+const SANY_COLS = 'id, country, region, site, asset_code, asset_no, invoice_no, invoice_date, period_date, description, amount, currency, status, doc_type, gross_amount, net_amount, fx_rate, deductions, fleet_remarks, maintenance_remarks, source, notes, created_at'
 
 /** Empty, correctly-shaped Cost/M3 result. */
 function emptyCostPerM3() {

@@ -126,3 +126,39 @@ describe('batching helpers', () => {
     expect(normalizeRegion('')).toBeNull()
   })
 })
+
+describe('SCO Values mapping + SANY proforma passthrough', () => {
+  it('maps the ERP/SCO grid "Values" column to the cost amount', () => {
+    const [row] = mapImportRows('sco', [{
+      Country: 'KSA', 'Store Code': 'SP_RIY', 'Cost Center': 'CC1',
+      'Item Desc': 'Cement', Values: '12,500.50', Transaction: '2026-07-05',
+    }])
+    expect(row.amount).toBeCloseTo(12500.5, 2)
+    expect(row.site).toBe('SP_RIY')
+    expect(row.description).toBe('Cement')
+    expect(row.period_date).toBe('2026-07-01')
+  })
+
+  it('keeps an explicit proforma Doc Type and passes gross/net/fx/deductions through', () => {
+    const [row] = mapImportRows('sany', [{
+      Country: 'KSA', 'Doc Type': 'proforma', 'Quotation No': 'SYDU1',
+      'Parts Description': 'SANY service contract', 'Amount (SAR) / Cost': 2004903.83,
+      Currency: 'USD', 'Gross Amount (USD)': 534641.02, 'Net Amount (USD)': 381946.65,
+      'FX Rate': 3.75, Deductions: [{ label: 'Penalty', amount_usd: 51690.9 }],
+    }])
+    expect(row.doc_type).toBe('proforma') // NOT 'detail' - it must feed Cost/M3
+    expect(row.amount).toBeCloseTo(2004903.83, 2)
+    expect(row.gross_amount).toBeCloseTo(534641.02, 2)
+    expect(row.net_amount).toBeCloseTo(381946.65, 2)
+    expect(row.fx_rate).toBe(3.75)
+    expect(Array.isArray(row.deductions)).toBe(true)
+    expect(row.deductions[0]).toMatchObject({ label: 'Penalty' })
+  })
+
+  it('a SANY detail row (asset/parts, no Doc Type) is still tagged detail', () => {
+    const [row] = mapImportRows('sany', [{
+      Country: 'KSA', 'Asset No': 'TM505', 'Parts Description': 'Filter', 'Amount (SAR) / Cost': 100,
+    }])
+    expect(row.doc_type).toBe('detail')
+  })
+})

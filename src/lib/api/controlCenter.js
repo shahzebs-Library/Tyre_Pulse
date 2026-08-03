@@ -58,6 +58,24 @@ export async function getControlCenterSummary({ country } = {}) {
   }
 }
 
+/**
+ * One-call Control Center feed (V460): summary + default tyre_cost lineage in a
+ * single round trip. Returns `{ ok, summary, lineage }`. Degrades to `{ok:false}`
+ * so the caller can fall back to the two separate calls.
+ * @param {{ country?:string }} [opts]
+ */
+export async function getDiagnosticsFeed({ country } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_diagnostics_feed', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error) return { ok: false, reason: 'error' }
+    return data || { ok: false, reason: 'empty' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
 /** Severity ordering + tone for the diagnostics feed (console kit vocabulary). */
 export const ISSUE_SEVERITY_RANK = { critical: 0, warning: 1, info: 2 }
 export const ISSUE_SEVERITY_TONE = { critical: 'danger', warning: 'warning', info: 'info' }

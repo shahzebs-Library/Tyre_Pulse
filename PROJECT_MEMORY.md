@@ -76,6 +76,19 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   scopes reads to the active country via the null-safe convention (All = no predicate; a country = its rows +
   NULL-country rows; mirrors _client.applyCountry) and shows an amber "mixed currencies, pick a country" note under
   'All'. activeCurrency resolution was already correct; only SCOPE changed, so a single-country view is unchanged rows.
+- **V460 `get_diagnostics_feed(country)` + V461 Cost/M3 COUNTRY-ABAC guard.** V460: single-call Control Center
+  aggregator that composes get_control_center_summary + default-tyre_cost get_figure_lineage in ONE round trip
+  (super-admin gated, anon revoked; additive; service `getDiagnosticsFeed` + tests). V461: the 4 Cost/M3 DEFINER
+  RPCs (get_cost_per_m3 / _trend / get_production_rejections / get_maint_tyre_split) bypass RLS and accepted any
+  p_country, so a country-restricted user (V226/V269) could read a country they cannot see. Added, right after the
+  org check: `if p_country is not null and not public.app_can_see_country(p_country) then return forbidden` (null/
+  'All' unchanged; client only passes the user's active country). Verified all 4 compile. **DELIBERATELY NOT
+  extended to the CPK family** (get_fleet_cpk 7.9k / get_cpk_drivers 6.8k plpgsql, get_brand_size_cpk is a
+  LANGUAGE-sql fn that can't take an `if` guard): hand-rewriting 7-8k-char live CPK bodies for a LOW, near-zero-
+  exposure finding (this is one org with mostly unrestricted users) risks breaking live CPK reporting - not worth
+  it. Same gap exists on the legacy expense family (get_parts_expense_snapshot/get_expense_by_country/
+  get_tyre_cost_by_asset/get_cost_variance) - a family-wide policy call, deferred. RULE: to guard a plpgsql DEFINER
+  cost RPC, add the app_can_see_country check right after the org check; a LANGUAGE-sql RPC needs conversion first.
 - **V459 CONTROL CENTER RPCs GATED TO SUPER-ADMIN.** Security review found get_figure_lineage +
   get_control_center_summary (V458) were callable by any authenticated org user though they power ONLY the
   super-admin /console/control-center page, leaking diagnostics/lineage metadata (import filenames, volumes,

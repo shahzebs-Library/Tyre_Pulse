@@ -18,7 +18,7 @@ vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
 
 import {
   rankIssues, openIssueCount, ISSUE_SEVERITY_TONE, DOMAIN_LABELS, LINEAGE_DOMAINS,
-  getFigureLineage, getControlCenterSummary,
+  getFigureLineage, getControlCenterSummary, getDiagnosticsFeed,
 } from '../lib/api/controlCenter'
 
 beforeEach(() => {
@@ -127,5 +127,24 @@ describe('controlCenter service - getControlCenterSummary', () => {
   it('returns { ok:false, reason:empty } when the RPC resolves null data', async () => {
     h.state.rpc = { data: null, error: null }
     expect(await getControlCenterSummary()).toEqual({ ok: false, reason: 'empty' })
+  })
+})
+
+describe('controlCenter service - getDiagnosticsFeed', () => {
+  it('returns the composed feed and passes the country ("All" -> null)', async () => {
+    h.state.rpc = { data: { ok: true, summary: { ok: true }, lineage: { ok: true } }, error: null }
+    const out = await getDiagnosticsFeed({ country: 'All' })
+    expect(out.ok).toBe(true)
+    expect(h.state.lastRpc.name).toBe('get_diagnostics_feed')
+    expect(h.state.lastRpc.args.p_country).toBeNull()
+  })
+
+  it('degrades to { ok:false } on error / throw / null data', async () => {
+    h.state.rpc = { data: null, error: { message: 'x' } }
+    expect(await getDiagnosticsFeed({ country: 'KSA' })).toEqual({ ok: false, reason: 'error' })
+    h.state.rpc = new Error('function get_diagnostics_feed does not exist')
+    expect(await getDiagnosticsFeed()).toEqual({ ok: false, reason: 'unavailable' })
+    h.state.rpc = { data: null, error: null }
+    expect(await getDiagnosticsFeed()).toEqual({ ok: false, reason: 'empty' })
   })
 })

@@ -291,10 +291,9 @@ export default function InsurancePolicies() {
     if (!file || !detail) return
     setEmailAnalyzing(true); setEmailError(''); setEmailAnalysis(null); setEmailFileName(file.name || '')
     try {
-      const { extractPdfLines } = await import('../lib/import/parsePdf')
-      const lines = await extractPdfLines(file)
-      const text = (Array.isArray(lines) ? lines : []).join('\n').trim()
-      if (!text) throw new Error('No readable text was found in the document. It may be a scanned image; upload a text-based PDF.')
+      const { extractEmailText } = await import('../lib/import/parseEmailFile')
+      const text = await extractEmailText(file)
+      if (!text) throw new Error('No readable text was found in the file. If it is a scanned PDF, use a text-based one; from Outlook use Save As Text/HTML or forward as PDF.')
       const result = await analyzeInsurerEmail({ policy: detail, conditions, emailText: text })
       setEmailAnalysis(result)
       if (result?.outcome === 'rejected') setSelectedDocKey('reconsideration')
@@ -697,21 +696,22 @@ export default function InsurancePolicies() {
                     <h3 className="text-sm font-semibold text-slate-200">Analyze insurer email or letter</h3>
                   </div>
                   <p className="mb-4 text-xs text-slate-500">
-                    Upload the insurer's decision as a PDF. It reads the message and, using only this policy's stored clauses, tells you the outcome, the exact clause the decision maps to, and the clause under which the claim should be approved. Text-based PDFs only (not scanned images).
+                    Upload the insurer's decision straight from Outlook - drag the email out as a .eml file, or use Save As to get .txt / .html - or a PDF. It reads the message and, using only this policy's stored clauses, tells you the outcome, the exact clause the decision maps to, and the clause under which the claim should be approved.
                   </p>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    <input ref={emailPdfRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={onAnalyzeEmail} />
+                    <input ref={emailPdfRef} type="file" accept=".pdf,.eml,.mht,.html,.htm,.txt,application/pdf,message/rfc822,text/html,text/plain" className="hidden" onChange={onAnalyzeEmail} />
                     <button
                       type="button"
                       disabled={emailAnalyzing}
                       onClick={() => emailPdfRef.current?.click()}
                       className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
                     >
-                      <Sparkles size={15} /> {emailAnalyzing ? 'Reading and analyzing...' : 'Upload insurer PDF'}
+                      <Sparkles size={15} /> {emailAnalyzing ? 'Reading and analyzing...' : 'Upload insurer email or PDF'}
                     </button>
                     {emailFileName && <span className="text-xs text-slate-400">{emailFileName}</span>}
                   </div>
+                  <p className="mt-2 text-xs text-slate-500">Accepts .eml, .mht, .html, .txt and .pdf. Outlook .msg is not supported directly - use Save As Text/HTML or forward as PDF.</p>
 
                   {emailError && (
                     <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{emailError}</div>

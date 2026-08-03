@@ -35,7 +35,7 @@ import { fmtCpkValue, fmtDistance, fmtMoney, fmtCoverage, sortByTypeWorstFirst }
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import CpkDataTable from '../components/cpk/CpkDataTable'
 
-const CpkScenarioPanel = lazy(() => import('../components/cpk/CpkScenarioPanel'))
+const CpkScenarioStudioPanel = lazy(() => import('../components/cpk/CpkScenarioStudioPanel'))
 const CpkDriversPanel = lazy(() => import('../components/cpk/CpkDriversPanel'))
 const KmSourcePanel = lazy(() => import('../components/cpk/KmSourcePanel'))
 const CpkUnitAuditPanel = lazy(() => import('../components/cpk/CpkUnitAuditPanel'))
@@ -49,7 +49,7 @@ const TABS = [
   { key: 'km_source', label: 'KM source', icon: Milestone },
   { key: 'units', label: 'Units & why different', icon: Layers },
   { key: 'report', label: 'Custom report', icon: FileText },
-  { key: 'scenario', label: 'What-if scenario', icon: FlaskConical },
+  { key: 'scenario', label: 'Scenario studio', icon: FlaskConical },
   { key: 'brand', label: 'Brand value', icon: TrendingUp },
   { key: 'drivers', label: 'Why it changed', icon: Info },
 ]
@@ -348,9 +348,16 @@ export default function CpkIntelligence() {
       {tab === 'scenario' && (
         <Suspense fallback={<Loading />}>
           <p className="mb-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Exclude a case (e.g. a wheel loader with cost but no measured km) and watch the fleet CPK move live.
+            Model any scenario: type a manual km (or hours) total, scale tyre / maintenance / tyre-price costs,
+            include or exclude assets, and watch the cost per km / hour move live. Save named scenarios to compare.
           </p>
-          <CpkScenarioPanel perVehicle={fleetCpk.perVehicle} loading={loading} />
+          <CpkScenarioStudioPanel
+            perVehicle={fleetCpk.perVehicle}
+            byType={fleetCpk.byType}
+            fleet={fleetCpk.fleet}
+            currency={currency}
+            country={country}
+          />
         </Suspense>
       )}
 

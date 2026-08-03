@@ -51,7 +51,7 @@ describe('CpkIntelligence renders every tab without crashing', () => {
   it('clicking through every tab never throws', async () => {
     renderPage()
     await waitFor(() => expect(screen.getByText(/CPK Intelligence/i)).toBeTruthy())
-    const tabLabels = ['Per vehicle', 'KM source', 'Units & why different', 'Custom report', 'What-if scenario', 'Brand value', 'Why it changed']
+    const tabLabels = ['Per vehicle', 'KM source', 'Units & why different', 'Custom report', 'Scenario studio', 'Brand value', 'Why it changed']
     for (const label of tabLabels) {
       const btn = screen.getAllByRole('button').find((b) => b.textContent?.trim() === label)
       if (!btn) continue

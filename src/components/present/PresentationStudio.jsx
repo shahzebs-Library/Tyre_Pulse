@@ -252,8 +252,9 @@ export default function PresentationStudio({
         valueLabels: { enabled: showLabels, color: themeInk(), size: 11, family: FONT_FAMILY },
       },
     }
+    // st.dim included so a source switch rebuilds the tooltip's format closure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSplit, st.type, st.labels, st.legend, st.pct, valueKind])
+  }, [isSplit, st.type, st.labels, st.legend, st.pct, valueKind, st.dim])
 
   const Comp = st.type === 'doughnut' ? Doughnut : (st.type === 'line' ? Line : Bar)
   const hasData = (chart.datasets || []).some((d) => (d.data || []).some((v) => Number(v)))

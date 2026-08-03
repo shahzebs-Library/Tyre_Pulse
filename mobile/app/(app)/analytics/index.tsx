@@ -1,20 +1,22 @@
 /**
  * Fleet Analytics - mobile KPI dashboard
  *
- * Available to: admin · manager · director
+ * Available to: admin / super-admin only (the `analytics` module carries
+ * roles: [] in the mobile MODULES registry; a per-user or per-role grant can
+ * still extend it). Gated by withModuleGuard(..., 'analytics') so the screen
+ * guard agrees with the registry and a manager cannot reach it directly.
  * Shows: fleet cost KPIs, risk breakdown, top sites by cost, recent critical alerts
  */
 
 import { useState, useCallback, useEffect } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput,
-  RefreshControl, StatusBar, ActivityIndicator, Platform,
+  RefreshControl, StatusBar, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../../lib/supabase'
 import { fetchAllPages } from '../../../lib/fetchAll'
-import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 import { toUserMessage } from '../../../lib/safeError'
 
 /** Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces). */
@@ -58,8 +60,9 @@ import { withModuleGuard } from '../../../components/ModuleGuard'
 export default withModuleGuard(AnalyticsScreen, 'analytics')
 
 function AnalyticsScreen() {
-  const { allowed, loading: guardLoading } = useElevatedGuard()
-
+  // Access is enforced by the registry via withModuleGuard(..., 'analytics')
+  // above; the `analytics` module is admin/super only. By the time this body
+  // renders, access is already confirmed, so no second in-screen role guard.
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -79,7 +82,6 @@ function AnalyticsScreen() {
   // fetched once (RLS scopes org + country). Kept independent of the site filter
   // so selecting a site never collapses the option list.
   useEffect(() => {
-    if (!allowed) return
     let cancelled = false
     ;(async () => {
       try {
@@ -101,7 +103,7 @@ function AnalyticsScreen() {
       }
     })()
     return () => { cancelled = true }
-  }, [allowed])
+  }, [])
 
   // Resolve the active [from, to] window from the selected period / custom range.
   // Empty string = open-ended on that side.
@@ -198,22 +200,9 @@ function AnalyticsScreen() {
     }
   }, [resolveRange, site])
 
-  useEffect(() => { if (allowed) load() }, [load, allowed])
+  useEffect(() => { load() }, [load])
 
   async function onRefresh() { setRefreshing(true); load() }
-
-  if (guardLoading) return (
-    <View style={styles.center}><ActivityIndicator size="large" color="#3b82f6" /></View>
-  )
-
-  if (!allowed) return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.center}>
-        <Ionicons name="lock-closed-outline" size={48} color="#94a3b8" />
-        <Text style={styles.accessDenied}>Analytics available for{'\n'}Admin, Manager & Director</Text>
-      </View>
-    </SafeAreaView>
-  )
 
   const maxCost = bySite.reduce((m, s) => Math.max(m, s.cost), 1)
   const maxBrand = byBrand.reduce((m, b) => Math.max(m, b.count), 1)
@@ -459,8 +448,6 @@ const kpiStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: '#eff6ff' },
-  center:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  accessDenied: { fontSize: 15, color: '#94a3b8', textAlign: 'center', marginTop: 12, lineHeight: 22 },
 
   header: {
     flexDirection: 'row', alignItems: 'center',

@@ -5,7 +5,7 @@ import {
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
-  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck,
+  LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -38,6 +38,7 @@ const NAV_GROUPS = [
       { to: '/console/smart-import',    label: 'Smart Import',     icon: Wand2 },
       { to: '/console/material-master', label: 'Material Master',  icon: Boxes },
       { to: '/console/classification-learning', label: 'Teach the Classifier', icon: Brain },
+      { to: '/console/data-learning', label: 'Data Learning', icon: Sparkles },
       { to: '/console/duplicates',      label: 'Duplicate Control', icon: CopyX },
       { to: '/console/data-browser',    label: 'Data Browser',     icon: Search },
       { to: '/console/data-cleanup',    label: 'Data Cleanup',     icon: Trash2 },

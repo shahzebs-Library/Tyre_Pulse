@@ -1,0 +1,28 @@
+-- V472 - extend the tyre learning layer to more fields + gap overview + master completeness.
+-- (STATUS: APPLIED LIVE on jhssdmeruxtrlqnwfksc via MCP apply_migration v472_data_learning_overall)
+--
+-- Builds on V471 (tyre_learned_facts + apply_tyre_learned_facts trigger + confirm/undo).
+--
+-- 1) tyre_learned_facts.target_field CHECK now allows 'removal_reason' (was brand,size).
+-- 2) apply_tyre_learned_facts() trigger extended: for brand/size/removal_reason it fills a
+--    blank value from a 'serial' fact and normalizes a present value via an 'alias' fact
+--    (future imports/edits auto-apply every confirmed rule).
+-- 3) tyre_learn_suggestions(p_country,p_limit,p_field default 'brand') - now field-aware
+--    (brand from master tyre_brand, size from master tire_size; self-consistency for both).
+--    REPLACES the 2-arg version. Output key is `suggested_value` (was suggested_brand).
+-- 4) get_tyre_gap_overview(p_country) - per field total/blank/recoverable (recoverable for
+--    brand+size only; removal_reason is normalize-only so recoverable is null).
+-- 5) get_master_file_completeness() - per-column filled count over the 48-col KSA master
+--    upload (ksa_country_upload_template_staging), one table scan, dynamic per-column filter.
+--
+-- All RPCs SECURITY DEFINER, pinned search_path=public, self-gate on app_is_elevated(),
+-- anon/public execute revoked, authenticated granted. NEVER touches cost.
+--
+-- Verified live (direct queries): gaps brand 253 / size 2,279 / removal_reason 7,623;
+-- master 192,198 rows (tyre_brand filled 50,888, tire_size 51,082).
+--
+-- Rollback: revert the target_field CHECK to ('brand','size'); restore the V471 trigger
+-- body; drop the 3-arg tyre_learn_suggestions + get_tyre_gap_overview + get_master_file_
+-- completeness (recreate the V471 2-arg suggestions if needed).
+--
+-- See the apply_migration body (name v472_data_learning_overall) for the full DDL.

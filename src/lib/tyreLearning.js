@@ -18,7 +18,12 @@ export const MATCH_TYPES = {
 export const TARGET_FIELDS = {
   brand: 'Brand',
   size: 'Size',
+  removal_reason: 'Removal reason',
 }
+
+// Fields the server can serial-recover a suggestion for. removal_reason is
+// normalize-only (there is no serial-recoverable source for it).
+export const SUGGESTABLE_FIELDS = ['brand', 'size']
 
 // Tokens the master files use as a blank placeholder (V468 rule) - never a value.
 const BLANK_TOKENS = new Set(['', 'NULL', 'N/A', 'NA', '-', 'NONE', 'UNKNOWN'])
@@ -48,26 +53,80 @@ export const SOURCE_LABEL = {
 
 /**
  * Normalize the suggestions array from tyre_learn_suggestions into display rows,
- * dropping any whose suggested brand does not survive cleaning (honest).
- * @returns {Array<{serialKey,serialNo,country,rows,brand,source,sourceLabel}>}
+ * dropping any whose suggested value does not survive cleaning (honest).
+ * The suggested value is a generic token (brand or size); `brand` is kept as a
+ * back-compat alias of `value`.
+ * @returns {Array<{serialKey,serialNo,country,rows,value,brand,source,sourceLabel}>}
  */
 export function shapeSuggestions(list) {
   return (Array.isArray(list) ? list : [])
     .map((r) => {
-      const brand = normalizeBrandToken(r.suggested_brand)
-      if (!brand) return null
+      const value = normalizeBrandToken(r.suggested_value ?? r.suggested_brand ?? r.value)
+      if (!value) return null
       return {
         serialKey: r.serial_key ?? r.serialKey ?? '',
         serialNo: r.serial_no ?? r.serialNo ?? r.serial_key ?? '',
         country: r.country ?? null,
         rows: Number(r.rows) || 0,
-        brand,
+        value,
+        brand: value,
         source: r.source || 'master',
         sourceLabel: SOURCE_LABEL[r.source] || 'Suggested',
       }
     })
     .filter(Boolean)
     .sort((a, b) => b.rows - a.rows)
+}
+
+/** Round a percentage honestly (null when the denominator is 0). */
+function pctOf(part, total) {
+  const t = Number(total) || 0
+  if (t <= 0) return null
+  return Math.round((Number(part) || 0) / t * 100)
+}
+
+/**
+ * Shape get_tyre_gap_overview into display rows. pct = filled percentage
+ * ((total-blank)/total), honestly null when total is 0.
+ * @returns {Array<{field,label,total,blank,recoverable,pct}>}
+ */
+export function shapeGapOverview(json) {
+  if (!json || json.ok !== true || !Array.isArray(json.fields)) return []
+  return json.fields.map((f) => {
+    const total = Number(f.total) || 0
+    const blank = Number(f.blank) || 0
+    return {
+      field: f.field,
+      label: f.label ?? TARGET_FIELDS[f.field] ?? f.field,
+      total,
+      blank,
+      recoverable: f.recoverable == null ? null : Number(f.recoverable) || 0,
+      pct: pctOf(total - blank, total),
+    }
+  })
+}
+
+/**
+ * Shape get_master_file_completeness into a per-column report sorted by ord.
+ * pct = filled/total (null on zero total); blank = total - filled.
+ * @returns {{total,columns:Array<{column,filled,blank,pct}>}}
+ */
+export function shapeMasterCompleteness(json) {
+  if (!json || json.ok !== true || !Array.isArray(json.columns)) return { total: 0, columns: [] }
+  const total = Number(json.total) || 0
+  const columns = json.columns
+    .slice()
+    .sort((a, b) => (Number(a.ord) || 0) - (Number(b.ord) || 0))
+    .map((c) => {
+      const filled = Number(c.filled) || 0
+      return {
+        column: c.column,
+        filled,
+        blank: total - filled,
+        pct: pctOf(filled, total),
+      }
+    })
+  return { total, columns }
 }
 
 /** Summary tiles for the suggestions set. */

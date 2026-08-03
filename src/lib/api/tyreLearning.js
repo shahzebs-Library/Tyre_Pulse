@@ -10,17 +10,51 @@
  */
 import { supabase, unwrap } from './_client'
 
-/** Blank-brand serials with a recoverable brand (self/master). Never throws. */
-export async function listTyreSuggestions({ country = null, limit = 200 } = {}) {
+/**
+ * Blank serials with a recoverable value (self/master) for a field. Only 'brand'
+ * and 'size' are serial-recoverable. Never throws (returns [] on error).
+ */
+export async function listTyreSuggestions({ country = null, field = 'brand', limit = 200 } = {}) {
   try {
     const { data, error } = await supabase.rpc('tyre_learn_suggestions', {
       p_country: country && country !== 'All' ? country : null,
       p_limit: limit,
+      p_field: field,
     })
     if (error) return []
     return Array.isArray(data?.suggestions) ? data.suggestions : []
   } catch {
     return []
+  }
+}
+
+/**
+ * Field-level gap overview (blank + recoverable counts per target field).
+ * Never throws; returns the json object or { ok:false }.
+ */
+export async function getTyreGapOverview({ country = null } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_tyre_gap_overview', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error || !data) return { ok: false }
+    return data
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Per-column completeness of the KSA master upload staging table.
+ * Never throws; returns the json object or { ok:false }.
+ */
+export async function getMasterCompleteness() {
+  try {
+    const { data, error } = await supabase.rpc('get_master_file_completeness')
+    if (error || !data) return { ok: false }
+    return data
+  } catch {
+    return { ok: false }
   }
 }
 

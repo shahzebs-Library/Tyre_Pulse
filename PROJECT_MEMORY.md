@@ -122,7 +122,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   aiRouterAgents 6. RULE: `chat-ai` edge fn HARD-CODES model = claude-haiku-4-5 and IGNORES the client `model`
   param, so every AI call runs on Haiku (the user declined a model picker). To add an agent: extend the 4 registries
   above + write a runner that builds a compact digest from the loaded context and calls callAiEdgeFunction.
-- **OPEN / NEXT (user asked, big):** a MASTER-FILE LEARNING / GAP-FIX layer. The KSA 48-col master upload
+- **TYRE DATA LEARNING LAYER (V471, applied live). Confirm once -> fix current + future.** The user wanted an ML/
+  learning layer where confirming a fact auto-fixes anything related and keeps applying to future data. Built for
+  tyre gaps (brand/size; NEVER cost). Table `tyre_learned_facts` (match_type serial|alias, target_field brand|size,
+  target_value; org restrictive RLS + read app_is_active + write app_is_elevated) + `tyre_learn_apply_log` (undo).
+  **BEFORE INSERT/UPDATE trigger `apply_tyre_learned_facts` on tyre_records** = the future-proofing: fills a blank
+  brand/size from a `serial` fact and normalizes a raw brand from an `alias` fact on every future write (verified
+  live rolled back: serial fill on update + future insert, "TRAINGLE"->"TRIANGLE" normalize). RPCs (DEFINER,
+  elevated): `tyre_learn_confirm(match_type,match_value,target_field,target_value,country,source,dry_run)` (dry-run
+  count OR upsert rule + fill current rows + log), `tyre_learn_undo(batch)` (deactivate rule FIRST then restore -
+  order matters or the trigger re-applies), `tyre_learn_suggestions(country,limit)` (blank-brand serials recoverable
+  from another row of the same serial [self] or the master upload [master]; 131 real KSA suggestions = 89 self + 42
+  master). Pure `src/lib/tyreLearning.js` (normalizeBrandToken rejects the master's literal NULL/N-A tokens + tab
+  pollution; shapeSuggestions; 6 tests) + service `src/lib/api/tyreLearning.js` + `TyreLearningSection.jsx` on
+  `/data-reconciliation` (suggestions + one-click Confirm + manual teach + learned-rules on/off + undo). Next free
+  migration **V472**. RULE: to add a learnable field, extend the target_field CHECK + the trigger + confirm predicate;
+  cost is deliberately excluded.
+- **STILL OPEN (offered):** a per-column completeness report on the 48-col master file; extending learning to
+  repair-reason normalization + the old/new serial chain; switching CPK onto the odometer basis for the 362
+  odometer-only assets.
+- **OLD OPEN note (superseded by V471 above):** a MASTER-FILE LEARNING / GAP-FIX layer. The KSA 48-col master upload
   (`ksa_country_upload_template_staging`) carries tyre lifecycle data - old_serialno + new serial, old_tyrebrand +
   new brand, remove/add km, repair reasons, preventive-repair info. The user wants: when they CONFIRM data from the
   master material, an ML/learning layer fills the blank gaps (brand, serial chain, km, repair reason) on the BEST/

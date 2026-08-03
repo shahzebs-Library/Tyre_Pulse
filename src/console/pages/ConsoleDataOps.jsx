@@ -7,6 +7,7 @@ import {
   Database, AlertTriangle, RefreshCw,
 } from 'lucide-react'
 import { getControlCenterSummary, openIssueCount } from '../../lib/api/controlCenter'
+import { openConsoleRoute, isConsoleRoute } from '../lib/openRoute'
 import { toUserMessage } from '../../lib/safeError'
 import {
   Panel, PanelHeader, StatTile, Btn, Badge, Note,
@@ -172,7 +173,7 @@ export default function ConsoleDataOps() {
           <PanelHeader icon={g.icon} title={g.title} subtitle={g.subtitle} />
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {g.cards.map((c) => (
-              <LinkCard key={c.route} card={c} onOpen={() => navigate(c.route)} />
+              <LinkCard key={c.route} card={c} onOpen={() => openConsoleRoute(c.route, navigate)} />
             ))}
           </div>
         </Panel>
@@ -198,7 +199,7 @@ function LinkCard({ card, onOpen }) {
         </div>
       </div>
       <p className="text-xs text-gray-500 flex-1">{desc}</p>
-      <span className="text-xs text-orange-400 font-medium mt-1">Open</span>
+      <span className="text-xs text-orange-400 font-medium mt-1">{isConsoleRoute(route) ? 'Open' : 'Open in new tab'}</span>
     </button>
   )
 }

@@ -201,6 +201,8 @@ export default function ConsoleDataQuality() {
                       {href ? (
                         <a
                           href={href}
+                          target={href.startsWith('/console') ? undefined : '_blank'}
+                          rel={href.startsWith('/console') ? undefined : 'noopener noreferrer'}
                           className="inline-flex items-center gap-1 text-orange-300 hover:text-orange-200 text-xs"
                         >
                           <ExternalLink size={12} /> Open

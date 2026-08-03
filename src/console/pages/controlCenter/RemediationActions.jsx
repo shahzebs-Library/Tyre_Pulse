@@ -35,6 +35,7 @@ import {
   LoadingState, ErrorState,
 } from '../../components/ui'
 import { toUserMessage } from '../../../lib/safeError'
+import { openConsoleRoute } from '../../lib/openRoute'
 import {
   listDuplicateTargets, previewDuplicates, resolveDuplicates,
 } from '../../../lib/api/duplicateControl'
@@ -169,7 +170,7 @@ function ActionCard({
               </Btn>
             )}
             {route && (
-              <Btn variant="ghost" size="sm" icon={ExternalLink} onClick={() => navigate(route.to)}>
+              <Btn variant="ghost" size="sm" icon={ExternalLink} onClick={() => openConsoleRoute(route.to, navigate)}>
                 {route.label}
               </Btn>
             )}

@@ -63,6 +63,15 @@ function SeverityBadge({ severity }) {
 const CATEGORY_KEYS = Object.keys(CONDITION_CATEGORY_LABELS)
 const POLICY_TYPE_KEYS = Object.keys(POLICY_TYPE_LABELS)
 
+// Detail-column tool tabs so every claim tool is one click away (not a long scroll).
+const DETAIL_TABS = [
+  { key: 'overview', label: 'Conditions' },
+  { key: 'claim', label: 'Claim checker' },
+  { key: 'totalloss', label: 'Total loss' },
+  { key: 'analyze', label: 'Analyze email' },
+  { key: 'correspondence', label: 'Correspondence' },
+]
+
 // The claim-scenario context flags the operator sets.
 const DEFAULT_CTX = {
   repairedBeforeApproval: false,
@@ -85,6 +94,7 @@ export default function InsurancePolicies() {
   const [detail, setDetail] = useState(null) // { ...policy, conditions: [] }
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [detailTab, setDetailTab] = useState('overview')
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
 
@@ -159,7 +169,7 @@ export default function InsurancePolicies() {
   useEffect(() => {
     let cancelled = false
     async function run() {
-      setEmailAnalysis(null); setEmailError(''); setEmailFileName('')
+      setEmailAnalysis(null); setEmailError(''); setEmailFileName(''); setDetailTab('overview')
       if (!selectedId) { setDetail(null); return }
       setDetailLoading(true)
       const { data, error: err } = await getPolicy(selectedId)
@@ -569,6 +579,17 @@ export default function InsurancePolicies() {
                   )}
                 </div>
 
+                {/* tool tabs - every claim tool one click away */}
+                <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-800 bg-slate-900/40 p-1.5">
+                  {DETAIL_TABS.map((t) => (
+                    <button key={t.key} type="button" onClick={() => setDetailTab(t.key)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${detailTab === t.key ? 'bg-emerald-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {detailTab === 'overview' && (<>
                 {/* conditions grouped by category */}
                 <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
                   <div className="mb-3 flex items-center justify-between">
@@ -612,6 +633,9 @@ export default function InsurancePolicies() {
                   )}
                 </div>
 
+                </>)}
+
+                {detailTab === 'claim' && (<>
                 {/* claim scenario checker */}
                 <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
                   <div className="mb-3 flex items-center gap-2">
@@ -669,6 +693,9 @@ export default function InsurancePolicies() {
                   </div>
                 </div>
 
+                </>)}
+
+                {detailTab === 'totalloss' && (<>
                 {/* vehicle value & total loss */}
                 <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
                   <div className="mb-3 flex items-center gap-2">
@@ -689,6 +716,9 @@ export default function InsurancePolicies() {
                   </div>
                 </div>
 
+                </>)}
+
+                {detailTab === 'analyze' && (<>
                 {/* analyze insurer email / letter (PDF) */}
                 <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
                   <div className="mb-1 flex items-center gap-2">
@@ -780,6 +810,9 @@ export default function InsurancePolicies() {
                   )}
                 </div>
 
+                </>)}
+
+                {detailTab === 'correspondence' && (<>
                 {/* correspondence & documents */}
                 <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
                   <div className="mb-1 flex items-center gap-2">
@@ -854,6 +887,7 @@ export default function InsurancePolicies() {
                     </div>
                   )}
                 </div>
+                </>)}
               </>
             )}
           </div>

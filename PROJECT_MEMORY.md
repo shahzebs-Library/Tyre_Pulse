@@ -138,6 +138,21 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `/data-reconciliation` (suggestions + one-click Confirm + manual teach + learned-rules on/off + undo). Next free
   migration **V472**. RULE: to add a learnable field, extend the target_field CHECK + the trigger + confirm predicate;
   cost is deliberately excluded.
+- **V472 - DATA LEARNING EXTENDED TO OVERALL + MOVED INTO THE CONSOLE (applied live, 2-agent build).** target_field
+  CHECK now allows `removal_reason` (brand/size/removal_reason); the `apply_tyre_learned_facts` trigger fills a blank
+  brand/size/removal_reason from a serial fact and normalizes a present value via an alias fact (future data
+  auto-applies every rule). `tyre_learn_suggestions(country,limit,field)` is now field-aware (brand from master
+  tyre_brand, size from master tire_size + self-consistency; REPLACES the 2-arg version; output key is now
+  `suggested_value`). New report RPCs `get_tyre_gap_overview(country)` (per-field total/blank/recoverable; recoverable
+  null for removal_reason) + `get_master_file_completeness()` (per-column fill rate over the 48-col
+  ksa_country_upload_template_staging, one scan/dynamic filters). All DEFINER/elevated/anon-revoked, never cost.
+  Client: `tyreLearning.js` shapeGapOverview/shapeMasterCompleteness (honest null pct on zero total) + field-aware
+  listTyreSuggestions; NEW super-admin page **`/console/data-learning`** (`ConsoleDataLearning.jsx`, nav "Data
+  Learning") = gap tiles + per-field suggestions + confirm/undo + manual teach + learned-rules on/off + the
+  master-file per-column completeness (trust) report. The `/data-reconciliation` TyreLearningSection still works
+  (shapeSuggestions keeps a `.brand` alias). Live gaps: brand 253 / size 2,279 / removal_reason 7,623; master
+  192,198 rows. Next free migration **V473**. STILL open (offered): learning for the old->new serial chain; a
+  per-country master completeness cut.
 - **STILL OPEN (offered):** a per-column completeness report on the 48-col master file; extending learning to
   repair-reason normalization + the old/new serial chain; switching CPK onto the odometer basis for the 362
   odometer-only assets.

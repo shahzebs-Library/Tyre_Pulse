@@ -66,6 +66,25 @@ async function purgeAndReload() {
 }
 
 /**
+ * One-shot: if `reason` is a chunk-load error, purge caches + workers and reload
+ * (guarded so it can only fire once per tab, released by markAppRendered). Returns
+ * true when it initiated recovery, false otherwise. Exported so BOTH the global
+ * listeners AND the React error boundary can share the exact same guard - a
+ * React.lazy chunk failure is caught by the boundary, never as an
+ * unhandledrejection, so the boundary must be able to trigger this too.
+ */
+export function recoverFromChunkError(reason) {
+  if (typeof window === 'undefined') return false
+  if (!isChunkLoadError(reason)) return false
+  const storageOk = canUseSessionStorage()
+  // Already tried once this tab: do not loop. The boundary's "Reload App" remains.
+  if (storageOk && window.sessionStorage.getItem(RELOAD_GUARD_KEY)) return false
+  if (storageOk) window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
+  purgeAndReload()
+  return true
+}
+
+/**
  * Install the one-shot chunk-load recovery listener.
  * Safe to call more than once; only the first call registers.
  */
@@ -74,20 +93,9 @@ export function installChunkRecovery() {
   if (window.__tpChunkRecoveryInstalled) return
   window.__tpChunkRecoveryInstalled = true
 
-  const storageOk = canUseSessionStorage()
-
-  const attemptRecovery = (reason) => {
-    if (!isChunkLoadError(reason)) return
-    // Already tried once this tab: do not loop. The error boundary's own
-    // "Reload App" button remains available to the user.
-    if (storageOk && window.sessionStorage.getItem(RELOAD_GUARD_KEY)) return
-    if (storageOk) window.sessionStorage.setItem(RELOAD_GUARD_KEY, '1')
-    purgeAndReload()
-  }
-
-  window.addEventListener('unhandledrejection', (e) => attemptRecovery(e?.reason))
+  window.addEventListener('unhandledrejection', (e) => recoverFromChunkError(e?.reason))
   // A failing <script type="module"> surfaces here rather than as a rejection.
-  window.addEventListener('error', (e) => attemptRecovery(e?.error ?? e?.message))
+  window.addEventListener('error', (e) => recoverFromChunkError(e?.error ?? e?.message))
 }
 
 /**

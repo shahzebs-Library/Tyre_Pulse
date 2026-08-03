@@ -1,6 +1,7 @@
 import { Component } from 'react'
 import { RefreshCw, Send } from 'lucide-react'
 import { captureError } from '../lib/monitoring'
+import { isChunkLoadError, recoverFromChunkError } from '../lib/chunkRecovery'
 
 /**
  * Generate a short, human-quotable error reference id (e.g. "ERR-1A2B3C4D").
@@ -20,16 +21,25 @@ function makeReferenceId() {
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null, componentStack: null, referenceId: null, copied: false, reported: false, reporting: false }
+    this.state = { hasError: false, error: null, componentStack: null, referenceId: null, copied: false, reported: false, reporting: false, recovering: false }
   }
 
   static getDerivedStateFromError(error) {
-    // Reference id is generated here so it exists even if componentDidCatch
-    // is skipped; never throws.
+    // A chunk-load error is the expected symptom of a deploy landing while a tab
+    // holds a stale index: the lazy route's JS chunk 404s. Show a calm "updating"
+    // state (a reload is about to fire) instead of the error screen, and mint no
+    // reference id for it - it is not a bug.
+    if (isChunkLoadError(error)) return { hasError: true, error, recovering: true }
     return { hasError: true, error, referenceId: makeReferenceId() }
   }
 
   componentDidCatch(error, info) {
+    // Deploy stale-chunk case: purge caches + workers and reload once (guarded so
+    // it can never loop). Do NOT capture it to Sentry - it is expected on deploy.
+    if (isChunkLoadError(error)) {
+      try { recoverFromChunkError(error) } catch { /* the Reload button remains */ }
+      return
+    }
     const componentStack = info?.componentStack ?? null
     const referenceId = this.state.referenceId || makeReferenceId()
     this.setState({ componentStack, referenceId })
@@ -74,6 +84,33 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (!this.state.hasError) return this.props.children
+
+    // Stale-chunk after a deploy: a reload is already firing. Show a calm notice,
+    // not the error screen.
+    if (this.state.recovering) {
+      return (
+        <div style={{
+          minHeight: '100vh', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', background: 'var(--bg-base)',
+          padding: '24px 20px', fontFamily: 'system-ui, -apple-system, sans-serif', gap: 14,
+        }}>
+          <RefreshCw size={22} className="animate-spin" style={{ color: '#16a34a' }} />
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 320, lineHeight: 1.6, margin: 0 }}>
+            Updating TyrePulse to the latest version...
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: 6, padding: '9px 20px', borderRadius: 10, border: 'none',
+              background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff',
+              fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Reload now
+          </button>
+        </div>
+      )
+    }
 
     return (
       <div

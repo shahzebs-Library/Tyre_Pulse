@@ -46,6 +46,7 @@ const ConsoleImportHistory = lazy(() => import('./console/pages/ConsoleImportHis
 const ConsoleMaterialMaster = lazy(() => import('./console/pages/ConsoleMaterialMaster'))
 const ConsoleClassificationLearning = lazy(() => import('./console/pages/ConsoleClassificationLearning'))
 const ConsoleDataLearning = lazy(() => import('./console/pages/ConsoleDataLearning'))
+const ConsoleMetricCatalogue = lazy(() => import('./console/pages/ConsoleMetricCatalogue'))
 const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
@@ -766,6 +767,7 @@ export default function App() {
           <Route path="material-master" element={<ConsoleMaterialMaster />} />
           <Route path="classification-learning" element={<ConsoleClassificationLearning />} />
           <Route path="data-learning" element={<ConsoleDataLearning />} />
+          <Route path="metric-catalogue" element={<ConsoleMetricCatalogue />} />
           <Route path="smart-import"  element={<ConsoleSmartImport />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />

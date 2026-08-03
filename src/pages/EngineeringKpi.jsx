@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
@@ -146,7 +147,7 @@ function KpiCard({ title, value, subValue, description, status, icon: Icon, tren
 }
 
 // ── Headline KPI Strip Card ───────────────────────────────────────────────────
-function HeadlineCard({ title, value, sub, status }) {
+function HeadlineCard({ title, value, sub, status, metricId, country }) {
   const valueColor = status === 'good' ? 'text-green-400'
     : status === 'warning' ? 'text-yellow-400'
     : status === 'critical' ? 'text-red-400'
@@ -159,7 +160,10 @@ function HeadlineCard({ title, value, sub, status }) {
 
   return (
     <div className={`card border ${borderColor} flex flex-col gap-1.5`}>
-      <p className="text-xs text-gray-400 font-medium">{title}</p>
+      <div className="flex items-center justify-between gap-1">
+        <p className="text-xs text-gray-400 font-medium">{title}</p>
+        {metricId && <ExplainThisNumber metricId={metricId} country={country} value={value} label={title} />}
+      </div>
       <p className={`text-2xl font-bold ${valueColor}`}>{value}</p>
       {sub && <p className="text-xs text-gray-500">{sub}</p>}
     </div>
@@ -1002,6 +1006,8 @@ export default function EngineeringKpi() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {/* 1. Fleet CPK */}
             <HeadlineCard
+              metricId="fleet_cpk"
+              country={activeCountry}
               title="Fleet CPK"
               value={kpis.cpk.validCount === 0 ? 'N/A' : `${activeCurrency} ${kpis.cpk.fleetAvgCpk.toFixed(4)}`}
               sub={kpis.cpk.validCount === 0 ? 'No km data' : `${activeCurrency}/km | ${kpis.cpk.coveragePct.toFixed(0)}% coverage`}
@@ -1013,6 +1019,8 @@ export default function EngineeringKpi() {
             />
             {/* 2. Avg Tyre Life */}
             <HeadlineCard
+              metricId="avg_tyre_life"
+              country={activeCountry}
               title="Avg Tyre Life"
               value={kpis.avgTyreLife.validCount === 0 ? 'N/A' : `${Math.round(kpis.avgTyreLife.avgKm).toLocaleString()} km`}
               sub={kpis.avgTyreLife.validCount === 0 ? 'No km data' : `${kpis.avgTyreLife.validCount} records`}
@@ -1024,6 +1032,8 @@ export default function EngineeringKpi() {
             />
             {/* 3. Failure Rate */}
             <HeadlineCard
+              metricId="failure_rate"
+              country={activeCountry}
               title="Failure Rate"
               value={`${(kpis.failureRate.failureRate * 100).toFixed(1)}%`}
               sub={`${kpis.failureRate.failureCount} of ${kpis.failureRate.totalCount} records`}

@@ -1,0 +1,36 @@
+-- V473 DATA TRUST PHASE 1: Metric Registry + versioned formulas + Explain This Number + record provenance.
+-- (STATUS: APPLIED LIVE on jhssdmeruxtrlqnwfksc via MCP apply_migration v473_metric_registry_explain + v473b_seed_metric_registry)
+-- Additive only. No existing table/column/RPC/report changed.
+--
+-- Purpose: make every displayed KPI explainable and traceable - one governed,
+-- versioned definition per metric, and an Explain panel that shows the formula,
+-- source, filters, freshness and lineage behind any number.
+--
+-- Objects:
+--   table  public.metric_registry   - one governed row per KPI (formula owner, source table/columns,
+--                                      date field/logic, unit, currency handling, null/duplicate handling,
+--                                      included/excluded statuses, joins/transformations, refresh SLA,
+--                                      lineage_domain -> get_figure_lineage, dashboards using it).
+--                                      GLOBAL (platform definitions); RLS: authenticated read, super-admin/Admin write.
+--   table  public.metric_versions   - versioned formulas per metric (version, formula, numerator/denominator,
+--                                      rounding, effective_from/to, owner, approver, approved_at, change_note).
+--   rpc    explain_metric(metric_id,country,from,to) - full explain payload: registry def + latest version +
+--                                      freshness (source row count + last source update + last calc) +
+--                                      lineage (composes get_figure_lineage where lineage_domain is set).
+--   rpc    get_record_provenance(table,id) - drill from an aggregate to one source record's full row + import batch
+--                                      (whitelisted tables: tyre_records, work_orders, parts_consumption,
+--                                      vehicle_fleet, accidents, inspections, stock_records; org-scoped).
+--   seed   12 real KPIs registered + a v1 version each (fleet_cpk, avg_tyre_life, failure_rate, tyre_spend,
+--                                      maintenance_cost, cost_per_m3, open_work_orders, fleet_size, accidents_total,
+--                                      claims_recovered, inspection_compliance, scrap_rate).
+--
+-- Both RPCs SECURITY DEFINER, pinned search_path=public; explain_metric gates app_is_active(),
+-- get_record_provenance gates app_is_elevated(); anon/public execute revoked, authenticated granted.
+--
+-- Client: src/lib/api/metricRegistry.js + src/lib/metricExplain.js (shapeExplain/freshnessAge; 16 tests),
+-- src/components/trust/ExplainThisNumber.jsx (reusable Explain panel, mounted on EngineeringKpi Fleet CPK /
+-- Avg Tyre Life / Failure Rate cards + the Cost per M3 headline), and the console page
+-- src/console/pages/ConsoleMetricCatalogue.jsx (/console/metric-catalogue, nav "Metric Catalogue").
+--
+-- Rollback: drop the two RPCs + metric_versions + metric_registry (all additive; no data migration to reverse).
+-- See apply_migration bodies (v473_metric_registry_explain, v473b_seed_metric_registry) for the full DDL + seed.

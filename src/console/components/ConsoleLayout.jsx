@@ -39,6 +39,7 @@ const NAV_GROUPS = [
       { to: '/console/material-master', label: 'Material Master',  icon: Boxes },
       { to: '/console/classification-learning', label: 'Teach the Classifier', icon: Brain },
       { to: '/console/data-learning', label: 'Data Learning', icon: Sparkles },
+      { to: '/console/metric-catalogue', label: 'Metric Catalogue', icon: LayoutList },
       { to: '/console/duplicates',      label: 'Duplicate Control', icon: CopyX },
       { to: '/console/data-browser',    label: 'Data Browser',     icon: Search },
       { to: '/console/data-cleanup',    label: 'Data Cleanup',     icon: Trash2 },

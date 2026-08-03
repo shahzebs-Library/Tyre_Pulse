@@ -15,6 +15,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Gauge, RefreshCcw, FileSpreadsheet, FileText, Layers } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { getCostPerM3, getCostPerM3Trend } from '../lib/api/costPerM3'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../lib/cpkModule'
@@ -156,7 +157,10 @@ export default function CostPerM3() {
 
       {/* Headline card (matches the All-<country> summary) */}
       <div className="mb-6 rounded-xl border border-[var(--border-subtle)] overflow-hidden">
-        <div className="bg-[var(--accent)] text-white px-4 py-2.5 font-semibold">All {country}</div>
+        <div className="bg-[var(--accent)] text-white px-4 py-2.5 font-semibold flex items-center justify-between gap-2">
+          <span>All {country}</span>
+          <ExplainThisNumber metricId="cost_per_m3" country={country} label={`Cost per M3 - ${country}`} />
+        </div>
         {loading ? (
           <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
         ) : (

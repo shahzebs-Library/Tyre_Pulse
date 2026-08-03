@@ -435,6 +435,57 @@ export function branchImpact(perVehicle = [], areaMap = [], { fromSite, toSite }
 }
 
 /**
+ * Fleet km + hours TOTALS transparency (the customer's "you are not taking total
+ * sum km and total hours" doubt). Sums the RAW km and hours that get_fleet_cpk now
+ * carries on every per_vehicle row, split by which unit CPK costs each asset in.
+ *
+ * These are SUMS, not CPKs, so an empty/absent value contributes 0 (not null): a
+ * missing meter reading is a zero addend, and 0 is a truthful total.
+ *
+ *  - totalKm    = sum of r.km over ALL assets (road + plant) = the full km from
+ *                 monthly tyre consumption. Nothing is dropped.
+ *  - totalHours = sum of r.hours over ALL assets.
+ *  - kmSideKm   = sum r.km on assets costed per km (unit !== 'engine_hours') =
+ *                 exactly CPK's km denominator.
+ *  - plantKm    = sum r.km on assets costed per engine-hour (unit === 'engine_hours')
+ *                 = real km that sits on the hours side, NOT in the km CPK.
+ *  - kmAssets / hoursAssets = asset counts by unit.
+ *  - totalCost  = sum total_cost over ALL assets.
+ *
+ * Invariant: totalKm === kmSideKm + plantKm.
+ *
+ * @param {Array} [perVehicle] per-asset CPK rows, each carrying km + hours numbers
+ * @returns {{ totalKm:number, totalHours:number, kmSideKm:number, plantKm:number,
+ *   kmAssets:number, hoursAssets:number, totalCost:number }}
+ */
+export function unitTotals(perVehicle = []) {
+  const rows = Array.isArray(perVehicle) ? perVehicle : []
+  let totalKm = 0
+  let totalHours = 0
+  let kmSideKm = 0
+  let plantKm = 0
+  let kmAssets = 0
+  let hoursAssets = 0
+  let totalCost = 0
+  for (const r of rows) {
+    const km = num(r?.km) ?? 0
+    const hours = num(r?.hours) ?? 0
+    const cost = num(r?.total_cost) ?? 0
+    totalKm += km
+    totalHours += hours
+    totalCost += cost
+    if (isHoursRow(r)) {
+      plantKm += km
+      hoursAssets += 1
+    } else {
+      kmSideKm += km
+      kmAssets += 1
+    }
+  }
+  return { totalKm, totalHours, kmSideKm, plantKm, kmAssets, hoursAssets, totalCost }
+}
+
+/**
  * Flatten per-branch area rows into export rows for Excel / PDF.
  * @param {Array} [areas] output of groupByArea
  * @returns {Array<{ site:string, region:string, kmDistance:number|null,

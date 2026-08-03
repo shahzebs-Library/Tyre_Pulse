@@ -1,0 +1,8 @@
+-- V466: Insurance policy knowledge base (ADMIN-ONLY, fully secured). APPLIED LIVE
+-- jhssdmeruxtrlqnwfksc 2026-08-03. Tables insurance_policies + insurance_policy_conditions
+-- with RESTRICTIVE org isolation + a permissive Admin/super gate (is_super_admin() OR
+-- app_role()='Admin'); anon revoked. Seeded 3 real Green Concrete policies (Motor
+-- Comprehensive 210-AIC-2026-11949342-000 limit 10,000,000 TL 60%; Plant & Equipment
+-- 210-PE-2026-11950716-000 sum insured 186,920,953.11 TL 65%; Motor TPL) + 14 claim
+-- conditions (4 rejection, 2 delay). Full body applied via apply_migration; see the
+-- applied migration in supabase_migrations. ROLLBACK: drop both tables.

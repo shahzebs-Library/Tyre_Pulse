@@ -7,6 +7,7 @@ import {
   groupByArea,
   branchImpact,
   areaExportRows,
+  unitTotals,
   num,
   pctDelta,
 } from '../lib/cpkScenarioStudio'
@@ -385,6 +386,58 @@ describe('branchImpact', () => {
     const imp = branchImpact(perVehicle, areaMap, { fromSite: 'NHC' })
     expect(imp.movedAssets).toBe(0)
     expect(imp.projectedCost).toBe(null)
+  })
+})
+
+// per_vehicle rows now carry BOTH km and hours numbers in addition to
+// distance_or_hours. Two road (km) assets + one plant asset whose km is real but
+// costed per engine-hour.
+const perVehicleUnits = [
+  { asset_no: 'TM634', unit: 'km', distance_or_hours: 187080, km: 187080, hours: 0, total_cost: 12000 },
+  { asset_no: 'TM700', unit: 'km', distance_or_hours: 100000, km: 100000, hours: 0, total_cost: 7000 },
+  { asset_no: 'GEN12', unit: 'engine_hours', distance_or_hours: 1200, km: 15672, hours: 1200, total_cost: 6000 },
+]
+
+describe('unitTotals', () => {
+  it('sums km and hours across all assets and splits km by unit', () => {
+    const t = unitTotals(perVehicleUnits)
+    // full km = road km + plant km (nothing dropped)
+    expect(t.totalKm).toBe(187080 + 100000 + 15672)
+    expect(t.kmSideKm).toBe(187080 + 100000) // road assets = CPK's km denominator
+    expect(t.plantKm).toBe(15672)            // plant km sits on the hours side
+    // the invariant the panel relies on
+    expect(t.totalKm).toBe(t.kmSideKm + t.plantKm)
+
+    expect(t.totalHours).toBe(1200)
+    expect(t.kmAssets).toBe(2)
+    expect(t.hoursAssets).toBe(1)
+    expect(t.totalCost).toBe(25000)
+  })
+
+  it('treats a missing km/hours as a zero addend (sums, not CPKs)', () => {
+    const t = unitTotals([
+      { asset_no: 'A', unit: 'km', total_cost: 100 },              // no km/hours fields
+      { asset_no: 'B', unit: 'km', km: 500, hours: null, total_cost: 50 },
+    ])
+    expect(t.totalKm).toBe(500)
+    expect(t.kmSideKm).toBe(500)
+    expect(t.plantKm).toBe(0)
+    expect(t.totalHours).toBe(0)
+    expect(t.kmAssets).toBe(2)
+    expect(t.totalCost).toBe(150)
+  })
+
+  it('is defensive on empty / bad input (every field a finite number)', () => {
+    for (const t of [unitTotals(), unitTotals(null), unitTotals('nope')]) {
+      expect(t.totalKm).toBe(0)
+      expect(t.totalHours).toBe(0)
+      expect(t.kmSideKm).toBe(0)
+      expect(t.plantKm).toBe(0)
+      expect(t.kmAssets).toBe(0)
+      expect(t.hoursAssets).toBe(0)
+      expect(t.totalCost).toBe(0)
+      Object.values(t).forEach((v) => expect(Number.isFinite(v)).toBe(true))
+    }
   })
 })
 

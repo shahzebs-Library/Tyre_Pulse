@@ -1,0 +1,7 @@
+-- V467: expose per-asset km AND hours in get_fleet_cpk.per_vehicle (+ all_km/all_hours
+-- on fleet). APPLIED LIVE 2026-08-03. Additive only - every existing key unchanged; two
+-- new per_vehicle keys ('km','hours') and two fleet keys ('all_km','all_hours') added so
+-- the Scenario Studio can show the FULL total km (incl. plant assets costed per hour) and
+-- model remove-hours -> km. Verified: KSA total km 167,457,434 = road 151,784,573 +
+-- plant 15,672,861; total hours 1,003,346. ROLLBACK: re-apply the prior body (this minus
+-- the km/hours/all_km/all_hours keys).

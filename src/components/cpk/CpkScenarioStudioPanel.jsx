@@ -25,12 +25,15 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   SlidersHorizontal, FlaskConical, Save, Copy, Trash2, RefreshCcw,
-  FileSpreadsheet, FileText, Search, Plus, X, Info,
+  FileSpreadsheet, FileText, Search, Plus, Info,
   TrendingUp, TrendingDown, Minus, Gauge, Truck, Factory,
+  Building2, MapPin, GitCompare, ArrowLeftRight, ToggleLeft, ToggleRight, Layers,
 } from 'lucide-react'
 import {
   DEFAULT_LEVERS, buildBaseline, applyLevers, scenarioRows, num,
+  unitTotals, groupByArea, branchImpact, areaExportRows,
 } from '../../lib/cpkScenarioStudio'
+import { getFleetAreaMap } from '../../lib/api/fleetCpk'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../../lib/exportUtils'
 
 const STORAGE_KEY = 'cpkScenarioStudio.v1'
@@ -151,6 +154,33 @@ export default function CpkScenarioStudioPanel({
   const [levers, setLevers] = useState(DEFAULT_LEVERS)
   const result = useMemo(() => applyLevers(baseline, levers), [baseline, levers])
 
+  /* ----- fleet km + hours totals (the transparency answer) ----- */
+  const totals = useMemo(() => unitTotals(perVehicle), [perVehicle])
+
+  /* ----- branch (area) map, fetched on mount, degrades to [] ----- */
+  const [areaMap, setAreaMap] = useState([])
+  useEffect(() => {
+    let alive = true
+    getFleetAreaMap({ country })
+      .then((rows) => { if (alive) setAreaMap(Array.isArray(rows) ? rows : []) })
+      .catch(() => { if (alive) setAreaMap([]) })
+    return () => { alive = false }
+  }, [country])
+
+  const areas = useMemo(() => groupByArea(perVehicle, areaMap), [perVehicle, areaMap])
+
+  /* ----- compare branches ----- */
+  const [fromSite, setFromSite] = useState('')
+  const [toSite, setToSite] = useState('')
+  const impact = useMemo(
+    () => branchImpact(perVehicle, areaMap, { fromSite, toSite }),
+    [perVehicle, areaMap, fromSite, toSite],
+  )
+
+  // If hours are removed, everything is costed per km: cost / the FULL km total
+  // (road + plant). Honest N/A when there is no km to divide by.
+  const kmOnlyCpk = totals.totalKm > 0 ? totals.totalCost / totals.totalKm : null
+
   /* ----- saved scenarios ----- */
   const [scenarios, setScenarios] = useState(() => loadScenarios())
   const [scenarioName, setScenarioName] = useState('')
@@ -268,6 +298,35 @@ export default function CpkScenarioStudioPanel({
     }
   }
 
+  /* ----- by-branch export ----- */
+  function exportAreas(kind) {
+    const rows = areaExportRows(areas).map((r) => ({
+      site: r.site,
+      region: r.region || '',
+      assets: fmtInt(r.assetCount),
+      km: fmtInt(r.kmDistance),
+      km_cpk: fmtCpk(r.kmCpkTotal),
+      hours: fmtInt(r.hoursDistance),
+      hours_cpk: fmtCpk(r.hoursCpkTotal),
+    }))
+    if (!rows.length) return
+    const name = reportFileName('TyrePulse CPK By Branch', countryLabel, reportDateLabel())
+    const colKeys = ['site', 'region', 'assets', 'km', 'km_cpk', 'hours', 'hours_cpk']
+    const headers = ['Branch', 'Region', 'Assets', 'Km', `Cost per km (${cur})`, 'Hours', `Cost per hour (${cur})`]
+    if (kind === 'excel') {
+      exportToExcel(rows, colKeys, headers, name, 'CPK By Branch')
+    } else {
+      exportToPdf(
+        rows,
+        colKeys.map((k, i) => ({ key: k, header: headers[i] })),
+        `CPK by branch (${countryLabel})`,
+        name,
+        'landscape',
+      )
+    }
+  }
+
+  const dropHours = levers.dropHoursSide === true
   const hasData = assetList.length > 0
 
   return (
@@ -298,6 +357,98 @@ export default function CpkScenarioStudioPanel({
           consumption to model a scenario.
         </div>
       )}
+
+      {/* ================= FLEET TOTALS (km + hours transparency) ================= */}
+      <section
+        className="mb-4 rounded-xl border p-4"
+        style={{ borderColor: 'var(--border-subtle)', background: 'var(--surface-raised, var(--bg-elevated))' }}
+      >
+        <h3 className="mb-1 flex items-center gap-2 text-base font-semibold">
+          <Layers size={18} /> Fleet totals (km and hours)
+        </h3>
+        <p className="mb-3 flex items-start gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <Info size={12} className="mt-0.5 shrink-0" />
+          <span>
+            The km total splits by unit: road vehicles are costed per km; plant / mixers per engine hour.
+            Nothing is dropped - the plant km simply sits on the hours side. Use "Remove hours" below to fold
+            it back into a km-only view.
+          </span>
+        </p>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <TotalTile
+            icon={Gauge}
+            title="Total km (all assets)"
+            value={fmtInt(totals.totalKm)}
+            note="full sum from monthly tyre consumption"
+          />
+          <TotalTile
+            icon={Truck}
+            title="Km-measured (road)"
+            value={fmtInt(totals.kmSideKm)}
+            note={`${fmtInt(totals.kmAssets)} assets - this is CPK's km denominator`}
+          />
+          <TotalTile
+            icon={Factory}
+            title="Hours-measured plant km"
+            value={fmtInt(totals.plantKm)}
+            note={`${fmtInt(totals.hoursAssets)} assets - real km, but costed per engine-hour, so NOT in the km CPK`}
+          />
+          <TotalTile
+            icon={Gauge}
+            title="Total engine hours"
+            value={fmtInt(totals.totalHours)}
+            note={`${fmtInt(totals.hoursAssets)} plant assets`}
+          />
+        </div>
+
+        {/* ---- remove hours (km-only) toggle ---- */}
+        <div
+          className="mt-4 rounded-lg border p-3"
+          style={{ borderColor: dropHours ? 'var(--accent)' : 'var(--border-subtle)', background: 'var(--bg-elevated)' }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <ArrowLeftRight size={14} /> Remove hours cost + hours (km-only view)
+              </div>
+              <p className="mt-0.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                Costs everything per km over the full km total (road + plant). This is the "if we removed
+                the hours cost and hours, what km-based data do we get" answer.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLever('dropHoursSide', !dropHours)}
+              aria-pressed={dropHours}
+              aria-label="Remove hours cost and hours (km-only view)"
+              className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium"
+              style={{
+                borderColor: dropHours ? 'var(--accent)' : 'var(--border-subtle)',
+                color: dropHours ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+            >
+              {dropHours ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+              {dropHours ? 'On' : 'Off'}
+            </button>
+          </div>
+
+          {dropHours && (
+            <div className="mt-3 rounded-md border p-3" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="text-2xl font-semibold tabular-nums">
+                {fmtCpk(kmOnlyCpk)}
+                <span className="ml-1 text-sm font-normal" style={{ color: 'var(--text-secondary)' }}>
+                  {cur} / km
+                </span>
+              </div>
+              <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                If hours are removed, everything is costed per km: Cost/km = {fmtCpk(kmOnlyCpk)} over{' '}
+                {fmtInt(totals.totalKm)} km (total cost {fmtMoney(totals.totalCost, cur)}).
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* ================= LEVERS ================= */}
@@ -638,6 +789,180 @@ export default function CpkScenarioStudioPanel({
           </p>
         )}
       </section>
+
+      {/* ================= BY BRANCH (AREA) ================= */}
+      <section
+        className="mt-4 rounded-xl border p-4"
+        style={{ borderColor: 'var(--border-subtle)', background: 'var(--surface-raised, var(--bg-elevated))' }}
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-base font-semibold">
+            <Building2 size={18} /> By branch (area)
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => exportAreas('excel')}
+              disabled={areas.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
+              style={{ borderColor: 'var(--border-subtle)' }}
+            >
+              <FileSpreadsheet size={12} /> Excel
+            </button>
+            <button
+              type="button"
+              onClick={() => exportAreas('pdf')}
+              disabled={areas.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs disabled:opacity-40"
+              style={{ borderColor: 'var(--border-subtle)' }}
+            >
+              <FileText size={12} /> PDF
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-subtle)' }}>
+          <table className="w-full text-sm border-collapse">
+            <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
+              <tr>
+                <th className="px-4 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Branch</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Assets</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Km</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Cost per km ({cur})</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Hours</th>
+                <th className="px-4 py-2.5 text-right font-semibold whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>Cost per hour ({cur})</th>
+              </tr>
+            </thead>
+            <tbody>
+              {areas.map((a) => (
+                <tr key={a.site} className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <td className="px-4 py-2.5 text-left whitespace-nowrap font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin size={12} style={{ color: 'var(--text-secondary)' }} />
+                      {a.site}
+                      {a.region ? (
+                        <span className="text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>
+                          ({a.region})
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtInt(a.assetCount)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtInt(a.km?.distance)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtCpk(a.km?.cpkTotal)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtInt(a.hours?.distance)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">{fmtCpk(a.hours?.cpkTotal)}</td>
+                </tr>
+              ))}
+              {areas.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    No branch data. Load a country with an area map and CPK rows to group by branch.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* ================= COMPARE BRANCHES ================= */}
+      <section
+        className="mt-4 rounded-xl border p-4"
+        style={{ borderColor: 'var(--border-subtle)', background: 'var(--surface-raised, var(--bg-elevated))' }}
+      >
+        <h3 className="mb-1 flex items-center gap-2 text-base font-semibold">
+          <GitCompare size={18} /> Compare branches
+        </h3>
+        <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Model moving one branch&apos;s assets so they are costed at another branch&apos;s km rate.
+        </p>
+
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs font-medium" htmlFor="cpk-from-site" style={{ color: 'var(--text-secondary)' }}>
+              From branch
+            </label>
+            <select
+              id="cpk-from-site"
+              value={fromSite}
+              onChange={(e) => setFromSite(e.target.value)}
+              className="mt-1 block rounded-md border bg-transparent px-3 py-1.5 text-sm"
+              style={{ borderColor: 'var(--border-subtle)' }}
+            >
+              <option value="">Select branch</option>
+              {areas.map((a) => (
+                <option key={a.site} value={a.site}>{a.site}</option>
+              ))}
+            </select>
+          </div>
+
+          <ArrowLeftRight size={16} className="mb-2 shrink-0" style={{ color: 'var(--text-secondary)' }} />
+
+          <div>
+            <label className="text-xs font-medium" htmlFor="cpk-to-site" style={{ color: 'var(--text-secondary)' }}>
+              To branch (cost rate)
+            </label>
+            <select
+              id="cpk-to-site"
+              value={toSite}
+              onChange={(e) => setToSite(e.target.value)}
+              className="mt-1 block rounded-md border bg-transparent px-3 py-1.5 text-sm"
+              style={{ borderColor: 'var(--border-subtle)' }}
+            >
+              <option value="">Select branch</option>
+              {areas.map((a) => (
+                <option key={a.site} value={a.site}>{a.site}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {fromSite && toSite ? (
+          <div className="mt-4 rounded-lg border p-3" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <TotalTile title="Moved assets" value={fmtInt(impact.movedAssets)} />
+              <TotalTile title="Moved km" value={fmtInt(impact.movedKm)} />
+              <TotalTile title={`Current ${cur}/km`} value={fmtCpk(impact.currentCpk)} />
+              <TotalTile title={`${toSite} ${cur}/km`} value={fmtCpk(impact.targetCpk)} />
+              <TotalTile title="Projected cost" value={fmtMoney(impact.projectedCost, cur)} />
+              <TotalTile title="Cost delta" value={fmtMoney(impact.costDelta, cur)} note={fmtPct(impact.costDeltaPct)} />
+            </div>
+            <p className="mt-3 flex items-start gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <Info size={12} className="mt-0.5 shrink-0" />
+              <span>
+                {impact.targetCpk == null ? (
+                  <>Moving {fmtInt(impact.movedAssets)} assets from {fromSite} to {toSite}: N/A -{' '}
+                  {toSite} has no measured Cost/km to project against.</>
+                ) : (
+                  <>Moving {fmtInt(impact.movedAssets)} assets from {fromSite} to {toSite}&apos;s cost rate
+                  changes cost by {fmtMoney(impact.costDelta, cur)} ({fmtPct(impact.costDeltaPct)}).</>
+                )}
+              </span>
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Pick a From and a To branch to see the cost impact.
+          </p>
+        )}
+      </section>
+    </div>
+  )
+}
+
+/* ---------- totals / metric tile ---------- */
+
+function TotalTile({ icon: Icon, title, value, note }) {
+  return (
+    <div className="rounded-lg border p-3" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+      <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+        {Icon ? <Icon size={13} /> : null} {title}
+      </div>
+      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+      {note ? (
+        <p className="mt-0.5 text-xs" style={{ color: 'var(--text-secondary)' }}>{note}</p>
+      ) : null}
     </div>
   )
 }

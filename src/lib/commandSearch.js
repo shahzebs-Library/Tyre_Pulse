@@ -203,6 +203,7 @@ export const NAV_COMMANDS = [
   { id: 'fuel-theft', label: 'Fuel Theft Alerts', path: '/fuel-theft', icon: 'Droplet', adminOnly: true },
   { id: 'driver-coaching', label: 'Driver Coaching', path: '/driver-coaching', icon: 'Award', adminOnly: true },
   { id: 'claims-summary', label: 'Claims Summary', path: '/claims-summary', icon: 'BarChart2' },
+  { id: 'insurance-policies', label: 'Insurance Policies', path: '/insurance-policies', icon: 'Shield', roles: ['Admin'], keywords: ['insurance', 'policy', 'claim', 'reject', 'delay', 'total loss', 'coverage', 'vehicle value'] },
   { id: 'insurance-claims', label: 'Insurance Claims', path: '/insurance-claims', icon: 'ShieldAlert' },
   { id: 'incidents', label: 'Incident Reports', path: '/incidents', icon: 'FileWarning' },
   { id: 'accident-workflow-settings', label: 'Accident Workflow', path: '/accident-workflow-settings', icon: 'GitBranch', roles: ANALYTICS_ROLES },

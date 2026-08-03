@@ -36,6 +36,35 @@ function emptyResult() {
  *   Camel-cased arrays parsed from the RPC's per_vehicle / by_type / fleet.
  *   Always resolves; never rejects.
  */
+/**
+ * KM SOURCE for CPK (V462): trace the fleet CPK km back to the exact tyre rows.
+ * The CPK km side = SUM of each tyre's total_km (from the monthly tyre consumption),
+ * matched to the tyre's change month by coalesce(removal_date, issue_date) - the
+ * IDENTICAL filter get_fleet_cpk uses, so the per-asset km reconciles to the page.
+ *
+ * @param {{ country?:string, from?:string, to?:string, asset?:string }} [opts]
+ *   asset omitted -> `{ ok, source, basis, from, to, by_asset:[{asset_no,tyres,km}] }`
+ *   asset given   -> `{ ok, source, basis, asset_no, km, tyre_count,
+ *                       tyres:[{serial_no,position,brand,size,job_card,issue_date,
+ *                       fitment_date,removal_date,effective_date,km_at_fitment,
+ *                       km_at_removal,total_km,cost_per_tyre,data_source}] }`
+ * Degrades to `{ ok:false }`; never throws.
+ */
+export async function getCpkKmSource({ country, from, to, asset } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_cpk_km_source', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null,
+      p_to: to || null,
+      p_asset: asset || null,
+    })
+    if (error) return { ok: false, reason: 'error' }
+    return data || { ok: false, reason: 'empty' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
 export async function getFleetCpk({ country, from, to } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_fleet_cpk', {

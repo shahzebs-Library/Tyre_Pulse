@@ -1,0 +1,18 @@
+-- V462 - get_cpk_km_source: CPK km SOURCE transparency.
+-- STATUS: APPLIED LIVE (jhssdmeruxtrlqnwfksc) + verified (reconciles to
+-- fleet_tyre_km_by_asset: KSA current month TM634 = 2 tyres / 187,080 km).
+--
+-- The fleet CPK km side = SUM of each tyre's total_km from the MONTHLY TYRE
+-- CONSUMPTION (V453), matched to the tyre's change month by
+-- coalesce(removal_date, issue_date). This RPC exposes WHICH tyre rows and their
+-- total_km make up that km so any km figure is traceable to source.
+-- Same filter (total_km>0, effective date in window) as fleet_tyre_km_by_asset,
+-- so per-asset km reconciles to the CPK page exactly.
+--   p_asset NULL  -> { ok, source, basis, from, to, by_asset:[{asset_no,tyres,km}] }
+--   p_asset given -> { ok, source, basis, asset_no, km, tyre_count,
+--                      tyres:[{serial_no,position,brand,size,job_card,issue_date,
+--                      fitment_date,removal_date,effective_date,km_at_fitment,
+--                      km_at_removal,total_km,cost_per_tyre,data_source}] }
+-- DEFINER STABLE, org-scoped, country-ABAC guarded (app_can_see_country, matches
+-- V461), anon revoked, authenticated granted.
+-- REVERSIBLE: drop function public.get_cpk_km_source(text,date,date,text);

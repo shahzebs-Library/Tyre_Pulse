@@ -184,6 +184,7 @@ export default function PressureIntelligence() {
   const [tyreRecords, setTyreRecords]   = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
+  const [truncated, setTruncated]       = useState(false)
 
   // Filters
   const [siteFilter, setSiteFilter]         = useState('')
@@ -208,20 +209,34 @@ export default function PressureIntelligence() {
       setLoading(true)
       setError(null)
       try {
-        const [{ data: ins }, { data: tr }] = await Promise.all([
-          fetchAllPages((from, to) => supabase
+        // Scope the active country server-side (null-safe: a country sees its own
+        // rows plus rows with no country, mirroring the app applyCountry rule) so a
+        // single-country view never pages the whole fleet just to filter it later.
+        const country = activeCountry !== 'All' ? activeCountry : null
+        const scope = (q) => country ? q.or(`country.eq.${country},country.is.null`) : q
+
+        // Bound the reads (both are large tables) and add a stable id tiebreak so
+        // paging never drops or repeats a row at a page boundary. Surface a capped
+        // note when the ceiling is hit rather than silently under-reporting counts.
+        const [insRes, trRes] = await Promise.all([
+          fetchAllPages((from, to) => scope(supabase
             .from('inspections')
             .select('id,asset_no,tyre_serial,pressure_reading,inspector,inspection_date,site,country,notes')
             .order('inspection_date', { ascending: false })
-            .range(from, to)),
-          fetchAllPages((from, to) => supabase
+            .order('id', { ascending: false }))
+            .range(from, to), { max: 50000 }),
+          fetchAllPages((from, to) => scope(supabase
             .from('tyre_records')
             .select('id,asset_no,serial_number:serial_no,position,pressure_reading,brand,size,site,country,issue_date,risk_level')
             .order('issue_date', { ascending: false })
-            .range(from, to)),
+            .order('id', { ascending: false }))
+            .range(from, to), { max: 50000 }),
         ])
-        setInspections(ins || [])
-        setTyreRecords(tr || [])
+        if (insRes.error) throw insRes.error
+        if (trRes.error) throw trRes.error
+        setInspections(insRes.data || [])
+        setTyreRecords(trRes.data || [])
+        setTruncated(Boolean(insRes.truncated || trRes.truncated))
       } catch (e) {
         setError(toUserMessage(e, 'Could not load pressure data.'))
       } finally {
@@ -229,7 +244,7 @@ export default function PressureIntelligence() {
       }
     }
     load()
-  }, [])
+  }, [activeCountry])
 
   // ── Normalize into unified readings ────────────────────────────────────────
   const allReadings = useMemo(() => {
@@ -919,6 +934,17 @@ export default function PressureIntelligence() {
                   <span className="text-xs font-bold text-white">105 PSI</span>
                 </div>
               </div>
+
+              {/* Capped-view note: the ceiling was reached, so figures cover the most
+                  recent readings only. */}
+              {truncated && (
+                <div className="flex items-center gap-2 bg-amber-950/20 border border-amber-700/40 rounded-lg px-3 py-2">
+                  <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+                  <p className="text-xs text-amber-300">
+                    Capped view: showing the most recent 50,000 readings. Narrow the country or date range for the full set.
+                  </p>
+                </div>
+              )}
 
               {/* KPI Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

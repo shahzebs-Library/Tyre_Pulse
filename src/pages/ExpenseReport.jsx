@@ -514,8 +514,31 @@ export default function ExpenseReport() {
         ],
       })
     }
+    // Cost mix as a percentage (tyres / spare / oil share of total spend).
+    const kp = snap.kpis || {}
+    const mixTotal = (Number(kp.tyre_expense) || 0) + (Number(kp.spare_expense) || 0) + (Number(kp.oil_expense) || 0)
+    if (mixTotal > 0) {
+      const pct = (v) => Math.round(((Number(v) || 0) / mixTotal) * 1000) / 10
+      out.push({
+        key: 'cost_mix_pct', label: 'Cost mix (%)', kind: 'flat', valueKind: 'percent',
+        rows: [
+          { label: 'Tyres', value: pct(kp.tyre_expense) },
+          { label: 'Spare Parts', value: pct(kp.spare_expense) },
+          { label: 'Oil', value: pct(kp.oil_expense) },
+        ],
+      })
+    }
+    // Fleet CPK (cost per km / per engine-hour) by vehicle type - split by unit so
+    // a km-rate and an hour-rate never share one axis. Rates keep their decimals.
+    const byType = Array.isArray(fleetCpk?.byType) ? fleetCpk.byType : []
+    const kmRows = byType.filter((r) => r.unit === 'km' && r.cpk_total != null)
+      .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
+    const hrRows = byType.filter((r) => r.unit === 'engine_hours' && r.cpk_total != null)
+      .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
+    if (kmRows.length) out.push({ key: 'cpk_km', label: 'CPK per km by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: kmRows })
+    if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Cost per hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
     return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
-  }, [snap])
+  }, [snap, fleetCpk, activeCurrency])
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
@@ -873,7 +896,8 @@ export default function ExpenseReport() {
               scope={activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'}
               company={appSettings?.company_name || 'TyrePulse'}
               filePrefix="Expense"
-              note={`Present your own data as a chart, then copy, download a PNG, or export a PowerPoint deck. Values in ${activeCurrency}.`}
+              showInsights
+              note={`Present your own data - spend, cost mix % and CPK - then copy, download a PNG, or export a PowerPoint deck with talking points. Values in ${activeCurrency}.`}
             />
           )}
 

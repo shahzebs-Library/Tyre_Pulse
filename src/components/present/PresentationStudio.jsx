@@ -104,7 +104,7 @@ function Sel({ value, onChange, options }) {
 
 export default function PresentationStudio({
   catalog = [], currency = 'SAR', money, scope = '', company = 'TyrePulse',
-  filePrefix = 'Chart', note = '',
+  filePrefix = 'Chart', note = '', showInsights = false,
 }) {
   const sources = (catalog || []).filter((s) => s && (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
   const fmtMoney = money || ((v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v), currency, 0)))
@@ -136,9 +136,10 @@ export default function PresentationStudio({
   const isSplit = isSeries && measure === 'split'
 
   const dimLabel = src?.label || 'chart'
+  const pctSuffix = st.pct && !isSeries && (src?.valueKind || 'money') === 'money'
   const autoTitle = isSeries
     ? `${dimLabel}${isSplit ? ' split' : measure === 'total' ? ' total' : ` (${measure})`}`
-    : `By ${dimLabel.toLowerCase()}${st.pct ? ' (share %)' : ''}`
+    : `By ${dimLabel.toLowerCase()}${pctSuffix ? ' (share %)' : ''}`
   const title = st.title.trim() || autoTitle
 
   const chart = useMemo(() => {
@@ -156,18 +157,20 @@ export default function PresentationStudio({
       const one = series.find((s) => s.name === measure) || series[0]
       return { labels, datasets: [{ label: one?.name || 'Value', data: (one?.data || []).map((v) => Number(v) || 0) }] }
     }
-    // Flat: filter -> sort -> top-N -> optional %.
+    // Flat: filter -> sort -> top-N -> optional % (only when the source is money).
+    const kind = src?.valueKind || 'money'
+    const doPct = st.pct && kind === 'money'
     const q = st.search.trim().toLowerCase()
     let rows = (q ? src.rows.filter((r) => String(r.label || '').toLowerCase().includes(q)) : src.rows.slice())
       .map((r) => ({ label: r.label, v: Number(r.value) || 0 }))
     if (st.sort === 'desc') rows.sort((a, b) => b.v - a.v)
     else if (st.sort === 'asc') rows.sort((a, b) => a.v - b.v)
     rows = rows.slice(0, st.topN)
-    if (st.pct) {
+    if (doPct) {
       const tot = rows.reduce((s, r) => s + r.v, 0) || 1
       rows = rows.map((r) => ({ label: r.label, v: Math.round((r.v / tot) * 1000) / 10 }))
     }
-    return { labels: rows.map((r) => r.label), datasets: [{ label: st.pct ? 'Share %' : 'Value', data: rows.map((r) => r.v) }] }
+    return { labels: rows.map((r) => r.label), datasets: [{ label: doPct ? 'Share %' : 'Value', data: rows.map((r) => r.v) }] }
   }, [src, isSeries, measure, st.search, st.sort, st.topN, st.pct])
 
   const data = useMemo(() => {
@@ -185,12 +188,24 @@ export default function PresentationStudio({
     return { labels, datasets: [{ ...ds, backgroundColor: cols, borderColor: cols, borderWidth: st.type === 'doughnut' ? 0 : 1 }] }
   }, [chart, isSplit, st.type, st.palette])
 
-  const valueKind = src?.valueKind || 'money'   // 'money' | 'count'
+  const valueKind = src?.valueKind || 'money'   // 'money' | 'count' | 'percent' | 'rate'
+  const srcFormat = typeof src?.format === 'function' ? src.format : null
+  // % share only makes sense for money magnitudes (not counts/rates/percents).
+  const canPct = !isSeries && valueKind === 'money'
+  const usePct = st.pct && canPct
   const fmtCell = (v) => {
-    if (st.pct) return `${Number(v).toFixed(1)}%`
+    if (usePct) return `${Number(v).toFixed(1)}%`
+    if (srcFormat) return srcFormat(Number(v))
+    if (valueKind === 'percent') return `${Number(v).toFixed(1)}%`
     if (valueKind === 'count') return Number(v).toLocaleString('en-US')
+    if (valueKind === 'rate') return `${currency} ${Number(v).toLocaleString('en-US', { maximumFractionDigits: 3 })}`
     return fmtMoney(v)
   }
+  const headerLabel = usePct ? 'Share %'
+    : valueKind === 'percent' ? '%'
+    : valueKind === 'count' ? 'Count'
+    : valueKind === 'rate' ? (src?.unitLabel || 'Rate')
+    : (src?.unitLabel || 'Value')
 
   const options = useMemo(() => {
     const stacked = isSplit && (st.type === 'bar' || st.type === 'hbar')
@@ -239,7 +254,7 @@ export default function PresentationStudio({
     ? Math.min(720, Math.max(340, (chart.labels || []).length * 30))
     : 380
 
-  const valueHeaders = isSplit ? (chart.datasets || []).map((d) => d.label) : [st.pct ? 'Share %' : (valueKind === 'count' ? 'Count' : 'Value')]
+  const valueHeaders = isSplit ? (chart.datasets || []).map((d) => d.label) : [headerLabel]
   const tableRows = useMemo(() => {
     const labels = chart.labels || []
     if (isSplit) {
@@ -283,10 +298,56 @@ export default function PresentationStudio({
       setMsg('Chart copied. Paste it into your slide.')
     } catch { setMsg('Copy failed. Use Download PNG.') }
   }
+  // Short, honest talking points derived from the CURRENT chart - a caption the
+  // user can copy onto a slide. Enabled per-page via `showInsights`.
+  const insights = useMemo(() => {
+    if (!showInsights) return []
+    const labels = chart.labels || []
+    if (!labels.length) return []
+    const pts = []
+    if (isSplit) {
+      const sums = (chart.datasets || []).map((d) => ({ name: d.label, total: (d.data || []).reduce((a, b) => a + (Number(b) || 0), 0) }))
+      const grand = sums.reduce((a, s) => a + s.total, 0)
+      const top = sums.slice().sort((a, b) => b.total - a.total)[0]
+      pts.push(`${title}: ${fmtCell(grand)} in total across ${labels.length} months.`)
+      if (top && grand) pts.push(`${top.name} is the biggest share at ${fmtCell(top.total)} (${Math.round((top.total / grand) * 100)}%).`)
+    } else {
+      const vals = (chart.datasets?.[0]?.data || []).map((v) => Number(v) || 0)
+      const total = vals.reduce((a, b) => a + b, 0)
+      if (isSeries) {
+        let pk = 0; vals.forEach((v, i) => { if (v > vals[pk]) pk = i })
+        pts.push(`Peak was ${labels[pk]} at ${fmtCell(vals[pk])}.`)
+        const firstI = vals.findIndex((v) => v !== 0)
+        const lastI = vals.length - 1 - [...vals].reverse().findIndex((v) => v !== 0)
+        if (firstI >= 0 && lastI >= 0 && vals[firstI] !== 0 && firstI !== lastI) {
+          const ch = Math.round(((vals[lastI] - vals[firstI]) / Math.abs(vals[firstI])) * 100)
+          pts.push(`${ch >= 0 ? 'Up' : 'Down'} ${Math.abs(ch)}% from ${labels[firstI]} to ${labels[lastI]}.`)
+        }
+        if (valueKind === 'money') pts.push(`Total over the period: ${fmtCell(total)}.`)
+      } else {
+        const ranked = labels.map((l, i) => ({ l, v: vals[i] })).sort((a, b) => b.v - a.v)
+        const top = ranked[0]
+        if (top && total && valueKind === 'money') pts.push(`${top.l} leads at ${fmtCell(top.v)} (${Math.round((top.v / total) * 100)}% of the ${labels.length} shown).`)
+        else if (top) pts.push(`Highest is ${top.l} at ${fmtCell(top.v)}.`)
+        if (valueKind === 'money' && !usePct) pts.push(`Total shown: ${fmtCell(total)} across ${labels.length} ${dimLabel.toLowerCase()}s.`)
+      }
+    }
+    return pts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInsights, chart, isSplit, isSeries, valueKind, usePct, title, dimLabel])
+
+  async function copyInsights() {
+    if (!insights.length) return
+    try {
+      await navigator.clipboard.writeText(`${title}\n${insights.map((p) => `- ${p}`).join('\n')}`)
+      setMsg('Talking points copied.')
+    } catch { setMsg('Copy failed.') }
+  }
+
   function slide(img) {
     // Pre-format cells so the .pptx table shows money / count / % correctly.
     const rows = tableRows.map((r) => ({ label: r.label, cells: r.cells.map(fmtCell) }))
-    return { title, subtitle: `${scope || 'All'}  |  ${currency}`, img, rows, headers: valueHeaders }
+    return { title, subtitle: `${scope || 'All'}  |  ${currency}`, img, rows, headers: valueHeaders, caption: insights.join('  ') }
   }
   async function addToDeck() {
     setMsg(''); const img = await png()
@@ -314,6 +375,8 @@ export default function PresentationStudio({
           ...r.cells.map((c) => ({ text: String(c), options: { align: 'right' } })),
         ]))
         sl.addTable([head, ...body], { x: 9.0, y: 1.4, w: 3.8, fontSize: 9, color: '0F172A', border: { type: 'solid', color: 'E2E8F0', pt: 0.5 }, valign: 'middle' })
+        // Talking-points caption under the chart (expenses only; empty elsewhere).
+        if (s.caption) sl.addText(s.caption, { x: 0.5, y: 7.05, w: 8.2, h: 0.4, fontSize: 10, italic: true, color: '475569' })
       }
       await pptx.writeFile({ fileName: `${reportFileName(filePrefix, 'Presentation', scope || 'All')}.pptx` })
       setMsg(`PowerPoint exported (${slides.length} slide${slides.length === 1 ? '' : 's'}).`)
@@ -374,7 +437,7 @@ export default function PresentationStudio({
           <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">
             <input type="checkbox" checked={st.legend} onChange={(e) => set({ legend: e.target.checked })} className="accent-[var(--accent)]" /> Legend
           </label>
-          {!isSeries && (
+          {canPct && (
             <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">
               <input type="checkbox" checked={st.pct} onChange={(e) => set({ pct: e.target.checked })} className="accent-[var(--accent)]" /> Show as % share
             </label>
@@ -391,6 +454,20 @@ export default function PresentationStudio({
             )}
           </div>
         </div>
+
+        {/* Talking points - short copy-able explanation for a slide (expenses only). */}
+        {showInsights && hasData && insights.length > 0 && (
+          <div className="rounded-lg border border-[var(--hairline)] bg-[var(--surface-2,rgba(148,163,184,0.06))] p-3">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Talking points for your slide</span>
+              <button type="button" onClick={copyInsights}
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--input-border)] px-2 py-1 text-xs text-[var(--text-primary)] hover:bg-[var(--surface-hover)]"><Copy size={12} /> Copy</button>
+            </div>
+            <ul className="list-disc pl-5 space-y-0.5 text-sm text-[var(--text-secondary)]">
+              {insights.map((p, i) => <li key={i}>{p}</li>)}
+            </ul>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={downloadPng} disabled={!hasData}

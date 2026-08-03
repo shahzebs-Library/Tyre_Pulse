@@ -37,8 +37,8 @@ const lastDay = (y, m0) => new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate()
  * page never fetches the full history on open.
  */
 export const CPK_PERIODS = [
-  { key: 'week', label: 'Last 7 days' },
-  { key: 'prev_week', label: 'Previous 7 days' },
+  { key: 'week', label: 'Last week (Sun to Sat)' },
+  { key: 'prev_week', label: 'Week before (Sun to Sat)' },
   { key: 'current_month', label: 'This month' },
   { key: 'last_month', label: 'Last month' },
   { key: 'quarter', label: 'This quarter' },
@@ -69,16 +69,23 @@ export function periodBounds(key = DEFAULT_PERIOD, anchor = new Date()) {
   let to
   switch (meta.key) {
     case 'week': {
-      // Rolling 7-day window ending today (unambiguous for a weekly site report).
-      const back = new Date(Date.UTC(y, m, d))
-      back.setUTCDate(back.getUTCDate() - 6)
-      from = iso(back.getUTCFullYear(), back.getUTCMonth(), back.getUTCDate())
-      to = iso(y, m, d)
+      // The last COMPLETED calendar week, Sunday to Saturday (GCC: reported on
+      // Sunday for the week that ended the previous Saturday). end = the most
+      // recent Saturday on or before the anchor; start = that week's Sunday.
+      const base = new Date(Date.UTC(y, m, d))
+      const dow = base.getUTCDay() // 0 Sun .. 6 Sat
+      const end = new Date(base); end.setUTCDate(end.getUTCDate() - ((dow + 1) % 7))
+      const start = new Date(end); start.setUTCDate(start.getUTCDate() - 6)
+      from = iso(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+      to = iso(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
       break
     }
     case 'prev_week': {
-      const end = new Date(Date.UTC(y, m, d)); end.setUTCDate(end.getUTCDate() - 7)
-      const start = new Date(Date.UTC(y, m, d)); start.setUTCDate(start.getUTCDate() - 13)
+      // The Sunday-to-Saturday week before the 'week' window.
+      const base = new Date(Date.UTC(y, m, d))
+      const dow = base.getUTCDay()
+      const end = new Date(base); end.setUTCDate(end.getUTCDate() - ((dow + 1) % 7) - 7)
+      const start = new Date(end); start.setUTCDate(start.getUTCDate() - 6)
       from = iso(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
       to = iso(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
       break

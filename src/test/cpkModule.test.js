@@ -64,6 +64,26 @@ describe('periodBounds', () => {
     expect(b.from).toBe('2026-07-01')
   })
 
+  it('week is the last completed Sun-Sat week (reported on Sunday)', () => {
+    // 2026-07-19 is a Sunday; the week just ended is Sun 12 to Sat 18.
+    const sunday = new Date(Date.UTC(2026, 6, 19))
+    const wk = periodBounds('week', sunday)
+    expect(wk.from).toBe('2026-07-12')
+    expect(wk.to).toBe('2026-07-18')
+    const prev = periodBounds('prev_week', sunday)
+    expect(prev.from).toBe('2026-07-05')
+    expect(prev.to).toBe('2026-07-11')
+  })
+
+  it('week from a mid-week anchor still ends on the previous Saturday', () => {
+    // 2026-07-15 is a Wednesday; last completed week is Sun 5 to Sat 11.
+    const wk = periodBounds('week', anchor)
+    expect(wk.to).toBe('2026-07-11')
+    expect(wk.from).toBe('2026-07-05')
+    // Every week window is exactly 7 days (Sun..Sat inclusive).
+    expect(new Date(wk.to) - new Date(wk.from)).toBe(6 * 24 * 3600 * 1000)
+  })
+
   it('every preset resolves to valid ISO bounds', () => {
     for (const p of CPK_PERIODS) {
       const b = periodBounds(p.key, anchor)

@@ -174,6 +174,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   explain path. STILL OPEN (Phase 2/3): quality_rules/quality_results + reconciliation_runs + pipeline_runs/
   integration_events monitors + correction_cases workflow + incidents + releases/release_impacts + visual/
   column-level lineage + dashboard_registry/widget_bindings + cross-layer trace IDs.
+- **DATA TRUST PROGRAM - PHASE 2 DONE (V474, applied live, 2-agent build).** Additive. Tables `quality_rules`
+  (GLOBAL registry, 10 seeded) + `quality_results` + `reconciliation_runs` + `correction_cases` +
+  `correction_case_events` (all org-scoped RESTRICTIVE + elevated write; definer-written result/event tables).
+  RPCs (DEFINER, app_is_elevated, anon revoked): `run_quality_checks(country)` = 10 org-scoped checks (brand/size/
+  reason gaps, unpriced, future/reversed removal dates, orphan assets, no-import-uid, low-confidence spend, missing
+  vehicle type) -> quality_results; `run_reconciliation(country)` = 3 checks (WO total vs labour+parts, tyre-asset
+  in-fleet link, production supplied vs approved m3) -> reconciliation_runs; `correction_case_open/_transition/
+  _update` = governed workflow (case_no CC-YYYY-####, frozen dashboard_context, original vs corrected value, status
+  reported->investigating->proposed->approved->applied->reconciled->closed / rejected; the case RECORDS decisions +
+  keeps the original value, it does NOT itself mutate business data - the real fix goes through the existing
+  undoable tools); `get_pipeline_runs`/`get_integration_events` = job + integration MONITORS reading existing
+  import_batches/report_send_log/ai_token_logs (NO new logging infra). Client: `src/lib/api/dataTrustOps.js` +
+  pure `src/lib/dataTrustOps.js` (shapeQualityResults/qualitySummary/shapeReconciliation/CASE_STATUSES/nextStatuses/
+  ROOT_CAUSE_CATEGORIES [the spec's small-cause list]; 7 tests) + 4 console pages **/console/data-quality**,
+  **/console/reconciliation**, **/console/pipeline-monitor**, **/console/correction-center** (nav: Data Quality,
+  Reconciliation, Pipeline Monitor, Correction Center). Next free migration **V475**. STILL OPEN (Phase 3):
+  visual + column-level lineage, downstream impact analysis, release/release_impacts, dashboard_registry/
+  widget_bindings, cross-layer trace/correlation IDs, advanced alerting on quality/reconciliation breaches.
 - **STILL OPEN (offered):** a per-column completeness report on the 48-col master file; extending learning to
   repair-reason normalization + the old/new serial chain; switching CPK onto the odometer basis for the 362
   odometer-only assets.

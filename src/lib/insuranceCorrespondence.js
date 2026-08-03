@@ -62,6 +62,7 @@ export const CORRESPONDENCE_TYPES = [
   { key: 'delay_notice', title: 'Delay / pending-items notice', kind: 'letter', description: 'Explains what the settlement is waiting on and why.' },
   { key: 'followup', title: 'Status follow-up', kind: 'email', description: 'Chase the insurer for a claim status update.' },
   { key: 'rejection_notice', title: 'Rejection notice', kind: 'letter', description: 'States the rejection reasons and cites the exact policy clause for each.' },
+  { key: 'reconsideration', title: 'Reconsideration request', kind: 'email', description: 'Reply to the insurer citing the clause under which the claim should be approved.' },
   { key: 'total_loss_advice', title: 'Total-loss advice', kind: 'letter', description: 'Constructive total-loss position from repair cost vs insured value.' },
 ]
 
@@ -235,6 +236,30 @@ function buildRejectionNotice(c, findings) {
   }
 }
 
+function buildReconsideration(c, analysis) {
+  const a = analysis || null
+  const insurerReason = a && a.reasonSummary ? a.reasonSummary : PLACEHOLDER
+  const approvalClauses = a && Array.isArray(a.approval) && a.approval.length
+    ? a.approval.map((cl) => `Policy ${cl.policy_no || c.policyNo}, clause ${cl.seq}: "${cl.clause_text}"`)
+    : [`${PLACEHOLDER} - cite the policy clause under which cover applies.`]
+  return {
+    to: c.insurerContact,
+    subject: `Reconsideration request - claim ${c.reference} (policy ${c.policyNo})`,
+    sections: [
+      { body: [`Dear ${c.insurerContact},`] },
+      { body: [
+        `We refer to your decision on claim ${c.reference} under policy ${c.policyNo} (${c.insured}).`,
+        `Your stated position: ${insurerReason}`,
+        'We respectfully request reconsideration on the policy basis set out below.',
+      ] },
+      { heading: 'Incident and vehicle', body: incidentBlock(c) },
+      { heading: 'Policy basis for cover', checklist: approvalClauses },
+      { body: ['On this basis the claim falls within cover. Kindly reassess and confirm approval, or advise the specific evidence still required.'] },
+      { body: signOff(c) },
+    ],
+  }
+}
+
 function buildTotalLossAdvice(c, tl) {
   const verdict = tl.isTotalLoss == null
     ? 'Insufficient figures were provided to determine constructive total loss; enter the repair cost, insured value and total-loss threshold.'
@@ -272,7 +297,7 @@ function buildTotalLossAdvice(c, tl) {
  * @param {number}  args.insuredValue insured value for the total-loss advice.
  * @returns {{documents: Array, recommendedKeys: string[]}}
  */
-export function buildCorrespondence({ policy = {}, findings = [], ctx = {}, caseInfo = {}, repairCost, insuredValue } = {}) {
+export function buildCorrespondence({ policy = {}, findings = [], ctx = {}, caseInfo = {}, repairCost, insuredValue, analysis = null } = {}) {
   const fnds = Array.isArray(findings) ? findings : []
   const c = baseContext(policy, { ...caseInfo, claimAmount: caseInfo.claimAmount ?? repairCost })
   c.insuredValue = insuredValue ?? policy.sum_insured ?? policy.limit_of_liability
@@ -285,6 +310,7 @@ export function buildCorrespondence({ policy = {}, findings = [], ctx = {}, case
     delay_notice: buildDelayNotice(c, fnds),
     followup: buildFollowup(c),
     rejection_notice: buildRejectionNotice(c, fnds),
+    reconsideration: buildReconsideration(c, analysis),
     total_loss_advice: buildTotalLossAdvice(c, tl),
   }
 
@@ -298,6 +324,11 @@ export function buildCorrespondence({ policy = {}, findings = [], ctx = {}, case
   if (hasReject) recommended.add('rejection_notice')
   if (hasDelay) { recommended.add('delay_notice'); recommended.add('followup') }
   if (tl.isTotalLoss === true) recommended.add('total_loss_advice')
+  // When an insurer message has been analysed, drive the reply from its outcome.
+  if (analysis) {
+    if (analysis.outcome === 'rejected') recommended.add('reconsideration')
+    if (analysis.outcome === 'delayed' || analysis.outcome === 'information_requested') { recommended.add('followup'); recommended.add('document_checklist') }
+  }
 
   return { documents, recommendedKeys: [...recommended] }
 }

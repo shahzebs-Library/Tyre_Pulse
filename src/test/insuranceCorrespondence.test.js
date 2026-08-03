@@ -26,6 +26,22 @@ describe('buildCorrespondence', () => {
     expect(documents.map((d) => d.key).sort()).toEqual(CORRESPONDENCE_TYPES.map((t) => t.key).sort())
   })
 
+  it('drafts a reconsideration reply from an analysis and cites the approval clause', () => {
+    const analysis = {
+      outcome: 'rejected',
+      reasonSummary: 'Repair carried out before approval.',
+      approval: [{ seq: 3, category: 'coverage', clause_text: 'Own-damage cover applies within KSA.', policy_no: POLICY.policy_no }],
+      matched: [],
+    }
+    const { documents, recommendedKeys } = buildCorrespondence({ policy: POLICY, findings: [], ctx: {}, caseInfo: CASE, analysis })
+    expect(recommendedKeys).toContain('reconsideration')
+    const rec = documents.find((d) => d.key === 'reconsideration')
+    const text = documentToText(rec)
+    expect(text).toContain('clause 3')
+    expect(text).toContain('Own-damage cover applies within KSA.')
+    expect(text).toContain('Repair carried out before approval.')
+  })
+
   it('suggests claim submission and checklist by default and approval when not yet repaired', () => {
     const { recommendedKeys } = buildCorrespondence({ policy: POLICY, findings: [], ctx: { repairedBeforeApproval: false }, caseInfo: CASE })
     expect(recommendedKeys).toEqual(expect.arrayContaining(['claim_submission', 'document_checklist', 'approval_request']))

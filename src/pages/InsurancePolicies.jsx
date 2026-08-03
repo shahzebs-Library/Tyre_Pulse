@@ -14,7 +14,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Shield, FileText, FileSpreadsheet, AlertOctagon, Clock, Info,
   Plus, Pencil, Trash2, X, RefreshCw, Search, Calculator, Save, Upload,
-  Mail, ClipboardList, Copy, Download, Check as CheckIcon,
+  Mail, ClipboardList, Copy, Download, Check as CheckIcon, FileSearch, Sparkles,
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
@@ -32,6 +32,7 @@ import {
   buildCorrespondence, documentToText, documentMailto,
   documentKindLabel,
 } from '../lib/insuranceCorrespondence'
+import { analyzeInsurerEmail, outcomeMeta } from '../lib/insuranceEmailAnalysis'
 import { exportToExcel, exportToPdf, exportDocumentPdf, reportFileName } from '../lib/exportUtils'
 
 // ── small presentational helpers ─────────────────────────────────────────────
@@ -102,6 +103,13 @@ export default function InsurancePolicies() {
   const [selectedDocKey, setSelectedDocKey] = useState('claim_submission')
   const [copied, setCopied] = useState(false)
 
+  // insurer email/letter analyzer state
+  const emailPdfRef = useRef(null)
+  const [emailAnalyzing, setEmailAnalyzing] = useState(false)
+  const [emailAnalysis, setEmailAnalysis] = useState(null)
+  const [emailFileName, setEmailFileName] = useState('')
+  const [emailError, setEmailError] = useState('')
+
   // modals
   const [policyModal, setPolicyModal] = useState(null)   // { mode:'create'|'edit', row }
   const pdfRef = useRef(null)
@@ -151,6 +159,7 @@ export default function InsurancePolicies() {
   useEffect(() => {
     let cancelled = false
     async function run() {
+      setEmailAnalysis(null); setEmailError(''); setEmailFileName('')
       if (!selectedId) { setDetail(null); return }
       setDetailLoading(true)
       const { data, error: err } = await getPolicy(selectedId)
@@ -229,8 +238,9 @@ export default function InsurancePolicies() {
       },
       repairCost,
       insuredValue,
+      analysis: emailAnalysis,
     })
-  }, [detail, findings, ctx, caseInfo, ccy, repairCost, insuredValue])
+  }, [detail, findings, ctx, caseInfo, ccy, repairCost, insuredValue, emailAnalysis])
 
   const selectedDoc = useMemo(
     () => correspondence.documents.find((d) => d.key === selectedDocKey) || correspondence.documents[0] || null,
@@ -271,6 +281,28 @@ export default function InsurancePolicies() {
       })
     } catch (err) {
       setError(toUserMessage(err))
+    }
+  }
+
+  // ── analyse an insurer email / letter PDF ─────────────────────────────────────
+  async function onAnalyzeEmail(e) {
+    const file = e.target.files?.[0]
+    if (emailPdfRef.current) emailPdfRef.current.value = ''
+    if (!file || !detail) return
+    setEmailAnalyzing(true); setEmailError(''); setEmailAnalysis(null); setEmailFileName(file.name || '')
+    try {
+      const { extractPdfLines } = await import('../lib/import/parsePdf')
+      const lines = await extractPdfLines(file)
+      const text = (Array.isArray(lines) ? lines : []).join('\n').trim()
+      if (!text) throw new Error('No readable text was found in the document. It may be a scanned image; upload a text-based PDF.')
+      const result = await analyzeInsurerEmail({ policy: detail, conditions, emailText: text })
+      setEmailAnalysis(result)
+      if (result?.outcome === 'rejected') setSelectedDocKey('reconsideration')
+      else if (result?.outcome === 'delayed' || result?.outcome === 'information_requested') setSelectedDocKey('followup')
+    } catch (err) {
+      setEmailError(toUserMessage(err))
+    } finally {
+      setEmailAnalyzing(false)
     }
   }
 
@@ -656,6 +688,96 @@ export default function InsurancePolicies() {
                   <div className={`mt-3 rounded-lg border p-3 text-sm ${totalLoss.isTotalLoss == null ? 'border-slate-700 bg-slate-950/40 text-slate-300' : totalLoss.isTotalLoss ? 'border-red-500/30 bg-red-500/5 text-red-300' : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-300'}`}>
                     {totalLoss.isTotalLoss == null ? totalLoss.note : (totalLoss.isTotalLoss ? `Constructive total loss. ${totalLoss.note}` : `Not a total loss. ${totalLoss.note}`)}
                   </div>
+                </div>
+
+                {/* analyze insurer email / letter (PDF) */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
+                  <div className="mb-1 flex items-center gap-2">
+                    <FileSearch size={16} className="text-emerald-300" />
+                    <h3 className="text-sm font-semibold text-slate-200">Analyze insurer email or letter</h3>
+                  </div>
+                  <p className="mb-4 text-xs text-slate-500">
+                    Upload the insurer's decision as a PDF. It reads the message and, using only this policy's stored clauses, tells you the outcome, the exact clause the decision maps to, and the clause under which the claim should be approved. Text-based PDFs only (not scanned images).
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input ref={emailPdfRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={onAnalyzeEmail} />
+                    <button
+                      type="button"
+                      disabled={emailAnalyzing}
+                      onClick={() => emailPdfRef.current?.click()}
+                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                    >
+                      <Sparkles size={15} /> {emailAnalyzing ? 'Reading and analyzing...' : 'Upload insurer PDF'}
+                    </button>
+                    {emailFileName && <span className="text-xs text-slate-400">{emailFileName}</span>}
+                  </div>
+
+                  {emailError && (
+                    <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{emailError}</div>
+                  )}
+
+                  {emailAnalysis && !emailAnalyzing && (
+                    <div className="mt-4 space-y-3">
+                      {(() => {
+                        const meta = outcomeMeta(emailAnalysis.outcome)
+                        const tone = meta.tone === 'reject' ? 'border-red-500/30 bg-red-500/5 text-red-300'
+                          : meta.tone === 'delay' ? 'border-amber-500/30 bg-amber-500/5 text-amber-300'
+                          : meta.tone === 'ok' ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300'
+                          : 'border-slate-700 bg-slate-950/40 text-slate-300'
+                        return (
+                          <div className={`rounded-lg border p-3 ${tone}`}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold">{emailAnalysis.outcomeLabel}</span>
+                              <span className="rounded-full border border-white/20 px-2 py-0.5 text-[11px] opacity-80">Confidence: {emailAnalysis.confidence}</span>
+                            </div>
+                            {emailAnalysis.reasonSummary && <p className="mt-1 text-sm">{emailAnalysis.reasonSummary}</p>}
+                            {emailAnalysis.quotedText && <p className="mt-1 text-xs italic opacity-80">"{emailAnalysis.quotedText}"</p>}
+                          </div>
+                        )
+                      })()}
+
+                      {emailAnalysis.matched.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Clause the decision maps to</p>
+                          <div className="space-y-2">
+                            {emailAnalysis.matched.map((cl) => (
+                              <div key={`m-${cl.seq}`} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                                <div className="mb-1 flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-slate-500">Policy {cl.policy_no || detail.policy_no} | clause {cl.seq} | {CONDITION_CATEGORY_LABELS[cl.category] || cl.category}</span>
+                                  {cl.causes_rejection && <SeverityBadge severity="reject" />}
+                                  {cl.causes_delay && <SeverityBadge severity="delay" />}
+                                </div>
+                                <p className="text-sm text-slate-200">{cl.clause_text || '(no clause text)'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {emailAnalysis.approval.length > 0 && (
+                        <div>
+                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-300">Should be approved under</p>
+                          <div className="space-y-2">
+                            {emailAnalysis.approval.map((cl) => (
+                              <div key={`a-${cl.seq}`} className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3">
+                                <p className="mb-1 text-xs text-slate-400">Policy {cl.policy_no || detail.policy_no} | clause {cl.seq} | {CONDITION_CATEGORY_LABELS[cl.category] || cl.category}</p>
+                                <p className="text-sm text-slate-200">{cl.clause_text || '(no clause text)'}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {emailAnalysis.matched.length === 0 && emailAnalysis.approval.length === 0 && (
+                        <div className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-400">
+                          The message did not map to a recorded clause on this policy. Check you selected the right policy, or add the missing condition above.
+                        </div>
+                      )}
+
+                      <p className="text-xs text-slate-500">Grounded in this policy's stored clauses only. Use the reply drafted for you in the section below (a reconsideration reply is prepared for a rejection).</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* correspondence & documents */}

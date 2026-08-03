@@ -86,6 +86,18 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Excel/PDF, and an **Import PDF** button (`src/lib/import/parseInsurancePolicy.js` parses a policy schedule + prefills a
   new policy). Pure engine `src/lib/insuranceKnowledge.js` (assessClaim/totalLossAssessment) + service
   `src/lib/api/insurancePolicies.js`. RULE: policies are Admin-only in both RLS and the route.
+  - **CLAIM CORRESPONDENCE + DOCUMENT GENERATOR (no migration, code only).** A scenario now produces
+    ready-to-use documents from the policy knowledge base: insurer claim submission, repair-approval
+    request (prevents the repaired-before-approval rejection), rejection notice that CITES the exact
+    policy clause per reason, delay/pending notice, status follow-up, adaptive required-documents
+    checklist (theft/NAJM/outside-KSA/commercial add their own items), and constructive total-loss
+    advice. Pure engine `src/lib/insuranceCorrespondence.js` (buildCorrespondence over the assessClaim
+    findings + case fields; documentToText; documentMailto; CORRESPONDENCE_TYPES; recommendedKeys marks
+    the docs the facts suggest). `exportDocumentPdf` in exportUtils = single-document (letter/email/
+    checklist) A4 PDF renderer. On the page: a "Correspondence & documents" section (case fields +
+    document picker + live preview + copy / PDF / text / mailto). Per-country currency never blended,
+    honest `[to be completed]` placeholders, ASCII only, NOTHING is auto-emailed (copy/download/mailto
+    only). Tests insuranceCorrespondence 11.
 - **AGENTS + SESSION-LIMIT NOTE:** most of this was built by parallel general-purpose agents (engine/UI/parser splits,
   non-conflicting file ownership). Two agent waves hit the shared account session limit mid-build (resets on the hour) -
   their completed engine/service files were committed WIP and finished after reset. When agents fail on the limit, keep

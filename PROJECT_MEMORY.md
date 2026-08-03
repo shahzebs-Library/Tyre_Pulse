@@ -3,6 +3,36 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-03 — SANY PROFORMA PDF + SCO VALUES + KSA DELAY PENALTY (V464) + STALE-CHUNK AUTO-RECOVERY. Migrations through **V464**, next free **V465**. Merged to main.
+- **SANY SERVICE-CONTRACT PROFORMA PDF now imports** (`src/lib/import/parsePdf.js` `parseSanyProformaPdf`). This is a
+  DIFFERENT format from the existing SANY summary (Region|Date|Quot|Amount SAR): a USD per-machine service invoice with
+  one net-of-deductions total. Parser is tolerant of the PDF's split digits ("5 34 , 641 . 02") and a broken "Deduction"
+  word ("Deduct ion" / "D eduction") - anchors deductions on the negative "-$" amounts, label from the words after the
+  last " of ". Extracts gross/net/fx (1 USD=3.75 SAR)/deductions[]/ref/period. `pdfRowsFor('sany')` tries proforma first,
+  falls back to the summary parser. Verified on the real file: Gross USD 534,641.02, Net 381,946.65, 3 deductions summing
+  exactly to gross-net. **Customer decision: Cost/M3 uses GROSS -> SAR** (534,641.02 x 3.75 = 2,004,903.83); stored as
+  `sany_invoices.amount` (doc_type='proforma', counted by get_cost_per_m3 which is UNCHANGED). V464 added
+  sany_invoices.gross_amount/net_amount/fx_rate/deductions (shown on /sany-invoices).
+- **SCO 'Values' -> cost** (costPerM3.js HEADER_SYNONYMS): the ERP/SCO grid cost column is 'Values'; added it to `amount`
+  synonyms (+ 'store code'/'store'->site, 'item desc'->description, 'transaction'->period_date) so an SCO grid imports.
+- **KSA REPAIR-DELAY PENALTY (V464, STANDALONE - never feeds Cost/M3).** Rule: a vehicle at a SANY workshop whose repair
+  ran over 5 days is charged 43 SAR/hour of TOTAL repair downtime, DEDUCTED from the SANY invoice. New ledger
+  `sany_delay_penalties` (generated penalty_amount = downtime_hours * rate_per_hour[43]; org+country+site RLS) +
+  `get_sany_delay_candidates(country,from,to,min_days)` RPC (job cards where production_in-production_out > min_days;
+  4,680 real KSA candidates). Page **`/sany-delay-penalty`** (Cost/M3 nav "SANY Delay Penalty"): find candidates -> tick
+  the ones sent to SANY -> add as penalty rows -> mark deducted against a SANY invoice_no, export. There is NO
+  "sent to SANY" flag in job cards, so the user confirms which (candidates show ALL repairs >5 days). Service
+  `src/lib/api/sanyDelayPenalty.js`. Customer chose: Gross for Cost/M3; penalty standalone-then-deduct-from-invoice;
+  total downtime (no 5-day subtraction); Values->cost.
+- **STALE-CHUNK AUTO-RECOVERY (deploy safety, `chunkRecovery.js` + `ErrorBoundary.jsx`).** A React.lazy route whose JS
+  chunk 404s after a deploy (stale cached index) is caught by the ErrorBoundary, NOT as an unhandledrejection - so the
+  existing chunkRecovery listener never fired and the user got "Something went wrong" (reported as "CPK Intelligence
+  cannot be loaded" after two back-to-back deploys). FIX: chunkRecovery exposes `recoverFromChunkError()` (shared one-shot
+  guard); ErrorBoundary detects `isChunkLoadError`, triggers purge+reload, shows a calm "Updating to the latest version"
+  notice, mints no reference id, and does NOT capture it to Sentry (expected deploy artifact). RULE: lazy-route chunk
+  failures need the boundary to trigger recovery - the global unhandledrejection listener alone does not catch them.
+  Tests: cpkPanels.render (3 panels mount clean on empty+populated), chunkRecovery (detection + one-shot guard).
+
 ## SESSION 2026-08-02 — CPK INTELLIGENCE + COST PER M3 + PMV INTAKE + SEARCH RBAC + ENTERPRISE PERF + CONTROL CENTER. Migrations through **V463**, next free **V464**. ALL MERGED to main (PRs #248-#264). ACTIVE.
 - **V460-V463 + CPK DEPTH/TRACEABILITY (applied live, merged).** Customer: "I should be able to know from where CPK
   takes those km (always from the monthly tyre consumption's kms)" AND "tell where and why the difference came if we

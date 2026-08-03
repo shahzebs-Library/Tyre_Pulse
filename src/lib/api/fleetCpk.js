@@ -65,6 +65,48 @@ export async function getCpkKmSource({ country, from, to, asset } = {}) {
   }
 }
 
+/**
+ * HOURS SOURCE for CPK (V463): the NON-MOVABLE (engine-hour) counterpart of
+ * getCpkKmSource. An asset's CPK hours = span (max-min engine_hours) over its
+ * period readings. Same filter as fleet_hours_by_asset, so it reconciles.
+ * @param {{ country?:string, from?:string, to?:string, asset?:string }} [opts]
+ */
+export async function getCpkHoursSource({ country, from, to, asset } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_cpk_hours_source', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null, p_to: to || null, p_asset: asset || null,
+    })
+    if (error) return { ok: false, reason: 'error' }
+    return data || { ok: false, reason: 'empty' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
+/**
+ * UNIT AUDIT (V463): per asset, the vehicle_type, the unit CPK measures it in
+ * (plant = engine_hours, else km) and whether it has km data (tyre total_km)
+ * and/or hours data (engine-hour span), with a status flag so a user can see
+ * WHY an asset's CPK looks the way it does: `both_present` (has km AND hours -
+ * CPK uses only its type's unit), `off_unit_only` (its only data is on the OTHER
+ * unit - possible mis-classification, CPK ignores it), `used_unit_no_data` (no
+ * data for its unit -> CPK N/A), `ok`. Returns `{ ok, summary, assets, note }`.
+ * @param {{ country?:string, from?:string, to?:string }} [opts]
+ */
+export async function getCpkUnitAudit({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_cpk_unit_audit', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null, p_to: to || null,
+    })
+    if (error) return { ok: false, reason: 'error' }
+    return data || { ok: false, reason: 'empty' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
 export async function getFleetCpk({ country, from, to } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_fleet_cpk', {

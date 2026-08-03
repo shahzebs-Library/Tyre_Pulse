@@ -1,0 +1,18 @@
+-- V463 - CPK hours-source + unit audit ("where and why the difference").
+-- STATUS: APPLIED LIVE (jhssdmeruxtrlqnwfksc) + verified. KSA last 365d: 356
+-- assets with km, 317 with hours, 317 with BOTH (the type-based unit choice picks
+-- one; the audit flags the overlap so a user sees why a CPK differs).
+--
+-- get_cpk_hours_source(country,from,to,asset): NON-MOVABLE counterpart of
+--   get_cpk_km_source. An asset's CPK hours = span (max-min engine_hours) over its
+--   period readings; exposes which readings make it up (same filter as
+--   fleet_hours_by_asset). asset NULL -> per-asset summary; asset given -> the
+--   readings + min/max/span.
+-- get_cpk_unit_audit(country,from,to): per asset -> vehicle_type, unit CPK uses
+--   (cpk_unit_for_asset_type: plant->engine_hours else km), side, km (tyre
+--   total_km) + hours (engine-hour span), has_km/has_hours, and a status:
+--   both_present | off_unit_only (data only on the other unit; CPK ignores it) |
+--   used_unit_no_data (denominator 0 -> N/A) | ok. Plus a summary count by status.
+-- Both DEFINER STABLE, org-scoped, country-ABAC guarded, anon revoked.
+-- REVERSIBLE: drop function public.get_cpk_hours_source(text,date,date,text);
+--             drop function public.get_cpk_unit_audit(text,date,date);

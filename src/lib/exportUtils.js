@@ -226,7 +226,7 @@ function _deriveNarrative(data) {
     + (vTotal ? `${vAlert} of ${vTotal} vehicles currently carry one or more active alerts.` : '')
 
   const money = spend > 0
-    ? ` Tyre spend for the period totals ${fmtCurr(spend)}${data.ytdSpend ? `, with ${fmtCurr(data.ytdSpend)} year to date` : ''}.`
+    ? ` Tyre spend for the period totals ${fmtCurr(spend, data.currency || 'SAR')}${data.ytdSpend ? `, with ${fmtCurr(data.ytdSpend, data.currency || 'SAR')} year to date` : ''}.`
     : ''
   const p2 = `${actions} corrective action${actions === 1 ? '' : 's'} ${actions === 1 ? 'is' : 'are'} open`
     + `${highAct ? `, including ${highAct} high priority` : ''}.`
@@ -258,7 +258,7 @@ function _deriveBusinessInsights(data) {
   if ((data.criticalTyres || 0) > 0)
     out.push({ label: 'Critical Exposure', value: `${data.criticalTyres} tyres`, sub: `${Math.round((data.criticalTyres / totalT) * 100)}% of fleet`, tone: 'crit' })
   if ((data.monthlySpend || 0) > 0)
-    out.push({ label: 'Period Tyre Spend', value: fmtCurr(data.monthlySpend), sub: data.ytdSpend ? `${fmtCurr(data.ytdSpend)} YTD` : 'current period', tone: 'info' })
+    out.push({ label: 'Period Tyre Spend', value: fmtCurr(data.monthlySpend, data.currency || 'SAR'), sub: data.ytdSpend ? `${fmtCurr(data.ytdSpend, data.currency || 'SAR')} YTD` : 'current period', tone: 'info' })
   const acts = data.openActions || []
   if (acts.length) {
     const hi = acts.filter(a => /crit|high/i.test(a.priority || '')).length
@@ -273,10 +273,10 @@ function _deriveForecast(data) {
   const monthIdx = (new Date()).getMonth() + 1
   if (ytd > 0) {
     const runRate = ytd / monthIdx
-    out.push({ label: 'Next-Month Spend', value: fmtCurr(runRate), conf: 'Medium', note: 'YTD run-rate' })
-    out.push({ label: 'Projected Annual', value: fmtCurr(runRate * 12), conf: 'Medium', note: 'Linear extrapolation' })
+    out.push({ label: 'Next-Month Spend', value: fmtCurr(runRate, data.currency || 'SAR'), conf: 'Medium', note: 'YTD run-rate' })
+    out.push({ label: 'Projected Annual', value: fmtCurr(runRate * 12, data.currency || 'SAR'), conf: 'Medium', note: 'Linear extrapolation' })
   } else if ((data.monthlySpend || 0) > 0) {
-    out.push({ label: 'Projected Annual', value: fmtCurr(data.monthlySpend * 12), conf: 'Low', note: 'From current month' })
+    out.push({ label: 'Projected Annual', value: fmtCurr(data.monthlySpend * 12, data.currency || 'SAR'), conf: 'Low', note: 'From current month' })
   }
   const repl = (data.criticalTyres || 0) + Math.round((data.warningTyres || 0) * 0.5)
   if (repl > 0) out.push({ label: 'Replacements Due', value: `~${repl} tyres`, conf: 'High', note: 'Critical + 50% high-risk' })
@@ -2295,10 +2295,10 @@ export async function exportDailyExecutivePdf(data, filename) {
 
     // Cost row
     const costKpis = [
-      { l: 'Monthly Spend',   v: fmtCurr(data.monthlySpend),  rgb: data.monthlySpend > (data.monthlyBudget || Infinity) ? [...P.crimson] : [...P.emerald] },
-      { l: 'YTD Spend',       v: fmtCurr(data.ytdSpend),      rgb: P.indigo },
-      { l: 'Cost / km',       v: data.costPerKm ? `SAR ${data.costPerKm.toFixed(3)}` : '-', rgb: [...P.gold] },
-      { l: 'Budget Variance', v: (data.monthlyBudget && data.monthlySpend) ? fmtCurr(Math.abs(data.monthlyBudget - data.monthlySpend)) : '-', rgb: [...P.emerald] },
+      { l: 'Monthly Spend',   v: fmtCurr(data.monthlySpend, data.currency || 'SAR'),  rgb: data.monthlySpend > (data.monthlyBudget || Infinity) ? [...P.crimson] : [...P.emerald] },
+      { l: 'YTD Spend',       v: fmtCurr(data.ytdSpend, data.currency || 'SAR'),      rgb: P.indigo },
+      { l: 'Cost / km',       v: data.costPerKm ? `${data.currency || 'SAR'} ${data.costPerKm.toFixed(3)}` : '-', rgb: [...P.gold] },
+      { l: 'Budget Variance', v: (data.monthlyBudget && data.monthlySpend) ? fmtCurr(Math.abs(data.monthlyBudget - data.monthlySpend), data.currency || 'SAR') : '-', rgb: [...P.emerald] },
       { l: 'Vehicles w/ Alerts', v: data.vehiclesWithAlerts ?? 0, rgb: [...P.scarlet] },
     ]
     doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)

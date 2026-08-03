@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, listScrappedTyres, updateScrapReason, getScrapPermissions } from '../lib/api/tyreExchange'
+import { COUNTRY_CURRENCY } from '../lib/api/assetMaster'
 
 function SearchSkeleton() {
   return (
@@ -371,12 +372,12 @@ export default function SerialTracker() {
           batch.map(async serial => {
             const { data, error: qErr } = await supabase
               .from('tyre_records')
-              .select('serial_no, issue_date, asset_no, status, cost:cost_per_tyre')
+              .select('serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre')
               .eq('serial_no', serial)
               .order('issue_date', { ascending: true })
             if (qErr) throw qErr
             if (!data || data.length === 0) {
-              return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, status: 'Not Found' }
+              return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, country: null, status: 'Not Found' }
             }
             const first = data[0]
             const last  = data[data.length - 1]
@@ -389,6 +390,7 @@ export default function SerialTracker() {
               last_asset: last.asset_no || null,
               total_records: data.length,
               cost,
+              country: last.country || first.country || null,
               status: scrapped ? 'Scrapped' : isActive ? 'Active' : 'Retired',
             }
           })
@@ -591,7 +593,7 @@ export default function SerialTracker() {
                 </div>
                 {stats.totalCost > 0 && (
                   <p className="text-[var(--text-secondary)] text-sm mt-3">
-                    Total cost: <span className="text-[var(--text-primary)] font-semibold">{formatCurrencyCompact(stats.totalCost)}</span>
+                    Total cost: <span className="text-[var(--text-primary)] font-semibold">{formatCurrencyCompact(stats.totalCost, COUNTRY_CURRENCY[records[0]?.country] || 'SAR')}</span>
                   </p>
                 )}
               </div>
@@ -619,7 +621,7 @@ export default function SerialTracker() {
                                 <span className="text-[var(--text-secondary)]">{r.site || '-'}</span>
                                 {r.position && <span className="text-[var(--text-muted)]">Pos: <span className="text-[var(--text-primary)] font-mono">{r.position}</span></span>}
                                 {r.risk_level && <span className={riskColor(r.risk_level)}>{r.risk_level}</span>}
-                                {r.cost > 0 && <span className="text-[var(--text-muted)]">{formatCurrencyCompact(r.cost)}</span>}
+                                {r.cost > 0 && <span className="text-[var(--text-muted)]">{formatCurrencyCompact(r.cost, COUNTRY_CURRENCY[r.country] || 'SAR')}</span>}
                               </div>
                               {r.description && <p className="text-xs text-[var(--text-dim)] mt-0.5 truncate">{r.description}</p>}
                             </div>
@@ -780,7 +782,7 @@ export default function SerialTracker() {
                           <td className="py-2 pr-4 font-mono text-[var(--text-secondary)] text-xs">{r.last_asset || '-'}</td>
                           <td className="py-2 pr-4 text-[var(--text-secondary)] text-right">{r.total_records}</td>
                           <td className="py-2 pr-4 text-[var(--text-secondary)] text-right text-xs">
-                            {r.cost > 0 ? formatCurrencyCompact(r.cost) : '-'}
+                            {r.cost > 0 ? formatCurrencyCompact(r.cost, COUNTRY_CURRENCY[r.country] || 'SAR') : '-'}
                           </td>
                           <td className="py-2">
                             {r.status === 'Not Found' ? (

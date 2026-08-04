@@ -18,6 +18,8 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import { forecastTyreDemand } from '../lib/tyreDemandForecast'
+import TyreForecastSection from '../components/tyre/TyreForecastSection'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -215,7 +217,7 @@ export default function ForecastingEngine() {
           fetchAllPages((from, to) => {
             let q = supabase
               .from('tyre_records')
-              .select('id,asset_no,site,brand,position,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
+              .select('id,asset_no,site,brand,size,qty,position,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
               .order('issue_date', { ascending: true })
               .order('id', { ascending: true })
             // Null-safe country scope (its rows plus NULL-country rows); All = no predicate.
@@ -247,6 +249,14 @@ export default function ForecastingEngine() {
     load()
     return () => { cancelled = true }
   }, [activeCountry])
+
+  // Tyre demand forecast BY SIZE (12-month history, projected 3 months). Size
+  // spelling is corrected in the engine so demand is not fragmented. Single
+  // country only, so cost/spend stays in one currency (never blended).
+  const sizeForecast = useMemo(
+    () => (activeCountry !== 'All' ? forecastTyreDemand(records, { window: 12, ahead: 3 }) : null),
+    [records, activeCountry],
+  )
 
   // Anchor every historical window to the data's latest issue_date (fallback:
   // today) so historic imports still populate the forecast baselines.
@@ -1191,6 +1201,19 @@ export default function ForecastingEngine() {
           </div>
         </div>
       </motion.div>
+
+      {/* Tyre demand forecast by size (single country). */}
+      {activeCountry !== 'All' && sizeForecast && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+          <TyreForecastSection
+            forecast={sizeForecast}
+            country={activeCountry}
+            currency={activeCurrency}
+            money={(v) => fmtCurrency(v, activeCurrency)}
+            filePrefix="Forecast"
+          />
+        </motion.div>
+      )}
 
       <EmailReportModal
         isOpen={emailModalOpen}

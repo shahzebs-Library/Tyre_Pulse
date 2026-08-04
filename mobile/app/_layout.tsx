@@ -3,7 +3,7 @@ import 'react-native-url-polyfill/auto'
 // app renders, so early crashes are captured.
 import '../lib/sentry'
 import { useEffect, useRef, useState } from 'react'
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useRouter, usePathname } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useFonts } from 'expo-font'
@@ -19,6 +19,21 @@ import {
 } from '../lib/notifications'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
+
+/**
+ * Error boundary scoped to the current route. Re-keying on the pathname means a
+ * screen that throws is contained to itself and recovers the moment the user
+ * navigates somewhere else, instead of leaving the whole app on an error screen
+ * whose Reset button just re-runs the same crash.
+ *
+ * It must sit INSIDE the providers: keying anything that wraps AuthProvider
+ * would remount the session on every navigation and re-fetch the profile each
+ * time a user changes screen.
+ */
+function ScreenBoundary({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
+}
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ ...Ionicons.font })
@@ -62,7 +77,21 @@ function RootLayout() {
           <ThemeProvider>
             <LanguageProvider>
               <AuthProvider>
-                <Stack screenOptions={{ headerShown: false }} />
+                {/* SCREEN-LEVEL BOUNDARY - this is what makes a crash survivable.
+                    The outer boundary catches everything, but it sits ABOVE the
+                    providers, so once it trips the whole app is the error screen
+                    and its Reset re-renders the very screen that just threw -
+                    straight back into the same crash. That is a real stuck state,
+                    and Play Console shows it happening: a JavascriptException on
+                    build 34 that takes the app down.
+                    Keying an inner boundary on the route means a crash is scoped
+                    to the screen that caused it, and simply navigating elsewhere
+                    clears it - the providers, the session and any queued field
+                    work all stay mounted. The web app carries the identical fix
+                    for the identical reason (see PROJECT_MEMORY). */}
+                <ScreenBoundary>
+                  <Stack screenOptions={{ headerShown: false }} />
+                </ScreenBoundary>
               </AuthProvider>
             </LanguageProvider>
           </ThemeProvider>

@@ -3,6 +3,35 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-04 — PRESENTATION STUDIO restored + hardened + TYRE DEMAND FORECAST BY SIZE. Migrations through **V476**, next free **V477**. Merged to main.
+- **ADMIN ACCESS FIX (data-only):** `ws123na@gmail.com` was a plain Admin (is_super_admin=false) so every console-consolidated
+  admin function (main-app /users, /master-access-control, /admin, /ai-administration, /security-center, /permission-matrix,
+  /org-hierarchy, /holding-company all REDIRECT to super-admin-only /console) bounced them out. Promoted ws123na to
+  is_super_admin=true (kept zebkhan311 too) via the trg_guard_profile_privileged disable/enable dance. Reversible.
+- **PRESENTATION STUDIO (`src/components/present/PresentationStudio.jsx`) - the reusable "build your own chart" studio on
+  Expenses/CostPerM3/BoardOverview** was rolled back once ("many things failed to load") then restored + HARDENED: every
+  mount wrapped in `src/components/present/StudioBoundary.jsx` (local error boundary) so a studio render error can never blank
+  the host page again. Advanced: stacked/grouped toggle for split bars + Download Excel of the numbers. Weekly (GCC Sun-Sat)
+  CPK/M3 periods + site-manager review digest ride with it. RULE: keep every studio mount inside StudioBoundary.
+- **TYRE DEMAND FORECAST BY SIZE (`src/lib/tyreDemandForecast.js` + `src/components/tyre/TyreForecastSection.jsx`).** Pure
+  engine counts tyres fitted per canonical size per month (contiguous, zero-filled, anchored to the latest data month - no
+  clock), projects next 3 months (least-squares `linearFit` from expenseTrends when >=4 active months, else recent average;
+  floored 0, whole tyres; confidence high/med/low), + cost side (avg unit cost of PRICED fitments, priced %, projected spend
+  = forecast x avg cost, per-country currency NEVER blended, honest N/A on gaps). SIZE CANONICALIZER (`buildSizeCanonicalizer`)
+  is DATA-DRIVEN: strips spacing/case (merges 315/80 R 22.5 == 315/80R22.5), merges a bare width (315,385) into the one full
+  size that exists, repairs a dropped-leading-digit typo (35/70R16->235/70R16) ONLY when the repair exists, buckets junk
+  (0,1212,12*8) as UNKNOWN - never guesses when ambiguous. Shown on **Expenses & CPK** (section "Tyre Forecast") AND
+  **Forecasting Engine** (`/forecasting`) via the ONE shared TyreForecastSection - single country only (currency). Chart Builder
+  gained two forecast sources. Tests `tyreDemandForecast.test.js` (23). RULE: every Expenses chart + the Chart Builder + the
+  forecast are gated `!isAll` (per-country currency) - they DO NOT show on the "All countries" view; the All-view note says so.
+- **V476 BLANK/JUNK TYRE SIZE BACKFILL (applied live, reversible via `_bak_tyre_size_backfill_v476`).** The forecast's UNKNOWN
+  bucket = tyre_records with blank/junk `size` (KSA 1707 blank). Backfilled the REAL size: Pass A = the same serial's most
+  common valid size (2147 rows), Pass B = an asset that uses exactly ONE size (146 rows) = **2293 filled fleet-wide**, only
+  11 blank + 2 junk left. KSA 12-mo UNKNOWN 1656 -> 5 (0.07%); 315/80R22.5 4949 -> 6396, 385/65R22.5 388 -> 467. Valid-size
+  regex (compact): metric `^\d{3}/\d{2}R\d{1,2}(\.\d)?$`, simple `^\d{2,3}(\.\d)?R\d{2}(\.\d)?$`, OTR `^\d{1,2}-\d{2}(\.\d)?/\d{1,2}$`.
+  Rollback = `update tyre_records t set size=b.old_size from _bak_tyre_size_backfill_v476 b where b.id=t.id`. Next free **V477**.
+
+
 ## SESSION 2026-08-03 — SANY PROFORMA + DELAY PENALTY + CPK STUDIO/BRANCHES/KM-INTELLIGENCE + INSURANCE KB + BRAND BACKFILL. Migrations through **V470**, next free **V471**. All merged to main.
 - **SANY SERVICE-CONTRACT PROFORMA PDF now imports** (`src/lib/import/parsePdf.js` `parseSanyProformaPdf`). This is a
   DIFFERENT format from the existing SANY summary (Region|Date|Quot|Amount SAR): a USD per-machine service invoice with

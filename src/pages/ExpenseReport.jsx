@@ -287,8 +287,9 @@ const CONF_TONE = {
  * months, with a stated confidence. Counts only (no money), so it is honest
  * where prices are missing. Excel export of the exact figures.
  */
-function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
+function TyreForecastSection({ forecast, country, currency = '', money, filePrefix = 'Expense' }) {
   const rows = forecastTableRows(forecast)
+  const fmtM = money || ((v) => (v == null ? 'N/A' : `${currency} ${Math.round(Number(v)).toLocaleString('en-US')}`))
   if (!rows.length) {
     return (
       <div className="card text-sm text-[var(--text-muted)]">
@@ -298,11 +299,19 @@ function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
   }
   const fmLabels = forecast.forecastLabels || []
   const grandNext = rows.reduce((a, r) => a + r.forecastTotal, 0)
+  const grandSpend = forecast.totals?.projectedSpend ?? null
+  const gaps = rows.filter((r) => r.total > 0 && (r.pricedPct == null || r.pricedPct < 60))
   function exportXlsx() {
-    const keys = ['size', 'total', 'avgPerMonth', 'trend', ...fmLabels.map((_, i) => `f${i}`), 'forecastTotal', 'confidence']
-    const headers = ['Size', 'Used (12 mo)', 'Avg / month', 'Trend', ...fmLabels, 'Next months total', 'Confidence']
+    const keys = ['size', 'total', 'avgPerMonth', 'trend', ...fmLabels.map((_, i) => `f${i}`), 'forecastTotal', 'avgUnitCost', 'pricedPct', 'projectedSpend', 'confidence']
+    const headers = ['Size', 'Used (12 mo)', 'Avg / month', 'Trend', ...fmLabels, 'Next months total', `Cost/tyre (${currency})`, 'Priced %', `Projected spend (${currency})`, 'Confidence']
     const out = rows.map((r) => {
-      const o = { size: r.size, total: r.total, avgPerMonth: r.avgPerMonth, trend: r.trend, forecastTotal: r.forecastTotal, confidence: r.confidence }
+      const o = {
+        size: r.size, total: r.total, avgPerMonth: r.avgPerMonth, trend: r.trend, forecastTotal: r.forecastTotal,
+        avgUnitCost: r.avgUnitCost == null ? 'N/A' : Math.round(r.avgUnitCost),
+        pricedPct: r.pricedPct == null ? 'N/A' : r.pricedPct,
+        projectedSpend: r.projectedSpend == null ? 'N/A' : Math.round(r.projectedSpend),
+        confidence: r.confidence,
+      }
       r.forecast.forEach((v, i) => { o[`f${i}`] = v })
       return o
     })
@@ -315,7 +324,8 @@ function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Tyre demand forecast by size</h3>
           <p className="text-xs text-[var(--text-tertiary)]">
             Tyres fitted per size over the last 12 months, projected {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'} ahead
-            ({fmLabels.join(', ') || 'next months'}). Trend when there is enough history, else a recent average. Whole tyres, floored at zero.
+            ({fmLabels.join(', ') || 'next months'}). Sizes are cleaned so spelling variants (315/80 R 22.5 vs 315/80R22.5) count as one.
+            Trend when there is enough history, else a recent average. Whole tyres, floored at zero. Projected spend = forecast x average cost per tyre.
           </p>
         </div>
         <button type="button" onClick={exportXlsx}
@@ -323,11 +333,25 @@ function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
           <Download size={14} /> Excel
         </button>
       </div>
-      <div className="mb-1 rounded-lg border border-[var(--hairline)] px-3 py-2 text-sm">
-        <span className="text-[var(--text-secondary)]">Projected total next {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'}: </span>
-        <span className="font-semibold text-[var(--text-primary)]">{grandNext.toLocaleString('en-US')} tyres</span>
-        <span className="text-[var(--text-muted)]"> across {rows.length} sizes</span>
+      <div className="mb-1 rounded-lg border border-[var(--hairline)] px-3 py-2 text-sm flex flex-wrap gap-x-6 gap-y-1">
+        <span>
+          <span className="text-[var(--text-secondary)]">Projected next {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'}: </span>
+          <span className="font-semibold text-[var(--text-primary)]">{grandNext.toLocaleString('en-US')} tyres</span>
+          <span className="text-[var(--text-muted)]"> across {rows.length} sizes</span>
+        </span>
+        {grandSpend != null && (
+          <span>
+            <span className="text-[var(--text-secondary)]">Projected spend: </span>
+            <span className="font-semibold text-[var(--text-primary)]">{fmtM(grandSpend)}</span>
+          </span>
+        )}
       </div>
+      {gaps.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+          Cost gap: {gaps.length} size{gaps.length === 1 ? '' : 's'} have little or no unit-price data, so their projected spend is missing or approximate
+          ({gaps.slice(0, 6).map((g) => g.size).join(', ')}{gaps.length > 6 ? '...' : ''}). Add tyre prices to sharpen the cost forecast.
+        </div>
+      )}
       <div className="max-h-96 overflow-auto">
         <table className="w-full text-sm">
           <thead>
@@ -338,6 +362,8 @@ function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
               <th className="py-1.5 px-3 font-semibold">Trend</th>
               {fmLabels.map((l) => <th key={l} className="py-1.5 px-3 font-semibold text-right">{l}</th>)}
               <th className="py-1.5 px-3 font-semibold text-right">Next total</th>
+              <th className="py-1.5 px-3 font-semibold text-right">Cost/tyre</th>
+              <th className="py-1.5 px-3 font-semibold text-right">Projected spend</th>
               <th className="py-1.5 px-3 font-semibold">Confidence</th>
             </tr>
           </thead>
@@ -350,6 +376,8 @@ function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
                 <td className="py-1.5 px-3 text-[var(--text-secondary)]">{r.trend}</td>
                 {r.forecast.map((v, i) => <td key={i} className="py-1.5 px-3 text-right tabular-nums text-[var(--text-primary)]">{v.toLocaleString('en-US')}</td>)}
                 <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-[var(--text-primary)]">{r.forecastTotal.toLocaleString('en-US')}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.avgUnitCost == null ? 'N/A' : fmtM(r.avgUnitCost)}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.projectedSpend == null ? 'N/A' : fmtM(r.projectedSpend)}</td>
                 <td className={`py-1.5 px-3 capitalize ${CONF_TONE[r.confidence] || CONF_TONE.none}`}>{r.confidence}</td>
               </tr>
             ))}
@@ -1145,7 +1173,7 @@ export default function ExpenseReport() {
 
           {/* Tyre demand forecast by size - exact projected tyre counts. */}
           {sections.forecast && !isAll && tyreForecast && (
-            <TyreForecastSection forecast={tyreForecast} country={activeCountry} filePrefix="Expense" />
+            <TyreForecastSection forecast={tyreForecast} country={activeCountry} currency={activeCurrency} money={money} filePrefix="Expense" />
           )}
 
           {/* Chart Builder - the shared Presentation Studio over this snapshot.

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   forecastTyreDemand, forecastTableRows, nextMonthKey, prevMonthKey,
-  monthRange, monthShort, MIN_TREND_MONTHS, DEFAULT_AHEAD,
+  monthRange, monthShort, buildSizeCanonicalizer, MIN_TREND_MONTHS, DEFAULT_AHEAD,
 } from '../lib/tyreDemandForecast'
 
-const rec = (size, issue_date, qty = 1) => ({ size, issue_date, qty })
+const rec = (size, issue_date, qty = 1, cost_per_tyre = 0) => ({ size, issue_date, qty, cost_per_tyre })
 
 describe('month helpers', () => {
   it('nextMonthKey rolls the year at December', () => {
@@ -83,11 +83,11 @@ describe('forecastTyreDemand', () => {
 
   it('sorts sizes by forecast demand and totals reconcile', () => {
     const rows = [
-      ...Array.from({ length: 10 }, () => rec('BIG', '2026-07-01')),
-      rec('SMALL', '2026-07-01'),
+      ...Array.from({ length: 10 }, () => rec('315/80R22.5', '2026-07-01')),
+      rec('11R22.5', '2026-07-01'),
     ]
     const fc = forecastTyreDemand(rows, { window: 3, ahead: 1 })
-    expect(fc.sizes[0].size).toBe('BIG')
+    expect(fc.sizes[0].size).toBe('315/80R22.5')
     const sumSizes = fc.sizes.reduce((a, s) => a + s.forecast[0], 0)
     expect(fc.totals.forecast[0]).toBe(sumSizes)
   })
@@ -103,11 +103,61 @@ describe('forecastTyreDemand', () => {
     const rows = [
       ...Array.from({ length: 4 }, () => rec('315/80 R 22.5', '2026-07-01')),
       ...Array.from({ length: 6 }, () => rec('315/80R22.5', '2026-07-02')),
+      rec('315 /80R22.5', '2026-07-03'),
+      rec('315/80R 22.5', '2026-07-04'),
     ]
     const fc = forecastTyreDemand(rows, { window: 2, ahead: 1 })
     expect(fc.sizes).toHaveLength(1)
     expect(fc.sizes[0].size).toBe('315/80R22.5')
-    expect(fc.sizes[0].total).toBe(10)
+    expect(fc.sizes[0].total).toBe(12)
+  })
+
+  it('computes average unit cost + projected spend from priced fitments only', () => {
+    // 4 months so it forecasts; 2 priced at 900, others unpriced.
+    const rows = ['2026-04', '2026-05', '2026-06', '2026-07'].flatMap((mk, i) => ([
+      rec('315/80R22.5', `${mk}-01`, 1, i < 2 ? 900 : 0),
+      rec('315/80R22.5', `${mk}-15`, 1, 0),
+    ]))
+    const fc = forecastTyreDemand(rows, { window: 4, ahead: 3 })
+    const s = fc.sizes[0]
+    expect(s.avgUnitCost).toBe(900)          // priced tyres averaged, unpriced ignored
+    expect(s.pricedPct).toBeGreaterThan(0)
+    expect(s.projectedSpend).toBe(900 * s.forecastTotal)
+  })
+
+  it('leaves cost null (a gap) when a size has no priced fitment', () => {
+    const rows = ['2026-05', '2026-06', '2026-07'].map((mk) => rec('11R22.5', `${mk}-01`, 1, 0))
+    const fc = forecastTyreDemand(rows, { window: 3, ahead: 1 })
+    const s = fc.sizes[0]
+    expect(s.avgUnitCost).toBeNull()
+    expect(s.projectedSpend).toBeNull()
+  })
+})
+
+describe('buildSizeCanonicalizer', () => {
+  const universe = ['315/80 R 22.5', '385/65 R 22.5', '235/70 R 16', '235/75 R 17.5', '11 R 22.5']
+  const canon = buildSizeCanonicalizer(universe)
+
+  it('normalizes spacing + case for a valid size', () => {
+    expect(canon('315/80 R 22.5')).toBe('315/80R22.5')
+    expect(canon('315 /80R22.5')).toBe('315/80R22.5')
+  })
+  it('merges a bare width into the one full size that exists', () => {
+    expect(canon('315')).toBe('315/80R22.5')
+    expect(canon('385')).toBe('385/65R22.5')
+  })
+  it('refuses a bare width that is ambiguous', () => {
+    expect(canon('235')).toBe('UNKNOWN') // 235/70R16 AND 235/75R17.5 both exist
+  })
+  it('repairs a dropped leading digit only when the repair exists', () => {
+    expect(canon('35/70R16')).toBe('235/70R16') // 235/70R16 is in the universe
+    expect(canon('99/70R16')).toBe('UNKNOWN')    // 299/199/399 none exist
+  })
+  it('buckets junk as UNKNOWN', () => {
+    expect(canon('0')).toBe('UNKNOWN')
+    expect(canon('2416146991')).toBe('UNKNOWN')
+    expect(canon('12*8')).toBe('UNKNOWN')
+    expect(canon('')).toBe('UNKNOWN')
   })
 
   it('MIN_TREND_MONTHS and DEFAULT_AHEAD are exported sane', () => {

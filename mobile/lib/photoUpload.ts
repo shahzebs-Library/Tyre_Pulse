@@ -36,16 +36,43 @@ const MAX_DECODE_BYTES = 12 * 1024 * 1024 // hard cap on the file we base64-deco
  */
 export async function prepareForUpload(localUri: string): Promise<string> {
   if (!localUri || !localUri.startsWith('file://')) return localUri
-  try {
-    const context = ImageManipulator.manipulate(localUri)
-    context.resize({ width: MAX_UPLOAD_DIM })
-    const image = await context.renderAsync()
-    const result = await image.saveAsync({ compress: UPLOAD_COMPRESS, format: SaveFormat.JPEG })
-    return result?.uri || localUri
-  } catch (err: any) {
-    if (__DEV__) console.warn('[photoUpload] resize skipped:', err?.message)
-    return localUri
+
+  // Try progressively smaller targets before giving up.
+  //
+  // WHY A LADDER: a single failed resize used to fall straight back to the
+  // ORIGINAL multi-megapixel file. That file then almost always exceeded
+  // MAX_DECODE_BYTES in uploadInspectionPhoto, which returns null - so the
+  // photo was SILENTLY DROPPED. On an inspection carrying 13-15 photos that is
+  // real evidence lost with no message to the user, and it matches the reported
+  // "uploads fail or crash". Image manipulation on low-end devices fails mostly
+  // because of memory pressure, and a smaller target is exactly what succeeds on
+  // the retry - so retrying recovers the photo instead of discarding it.
+  const attempts: Array<{ width: number; compress: number }> = [
+    { width: MAX_UPLOAD_DIM, compress: UPLOAD_COMPRESS }, // 1600px, q0.5
+    { width: 1024, compress: 0.45 },                      // memory-pressure retry
+    { width: 720, compress: 0.4 },                        // last resort, still legible
+  ]
+
+  for (const attempt of attempts) {
+    try {
+      const context = ImageManipulator.manipulate(localUri)
+      context.resize({ width: attempt.width })
+      const image = await context.renderAsync()
+      const result = await image.saveAsync({ compress: attempt.compress, format: SaveFormat.JPEG })
+      if (result?.uri) return result.uri
+    } catch (err: any) {
+      if (__DEV__) {
+        console.warn(`[photoUpload] resize at ${attempt.width}px failed:`, err?.message)
+      }
+      // Fall through to the next, smaller attempt.
+    }
   }
+
+  // Every attempt failed. Return the original: the caller still applies its
+  // MAX_DECODE_BYTES guard, so an oversized file is refused rather than read
+  // into memory - a refusal is recoverable, a native OOM crash is not.
+  if (__DEV__) console.warn('[photoUpload] all resize attempts failed; using original')
+  return localUri
 }
 
 /**

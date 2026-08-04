@@ -12,12 +12,31 @@ import {
 import {
   syncRecordQueue, clearSyncedRecords, getPendingRecordCount,
 } from '../lib/recordQueue'
-import { clearPushToken, cancelDailyInspectionReminder } from '../lib/notifications'
+import { clearPushToken, cancelDailyInspectionReminder, registerPushToken } from '../lib/notifications'
 import { setSentryUser } from '../lib/sentry'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 /** Last server-verified profile, so a cold start with no signal is not a lockout.
  *  Written ONLY from a successful fetch of a non-locked, approved account. */
+/** How long we are willing to wait for the stored session to come back out of
+ *  the Android Keystore before we stop blocking the UI. Generous enough that a
+ *  merely slow device still restores silently, short enough that a stalled one
+ *  never traps the user behind an endless spinner. */
+const SESSION_RESTORE_TIMEOUT_MS = 8000
+
+/** Reject if `p` has not settled within `ms`. The underlying work is left to
+ *  finish on its own (we cannot cancel a native Keystore read) - we simply stop
+ *  waiting on it, which is the whole point. */
+function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error('session restore timed out')), ms)
+    Promise.resolve(p).then(
+      (v) => { clearTimeout(id); resolve(v) },
+      (e) => { clearTimeout(id); reject(e) },
+    )
+  })
+}
+
 const PROFILE_CACHE_KEY = 'tp_profile_cache_v1'
 /** Beyond this the cached profile is refused and the app fails closed again, so a
  *  revoked account cannot stay usable indefinitely by staying offline. */
@@ -86,6 +105,11 @@ interface AuthContextType {
   profileStale: boolean
   /** Re-run the profile fetch for the current user (retry after profileError). */
   retryProfile: () => Promise<void>
+  /** True when reading the stored session took too long (stalled Android
+   *  Keystore). The entry screen must offer a retry rather than spin forever. */
+  sessionTimedOut: boolean
+  /** Re-attempt session restore after a timeout. */
+  retrySession: () => Promise<void>
   /** True when the grants OR role-matrix RPC threw. The permission maps still
    *  fail-open to {} by design; this signal lets the gate choose to fail CLOSED
    *  for sensitive actions. */
@@ -120,9 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** True when `profile` came from the offline cache rather than the server, so
    *  the UI can show a quiet "working offline" hint. Cleared on a live fetch. */
   const [profileStale, setProfileStale]     = useState(false)
+  /** True when restoring the stored session exceeded SESSION_RESTORE_TIMEOUT_MS
+   *  (stalled Keystore). The entry screen shows a retry instead of spinning. */
+  const [sessionTimedOut, setSessionTimedOut] = useState(false)
   const [permissionsError, setPermissionsError] = useState(false)
   const [grants, setGrants]   = useState<GrantMap>({})
   const [roleMatrix, setRoleMatrix] = useState<RoleMatrix>({})
+  /** User id we have already registered a push token for this app session, so a
+   *  repeated profile fetch does not re-run device registration. */
+  const pushRegisteredForRef  = useRef<string | null>(null)
   const profileChannelRef     = useRef<RealtimeChannel | null>(null)
   const grantsChannelRef      = useRef<RealtimeChannel | null>(null)
   const roleMatrixChannelRef  = useRef<RealtimeChannel | null>(null)
@@ -246,6 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true
+    let settled = false          // whichever path resolves the session first wins
 
     // Bring up all user-scoped state for a signed-in session. AWAITS profile
     // resolution so the gate is never told the user is "ready" before their
@@ -263,9 +294,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetchProfile(userId)
     }
 
+    // THE PERMANENT-SPINNER GUARD.
+    //
+    // getSession() reads the stored session out of expo-secure-store, i.e. the
+    // Android Keystore, over binder IPC - and because a Supabase session is far
+    // larger than one SecureStore slot it is split into chunks, so a single cold
+    // start makes 3-5 separate Keystore round trips. On low-end hardware (the
+    // reported Infinix devices) those calls are slow and can stall outright.
+    // Google's own ANR for this build says exactly that: "Slow binder call - the
+    // main thread was busy doing a binder call that was potentially slow".
+    //
+    // There was NO time limit on it: if the vault never answered, neither .then
+    // nor .catch ran, `loading` stayed true, and app/index.tsx showed a spinner
+    // with no exit - the reported "it just keeps rounding and never goes
+    // forward", permanently. A bounded wait converts that dead end into an
+    // honest, retryable state. It changes nothing about WHAT is stored or who
+    // may sign in; it only refuses to wait forever.
+    const timeoutId = setTimeout(() => {
+      if (!mounted || settled) return
+      settled = true
+      setSessionTimedOut(true)     // index.tsx offers Retry / Sign in
+      setProfileLoading(false)
+      setLoading(false)
+    }, SESSION_RESTORE_TIMEOUT_MS)
+
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
-        if (!mounted) return
+        if (!mounted || settled) return
+        settled = true
+        clearTimeout(timeoutId)
         setUser(session?.user ?? null)
         if (session?.user) {
           setLoading(false)          // auth session resolved
@@ -275,10 +332,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false)
         }
       })
-      .catch(() => { if (mounted) { setProfileLoading(false); setLoading(false) } })
+      .catch(() => {
+        if (!mounted || settled) return
+        settled = true
+        clearTimeout(timeoutId)
+        setProfileLoading(false)
+        setLoading(false)
+      })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return
+      // Run OUTSIDE the auth callback. supabase-js emits INITIAL_SESSION from
+      // inside its own auth lock; doing async session work synchronously in here
+      // is what deadlocked the WEB app into a blank screen until a second
+      // refresh (see PROJECT_MEMORY). Deferring to a fresh macrotask keeps that
+      // whole class of hang out of the field app. handleSession work below is
+      // idempotent, so a late INITIAL_SESSION cannot undo a completed bootstrap.
+      setTimeout(() => { void handleAuthStateChange(session) }, 0)
+    })
+
+    async function handleAuthStateChange(session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) {
+      if (!mounted) return
+      // A real auth event is authoritative: it clears any earlier timeout state.
+      settled = true
+      clearTimeout(timeoutId)
+      setSessionTimedOut(false)
       setUser(session?.user ?? null)
       setLoading(false)
       if (session?.user) {
@@ -291,6 +369,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setGrants({})
         setRoleMatrix({})
         setSentryUser(null)
+        // Next account on this device must register its own push token.
+        pushRegisteredForRef.current = null
         unsubscribeFromProfile()
         unsubscribeFromGrants()
         unsubscribeFromRoleMatrix()
@@ -298,16 +378,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // queue rows; unsynced field work is preserved (see clearLocalUserState).
         clearLocalUserState().catch(() => {})
       }
-    })
+    }
 
     return () => {
       mounted = false
+      clearTimeout(timeoutId)
       subscription.unsubscribe()
       unsubscribeFromProfile()
       unsubscribeFromGrants()
       unsubscribeFromRoleMatrix()
     }
   }, [])
+
+  /** Re-attempt session restore after the bounded wait gave up. Used by the
+   *  "taking longer than usual" screen so a slow Keystore is a retry, never a
+   *  dead end. */
+  async function retrySession() {
+    setSessionTimedOut(false)
+    setLoading(true)
+    try {
+      const { data: { session } } = await withTimeout(
+        supabase.auth.getSession(), SESSION_RESTORE_TIMEOUT_MS,
+      )
+      setUser(session?.user ?? null)
+      setLoading(false)
+      if (session?.user) {
+        setProfileLoading(true)
+        subscribeToProfile(session.user.id)
+        subscribeToGrants(session.user.id)
+        subscribeToRoleMatrix()
+        fetchGrants()
+        fetchRoleMatrix()
+        await fetchProfile(session.user.id)
+      } else {
+        setProfileLoading(false)
+      }
+    } catch {
+      // Still stalled: return to the recoverable screen rather than spin.
+      setLoading(false)
+      setProfileLoading(false)
+      setSessionTimedOut(true)
+    }
+  }
 
   async function fetchProfile(userId: string) {
     setProfileLoading(true)
@@ -329,6 +441,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSentryUser({ id: data.id, username: data.username })
         setProfileError(false)
         setProfileStale(false)
+        // REGISTER THIS DEVICE FOR PUSH, HERE - not only on the Profile screen.
+        //
+        // registerPushToken() used to be called from exactly one place: the
+        // Profile tab. Field users scan, inspect, upload and close the app; they
+        // rarely open Profile. Sign-out clears the token by design. The result,
+        // measured on the live database, was 0 push tokens across 36 accounts -
+        // so no server notification could reach anybody, which is exactly what
+        // was reported. Registering once per signed-in session, right after the
+        // profile is verified, is what makes notifications actually deliverable.
+        // Best-effort by design: it must never block or fail sign-in.
+        if (pushRegisteredForRef.current !== userId) {
+          pushRegisteredForRef.current = userId
+          registerPushToken(userId).catch(() => {
+            // Permission denied or offline: leave it unregistered and let a
+            // later sign-in retry. Never surface this as a sign-in failure.
+            pushRegisteredForRef.current = null
+          })
+        }
       } else {
         // No profile row for an authenticated user is not a hard error (a fresh
         // signup may not be provisioned yet); leave profile null, no error.
@@ -434,6 +564,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, profile, loading, profileLoading, profileError, profileStale, retryProfile,
+      sessionTimedOut, retrySession,
       permissionsError, isSuperAdmin, grants, roleMatrix, canAccess,
       refreshGrants: refreshAccess, hasUnsyncedWork, signIn, signOut,
     }}>

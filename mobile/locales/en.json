@@ -161,7 +161,10 @@
     "reviewSummaryTitle": "Inspection summary",
     "positionsRecorded": "positions recorded",
     "submittedForApprovalTitle": "Submitted for approval",
-    "submittedForApprovalNote": "A supervisor will review and sign off on this inspection. You will see it under History once approved."
+    "submittedForApprovalNote": "A supervisor will review and sign off on this inspection. You will see it under History once approved.",
+    "step1Label": "Vehicle",
+    "step2Label": "Tyres",
+    "step3Label": "Review"
   },
   "history": {
     "title": "Inspection History",

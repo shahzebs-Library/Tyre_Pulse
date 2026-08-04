@@ -162,7 +162,10 @@
     "reviewSummaryTitle": "ملخص الفحص",
     "positionsRecorded": "موضعاً مسجلاً",
     "submittedForApprovalTitle": "تم الإرسال للاعتماد",
-    "submittedForApprovalNote": "سيقوم المشرف بمراجعة هذا الفحص والتوقيع عليه. سيظهر ضمن السجل بعد الاعتماد."
+    "submittedForApprovalNote": "سيقوم المشرف بمراجعة هذا الفحص والتوقيع عليه. سيظهر ضمن السجل بعد الاعتماد.",
+    "step1Label": "المركبة",
+    "step2Label": "الإطارات",
+    "step3Label": "المراجعة"
   },
   "history": {
     "title": "سجل الفحوصات",

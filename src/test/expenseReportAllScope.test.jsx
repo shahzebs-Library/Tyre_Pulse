@@ -98,7 +98,7 @@ describe('ExpenseReport - All countries scope', () => {
 
   it('hides the cross-currency charts and says why', async () => {
     render(<ExpenseReport />)
-    await screen.findByText('Charts are shown per country')
+    await screen.findByText('Charts, Chart Builder and Tyre Forecast show per country')
     expect(screen.queryByText('Top stores by spend')).toBeNull()
     expect(screen.queryByText('Top assets by spend')).toBeNull()
     expect(screen.queryByText('Top items by spend')).toBeNull()
@@ -154,7 +154,7 @@ describe('ExpenseReport - single country scope is unchanged', () => {
     await screen.findByText('Top stores by spend')
     expect(screen.getByText('Top assets by spend')).toBeTruthy()
     expect(screen.getByText('Tyres, spare parts and oil by month')).toBeTruthy()
-    expect(screen.queryByText('Charts are shown per country')).toBeNull()
+    expect(screen.queryByText('Charts, Chart Builder and Tyre Forecast show per country')).toBeNull()
     expect(screen.queryByText('By country (own currency)')).toBeNull()
   })
 

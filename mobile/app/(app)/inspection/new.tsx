@@ -35,6 +35,50 @@ type Step = 'header' | 'tyres' | 'review' | 'submit'
 
 import { withModuleGuard } from '../../../components/ModuleGuard'
 
+/**
+ * Step track for the inspection wizard.
+ *
+ * Replaces three unlabelled 26px numbered circles. Those told a tyre man which
+ * number he was on but not what it meant, how much was left, or what he had
+ * already finished - and at that size, in sun, with gloves, the digit was the
+ * only cue. This shows the stage NAME, ticks the stages already completed and
+ * draws a connector, so progress reads at a glance. Mirrors for Arabic.
+ */
+function StepTrack({ current, isRTL, t, styles, theme }: {
+  current: 1 | 2 | 3
+  isRTL: boolean
+  t: (k: string) => string
+  styles: ReturnType<typeof makeStyles>
+  theme: Theme
+}) {
+  const steps: Array<{ n: 1 | 2 | 3; label: string }> = [
+    { n: 1, label: t('inspection.step1Label') },
+    { n: 2, label: t('inspection.step2Label') },
+    { n: 3, label: t('inspection.step3Label') },
+  ]
+  return (
+    <View style={[styles.track, isRTL && styles.trackRTL]}>
+      {steps.map((st, i) => {
+        const done = st.n < current
+        const active = st.n === current
+        return (
+          <View key={st.n} style={[styles.trackItem, isRTL && styles.trackItemRTL]}>
+            {i > 0 && <View style={[styles.trackLine, (done || active) && styles.trackLineOn]} />}
+            <View style={[styles.trackDot, done && styles.trackDotDone, active && styles.trackDotActive]}>
+              {done
+                ? <Ionicons name="checkmark" size={13} color={theme.color.onPrimary} />
+                : <Text style={active ? styles.trackNumActive : styles.trackNum}>{st.n}</Text>}
+            </View>
+            <Text style={[styles.trackLabel, active && styles.trackLabelActive]} numberOfLines={1}>
+              {st.label}
+            </Text>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
 export default withModuleGuard(NewInspectionScreen, 'inspect')
 
 function NewInspectionScreen() {
@@ -502,17 +546,7 @@ function NewInspectionScreen() {
               <Ionicons name={backIcon} size={22} color={theme.color.text} />
             </TouchableOpacity>
             <Text style={styles.navTitle}>{t('inspection.navTitle')}</Text>
-            <View style={styles.stepPills}>
-              <View style={[styles.stepPill, styles.stepPillActive]}>
-                <Text style={styles.stepPillTextActive}>{t('inspection.step1')}</Text>
-              </View>
-              <View style={styles.stepPill}>
-                <Text style={styles.stepPillText}>{t('inspection.step2')}</Text>
-              </View>
-              <View style={styles.stepPill}>
-                <Text style={styles.stepPillText}>{t('inspection.step3')}</Text>
-              </View>
-            </View>
+            <StepTrack current={1} isRTL={isRTL} t={t} styles={styles} theme={theme} />
           </View>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -945,17 +979,7 @@ function NewInspectionScreen() {
               {selectedVehicle?.asset_no} · {selectedSite}
             </Text>
           </View>
-          <View style={styles.stepPills}>
-            <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>{t('inspection.step1')}</Text>
-            </View>
-            <View style={[styles.stepPill, styles.stepPillActive]}>
-              <Text style={styles.stepPillTextActive}>{t('inspection.step2')}</Text>
-            </View>
-            <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>{t('inspection.step3')}</Text>
-            </View>
-          </View>
+          <StepTrack current={2} isRTL={isRTL} t={t} styles={styles} theme={theme} />
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -1106,13 +1130,7 @@ function NewInspectionScreen() {
               <Text style={[styles.navTitle, { textAlign }]}>{t('inspection.reviewTitle')}</Text>
               <Text style={[styles.navSubtitle, { textAlign }]}>{t('inspection.reviewSubtitle')}</Text>
             </View>
-            <View style={styles.stepPills}>
-              <View style={styles.stepPill}><Text style={styles.stepPillText}>{t('inspection.step1')}</Text></View>
-              <View style={styles.stepPill}><Text style={styles.stepPillText}>{t('inspection.step2')}</Text></View>
-              <View style={[styles.stepPill, styles.stepPillActive]}>
-                <Text style={styles.stepPillTextActive}>{t('inspection.step3')}</Text>
-              </View>
-            </View>
+            <StepTrack current={3} isRTL={isRTL} t={t} styles={styles} theme={theme} />
           </View>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -1274,6 +1292,23 @@ function makeStyles(theme: Theme) {
   },
   navTitle: { fontSize: 16, fontWeight: '700', color: c.text, flex: 1 },
   navSubtitle: { fontSize: 11, color: c.textMuted, marginTop: 1 },
+  track: { flexDirection: 'row', alignItems: 'center' },
+  trackRTL: { flexDirection: 'row-reverse' },
+  trackItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  trackItemRTL: { flexDirection: 'row-reverse' },
+  trackLine: { width: 12, height: 2, backgroundColor: c.border, marginHorizontal: 3 },
+  trackLineOn: { backgroundColor: c.primary },
+  trackDot: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: c.surfaceAlt, borderWidth: 1.5, borderColor: c.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  trackDotActive: { backgroundColor: c.primary, borderColor: c.primary },
+  trackDotDone: { backgroundColor: c.primary, borderColor: c.primary },
+  trackNum: { fontSize: 11, fontWeight: '800', color: c.textMuted },
+  trackNumActive: { fontSize: 11, fontWeight: '800', color: c.onPrimary },
+  trackLabel: { fontSize: 11, fontWeight: '700', color: c.textMuted, maxWidth: 58 },
+  trackLabelActive: { color: c.primary },
   stepPills: { flexDirection: 'row', gap: spacing.xs + 2 },
   stepPill: {
     width: 26, height: 26, borderRadius: 13,

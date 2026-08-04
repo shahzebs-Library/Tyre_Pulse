@@ -15,9 +15,13 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../../../lib/supabase'
-import { fetchAllPages } from '../../../lib/fetchAll'
 import { toUserMessage } from '../../../lib/safeError'
+import { useAuth } from '../../../contexts/AuthContext'
+import {
+  getMobileAnalytics, avgCostPerTyre,
+  compactNumber, currencyFor, formatSpend,
+  type MobileAnalytics,
+} from '../../../lib/mobileAnalytics'
 
 /** Local YYYY-MM-DD (avoids the UTC shift that toISOString() introduces). */
 function isoDay(d: Date): string {
@@ -29,27 +33,8 @@ function daysAgo(days: number): string {
   const d = new Date(); d.setDate(d.getDate() - days); return isoDay(d)
 }
 
-interface KPI {
-  totalRecords: number
-  totalCost: number
-  criticalCount: number
-  highCount: number
-  avgCostPerTyre: number
-  totalVehicles: number
-  openActions: number
-}
-
-interface SiteStat { site: string; count: number; cost: number }
-interface BrandStat { brand: string; count: number; cost: number }
-interface RiskStat  { risk: string; count: number }
-
-/** The tyre_records projection every KPI on this screen is derived from. */
-interface TyreRow {
-  cost_per_tyre: number | null
-  risk_level: string | null
-  brand: string | null
-  site: string | null
-}
+/** Risk bands shown in a fixed order so the list does not reshuffle on refresh. */
+const RISK_BANDS = ['Critical', 'High', 'Medium', 'Low'] as const
 
 const RISK_COLOR: Record<string, string> = {
   Critical: '#dc2626', High: '#ea580c', Medium: '#f59e0b', Low: '#16a34a',
@@ -63,47 +48,27 @@ function AnalyticsScreen() {
   // Access is enforced by the registry via withModuleGuard(..., 'analytics')
   // above; the `analytics` module is admin/super only. By the time this body
   // renders, access is already confirmed, so no second in-screen role guard.
+  const { profile } = useAuth()
+  // The user's own country decides the currency. There is no all-countries
+  // total: SAR, AED and EGP are not addable, so spend simply reads N/A there.
+  const country  = profile?.country ?? null
+  const currency = currencyFor(country)
+
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [kpi, setKpi]             = useState<KPI | null>(null)
-  const [byRisk, setByRisk]       = useState<RiskStat[]>([])
-  const [bySite, setBySite]       = useState<SiteStat[]>([])
-  const [byBrand, setByBrand]     = useState<BrandStat[]>([])
+  const [data, setData]           = useState<MobileAnalytics | null>(null)
   const [period, setPeriod]       = useState<'30' | '90' | '365' | 'custom'>('90')
   // Custom date-range (YYYY-MM-DD); only used when period === 'custom'.
   const [fromDate, setFromDate]   = useState('')
   const [toDate, setToDate]       = useState('')
-  // Site/location filter ('' = all sites) + the distinct-site option list.
+  // Site/location filter ('' = all sites). The option list rides along with the
+  // aggregate, so no separate read of the fleet register is needed.
   const [site, setSite]           = useState('')
-  const [siteOptions, setSiteOptions] = useState<string[]>([])
 
-  // Distinct sites for the location dropdown, sourced from the fleet master and
-  // fetched once (RLS scopes org + country). Kept independent of the site filter
-  // so selecting a site never collapses the option list.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        // Paged: the fleet register exceeds the PostgREST row cap, and an
-        // un-paged read would silently drop whole sites from this list, making
-        // them unfilterable. Best-effort: on error we keep whatever pages
-        // succeeded rather than failing the screen.
-        const { data } = await fetchAllPages<{ site: string | null }>(
-          (rangeFrom, rangeTo) => supabase.from('vehicle_fleet')
-            .select('site')
-            .order('id', { ascending: true })
-            .range(rangeFrom, rangeTo),
-        )
-        if (cancelled) return
-        const sites = [...new Set(data.map(r => r.site).filter(Boolean) as string[])].sort()
-        setSiteOptions(sites)
-      } catch (e: any) {
-        if (__DEV__) console.warn('[analytics] site options failed:', e?.message)
-      }
-    })()
-    return () => { cancelled = true }
-  }, [])
+  // Keep the last known site list so the chips do not vanish while a filtered
+  // refresh is in flight.
+  const [siteOptions, setSiteOptions] = useState<string[]>([])
 
   // Resolve the active [from, to] window from the selected period / custom range.
   // Empty string = open-ended on that side.
@@ -121,91 +86,47 @@ function AnalyticsScreen() {
     setLoading(true)
     setError(null)
     try {
-    const { from, to } = resolveRange()
-
-    // PAGED read. Every KPI, percentage and ranking below is derived from these
-    // rows, so an un-paged query would be silently capped by PostgREST at 1000
-    // rows and understate all of them. The window can legitimately cover the
-    // whole table (the Custom preset with both dates blank applies no date
-    // filter at all), so this must never rely on the filter to stay under the
-    // cap. Ordered by primary key to keep page boundaries stable.
-    const buildRecords = (rangeFrom: number, rangeTo: number) => {
-      let q = supabase.from('tyre_records')
-        .select('id,cost_per_tyre,risk_level,brand,site')
-        .order('id', { ascending: true })
-      if (from) q = q.gte('issue_date', from)
-      if (to)   q = q.lte('issue_date', to)
-      if (site) q = q.eq('site', site)
-      return q.range(rangeFrom, rangeTo)
-    }
-
-    let vehiclesQ = supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true })
-    if (site) vehiclesQ = vehiclesQ.eq('site', site)
-
-    let actionsQ = supabase.from('corrective_actions')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['Open', 'In Progress'])
-    if (site) actionsQ = actionsQ.eq('site', site)
-
-    const [recordsRes, vehiclesRes, actionsRes] = await Promise.all([
-      fetchAllPages<TyreRow>(buildRecords), vehiclesQ, actionsQ,
-    ])
-    if (recordsRes.error) throw recordsRes.error
-
-    const records = recordsRes.data
-
-    const totalCost = records.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
-    const critical  = records.filter(r => r.risk_level === 'Critical').length
-    const high      = records.filter(r => r.risk_level === 'High').length
-
-    setKpi({
-      totalRecords:  records.length,
-      totalCost,
-      criticalCount: critical,
-      highCount:     high,
-      avgCostPerTyre: records.length > 0 ? totalCost / records.length : 0,
-      totalVehicles: vehiclesRes.count ?? 0,
-      openActions:   actionsRes.count ?? 0,
-    })
-
-    // Risk breakdown
-    const riskMap: Record<string, number> = {}
-    records.forEach(r => { const k = r.risk_level ?? 'Unknown'; riskMap[k] = (riskMap[k] ?? 0) + 1 })
-    setByRisk(['Critical', 'High', 'Medium', 'Low'].map(r => ({ risk: r, count: riskMap[r] ?? 0 })))
-
-    // Top sites by cost (top 6)
-    const siteMap: Record<string, SiteStat> = {}
-    records.forEach(r => {
-      const s = r.site ?? 'Unknown'
-      if (!siteMap[s]) siteMap[s] = { site: s, count: 0, cost: 0 }
-      siteMap[s].count++
-      siteMap[s].cost += Number(r.cost_per_tyre) || 0
-    })
-    setBySite(Object.values(siteMap).sort((a, b) => b.cost - a.cost).slice(0, 6))
-
-    // Top brands by count (top 5)
-    const brandMap: Record<string, BrandStat> = {}
-    records.forEach(r => {
-      const b = r.brand ?? 'Unknown'
-      if (!brandMap[b]) brandMap[b] = { brand: b, count: 0, cost: 0 }
-      brandMap[b].count++
-      brandMap[b].cost += Number(r.cost_per_tyre) || 0
-    })
-    setByBrand(Object.values(brandMap).sort((a, b) => b.count - a.count).slice(0, 5))
+      const { from, to } = resolveRange()
+      // ONE row from the server. This screen used to page the whole
+      // tyre_records table into memory and count it here, which made it the
+      // slowest screen in the app and a genuine out-of-memory risk on the
+      // low-end handsets the fleet runs on. The database counts; the phone
+      // renders. Every figure below is exact - there is no row cap to hit.
+      const res = await getMobileAnalytics({ country, from, to, site })
+      setData(res)
+      // Only replace the chips when the server actually returned a list, so a
+      // momentary empty result cannot strand the user with no way to clear
+      // their own filter.
+      if (res?.sites?.length) setSiteOptions(res.sites)
     } catch (e: any) {
       setError(toUserMessage(e, 'Could not load analytics. Please try again.'))
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [resolveRange, site])
+  }, [resolveRange, site, country])
 
   useEffect(() => { load() }, [load])
 
   async function onRefresh() { setRefreshing(true); load() }
 
-  const maxCost = bySite.reduce((m, s) => Math.max(m, s.cost), 1)
-  const maxBrand = byBrand.reduce((m, b) => Math.max(m, b.count), 1)
+  // Money is only shown when a single country is in scope AND the server sent a
+  // figure; otherwise the bars rank by volume, which is always comparable.
+  const showMoney = !!currency && data?.tyre_spend != null
+
+  // The server returns whatever bands exist in the data; render the four known
+  // bands in a fixed order (zero-filled) so the list does not reshuffle.
+  const riskRows = RISK_BANDS.map(band => ({
+    risk: band,
+    count: data?.by_risk.find(r => r.risk.toLowerCase() === band.toLowerCase())?.count ?? 0,
+  }))
+  // Anything the fleet has not rated yet. Stated plainly rather than folded into
+  // Low, which would read as "these tyres were checked and are fine".
+  const unratedTyres = Math.max(0, (data?.tyres_total ?? 0) - riskRows.reduce((s, r) => s + r.count, 0))
+
+  const maxSite = (data?.by_site ?? []).reduce(
+    (m, s) => Math.max(m, showMoney ? (s.cost ?? 0) : s.count), 1)
+  const maxBrand = (data?.by_brand ?? []).reduce((m, b) => Math.max(m, b.count), 1)
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -214,7 +135,10 @@ function AnalyticsScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Fleet Analytics</Text>
-          <Text style={styles.subtitle}>{site ? `${site} · ` : 'All sites · '}{period === 'custom' ? 'Custom range' : period === '365' ? 'Last 1 year' : `Last ${period} days`}</Text>
+          <Text style={styles.subtitle}>
+            {country ? `${country} · ` : ''}{site ? `${site} · ` : 'All sites · '}
+            {period === 'custom' ? 'Custom range' : period === '365' ? 'Last 1 year' : `Last ${period} days`}
+          </Text>
         </View>
       </View>
 
@@ -307,7 +231,7 @@ function AnalyticsScreen() {
             <View key={i} style={[styles.card, { height: h }]} />
           ))}
         </ScrollView>
-      ) : (error || !kpi) ? (
+      ) : (error || !data) ? (
         <ScrollView
           contentContainerStyle={[styles.content, { alignItems: 'center', justifyContent: 'center', flexGrow: 1 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
@@ -328,71 +252,81 @@ function AnalyticsScreen() {
         >
           {/* KPI row 1 */}
           <View style={styles.kpiGrid}>
-            <KpiCard icon="layers-outline"    label="Total Records"  value={kpi!.totalRecords.toLocaleString()} color="#3b82f6" />
-            <KpiCard icon="car-sport-outline" label="Fleet Size"     value={kpi!.totalVehicles.toLocaleString()} color="#8b5cf6" />
-            <KpiCard icon="cash-outline"      label="Total Cost"     value={`SAR ${(kpi!.totalCost / 1000).toFixed(0)}k`} color="#16a34a" />
-            <KpiCard icon="warning-outline"   label="Critical"       value={kpi!.criticalCount.toString()} color="#dc2626" />
+            <KpiCard icon="layers-outline"    label="Total Records"  value={compactNumber(data.tyres_total)} color="#3b82f6" />
+            <KpiCard icon="car-sport-outline" label="Fleet Size"     value={compactNumber(data.vehicles_total)} color="#8b5cf6" />
+            {/* Reads N/A rather than a blended figure when no single country applies. */}
+            <KpiCard icon="cash-outline"      label="Tyre Spend"     value={formatSpend(data.tyre_spend, country)} color="#16a34a" />
+            <KpiCard icon="warning-outline"   label="Critical"       value={compactNumber(data.tyres_critical)} color="#dc2626" />
           </View>
           <View style={styles.kpiGrid}>
-            <KpiCard icon="trending-up-outline" label="Avg Cost/Tyre" value={`SAR ${Math.round(kpi!.avgCostPerTyre).toLocaleString()}`} color="#f59e0b" />
-            <KpiCard icon="flame-outline"       label="High Risk"     value={kpi!.highCount.toString()} color="#ea580c" />
-            <KpiCard icon="construct-outline"   label="Open Actions"  value={kpi!.openActions.toString()} color="#0ea5e9" />
-            <KpiCard icon="checkmark-circle-outline" label="Safe"     value={(kpi!.totalRecords - kpi!.criticalCount - kpi!.highCount).toString()} color="#16a34a" />
+            <KpiCard icon="trending-up-outline" label="Avg Cost/Tyre" value={formatSpend(avgCostPerTyre(data), country)} color="#f59e0b" />
+            <KpiCard icon="flame-outline"       label="High Risk"     value={compactNumber(data.tyres_high)} color="#ea580c" />
+            <KpiCard icon="construct-outline"   label="Open Actions"  value={compactNumber(data.open_actions)} color="#0ea5e9" />
+            <KpiCard icon="clipboard-outline"   label="Inspections 30d" value={compactNumber(data.inspections_30d)} color="#0891b2" />
           </View>
 
           {/* Risk breakdown - with % labels inside bars */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Risk Breakdown</Text>
             <View style={{ gap: 12 }}>
-              {byRisk.map(r => {
-                const pct = kpi!.totalRecords > 0 ? r.count / kpi!.totalRecords : 0
+              {riskRows.map(r => {
+                const pct = data.tyres_total > 0 ? r.count / data.tyres_total : 0
                 const pctLabel = `${Math.round(pct * 100)}%`
                 return (
                   <View key={r.risk}>
                     <View style={styles.barMeta}>
-                      <View style={[styles.riskDot, { backgroundColor: RISK_COLOR[r.risk] }]} />
+                      <View style={[styles.riskDot, { backgroundColor: RISK_COLOR[r.risk] || '#94a3b8' }]} />
                       <Text style={styles.barLabel}>{r.risk}</Text>
-                      <Text style={[styles.barValue, { color: RISK_COLOR[r.risk] }]}>{r.count}</Text>
+                      <Text style={[styles.barValue, { color: RISK_COLOR[r.risk] || '#64748b' }]}>{r.count}</Text>
                       <Text style={styles.pctLabel}>{pctLabel}</Text>
                     </View>
                     <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: RISK_COLOR[r.risk] }]} />
+                      <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: RISK_COLOR[r.risk] || '#cbd5e1' }]} />
                     </View>
                   </View>
                 )
               })}
+              {unratedTyres > 0 && (
+                <Text style={styles.note}>
+                  {compactNumber(unratedTyres)} of these tyres carry no risk rating yet, so they sit outside the bands above.
+                </Text>
+              )}
             </View>
           </View>
 
-          {/* Top sites by cost */}
-          {bySite.length > 0 && (
+          {/* Top sites. Ranked by cost inside one country, by volume otherwise -
+              the ranking always matches the number we are able to show. */}
+          {data.by_site.length > 0 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Top Sites by Cost (SAR)</Text>
+              <Text style={styles.cardTitle}>
+                {showMoney ? `Top Sites by Cost (${currency})` : 'Top Sites by Volume'}
+              </Text>
               <View style={{ gap: 12 }}>
-                {bySite.map((s, idx) => (
-                  <View key={s.site}>
-                    <View style={styles.barMeta}>
-                      <Text style={styles.rankNum}>#{idx + 1}</Text>
-                      <Text style={styles.barLabel} numberOfLines={1}>{s.site}</Text>
-                      <Text style={[styles.barValue, { color: '#3b82f6' }]}>
-                        {s.cost >= 1000 ? `${(s.cost / 1000).toFixed(0)}k` : Math.round(s.cost).toString()}
-                      </Text>
+                {data.by_site.map((s, idx) => {
+                  const v = showMoney ? (s.cost ?? 0) : s.count
+                  return (
+                    <View key={s.site}>
+                      <View style={styles.barMeta}>
+                        <Text style={styles.rankNum}>#{idx + 1}</Text>
+                        <Text style={styles.barLabel} numberOfLines={1}>{s.site}</Text>
+                        <Text style={[styles.barValue, { color: '#3b82f6' }]}>{compactNumber(v)}</Text>
+                      </View>
+                      <View style={styles.barTrack}>
+                        <View style={[styles.barFill, { width: `${Math.round((v / maxSite) * 100)}%`, backgroundColor: '#3b82f6' }]} />
+                      </View>
                     </View>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.round((s.cost / maxCost) * 100)}%`, backgroundColor: '#3b82f6' }]} />
-                    </View>
-                  </View>
-                ))}
+                  )
+                })}
               </View>
             </View>
           )}
 
           {/* Top brands */}
-          {byBrand.length > 0 && (
+          {data.by_brand.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Top Brands by Volume</Text>
               <View style={{ gap: 12 }}>
-                {byBrand.map((b, idx) => (
+                {data.by_brand.map((b, idx) => (
                   <View key={b.brand}>
                     <View style={styles.barMeta}>
                       <Text style={styles.rankNum}>#{idx + 1}</Text>
@@ -406,6 +340,12 @@ function AnalyticsScreen() {
                 ))}
               </View>
             </View>
+          )}
+
+          {!showMoney && (
+            <Text style={styles.note}>
+              Costs are hidden because more than one currency is in scope. Pick a single country to see spend.
+            </Text>
           )}
         </ScrollView>
       )}
@@ -488,6 +428,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, gap: 14,
   },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  note: { fontSize: 11, color: '#64748b', lineHeight: 16 },
 
   barMeta:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   riskDot:  { width: 8, height: 8, borderRadius: 4 },

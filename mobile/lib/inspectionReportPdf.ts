@@ -15,7 +15,7 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { supabase } from './supabase'
-import { diagramPositions } from './tyreDiagramLayouts'
+import { diagramPositions, LAYOUTS, resolveVehicleType } from './tyreDiagramLayouts'
 
 // ── Condition colour system (semantic, fixed hex - shared with the detail view) ──
 const COND_GREEN = '#16a34a'
@@ -101,6 +101,64 @@ function orderedPositions(insp: InspectionForReport): string[] {
 }
 
 /** Render a stored SVG signature inline, or an honest placeholder. */
+/**
+ * Draw the vehicle tyre map as real SVG, using the SAME coordinates the on-screen
+ * diagram uses (LAYOUTS is the single source for both), so the printed map and
+ * the app show the wheels in identical places.
+ *
+ * Each wheel is filled with its recorded condition colour and labelled; a wheel
+ * with no reading is drawn hollow and dashed, so "not inspected" is visibly
+ * different from "inspected and fine" - the distinction a reader of the report
+ * most needs and the one a plain grid of boxes could not make.
+ *
+ * Returns '' when the vehicle type carries no tyres (generators, plants), so the
+ * section is omitted rather than printing an empty frame.
+ */
+function tyreMapSvg(vehicleType: string, conditions: Record<string, any>): string {
+  const layout = LAYOUTS[resolveVehicleType(vehicleType)]
+  if (!layout || !layout.tyres.length) return ''
+
+  const VIEW_W = 200
+  const viewH = layout.viewH || 320
+  // Body slab: inset from the widest wheel column so wheels read as mounted on it.
+  const bodyX = 58, bodyW = 84
+  const top = Math.min(...layout.tyres.map(t => t.y))
+  const bottom = Math.max(...layout.tyres.map(t => t.y + t.h))
+  const bodyY = Math.max(6, top - 16)
+  const bodyH = Math.min(viewH - bodyY - 6, (bottom - top) + 32)
+
+  const wheels = layout.tyres.map(t => {
+    const c = conditions[t.id]
+    const recorded = !!c
+    const fill = recorded ? conditionColor(c?.condition ?? c?.risk) : '#ffffff'
+    const stroke = recorded ? 'rgba(15,23,42,.28)' : '#94a3b8'
+    const dash = recorded ? '' : ' stroke-dasharray="3 2"'
+    // Label sits outside the wheel on its own side so it never overlaps the body.
+    const leftSide = t.x < VIEW_W / 2
+    const lx = leftSide ? t.x - 3 : t.x + t.w + 3
+    const anchor = leftSide ? 'end' : 'start'
+    const tread = c?.tread_depth_mm ?? c?.tread_depth
+    const sub = tread != null ? `${tread}mm` : ''
+    return `<rect x="${t.x}" y="${t.y}" width="${t.w}" height="${t.h}" rx="5"
+        fill="${fill}" stroke="${stroke}" stroke-width="1.2"${dash} />
+      <text x="${lx}" y="${t.y + t.h / 2 - 1}" text-anchor="${anchor}"
+        font-size="9" font-weight="700" fill="#0f172a">${esc(t.label)}</text>
+      ${sub ? `<text x="${lx}" y="${t.y + t.h / 2 + 9}" text-anchor="${anchor}"
+        font-size="7.5" fill="#64748b">${esc(sub)}</text>` : ''}`
+  }).join('')
+
+  return `<div class="tyremap">
+    <svg viewBox="0 0 ${VIEW_W} ${viewH}" width="100%" height="${Math.min(viewH, 300)}"
+      xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tyre position map">
+      <rect x="${bodyX}" y="${bodyY}" width="${bodyW}" height="${bodyH}" rx="10"
+        fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2" />
+      <text x="${VIEW_W / 2}" y="${bodyY + 14}" text-anchor="middle"
+        font-size="8" font-weight="700" fill="#94a3b8" letter-spacing="1">FRONT</text>
+      ${wheels}
+    </svg>
+  </div>`
+}
+
 function signatureBlock(svg: any, name: string): string {
   const isSvg = typeof svg === 'string' && svg.trim().startsWith('<svg')
   const inner = isSvg
@@ -155,6 +213,7 @@ const css = `
   .sigBox { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
   .sigInk { height: 74px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .sigInk svg { max-height: 74px; max-width: 100%; }
+  .tyremap { max-width: 320px; margin: 0 auto 14px; page-break-inside: avoid; }
   .sigEmpty { height: 74px; display: flex; align-items: center; justify-content: center; color: #cbd5e1; font-style: italic; font-size: 12px; }
   .sigLine { border-top: 1px solid #cbd5e1; margin: 6px 0 4px; }
   .sigName { font-size: 12px; font-weight: 700; color: ${INK}; }
@@ -285,6 +344,7 @@ export function buildInspectionHtml(insp: InspectionForReport): string {
       ${legend}
 
       <h2>Tyre Layout (${positions.length})</h2>
+      ${tyreMapSvg(insp.vehicle_type ?? '', conditions)}
       ${grid}
 
       <h2>Recorded Conditions (${recorded.length})</h2>

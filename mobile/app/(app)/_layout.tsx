@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Tabs, Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { View, Text, StyleSheet, TouchableOpacity, DeviceEventEmitter } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, DeviceEventEmitter, Linking } from 'react-native'
 import { getPendingCount } from '../../lib/offlineQueue'
 import { getPendingRecordCount } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
@@ -11,6 +11,7 @@ import { useNetworkSync } from '../../hooks/useNetworkSync'
 import { useRealtime } from '../../hooks/useRealtime'
 import { supabase } from '../../lib/supabase'
 import { TAB_BAR } from '../../lib/permissions'
+import { checkUpdateRequired } from '../../lib/appVersionGate'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -43,6 +44,18 @@ export default function AppLayout() {
   const insets = useSafeAreaInsets()
   const [accidentBadge, setAccidentBadge] = useState(0)
   const [homeBadge, setHomeBadge] = useState(0)
+  const [updateRequired, setUpdateRequired] = useState(false)
+
+  // Check once per app session, after sign-in. Never blocks rendering: it starts
+  // false and only flips if the server explicitly reports this build too old.
+  useEffect(() => {
+    if (!user) return
+    let alive = true
+    checkUpdateRequired()
+      .then((req) => { if (alive) setUpdateRequired(req) })
+      .catch(() => { /* fail open - never lock a field user out over a version check */ })
+    return () => { alive = false }
+  }, [user])
 
   useNetworkSync()
 
@@ -107,6 +120,13 @@ export default function AppLayout() {
   }
 
   if (!user) return <Redirect href="/(auth)/login" />
+
+  // Minimum-version gate. An admin can require everyone onto a newer build once
+  // a fix has shipped, so a tester who never updated stops reporting bugs that
+  // were already fixed. Fail-open: no minimum set, or any error reading it, and
+  // this is false, so the app opens exactly as before.
+  if (updateRequired) return <UpdateRequiredGate onSignOut={signOut} />
+
 
   // Authenticated but the profile could not be verified (hard fetch error).
   // FAIL CLOSED: block all protected content behind a safe retry screen; a
@@ -222,6 +242,43 @@ export default function AppLayout() {
 }
 
 // Shown when an account is locked or not yet approved by an admin.
+/**
+ * Shown when an admin has set a minimum version above this build. Deliberately
+ * offers no "continue anyway": the point is to stop old builds reporting bugs
+ * that are already fixed, and to stop them writing data in an outdated shape.
+ * Sign out stays available so a device can be handed to someone else.
+ */
+function UpdateRequiredGate({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <View style={styles.gate}>
+      <View style={[styles.gateIcon, { backgroundColor: 'rgba(22,163,74,0.12)' }]}>
+        <Ionicons name="arrow-up-circle-outline" size={34} color="#16a34a" />
+      </View>
+      <Text style={styles.gateTitle}>Update Required</Text>
+      <Text style={styles.gateMsg}>
+        A newer version of TyrePulse Inspector is available and this one is no
+        longer supported. Open Google Play and update to continue. Any work saved
+        on this device is safe and will sync after you update.
+      </Text>
+      <TouchableOpacity style={styles.gateBtn} onPress={() => { openPlayStore() }}>
+        <Ionicons name="download-outline" size={18} color="#fff" />
+        <Text style={styles.gateBtnText}>Open Google Play</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={{ marginTop: 14 }} onPress={onSignOut}>
+        <Text style={{ color: '#64748b', fontSize: 14, fontWeight: '600' }}>Sign out</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+/** Open this app's Play Store listing; falls back to the web listing. */
+function openPlayStore() {
+  const id = 'com.shahzebrahman.tyrepulseinspector'
+  Linking.openURL(`market://details?id=${id}`).catch(() => {
+    Linking.openURL(`https://play.google.com/store/apps/details?id=${id}`).catch(() => {})
+  })
+}
+
 function AccessGate({ locked, onSignOut }: { locked: boolean; onSignOut: () => void }) {
   return (
     <View style={styles.gate}>

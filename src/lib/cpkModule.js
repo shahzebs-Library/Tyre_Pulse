@@ -37,6 +37,8 @@ const lastDay = (y, m0) => new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate()
  * page never fetches the full history on open.
  */
 export const CPK_PERIODS = [
+  { key: 'week', label: 'Last week (Sun to Sat)' },
+  { key: 'prev_week', label: 'Week before (Sun to Sat)' },
   { key: 'current_month', label: 'This month' },
   { key: 'last_month', label: 'Last month' },
   { key: 'quarter', label: 'This quarter' },
@@ -60,10 +62,34 @@ export function periodBounds(key = DEFAULT_PERIOD, anchor = new Date()) {
   const y = a.getUTCFullYear()
   const m = a.getUTCMonth() // 0-based
   const d = a.getUTCDate()
-  const meta = CPK_PERIODS.find((p) => p.key === key) || CPK_PERIODS[0]
+  const meta = CPK_PERIODS.find((p) => p.key === key)
+    || CPK_PERIODS.find((p) => p.key === DEFAULT_PERIOD)
+    || CPK_PERIODS[0]
   let from
   let to
   switch (meta.key) {
+    case 'week': {
+      // The last COMPLETED calendar week, Sunday to Saturday (GCC: reported on
+      // Sunday for the week that ended the previous Saturday). end = the most
+      // recent Saturday on or before the anchor; start = that week's Sunday.
+      const base = new Date(Date.UTC(y, m, d))
+      const dow = base.getUTCDay() // 0 Sun .. 6 Sat
+      const end = new Date(base); end.setUTCDate(end.getUTCDate() - ((dow + 1) % 7))
+      const start = new Date(end); start.setUTCDate(start.getUTCDate() - 6)
+      from = iso(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+      to = iso(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+      break
+    }
+    case 'prev_week': {
+      // The Sunday-to-Saturday week before the 'week' window.
+      const base = new Date(Date.UTC(y, m, d))
+      const dow = base.getUTCDay()
+      const end = new Date(base); end.setUTCDate(end.getUTCDate() - ((dow + 1) % 7) - 7)
+      const start = new Date(end); start.setUTCDate(start.getUTCDate() - 6)
+      from = iso(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+      to = iso(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+      break
+    }
     case 'last_month': {
       const ly = m === 0 ? y - 1 : y
       const lm = m === 0 ? 11 : m - 1

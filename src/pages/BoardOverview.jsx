@@ -15,7 +15,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
-  LayoutDashboard, TrendingUp, PieChart, Lightbulb, Download, RefreshCw, Eye, EyeOff, Wallet,
+  LayoutDashboard, TrendingUp, PieChart, Lightbulb, Download, RefreshCw, Eye, EyeOff, Wallet, BarChart3,
   Gauge, Clock, Layers, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -42,6 +42,7 @@ import {
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
 import EmailPdfButton from '../components/EmailPdfButton'
+import PresentationStudio from '../components/present/PresentationStudio'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(
@@ -65,9 +66,10 @@ const SECTIONS = [
   ['charts', 'Charts', PieChart],
   ['costSplit', 'Tyres vs Maintenance', Wallet],
   ['fleetCpk', 'Fleet CPK', Gauge],
+  ['builder', 'Chart Builder', BarChart3],
   ['recommendations', 'Recommendations', Lightbulb],
 ]
-const SECTION_DEFAULTS = { kpis: true, trends: true, yearlyTrend: true, charts: true, costSplit: true, fleetCpk: true, recommendations: true }
+const SECTION_DEFAULTS = { kpis: true, trends: true, yearlyTrend: true, charts: true, costSplit: true, fleetCpk: true, builder: true, recommendations: true }
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
 const monthLabel = (key) => {
@@ -246,6 +248,37 @@ export default function BoardOverview() {
       datasets: [{ label: `${costModeLabel(costMode)} spend`, data: pickMonthly(costMode, rows).map((m) => m.value) }],
     }
   }, [cost, costMode])
+
+  // Chart Builder catalog: the board's own breakdowns + trends, ready to present.
+  const studioCatalog = useMemo(() => {
+    const b = data?.breakdowns
+    const t = data?.trends
+    const flat = (key, label, chart, valueKind) => {
+      const labels = chart?.labels || []
+      const d = chart?.datasets?.[0]?.data || []
+      return { key, label, kind: 'flat', valueKind, rows: labels.map((l, i) => ({ label: l, value: Number(d[i]) || 0 })) }
+    }
+    const series = (key, label, chart, valueKind, allowTotal = false) => ({
+      key, label, kind: 'series', valueKind, allowTotal,
+      labels: chart?.labels || [],
+      series: (chart?.datasets || []).map((ds) => ({ name: ds.label || 'Value', data: ds.data || [] })),
+    })
+    const out = []
+    if (b) {
+      out.push(flat('acc_site', 'Accidents by site', b.accidentsBySite, 'count'))
+      out.push(flat('tyre_site', 'Tyres by site', b.tyresBySite, 'count'))
+      out.push(flat('acc_sev', 'Accident severity', b.accidentSeverity, 'count'))
+      out.push(flat('claim_status', 'Claim status', b.claimStatus, 'count'))
+    }
+    if (t) {
+      out.push(series('m_tyre', 'Monthly tyre spend', t.tyreSpend, 'money'))
+      out.push(series('m_acc', 'Monthly accidents', t.accidents, 'count'))
+      out.push(series('m_insp', 'Monthly inspections', t.inspections, 'count'))
+      out.push(series('m_claims', 'Monthly claims (claimed vs recovered)', t.claims, 'money', true))
+    }
+    if ((costChart.labels || []).length) out.push(series('m_cost', `Monthly ${costModeLabel(costMode).toLowerCase()} cost`, costChart, 'money'))
+    return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
+  }, [data, costChart, costMode])
 
   // Build the Board Overview PDF doc. Shared by Download + Email so the emailed
   // report is identical to the downloaded one. Returns { doc, company } or null.
@@ -590,6 +623,21 @@ export default function BoardOverview() {
                 </>
               )}
             </section>
+          )}
+
+          {/* Chart Builder - present any of the board's data as a chart / PowerPoint */}
+          {sections.builder && data && studioCatalog.length > 0 && (
+            <StudioBoundary>
+              <PresentationStudio
+                catalog={studioCatalog}
+                currency={activeCurrency}
+                money={(v) => money(v, activeCurrency)}
+                scope={activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'}
+                company={appSettings?.company_name || 'TyrePulse'}
+                filePrefix="Board"
+                note="Present any board figure as a chart, then copy, download a PNG, or export a PowerPoint deck."
+              />
+            </StudioBoundary>
           )}
 
           {/* Recommendations */}

@@ -28,6 +28,7 @@ import { formatCurrency } from '../lib/formatters'
 import { getPartsExpenseSnapshot, getExpenseByCountry, getCostCpkOverview } from '../lib/api/partsConsumption'
 import { listTcoActualRecords } from '../lib/api/tyreRecords'
 import { getExpenseYearlyTrend } from '../lib/api/expenseTrends'
+import { forecastTyreDemand, forecastTableRows } from '../lib/tyreDemandForecast'
 import { fetchAllPages } from '../lib/fetchAll'
 import { periodWindow, buildCostCpkExport } from '../lib/costCpk'
 import {
@@ -65,13 +66,14 @@ const SECTIONS = [
   ['assets', 'Assets', Truck],
   ['items', 'Top Items', Package],
   ['trend', 'Trend', TrendingUp],
+  ['forecast', 'Tyre Forecast', Sparkles],
   ['builder', 'Chart Builder', BarChart3],
   ['fleetcpk', 'Fleet CPK', Gauge],
   ['evidence', 'Certainty', ShieldCheck],
 ]
 const SECTION_DEFAULTS = {
   kpis: true, compare: true, cpk: true, why: true, movers: true, categories: true, sites: true,
-  bysite: true, assets: true, items: true, trend: true, builder: true, fleetcpk: true, evidence: true,
+  bysite: true, assets: true, items: true, trend: true, forecast: true, builder: true, fleetcpk: true, evidence: true,
 }
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
@@ -275,6 +277,89 @@ function ChartCard({ title, children, refCb }) {
   )
 }
 
+const CONF_TONE = {
+  high: 'text-emerald-400', medium: 'text-sky-400', low: 'text-amber-400', none: 'text-[var(--text-muted)]',
+}
+
+/**
+ * Tyre demand forecast BY SIZE - exact numbers. Shows last-12-month usage, the
+ * monthly average, the trend, and the projected tyres per size for the next
+ * months, with a stated confidence. Counts only (no money), so it is honest
+ * where prices are missing. Excel export of the exact figures.
+ */
+function TyreForecastSection({ forecast, country, filePrefix = 'Expense' }) {
+  const rows = forecastTableRows(forecast)
+  if (!rows.length) {
+    return (
+      <div className="card text-sm text-[var(--text-muted)]">
+        Not enough tyre fitment history to forecast demand by size yet.
+      </div>
+    )
+  }
+  const fmLabels = forecast.forecastLabels || []
+  const grandNext = rows.reduce((a, r) => a + r.forecastTotal, 0)
+  function exportXlsx() {
+    const keys = ['size', 'total', 'avgPerMonth', 'trend', ...fmLabels.map((_, i) => `f${i}`), 'forecastTotal', 'confidence']
+    const headers = ['Size', 'Used (12 mo)', 'Avg / month', 'Trend', ...fmLabels, 'Next months total', 'Confidence']
+    const out = rows.map((r) => {
+      const o = { size: r.size, total: r.total, avgPerMonth: r.avgPerMonth, trend: r.trend, forecastTotal: r.forecastTotal, confidence: r.confidence }
+      r.forecast.forEach((v, i) => { o[`f${i}`] = v })
+      return o
+    })
+    exportToExcel(out, keys, headers, `${reportFileName(filePrefix, 'Tyre forecast by size', country || 'All')}.xlsx`)
+  }
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Tyre demand forecast by size</h3>
+          <p className="text-xs text-[var(--text-tertiary)]">
+            Tyres fitted per size over the last 12 months, projected {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'} ahead
+            ({fmLabels.join(', ') || 'next months'}). Trend when there is enough history, else a recent average. Whole tyres, floored at zero.
+          </p>
+        </div>
+        <button type="button" onClick={exportXlsx}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+          <Download size={14} /> Excel
+        </button>
+      </div>
+      <div className="mb-1 rounded-lg border border-[var(--hairline)] px-3 py-2 text-sm">
+        <span className="text-[var(--text-secondary)]">Projected total next {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'}: </span>
+        <span className="font-semibold text-[var(--text-primary)]">{grandNext.toLocaleString('en-US')} tyres</span>
+        <span className="text-[var(--text-muted)]"> across {rows.length} sizes</span>
+      </div>
+      <div className="max-h-96 overflow-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
+              <th className="py-1.5 pr-3 font-semibold">Size</th>
+              <th className="py-1.5 px-3 font-semibold text-right">Used (12 mo)</th>
+              <th className="py-1.5 px-3 font-semibold text-right">Avg / mo</th>
+              <th className="py-1.5 px-3 font-semibold">Trend</th>
+              {fmLabels.map((l) => <th key={l} className="py-1.5 px-3 font-semibold text-right">{l}</th>)}
+              <th className="py-1.5 px-3 font-semibold text-right">Next total</th>
+              <th className="py-1.5 px-3 font-semibold">Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.size} className="border-b border-[var(--hairline)]/40">
+                <td className="py-1.5 pr-3 text-[var(--text-primary)]">{r.size}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.total.toLocaleString('en-US')}</td>
+                <td className="py-1.5 px-3 text-right tabular-nums text-[var(--text-secondary)]">{r.avgPerMonth}</td>
+                <td className="py-1.5 px-3 text-[var(--text-secondary)]">{r.trend}</td>
+                {r.forecast.map((v, i) => <td key={i} className="py-1.5 px-3 text-right tabular-nums text-[var(--text-primary)]">{v.toLocaleString('en-US')}</td>)}
+                <td className="py-1.5 px-3 text-right tabular-nums font-semibold text-[var(--text-primary)]">{r.forecastTotal.toLocaleString('en-US')}</td>
+                <td className={`py-1.5 px-3 capitalize ${CONF_TONE[r.confidence] || CONF_TONE.none}`}>{r.confidence}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 
 /** One country's (or the single active scope's) per-site expense table. */
 function SiteTable({ group, canMap, onSave }) {
@@ -444,6 +529,8 @@ export default function ExpenseReport() {
   // Chart Builder. Best-effort: null when unavailable so nothing else breaks.
   const [tyreAgg, setTyreAgg] = useState(null)
   const [yearly, setYearly] = useState(null)
+  // Tyre demand forecast by size (from the full country history, not the window).
+  const [tyreForecast, setTyreForecast] = useState(null)
 
   const [sections, setSections] = useState(() => {
     try {
@@ -508,13 +595,18 @@ export default function ExpenseReport() {
         fetchAllPages(
           (f, t) => listTcoActualRecords({ country: activeCountry, from: f, to: t }),
           { max: 50000 },
-        ).then((r) => setTyreAgg(aggregateTyres(r?.data || [], from || '', to || '')))
-          .catch(() => setTyreAgg(null))
+        ).then((r) => {
+          const rows = r?.data || []
+          setTyreAgg(aggregateTyres(rows, from || '', to || ''))
+          // Forecast is built from the FULL history (12-month window), independent
+          // of the page date range, so the projection has enough signal.
+          setTyreForecast(forecastTyreDemand(rows, { window: 12, ahead: 3 }))
+        }).catch(() => { setTyreAgg(null); setTyreForecast(null) })
         getExpenseYearlyTrend({ country: activeCountry })
           .then((rows) => setYearly(Array.isArray(rows) ? rows : null))
           .catch(() => setYearly(null))
       } else {
-        setTyreAgg(null); setYearly(null)
+        setTyreAgg(null); setYearly(null); setTyreForecast(null)
       }
       setUpdatedAt(new Date())
     } catch (e) {
@@ -666,6 +758,29 @@ export default function ExpenseReport() {
       if (tyreAgg.remMonthLabels.length) out.push({ key: 'tyre_rem_month', label: 'Tyre removals by month', kind: 'series', valueKind: 'count', labels: tyreAgg.remMonthLabels, series: [{ name: 'Removals', data: tyreAgg.remMonthQty }] })
     }
 
+    // Tyre demand FORECAST by size (next 3 months) from the fitment history.
+    if (tyreForecast && tyreForecast.sizes.length) {
+      const fcSizes = tyreForecast.sizes.filter((s) => s.forecastTotal > 0 || s.total > 0)
+      if (fcSizes.length) {
+        out.push({
+          key: 'tyre_forecast_size', label: 'Tyre forecast by size (next 3 months)', kind: 'flat', valueKind: 'count',
+          unitLabel: 'tyres', rows: fcSizes.map((s) => ({ label: s.size, value: s.forecastTotal })),
+        })
+        // History + forecast on one monthly axis (actual, then the projected months).
+        const labels = [...tyreForecast.monthLabels, ...tyreForecast.forecastLabels]
+        const hist = tyreForecast.totals.history
+        const fc = tyreForecast.totals.forecast
+        out.push({
+          key: 'tyre_forecast_month', label: 'Tyre demand: actual + forecast', kind: 'series', valueKind: 'count',
+          labels,
+          series: [
+            { name: 'Actual', data: [...hist, ...fc.map(() => 0)] },
+            { name: 'Forecast', data: [...hist.map(() => 0), ...fc] },
+          ],
+        })
+      }
+    }
+
     // Yearly expenses (compare years) from the per-year trend.
     const yr = Array.isArray(yearly) ? [...yearly].sort((a, b) => String(a.year ?? a.period).localeCompare(String(b.year ?? b.period))) : []
     if (yr.length) {
@@ -680,7 +795,7 @@ export default function ExpenseReport() {
       })
     }
     return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
-  }, [snap, fleetCpk, activeCurrency, tyreAgg, yearly])
+  }, [snap, fleetCpk, activeCurrency, tyreAgg, yearly, tyreForecast])
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
@@ -1026,6 +1141,11 @@ export default function ExpenseReport() {
                 <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
               </div>
             </section>
+          )}
+
+          {/* Tyre demand forecast by size - exact projected tyre counts. */}
+          {sections.forecast && !isAll && tyreForecast && (
+            <TyreForecastSection forecast={tyreForecast} country={activeCountry} filePrefix="Expense" />
           )}
 
           {/* Chart Builder - the shared Presentation Studio over this snapshot.

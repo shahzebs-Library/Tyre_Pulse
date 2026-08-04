@@ -221,9 +221,9 @@ export default function PresentationStudio({
     const showLegend = st.legend || isSplit || st.type === 'doughnut'
     const catTick = {
       color: themeInk(),
-      font: { family: FONT_FAMILY, size: 11 },
+      font: { family: FONT_FAMILY, size: 14, weight: '600' },
       autoSkip: true,
-      autoSkipPadding: 8,
+      autoSkipPadding: 10,
       maxRotation: st.type === 'hbar' ? 0 : 50,
       minRotation: 0,
       callback(value) {
@@ -232,7 +232,7 @@ export default function PresentationStudio({
         return st.type === 'hbar' ? shortLabel(raw) : shortLabel(raw)
       },
     }
-    const valTick = { color: themeInk(), font: { family: FONT_FAMILY, size: 11 } }
+    const valTick = { color: themeInk(), font: { family: FONT_FAMILY, size: 13 } }
     return {
       ...chartBase(showLegend),
       font: { family: FONT_FAMILY },
@@ -243,13 +243,13 @@ export default function PresentationStudio({
         y: { stacked, beginAtZero: true, ticks: st.type === 'hbar' ? catTick : valTick, grid: { color: 'rgba(148,163,184,0.15)' } },
       },
       plugins: {
-        legend: { display: showLegend, labels: { color: themeInk(), font: { family: FONT_FAMILY } } },
+        legend: { display: showLegend, labels: { color: themeInk(), font: { family: FONT_FAMILY, size: 13 } } },
         tooltip: {
-          enabled: true, bodyFont: { family: FONT_FAMILY }, titleFont: { family: FONT_FAMILY },
+          enabled: true, bodyFont: { family: FONT_FAMILY, size: 13 }, titleFont: { family: FONT_FAMILY, size: 13 },
           // Tooltip shows the FULL label + formatted value (the axis is trimmed).
           callbacks: { label: (c) => `${c.dataset?.label || ''}: ${fmtCell(Number(c.parsed?.y ?? c.parsed?.x ?? c.parsed) || 0)}` },
         },
-        valueLabels: { enabled: showLabels, color: themeInk(), size: 11, family: FONT_FAMILY },
+        valueLabels: { enabled: showLabels, color: themeInk(), size: 14, family: FONT_FAMILY },
       },
     }
     // st.dim included so a source switch rebuilds the tooltip's format closure.

@@ -52,11 +52,11 @@ export const WHITE_BG_PLUGIN = {
  * reason this function takes a scale.
  */
 export const PAPER_FONT_PT = Object.freeze({
-  legend: 9,
-  tick: 8,
-  pointLabel: 8,
-  title: 10,
-  valueLabel: 8,
+  legend: 11,
+  tick: 11,
+  pointLabel: 10,
+  title: 13,
+  valueLabel: 12,
 })
 
 /**

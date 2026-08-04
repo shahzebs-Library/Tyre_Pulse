@@ -981,12 +981,13 @@ export default function ExpenseReport() {
               EGP on one axis - so they are shown per country instead. */}
           {isAll && (
             <div className="card">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Charts are shown per country</p>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Charts, Chart Builder and Tyre Forecast show per country</p>
               <p className="mt-1 text-xs text-[var(--text-tertiary)]">
                 KSA (SAR), UAE (AED) and Egypt (EGP) use different currencies, so spend cannot be summed into one
-                chart or one total. Pick a single country in the country selector to see spend by category, store,
-                asset, item and month. The per-country totals above and the spend by site below are each shown in
-                their own currency.
+                chart or one total. <span className="text-[var(--text-secondary)] font-medium">Pick a single country in the country selector at the top</span> to
+                see spend by category, store, asset, item and month, the <span className="text-[var(--text-secondary)] font-medium">Chart Builder</span>, and the
+                <span className="text-[var(--text-secondary)] font-medium"> Tyre demand forecast by size</span>. The per-country totals above and the spend by
+                site below are each shown in their own currency.
               </p>
             </div>
           )}

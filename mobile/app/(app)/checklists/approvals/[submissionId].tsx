@@ -134,10 +134,18 @@ function ChecklistApprovalReviewScreen() {
       })
       const verb = approved ? 'approved' : 'returned'
       const tail = res.offline ? ' It will sync when back online.' : ''
+      // Stay on the record you just signed - see the inspection approval screen
+      // for the full reasoning. Leaving immediately dropped you onto a list that
+      // no longer contained the item, or (when opened from a notification) all
+      // the way out to Home.
+      await load()
       Alert.alert(
         approved ? 'Checklist approved' : 'Checklist returned',
-        `The submission has been ${verb}.${tail}`,
-        [{ text: 'Done', onPress: goBack }],
+        `The submission has been ${verb}.${tail} You can review it here, or go back to the list.`,
+        [
+          { text: 'Stay here', style: 'cancel' },
+          { text: 'Back to list', onPress: goBack },
+        ],
       )
     } catch (e: any) {
       Alert.alert('Could not save decision', toUserMessage(e, 'Please try again.'))

@@ -116,10 +116,28 @@ function InspectionApprovalReviewScreen() {
         reviewNote: note.trim() || null,
         existingNotes: insp.notes,
       })
+      // STAY ON THE RECORD YOU JUST SIGNED.
+      //
+      // This used to jump straight back the moment you tapped Done. Two things
+      // went wrong with that. The approvals list only holds items still waiting,
+      // so the row you had just signed was gone the instant you landed on it -
+      // and if it was the last one the list was empty, which reads as being
+      // thrown out of the screen. Worse, arriving here from a notification means
+      // there is no history to go back to, so the fallback replaced the stack and
+      // the next Back press left the list too and landed on Home. That is the
+      // reported "I sign, I close, and I am on Home".
+      //
+      // Reloading instead keeps you on the record, now showing its decided state
+      // with the signature on it - proof the decision was saved - and you choose
+      // when to leave.
+      await load()
       Alert.alert(
         approved ? 'Inspection approved' : 'Inspection returned',
-        `The inspection has been ${approved ? 'approved' : 'returned to the field'}.`,
-        [{ text: 'Done', onPress: goBack }],
+        `The inspection has been ${approved ? 'approved' : 'returned to the field'}. You can review it here, or go back to the list.`,
+        [
+          { text: 'Stay here', style: 'cancel' },
+          { text: 'Back to list', onPress: goBack },
+        ],
       )
     } catch (e: any) {
       Alert.alert('Could not save decision', toUserMessage(e, 'Please try again.'))

@@ -278,6 +278,7 @@ const NAV_GROUPS = [
       { to: '/incidents',        label: 'Incident Reports', icon: FileWarning },
       { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
       { to: '/accident-workflow-settings', label: 'Accident Workflow', icon: GitBranch, roles: ANALYTICS_ROLES },
+      { to: '/approval-matrix', label: 'Approval Matrix', icon: ShieldCheck, adminOnly: true },
     ],
   },
   {

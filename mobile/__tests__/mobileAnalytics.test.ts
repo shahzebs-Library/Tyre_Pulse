@@ -11,7 +11,7 @@
 jest.mock('../lib/supabase', () => ({ supabase: { rpc: jest.fn() } }))
 
 import {
-  shapeAnalytics, safeCount, avgCostPerTyre,
+  shapeAnalytics, avgCostPerTyre,
   compactNumber, currencyFor, formatSpend,
 } from '../lib/mobileAnalytics'
 
@@ -71,11 +71,6 @@ describe('shapeAnalytics', () => {
 })
 
 describe('derived figures', () => {
-  it('counts the remainder as safe and never goes negative', () => {
-    expect(safeCount({ tyres_total: 100, tyres_critical: 12, tyres_high: 30 })).toBe(58)
-    expect(safeCount({ tyres_total: 5, tyres_critical: 9, tyres_high: 9 })).toBe(0)
-  })
-
   it('has no average when spend is not comparable or nothing was counted', () => {
     expect(avgCostPerTyre({ tyre_spend: 1000, tyres_total: 4 })).toBe(250)
     expect(avgCostPerTyre({ tyre_spend: null, tyres_total: 4 })).toBeNull()

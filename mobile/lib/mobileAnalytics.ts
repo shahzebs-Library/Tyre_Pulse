@@ -108,11 +108,6 @@ export async function getMobileAnalytics(f: AnalyticsFilter = {}): Promise<Mobil
   return shapeAnalytics(data)
 }
 
-/** Count of tyres that are neither Critical nor High. Never negative. */
-export function safeCount(a: Pick<MobileAnalytics, 'tyres_total' | 'tyres_critical' | 'tyres_high'>): number {
-  return Math.max(0, a.tyres_total - a.tyres_critical - a.tyres_high)
-}
-
 /** Average spend per tyre, or null when spend is not comparable / nothing counted. */
 export function avgCostPerTyre(a: Pick<MobileAnalytics, 'tyre_spend' | 'tyres_total'>): number | null {
   if (a.tyre_spend == null || a.tyres_total <= 0) return null

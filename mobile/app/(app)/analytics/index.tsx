@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
-  getMobileAnalytics, safeCount, avgCostPerTyre,
+  getMobileAnalytics, avgCostPerTyre,
   compactNumber, currencyFor, formatSpend,
   type MobileAnalytics,
 } from '../../../lib/mobileAnalytics'

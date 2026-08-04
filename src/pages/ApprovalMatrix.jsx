@@ -51,7 +51,15 @@ export default function ApprovalMatrix() {
   const [form, setForm] = useState(BLANK)
 
   // Preview state
-  const [test, setTest] = useState({ entity_type: 'inspection', country: '', site: '', role: 'Tyre Man' })
+  // Seed the preview with the country the admin is already looking at, so the
+  // first run answers for their own scope instead of every country at once.
+  // 'All' is a scope, not a country, so it seeds blank (= any).
+  const [test, setTest] = useState({
+    entity_type: 'inspection',
+    country: activeCountry && activeCountry !== 'All' ? activeCountry : '',
+    site: '',
+    role: 'Tyre Man',
+  })
   const [preview, setPreview] = useState(null)
 
   const load = useCallback(async () => {

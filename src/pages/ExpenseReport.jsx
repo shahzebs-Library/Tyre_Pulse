@@ -18,7 +18,6 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Wallet, TrendingUp, PieChart, Download, RefreshCw, Eye, EyeOff, Boxes, Building2, Truck,
   Package, MapPin, Save, ArrowRight, Gauge, ShieldCheck, Sparkles, Clock, Layers,
-  BarChart3,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
@@ -26,9 +25,6 @@ import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
 import { getPartsExpenseSnapshot, getExpenseByCountry, getCostCpkOverview } from '../lib/api/partsConsumption'
-import { listTcoActualRecords } from '../lib/api/tyreRecords'
-import { getExpenseYearlyTrend } from '../lib/api/expenseTrends'
-import { fetchAllPages } from '../lib/fetchAll'
 import { periodWindow, buildCostCpkExport } from '../lib/costCpk'
 import {
   PeriodBar, ComparisonStrip, CpkPanel, MoversPanel, EvidencePanel,
@@ -42,7 +38,6 @@ import {
   sortByTypeWorstFirst, fleetTiles,
 } from '../lib/fleetCpkView'
 import { stylize, ACCENTS } from '../lib/reportColors'
-import PresentationStudio from '../components/present/PresentationStudio'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
@@ -64,13 +59,12 @@ const SECTIONS = [
   ['assets', 'Assets', Truck],
   ['items', 'Top Items', Package],
   ['trend', 'Trend', TrendingUp],
-  ['builder', 'Chart Builder', BarChart3],
   ['fleetcpk', 'Fleet CPK', Gauge],
   ['evidence', 'Certainty', ShieldCheck],
 ]
 const SECTION_DEFAULTS = {
   kpis: true, compare: true, cpk: true, why: true, movers: true, categories: true, sites: true,
-  bysite: true, assets: true, items: true, trend: true, builder: true, fleetcpk: true, evidence: true,
+  bysite: true, assets: true, items: true, trend: true, fleetcpk: true, evidence: true,
 }
 
 /** 'YYYY-MM' -> 'Mon YY' month label (passthrough for non date keys). */
@@ -83,91 +77,6 @@ const monthLabel = (key) => {
 }
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
-
-/**
- * Aggregate tyre records for the Chart Builder: quantity by site / size / brand /
- * month and cost-per-km by site (sum cost / sum km, per site). Scoped client-side
- * to [from,to] on issue_date when given. Pure; honest zeros/N-A downstream.
- */
-export function aggregateTyres(rows = [], fromISO = '', toISO = '') {
-  const inRange = (d) => {
-    if (!d) return !fromISO && !toISO
-    const s = String(d).slice(0, 10)
-    if (fromISO && s < fromISO) return false
-    if (toISO && s > toISO) return false
-    return true
-  }
-  const site = new Map(); const size = new Map(); const brand = new Map(); const month = new Map()
-  const siteCost = new Map(); const siteKm = new Map()
-  const remSite = new Map(); const remMonth = new Map()
-  // Per-brand: total qty, cost (+ qty priced) for an average cost, km (+ count) for an average life.
-  const brandCost = new Map(); const brandCostQty = new Map()
-  const brandKm = new Map(); const brandKmN = new Map()
-  let total = 0; let removed = 0
-  for (const r of rows) {
-    const s = String(r.site || 'Unspecified')
-    // Removals: counted on removal_date (a tyre taken off in the window).
-    if (r.removal_date && inRange(r.removal_date)) {
-      const q = Number(r.qty) > 0 ? Number(r.qty) : 1
-      removed += q
-      remSite.set(s, (remSite.get(s) || 0) + q)
-      const rmk = String(r.removal_date).slice(0, 7)
-      if (/^\d{4}-\d{2}$/.test(rmk)) remMonth.set(rmk, (remMonth.get(rmk) || 0) + q)
-    }
-    if (!inRange(r.issue_date)) continue
-    const qty = Number(r.qty) > 0 ? Number(r.qty) : 1
-    total += qty
-    const z = String(r.size || 'Unknown')
-    const b = String(r.brand || 'Unknown')
-    site.set(s, (site.get(s) || 0) + qty)
-    size.set(z, (size.get(z) || 0) + qty)
-    brand.set(b, (brand.get(b) || 0) + qty)
-    const mk = String(r.issue_date || '').slice(0, 7)
-    if (/^\d{4}-\d{2}$/.test(mk)) month.set(mk, (month.get(mk) || 0) + qty)
-    const unitCost = Number(r.cost_per_tyre) || 0
-    const cost = unitCost * qty
-    const km = Number(r.total_km) || 0
-    if (km > 0 && cost > 0) {
-      siteCost.set(s, (siteCost.get(s) || 0) + cost)
-      siteKm.set(s, (siteKm.get(s) || 0) + km)
-    }
-    if (unitCost > 0) {
-      brandCost.set(b, (brandCost.get(b) || 0) + cost)
-      brandCostQty.set(b, (brandCostQty.get(b) || 0) + qty)
-    }
-    if (km > 0) {
-      brandKm.set(b, (brandKm.get(b) || 0) + km)
-      brandKmN.set(b, (brandKmN.get(b) || 0) + 1)
-    }
-  }
-  const rowsOf = (m) => [...m.entries()].map(([label, value]) => ({ label, value }))
-  const cpkSite = [...siteKm.entries()]
-    .map(([s, km]) => ({ label: s, value: km > 0 ? (siteCost.get(s) || 0) / km : 0 }))
-    .filter((r) => r.value > 0)
-  const months = [...month.keys()].sort()
-  const remMonths = [...remMonth.keys()].sort()
-  const avgCostByBrand = [...brandCostQty.entries()]
-    .map(([b, q]) => ({ label: b, value: q > 0 ? (brandCost.get(b) || 0) / q : 0 }))
-    .filter((r) => r.value > 0)
-  const avgKmByBrand = [...brandKmN.entries()]
-    .map(([b, n2]) => ({ label: b, value: n2 > 0 ? (brandKm.get(b) || 0) / n2 : 0 }))
-    .filter((r) => r.value > 0)
-  return {
-    total,
-    removed,
-    bySite: rowsOf(site),
-    bySize: rowsOf(size),
-    byBrand: rowsOf(brand),
-    avgCostByBrand,
-    avgKmByBrand,
-    cpkSite,
-    removalBySite: rowsOf(remSite),
-    monthLabels: months.map((mk) => monthLabel(mk)),
-    monthQty: months.map((mk) => month.get(mk) || 0),
-    remMonthLabels: remMonths.map((mk) => monthLabel(mk)),
-    remMonthQty: remMonths.map((mk) => remMonth.get(mk) || 0),
-  }
-}
 
 /**
  * Currency for one country (KSA=SAR, UAE=AED, Egypt=EGP), falling back to the
@@ -273,7 +182,6 @@ function ChartCard({ title, children, refCb }) {
     </div>
   )
 }
-
 
 /** One country's (or the single active scope's) per-site expense table. */
 function SiteTable({ group, canMap, onSave }) {
@@ -439,10 +347,6 @@ export default function ExpenseReport() {
   // last 365 days (the rest of the page can default to all-time).
   const [fleetCpk, setFleetCpk] = useState({ perVehicle: [], byType: [], fleet: [] })
   const [fleetCpkLoading, setFleetCpkLoading] = useState(true)
-  // Tyre-quantity + tyre-CPK-by-site aggregation and multi-year expenses, for the
-  // Chart Builder. Best-effort: null when unavailable so nothing else breaks.
-  const [tyreAgg, setTyreAgg] = useState(null)
-  const [yearly, setYearly] = useState(null)
 
   const [sections, setSections] = useState(() => {
     try {
@@ -500,21 +404,6 @@ export default function ExpenseReport() {
         return { ...s, rows, siteOptions: opts }
       }))
       setSiteGroups(groups)
-
-      // Tyre quantity + tyre CPK aggregation (single country only; the studio is
-      // hidden on the All view). Best-effort, capped, never blocks the page.
-      if (!isAll) {
-        fetchAllPages(
-          (f, t) => listTcoActualRecords({ country: activeCountry, from: f, to: t }),
-          { max: 50000 },
-        ).then((r) => setTyreAgg(aggregateTyres(r?.data || [], from || '', to || '')))
-          .catch(() => setTyreAgg(null))
-        getExpenseYearlyTrend({ country: activeCountry })
-          .then((rows) => setYearly(Array.isArray(rows) ? rows : null))
-          .catch(() => setYearly(null))
-      } else {
-        setTyreAgg(null); setYearly(null)
-      }
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the expense report.'))
@@ -595,91 +484,6 @@ export default function ExpenseReport() {
       ],
     }
   }, [snap])
-
-  // ── Chart Builder catalog (the shared Presentation Studio renders it) ────────
-  const studioCatalog = useMemo(() => {
-    if (!snap?.ok) return []
-    const flat = (key, label) => ({
-      key, label, kind: 'flat', valueKind: 'money',
-      rows: (snap[key] || []).map((r) => ({ label: r.label, value: Number(r.spend) || 0 })),
-    })
-    const out = [
-      flat('by_asset', 'Asset'),
-      flat('by_store', 'Site / store'),
-      flat('by_category', 'Category'),
-      flat('top_items', 'Item'),
-    ]
-    const m = snap.monthly || []
-    if (m.length) {
-      out.push({
-        key: 'monthly', label: 'Month', kind: 'series', valueKind: 'money', allowTotal: true,
-        labels: m.map((r) => monthLabel(r.m)),
-        series: [
-          { name: 'Tyres', data: m.map((r) => Number(r.tyre) || 0) },
-          { name: 'Spare Parts', data: m.map((r) => Number(r.spare) || 0) },
-          { name: 'Oil', data: m.map((r) => Number(r.oil) || 0) },
-        ],
-      })
-    }
-    // Cost mix as a percentage (tyres / spare / oil share of total spend).
-    const kp = snap.kpis || {}
-    const mixTotal = (Number(kp.tyre_expense) || 0) + (Number(kp.spare_expense) || 0) + (Number(kp.oil_expense) || 0)
-    if (mixTotal > 0) {
-      const pct = (v) => Math.round(((Number(v) || 0) / mixTotal) * 1000) / 10
-      out.push({
-        key: 'cost_mix_pct', label: 'Cost mix (%)', kind: 'flat', valueKind: 'percent',
-        rows: [
-          { label: 'Tyres', value: pct(kp.tyre_expense) },
-          { label: 'Spare Parts', value: pct(kp.spare_expense) },
-          { label: 'Oil', value: pct(kp.oil_expense) },
-        ],
-      })
-    }
-    // Fleet CPK (cost per km / per engine-hour) by vehicle type - split by unit so
-    // a km-rate and an hour-rate never share one axis. Rates keep their decimals.
-    const byType = Array.isArray(fleetCpk?.byType) ? fleetCpk.byType : []
-    const kmRows = byType.filter((r) => r.unit === 'km' && r.cpk_total != null)
-      .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
-    const hrRows = byType.filter((r) => r.unit === 'engine_hours' && r.cpk_total != null)
-      .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
-    if (kmRows.length) out.push({ key: 'cpk_km', label: 'CPK per km by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: kmRows })
-    if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Cost per hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
-
-    // Overall fleet CPK (one bar per unit) from the fleet-level tiles.
-    const tiles = fleetTiles(fleetCpk?.fleet)
-    const cpkOverall = tiles
-      .filter((t) => t.cpkTotal != null)
-      .map((t) => ({ label: t.unit === 'engine_hours' ? 'Cost per engine-hour' : 'Cost per km', value: Number(t.cpkTotal) || 0 }))
-    if (cpkOverall.length) out.push({ key: 'cpk_overall', label: 'Overall CPK', kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
-
-    // Tyre quantity + tyre CPK by site (from the loaded tyre records).
-    if (tyreAgg) {
-      if (tyreAgg.bySite.length) out.push({ key: 'tyre_qty_site', label: 'Tyres used by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySite })
-      if (tyreAgg.bySize.length) out.push({ key: 'tyre_qty_size', label: 'Tyres used by size', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySize })
-      if (tyreAgg.byBrand.length) out.push({ key: 'tyre_qty_brand', label: 'Tyres used by brand', kind: 'flat', valueKind: 'count', rows: tyreAgg.byBrand })
-      if (tyreAgg.avgCostByBrand.length) out.push({ key: 'tyre_avgcost_brand', label: 'Average cost per tyre by brand', kind: 'flat', valueKind: 'money', rows: tyreAgg.avgCostByBrand })
-      if (tyreAgg.avgKmByBrand.length) out.push({ key: 'tyre_avgkm_brand', label: 'Average km per tyre by brand', kind: 'flat', valueKind: 'count', unitLabel: 'km', format: (v) => `${Math.round(v).toLocaleString('en-US')} km`, rows: tyreAgg.avgKmByBrand })
-      if (tyreAgg.cpkSite.length) out.push({ key: 'tyre_cpk_site', label: 'Tyre cost per km by site', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: tyreAgg.cpkSite })
-      if (tyreAgg.monthLabels.length) out.push({ key: 'tyre_qty_month', label: 'Tyres used by month', kind: 'series', valueKind: 'count', labels: tyreAgg.monthLabels, series: [{ name: 'Tyres', data: tyreAgg.monthQty }] })
-      if (tyreAgg.removalBySite.length) out.push({ key: 'tyre_rem_site', label: 'Tyre removals by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.removalBySite })
-      if (tyreAgg.remMonthLabels.length) out.push({ key: 'tyre_rem_month', label: 'Tyre removals by month', kind: 'series', valueKind: 'count', labels: tyreAgg.remMonthLabels, series: [{ name: 'Removals', data: tyreAgg.remMonthQty }] })
-    }
-
-    // Yearly expenses (compare years) from the per-year trend.
-    const yr = Array.isArray(yearly) ? [...yearly].sort((a, b) => String(a.year ?? a.period).localeCompare(String(b.year ?? b.period))) : []
-    if (yr.length) {
-      out.push({
-        key: 'yearly', label: 'Year', kind: 'series', valueKind: 'money', allowTotal: true,
-        labels: yr.map((r) => String(r.year ?? r.period)),
-        series: [
-          { name: 'Tyres', data: yr.map((r) => Number(r.tyre) || 0) },
-          { name: 'Spare Parts', data: yr.map((r) => Number(r.spare) || 0) },
-          { name: 'Oil', data: yr.map((r) => Number(r.lubricant ?? r.oil) || 0) },
-        ],
-      })
-    }
-    return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
-  }, [snap, fleetCpk, activeCurrency, tyreAgg, yearly])
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
@@ -1025,21 +829,6 @@ export default function ExpenseReport() {
                 <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
               </div>
             </section>
-          )}
-
-          {/* Chart Builder - the shared Presentation Studio over this snapshot.
-              Single-country only (the snapshot dimensions are per country). */}
-          {sections.builder && !isAll && studioCatalog.length > 0 && (
-            <PresentationStudio
-              catalog={studioCatalog}
-              currency={activeCurrency}
-              money={money}
-              scope={activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'}
-              company={appSettings?.company_name || 'TyrePulse'}
-              filePrefix="Expense"
-              showInsights
-              note={`Present your own data - spend, cost mix % and CPK - then copy, download a PNG, or export a PowerPoint deck with talking points. Values in ${activeCurrency}.`}
-            />
           )}
 
           {/* Fleet CPK (cost per km for road assets, cost per hour for plant).

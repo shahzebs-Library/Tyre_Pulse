@@ -160,6 +160,7 @@ function InspectionDetailScreen() {
               <View style={{ alignItems: 'center' }}>
                 <VehicleTyreDiagram
                   vehicleType={insp.vehicle_type ?? ''}
+                  assetNo={insp.asset_no ?? null}
                   positions={shownPositions}
                   tyreData={conditions}
                   selectedPosition={null}

@@ -188,6 +188,23 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
       { id: 'RRo', x: 164, y: 170, w: 20, h: 38, label: 'RRo' },
     ],
   },
+  // Trailer: 2 dual-tyre axles and no steer axle = 8 tyres, per the fleet
+  // owner. A towed unit has no cab, so it reuses the truck body only because
+  // there is no trailer artwork; the wheel arrangement is the accurate part.
+  Trailer: {
+    emoji: '🚛', viewH: 270,
+    bodyKey: 'canter',
+    tyres: [
+      { id: 'R1Lo', x: 14,  y: 96,  w: 19, h: 35, label: 'R1Lo' },
+      { id: 'R1Li', x: 35,  y: 96,  w: 19, h: 35, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 96,  w: 19, h: 35, label: 'R1Ri' },
+      { id: 'R1Ro', x: 167, y: 96,  w: 19, h: 35, label: 'R1Ro' },
+      { id: 'R2Lo', x: 14,  y: 168, w: 19, h: 35, label: 'R2Lo' },
+      { id: 'R2Li', x: 35,  y: 168, w: 19, h: 35, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 168, w: 19, h: 35, label: 'R2Ri' },
+      { id: 'R2Ro', x: 167, y: 168, w: 19, h: 35, label: 'R2Ro' },
+    ],
+  },
   // Line pump: 2 single-tyre steer axles + 2 dual-tyre drive axles = 12 tyres,
   // confirmed by the fleet owner. It rides a shorter chassis than the truck
   // -mounted concrete pump (which has a third steer axle and 14 tyres), but it
@@ -240,9 +257,14 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
 const LAYOUT_KEY_INDEX: Record<string, string> = {}
 Object.keys(LAYOUTS).forEach(k => { LAYOUT_KEY_INDEX[k.toLowerCase().replace(/[\s\-_]+/g, '')] = k })
 
-export function resolveVehicleType(vt?: string | null): string {
+/**
+ * Resolve ONE string, returning null when nothing matched rather than falling
+ * back. The null is what lets resolveVehicleType() know the string told it
+ * nothing, so it can try the asset number instead of settling for a pickup.
+ */
+function resolveOne(vt?: string | null): string | null {
   const raw = String(vt ?? '').trim()
-  if (!raw) return 'Pickup'
+  if (!raw) return null
 
   // Exact layout-key match, case/spacing-insensitive.
   const s = raw.toLowerCase()
@@ -301,10 +323,25 @@ export function resolveVehicleType(vt?: string | null): string {
   if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
   // Tankers are 2-axle rigids: 6 tyres, not the 10 they used to get here.
   if (s.includes('tanker')) return 'Tanker'
+  // A towed trailer: 2 dual axles, 8 tyres, no steer axle.
+  if (s.includes('trailer') || compact.includes('trl')) return 'Trailer'
   // Heavy 6x4 chassis family (cranes, generic trucks): 10 tyres.
   if (s.includes('crane') || s.includes('truck')) return 'Truck 6x4'
-  // Unknown -> minimal web default (2 axles / 4 tyres). Never guess extra axles.
-  return 'Pickup'
+  // Nothing recognised. Report that rather than guessing.
+  return null
+}
+
+/**
+ * Map a vehicle type onto a layout key, optionally using the ASSET NUMBER when
+ * the type says nothing useful.
+ *
+ * The register carries junk catch-all types - "HEAVY EQP" covers four wheel
+ * loaders, a skid loader and an ice plant - and in those rows the asset number
+ * is the only thing that identifies the machine. The type still wins whenever
+ * it resolves, so a real type is never overridden by a prefix.
+ */
+export function resolveVehicleType(vt?: string | null, assetNo?: string | null): string {
+  return resolveOne(vt) ?? resolveOne(assetNo) ?? 'Pickup'
 }
 
 // ── Legacy diagram-ID -> canonical GCC position code (type-aware) ───────────────
@@ -365,10 +402,13 @@ export function isTyrelessEquipment(vt?: string | null): boolean {
  * Canonical tyre position ids for a vehicle type, sourced from the same layout
  * the diagram renders, so the diagram and the inspection position list always
  * match. Returns [] for tyreless equipment.
+ *
+ * Takes the same optional asset number as resolveVehicleType, so a row whose
+ * type is a junk catch-all still lists the right positions.
  */
-export function diagramPositions(vehicleType: string): string[] {
+export function diagramPositions(vehicleType: string, assetNo?: string | null): string[] {
   if (isTyrelessEquipment(vehicleType)) return []
-  const layout = LAYOUTS[resolveVehicleType(vehicleType)] || LAYOUTS.Pickup
+  const layout = LAYOUTS[resolveVehicleType(vehicleType, assetNo)] || LAYOUTS.Pickup
   return layout.tyres.map(t => t.id)
 }
 

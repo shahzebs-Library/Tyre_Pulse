@@ -79,6 +79,42 @@ describe('counts corrected by the fleet owner', () => {
     expect(tyreCount('SPIDER PUMP')).toBe(10)
   })
 
+  it('a trailer is 2 dual axles, 8 tyres, no steer axle', () => {
+    expect(resolveVehicleType('TRAILER')).toBe('Trailer')
+    expect(tyreCount('TRAILER')).toBe(8)
+    const ids = diagramPositions('TRAILER')
+    expect(ids).toHaveLength(8)
+    expect(ids.some(id => id.startsWith('F'))).toBe(false) // no steer axle
+  })
+
+  it('a forklift keeps its 4', () => {
+    expect(tyreCount('FORKLIFT')).toBe(4)
+  })
+})
+
+// The register uses "HEAVY EQP" as a catch-all: it currently covers four wheel
+// loaders, a skid loader and an ice plant. In those rows the asset number is
+// the only thing that says what the machine is.
+describe('a junk catch-all type falls back to the asset number', () => {
+  it.each([
+    ['WL003', 'Wheel loader'], ['WL006', 'Wheel loader'],
+    ['WL011', 'Wheel loader'], ['WL018', 'Wheel loader'],
+    ['SL001', 'Skid loader'],
+  ])('HEAVY EQP / %s -> %s', (asset, expected) => {
+    expect(resolveVehicleType('HEAVY EQP', asset)).toBe(expected)
+  })
+
+  it('a real type is never overridden by the asset number', () => {
+    // TR-MIXER wins even though DT001 would resolve to something else.
+    expect(resolveVehicleType('TR-MIXER', 'DT001')).toBe('Tri-mixer')
+    expect(resolveVehicleType('PICKUP', 'WL003')).toBe('Pickup')
+  })
+
+  it('still falls back to a pickup when neither says anything', () => {
+    expect(resolveVehicleType('HEAVY EQP', 'ZZ999')).toBe('Pickup')
+    expect(resolveVehicleType('HEAVY EQP')).toBe('Pickup')
+  })
+
   it('the truck-mounted concrete pump still carries 14', () => {
     expect(tyreCount('PUMPS')).toBe(14)
   })

@@ -212,16 +212,23 @@ export function resolveVehicleType(vt?: string | null): string {
   const exact = LAYOUT_KEY_INDEX[compact]
   if (exact) return exact
 
-  // Plate-number prefix detection - first 2 alpha chars of asset_no
-  const prefix = (raw.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
-  const PREFIX_MAP: Record<string, string> = {
-    TM: 'Tri-mixer',
-    MP: 'Concrete pump',
-    WL: 'Wheel loader',
-    SL: 'Skid loader',
-    PL: 'Pickup',
+  // Asset-code prefix detection, for callers that pass an asset number (TM634)
+  // instead of a type. It MUST require letters immediately followed by a digit:
+  // matching on leading letters alone read "PLACING BOOM" as a PL-prefixed
+  // pickup and drew 4 tyres for a 14-tyre placing boom, because the check ran
+  // before the keyword rules below could see the word "boom".
+  const assetCode = raw.match(/^([A-Za-z]{2,3})\s*\d/)
+  if (assetCode) {
+    const prefix = assetCode[1].toUpperCase().slice(0, 2)
+    const PREFIX_MAP: Record<string, string> = {
+      TM: 'Tri-mixer',
+      MP: 'Concrete pump',
+      WL: 'Wheel loader',
+      SL: 'Skid loader',
+      PL: 'Pickup',
+    }
+    if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
   }
-  if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
 
   // Explicit "N-Wheeler" names FIRST - "wheeler" contains "wheel" and used to
   // fall into the 4-tyre Wheel loader layout.
@@ -292,6 +299,9 @@ Object.entries(LAYOUTS).forEach(([typeKey, layout]) => {
 export const NO_TYRE_EQUIPMENT = [
   'generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant',
   'batch', 'reclaimer', 'compressor', 'tower light', 'light tower',
+  // Fixed installations in the live fleet that were drawing a 4-tyre pickup.
+  // A building has no wheels; asking an inspector to record four is nonsense.
+  'building', 'water treatment',
 ]
 
 export function isTyrelessEquipment(vt?: string | null): boolean {

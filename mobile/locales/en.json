@@ -190,7 +190,6 @@
     "clearSynced": "Clear synced records",
     "account": "Account",
     "signOut": "Sign Out",
-    "version": "TyrePulse Inspector v1.0.0",
     "syncCompleteTitle": "Sync Complete",
     "syncFailed": "failed - check connection.",
     "uploaded": "inspection uploaded.",
@@ -234,7 +233,8 @@
     "deleteSuccessTitle": "Request submitted",
     "deleteSuccessMsg": "Your account deletion request has been recorded. An administrator will action it within about 30 days.",
     "deleteErrorTitle": "Could not submit request",
-    "deleteMismatch": "Type DELETE exactly to confirm."
+    "deleteMismatch": "Type DELETE exactly to confirm.",
+    "appName": "TyrePulse Inspector"
   },
   "tyre": {
     "serialNumber": "Serial Number",

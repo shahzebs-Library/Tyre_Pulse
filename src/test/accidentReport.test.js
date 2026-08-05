@@ -424,6 +424,42 @@ describe('per-chart formatting: palettes, styleChartData and label toggle', () =
     VALUE_LABELS_PLUGIN.afterDatasetsDraw(chartOn)
     expect(calls).toContain('3')
   })
+
+  // A dataset flagged _isTrend is a FITTED MODEL drawn over the data, not a
+  // reading. Labelling it prints numbers nobody measured.
+  it('value-labels plugin does not label a trend dataset', () => {
+    const calls = []
+    const ctx = { save() {}, restore() {}, fillText: (t) => calls.push(t), fillStyle: '', font: '' }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw({
+      config: { type: 'bar', options: {} },
+      ctx,
+      options: {},
+      data: { labels: ['A'], datasets: [{ data: [7] }, { data: [999], _isTrend: true }] },
+      isDatasetVisible: () => true,
+      getDatasetMeta: () => ({ data: [{ x: 10, y: 10 }] }),
+    })
+    expect(calls).toEqual(['7'])
+  })
+
+  // The one that is a correctness bug rather than clutter: on a stacked bar the
+  // plugin SUMS every dataset to label the stack total, so a trend line left in
+  // that sum would print a total the bars do not add up to.
+  it('a trend dataset is excluded from the stacked-bar total', () => {
+    const calls = []
+    const ctx = { save() {}, restore() {}, fillText: (t) => calls.push(t), fillStyle: '', font: '' }
+    VALUE_LABELS_PLUGIN.afterDatasetsDraw({
+      config: { type: 'bar', options: {} },
+      ctx,
+      options: { scales: { x: { stacked: true }, y: { stacked: true } } },
+      data: {
+        labels: ['A'],
+        datasets: [{ data: [10] }, { data: [20] }, { data: [999], _isTrend: true }],
+      },
+      isDatasetVisible: () => true,
+      getDatasetMeta: () => ({ data: [{ x: 10, y: 10 }] }),
+    })
+    expect(calls).toEqual(['30'])   // 10 + 20, NOT 1029
+  })
 })
 
 describe('chart width fractions + row packing (full/half/third/quarter)', () => {

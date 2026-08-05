@@ -691,6 +691,13 @@ export default function ExpenseReport() {
         const fc = tyreForecast.totals.forecast
         out.push({
           key: 'tyre_forecast_month', label: 'Tyre demand: actual + forecast', kind: 'series', valueKind: 'count',
+          // No trend line here, for two reasons. The forecast months are ALREADY
+          // a fitted projection, so a trend across them regresses on a
+          // regression while looking like independent evidence. And each series
+          // is zero-padded over the months it does not cover, so picking one
+          // series alone would fit a line through those zeros as if they were
+          // real readings of nothing.
+          ordered: false,
           labels,
           series: [
             { name: 'Actual', data: [...hist, ...fc.map(() => 0)] },

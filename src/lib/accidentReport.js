@@ -351,6 +351,11 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
     // Overlap avoidance needs real text metrics; when they are unavailable
     // (headless/test canvas), draw every label as before rather than guess.
     const hasMeasure = typeof ctx.measureText === 'function'
+    // A dataset flagged _isTrend is a fitted MODEL laid over the data, not a
+    // reading. Labelling it would print numbers nobody measured, and on a
+    // stacked bar it would be added into the stack total and make that total
+    // wrong. Skipped everywhere the plugin walks datasets.
+    const isModel = (ds) => ds?._isTrend === true
     const drawnBoxes = []
     const collides = (x0, y0, x1, y1) => hasMeasure
       && drawnBoxes.some((b) => !(x1 < b.x0 || x0 > b.x1 || y1 < b.y0 || y0 > b.y1))
@@ -380,6 +385,7 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
     if (type === 'radar') {
       // Radar: draw each point's raw count just above the vertex.
       chart.data.datasets.forEach((ds, di) => {
+        if (isModel(ds)) return
         if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
         const meta = chart.getDatasetMeta(di)
         ;(meta?.data || []).forEach((el, i) => {
@@ -398,6 +404,7 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
         let total = 0
         let topEl = null
         chart.data.datasets.forEach((ds, di) => {
+          if (isModel(ds)) return
           if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
           const v = Number(ds.data?.[i])
           if (!Number.isFinite(v) || v === 0) return
@@ -410,6 +417,7 @@ export const makeValueLabelsPlugin = (color = PAPER.ink) => ({
       }
     } else {
       chart.data.datasets.forEach((ds, di) => {
+        if (isModel(ds)) return
         if (chart.isDatasetVisible && !chart.isDatasetVisible(di)) return
         const meta = chart.getDatasetMeta(di)
         ;(meta?.data || []).forEach((el, i) => {

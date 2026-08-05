@@ -33,6 +33,7 @@ import {
   BarChart3, Search, Image as ImageIcon, Copy, Plus, Presentation, Trash2, Save, FileSpreadsheet,
 } from 'lucide-react'
 import { PRESETS, PRESET_KEYS, PRESET_LABELS } from '../../lib/reportColors'
+import { canTrend, trendLine, trendDataset, trendSummary, MIN_TREND_POINTS } from '../../lib/presentTrend'
 import { makeValueLabelsPlugin } from '../../lib/accidentReport'
 import { reportFileName, exportToExcel } from '../../lib/exportUtils'
 import { formatCurrency } from '../../lib/formatters'
@@ -112,7 +113,7 @@ export default function PresentationStudio({
   const [st, setSt] = useState({
     dim: sources[0]?.key || '', type: 'bar', topN: 15, sort: 'desc', pct: false,
     palette: 'vivid', labels: true, legend: false, search: '', measure: 'split', title: '',
-    stack: 'stacked',
+    stack: 'stacked', trend: false,
   })
   const set = (patch) => setSt((s) => ({ ...s, ...patch }))
   const ref = useRef(null)
@@ -182,20 +183,44 @@ export default function PresentationStudio({
     return { labels: rows.map((r) => r.label), datasets: [{ label: doPct ? 'Share %' : 'Value', data: rows.map((r) => r.v) }] }
   }, [src, isSeries, measure, st.search, st.sort, st.topN, st.pct])
 
+  // A trend line is only offered where the x axis is genuinely ORDERED. The
+  // category sources are sorted by value, so a line through them would trace
+  // the sort and read as a finding - see src/lib/presentTrend.js.
+  const trendAllowed = canTrend(src) && st.type !== 'doughnut'
+  const showTrend = trendAllowed && st.trend
+
+  // Fit the TOTAL across split series: one line over "spend", not three lines
+  // that each explain a slice and none that explain the whole.
+  const trend = useMemo(() => {
+    if (!showTrend) return null
+    const sets = chart.datasets || []
+    if (!sets.length) return null
+    const totals = (chart.labels || []).map((_, i) =>
+      sets.reduce((sum, d) => {
+        const v = Number(d.data?.[i])
+        return sum + (Number.isFinite(v) ? v : 0)
+      }, 0))
+    return trendLine(totals)
+  }, [showTrend, chart])
+
   const data = useMemo(() => {
     const labels = chart.labels || []
+    const withTrend = (datasets) => {
+      const t = trendDataset(trend, { label: isSplit ? 'Trend (total)' : 'Trend' })
+      return t ? [...datasets, t] : datasets
+    }
     if (isSplit) {
       const cols = paletteColors((chart.datasets || []).length, st.palette)
-      return { labels, datasets: (chart.datasets || []).map((ds, i) => ({ ...ds, backgroundColor: cols[i], borderColor: cols[i], fill: false })) }
+      return { labels, datasets: withTrend((chart.datasets || []).map((ds, i) => ({ ...ds, backgroundColor: cols[i], borderColor: cols[i], fill: false }))) }
     }
     const ds = chart.datasets?.[0] || { data: [] }
     if (st.type === 'line') {
       const c = paletteColors(1, st.palette)[0]
-      return { labels, datasets: [{ ...ds, borderColor: c, backgroundColor: c, pointRadius: 3, tension: 0.25, fill: false }] }
+      return { labels, datasets: withTrend([{ ...ds, borderColor: c, backgroundColor: c, pointRadius: 3, tension: 0.25, fill: false }]) }
     }
     const cols = paletteColors(labels.length, st.palette)
-    return { labels, datasets: [{ ...ds, backgroundColor: cols, borderColor: cols, borderWidth: st.type === 'doughnut' ? 0 : 1 }] }
-  }, [chart, isSplit, st.type, st.palette])
+    return { labels, datasets: withTrend([{ ...ds, backgroundColor: cols, borderColor: cols, borderWidth: st.type === 'doughnut' ? 0 : 1 }]) }
+  }, [chart, isSplit, st.type, st.palette, trend])
 
   const valueKind = src?.valueKind || 'money'   // 'money' | 'count' | 'percent' | 'rate'
   const srcFormat = typeof src?.format === 'function' ? src.format : null
@@ -215,6 +240,11 @@ export default function PresentationStudio({
     : valueKind === 'count' ? (src?.unitLabel || 'Count')
     : valueKind === 'rate' ? (src?.unitLabel || 'Rate')
     : (src?.unitLabel || 'Value')
+
+  // The drawn line always carries its plain-English reading, including the
+  // warning when the points are too scattered for the direction to mean much -
+  // a dashed line on its own looks equally confident either way.
+  const trendNote = showTrend ? trendSummary(trend, (chart.labels || []).length, fmtCell) : null
 
   const options = useMemo(() => {
     const stacked = isSplit && st.stack === 'stacked' && (st.type === 'bar' || st.type === 'hbar')
@@ -315,6 +345,7 @@ export default function PresentationStudio({
     const labels = chart.labels || []
     if (!labels.length) return []
     const pts = []
+    if (trendNote) pts.push(trendNote)
     if (isSplit) {
       const sums = (chart.datasets || []).map((d) => ({ name: d.label, total: (d.data || []).reduce((a, b) => a + (Number(b) || 0), 0) }))
       const grand = sums.reduce((a, s) => a + s.total, 0)
@@ -344,7 +375,7 @@ export default function PresentationStudio({
     }
     return pts
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInsights, chart, isSplit, isSeries, valueKind, usePct, title, dimLabel])
+  }, [showInsights, chart, isSplit, isSeries, valueKind, usePct, title, dimLabel, trendNote])
 
   // The copy-able block: title, talking points, AND the underlying numbers, so a
   // paste into a slide carries the figures, not just the prose.
@@ -370,6 +401,8 @@ export default function PresentationStudio({
     const config = {
       dim: st.dim, type: st.type, palette: st.palette, sort: st.sort, topN: st.topN,
       pct: st.pct, measure: st.measure, labels: st.labels, legend: st.legend, title: st.title,
+      // `stack` was missing here, so a saved grouped-bar report reloaded stacked.
+      stack: st.stack, trend: st.trend,
     }
     persistSaved([...saved.filter((s) => s.name !== name), { name, config }])
     setMsg(`Saved "${name}".`)
@@ -380,7 +413,9 @@ export default function PresentationStudio({
     if (!r) return
     const cfg = r.config || {}
     const dimOk = sources.some((s) => s.key === cfg.dim) ? cfg.dim : (sources[0]?.key || '')
-    setSt((s) => ({ ...s, ...cfg, dim: dimOk }))
+    // A report saved before the trend line existed carries no `trend` key; read
+    // that as off rather than letting the current toggle leak into it.
+    setSt((s) => ({ ...s, ...cfg, dim: dimOk, trend: cfg.trend === true }))
     setMsg(`Loaded "${name}". It now shows the current data.`)
   }
   function deleteReport(name) {
@@ -522,6 +557,21 @@ export default function PresentationStudio({
           <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">
             <input type="checkbox" checked={st.legend} onChange={(e) => set({ legend: e.target.checked })} className="accent-[var(--accent)]" /> Legend
           </label>
+          {/* Offered ONLY on an ordered axis. On a chart sorted by value a
+              trend line would trace the sort order and look like a finding, so
+              the control is absent rather than present and misleading. */}
+          {trendAllowed ? (
+            <label className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer select-none">
+              <input type="checkbox" checked={st.trend} onChange={(e) => set({ trend: e.target.checked })} className="accent-[var(--accent)]" /> Trend line
+            </label>
+          ) : (
+            <span
+              className="inline-flex items-center gap-2 text-sm text-[var(--text-dim)] select-none"
+              title="A trend line needs an ordered axis such as months. This view is ranked by value, so a line across it would only show the ranking."
+            >
+              <input type="checkbox" disabled checked={false} readOnly className="accent-[var(--accent)] opacity-40" /> Trend line (needs a time axis)
+            </span>
+          )}
           {isSplit && (st.type === 'bar' || st.type === 'hbar') && (
             <span className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
               Bars
@@ -551,6 +601,11 @@ export default function PresentationStudio({
               <div className="h-full flex items-center justify-center text-sm text-[var(--text-muted)]">No data for this selection.</div>
             )}
           </div>
+          {hasData && showTrend && (
+            trendNote
+              ? <p className="mt-2 text-xs text-[var(--text-tertiary)]">{trendNote}</p>
+              : <p className="mt-2 text-xs text-[var(--text-tertiary)]">Not enough points to fit a trend line. A straight line needs at least {MIN_TREND_POINTS} readings.</p>
+          )}
         </div>
 
         {/* Talking points - short copy-able explanation for a slide (expenses only). */}

@@ -339,12 +339,20 @@ Object.entries(LAYOUTS).forEach(([typeKey, layout]) => {
 })
 
 // ── Tyreless (stationary / non-wheeled) equipment ───────────────────────────────
+// Equipment that carries no tyres at all. Matching here short-circuits BOTH the
+// diagram and diagramPositions(), so an inspector is asked for nothing rather
+// than for wheels the machine does not have.
 export const NO_TYRE_EQUIPMENT = [
-  'generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant',
-  'batch', 'reclaimer', 'compressor', 'tower light', 'light tower',
-  // Fixed installations in the live fleet that were drawing a 4-tyre pickup.
-  // A building has no wheels; asking an inspector to record four is nonsense.
-  'building', 'water treatment',
+  'generator', 'genset', 'chiller', 'reclaimer', 'compressor',
+  'tower light', 'light tower',
+  // ANY plant is a fixed installation - bt-plant, ice plant, batching plant,
+  // water treatment plant. One word covers every spelling in the register.
+  'plant', 'batch',
+  // A placing boom is mast-mounted concrete placing gear, not a vehicle. It is
+  // a different machine from the truck-mounted concrete pump and must not
+  // borrow that pump's 14 tyres.
+  'placing boom', 'placing',
+  'building',
 ]
 
 export function isTyrelessEquipment(vt?: string | null): boolean {

@@ -7,18 +7,20 @@
  * asset count that was live when it was written. Keep it that way - a fixture
  * invented in a test file proves nothing about this fleet.
  */
-import { resolveVehicleType, isTyrelessEquipment, LAYOUTS } from '../lib/tyreDiagramLayouts'
+import {
+  resolveVehicleType, isTyrelessEquipment, LAYOUTS, diagramPositions,
+} from '../lib/tyreDiagramLayouts'
 
 const tyreCount = (vt: string): number =>
   isTyrelessEquipment(vt) ? 0 : (LAYOUTS as any)[resolveVehicleType(vt)]?.tyres?.length ?? 0
 
 describe('a descriptive type is never read as an asset code', () => {
-  // THE BUG THIS LOCKS: the asset-code shortcut matched leading letters alone,
-  // so "PLACING BOOM" hit the PL -> Pickup rule and drew 4 tyres for a machine
-  // that carries 14. It ran before the keyword rules could see "boom".
-  it('PLACING BOOM is a concrete pump, not a PL pickup', () => {
-    expect(resolveVehicleType('PLACING BOOM')).toBe('Concrete pump')
-    expect(tyreCount('PLACING BOOM')).toBe(14)
+  // The asset-code shortcut matched leading letters alone, so any type starting
+  // with PL/SL/WL/TM/MP was silently routed by prefix before the keyword rules
+  // could read the words. It now requires letters followed by a digit.
+  it('a descriptive name starting with a prefix code is not routed by it', () => {
+    expect(resolveVehicleType('PLACING BOOM')).not.toBe('Pickup')
+    expect(resolveVehicleType('SLURRY TANKER')).not.toBe('Skid loader')
   })
 
   it('still honours a genuine asset code, which is why the shortcut exists', () => {
@@ -34,12 +36,26 @@ describe('a descriptive type is never read as an asset code', () => {
   })
 })
 
-describe('fixed installations have no wheels', () => {
-  it.each(['BUILDINGS', 'WATER TREATMENT PLANT', 'GENERATOR', 'BT-PLANT', 'ICE PLANT', 'CHILLER'])(
-    '%s asks for zero tyres', (vt) => {
-      expect(isTyrelessEquipment(vt)).toBe(true)
-      expect(tyreCount(vt)).toBe(0)
-    })
+describe('equipment with no wheels asks for no tyres', () => {
+  // Every plant spelling in the register, plus the placing boom, which is
+  // mast-mounted concrete gear and NOT the truck-mounted pump it used to
+  // borrow 14 tyres from.
+  it.each([
+    'PLACING BOOM', 'BT-PLANT', 'ICE PLANT', 'WATER TREATMENT PLANT',
+    'BATCHING PLANT', 'BUILDINGS', 'GENERATOR', 'CHILLER', 'RECLAIMER',
+  ])('%s asks for zero tyres', (vt) => {
+    expect(isTyrelessEquipment(vt)).toBe(true)
+    expect(tyreCount(vt)).toBe(0)
+    // The inspection form must agree with the diagram, or it would still list
+    // positions for a machine the diagram refuses to draw.
+    expect(diagramPositions(vt)).toEqual([])
+  })
+
+  it('does not swallow a real wheeled machine', () => {
+    expect(isTyrelessEquipment('TR-MIXER')).toBe(false)
+    expect(isTyrelessEquipment('LINE PUMP')).toBe(false)
+    expect(isTyrelessEquipment('PUMPS')).toBe(false)
+  })
 })
 
 describe('counts corrected by the fleet owner', () => {
@@ -65,7 +81,12 @@ describe('counts corrected by the fleet owner', () => {
 
   it('the truck-mounted concrete pump still carries 14', () => {
     expect(tyreCount('PUMPS')).toBe(14)
-    expect(tyreCount('PLACING BOOM')).toBe(14)
+  })
+
+  // A placing boom is NOT a truck-mounted pump. It briefly borrowed that
+  // pump's 14 tyres; it has none of its own.
+  it('a placing boom carries no tyres at all', () => {
+    expect(tyreCount('PLACING BOOM')).toBe(0)
   })
 })
 

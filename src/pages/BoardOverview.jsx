@@ -43,6 +43,7 @@ import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
 import EmailPdfButton from '../components/EmailPdfButton'
 import PresentationStudio from '../components/present/PresentationStudio'
+import StudioBoundary from '../components/present/StudioBoundary'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(

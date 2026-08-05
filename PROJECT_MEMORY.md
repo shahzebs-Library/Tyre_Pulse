@@ -3,6 +3,52 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-05 — TREND LINES + BOARD-OVERVIEW CRASH + CONSOLE ENTRY HARDENED + WEB AUDIT. No migration; next free **V481**. Mobile 1.3.2 (code 38) LIVE on both Play tracks (alpha + internal).
+- **STUDIO TREND LINES (pushed `919219c`).** `src/lib/presentTrend.js` (pure; REUSES expenseTrends.linearFit -
+  one regression in the codebase) + a "Trend line" toggle in PresentationStudio. RULES: only on ORDERED axes
+  (`canTrend` - category sources are sorted by value, a line would trace the SORT); refuses <3 points; gaps stay
+  gaps (Number(null) is 0 trap); direction judged vs max(span,|mean|) not zero; fits the TOTAL across split
+  series; R^2 reported + "hint not a measurement" caption when weak; `ordered:false` on tyre_forecast_month
+  (half its points are already a projection). TWO defects proven by revert-and-watch-fail: the value-labels
+  plugin summed a trend dataset into the STACKED-BAR TOTAL (printed 1,029 for bars totalling 30) - datasets
+  flagged `_isTrend` are now skipped everywhere the plugin walks; and scale-level stacked:true would stack the
+  line on top of the bars - trendDataset carries its own `stack:'_trend'` group. Incidental: `stack` was missing
+  from the studio's saved-report config (a saved grouped report reloaded stacked).
+- **BOARD OVERVIEW CRASH FIXED (ERR-W4RA0AXE, user-reported "board view error").** BoardOverview.jsx rendered
+  `<StudioBoundary>` WITHOUT importing it -> ReferenceError -> whole page down. WHY 3 GUARDS MISSED IT: vite has
+  no undef analysis; core `no-undef` CANNOT see a JSX element name (JSXIdentifier node - the `icon: Route` bug
+  was caught because it was a plain JS expression); and CI never ran lint at all. CLOSED BOTH GAPS: added
+  eslint-plugin-react (devDep) + `react/jsx-no-undef`:error + `react/jsx-uses-vars` (proven to fire on the
+  broken file, then full-src sweep = this was the ONLY one), and ci.yml web job now runs `npm run lint` before
+  tests/build. RULE: the JSX half of the ReferenceError class is `react/jsx-no-undef`, not `no-undef`.
+- **CONSOLE ENTRY NO LONGER WALKS STRAIGHT IN (user: "click console -> straight to super admin").** The in-app
+  System Console NavLink navigated in-tab, carrying the SHARED main-app session, and resolveAdmin admitted any
+  super admin on it - no console sign-in at all. THREE LAYERS now (pinned by consoleSurfaceGuard.test.js,
+  source-scan style): (1) Layout.jsx entry is a plain `<a target="_blank" rel="noopener noreferrer">` - a tab
+  that BOOTS on /console uses the isolated tab-local sessionStorage surface (IS_CONSOLE_SURFACE), which starts
+  EMPTY, so ConsoleLogin is unavoidable; (2) App.jsx `ConsoleSurfaceGate` wraps BOTH /console/login and
+  /console/* - a same-tab navigation (legacy /users-style redirects, typed URL) renders an "open the secure
+  console tab" screen instead of the console (login included: a same-tab login would write to the SHARED
+  tp_auth storage); (3) ConsoleAuthContext.resolveAdmin refuses a super admin when !IS_CONSOLE_SURFACE (no
+  signOut - the main-app session is not the console's to end). ReportSharing's "Change report colours" now
+  window.open's the console. SUPERSEDES the "piggyback the main-app session via the in-app link" design (was
+  deliberate; user reversed it). Console access now ALWAYS = own sign-in + 10-min idle + 8-h absolute + cleared
+  on tab close. GOTCHA hit: a `{/* */}` JSX comment at EXPRESSION position (inside `cond && ( ... )`) is a
+  build error - use a `//` line comment there.
+- **WEB AUDIT (clean, verified rather than assumed):** renderInline in CopilotCard + AiCommandCenter is
+  escape-first (real escapers, checked) - the dangerouslySetInnerHTML sinks are safe; DailyOps print window
+  escapes per value, Reports print window writes React-escaped DOM; every target=_blank carries rel
+  (noreferrer implies noopener); AccidentDetailModal photo hrefs are safe because resolveStorageUrl routes ALL
+  values through the safeImageSrc allowlist; navigation targets are internal constants (react-router
+  open-redirect CVE stays nil-exposure; fix = the deferred v7 major - the 2 moderate prod `npm audit` findings
+  are that pair); no secrets/eval/innerHTML in src. Supabase advisors: 2 NEW `function_search_path_mutable`
+  (`import_merge_key`, `accident_ws_stamp`) pinned live via ALTER FUNCTION (class back to 0); the 344/329/125
+  PostgREST buckets remain the known-benign adjudicated set; 19 INFO = deny-all _bak snapshots (correct).
+  Sentry web project: 0 unresolved issues in 7 days.
+- **STILL OPEN (unchanged):** raise mobile_min_version 1.3.1 -> 1.3.2 only after a tester confirms 1.3.2;
+  Sentry mobile symbol upload (needs SENTRY_AUTH_TOKEN ticked for Production in Expo env); STATIONARY PUMP
+  (11 assets) tyre count unanswered; extensions vector/pg_net in public schema (standing, risky to move).
+
 ## SESSION 2026-08-04 (part 2) — MOBILE 1.3.1 STABILIZATION + APPROVAL MATRIX + SERVER-SIDE MOBILE ANALYTICS. Migrations through **V480**, next free **V481**. Merged to main (PR #267, squash `5388bc5`).
 - **THE PERMANENT-SPINNER BUG (app opens, spins forever, "sometimes it works").** FOUR independent sources agreed:
   Play ANR "Slow binder call `__ioctl`"; `getSession()` awaited with NO timeout; `secureStorage` chunking = 3-5

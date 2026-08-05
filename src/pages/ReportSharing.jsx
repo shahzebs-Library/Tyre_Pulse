@@ -150,7 +150,9 @@ export default function ReportSharing() {
           </div>
         </div>
         {isSuper && (
-          <button type="button" onClick={() => navigate('/console/appearance')}
+          // New tab: the console only serves its own isolated surface now, so
+          // an in-tab navigate would land on the "open secure tab" screen.
+          <button type="button" onClick={() => window.open('/console/appearance', '_blank', 'noopener,noreferrer')}
             className="text-xs font-semibold px-3 py-2 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 flex items-center gap-1.5 shrink-0">
             <ExternalLink size={13} /> Change report colours
           </button>

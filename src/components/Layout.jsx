@@ -1128,33 +1128,26 @@ export default function Layout({ children }) {
                       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       style={{ overflow: 'hidden' }}
                     >
-                      <NavLink
-                        to="/console"
-                        title={!sidebarOpen ? 'System Console' : undefined}
-                        className={({ isActive }) =>
-                          `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
-                           transition-all duration-150 mb-px group
-                           ${!sidebarOpen ? 'justify-center' : ''}
-                           ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
-                        }
-                        style={({ isActive }) => isActive ? {
-                          background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
-                          border: '1px solid rgba(22,163,74,0.24)',
-                          boxShadow: '0 0 18px rgba(22,163,74,0.1)',
-                        } : { border: '1px solid transparent' }}
+                      {/* Plain anchor, NEW TAB on purpose. A tab that BOOTS on
+                          /console uses the isolated tab-local console session
+                          (sessionStorage, IS_CONSOLE_SURFACE), which starts
+                          empty - so the console ALWAYS asks for its own
+                          sign-in and can never be entered on the main app's
+                          session. An in-tab NavLink here was the bypass. */}
+                      <a
+                        href="/console"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={!sidebarOpen ? 'System Console (opens in its own secure tab)' : 'Opens in its own secure tab and asks for its own sign-in'}
+                        className={`relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
+                           transition-all duration-150 mb-px group text-gray-600 hover:text-gray-200
+                           ${!sidebarOpen ? 'justify-center' : ''}`}
+                        style={{ border: '1px solid transparent' }}
                       >
-                        {({ isActive }) => (
-                          <>
-                            {isActive && (
-                              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[52%] rounded-r-full"
-                                style={{ background: 'linear-gradient(180deg,#86efac,#22c55e)', boxShadow: '0 0 10px rgba(74,222,128,0.8)' }} />
-                            )}
-                            <Shield size={13.5} strokeWidth={isActive ? 2.2 : 1.8}
-                              className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                            {sidebarOpen && <span className="truncate">System Console</span>}
-                          </>
-                        )}
-                      </NavLink>
+                        <Shield size={13.5} strokeWidth={1.8}
+                          className="flex-shrink-0 text-gray-600 group-hover:text-gray-300" />
+                        {sidebarOpen && <span className="truncate">System Console</span>}
+                      </a>
                     </motion.div>
                   )}
                 </AnimatePresence>

@@ -1099,61 +1099,11 @@ export default function Layout({ children }) {
             )
           })}
 
-          {/* System Console entry (super-admins only) - single doorway to the
-              isolated /console admin + access-control surface. */}
-          {isSuperAdmin === true && (() => {
-            const adminCollapsed = collapsedGroups.has('Admin')
-            return (
-              <div className="mb-0.5">
-                {sidebarOpen && (
-                  <button
-                    onClick={() => toggleGroup('Admin')}
-                    className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
-                  >
-                    <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      {t('nav.groups.Admin')}
-                    </span>
-                    <motion.div animate={{ rotate: adminCollapsed ? -90 : 0 }} transition={{ duration: 0.18 }}>
-                      <ChevronDown size={9} className="text-gray-700 group-hover/sec:text-gray-500 transition-colors" />
-                    </motion.div>
-                  </button>
-                )}
-                <AnimatePresence initial={false}>
-                  {(!adminCollapsed || !sidebarOpen) && (
-                    <motion.div
-                      key="admin-items"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ overflow: 'hidden' }}
-                    >
-                      {/* Plain anchor, NEW TAB on purpose. A tab that BOOTS on
-                          /console uses the isolated tab-local console session
-                          (sessionStorage, IS_CONSOLE_SURFACE), which starts
-                          empty - so the console ALWAYS asks for its own
-                          sign-in and can never be entered on the main app's
-                          session. An in-tab NavLink here was the bypass. */}
-                      <a
-                        href="/console"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={!sidebarOpen ? 'System Console (opens in its own secure tab)' : 'Opens in its own secure tab and asks for its own sign-in'}
-                        className={`relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
-                           transition-all duration-150 mb-px group text-gray-600 hover:text-gray-200
-                           ${!sidebarOpen ? 'justify-center' : ''}`}
-                        style={{ border: '1px solid transparent' }}
-                      >
-                        <Shield size={13.5} strokeWidth={1.8}
-                          className="flex-shrink-0 text-gray-600 group-hover:text-gray-300" />
-                        {sidebarOpen && <span className="truncate">System Console</span>}
-                      </a>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )
-          })()}
+          {/* NO System Console entry here - by explicit instruction the main
+              app frontend never surfaces the console, not even to admins or
+              super admins. The console is reached ONLY by opening /console
+              directly, in its own tab, behind its own sign-in (see App.jsx
+              ConsoleSurfaceGate). Do not re-add a console link to this nav. */}
         </nav>
 
         {/* ── User footer ────────────────────────────────────────────────────── */}

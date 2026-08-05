@@ -16,16 +16,18 @@ import path from 'path'
 const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8')
 
 describe('console surface isolation', () => {
-  it('the sidebar entry opens a NEW tab, never an in-tab NavLink to /console', () => {
+  it('the main-app frontend carries NO console entry at all', () => {
+    // Explicit instruction: the frontend never surfaces the console - not a
+    // NavLink, not an anchor, not even for admins or super admins. It is
+    // reached only by opening /console directly in its own tab.
     const layout = read('src/components/Layout.jsx')
-    // The bypass was `<NavLink to="/console"` - same tab, shared session.
     expect(layout).not.toMatch(/NavLink\s*\n?\s*to="\/console"/)
-    // The doorway is a plain anchor that boots a fresh tab on the console
-    // surface (tab-local sessionStorage -> the console login is unavoidable).
-    const anchor = layout.match(/href="\/console"[\s\S]{0,200}/)
-    expect(anchor).not.toBeNull()
-    expect(anchor[0]).toContain('target="_blank"')
-    expect(anchor[0]).toContain('noopener')
+    expect(layout).not.toMatch(/href="\/console"/)
+    expect(layout).not.toContain('>System Console<')
+    // The one page that used to deep-link the console theme editor no longer does.
+    const sharing = read('src/pages/ReportSharing.jsx')
+    expect(sharing).not.toMatch(/window\.open\(['"]\/console/)
+    expect(sharing).not.toMatch(/navigate\(['"]\/console/)
   })
 
   it('App.jsx gates BOTH console routes behind ConsoleSurfaceGate (login included)', () => {

@@ -30,11 +30,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   /console/* - a same-tab navigation (legacy /users-style redirects, typed URL) renders an "open the secure
   console tab" screen instead of the console (login included: a same-tab login would write to the SHARED
   tp_auth storage); (3) ConsoleAuthContext.resolveAdmin refuses a super admin when !IS_CONSOLE_SURFACE (no
-  signOut - the main-app session is not the console's to end). ReportSharing's "Change report colours" now
-  window.open's the console. SUPERSEDES the "piggyback the main-app session via the in-app link" design (was
-  deliberate; user reversed it). Console access now ALWAYS = own sign-in + 10-min idle + 8-h absolute + cleared
-  on tab close. GOTCHA hit: a `{/* */}` JSX comment at EXPRESSION position (inside `cond && ( ... )`) is a
-  build error - use a `//` line comment there.
+  signOut - the main-app session is not the console's to end). SUPERSEDES the "piggyback the main-app session
+  via the in-app link" design (was deliberate; user reversed it). Console access now ALWAYS = own sign-in +
+  10-min idle + 8-h absolute + cleared on tab close. GOTCHA hit: a `{/* */}` JSX comment at EXPRESSION
+  position (inside `cond && ( ... )`) is a build error - use a `//` line comment there.
+  **THEN TIGHTENED FURTHER on the user's explicit instruction ("even as an admin I don't want to see it in my
+  frontend"): the main app surfaces NO console entry AT ALL** - the sidebar System Console link and
+  ReportSharing's "Change report colours" console button are REMOVED (not hidden - deleted). Super admins
+  reach the console ONLY by typing /console in its own tab. consoleSurfaceGuard.test.js pins "no console
+  entry in the frontend" as an invariant. RULE: never re-add a console link/button to any main-app surface.
 - **WEB AUDIT (clean, verified rather than assumed):** renderInline in CopilotCard + AiCommandCenter is
   escape-first (real escapers, checked) - the dangerouslySetInnerHTML sinks are safe; DailyOps print window
   escapes per value, Reports print window writes React-escaped DOM; every target=_blank carries rel

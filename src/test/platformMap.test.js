@@ -66,6 +66,12 @@ describe('shaping + search', () => {
     expect(filterSections(secs, '')).toBe(secs)
   })
 
+  it('webSections flattens the app sidebar catalog to plain label groups', () => {
+    expect(webSections([{ label: 'G', items: [{ label: 'A' }, { label: 'B' }] }]))
+      .toEqual([{ label: 'G', items: ['A', 'B'] }])
+    expect(webSections(null)).toEqual([])
+  })
+
   it('platformCounts totals every surface', () => {
     const c = platformCounts({ consoleNav: CONSOLE_NAV, navCatalog: [{ label: 'G', items: [{ label: 'A' }] }], mobileModules: MOBILE_MODULES })
     expect(c.consolePages).toBeGreaterThan(30)

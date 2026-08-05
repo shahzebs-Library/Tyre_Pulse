@@ -49,6 +49,47 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Sentry mobile symbol upload (needs SENTRY_AUTH_TOKEN ticked for Production in Expo env); STATIONARY PUMP
   (11 assets) tyre count unanswered; extensions vector/pg_net in public schema (standing, risky to move).
 
+## SESSION 2026-08-05 (part 2) — DEEP DATA AUDIT + 4 USER-APPROVED LIVE FIXES. All applied via execute_sql with _bak snapshots (no migration file; data-only). Next free migration still **V481**.
+- **THE BIG ONE - THE V388 CORRUPTED JOB-CARD DATES ARE FINALLY REPAIRED IN PLACE.** The customer never
+  re-uploaded (5 months); measured live: KSA work_orders carried year-0022..0026 timestamps on FOUR columns
+  (opened_at 27,996 / completed_at 27,862 / production_out_at 27,996 / production_in_at 26,872 - the year
+  distribution was byte-identical to the V388 measurement, years 22-26 ONLY, i.e. the dropped-century shape,
+  so `+ interval '2000 years'` is DETERMINISTIC repair, not inference). 28,986 rows fixed in one update,
+  snapshot **`_bak.wo_dates_fix_20260805`** (id + all 4 old values; undo = restore from it). VERIFIED: 0
+  ancient dates left, earliest opened 2019-12-08. **DELIBERATELY NOT TOUCHED: the ~1,435 reversed + ~1,535
+  future-dated KSA rows = the MDY day-month-swap class, genuinely ambiguous, still needs the re-upload.**
+- **TYRE LIFECYCLE INTEGRITY PACK** (snapshots `_bak.tyre_status_fix_20260805` + `_bak.tyre_trim_fix_20260805`):
+  (a) 214 KSA rows said status Active WHILE carrying a removal_date -> status Removed (the row itself asserts
+  removal); (b) 4 UAE future removal_dates nulled incl. a year-2062 typo that made "latest UAE tyre data" read
+  2062 (the V422-authored-never-applied class; km/status kept); (c) 4 Excel scientific-notation duplicate rows
+  deleted (e.g. `1.24391E+11` beside the real `124391204515`, same asset+position+date - the 4th, TM571
+  `2.24E+22` vs `224020E017`, needed a looser mantissa match; 27 standalone mangled `E+` serials remain, mangled
+  but NOT duplicates - left, fixable only from the master file); (d) 251 whitespace-PADDED tyre_position +
+  140 padded serial_no rows (KSA, fixed-width import artifact) btrim'd - **the padding was MASKING 43 real
+  double-active groups** ('LHF1' vs 'LHF1    ' counted as different positions). trg_guard_tyre_active_fitment
+  disabled/re-enabled around the trim (verified back to 'O'); then 41 groups resolved by the evidence rule
+  (one DATED active + one UNDATED active from the padded import -> the undated row demoted to Removed, no
+  dates invented). RESULT: double-active groups 38+hidden43 -> **1** (MP129 LHF1: two different serials, BOTH
+  undated - honestly unresolvable, left visible). RULE: whitespace in tyre_position is the same defect class
+  as the V245/V246 casing bugs AND it hides double-fitments - btrim on compare.
+- **UAE FLEET BACKFILL: 371 -> 439 (+68 derived rows).** New UAE assets had arrived after the V348 derivation;
+  65 tyre-assets + 53 job-card-assets (68 distinct) were orphans invisible to per-asset views. Same derivation
+  as V348/V351 (vehicle_type = mode of work_orders.asset_category else tyre_records.vehicle_type; site = mode
+  across both; status Active). VERIFIED 0 UAE orphans left. STILL 6 orphans elsewhere (KSA 3 + Egypt 3) -
+  outside the approved scope, trivial, offered.
+- **TYRE PRICE BACKFILL RE-RUN (the V401 engine, dry-run first).** Thousands of fitments loaded since V401
+  were unpriced (KSA 2,186 / UAE 1,887 / Egypt 187). Applied KSA: **1,819 filled** (comparable 1,702 /
+  own_jobcard 117, median SAR 900 - same plausible median as V401), ONE batch in tyre_price_backfill_log
+  (undo = tyre_price_backfill_undo(batch)), 0 implausible fills, 363 KSA left honestly unpriced. **UAE/Egypt
+  filled 0 BY DESIGN**: V401c refuses to use its own earlier fills as evidence and those countries have no
+  NEW real prices - honest, do not "fix". GOTCHA: the RPC is org-scoped via app_current_org(), NULL in an MCP
+  session - impersonate the super admin via `set_config('request.jwt.claims','{"sub":"<uuid>"...}',true)`.
+- **AUDIT VERDICT (measured, live):** CLEAN = currency integrity (1 per country, 0 null costs, 0 blank sites),
+  0 reversed tyre dates, 0 negative km/meters, 0 exact-dup expenses, feeds fresh (job cards to Aug 5).
+  KNOWN-STANDING (no change): default-classified spend KSA 55%/UAE 64%/Egypt 72%; UAE/Egypt expenses lack the
+  `#` import key (96-99% - fingerprint is the only re-import guard there); production m3 uploads stopped
+  Jul 9 (customer side); 497 fleet rows honestly without vehicle_type; 8 tyres with >400k km flagged.
+
 ## SESSION 2026-08-04 (part 2) — MOBILE 1.3.1 STABILIZATION + APPROVAL MATRIX + SERVER-SIDE MOBILE ANALYTICS. Migrations through **V480**, next free **V481**. Merged to main (PR #267, squash `5388bc5`).
 - **THE PERMANENT-SPINNER BUG (app opens, spins forever, "sometimes it works").** FOUR independent sources agreed:
   Play ANR "Slow binder call `__ioctl`"; `getSession()` awaited with NO timeout; `secureStorage` chunking = 3-5

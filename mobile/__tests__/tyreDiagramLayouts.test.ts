@@ -29,7 +29,7 @@ describe('a descriptive type is never read as an asset code', () => {
 
   it('requires a digit, so any future descriptive name is safe', () => {
     // These must fall through to the keyword rules, not the prefix map.
-    expect(resolveVehicleType('SLURRY TANKER')).toBe('Truck 6x4')   // not SL -> Skid loader
+    expect(resolveVehicleType('SLURRY TANKER')).toBe('Tanker')         // not SL -> Skid loader
     expect(resolveVehicleType('WLD WORKSHOP TRUCK')).toBe('Truck 6x4') // not WL -> Wheel loader
   })
 })
@@ -42,11 +42,34 @@ describe('fixed installations have no wheels', () => {
     })
 })
 
+describe('counts corrected by the fleet owner', () => {
+  // Both of these used to resolve to the 10-tyre 6x4 layout. The owner
+  // confirmed the real chassis, so an inspector is now asked for the tyres
+  // the vehicle actually carries.
+  it('LINE PUMP carries 12 and reads as a pump, not a 10-tyre truck', () => {
+    expect(resolveVehicleType('LINE PUMP')).toBe('Line pump')
+    expect(tyreCount('LINE PUMP')).toBe(12)
+    // "shown as a pump" was the explicit ask: it must keep the pump body art.
+    expect((LAYOUTS as any)['Line pump'].bodyKey).toBe('concretePump')
+  })
+
+  it('a tanker is a 6-tyre 2-axle rigid, not a 10-tyre 6x4', () => {
+    expect(tyreCount('D TANKER')).toBe(6)
+    expect(tyreCount('DIESEL TANKER')).toBe(6)
+    expect(tyreCount('WATER TANKER')).toBe(6)
+  })
+
+  it('spider pump is untouched and still a 6x4', () => {
+    expect(tyreCount('SPIDER PUMP')).toBe(10)
+  })
+
+  it('the truck-mounted concrete pump still carries 14', () => {
+    expect(tyreCount('PUMPS')).toBe(14)
+    expect(tyreCount('PLACING BOOM')).toBe(14)
+  })
+})
+
 describe('the live fleet resolves to the expected tyre count', () => {
-  // 10 tyres is CORRECT for a 6x4 chassis - these are not bugs.
-  it.each([
-    ['SPIDER PUMP', 10], ['LINE PUMP', 10], ['D TANKER', 10],
-  ])('%s -> %i tyres (6x4 chassis)', (vt, n) => expect(tyreCount(vt as string)).toBe(n))
 
   it.each([
     ['TR-MIXER', 12], ['PUMPS', 14], ['BUS', 6],

@@ -172,6 +172,44 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
       { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
     ],
   },
+  // Diesel / water tanker: 1 single-tyre steer axle + 1 dual-tyre drive axle
+  // = 6 tyres. Confirmed by the fleet owner. It is a 2-axle rigid, NOT the 6x4
+  // it used to resolve to, which asked an inspector for 10 tyres on a 6-tyre
+  // truck. Same geometry as the Canter, which is the same chassis class.
+  Tanker: {
+    emoji: '🚚', viewH: 310,
+    bodyKey: 'canter',
+    tyres: [
+      { id: 'FL',  x: 31,  y: 36,  w: 22, h: 40, label: 'FL'  },
+      { id: 'FR',  x: 147, y: 36,  w: 22, h: 40, label: 'FR'  },
+      { id: 'RLo', x: 16,  y: 170, w: 20, h: 38, label: 'RLo' },
+      { id: 'RLi', x: 38,  y: 170, w: 20, h: 38, label: 'RLi' },
+      { id: 'RRi', x: 142, y: 170, w: 20, h: 38, label: 'RRi' },
+      { id: 'RRo', x: 164, y: 170, w: 20, h: 38, label: 'RRo' },
+    ],
+  },
+  // Line pump: 2 single-tyre steer axles + 2 dual-tyre drive axles = 12 tyres,
+  // confirmed by the fleet owner. It rides a shorter chassis than the truck
+  // -mounted concrete pump (which has a third steer axle and 14 tyres), but it
+  // IS a pump and must read as one, so it keeps the pump body art.
+  'Line pump': {
+    emoji: '🏗️', viewH: 375,
+    bodyKey: 'concretePump',
+    tyres: [
+      { id: 'F1L',  x: 29,  y: 40,  w: 22, h: 38, label: 'F1L'  },
+      { id: 'F1R',  x: 149, y: 40,  w: 22, h: 38, label: 'F1R'  },
+      { id: 'F2L',  x: 29,  y: 84,  w: 22, h: 38, label: 'F2L'  },
+      { id: 'F2R',  x: 149, y: 84,  w: 22, h: 38, label: 'F2R'  },
+      { id: 'R1Lo', x: 13,  y: 258, w: 19, h: 33, label: 'R1Lo' },
+      { id: 'R1Li', x: 34,  y: 258, w: 19, h: 33, label: 'R1Li' },
+      { id: 'R1Ri', x: 147, y: 258, w: 19, h: 33, label: 'R1Ri' },
+      { id: 'R1Ro', x: 168, y: 258, w: 19, h: 33, label: 'R1Ro' },
+      { id: 'R2Lo', x: 13,  y: 300, w: 19, h: 33, label: 'R2Lo' },
+      { id: 'R2Li', x: 34,  y: 300, w: 19, h: 33, label: 'R2Li' },
+      { id: 'R2Ri', x: 147, y: 300, w: 19, h: 33, label: 'R2Ri' },
+      { id: 'R2Ro', x: 168, y: 300, w: 19, h: 33, label: 'R2Ro' },
+    ],
+  },
   // MP concrete pump: 3 single-tyre steer axles up front, then 2 dual-tyre
   // drive axles at the rear (14 tyres total).
   'Concrete pump': {
@@ -248,8 +286,11 @@ export function resolveVehicleType(vt?: string | null): string {
   // Stationary / skid-mounted pumps are NOT the 5-axle truck-mounted pump -
   // fall back to the minimal 2-axle default instead of 3 steer axles.
   if (s.includes('stationary'))                            return 'Pickup'
-  // Spider / line pumps ride a standard 6x4 truck chassis (10 tyres).
-  if (compact.includes('spiderpump') || compact.includes('linepump') || s.includes('spider')) return 'Truck 6x4'
+  // Line pump: its own 12-tyre pump layout (fleet owner confirmed), NOT the
+  // 10-tyre 6x4 it used to share with the spider pump.
+  if (compact.includes('linepump')) return 'Line pump'
+  // Spider pump still rides a standard 6x4 truck chassis (10 tyres).
+  if (compact.includes('spiderpump') || s.includes('spider')) return 'Truck 6x4'
   if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
   if (s.includes('skid'))                                  return 'Skid loader'
   if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
@@ -258,8 +299,10 @@ export function resolveVehicleType(vt?: string | null): string {
   if (s.includes('tata'))                                  return 'Tata'
   if (s.includes('ashok') || s.includes('leyland'))        return 'Ashok Leyland'
   if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
-  // Heavy 6x4 chassis family (tankers, cranes, generic trucks): 10 tyres.
-  if (s.includes('tanker') || s.includes('crane') || s.includes('truck')) return 'Truck 6x4'
+  // Tankers are 2-axle rigids: 6 tyres, not the 10 they used to get here.
+  if (s.includes('tanker')) return 'Tanker'
+  // Heavy 6x4 chassis family (cranes, generic trucks): 10 tyres.
+  if (s.includes('crane') || s.includes('truck')) return 'Truck 6x4'
   // Unknown -> minimal web default (2 axles / 4 tyres). Never guess extra axles.
   return 'Pickup'
 }

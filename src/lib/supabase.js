@@ -38,9 +38,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // so the URL the tab BOOTED on uniquely identifies the surface. supabase-js only
 // cross-tab-syncs sessions stored under its own `storageKey`, so giving each
 // surface a distinct key yields two fully independent sessions across tabs.
-// A Console opened via the in-app <Link to="/console"> (client-side nav, no
-// reload) keeps the tab's main-app session, so a signed-in super admin still
-// reaches it seamlessly; only a separately-opened Console tab gets its own login.
+// The console is ONLY served on its own surface: the in-app System Console
+// entry opens a NEW tab (Layout.jsx), and a same-tab client-side navigation to
+// /console renders an "open in secure tab" screen instead of the console
+// (App.jsx ConsoleSurfaceGate) - so console entry ALWAYS goes through the
+// console's own sign-in on the tab-local session, never the main-app session.
 export const IS_CONSOLE_SURFACE =
   typeof window !== 'undefined' &&
   typeof window.location?.pathname === 'string' &&

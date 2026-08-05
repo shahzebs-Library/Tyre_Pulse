@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   web:
-    name: Web — tests + build
+    name: Web — lint + tests + build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +20,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Lint gates the build: no-undef + react/jsx-no-undef are the two rules
+      # that catch a ReferenceError a clean vite build and a green suite both
+      # miss ("StudioBoundary is not defined" shipped exactly this way -
+      # lint existed but never ran in CI).
+      - run: npm run lint
       - run: npm run test:run
       - run: npx vite build
 

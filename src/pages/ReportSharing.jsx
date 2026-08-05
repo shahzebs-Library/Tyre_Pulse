@@ -14,7 +14,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Share2, Tv, Eye, Radio, Palette, ExternalLink, AlertCircle,
+  Share2, Tv, Eye, Radio, Palette, AlertCircle,
   LayoutGrid, Link2, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -149,12 +149,9 @@ export default function ReportSharing() {
             </p>
           </div>
         </div>
-        {isSuper && (
-          <button type="button" onClick={() => navigate('/console/appearance')}
-            className="text-xs font-semibold px-3 py-2 rounded-lg bg-[var(--accent)] text-white hover:opacity-90 flex items-center gap-1.5 shrink-0">
-            <ExternalLink size={13} /> Change report colours
-          </button>
-        )}
+        {/* No console link here - by explicit instruction the frontend never
+            surfaces the console. The report theme is changed from the System
+            Console itself (Report Colors), reached directly at /console. */}
       </div>
 
       {/* How it works */}

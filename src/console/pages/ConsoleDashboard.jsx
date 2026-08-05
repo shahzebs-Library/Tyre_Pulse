@@ -8,6 +8,8 @@ import { supabase } from '../../lib/supabase'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
 import { ErrorState } from '../components/ui'
+import { loadAttentionInputs } from '../../lib/api/consoleAttention'
+import { buildAttention } from '../../lib/consoleAttention'
 
 export default function ConsoleDashboard() {
   const { activeOrg } = useConsoleAuth()
@@ -17,6 +19,7 @@ export default function ConsoleDashboard() {
   const [recentActions, setRecentActions] = useState([])
   const [recentUsers, setRecentUsers]     = useState([])
   const [aiTrend, setAiTrend]             = useState([])
+  const [attention, setAttention]         = useState(null)   // null = not loaded yet
   const [error, setError]                 = useState('')
 
   useEffect(() => { loadAll() }, [activeOrg])
@@ -28,7 +31,7 @@ export default function ConsoleDashboard() {
   async function loadAll() {
     setLoading(true); setError('')
     const results = await Promise.allSettled([
-      loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend(),
+      loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend(), loadAttention(),
     ])
     const failed = results.filter((r) => r.status === 'rejected')
     if (failed.length === results.length) {
@@ -45,6 +48,14 @@ export default function ConsoleDashboard() {
     const { data, error: err } = await supabase.rpc('get_console_stats')
     if (err) throw err
     setStats(data)
+  }
+
+  // "Anything waiting on me?" - the loader yields null (UNKNOWN) for anything
+  // it could not read, and the pure engine renders that as "could not check"
+  // rather than a silent all-clear.
+  async function loadAttention() {
+    const inputs = await loadAttentionInputs()
+    setAttention(buildAttention(inputs))
   }
 
   async function loadRecentActions() {
@@ -110,6 +121,32 @@ export default function ConsoleDashboard() {
       </div>
 
       <ErrorState message={error} onRetry={loadAll} />
+
+      {/* ── Anything waiting on you? Plain English, one action per line. ── */}
+      {attention !== null && (
+        <div className={`rounded-xl border p-4 ${attention.length
+          ? 'border-orange-800/50 bg-orange-950/20'
+          : 'border-green-800/40 bg-green-950/10'}`}>
+          <h3 className="text-sm font-semibold text-white mb-2">
+            {attention.length ? 'Waiting on you' : 'Nothing is waiting on you'}
+          </h3>
+          {attention.length === 0 ? (
+            <p className="text-xs text-gray-500">No pending approvals, no unresolved errors, no stale data feeds, no open alerts.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {attention.map((a) => (
+                <button key={a.key} type="button" onClick={() => navigate(a.to)}
+                  className="w-full flex items-center gap-2 text-left rounded-lg px-2 py-1.5 hover:bg-gray-800/50 transition-colors">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    a.tone === 'danger' ? 'bg-red-500' : a.tone === 'warning' ? 'bg-orange-400' : 'bg-blue-400'}`} />
+                  <span className="text-xs text-gray-200 flex-1">{a.text}</span>
+                  <span className="text-[10px] text-orange-400">Open →</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── KPI grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

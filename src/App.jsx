@@ -18,6 +18,7 @@ import SubscriptionGate from './components/SubscriptionGate'
 import { useFeatureGate } from './hooks/useFeatureFlags'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
+import { IS_CONSOLE_SURFACE } from './lib/supabase'
 import ConsoleLayout from './console/components/ConsoleLayout'
 import ConsoleAuthBridge from './console/ConsoleAuthBridge'
 // Console pages are admin/super-admin only and rarely loaded; lazy-load them so
@@ -56,6 +57,8 @@ const ConsoleTrustAlerts = lazy(() => import('./console/pages/ConsoleTrustAlerts
 const ConsoleReleases = lazy(() => import('./console/pages/ConsoleReleases'))
 const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
+const ConsolePlatformMap     = lazy(() => import('./console/pages/ConsolePlatformMap'))
+const ConsoleMobileApp       = lazy(() => import('./console/pages/ConsoleMobileApp'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
 const ConsoleCrashReports  = lazy(() => import('./console/pages/ConsoleCrashReports'))
 const ConsoleSessions      = lazy(() => import('./console/pages/ConsoleSessions'))
@@ -370,6 +373,41 @@ function ChecklistOnlyGate({ children }) {
     return <Navigate to="/checklists" replace />
   }
   return children
+}
+
+// ── Console surface gate ──────────────────────────────────────────────────
+// The console is served ONLY on its own isolated auth surface: a tab that
+// BOOTED on /console (IS_CONSOLE_SURFACE), whose session lives in tab-local
+// sessionStorage and always starts empty - so the console's own sign-in is
+// unavoidable. A same-tab client-side navigation to /console (the old in-app
+// link, a legacy /users-style redirect, a typed URL) still carries the
+// MAIN-APP session; rendering the console there admitted a signed-in super
+// admin with no console login at all. That path now gets this screen instead.
+function ConsoleSurfaceGate({ children }) {
+  if (IS_CONSOLE_SURFACE) return children
+  return (
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
+      <div className="max-w-md w-full text-center rounded-2xl border border-gray-800 bg-gray-900/50 p-8">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-5"
+          style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.3)' }}>
+          <span className="text-3xl">🛡️</span>
+        </div>
+        <h1 className="text-lg font-bold text-white mb-2">System Console</h1>
+        <p className="text-sm text-gray-400 leading-relaxed mb-6">
+          The console runs in its own secure tab with its own sign-in.
+          It never opens on your app session.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.open('/console', '_blank', 'noopener,noreferrer')}
+          className="w-full rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold py-2.5 transition-colors"
+        >
+          Open the secure console tab
+        </button>
+        <a href="/" className="mt-3 inline-block text-xs text-gray-500 hover:text-gray-300">Back to the app</a>
+      </div>
+    </div>
+  )
 }
 
 // ── Console auth guard (must sit inside ConsoleAuthProvider) ──────────────
@@ -736,20 +774,27 @@ export default function App() {
     <LanguageProvider>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        {/* ── System Console - completely isolated from main app ── */}
+        {/* ── System Console - completely isolated from main app. The
+            ConsoleSurfaceGate keeps BOTH routes (login included) off the
+            main-app session: a same-tab /console/login would otherwise sign
+            in on the SHARED main-app storage. ── */}
         <Route path="/console/login" element={
-          <ConsoleAuthProvider>
-            <Suspense fallback={<LoadingSpinner />}>
-              <ConsoleLogin />
-            </Suspense>
-          </ConsoleAuthProvider>
+          <ConsoleSurfaceGate>
+            <ConsoleAuthProvider>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ConsoleLogin />
+              </Suspense>
+            </ConsoleAuthProvider>
+          </ConsoleSurfaceGate>
         } />
         <Route path="/console/*" element={
-          <ConsoleAuthProvider>
-            <ConsoleGuard>
-              <ConsoleLayout />
-            </ConsoleGuard>
-          </ConsoleAuthProvider>
+          <ConsoleSurfaceGate>
+            <ConsoleAuthProvider>
+              <ConsoleGuard>
+                <ConsoleLayout />
+              </ConsoleGuard>
+            </ConsoleAuthProvider>
+          </ConsoleSurfaceGate>
         }>
           <Route index                element={<ConsoleDashboard />} />
           <Route path="organisations" element={<ConsoleOrganisations />} />
@@ -786,6 +831,8 @@ export default function App() {
           <Route path="releases" element={<ConsoleReleases />} />
           <Route path="smart-import"  element={<ConsoleSmartImport />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
+          <Route path="platform-map"     element={<ConsolePlatformMap />} />
+          <Route path="mobile-app"       element={<ConsoleMobileApp />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />
           <Route path="crash-reports" element={<ConsoleCrashReports />} />
           <Route path="sessions"      element={<ConsoleSessions />} />

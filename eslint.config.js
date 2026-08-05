@@ -1,5 +1,6 @@
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
+import react from 'eslint-plugin-react'
 
 /**
  * Minimal, deliberately narrow lint config.
@@ -41,12 +42,22 @@ export default [
         ecmaFeatures: { jsx: true },
       },
     },
-    plugins: { 'react-hooks': reactHooks },
+    plugins: { 'react-hooks': reactHooks, react },
+    settings: { react: { version: 'detect' } },
     rules: {
       // The one that matters: a name used but never defined. This is the rule
       // that would have caught the ReferenceError that shipped past a clean
       // build and a green suite, rendering its page blank.
       'no-undef': 'error',
+      // Core no-undef CANNOT see a JSX element name - <StudioBoundary> is a
+      // JSXIdentifier node, which the base rule ignores. That exact gap shipped
+      // "StudioBoundary is not defined" to /board-overview (ERR-W4RA0AXE) past
+      // a clean build, a clean lint and a green suite. This is the JSX half of
+      // the same ReferenceError class.
+      'react/jsx-no-undef': 'error',
+      // Counts a JSX reference as a use, which is what makes an unused-import
+      // check possible at all (see the no-unused-vars note below).
+      'react/jsx-uses-vars': 'error',
       // NOTE on `no-unused-vars`, which would catch an orphaned import (the
       // symptom of a half-finished refactor): it is OFF because the base rule
       // does not count a JSX reference as a use. Without eslint-plugin-react's

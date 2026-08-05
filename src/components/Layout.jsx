@@ -1099,68 +1099,11 @@ export default function Layout({ children }) {
             )
           })}
 
-          {/* System Console entry (super-admins only) - single doorway to the
-              isolated /console admin + access-control surface. */}
-          {isSuperAdmin === true && (() => {
-            const adminCollapsed = collapsedGroups.has('Admin')
-            return (
-              <div className="mb-0.5">
-                {sidebarOpen && (
-                  <button
-                    onClick={() => toggleGroup('Admin')}
-                    className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
-                  >
-                    <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      {t('nav.groups.Admin')}
-                    </span>
-                    <motion.div animate={{ rotate: adminCollapsed ? -90 : 0 }} transition={{ duration: 0.18 }}>
-                      <ChevronDown size={9} className="text-gray-700 group-hover/sec:text-gray-500 transition-colors" />
-                    </motion.div>
-                  </button>
-                )}
-                <AnimatePresence initial={false}>
-                  {(!adminCollapsed || !sidebarOpen) && (
-                    <motion.div
-                      key="admin-items"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ overflow: 'hidden' }}
-                    >
-                      <NavLink
-                        to="/console"
-                        title={!sidebarOpen ? 'System Console' : undefined}
-                        className={({ isActive }) =>
-                          `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
-                           transition-all duration-150 mb-px group
-                           ${!sidebarOpen ? 'justify-center' : ''}
-                           ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
-                        }
-                        style={({ isActive }) => isActive ? {
-                          background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
-                          border: '1px solid rgba(22,163,74,0.24)',
-                          boxShadow: '0 0 18px rgba(22,163,74,0.1)',
-                        } : { border: '1px solid transparent' }}
-                      >
-                        {({ isActive }) => (
-                          <>
-                            {isActive && (
-                              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[52%] rounded-r-full"
-                                style={{ background: 'linear-gradient(180deg,#86efac,#22c55e)', boxShadow: '0 0 10px rgba(74,222,128,0.8)' }} />
-                            )}
-                            <Shield size={13.5} strokeWidth={isActive ? 2.2 : 1.8}
-                              className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                            {sidebarOpen && <span className="truncate">System Console</span>}
-                          </>
-                        )}
-                      </NavLink>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )
-          })()}
+          {/* NO System Console entry here - by explicit instruction the main
+              app frontend never surfaces the console, not even to admins or
+              super admins. The console is reached ONLY by opening /console
+              directly, in its own tab, behind its own sign-in (see App.jsx
+              ConsoleSurfaceGate). Do not re-add a console link to this nav. */}
         </nav>
 
         {/* ── User footer ────────────────────────────────────────────────────── */}

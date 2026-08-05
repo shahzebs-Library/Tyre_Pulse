@@ -67,6 +67,14 @@ export function ConsoleAuthProvider({ children }) {
       .eq('id', userId)
       .maybeSingle()
     if (data?.is_super_admin) {
+      // Console admin status is granted ONLY on the isolated console surface
+      // (a tab that booted on /console, tab-local sessionStorage session). On a
+      // piggybacked MAIN-APP session (in-tab navigation to /console) even a
+      // super admin is refused: that path used to walk straight into the
+      // console with no console sign-in at all. Do not sign out - the shared
+      // main-app session is not ours to end; the surface gate (App.jsx) shows
+      // the "open the secure console tab" screen instead.
+      if (!IS_CONSOLE_SURFACE) { setAdmin(null); setLoading(false); return }
       // A super admin with MFA enrolled must have COMPLETED it. A password-only
       // (AAL1) session is a half login and must not enter the console. Do NOT
       // sign out here - the ConsoleLogin MFA step is finishing that same session

@@ -3,6 +3,126 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-05 — TREND LINES + BOARD-OVERVIEW CRASH + CONSOLE ENTRY HARDENED + WEB AUDIT. No migration; next free **V481**. Mobile 1.3.2 (code 38) LIVE on both Play tracks (alpha + internal).
+- **STUDIO TREND LINES (pushed `919219c`).** `src/lib/presentTrend.js` (pure; REUSES expenseTrends.linearFit -
+  one regression in the codebase) + a "Trend line" toggle in PresentationStudio. RULES: only on ORDERED axes
+  (`canTrend` - category sources are sorted by value, a line would trace the SORT); refuses <3 points; gaps stay
+  gaps (Number(null) is 0 trap); direction judged vs max(span,|mean|) not zero; fits the TOTAL across split
+  series; R^2 reported + "hint not a measurement" caption when weak; `ordered:false` on tyre_forecast_month
+  (half its points are already a projection). TWO defects proven by revert-and-watch-fail: the value-labels
+  plugin summed a trend dataset into the STACKED-BAR TOTAL (printed 1,029 for bars totalling 30) - datasets
+  flagged `_isTrend` are now skipped everywhere the plugin walks; and scale-level stacked:true would stack the
+  line on top of the bars - trendDataset carries its own `stack:'_trend'` group. Incidental: `stack` was missing
+  from the studio's saved-report config (a saved grouped report reloaded stacked).
+- **BOARD OVERVIEW CRASH FIXED (ERR-W4RA0AXE, user-reported "board view error").** BoardOverview.jsx rendered
+  `<StudioBoundary>` WITHOUT importing it -> ReferenceError -> whole page down. WHY 3 GUARDS MISSED IT: vite has
+  no undef analysis; core `no-undef` CANNOT see a JSX element name (JSXIdentifier node - the `icon: Route` bug
+  was caught because it was a plain JS expression); and CI never ran lint at all. CLOSED BOTH GAPS: added
+  eslint-plugin-react (devDep) + `react/jsx-no-undef`:error + `react/jsx-uses-vars` (proven to fire on the
+  broken file, then full-src sweep = this was the ONLY one), and ci.yml web job now runs `npm run lint` before
+  tests/build. RULE: the JSX half of the ReferenceError class is `react/jsx-no-undef`, not `no-undef`.
+- **CONSOLE ENTRY NO LONGER WALKS STRAIGHT IN (user: "click console -> straight to super admin").** The in-app
+  System Console NavLink navigated in-tab, carrying the SHARED main-app session, and resolveAdmin admitted any
+  super admin on it - no console sign-in at all. THREE LAYERS now (pinned by consoleSurfaceGuard.test.js,
+  source-scan style): (1) Layout.jsx entry is a plain `<a target="_blank" rel="noopener noreferrer">` - a tab
+  that BOOTS on /console uses the isolated tab-local sessionStorage surface (IS_CONSOLE_SURFACE), which starts
+  EMPTY, so ConsoleLogin is unavoidable; (2) App.jsx `ConsoleSurfaceGate` wraps BOTH /console/login and
+  /console/* - a same-tab navigation (legacy /users-style redirects, typed URL) renders an "open the secure
+  console tab" screen instead of the console (login included: a same-tab login would write to the SHARED
+  tp_auth storage); (3) ConsoleAuthContext.resolveAdmin refuses a super admin when !IS_CONSOLE_SURFACE (no
+  signOut - the main-app session is not the console's to end). SUPERSEDES the "piggyback the main-app session
+  via the in-app link" design (was deliberate; user reversed it). Console access now ALWAYS = own sign-in +
+  10-min idle + 8-h absolute + cleared on tab close. GOTCHA hit: a `{/* */}` JSX comment at EXPRESSION
+  position (inside `cond && ( ... )`) is a build error - use a `//` line comment there.
+  **THEN TIGHTENED FURTHER on the user's explicit instruction ("even as an admin I don't want to see it in my
+  frontend"): the main app surfaces NO console entry AT ALL** - the sidebar System Console link and
+  ReportSharing's "Change report colours" console button are REMOVED (not hidden - deleted). Super admins
+  reach the console ONLY by typing /console in its own tab. consoleSurfaceGuard.test.js pins "no console
+  entry in the frontend" as an invariant. RULE: never re-add a console link/button to any main-app surface.
+- **WEB AUDIT (clean, verified rather than assumed):** renderInline in CopilotCard + AiCommandCenter is
+  escape-first (real escapers, checked) - the dangerouslySetInnerHTML sinks are safe; DailyOps print window
+  escapes per value, Reports print window writes React-escaped DOM; every target=_blank carries rel
+  (noreferrer implies noopener); AccidentDetailModal photo hrefs are safe because resolveStorageUrl routes ALL
+  values through the safeImageSrc allowlist; navigation targets are internal constants (react-router
+  open-redirect CVE stays nil-exposure; fix = the deferred v7 major - the 2 moderate prod `npm audit` findings
+  are that pair); no secrets/eval/innerHTML in src. Supabase advisors: 2 NEW `function_search_path_mutable`
+  (`import_merge_key`, `accident_ws_stamp`) pinned live via ALTER FUNCTION (class back to 0); the 344/329/125
+  PostgREST buckets remain the known-benign adjudicated set; 19 INFO = deny-all _bak snapshots (correct).
+  Sentry web project: 0 unresolved issues in 7 days.
+- **STILL OPEN (unchanged):** raise mobile_min_version 1.3.1 -> 1.3.2 only after a tester confirms 1.3.2;
+  Sentry mobile symbol upload (needs SENTRY_AUTH_TOKEN ticked for Production in Expo env); STATIONARY PUMP
+  (11 assets) tyre count unanswered; extensions vector/pg_net in public schema (standing, risky to move).
+
+## SESSION 2026-08-05 (part 3) — OWNER-GRADE CONSOLE: PLATFORM MAP + MOBILE APP CONTROL + ATTENTION PANEL. Merged to main. No migration; next free **V481**.
+- User (non-technical owner) asked for an advanced, fully TRANSPARENT super-admin console: "whatever we have
+  modules or we don't have, give me a clear UI" + "makes my work 100x faster". Built three genuinely missing
+  pieces rather than re-skinning the 45 existing pages:
+- **PLATFORM MAP `/console/platform-map`** (`ConsolePlatformMap.jsx` over pure `src/lib/platformMap.js`) = THE
+  transparency surface: every console tool / web app area / mobile module in PLAIN ENGLISH, plus an honest
+  **NOT_BUILT gap list where every entry names WHO can move it** ('you' | 'customer file' | 'build').
+  DERIVED, never hand-listed: console pages from a new icon-free **`CONSOLE_NAV` export on ConsoleLayout**
+  (same pattern as Layout's NAV_CATALOG), web areas from NAV_CATALOG, mobile from mobileModules.js.
+  **`platformMap.test.js` FAILS when a console nav route lacks a CONSOLE_DESCRIPTIONS entry** - a new console
+  page cannot ship invisible to the owner. RULE: when adding a console page, write its plain-English
+  description in platformMap.js or CI fails; keep NOT_BUILT honest (add gaps, remove closed ones).
+- **MOBILE APP CONTROL `/console/mobile-app`** (`ConsoleMobileApp.jsx` + pure `src/lib/mobileOps.js` + service
+  `src/lib/api/mobileOps.js`) = the page the owner personally needed twice this week: newest released build,
+  the forced-update gate, device counts. **The gate has a hard INTERLOCK, not a warning**: `gateRisk` REFUSES
+  a minimum above `mobile_latest_version` (that mistake locks every phone out with nothing to update to) and
+  refuses junk (the phones fail open on junk, so saving it is pure confusion). Version compare mirrors
+  mobile/lib/appVersion.ts EXACTLY (numeric segments - 1.10.0 > 1.9.0). NEW system_config key
+  **`mobile_latest_version`** (seeded '1.3.2' live) = the truth the interlock checks; RULE: record each new
+  release there (the page has a "Record release" box). Writes audit via log_console_event.
+- **ATTENTION PANEL on the console Dashboard** ("Waiting on you"): pure `src/lib/consoleAttention.js` +
+  loader `src/lib/api/consoleAttention.js`. Pending approvals, unresolved errors (7d), open trust alerts,
+  locked accounts, stale feeds (>10d) - each one plain English + one action link; explicit green "Nothing is
+  waiting on you" when truly clear. HONESTY RULE PINNED BY TEST: an unreadable/omitted count renders "could
+  not check", NEVER a silent zero; a feed with no data says so, never "stale since 1970". Job-card freshness
+  deliberately uses created_at (arrival), not opened_at (the MDY-swap rows carry future opened_at).
+- Nav: Platform Map + Mobile App added to the console Overview group. Tests: platformMap 7 + mobileOps 9 +
+  consoleAttention 6.
+
+## SESSION 2026-08-05 (part 2) — DEEP DATA AUDIT + 4 USER-APPROVED LIVE FIXES. All applied via execute_sql with _bak snapshots (no migration file; data-only). Next free migration still **V481**.
+- **THE BIG ONE - THE V388 CORRUPTED JOB-CARD DATES ARE FINALLY REPAIRED IN PLACE.** The customer never
+  re-uploaded (5 months); measured live: KSA work_orders carried year-0022..0026 timestamps on FOUR columns
+  (opened_at 27,996 / completed_at 27,862 / production_out_at 27,996 / production_in_at 26,872 - the year
+  distribution was byte-identical to the V388 measurement, years 22-26 ONLY, i.e. the dropped-century shape,
+  so `+ interval '2000 years'` is DETERMINISTIC repair, not inference). 28,986 rows fixed in one update,
+  snapshot **`_bak.wo_dates_fix_20260805`** (id + all 4 old values; undo = restore from it). VERIFIED: 0
+  ancient dates left, earliest opened 2019-12-08. **DELIBERATELY NOT TOUCHED: the ~1,435 reversed + ~1,535
+  future-dated KSA rows = the MDY day-month-swap class, genuinely ambiguous, still needs the re-upload.**
+- **TYRE LIFECYCLE INTEGRITY PACK** (snapshots `_bak.tyre_status_fix_20260805` + `_bak.tyre_trim_fix_20260805`):
+  (a) 214 KSA rows said status Active WHILE carrying a removal_date -> status Removed (the row itself asserts
+  removal); (b) 4 UAE future removal_dates nulled incl. a year-2062 typo that made "latest UAE tyre data" read
+  2062 (the V422-authored-never-applied class; km/status kept); (c) 4 Excel scientific-notation duplicate rows
+  deleted (e.g. `1.24391E+11` beside the real `124391204515`, same asset+position+date - the 4th, TM571
+  `2.24E+22` vs `224020E017`, needed a looser mantissa match; 27 standalone mangled `E+` serials remain, mangled
+  but NOT duplicates - left, fixable only from the master file); (d) 251 whitespace-PADDED tyre_position +
+  140 padded serial_no rows (KSA, fixed-width import artifact) btrim'd - **the padding was MASKING 43 real
+  double-active groups** ('LHF1' vs 'LHF1    ' counted as different positions). trg_guard_tyre_active_fitment
+  disabled/re-enabled around the trim (verified back to 'O'); then 41 groups resolved by the evidence rule
+  (one DATED active + one UNDATED active from the padded import -> the undated row demoted to Removed, no
+  dates invented). RESULT: double-active groups 38+hidden43 -> **1** (MP129 LHF1: two different serials, BOTH
+  undated - honestly unresolvable, left visible). RULE: whitespace in tyre_position is the same defect class
+  as the V245/V246 casing bugs AND it hides double-fitments - btrim on compare.
+- **UAE FLEET BACKFILL: 371 -> 439 (+68 derived rows).** New UAE assets had arrived after the V348 derivation;
+  65 tyre-assets + 53 job-card-assets (68 distinct) were orphans invisible to per-asset views. Same derivation
+  as V348/V351 (vehicle_type = mode of work_orders.asset_category else tyre_records.vehicle_type; site = mode
+  across both; status Active). VERIFIED 0 UAE orphans left. STILL 6 orphans elsewhere (KSA 3 + Egypt 3) -
+  outside the approved scope, trivial, offered.
+- **TYRE PRICE BACKFILL RE-RUN (the V401 engine, dry-run first).** Thousands of fitments loaded since V401
+  were unpriced (KSA 2,186 / UAE 1,887 / Egypt 187). Applied KSA: **1,819 filled** (comparable 1,702 /
+  own_jobcard 117, median SAR 900 - same plausible median as V401), ONE batch in tyre_price_backfill_log
+  (undo = tyre_price_backfill_undo(batch)), 0 implausible fills, 363 KSA left honestly unpriced. **UAE/Egypt
+  filled 0 BY DESIGN**: V401c refuses to use its own earlier fills as evidence and those countries have no
+  NEW real prices - honest, do not "fix". GOTCHA: the RPC is org-scoped via app_current_org(), NULL in an MCP
+  session - impersonate the super admin via `set_config('request.jwt.claims','{"sub":"<uuid>"...}',true)`.
+- **AUDIT VERDICT (measured, live):** CLEAN = currency integrity (1 per country, 0 null costs, 0 blank sites),
+  0 reversed tyre dates, 0 negative km/meters, 0 exact-dup expenses, feeds fresh (job cards to Aug 5).
+  KNOWN-STANDING (no change): default-classified spend KSA 55%/UAE 64%/Egypt 72%; UAE/Egypt expenses lack the
+  `#` import key (96-99% - fingerprint is the only re-import guard there); production m3 uploads stopped
+  Jul 9 (customer side); 497 fleet rows honestly without vehicle_type; 8 tyres with >400k km flagged.
+
 ## SESSION 2026-08-04 (part 2) — MOBILE 1.3.1 STABILIZATION + APPROVAL MATRIX + SERVER-SIDE MOBILE ANALYTICS. Migrations through **V480**, next free **V481**. Merged to main (PR #267, squash `5388bc5`).
 - **THE PERMANENT-SPINNER BUG (app opens, spins forever, "sometimes it works").** FOUR independent sources agreed:
   Play ANR "Slow binder call `__ioctl`"; `getSession()` awaited with NO timeout; `secureStorage` chunking = 3-5

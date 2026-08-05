@@ -191,7 +191,6 @@
     "clearSynced": "مسح السجلات المتزامنة",
     "account": "الحساب",
     "signOut": "تسجيل الخروج",
-    "version": "TyrePulse Inspector v1.0.0",
     "syncCompleteTitle": "اكتملت المزامنة",
     "syncFailed": "فشل - تحقق من الاتصال.",
     "uploaded": "فحص تم رفعه.",
@@ -235,7 +234,8 @@
     "deleteSuccessTitle": "تم إرسال الطلب",
     "deleteSuccessMsg": "تم تسجيل طلب حذف حسابك. سيقوم المسؤول بتنفيذه خلال نحو 30 يومًا.",
     "deleteErrorTitle": "تعذّر إرسال الطلب",
-    "deleteMismatch": "اكتب DELETE تمامًا للتأكيد."
+    "deleteMismatch": "اكتب DELETE تمامًا للتأكيد.",
+    "appName": "تاير بلس إنسبكتور"
   },
   "tyre": {
     "serialNumber": "الرقم التسلسلي",

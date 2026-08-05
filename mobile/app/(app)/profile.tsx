@@ -16,6 +16,7 @@ import {
   clearSyncedRecords, getRecordQueue,
 } from '../../lib/recordQueue'
 import { canAccessAdmin, canManageUsers, canUseAI, canViewAccidents } from '../../lib/permissions'
+import { currentVersion } from '../../lib/appVersionGate'
 import { requestAccountDeletion } from '../../lib/accountDeletion'
 import {
   requestNotificationPermission,
@@ -486,7 +487,13 @@ function ProfileScreen() {
           )}
         </Card>
 
-        <AppText variant="caption" color="muted" center style={styles.version}>{t('profile.version')}</AppText>
+        {/* The version MUST come from the build, not from a translation
+            string. It was hardcoded as "v1.0.0" in both locale files, so it
+            read the same through every release and made an installed update
+            look like it had not happened. */}
+        <AppText variant="caption" color="muted" center style={styles.version}>
+          {t('profile.appName')} v{currentVersion()}
+        </AppText>
       </ScrollView>
     </Screen>
   )

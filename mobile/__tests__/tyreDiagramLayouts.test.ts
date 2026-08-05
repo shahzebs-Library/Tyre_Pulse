@@ -99,9 +99,23 @@ describe('a junk catch-all type falls back to the asset number', () => {
   it.each([
     ['WL003', 'Wheel loader'], ['WL006', 'Wheel loader'],
     ['WL011', 'Wheel loader'], ['WL018', 'Wheel loader'],
-    ['SL001', 'Skid loader'],
+    // SL and the 3-letter SLP both mean skid loader: the prefix is read from
+    // the first two letters, so a longer code still lands correctly.
+    ['SL001', 'Skid loader'], ['SLP001', 'Skid loader'], ['SLP12', 'Skid loader'],
   ])('HEAVY EQP / %s -> %s', (asset, expected) => {
     expect(resolveVehicleType('HEAVY EQP', asset)).toBe(expected)
+  })
+
+  it('both loader kinds carry 4 tyres', () => {
+    expect((LAYOUTS as any)[resolveVehicleType('HEAVY EQP', 'SLP001')].tyres).toHaveLength(4)
+    expect((LAYOUTS as any)[resolveVehicleType('HEAVY EQP', 'WL003')].tyres).toHaveLength(4)
+  })
+
+  // IP is a normal asset, not a plant - it keeps the 4-tyre default rather
+  // than being read as "ice plant" from two letters.
+  it('IP is left as an ordinary asset', () => {
+    expect(isTyrelessEquipment('HEAVY EQP')).toBe(false)
+    expect(resolveVehicleType('HEAVY EQP', 'IP064')).toBe('Pickup')
   })
 
   it('a real type is never overridden by the asset number', () => {

@@ -172,6 +172,61 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
       { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
     ],
   },
+  // Diesel / water tanker: 1 single-tyre steer axle + 1 dual-tyre drive axle
+  // = 6 tyres. Confirmed by the fleet owner. It is a 2-axle rigid, NOT the 6x4
+  // it used to resolve to, which asked an inspector for 10 tyres on a 6-tyre
+  // truck. Same geometry as the Canter, which is the same chassis class.
+  Tanker: {
+    emoji: '🚚', viewH: 310,
+    bodyKey: 'canter',
+    tyres: [
+      { id: 'FL',  x: 31,  y: 36,  w: 22, h: 40, label: 'FL'  },
+      { id: 'FR',  x: 147, y: 36,  w: 22, h: 40, label: 'FR'  },
+      { id: 'RLo', x: 16,  y: 170, w: 20, h: 38, label: 'RLo' },
+      { id: 'RLi', x: 38,  y: 170, w: 20, h: 38, label: 'RLi' },
+      { id: 'RRi', x: 142, y: 170, w: 20, h: 38, label: 'RRi' },
+      { id: 'RRo', x: 164, y: 170, w: 20, h: 38, label: 'RRo' },
+    ],
+  },
+  // Trailer: 2 dual-tyre axles and no steer axle = 8 tyres, per the fleet
+  // owner. A towed unit has no cab, so it reuses the truck body only because
+  // there is no trailer artwork; the wheel arrangement is the accurate part.
+  Trailer: {
+    emoji: '🚛', viewH: 270,
+    bodyKey: 'canter',
+    tyres: [
+      { id: 'R1Lo', x: 14,  y: 96,  w: 19, h: 35, label: 'R1Lo' },
+      { id: 'R1Li', x: 35,  y: 96,  w: 19, h: 35, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 96,  w: 19, h: 35, label: 'R1Ri' },
+      { id: 'R1Ro', x: 167, y: 96,  w: 19, h: 35, label: 'R1Ro' },
+      { id: 'R2Lo', x: 14,  y: 168, w: 19, h: 35, label: 'R2Lo' },
+      { id: 'R2Li', x: 35,  y: 168, w: 19, h: 35, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 168, w: 19, h: 35, label: 'R2Ri' },
+      { id: 'R2Ro', x: 167, y: 168, w: 19, h: 35, label: 'R2Ro' },
+    ],
+  },
+  // Line pump: 2 single-tyre steer axles + 2 dual-tyre drive axles = 12 tyres,
+  // confirmed by the fleet owner. It rides a shorter chassis than the truck
+  // -mounted concrete pump (which has a third steer axle and 14 tyres), but it
+  // IS a pump and must read as one, so it keeps the pump body art.
+  'Line pump': {
+    emoji: '🏗️', viewH: 375,
+    bodyKey: 'concretePump',
+    tyres: [
+      { id: 'F1L',  x: 29,  y: 40,  w: 22, h: 38, label: 'F1L'  },
+      { id: 'F1R',  x: 149, y: 40,  w: 22, h: 38, label: 'F1R'  },
+      { id: 'F2L',  x: 29,  y: 84,  w: 22, h: 38, label: 'F2L'  },
+      { id: 'F2R',  x: 149, y: 84,  w: 22, h: 38, label: 'F2R'  },
+      { id: 'R1Lo', x: 13,  y: 258, w: 19, h: 33, label: 'R1Lo' },
+      { id: 'R1Li', x: 34,  y: 258, w: 19, h: 33, label: 'R1Li' },
+      { id: 'R1Ri', x: 147, y: 258, w: 19, h: 33, label: 'R1Ri' },
+      { id: 'R1Ro', x: 168, y: 258, w: 19, h: 33, label: 'R1Ro' },
+      { id: 'R2Lo', x: 13,  y: 300, w: 19, h: 33, label: 'R2Lo' },
+      { id: 'R2Li', x: 34,  y: 300, w: 19, h: 33, label: 'R2Li' },
+      { id: 'R2Ri', x: 147, y: 300, w: 19, h: 33, label: 'R2Ri' },
+      { id: 'R2Ro', x: 168, y: 300, w: 19, h: 33, label: 'R2Ro' },
+    ],
+  },
   // MP concrete pump: 3 single-tyre steer axles up front, then 2 dual-tyre
   // drive axles at the rear (14 tyres total).
   'Concrete pump': {
@@ -202,9 +257,14 @@ export const LAYOUTS: Record<string, DiagramLayout> = {
 const LAYOUT_KEY_INDEX: Record<string, string> = {}
 Object.keys(LAYOUTS).forEach(k => { LAYOUT_KEY_INDEX[k.toLowerCase().replace(/[\s\-_]+/g, '')] = k })
 
-export function resolveVehicleType(vt?: string | null): string {
+/**
+ * Resolve ONE string, returning null when nothing matched rather than falling
+ * back. The null is what lets resolveVehicleType() know the string told it
+ * nothing, so it can try the asset number instead of settling for a pickup.
+ */
+function resolveOne(vt?: string | null): string | null {
   const raw = String(vt ?? '').trim()
-  if (!raw) return 'Pickup'
+  if (!raw) return null
 
   // Exact layout-key match, case/spacing-insensitive.
   const s = raw.toLowerCase()
@@ -212,16 +272,23 @@ export function resolveVehicleType(vt?: string | null): string {
   const exact = LAYOUT_KEY_INDEX[compact]
   if (exact) return exact
 
-  // Plate-number prefix detection - first 2 alpha chars of asset_no
-  const prefix = (raw.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
-  const PREFIX_MAP: Record<string, string> = {
-    TM: 'Tri-mixer',
-    MP: 'Concrete pump',
-    WL: 'Wheel loader',
-    SL: 'Skid loader',
-    PL: 'Pickup',
+  // Asset-code prefix detection, for callers that pass an asset number (TM634)
+  // instead of a type. It MUST require letters immediately followed by a digit:
+  // matching on leading letters alone read "PLACING BOOM" as a PL-prefixed
+  // pickup and drew 4 tyres for a 14-tyre placing boom, because the check ran
+  // before the keyword rules below could see the word "boom".
+  const assetCode = raw.match(/^([A-Za-z]{2,3})\s*\d/)
+  if (assetCode) {
+    const prefix = assetCode[1].toUpperCase().slice(0, 2)
+    const PREFIX_MAP: Record<string, string> = {
+      TM: 'Tri-mixer',
+      MP: 'Concrete pump',
+      WL: 'Wheel loader',
+      SL: 'Skid loader',
+      PL: 'Pickup',
+    }
+    if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
   }
-  if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
 
   // Explicit "N-Wheeler" names FIRST - "wheeler" contains "wheel" and used to
   // fall into the 4-tyre Wheel loader layout.
@@ -241,8 +308,11 @@ export function resolveVehicleType(vt?: string | null): string {
   // Stationary / skid-mounted pumps are NOT the 5-axle truck-mounted pump -
   // fall back to the minimal 2-axle default instead of 3 steer axles.
   if (s.includes('stationary'))                            return 'Pickup'
-  // Spider / line pumps ride a standard 6x4 truck chassis (10 tyres).
-  if (compact.includes('spiderpump') || compact.includes('linepump') || s.includes('spider')) return 'Truck 6x4'
+  // Line pump: its own 12-tyre pump layout (fleet owner confirmed), NOT the
+  // 10-tyre 6x4 it used to share with the spider pump.
+  if (compact.includes('linepump')) return 'Line pump'
+  // Spider pump still rides a standard 6x4 truck chassis (10 tyres).
+  if (compact.includes('spiderpump') || s.includes('spider')) return 'Truck 6x4'
   if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
   if (s.includes('skid'))                                  return 'Skid loader'
   if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
@@ -251,10 +321,27 @@ export function resolveVehicleType(vt?: string | null): string {
   if (s.includes('tata'))                                  return 'Tata'
   if (s.includes('ashok') || s.includes('leyland'))        return 'Ashok Leyland'
   if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
-  // Heavy 6x4 chassis family (tankers, cranes, generic trucks): 10 tyres.
-  if (s.includes('tanker') || s.includes('crane') || s.includes('truck')) return 'Truck 6x4'
-  // Unknown -> minimal web default (2 axles / 4 tyres). Never guess extra axles.
-  return 'Pickup'
+  // Tankers are 2-axle rigids: 6 tyres, not the 10 they used to get here.
+  if (s.includes('tanker')) return 'Tanker'
+  // A towed trailer: 2 dual axles, 8 tyres, no steer axle.
+  if (s.includes('trailer') || compact.includes('trl')) return 'Trailer'
+  // Heavy 6x4 chassis family (cranes, generic trucks): 10 tyres.
+  if (s.includes('crane') || s.includes('truck')) return 'Truck 6x4'
+  // Nothing recognised. Report that rather than guessing.
+  return null
+}
+
+/**
+ * Map a vehicle type onto a layout key, optionally using the ASSET NUMBER when
+ * the type says nothing useful.
+ *
+ * The register carries junk catch-all types - "HEAVY EQP" covers four wheel
+ * loaders, a skid loader and an ice plant - and in those rows the asset number
+ * is the only thing that identifies the machine. The type still wins whenever
+ * it resolves, so a real type is never overridden by a prefix.
+ */
+export function resolveVehicleType(vt?: string | null, assetNo?: string | null): string {
+  return resolveOne(vt) ?? resolveOne(assetNo) ?? 'Pickup'
 }
 
 // ── Legacy diagram-ID -> canonical GCC position code (type-aware) ───────────────
@@ -289,9 +376,20 @@ Object.entries(LAYOUTS).forEach(([typeKey, layout]) => {
 })
 
 // ── Tyreless (stationary / non-wheeled) equipment ───────────────────────────────
+// Equipment that carries no tyres at all. Matching here short-circuits BOTH the
+// diagram and diagramPositions(), so an inspector is asked for nothing rather
+// than for wheels the machine does not have.
 export const NO_TYRE_EQUIPMENT = [
-  'generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant',
-  'batch', 'reclaimer', 'compressor', 'tower light', 'light tower',
+  'generator', 'genset', 'chiller', 'reclaimer', 'compressor',
+  'tower light', 'light tower',
+  // ANY plant is a fixed installation - bt-plant, ice plant, batching plant,
+  // water treatment plant. One word covers every spelling in the register.
+  'plant', 'batch',
+  // A placing boom is mast-mounted concrete placing gear, not a vehicle. It is
+  // a different machine from the truck-mounted concrete pump and must not
+  // borrow that pump's 14 tyres.
+  'placing boom', 'placing',
+  'building',
 ]
 
 export function isTyrelessEquipment(vt?: string | null): boolean {
@@ -304,10 +402,13 @@ export function isTyrelessEquipment(vt?: string | null): boolean {
  * Canonical tyre position ids for a vehicle type, sourced from the same layout
  * the diagram renders, so the diagram and the inspection position list always
  * match. Returns [] for tyreless equipment.
+ *
+ * Takes the same optional asset number as resolveVehicleType, so a row whose
+ * type is a junk catch-all still lists the right positions.
  */
-export function diagramPositions(vehicleType: string): string[] {
+export function diagramPositions(vehicleType: string, assetNo?: string | null): string[] {
   if (isTyrelessEquipment(vehicleType)) return []
-  const layout = LAYOUTS[resolveVehicleType(vehicleType)] || LAYOUTS.Pickup
+  const layout = LAYOUTS[resolveVehicleType(vehicleType, assetNo)] || LAYOUTS.Pickup
   return layout.tyres.map(t => t.id)
 }
 

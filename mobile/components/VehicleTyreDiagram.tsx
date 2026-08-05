@@ -1192,6 +1192,9 @@ const BODY_COMPONENTS: Record<BodyKey, () => React.JSX.Element> = {
 // ── Component ────────────────────────────────────────────────────────────────────
 interface Props {
   vehicleType: string
+  /** Optional asset number. Used only when vehicleType identifies nothing -
+   *  the register's catch-all types (HEAVY EQP) hide real machines. */
+  assetNo?: string | null
   positions: string[]
   tyreData: Record<string, TyrePositionData>
   selectedPosition?: string | null
@@ -1200,12 +1203,12 @@ interface Props {
 }
 
 export default function VehicleTyreDiagram({
-  vehicleType, positions, tyreData, selectedPosition, onPositionPress, width = 320,
+  vehicleType, assetNo, positions, tyreData, selectedPosition, onPositionPress, width = 320,
 }: Props) {
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
 
-  const resolved = resolveVehicleType(vehicleType)
+  const resolved = resolveVehicleType(vehicleType, assetNo)
   const layout   = LAYOUTS[resolved] || LAYOUTS.Pickup
   const { emoji, viewH, bodyKey } = layout
   const Body = BODY_COMPONENTS[bodyKey]

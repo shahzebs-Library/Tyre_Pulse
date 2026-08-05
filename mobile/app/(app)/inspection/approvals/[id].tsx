@@ -90,7 +90,7 @@ function InspectionApprovalReviewScreen() {
   // would render grey ghost wheels) - so data is never hidden.
   const diagramReady = useMemo(() => {
     if (!insp || positions.length === 0) return false
-    const layout = LAYOUTS[resolveVehicleType(insp.vehicle_type ?? '')]
+    const layout = LAYOUTS[resolveVehicleType(insp.vehicle_type ?? '', insp.asset_no ?? null)]
     if (!layout) return false
     return matchPositionsToLayout(layout, positions).some(m => positions.includes(m.positionId))
   }, [insp, positions])
@@ -249,6 +249,7 @@ function InspectionApprovalReviewScreen() {
               <View style={{ alignItems: 'center' }}>
                 <VehicleTyreDiagram
                   vehicleType={insp.vehicle_type ?? ''}
+                  assetNo={insp.asset_no ?? null}
                   positions={positions}
                   tyreData={conds as any}
                   selectedPosition={null}

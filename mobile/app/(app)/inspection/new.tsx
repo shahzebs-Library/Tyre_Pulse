@@ -987,6 +987,7 @@ function NewInspectionScreen() {
           {selectedVehicle && (
             <VehicleTyreDiagram
               vehicleType={selectedVehicle.vehicle_type}
+              assetNo={selectedVehicle.asset_no}
               positions={positions}
               tyreData={tyreData}
               selectedPosition={activePosition}

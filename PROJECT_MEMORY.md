@@ -3,6 +3,60 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-04 (part 2) — MOBILE 1.3.1 STABILIZATION + APPROVAL MATRIX + SERVER-SIDE MOBILE ANALYTICS. Migrations through **V480**, next free **V481**. Merged to main (PR #267, squash `5388bc5`).
+- **THE PERMANENT-SPINNER BUG (app opens, spins forever, "sometimes it works").** FOUR independent sources agreed:
+  Play ANR "Slow binder call `__ioctl`"; `getSession()` awaited with NO timeout; `secureStorage` chunking = 3-5
+  Android Keystore round trips (each a binder IPC); and `app/index.tsx` rendered a spinner with NO exit state. On a
+  low-end Infinix a slow Keystore call hung session restore and nothing ever cleared it. FIX (`AuthContext.tsx`):
+  `SESSION_RESTORE_TIMEOUT_MS = 8000` + `withTimeout()`; a `settled` guard so the timeout and the resolve cannot both
+  fire; `onAuthStateChange` DEFERS via `setTimeout(...,0)` (the supabase-js auth-lock reentrancy rule, same as web);
+  push registration moved inside `fetchProfile` behind `pushRegisteredForRef`. `app/index.tsx` gained a third state
+  `sessionTimedOut` -> "Taking longer than usual" + Try again / Sign in. **RULE: never await a supabase auth method
+  without a timeout on mobile - the Keystore is a binder IPC and can hang indefinitely.**
+- **CRASH CONTAINMENT.** Only the outer ErrorBoundary sat ABOVE the providers, so its Reset re-ran the same crash and
+  the user was stuck. Added `ScreenBoundary` INSIDE the providers in `app/_layout.tsx`, keyed on `usePathname()`, so a
+  screen crash is contained to that screen and clears on navigation while the session stays mounted.
+- **FORCED UPDATE GATE.** Pure `mobile/lib/appVersion.ts` (`compareVersions` compares segments as NUMBERS - a text
+  compare puts 1.10.0 below 1.9.0; `isUpdateRequired` FAILS OPEN on a blank/unparseable minimum) + I/O
+  `mobile/lib/appVersionGate.ts` reading `system_config.mobile_min_version`. Split in two because the ts-jest suite is
+  plain Node and cannot parse expo-constants/supabase imports. `app/(app)/_layout.tsx` renders `UpdateRequiredGate`
+  (opens `market://details?id=com.shahzebrahman.tyrepulseinspector`). **The key is DELIBERATELY UNSET - set
+  `mobile_min_version = 1.3.1` only AFTER testers actually have 1.3.1, or you lock out the whole fleet.**
+- **V479 `get_mobile_analytics(country, from, to, site)` - the phone stopped counting tables.** The analytics screen
+  paged ALL of `tyre_records` into device memory and counted rows client-side, plus ALL of `vehicle_fleet` purely to
+  build a site dropdown - the slowest screen in the app and a real OOM risk on the 2GB handsets this fleet uses (same
+  class as the Play native crashes). One SECURITY INVOKER row now returns totals + by_risk + by_site + by_brand + the
+  site option list; the screen fetches ZERO table rows. **SUPERSEDES + DROPS V478 `get_mobile_kpis`** (one mobile
+  aggregate, never two that drift). Client `mobile/lib/mobileAnalytics.ts` (shapeAnalytics/avgCostPerTyre/
+  compactNumber/currencyFor/formatSpend; 9 tests). **CURRENCY: costs are NULL on the All-countries view and the UI
+  ranks by VOLUME there - SAR/AED/EGP are never summed. The old tiles were hard-coded 'SAR' and would have labelled
+  AED/EGP figures as riyals.** Unrated tyres are now stated under the risk bands instead of silently missing.
+  **RULE: mobile gets NO chart library (user standing constraint) - numbers and simple bars only.**
+- **V477 `approval_matrix` + `resolve_approvers()` - who signs what, set on the web.** All THREE routing styles
+  coexist and the NARROWEST match wins: named person (`match_user_id`), site (`match_site`), role (`match_role`);
+  a blank field = "any". **Specificity is a COUNT of pinned match fields, not a hand-ranked list** - a hand-ranked
+  list must be re-argued whenever a field is added and quietly drifts from the SQL. Order = `(level, specificity desc,
+  created_at)`. Pure `src/lib/approvalMatrix.js` MIRRORS the SQL - change BOTH. Page `/approval-matrix` (Admin only);
+  its "who would approve this?" preview calls the SERVER so what the admin sees is what the DB will do. 20 tests.
+  Table is EMPTY by design until an admin adds rules.
+- **V480 SECURITY (found by the pre-release audit, NOT by an advisor).** Both new RPCs were still anon-executable:
+  `get_mobile_analytics` from a leftover explicit anon grant (Supabase default privileges grant EXECUTE to anon at
+  CREATE time), `resolve_approvers` from a bare `=X/postgres` PUBLIC grant. **A `REVOKE ... FROM anon` is a NO-OP
+  against a PUBLIC grant - it has to come off PUBLIC.** No data was reachable (both INVOKER, and V281 revoked every
+  anon table grant), but the surface is closed. Re-verified by impersonating a real approved non-admin afterwards.
+  **RULE: after creating any public function, check `has_function_privilege('anon', oid, 'EXECUTE')` - revoking from
+  PUBLIC alone does not clear an explicit anon grant, and revoking from anon alone does not clear a PUBLIC grant.**
+- **OTHER MOBILE FIXES:** inspection wizard step track (labelled Vehicle/Tyres/Review, en+ar) - **the SVG tyre diagram
+  was deliberately NOT touched**; `tyreMapSvg()` in `inspectionReportPdf.ts` renders the real per-position tyre map in
+  the shared PDF (hollow+dashed when a position was not recorded, `''` for tyre-less equipment); `prepareForUpload`
+  retry ladder 1600/1024/720px so a photo upload degrades instead of failing; approval screens stay on the record
+  after signing (Stay here / Back to list) instead of bouncing to Home.
+- **RELEASE:** 1.3.1, `minSdkVersion` **24 unchanged**, 7 permissions unchanged, ZERO new dependencies -> every device
+  that has the app can install it, so the forced-update gate cannot orphan anyone. Build = `release-play.yml`
+  (workflow_dispatch on main) -> EAS `--auto-submit` -> Play track **`alpha` = Closed testing**.
+- **STILL OPEN:** `SENTRY_PROJECT` in eas.json is `javascript-nextjs` (the WEB project) - harmless while symbol upload
+  is disabled, wrong if it is ever enabled. V476/V477 have no repo `.sql` file (applied live only); V478-V480 do.
+
 ## SESSION 2026-08-04 — PRESENTATION STUDIO restored + hardened + TYRE DEMAND FORECAST BY SIZE. Migrations through **V476**, next free **V477**. Merged to main.
 - **ADMIN ACCESS FIX (data-only):** `ws123na@gmail.com` was a plain Admin (is_super_admin=false) so every console-consolidated
   admin function (main-app /users, /master-access-control, /admin, /ai-administration, /security-center, /permission-matrix,

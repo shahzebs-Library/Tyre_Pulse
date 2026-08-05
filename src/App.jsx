@@ -57,6 +57,8 @@ const ConsoleTrustAlerts = lazy(() => import('./console/pages/ConsoleTrustAlerts
 const ConsoleReleases = lazy(() => import('./console/pages/ConsoleReleases'))
 const ConsoleSmartImport   = lazy(() => import('./console/pages/ConsoleSmartImport'))
 const ConsoleVehicleDesigner = lazy(() => import('./console/pages/ConsoleVehicleDesigner'))
+const ConsolePlatformMap     = lazy(() => import('./console/pages/ConsolePlatformMap'))
+const ConsoleMobileApp       = lazy(() => import('./console/pages/ConsoleMobileApp'))
 const ConsoleNavigation    = lazy(() => import('./console/pages/ConsoleNavigation'))
 const ConsoleCrashReports  = lazy(() => import('./console/pages/ConsoleCrashReports'))
 const ConsoleSessions      = lazy(() => import('./console/pages/ConsoleSessions'))
@@ -829,6 +831,8 @@ export default function App() {
           <Route path="releases" element={<ConsoleReleases />} />
           <Route path="smart-import"  element={<ConsoleSmartImport />} />
           <Route path="vehicle-designer" element={<ConsoleVehicleDesigner />} />
+          <Route path="platform-map"     element={<ConsolePlatformMap />} />
+          <Route path="mobile-app"       element={<ConsoleMobileApp />} />
           <Route path="navigation"    element={<ConsoleNavigation />} />
           <Route path="crash-reports" element={<ConsoleCrashReports />} />
           <Route path="sessions"      element={<ConsoleSessions />} />

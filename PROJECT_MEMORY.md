@@ -53,6 +53,35 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Sentry mobile symbol upload (needs SENTRY_AUTH_TOKEN ticked for Production in Expo env); STATIONARY PUMP
   (11 assets) tyre count unanswered; extensions vector/pg_net in public schema (standing, risky to move).
 
+## SESSION 2026-08-05 (part 3) — OWNER-GRADE CONSOLE: PLATFORM MAP + MOBILE APP CONTROL + ATTENTION PANEL. Merged to main. No migration; next free **V481**.
+- User (non-technical owner) asked for an advanced, fully TRANSPARENT super-admin console: "whatever we have
+  modules or we don't have, give me a clear UI" + "makes my work 100x faster". Built three genuinely missing
+  pieces rather than re-skinning the 45 existing pages:
+- **PLATFORM MAP `/console/platform-map`** (`ConsolePlatformMap.jsx` over pure `src/lib/platformMap.js`) = THE
+  transparency surface: every console tool / web app area / mobile module in PLAIN ENGLISH, plus an honest
+  **NOT_BUILT gap list where every entry names WHO can move it** ('you' | 'customer file' | 'build').
+  DERIVED, never hand-listed: console pages from a new icon-free **`CONSOLE_NAV` export on ConsoleLayout**
+  (same pattern as Layout's NAV_CATALOG), web areas from NAV_CATALOG, mobile from mobileModules.js.
+  **`platformMap.test.js` FAILS when a console nav route lacks a CONSOLE_DESCRIPTIONS entry** - a new console
+  page cannot ship invisible to the owner. RULE: when adding a console page, write its plain-English
+  description in platformMap.js or CI fails; keep NOT_BUILT honest (add gaps, remove closed ones).
+- **MOBILE APP CONTROL `/console/mobile-app`** (`ConsoleMobileApp.jsx` + pure `src/lib/mobileOps.js` + service
+  `src/lib/api/mobileOps.js`) = the page the owner personally needed twice this week: newest released build,
+  the forced-update gate, device counts. **The gate has a hard INTERLOCK, not a warning**: `gateRisk` REFUSES
+  a minimum above `mobile_latest_version` (that mistake locks every phone out with nothing to update to) and
+  refuses junk (the phones fail open on junk, so saving it is pure confusion). Version compare mirrors
+  mobile/lib/appVersion.ts EXACTLY (numeric segments - 1.10.0 > 1.9.0). NEW system_config key
+  **`mobile_latest_version`** (seeded '1.3.2' live) = the truth the interlock checks; RULE: record each new
+  release there (the page has a "Record release" box). Writes audit via log_console_event.
+- **ATTENTION PANEL on the console Dashboard** ("Waiting on you"): pure `src/lib/consoleAttention.js` +
+  loader `src/lib/api/consoleAttention.js`. Pending approvals, unresolved errors (7d), open trust alerts,
+  locked accounts, stale feeds (>10d) - each one plain English + one action link; explicit green "Nothing is
+  waiting on you" when truly clear. HONESTY RULE PINNED BY TEST: an unreadable/omitted count renders "could
+  not check", NEVER a silent zero; a feed with no data says so, never "stale since 1970". Job-card freshness
+  deliberately uses created_at (arrival), not opened_at (the MDY-swap rows carry future opened_at).
+- Nav: Platform Map + Mobile App added to the console Overview group. Tests: platformMap 7 + mobileOps 9 +
+  consoleAttention 6.
+
 ## SESSION 2026-08-05 (part 2) — DEEP DATA AUDIT + 4 USER-APPROVED LIVE FIXES. All applied via execute_sql with _bak snapshots (no migration file; data-only). Next free migration still **V481**.
 - **THE BIG ONE - THE V388 CORRUPTED JOB-CARD DATES ARE FINALLY REPAIRED IN PLACE.** The customer never
   re-uploaded (5 months); measured live: KSA work_orders carried year-0022..0026 timestamps on FOUR columns

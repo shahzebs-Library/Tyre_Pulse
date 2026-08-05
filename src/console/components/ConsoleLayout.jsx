@@ -6,6 +6,7 @@ import {
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
   LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale, GitBranch, Rocket,
+  Map,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
@@ -25,6 +26,8 @@ const NAV_GROUPS = [
     label: 'Overview',
     items: [
       { to: '/console',               label: 'Dashboard',      icon: LayoutDashboard, end: true },
+      { to: '/console/platform-map',  label: 'Platform Map',   icon: Map },
+      { to: '/console/mobile-app',    label: 'Mobile App',     icon: Smartphone },
       { to: '/console/control-center', label: 'Data Trust & Control', icon: ShieldCheck },
       { to: '/console/health',        label: 'System Health',  icon: Activity },
       { to: '/console/crash-reports', label: 'Crash Reports',  icon: Bug },
@@ -102,6 +105,15 @@ const NAV_GROUPS = [
     ],
   },
 ]
+
+// Icon-free descriptor of the console nav for the Platform Map page. Derived
+// from NAV_GROUPS so the map can never drift from the real sidebar - a page
+// added here automatically appears on the map (and its missing description
+// fails the platformMap coverage test until one is written).
+export const CONSOLE_NAV = NAV_GROUPS.map((g) => ({
+  label: g.label,
+  items: g.items.map((it) => ({ to: it.to, label: it.label })),
+}))
 
 /** Filter the groups by a typed term, dropping groups that end up empty. */
 function filterGroups(groups, term) {

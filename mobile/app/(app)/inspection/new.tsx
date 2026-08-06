@@ -155,8 +155,9 @@ function NewInspectionScreen() {
   const shownVehicles = useMemo(() => {
     const q = vehicleQuery.trim().toLowerCase()
     if (!q && !classFilter) return []
+    // A typed search always covers the WHOLE visible fleet - the class chips
+    // only shape browsing, they must never make an asset unfindable.
     let pool = filteredVehicles
-    if (classFilter) pool = pool.filter(v => assetClassOf(v.asset_no) === classFilter)
     if (q) {
       pool = pool.filter(v =>
         v.asset_no?.toLowerCase().includes(q) ||
@@ -164,6 +165,8 @@ function NewInspectionScreen() {
         v.make?.toLowerCase().includes(q) ||
         v.model?.toLowerCase().includes(q)
       )
+    } else if (classFilter) {
+      pool = pool.filter(v => assetClassOf(v.asset_no) === classFilter)
     }
     // Capped: a broad term like "mixer" (or a big class like TM) would
     // otherwise render hundreds of cards - refine with the search box.

@@ -119,7 +119,9 @@ function VehiclesScreen() {
   const shown = useMemo(() => {
     const term = query.trim().toLowerCase()
     if (!term) return classed
-    return classed.filter(v =>
+    // A typed search always covers the WHOLE fleet - the class chips only
+    // shape browsing, they must never make an asset unfindable.
+    return rows.filter(v =>
       v.asset_no?.toLowerCase().includes(term) ||
       v.fleet_number?.toLowerCase().includes(term) ||
       v.make?.toLowerCase().includes(term) ||
@@ -129,7 +131,7 @@ function VehiclesScreen() {
       v.registration_no?.toLowerCase().includes(term) ||
       v.site?.toLowerCase().includes(term),
     )
-  }, [classed, query])
+  }, [rows, classed, query])
 
   if (!allowed) return null
 

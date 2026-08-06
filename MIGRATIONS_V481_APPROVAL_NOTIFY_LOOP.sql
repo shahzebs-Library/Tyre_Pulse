@@ -1,0 +1,36 @@
+-- ============================================================================
+-- V481 — APPROVAL NOTIFY LOOP (STATUS: APPLIED LIVE 2026-08-06 via MCP
+-- migration v481_approval_notify_loop; this file is the repo record)
+-- ============================================================================
+-- Closes the two notification gaps in the field-submission approval loop:
+--
+--  PART A  consume_event_approval_push() now ALSO inserts an in-app
+--          `notifications` row for EVERY eligible approver (Admin/Manager/
+--          Director/Maintenance Supervisor, approved, unlocked, org + country
+--          scoped) when an inspection/checklist requests approval. Before,
+--          the consumer only enqueued Expo PUSH for approvers with a
+--          registered push_token — web approvers and token-less phones were
+--          never told anything was waiting. Push behaviour unchanged.
+--
+--  PART B  notify_submission_decision() trigger fn + AFTER UPDATE triggers
+--          trg_notify_inspection_decision (inspections) and
+--          trg_notify_checklist_decision (checklist_submissions):
+--          when approval_status transitions to approved/rejected, the
+--          SUBMITTER (inspections.created_by / checklist_submissions
+--          .submitted_by) gets an in-app notification ("Inspection approved" /
+--          "... returned for correction") plus a best-effort push through the
+--          existing workflow_notifications deliverer when they carry a
+--          push_token. Self-decisions are not notified. All notification
+--          writes are wrapped so they can NEVER block the decision itself.
+--
+-- VERIFIED LIVE (rolled back): deciding a pending inspection produced 1
+-- submitter notification titled "Inspection approved"; replaying a real
+-- inspection.approval_requested event produced 4 in-app approver rows.
+--
+-- The authoritative SQL bodies live in supabase migration
+-- v481_approval_notify_loop (applied). Rollback:
+--   DROP TRIGGER trg_notify_inspection_decision ON public.inspections;
+--   DROP TRIGGER trg_notify_checklist_decision ON public.checklist_submissions;
+--   DROP FUNCTION public.notify_submission_decision();
+--   restore the V267 body of consume_event_approval_push.
+-- ============================================================================

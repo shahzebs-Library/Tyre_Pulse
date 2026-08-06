@@ -5,7 +5,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell,
@@ -65,12 +65,28 @@ function getSeverityConfig(severity) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function NotificationRow({ notification, onMarkRead, onDismiss, relativeTime }) {
+/**
+ * Route a DB-backed notification to the surface where it is acted on.
+ * 'approval' rows (a submission awaiting sign-off) land on the unified
+ * Approval Dashboard; 'approval_decision' rows (your work was decided)
+ * land on the page holding the record. Null = tap only marks read.
+ */
+function notificationLink(n) {
+  if (n.type === 'approval') return '/approvals'
+  if (n.type === 'approval_decision') {
+    return n.entityType === 'checklist' ? '/checklists' : '/inspections'
+  }
+  return null
+}
+
+function NotificationRow({ notification, onMarkRead, onDismiss, relativeTime, onNavigate }) {
   const cfg = getSeverityConfig(notification.severity)
   const Icon = cfg.icon
 
   function handleClick() {
     if (!notification.read) onMarkRead(notification.id)
+    const to = notificationLink(notification)
+    if (to) onNavigate?.(to)
   }
 
   return (
@@ -194,6 +210,7 @@ export default function NotificationCenter() {
   } = useRealtimeAlerts()
 
   const notificationsEnabled = useFeatureGate('notifications_center')
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const panelRef  = useRef(null)
   const buttonRef = useRef(null)
@@ -331,6 +348,7 @@ export default function NotificationCenter() {
                           onMarkRead={markRead}
                           onDismiss={dismiss}
                           relativeTime={relativeTime}
+                          onNavigate={(to) => { setOpen(false); navigate(to) }}
                         />
                       ))}
                     </AnimatePresence>

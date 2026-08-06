@@ -79,7 +79,13 @@ export async function markAllRead(userId: string): Promise<void> {
  * app/(app) are returned.
  */
 export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type'>): string | null {
+  const t = String(n.type || '').toLowerCase()
   const k = String(n.entity_type || n.type || '').toLowerCase()
+  // A decision on YOUR OWN submission goes to your own-work history, not the
+  // generic hub; a checklist decision goes to the checklists hub.
+  if (t === 'approval_decision') {
+    return k.includes('checklist') ? '/(app)/checklists' : '/(app)/history'
+  }
   if (k.includes('assign') || k.includes('work_order') || k.includes('workorder') || k.includes('job') || k.includes('parts') || k.includes('qc') || k.includes('workshop')) {
     return '/(app)/workshop'
   }

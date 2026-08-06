@@ -332,8 +332,22 @@ function NewInspectionScreen() {
         .select('id, site, asset_no, vehicle_type, make, model')
         .eq('site', site)
         .order('asset_no')
-      setVehicles(data ?? [])
-      setFilteredVehicles(data ?? [])
+      let rows = data ?? []
+      if (!rows.length) {
+        // Some registered site names carry no fleet rows under that exact
+        // spelling (legacy/alias naming, e.g. METRO vs RIY-MET). Rather than
+        // an empty list, fall back to the whole fleet visible to this user
+        // (RLS scopes it to their country) so they can still search their
+        // asset. Bounded well above the largest per-country fleet.
+        const fb = await supabase
+          .from('vehicle_fleet')
+          .select('id, site, asset_no, vehicle_type, make, model')
+          .order('asset_no')
+          .limit(2000)
+        rows = fb.data ?? []
+      }
+      setVehicles(rows)
+      setFilteredVehicles(rows)
     } catch {
       // Surface an honest "no vehicles" state (manual entry stays available)
       // rather than an unhandled rejection.

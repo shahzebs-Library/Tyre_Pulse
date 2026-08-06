@@ -1,0 +1,57 @@
+-- V489 - let an admin actually restore access for a field worker.
+-- STATUS: APPLIED LIVE (project jhssdmeruxtrlqnwfksc) + verified rolled back.
+--
+-- THE DEFECT. Field staff sign in with a username or employee number, and the
+-- account behind them carries a SYNTHETIC email, "<name>@users.tyrepulse.app",
+-- on a domain that receives no mail. 33 of 36 people are in that state. So when
+-- someone forgets their password:
+--   * the mobile app offers no "forgot password" at all;
+--   * the web "forgot password" mails a mailbox that does not exist;
+--   * and the console's Reset Password did the SAME thing, then told the admin
+--     "Password reset email sent successfully".
+-- The person was locked out permanently and the admin was told they had fixed
+-- it. Measured live on the day this was found: two real staff (employee numbers
+-- 10011843 and 10011860) failed 3 and 4 sign in attempts that morning and never
+-- got in. Their usernames resolved correctly, so it was the password, and there
+-- was no route back.
+--
+-- The only recovery that works for a mail-less account is an admin setting the
+-- password directly. Deliberately narrow, all enforced server side:
+--   * super admin may reset anyone; a plain Admin only within their own org
+--   * nobody may reset a SUPER ADMIN except another super admin, so an org
+--     Admin cannot take over the platform owner's account
+--   * you cannot reset yourself through it (that skips proving you know the
+--     current password) - use the normal change-password flow
+--   * minimum length read from system_config.password_min_length, floor 6
+--   * hashed with bcrypt exactly as GoTrue writes it ($2a$), verified by
+--     checking the stored hash validates against the new password
+--   * every use writes an access_audit row
+--   * the target's sessions and refresh tokens are revoked, so the password
+--     just set is the only way in - the point of a reset
+--   * any failed-attempt lockout on that username or employee number is
+--     cleared, so the new password works immediately rather than after 15 min
+--
+-- V489b FIXED A DEFECT IN V489: the audit insert used actor_id/target_user_id/
+-- detail, but the real columns are actor/target_user/after, so the insert threw
+-- and the "never let auditing block restoring access" guard swallowed it - a
+-- password could be set with no trace, the one thing this must never do. The
+-- guard is KEPT (a locked-out worker must not stay locked out because the audit
+-- table is unavailable) but a failure now logs to system_logs instead of
+-- vanishing.
+--
+-- VERIFIED live, rolled back, as the real super admin:
+--   reset ok + audited=true, audit row carries actor email, target name, reason
+--   the stored hash validates against the new password, and not against another
+--   a 5 character password refused with min_length 8, that user left untouched
+--   a Tyre Man calling it is refused with 42501
+--
+-- ROLLBACK: drop function if exists public.admin_set_user_password(uuid, text, text);
+--
+-- Full body is the live definition:
+--   select pg_get_functiondef('public.admin_set_user_password(uuid,text,text)'::regprocedure);
+--
+-- STILL OPEN, and deliberately not done here: the MOBILE app has no "forgot
+-- password" screen at all, so a worker in the field must phone an admin. A
+-- self-service route needs a channel that actually reaches them (an SMS code,
+-- or a supervisor approving in the app) - that is a product decision, not a
+-- patch.

@@ -13,6 +13,7 @@ import {
 import { listTemplates } from '../lib/api/checklists'
 import { useSites } from '../hooks/useSites'
 import { toUserMessage } from '../lib/safeError'
+import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
 
 // The friendly "tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
 function isMissingRelation(err) {
@@ -31,7 +32,13 @@ const CADENCES = [
 const CADENCE_LABEL = Object.fromEntries(CADENCES.map((c) => [c.key, c.label]))
 
 // Roles a schedule can target for its generated assignments.
-const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Store Keeper', 'Reporter', 'Driver']
+/**
+ * Roles come from the database. The list typed here previously included
+ * 'Store Keeper', which normalize_profiles_role() does not accept - nobody can
+ * hold it, so scheduling a checklist to it silently reached no one - and left
+ * out every custom job title this company created.
+ */
+const FALLBACK_ROLES = ASSIGNABLE_BUILTIN_ROLES
 
 const CADENCE_BADGE = {
   daily: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
@@ -72,6 +79,7 @@ export default function ChecklistSchedules() {
 
   const [schedules, setSchedules] = useState([])
   const [templates, setTemplates] = useState([])
+  const [roles, setRoles] = useState(FALLBACK_ROLES)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [missing, setMissing] = useState(false)
@@ -105,12 +113,14 @@ export default function ChecklistSchedules() {
   const load = useCallback(async () => {
     setLoading(true); setError(''); setMissing(false)
     try {
-      const [rows, tpls] = await Promise.all([
+      const [rows, tpls, ro] = await Promise.all([
         listSchedules({ country: activeCountry }),
         listTemplates({ status: 'published', country: activeCountry }).catch(() => []),
+        listAssignableRoles().catch(() => FALLBACK_ROLES),
       ])
       setSchedules(Array.isArray(rows) ? rows : [])
       setTemplates(Array.isArray(tpls) ? tpls : [])
+      setRoles(Array.isArray(ro) && ro.length ? ro : FALLBACK_ROLES)
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
@@ -490,7 +500,7 @@ export default function ChecklistSchedules() {
                   onChange={(e) => setField('assignee_role', e.target.value)}
                 >
                   <option value="">Anyone</option>
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {roles.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 

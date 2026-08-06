@@ -18,10 +18,18 @@ import {
   deleteApprovalRule, previewApprovers,
 } from '../lib/api/approvalMatrix'
 import { listSites } from '../lib/api/sites'
+import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
 import { ENTITY_TYPES, entityLabel, scopeLabel, approverLabel, validateRule, specificity } from '../lib/approvalMatrix'
 import { toUserMessage } from '../lib/safeError'
 
-const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
+/**
+ * Roles come from the database, not a list typed here. The hardcoded seven left
+ * out every custom job title this company created - Tyre Data Collector, Tire
+ * Planning Engineer, Workshop Maintenance Area Manager and four more - so an
+ * approval could not be routed to roles a third of the staff actually hold,
+ * which is why this page looked like it could not set anything.
+ */
+const FALLBACK_ROLES = ASSIGNABLE_BUILTIN_ROLES
 
 const BLANK = {
   entity_type: 'inspection', match_country: '', match_site: '', match_role: '',
@@ -44,6 +52,7 @@ export default function ApprovalMatrix() {
   const { activeCountry } = useSettings()
   const [rules, setRules] = useState([])
   const [sites, setSites] = useState([])
+  const [roles, setRoles] = useState(FALLBACK_ROLES)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -65,12 +74,16 @@ export default function ApprovalMatrix() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const [r, s] = await Promise.all([
+      const [r, s, ro] = await Promise.all([
         listApprovalRules(),
         listSites().catch(() => []),
+        // Never let an unreadable role list blank the pickers - the built-ins
+        // alone are still a usable page, an empty dropdown is not.
+        listAssignableRoles().catch(() => FALLBACK_ROLES),
       ])
       setRules(r)
       setSites(Array.isArray(s) ? s : [])
+      setRoles(Array.isArray(ro) && ro.length ? ro : FALLBACK_ROLES)
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the approval matrix.'))
     } finally { setLoading(false) }
@@ -182,14 +195,14 @@ export default function ApprovalMatrix() {
           <Field label="Submitted by role" hint="Blank = any">
             <select className={inputCls} value={form.match_role} onChange={(e) => set({ match_role: e.target.value })}>
               <option value="">Any role</option>
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
           <Field label="Approved by role" hint="Leave blank if naming a person">
             <select className={inputCls} value={form.approver_role}
               onChange={(e) => set({ approver_role: e.target.value, approver_user_id: '' })}>
               <option value="">-- none --</option>
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
           <Field label="Level" hint="1 = first signer">
@@ -308,7 +321,7 @@ export default function ApprovalMatrix() {
           </Field>
           <Field label="Submitted by">
             <select className={inputCls} value={test.role} onChange={(e) => setTest({ ...test, role: e.target.value })}>
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
           <button type="button" onClick={runPreview}

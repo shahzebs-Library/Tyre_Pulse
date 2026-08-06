@@ -34,6 +34,7 @@ import {
   Droplet, KeyRound, GraduationCap, FileClock,
   CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
   Wallet, FileCheck, Building2, Lock, ArrowLeft,
+  Megaphone,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -113,6 +114,7 @@ const NAV_GROUPS = [
       { to: '/sites',               label: 'Site Management',    icon: MapPin },
       { to: '/actions',             label: 'Corrective Actions', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause',         icon: Search },
+      { to: '/broadcast',            label: 'Message the Team',   icon: Megaphone, adminOnly: A },
       { to: '/daily-ops',           label: 'Daily Ops',          icon: Coffee, adminOnly: A },
       { to: '/live-fleet',          label: 'Live Fleet Status',  icon: Radio, adminOnly: A },
       { to: '/serial-tracker',      label: 'Serial Tracker',     icon: BarcodeScanIc, adminOnly: A },

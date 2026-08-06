@@ -3,6 +3,8 @@ import {
 } from 'react'
 import { I18nManager, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { supabase } from '../lib/supabase'
+import { syncProfileLanguage } from '../lib/profileLanguage'
 import * as Updates from 'expo-updates'
 
 import en from '../locales/en.json'
@@ -80,6 +82,13 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         text: continueLabel,
         onPress: async () => {
           await AsyncStorage.setItem(STORAGE_KEY, lang)
+          // Let the server know, so messages addressed by language reach this
+          // person in the one they actually read. Best effort - a failure here
+          // must never block the language change.
+          try {
+            const { data } = await supabase.auth.getUser()
+            await syncProfileLanguage(data?.user?.id, lang)
+          } catch { /* preference only */ }
           // Apply the RTL layout direction (guarded to only flip on a change).
           // A native RTL flip only fully applies after a reload, prompted here.
           applyRTL(lang)

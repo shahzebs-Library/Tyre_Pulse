@@ -5,10 +5,15 @@
  */
 import { FileText } from 'lucide-react'
 import LedgerPage from '../components/costm3/LedgerPage'
+import LedgerMonthlySummary from '../components/costm3/LedgerMonthlySummary'
 import { listSanyInvoices, createSanyInvoice, importSanyInvoices, deleteSanyInvoice } from '../lib/api/costPerM3'
 
 export default function SanyInvoices() {
   return (
+    <div>
+    <div className="p-4 md:p-6 max-w-[1300px] mx-auto pb-0">
+      <LedgerMonthlySummary kind="sany" title="SANY Invoices" />
+    </div>
     <LedgerPage
       title="SANY Workshop Invoices"
       subtitle="SANY workshop invoice costs that feed the Cost per M3 grand total"
@@ -38,5 +43,6 @@ export default function SanyInvoices() {
         { key: 'doc_type', label: 'Type', type: 'select', options: ['summary', 'detail'] },
       ]}
     />
+    </div>
   )
 }

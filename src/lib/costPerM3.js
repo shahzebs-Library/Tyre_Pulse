@@ -9,7 +9,11 @@
 
 const num = (v) => {
   if (v === '' || v == null) return null
-  const n = Number(String(v).replace(/,/g, ''))
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  // Tolerate currency prefixes/suffixes and thousands separators ("SAR 1,234.50").
+  const s = String(v).replace(/,/g, '').replace(/[^0-9.\-]/g, '')
+  if (!s || s === '-' || s === '.') return null
+  const n = Number(s)
   return Number.isFinite(n) ? n : null
 }
 
@@ -156,6 +160,15 @@ export function toDateDay(v) {
     return `${v.getFullYear()}-${p(v.getMonth() + 1)}-${p(v.getDate())}`
   }
   const s = String(v).trim()
+  // Excel serial date keeps its DAY precision here (toMonthStart floors to the 1st).
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    const n = Number(s)
+    if (n > 20000 && n < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.round(n) * 86400000)
+      const p = (x) => String(x).padStart(2, '0')
+      return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
+    }
+  }
   const iso = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
   if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, '0')}-${String(iso[3]).padStart(2, '0')}`
   const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
@@ -163,16 +176,44 @@ export function toDateDay(v) {
   return toMonthStart(s)
 }
 
-/** Normalise a month cell to the first day of that month (YYYY-MM-01) or null. */
+const MONTH_TOKENS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+
+/**
+ * Normalise a month cell to the first day of that month (YYYY-MM-01) or null.
+ * Real ERP exports carry every shape at once: Date objects (xlsx cellDates),
+ * Excel serial numbers, 'YYYY-MM', full dates with a time suffix, day-first
+ * 'DD/MM/YYYY', and month-name forms ('01-Jul-26', 'Jul-26', 'July 2026').
+ * Returning null on junk is deliberate — the import service SKIPS the row with
+ * a counted reason instead of sending garbage into a date column, where one
+ * bad cell aborts the whole insert chunk (the "uploaded but nothing shows" bug).
+ */
 export function toMonthStart(v) {
   if (v == null || v === '') return null
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-01`
+  }
   const s = String(v).trim()
+  // Excel serial date (days since 1899-12-30); plausible window ~1954..2119.
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    const n = Number(s)
+    if (n > 20000 && n < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.round(n) * 86400000)
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`
+    }
+  }
   const ym = s.match(/^(\d{4})[-/](\d{1,2})$/)
   if (ym) return `${ym[1]}-${String(ym[2]).padStart(2, '0')}-01`
-  const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
   if (ymd) return `${ymd[1]}-${String(ymd[2]).padStart(2, '0')}-01`
-  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
   if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-01`
+  // Month-name forms: '01-Jul-26', 'Jul-26', 'July 2026', '01 July 2026'.
+  const mn = s.toLowerCase().match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[^0-9]*(\d{4}|\d{2})(?!\d)/)
+  if (mn) {
+    const month = MONTH_TOKENS.indexOf(mn[1]) + 1
+    const year = mn[2].length === 4 ? Number(mn[2]) : 2000 + Number(mn[2])
+    if (month >= 1 && year > 1999 && year < 2120) return `${year}-${String(month).padStart(2, '0')}-01`
+  }
   return null
 }
 
@@ -198,9 +239,12 @@ export function mapImportRows(kind, rawRows = []) {
         if (!allow.has(field)) continue
         if (syns.includes(nk)) {
           if (field === 'period_date') {
-            out[field] = (kind === 'production' ? toDateDay(rawVal) : toMonthStart(rawVal)) || rawVal
+            // A cell that cannot be read as a date stays NULL (the service skips
+            // the row and says why) - the old raw-value fallback pushed junk into
+            // a date column and one bad cell aborted the entire insert chunk.
+            out[field] = (kind === 'production' ? toDateDay(rawVal) : toMonthStart(rawVal)) || null
           } else if (field === 'invoice_date') {
-            out[field] = toMonthStart(rawVal) || rawVal
+            out[field] = toMonthStart(rawVal) || null
           } else if (field === 'amount' || field === 'm3' || field === 'approved_m3'
             || field === 'gross_amount' || field === 'net_amount' || field === 'fx_rate') {
             out[field] = num(rawVal)

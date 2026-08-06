@@ -133,14 +133,37 @@ export async function createScoCost(row) {
   return data
 }
 
-/** Bulk insert SCO cost rows (import). Chunked/fast. Returns {read,inserted,skipped,failed,errors}. */
+/** Valid YYYY-MM-DD day string (the shape the mappers emit for a parsed date). */
+const isDay = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)
+
+/**
+ * Shared ledger-import filter: keep rows carrying a country, a PARSED date and
+ * a recognised amount; count each drop by its reason so the UI can say exactly
+ * why an upload landed short instead of a bare "0 imported". A raw (unparsed)
+ * date is never sent to the DB - one junk cell in a date column aborts the
+ * whole 500-row insert chunk, which read as "uploaded but nothing shows".
+ */
+function splitLedgerRows(rows, sanitize) {
+  const reasons = { no_country: 0, no_date: 0, no_amount: 0 }
+  const clean = []
+  for (const raw of (Array.isArray(rows) ? rows : [])) {
+    const r = sanitize(raw)
+    if (!r.country) { reasons.no_country += 1; continue }
+    if (!isDay(String(r.period_date || ''))) { reasons.no_date += 1; continue }
+    if (numOrNull(raw.amount) == null) { reasons.no_amount += 1; continue }
+    clean.push(r)
+  }
+  return { clean, reasons }
+}
+
+/** Bulk insert SCO cost rows (import). Chunked/fast. Returns {read,inserted,skipped,skip_reasons,failed,errors}. */
 export async function importScoCosts(rows = [], onProgress) {
   const read = Array.isArray(rows) ? rows.length : 0
-  const clean = (Array.isArray(rows) ? rows : []).map((r) => sanitizeSco(r)).filter((r) => r.country && Number.isFinite(r.amount))
+  const { clean, reasons } = splitLedgerRows(rows, sanitizeSco)
   const skipped = read - clean.length
-  if (!clean.length) return { read, inserted: 0, skipped, failed: 0, errors: [] }
+  if (!clean.length) return { read, inserted: 0, skipped, skip_reasons: reasons, failed: 0, errors: [] }
   const res = await chunkedInsert('sco_costs', clean, onProgress)
-  return { read, skipped, ...res }
+  return { read, skipped, skip_reasons: reasons, ...res }
 }
 
 export async function updateScoCost(id, patch) {
@@ -176,11 +199,11 @@ export async function createSanyInvoice(row) {
 
 export async function importSanyInvoices(rows = [], onProgress) {
   const read = Array.isArray(rows) ? rows.length : 0
-  const clean = (Array.isArray(rows) ? rows : []).map((r) => sanitizeSany(r)).filter((r) => r.country && Number.isFinite(r.amount))
+  const { clean, reasons } = splitLedgerRows(rows, sanitizeSany)
   const skipped = read - clean.length
-  if (!clean.length) return { read, inserted: 0, skipped, failed: 0, errors: [] }
+  if (!clean.length) return { read, inserted: 0, skipped, skip_reasons: reasons, failed: 0, errors: [] }
   const res = await chunkedInsert('sany_invoices', clean, onProgress)
-  return { read, skipped, ...res }
+  return { read, skipped, skip_reasons: reasons, ...res }
 }
 
 export async function updateSanyInvoice(id, patch) {
@@ -220,6 +243,22 @@ export async function listProduction({ country, from, to, limit = 1000 } = {}) {
  * @param {{ country?: string, from?: string, to?: string }} [opts]
  * @returns {Promise<Array<object>>}
  */
+/**
+ * Monthly summary for the SCO / SANY ledgers (V483 get_costm3_ledger_monthly).
+ * kind: 'sco' | 'sany'. Newest month first; degrades to [].
+ */
+export async function getLedgerMonthly(kind, { country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_costm3_ledger_monthly', {
+      p_kind: kind,
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null, p_to: to || null,
+    })
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
 export async function getProductionMonthly({ country, from, to } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_production_monthly', {

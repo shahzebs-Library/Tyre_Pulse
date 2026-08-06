@@ -4,10 +4,15 @@
  */
 import { Boxes } from 'lucide-react'
 import LedgerPage from '../components/costm3/LedgerPage'
+import LedgerMonthlySummary from '../components/costm3/LedgerMonthlySummary'
 import { listScoCosts, createScoCost, importScoCosts, deleteScoCost } from '../lib/api/costPerM3'
 
 export default function ScoCosts() {
   return (
+    <div>
+    <div className="p-4 md:p-6 max-w-[1300px] mx-auto pb-0">
+      <LedgerMonthlySummary kind="sco" title="SCO Cost" />
+    </div>
     <LedgerPage
       title="SCO Cost"
       subtitle="Subcontractor / SCO costs that feed the Cost per M3 grand total"
@@ -35,5 +40,6 @@ export default function ScoCosts() {
         { key: 'currency', label: 'Currency', type: 'text' },
       ]}
     />
+    </div>
   )
 }

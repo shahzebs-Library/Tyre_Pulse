@@ -24,6 +24,7 @@ import { formatMonthYear } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import EmailPdfButton from '../components/EmailPdfButton'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -739,7 +740,7 @@ export default function RetreadManagement() {
 
   const handleExportRoiPdf = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'Retread ROI Analysis', `Fleet size: ${roi.fleetSize} tyres`, company, brand)

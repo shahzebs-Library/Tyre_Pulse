@@ -47,6 +47,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -1111,7 +1112,7 @@ export default function ExecutiveReport() {
   // ── PDF Export (WYSIWYG: KPI cards + charts + tables, matches report view) ──
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -1410,7 +1411,7 @@ export default function ExecutiveReport() {
 
   const exportActionPlanPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'Action Plan', `Period: ${periodValueLabel(period)}`, company, brand)

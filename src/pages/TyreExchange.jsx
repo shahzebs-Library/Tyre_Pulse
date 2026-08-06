@@ -23,6 +23,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -583,7 +584,7 @@ export default function TyreExchange() {
 
   async function exportTransferCertificate(tx) {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'Tyre Transfer Certificate', `Serial: ${tx.serial}`, company, brand)

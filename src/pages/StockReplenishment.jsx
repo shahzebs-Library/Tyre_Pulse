@@ -24,6 +24,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } f
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -498,7 +499,7 @@ export default function StockReplenishment() {
   async function exportOrderPDF() {
     try {
       const { default: jsPDF } = await import('jspdf')
-      const { default: autoTable } = await import('jspdf-autotable')
+      const autoTable = await loadAutoTable()
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(branding)
       const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'

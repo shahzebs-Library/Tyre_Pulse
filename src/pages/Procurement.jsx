@@ -26,6 +26,7 @@ import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -527,7 +528,7 @@ export default function Procurement() {
   // ── PDF export ─────────────────────────────────────────────────────────────
   async function exportPDF(po) {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'Purchase Order', `${po.po_number}  ·  ${po.status}  ·  Priority: ${po.priority}`, company, brand)

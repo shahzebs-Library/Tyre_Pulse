@@ -16,6 +16,7 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -342,7 +343,7 @@ export default function StockManagement() {
   // Reorder request PDF
   async function generateReorderPdf(rec) {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'

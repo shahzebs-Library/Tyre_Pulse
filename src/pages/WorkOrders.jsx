@@ -32,6 +32,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -448,7 +449,7 @@ export default function WorkOrders() {
   // ── PDF Job Card ──────────────────────────────────────────────────────────
   async function exportJobCard(order) {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'Workshop Job Card', `${order.work_order_no} · ${order.work_type} · Priority: ${order.priority}`, company, brand)

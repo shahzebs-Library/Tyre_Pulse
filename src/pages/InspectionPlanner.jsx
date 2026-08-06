@@ -24,6 +24,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } f
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -957,7 +958,7 @@ export default function InspectionPlanner() {
   // ── Export ────────────────────────────────────────────────────────────────────
   async function exportPdf() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     setExportLoading(true)
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)

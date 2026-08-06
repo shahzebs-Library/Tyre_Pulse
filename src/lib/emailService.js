@@ -1,14 +1,15 @@
 // emailService.js - Report email generation and delivery
 import { supabase } from './supabase'
+import { loadAutoTable } from './pdfEngine'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, pdfEmptyState } from './exportUtils'
 
 // jspdf is heavy (~400 KB) - load it on first use, never with the page chunk.
 let jsPDF, autoTable
 async function ensurePdf() {
   if (!jsPDF) {
-    const [j, a] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+    const [j, at] = await Promise.all([import('jspdf'), loadAutoTable()])
     jsPDF = j.default
-    autoTable = a.default
+    autoTable = at
   }
 }
 

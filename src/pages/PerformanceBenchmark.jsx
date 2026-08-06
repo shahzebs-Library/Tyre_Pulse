@@ -23,6 +23,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import { computeAllKpis, computeCpkByBrand } from '../lib/kpiEngine'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -336,7 +337,7 @@ export default function PerformanceBenchmark() {
   // ── Export ────────────────────────────────────────────────────────────────
   async function exportPdf() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'

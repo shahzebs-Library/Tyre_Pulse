@@ -53,6 +53,38 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Sentry mobile symbol upload (needs SENTRY_AUTH_TOKEN ticked for Production in Expo env); STATIONARY PUMP
   (11 assets) tyre count unanswered; extensions vector/pg_net in public schema (standing, risky to move).
 
+## SESSION 2026-08-06 — ACCIDENT RPC FAMILY REPAIRED + INSURER PORTAL PAGE + GATE 1.3.2 + SCOPING PROOF. Next free **V481**.
+- **ALL 24 ACCIDENT WORKFLOW RPCs WERE BROKEN IN PRODUCTION (42703) - REPAIRED.** Every consumer of
+  `_accident_rpc_context` (accident_ws_set_status/_mark_na/_assign, task create/complete, request/decide
+  closure, claim register/decision/settlement, evidence/document RPCs, repair family, finance/recovery/
+  downtime, portal_create) does `select org, country, site from _accident_rpc_context(...)` - but the LIVE
+  context function's OUT params were named v_org/v_country/v_site, so every call raised "column org does not
+  exist" at runtime. Measured: 24 consumers expect the plain names, ZERO expect the v_ names. FIX = drop +
+  recreate `_accident_rpc_context(p_accident_id, OUT org uuid, OUT country text, OUT site text)` (body
+  identical; OUT names cannot change via CREATE OR REPLACE). VERIFIED end-to-end after: portal mint ok ->
+  PII-lean snapshot renders -> bad token {ok:false,'invalid'}. RULE: the OUT names org/country/site are a
+  CONTRACT 24 functions compile against - never rename them. Also anon-revoked accident_portal_create/_revoke
+  (were anon-executable via default grants; snapshot deliberately stays anon).
+- **INSURER PORTAL VIEWER SHIPPED** - `/accident-portal/:token` (`src/pages/AccidentPortalView.jsx`, anon
+  route beside /report/:token) + `getCasePortalSnapshot` in api/accidentPortal.js. Forced-light document,
+  plain English, PII-lean by construction (the RPC excludes money/driver at DB level); handles password /
+  revoked / expired / invalid calmly. CasePortalShare's minted links now land on a real page. The
+  platformMap NOT_BUILT entry for this gap is REMOVED (the map's honesty rule).
+- **Mobile gate raised to 1.3.2** (user confirmed a phone shows 1.3.2; min == latest so nobody stranded).
+- **MOBILE COUNTRY SCOPING PROVEN** by live impersonation of a KSA Tyre Man (`set_config request.jwt.claims`
+  + `set local role authenticated`): tyre_records 8,042 / vehicle_fleet 1,019 / work_orders 60,763 - ALL KSA,
+  zero cross-country; get_mobile_analytics with country=null still returns KSA-only. The boundary is RLS,
+  identical for mobile and web.
+- **STATIONARY PUMP = NO TYRES (owner answered).** mobile tyreDiagramLayouts NO_TYRE_EQUIPMENT += 'stationary'
+  (was drawing 4 via the Pickup fallback; that resolver line KEPT as a defensive stop so no caller falls
+  through to the 14-tyre 'pump' branch). Rides the NEXT app release (no build triggered - fleet just updated).
+- **Tiny data leftovers closed:** fleet orphans now 0 in ALL countries (KSA 3 + Egypt 3 derived, same
+  V348-style rule); 17 of 26 mangled E+ serials recovered from sibling rows of the same tyre where exactly
+  ONE candidate matched (snapshot `_bak.tyre_serial_fix_20260805`); 9 left honestly ambiguous.
+- **OPEN/NEXT:** user hinted FX rates should come from an API ("linked to api for real one") - design: an
+  edge fn fetches daily rates into currency_rates as ENTERED-unapproved, admin still APPROVES (keeps the
+  V380 enter-vs-approve boundary; never auto-approve a fetched rate). Not built yet.
+
 ## SESSION 2026-08-05 (part 3) — OWNER-GRADE CONSOLE: PLATFORM MAP + MOBILE APP CONTROL + ATTENTION PANEL. Merged to main. No migration; next free **V481**.
 - User (non-technical owner) asked for an advanced, fully TRANSPARENT super-admin console: "whatever we have
   modules or we don't have, give me a clear UI" + "makes my work 100x faster". Built three genuinely missing

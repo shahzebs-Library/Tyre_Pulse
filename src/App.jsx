@@ -226,6 +226,7 @@ const AccidentDetail         = lazy(() => import('./components/AccidentDetailMod
 const ClaimsSummary          = lazy(() => import('./pages/ClaimsSummary'))
 const InsurancePolicies      = lazy(() => import('./pages/InsurancePolicies'))
 const AccidentWorkflowSettings = lazy(() => import('./pages/AccidentWorkflowSettings'))
+const Broadcast = lazy(() => import('./pages/Broadcast'))
 const ApprovalMatrix = lazy(() => import('./pages/ApprovalMatrix'))
 const Reports                = lazy(() => import('./pages/Reports'))
 const GatePass               = lazy(() => import('./pages/GatePass'))
@@ -529,6 +530,7 @@ function MainApp() {
                       <Route path="/insurance-policies" element={<Safe><RoleRoute allowed={['Admin']}><InsurancePolicies /></RoleRoute></Safe>} />
                       <Route path="/accident-workflow-settings" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentWorkflowSettings /></RoleRoute></Safe>} />
                       <Route path="/approval-matrix" element={<Safe><RoleRoute allowed={['Admin']}><ApprovalMatrix /></RoleRoute></Safe>} />
+                      <Route path="/broadcast" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="broadcast"><Broadcast /></RoleRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
 <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />

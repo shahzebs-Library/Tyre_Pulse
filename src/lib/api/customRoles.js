@@ -166,3 +166,60 @@ export async function deleteCustomRole(id, name) {
   }
   return true
 }
+
+/**
+ * The built-in roles the DATABASE will actually accept on profiles.role.
+ *
+ * MIRROR of the array inside normalize_profiles_role() - change BOTH together.
+ * That trigger silently rewrites any role it does not recognise to 'Reporter',
+ * so a picker offering a role that is not on this list and not a custom role
+ * does not error: it saves, reports success, and quietly demotes the person.
+ *
+ * Deliberately NOT the same list as ACCESS_ROLES, which decides who gets a
+ * COLUMN in the permission matrix. 'Data Monitor Officer' is in that list but
+ * is not accepted by the trigger and is not a custom role, so it must never be
+ * offered as somebody's job title.
+ */
+export const ASSIGNABLE_BUILTIN_ROLES = [
+  'Admin', 'Manager', 'Director', 'Reporter', 'Inspector', 'Tyre Man', 'Driver',
+  'Integration Admin', 'Data Engineer', 'Automation',
+]
+
+/**
+ * Every role that can actually be assigned to a person: the built-in set plus
+ * whatever custom roles this organisation has created.
+ *
+ * WHY THIS EXISTS. Role pickers were hardcoding their own lists, and each list
+ * had drifted. The approval matrix offered seven roles and the checklist
+ * scheduler offered eight, including one ('Store Keeper') that the database
+ * does not accept at all - while nine people are Tyre Data Collectors, one is a
+ * Tire Planning Engineer and one is a Workshop Maintenance Area Manager, none
+ * of which appeared anywhere. You could not route an approval to a job title
+ * that over a third of the staff actually hold.
+ *
+ * Custom roles are a database row, so a hardcoded list can never keep up: the
+ * only correct source is the accepted built-ins plus the table.
+ *
+ * Degrades to the built-ins alone if custom roles are unreadable - a picker
+ * with the standard roles is usable, an empty one is not.
+ *
+ * @returns {Promise<string[]>} built-ins first (stable, familiar order), then
+ *   custom roles alphabetically. De-duplicated, blanks dropped.
+ */
+export async function listAssignableRoles() {
+  let custom = []
+  try {
+    custom = (await listCustomRoles()).map((r) => r?.name)
+  } catch {
+    custom = []
+  }
+  const clean = (v) => String(v ?? '').trim()
+  const builtIn = ASSIGNABLE_BUILTIN_ROLES.map(clean).filter(Boolean)
+  const seen = new Set(builtIn.map((r) => r.toLowerCase()))
+  const extra = custom
+    .map(clean)
+    .filter((r) => r && !seen.has(r.toLowerCase()))
+    .filter((r, i, a) => a.findIndex((x) => x.toLowerCase() === r.toLowerCase()) === i)
+    .sort((a, b) => a.localeCompare(b))
+  return builtIn.concat(extra)
+}

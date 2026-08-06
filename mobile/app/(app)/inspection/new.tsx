@@ -148,12 +148,14 @@ function NewInspectionScreen() {
   const shownVehicles = useMemo(() => {
     const q = vehicleQuery.trim().toLowerCase()
     if (!q) return []
+    // Capped: the pool is now the whole visible fleet, and a broad term like
+    // "mixer" would otherwise render hundreds of cards.
     return filteredVehicles.filter(v =>
       v.asset_no?.toLowerCase().includes(q) ||
       v.vehicle_type?.toLowerCase().includes(q) ||
       v.make?.toLowerCase().includes(q) ||
       v.model?.toLowerCase().includes(q)
-    )
+    ).slice(0, 30)
   }, [filteredVehicles, vehicleQuery])
 
   // Manual-entry guard: flag when a hand-typed asset does not match any vehicle
@@ -213,10 +215,15 @@ function NewInspectionScreen() {
   }, [step, captureLocation])
 
   useEffect(() => { loadSites() }, [])
+  useEffect(() => { loadVehicles() }, [])
 
-  useEffect(() => {
-    if (selectedSite) loadVehicles(selectedSite)
-  }, [selectedSite])
+  // Picking a vehicle carries its site with it (asset-first flow). The site
+  // stays editable below for the rare asset based elsewhere than it works.
+  const pickVehicle = useCallback((v: VehicleFleet) => {
+    setSelectedVehicle(v)
+    setVehicleQuery('')
+    if (v.site) setSelectedSite(v.site)
+  }, [])
 
   // Preselect the vehicle when arriving from the scanner or asset list (asset
   // param). Match is trimmed + case-insensitive so a scanned code always lands
@@ -227,7 +234,7 @@ function NewInspectionScreen() {
     const want = String(params.asset).trim().toLowerCase()
     const match = vehicles.find(v => (v.asset_no ?? '').trim().toLowerCase() === want)
     if (match) {
-      setSelectedVehicle(match)
+      pickVehicle(match)
     } else if (vehicles.length && !useManualEntry && !manualAsset) {
       setUseManualEntry(true)
       setManualAsset(String(params.asset).trim())
@@ -324,28 +331,20 @@ function NewInspectionScreen() {
     }
   }
 
-  async function loadVehicles(site: string) {
+  // ASSET-FIRST (user decision): the inspector searches their asset directly and
+  // the site follows from the picked vehicle. No site gate before the search -
+  // the old site-first flow made crews at alias-named sites (METRO vs RIY-MET)
+  // see an empty list. Loads the whole fleet visible to this user ONCE; RLS
+  // scopes it to their country, and the bound sits above any per-country fleet.
+  async function loadVehicles() {
     setLoadingVehicles(true)
     try {
       const { data } = await supabase
         .from('vehicle_fleet')
         .select('id, site, asset_no, vehicle_type, make, model')
-        .eq('site', site)
         .order('asset_no')
-      let rows = data ?? []
-      if (!rows.length) {
-        // Some registered site names carry no fleet rows under that exact
-        // spelling (legacy/alias naming, e.g. METRO vs RIY-MET). Rather than
-        // an empty list, fall back to the whole fleet visible to this user
-        // (RLS scopes it to their country) so they can still search their
-        // asset. Bounded well above the largest per-country fleet.
-        const fb = await supabase
-          .from('vehicle_fleet')
-          .select('id, site, asset_no, vehicle_type, make, model')
-          .order('asset_no')
-          .limit(2000)
-        rows = fb.data ?? []
-      }
+        .limit(2000)
+      const rows = data ?? []
       setVehicles(rows)
       setFilteredVehicles(rows)
     } catch {
@@ -566,45 +565,8 @@ function NewInspectionScreen() {
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={[styles.stepTitle, { textAlign }]}>{t('inspection.stepTitle')}</Text>
 
-            {/* ── Site picker (dropdown) ───────────────────────────────────── */}
+            {/* ── Vehicle picker (asset-first: the site follows the asset) ── */}
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.siteLabel')}</Text>
-
-              {sites.length === 0 ? (
-                /* No sites in DB yet - let user type one */
-                <TextInput
-                  style={[styles.input, { textAlign }]}
-                  value={selectedSite}
-                  onChangeText={v => { setSelectedSite(v); setSelectedVehicle(null) }}
-                  placeholder={t('inspection.typeSiteName')}
-                  placeholderTextColor={theme.color.textMuted}
-                  autoCapitalize="words"
-                />
-              ) : (
-                <TouchableOpacity
-                  style={[styles.dropdown, isRTL && styles.dropdownRTL]}
-                  onPress={() => { setSiteSearch(''); setSitePickerOpen(true) }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="location-outline" size={18} color={theme.color.primary} />
-                  <Text
-                    style={[
-                      styles.dropdownText,
-                      !selectedSite && styles.dropdownPlaceholder,
-                      { textAlign, flex: 1 },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {selectedSite || t('inspection.siteSelectPlaceholder')}
-                  </Text>
-                  <Ionicons name="chevron-down" size={18} color={theme.color.textMuted} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* ── Vehicle picker ───────────────────────────────────────────── */}
-            {selectedSite ? (
-              <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.vehicleLabel')}</Text>
 
                 {!useManualEntry && (
@@ -699,7 +661,7 @@ function NewInspectionScreen() {
                             <TouchableOpacity
                               key={v.id}
                               style={[styles.vehicleCard, selectedVehicleId === v.id && styles.vehicleCardActive]}
-                              onPress={() => { setSelectedVehicle(v); setVehicleQuery('') }}
+                              onPress={() => pickVehicle(v)}
                               activeOpacity={0.75}
                             >
                               <Ionicons
@@ -711,7 +673,7 @@ function NewInspectionScreen() {
                                 {v.asset_no}
                               </Text>
                               <Text style={[styles.vehicleCardType, selectedVehicleId === v.id && { color: theme.color.onPrimary, opacity: 0.75 }]}>
-                                {v.vehicle_type}
+                                {[v.vehicle_type, v.site].filter(Boolean).join(' · ')}
                               </Text>
                             </TouchableOpacity>
                           ))}
@@ -755,13 +717,13 @@ function NewInspectionScreen() {
                         <Ionicons name="alert-circle-outline" size={16} color={theme.color.warning.on} />
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.assetWarnText, { textAlign }]}>
-                            {`"${manualAsset.trim().toUpperCase()}" ${t('inspection.notInFleetMid')} ${selectedSite} ${t('inspection.notInFleetEnd')}`}
+                            {`"${manualAsset.trim().toUpperCase()}" ${t('inspection.notInFleetMid')} ${profile?.country ?? ''} ${t('inspection.notInFleetEnd')}`}
                           </Text>
                           {manualAssetCheck.suggestion && (
                             <TouchableOpacity
                               onPress={() => {
                                 const match = vehicles.find(v => v.asset_no === manualAssetCheck.suggestion)
-                                if (match) { setSelectedVehicle(match); setUseManualEntry(false); setManualAsset('') }
+                                if (match) { pickVehicle(match); setUseManualEntry(false); setManualAsset('') }
                               }}
                               activeOpacity={0.7}
                             >
@@ -789,7 +751,42 @@ function NewInspectionScreen() {
                   </View>
                 )}
               </View>
-            ) : null}
+
+            {/* ── Site (auto-filled from the picked asset, still editable) ── */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.siteLabel')}</Text>
+
+              {sites.length === 0 ? (
+                /* No sites in DB yet - let user type one */
+                <TextInput
+                  style={[styles.input, { textAlign }]}
+                  value={selectedSite}
+                  onChangeText={setSelectedSite}
+                  placeholder={t('inspection.typeSiteName')}
+                  placeholderTextColor={theme.color.textMuted}
+                  autoCapitalize="words"
+                />
+              ) : (
+                <TouchableOpacity
+                  style={[styles.dropdown, isRTL && styles.dropdownRTL]}
+                  onPress={() => { setSiteSearch(''); setSitePickerOpen(true) }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="location-outline" size={18} color={theme.color.primary} />
+                  <Text
+                    style={[
+                      styles.dropdownText,
+                      !selectedSite && styles.dropdownPlaceholder,
+                      { textAlign, flex: 1 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {selectedSite || t('inspection.siteSelectPlaceholder')}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color={theme.color.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Selected vehicle summary */}
             {(selectedVehicle || (useManualEntry && manualAsset.trim())) && (

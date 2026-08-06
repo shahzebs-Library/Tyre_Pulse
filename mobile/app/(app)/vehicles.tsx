@@ -67,7 +67,9 @@ function VehiclesScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
+  // Must match the `vehicles` entry in lib/permissions.ts, or a role that sees
+  // the tile on Home taps into a blank screen.
+  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director', 'reporter', 'driver'])
   const textAlign = isRTL ? 'right' : 'left'
   const mayInspect = canInspect(profile?.role)
 

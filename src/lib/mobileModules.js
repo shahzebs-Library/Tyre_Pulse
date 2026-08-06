@@ -43,7 +43,7 @@ export const MOBILE_MODULES = [
   { key: 'reportIssue',    label: 'Report Issue',     group: 'Field',       roles: ['manager', 'director', 'reporter', 'driver'] },
   // Fleet ---------------------------------------------------------------------
   { key: 'records',        label: 'Tyre Records',     group: 'Fleet',       roles: [] },
-  { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: [] },
+  { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver'] },
   { key: 'history',        label: 'History',          group: 'Fleet',       roles: [] },
   { key: 'alerts',         label: 'Alerts',           group: 'Fleet',       roles: ['manager', 'director', 'inspector'] },
   { key: 'calendar',       label: 'Calendar',         group: 'Fleet',       roles: ['manager', 'director', 'tyre_man', 'reporter'] },

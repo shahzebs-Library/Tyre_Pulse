@@ -96,7 +96,12 @@ export const MODULES: ModuleDef[] = [
   M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver']),
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      []),
-  M('vehicles',       'Vehicles',          'car-outline',            'Fleet',      []),
+  // Field staff need to look an asset up (owner instruction 2026-08-06). Safe to
+  // open: this screen reads a BOUNDED, country-scoped, lean-column page (2000
+  // rows, ~1k per country) - it was never the unbounded table scan that caused
+  // the low-end-device crashes; that was the analytics screen, now server-side.
+  M('vehicles',       'Vehicles',          'car-outline',            'Fleet',
+    ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
   M('history',        'History',           'time-outline',           'Fleet',      []),
   M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector']),
   M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),

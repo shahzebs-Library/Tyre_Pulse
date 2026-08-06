@@ -84,6 +84,53 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - **OPEN/NEXT:** user hinted FX rates should come from an API ("linked to api for real one") - design: an
   edge fn fetches daily rates into currency_rates as ENTERED-unapproved, admin still APPROVES (keeps the
   V380 enter-vs-approve boundary; never auto-approve a fetched rate). Not built yet.
+- **-ST SITE SUFFIX RETIRED FLEET-WIDE (user instruction "location which has st shouldn't be showing").**
+  SUPERSEDES the V247 "do NOT collapse -ST codes blindly" caution - the owner explicitly ordered the collapse.
+  324,492 rows renamed across 10 tables (parts_consumption 150,543 / wo_line_items 143,953 / work_orders
+  26,990 / tyre_records 2,652 / vehicle_fleet 321 / odometer_logs 22 / inspections 5 / accidents 3 /
+  accident_stage_events 3), snapshot `_bak.site_st_fix_20260806` (tbl,id,old_site). 18 NEW site_aliases rows:
+  confirmed targets kept (NHC-ST->NHC, DHABAN-ST->DHAHBAN, AMALA-ST->AMAALA, REDSEA-ST->RED SEA,
+  KSP_TP-ST->KSP-TP), the rest stripped (JED-ST->JED, RIY-SAL-ST->RIY-SAL, DIRIYAH-ST->DIRIYAH, ...);
+  QID-UP-ST + QIDDIYA-UP-ST both -> QIDDIYA-UP (the store map's own equivalence); RUMAH-ST->RUMAH (found only
+  in wo_line_items). Aliases whose CANONICAL was an -ST name repointed. sites registry renamed in place
+  (MALHAM-ST dropped - plain MALHAM existed); store_site_map values updated (it was the recurrence source).
+  **ROOT CAUSE OF RECURRENCE CLOSED: trg_normalize_site was NEVER on parts_consumption /
+  work_order_line_items / odometer_logs** - now attached to all three (alphabetical firing order puts
+  trg_classify_parts_consumption BEFORE trg_normalize_site so the classifier-derived site is normalized in
+  the same insert). PROVEN: a write of 'JED-ST' lands as 'JED'. MONEY PROVEN UNMOVED: the parts_consumption
+  update ran with trg_classify_parts_consumption DISABLED (the V373 re-bucketing trap) and per-country
+  tyre/spare/oil/line totals were byte-identical after. 0 profiles.sites carried -ST (no scope breakage).
+  RULE: -ST is retired; any new -ST spelling arriving in a file self-corrects via site_aliases.
+- **-ST CAME BACK IN THE REGISTRY THE SAME DAY - ROOT CAUSE FOUND + CLOSED.** At 08:57 all 13 KSA -ST names
+  reappeared in `sites` (created_at proves it) while EVERY business table stayed at 0. Cause: the `sites`
+  REGISTRY had no normalizer at all, so re-uploading the old Sites & Regions template inserted the retired
+  spellings straight back into the dropdown. No DB function inserts into sites (checked) - it is the app's
+  client-side `importSites`. FIX: new `normalize_site_name()` + `trg_normalize_site_name` BEFORE INSERT OR
+  UPDATE on `sites` - upper/trim/collapse, alias lookup, and on INSERT it RETURNS NULL when the canonical
+  already exists for that org+country (skip the duplicate rather than raise a unique violation that would
+  abort the operator's whole import). **BOTH normalizers generalized: alias first, then a BLANKET `[_-]ST$`
+  strip**, because an alias only covers names someone already noticed - proven by test, `BRANDNEW-ST` used to
+  survive. VERIFIED (rolled back): JED-ST skipped without duplicating JED, BRANDNEW-ST -> BRANDNEW, and a
+  work_orders insert of `FUTURE-ST` landed as `FUTURE`. Also de-duplicated `sites` (AMAALA/DHAHBAN/RED SEA
+  were each listed twice, one row carrying the region) - kept the oldest row, merged the region onto it,
+  snapshot `_bak.sites_dedupe_20260806`; sites 68 -> 62, 0 dupes, no FKs reference sites.id.
+  **STILL TO CONFIRM WITH THE OWNER: `DIRIYAH-ST2`** - ends ST2 not ST so the rule does not touch it; it may
+  be a real "Station 2". Also the stray `country='Saudi Arabia'` site row (RIY-MET) alongside the KSA one.
+- **FLEET/ASSET ACCESS WAS BLOCKED FOR THE BIGGEST GROUP (user: "they cant access fleet").** NOT site scope -
+  all 36 approved users already carry `sites=['ALL']`. The blocker was `module_permissions`: `fleet_master`
+  (which gates BOTH /fleet-master and /assets via NAV_MODULE_KEY) was **enabled=false for Tyre Man (16 users)
+  and Reporter (2)** - together more than half the user base. Enabled for Tyre Man/Reporter/Driver/Insurance
+  Officer (left OFF for the machine roles Automation + Integration Admin). VERIFIED by impersonating a real
+  Tyre Man: `app_user_can('fleet_master','view')` true and 1,022 KSA assets across 29 sites visible, country
+  boundary intact. Takes effect immediately (V227 realtime on module_permissions) - no deploy needed.
+- **MOBILE asset list opened to field staff.** `vehicles` carried `roles: []` (admin-only) from the
+  2026-07-26 field-capture lockdown. Re-checked the reason before widening: that screen reads a BOUNDED
+  country-scoped 2000-row lean-column page (~1k rows per country) and was never the unbounded scan that
+  caused the crashes - that was analytics, since moved server-side (V479), and `records` is now paged 30/page.
+  Opened to manager/director/inspector/tyre_man/reporter/driver in mobile permissions.ts, the web mirror
+  `src/lib/mobileModules.js`, AND the screen's own `useRoleGuard` (which must match the registry or a role
+  sees the tile then taps into a blank screen). Rides the NEXT app release. `records`/`history` deliberately
+  left admin-only - not asked for; say the word and they open the same way.
 
 ## SESSION 2026-08-05 (part 3) — OWNER-GRADE CONSOLE: PLATFORM MAP + MOBILE APP CONTROL + ATTENTION PANEL. Merged to main. No migration; next free **V481**.
 - User (non-technical owner) asked for an advanced, fully TRANSPARENT super-admin console: "whatever we have

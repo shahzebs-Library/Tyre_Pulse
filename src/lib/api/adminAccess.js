@@ -199,3 +199,43 @@ export async function listAccessAudit({ limit = 100, target = null } = {}) {
     ) || []
   )
 }
+
+/**
+ * Whether a reset EMAIL can ever reach this account.
+ *
+ * Field staff sign in with a username or employee number, and the account
+ * behind them carries a synthetic address on a domain that receives no mail.
+ * Sending a reset link there is not a slow failure, it is a guaranteed one -
+ * and the console used to report it as "sent successfully".
+ */
+export function canEmailReset(email) {
+  const e = String(email || '').trim().toLowerCase()
+  if (!e || !e.includes('@')) return false
+  return !e.endsWith('@users.tyrepulse.app')
+}
+
+/**
+ * Set a user's password directly. The ONLY recovery that works for an account
+ * whose email cannot receive mail, which is 33 of the 36 people here.
+ *
+ * Narrow by design, and enforced on the server rather than in this file: a
+ * super admin may reset anyone, a plain Admin only inside their own
+ * organisation, nobody but a super admin may reset a super admin, and you
+ * cannot reset yourself through it. Every use writes an audit row, the target's
+ * existing sessions are revoked so the new password is the only way in, and any
+ * failed-attempt lockout on that person is cleared so it works immediately.
+ *
+ * @param {string} userId
+ * @param {string} password
+ * @param {string} [reason] recorded on the audit row
+ * @returns {Promise<{ok:boolean, reason?:string, min_length?:number, full_name?:string, username?:string}>}
+ */
+export async function adminSetUserPassword(userId, password, reason) {
+  const { data, error } = await supabase.rpc('admin_set_user_password', {
+    p_user_id: userId,
+    p_password: password,
+    p_reason: reason || null,
+  })
+  if (error) throw error
+  return data || { ok: false, reason: 'unknown' }
+}

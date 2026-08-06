@@ -13,7 +13,10 @@ import { toUserMessage } from '../../lib/safeError'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { ACCESS_ROLES, ALL_MODULES } from '../../lib/moduleCatalog'
 import { listCustomRoles } from '../../lib/api/customRoles'
-import { setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess } from '../../lib/api/adminAccess'
+import {
+  setUserCountry, bulkSetRole, bulkSetGrant, adminSetUserSites, adminSetWebAccess,
+  canEmailReset, adminSetUserPassword,
+} from '../../lib/api/adminAccess'
 import { listDataSiteOptions } from '../../lib/api/sites'
 // Site scope semantics (V309): no sites = NO site-scoped access; an explicit
 // 'ALL' / '*' sentinel = org-wide. Admins/super always see everything.
@@ -63,6 +66,9 @@ export default function ConsoleUsers() {
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState(null)
   const [resetSent, setResetSent] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const [resetBusy, setResetBusy] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
 
   // Bulk selection + actions
   const [selected, setSelected]   = useState(() => new Set())
@@ -303,14 +309,38 @@ export default function ConsoleUsers() {
   }
 
   async function sendPasswordReset(user) {
-    setResetSent(false)
+    setResetSent(false); setResetError('')
     const { error: err } = await supabase.auth.resetPasswordForEmail(user.email, {
       redirectTo: `${window.location.origin}/reset-password`,
     })
-    if (!err) {
-      await logAction('reset_password', user.id, 'user', { email: user.email })
+    if (err) { setResetError(toUserMessage(err, 'Could not send the reset email.')); return }
+    await logAction('reset_password', user.id, 'user', { email: user.email })
+    setResetSent(true)
+  }
+
+  /**
+   * Set the password directly. The only thing that works for an account whose
+   * email cannot receive mail - which is most of the field staff. The password
+   * is shown once so it can be passed on in person or by phone; it is never
+   * emailed, because there is no mailbox to email.
+   */
+  async function setPasswordDirect(user) {
+    setResetSent(false); setResetError(''); setResetBusy(true)
+    try {
+      const r = await adminSetUserPassword(user.id, newPassword, 'admin reset - user could not sign in')
+      if (!r.ok) {
+        setResetError(
+          r.reason === 'too_short' ? `Use at least ${r.min_length} characters.`
+            : r.reason === 'use_change_password' ? 'Change your own password from Settings instead.'
+              : r.reason === 'no_such_user' ? 'That user no longer exists.'
+                : 'Could not set the password.')
+        return
+      }
+      await logAction('set_password', user.id, 'user', { username: r.username })
       setResetSent(true)
-    }
+    } catch (e) {
+      setResetError(toUserMessage(e, 'Could not set the password.'))
+    } finally { setResetBusy(false) }
   }
 
   // ── Selection helpers ──────────────────────────────────────────────────────
@@ -879,28 +909,72 @@ export default function ConsoleUsers() {
                 <p className="text-xs text-gray-500">{resetModal.email}</p>
               </div>
             </div>
+            {/* A field worker's address is synthetic and receives no mail, so a
+                reset link is a guaranteed dead end. Setting the password is the
+                only thing that restores access for them. */}
             {resetSent ? (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-900/30 border border-green-700/40 mb-4">
-                <CheckCircle size={14} className="text-green-400" />
-                <p className="text-xs text-green-300">Password reset email sent successfully.</p>
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-green-900/30 border border-green-700/40 mb-4">
+                <CheckCircle size={14} className="text-green-400 mt-0.5" />
+                <p className="text-xs text-green-300">
+                  {canEmailReset(resetModal.email)
+                    ? 'Password reset email sent.'
+                    : <>Password set. Give it to {resetModal.full_name ?? 'them'} in person or by phone -
+                        they can sign in with it straight away. Their other devices have been
+                        signed out.</>}
+                </p>
               </div>
-            ) : (
+            ) : canEmailReset(resetModal.email) ? (
               <p className="text-xs text-gray-400 mb-5">
                 Send a password reset link to <strong className="text-white">{resetModal.full_name ?? resetModal.email}</strong>.
                 The user will receive an email with a secure link to set a new password.
               </p>
+            ) : (
+              <>
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-900/25 border border-amber-700/40 mb-3">
+                  <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
+                  <p className="text-[11px] text-amber-200">
+                    This account signs in with a username, and its address
+                    (<span className="text-amber-100">{resetModal.email}</span>) cannot receive
+                    email. A reset link would never arrive, so set the password here instead.
+                  </p>
+                </div>
+                <label className="block mb-4">
+                  <span className="text-[11px] uppercase tracking-wide text-gray-500">New password</span>
+                  <input
+                    type="text"
+                    value={newPassword}
+                    onChange={(e) => { setNewPassword(e.target.value); setResetError('') }}
+                    autoComplete="off"
+                    placeholder="At least 8 characters"
+                    className="mt-1 w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-white"
+                  />
+                  {/* Shown, not hidden: the admin has to read it out to the person. */}
+                  <span className="mt-1 block text-[11px] text-gray-500">
+                    Shown so you can pass it on. Ask them to change it once they are back in.
+                  </span>
+                </label>
+              </>
+            )}
+            {resetError && (
+              <p className="mb-3 text-[11px] text-amber-400">{resetError}</p>
             )}
             <div className="flex gap-2">
-              <button onClick={() => setResetModal(null)}
+              <button onClick={() => { setResetModal(null); setNewPassword(''); setResetError(''); setResetSent(false) }}
                 className="flex-1 py-2 rounded-lg text-xs text-gray-400 bg-gray-800 hover:bg-gray-700 transition-colors">
                 {resetSent ? 'Close' : 'Cancel'}
               </button>
-              {!resetSent && (
+              {!resetSent && (canEmailReset(resetModal.email) ? (
                 <button onClick={() => sendPasswordReset(resetModal)}
                   className="flex-1 py-2 rounded-lg text-xs font-semibold text-white bg-blue-700 hover:bg-blue-600 transition-colors">
                   Send Reset Email
                 </button>
-              )}
+              ) : (
+                <button onClick={() => setPasswordDirect(resetModal)}
+                  disabled={resetBusy || newPassword.trim().length < 8}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold text-white bg-blue-700 hover:bg-blue-600 transition-colors disabled:opacity-40">
+                  {resetBusy ? 'Setting' : 'Set Password'}
+                </button>
+              ))}
             </div>
           </div>
         </div>

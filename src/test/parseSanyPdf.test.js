@@ -106,3 +106,36 @@ describe('parseSanyProformaPdf (SANY service-contract proforma, USD)', () => {
     expect(parseSanyProformaPdf('')).toBeNull()
   })
 })
+
+describe('parseSanyProformaPdf - real-file regressions (Jan-Apr 2026 pair)', () => {
+  // SANY's Jan-Apr 2026 proformas carry a hand-typed SIGNATURE date with the
+  // WRONG YEAR ("2025-April-15th" on a 2026 invoice). The invoice date must be
+  // the PI Duration period END, never the document's last date. And a single-token
+  // "Ref. No. SYDU20250415" must not swallow the following prose into the ref.
+  const lines = [
+    'Sany international Development Trading co.Ltd',
+    'Proforma Invoice of Service Contract',
+    'Ref. No. SYDU20250415',
+    'Service Merchant Name and Address : Consigned To :',
+    'Service Contract NO.: SYCAM202110 -3',
+    'PI Duration : 2026 - Jan - 15th --- 2026 - Apr - 15th',
+    'Currency: USD',
+    'generator $51,000.00',
+    'Total Amount (USD) $ 51,000.00',
+    'Authorized By: Date:',
+    'Dinghongyan 2025-April-15th',
+  ]
+
+  it('takes the period END as the invoice date, ignoring the wrong-year signature date', () => {
+    const r = parseSanyProformaPdf(lines)
+    expect(r).not.toBeNull()
+    expect(r.Date).toBe('2026-04-15')
+    expect(r.__period_month).toBe('2026-04-01')
+    expect(r['Parts Description']).toContain('2026-01-15 to 2026-04-15')
+  })
+
+  it('does not glue following prose onto a one-token Ref. No.', () => {
+    const r = parseSanyProformaPdf(lines)
+    expect(r['Quotation No']).toBe('SYDU20250415')
+  })
+})

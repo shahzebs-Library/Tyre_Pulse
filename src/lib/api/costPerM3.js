@@ -213,6 +213,25 @@ export async function listProduction({ country, from, to, limit = 1000 } = {}) {
 }
 
 /**
+ * Monthly production summary (V482 get_production_monthly): one row per month
+ * with loads, supplied/approved/not-approved m3, rejected loads + m3, and the
+ * rejection reasons carrying sample remarks. Server-aggregated (the table holds
+ * hundreds of thousands of load rows). Newest month first. Degrades to [].
+ * @param {{ country?: string, from?: string, to?: string }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function getProductionMonthly({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_production_monthly', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null, p_to: to || null,
+    })
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/**
  * Production rejections (concrete sent but not approved) by site + reason for a
  * country + period. Returns { ok, total:{supplied_m3, approved_m3, not_approved_m3,
  * rejected_loads}, by_site[], by_reason[] }. Degrades to an empty shape.

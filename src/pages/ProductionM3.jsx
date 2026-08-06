@@ -9,6 +9,7 @@
  */
 import LedgerPage from '../components/costm3/LedgerPage'
 import ProductionRejectionsPanel from '../components/costm3/ProductionRejectionsPanel'
+import ProductionMonthlySummary from '../components/costm3/ProductionMonthlySummary'
 import { listProduction, createProduction, importProduction, deleteProduction } from '../lib/api/costPerM3'
 
 const intCell = (v) => (v == null || v === '' ? 'N/A' : Math.round(Number(v)).toLocaleString())
@@ -16,6 +17,11 @@ const intCell = (v) => (v == null || v === '' ? 'N/A' : Math.round(Number(v)).to
 export default function ProductionM3() {
   return (
     <div>
+      {/* Month-wise summary first (owner preference): totals + rejections with
+          their remarks at a glance; the raw load list + Excel remain below. */}
+      <div className="p-4 md:p-6 max-w-[1300px] mx-auto pb-0">
+        <ProductionMonthlySummary />
+      </div>
       <LedgerPage
         title="Production (Concrete)"
         subtitle="Batching loads - approved M3 is the Cost per M3 denominator; rejections tracked below"

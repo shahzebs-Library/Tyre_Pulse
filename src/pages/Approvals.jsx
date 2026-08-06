@@ -27,6 +27,7 @@ const SOURCE = {
   workflow:         'workflow',
   accident_closure: 'accident_closure',
   checklist:        'checklist',
+  inspection:       'inspection',
   signoff_gap:      'signoff_gap',
 }
 
@@ -34,6 +35,7 @@ const SOURCE_META = {
   workflow:         { label: 'Workflow',          short: 'Workflow',  icon: GitBranch,      tone: 'blue' },
   accident_closure: { label: 'Accident Closure',  short: 'Closure',   icon: Car,            tone: 'red'  },
   checklist:        { label: 'Checklist Sign-off', short: 'Checklist', icon: ClipboardCheck, tone: 'teal' },
+  inspection:       { label: 'Inspection Sign-off', short: 'Inspection', icon: ClipboardList, tone: 'amber' },
   signoff_gap:      { label: 'Missed sign-off', short: 'Missed', icon: AlertOctagon, tone: 'orange' },
 }
 
@@ -184,6 +186,27 @@ function toChecklistItem(c) {
   }
 }
 
+/** Mobile field inspections awaiting sign-off (approval_status pending_approval). */
+function toInspectionItem(i) {
+  const title = i.title || [i.inspection_type, i.asset_no].filter(Boolean).join(' · ') || 'Inspection'
+  return {
+    source: SOURCE.inspection,
+    id: i.id,
+    title,
+    subtitle: [
+      i.asset_no && `Asset ${i.asset_no}`,
+      i.inspector && `By ${i.inspector}`,
+      i.severity,
+    ].filter(Boolean).join(' · ') || 'Awaiting sign-off',
+    note: null,
+    site: i.site || null,
+    country: i.country || null,
+    created_at: i.created_at || null,
+    status: 'pending',
+    raw: i,
+  }
+}
+
 // ─── Metric strip ───────────────────────────────────────────────────────────────
 
 function MetricCard({ icon: Icon, label, value, tone, loading }) {
@@ -208,6 +231,7 @@ function MetricStrip({ metrics, loading }) {
     { key: 'workflow_pending',  label: 'Workflows',         tone: 'blue',  icon: GitBranch },
     { key: 'closures_pending',  label: 'Closures',          tone: 'red',   icon: Car },
     { key: 'checklist_pending', label: 'Checklists',        tone: 'teal',  icon: ClipboardCheck },
+    { key: 'inspection_pending', label: 'Inspections',      tone: 'amber', icon: ClipboardList },
     { key: 'signoff_gaps',      label: 'Missed sign-off',   tone: 'orange', icon: AlertOctagon },
     { key: 'overdue',           label: 'Overdue',           tone: 'red',   icon: AlertTriangle },
     { key: 'recently_approved', label: 'Recently Approved', tone: 'green', icon: CheckCircle2 },
@@ -452,6 +476,10 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
       if (item.source === SOURCE.accident_closure) {
         if (approved) await queue.approveAccidentClosure(item.id)
         else await queue.rejectAccidentClosure(item.id, reason)
+      } else if (item.source === SOURCE.inspection) {
+        // Guarded server RPC: approver identity + timestamp derived server-side,
+        // optimistic "already decided" protection, approve locks the record.
+        await queue.decideInspection(item.id, { approved, reviewNote: reason })
       } else if (item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap) {
         // A gap goes through the SAME writer: recording the decision now moves it
         // out of not_required and stamps who signed it. There is no second path,
@@ -484,6 +512,18 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
         ['Site', item.site],
         ['Country', item.country],
         ['Requested', relTime(item.created_at)],
+      ]
+    : item.source === SOURCE.inspection
+    ? [
+        ['Asset', item.raw.asset_no],
+        ['Type', item.raw.inspection_type],
+        ['Inspector', item.raw.inspector],
+        ['Severity', item.raw.severity],
+        ['Inspection date', item.raw.inspection_date],
+        ['Tyre serial', item.raw.tyre_serial],
+        ['Site', item.site],
+        ['Country', item.country],
+        ['Submitted', relTime(item.created_at)],
       ]
     : [
         ['Template', item.raw.template_name],
@@ -696,6 +736,7 @@ export default function Approvals() {
   const [buckets, setBuckets]   = useState(EMPTY_BUCKETS)
   const [closures, setClosures] = useState([])
   const [checklistItems, setChecklistItems] = useState([])
+  const [inspectionItems, setInspectionItems] = useState([])
   const [intakeCount, setIntakeCount] = useState(0)
   const [actionableIds, setActionableIds] = useState(() => new Set())
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -717,13 +758,14 @@ export default function Approvals() {
     setWorkflowError(null)
     const country = activeCountry
 
-    const [dashR, mineR, closuresR, checklistR, intakeR, gapsR] = await Promise.allSettled([
+    const [dashR, mineR, closuresR, checklistR, intakeR, gapsR, inspectionsR] = await Promise.allSettled([
       workflows.getApprovalDashboard(),
       workflows.myPendingApprovals(),
       queue.listAccidentClosures({ country }),
       queue.listChecklistApprovals({ country }),
       queue.countDataIntakePending({ country }),
       queue.listChecklistSignoffGaps({ country }),
+      queue.listInspectionApprovals({ country }),
     ])
 
     // Workflow engine (non-fatal — the other sources still render).
@@ -742,6 +784,7 @@ export default function Approvals() {
     setChecklistItems(checklistR.status === 'fulfilled' ? (checklistR.value || []).map(toChecklistItem) : [])
     setIntakeCount(intakeR.status === 'fulfilled' ? (intakeR.value || 0) : 0)
     setSignoffGaps(gapsR.status === 'fulfilled' ? (gapsR.value || []).map(toSignoffGapItem) : [])
+    setInspectionItems(inspectionsR.status === 'fulfilled' ? (inspectionsR.value || []).map(toInspectionItem) : [])
 
     // Fatal only when EVERY primary source failed.
     const anyOk = [dashR, closuresR, checklistR].some(r => r.status === 'fulfilled')
@@ -753,23 +796,24 @@ export default function Approvals() {
 
   useEffect(() => { load() }, [load])
 
-  // Merged pending queue: workflow pending + closures + checklists.
+  // Merged pending queue: workflow pending + closures + checklists + inspections.
   const mergedPending = useMemo(() => {
     const wf = (buckets.pending || []).map(i => ({ ...i, source: SOURCE.workflow }))
-    return [...wf, ...closures, ...checklistItems]
-  }, [buckets.pending, closures, checklistItems])
+    return [...wf, ...closures, ...checklistItems, ...inspectionItems]
+  }, [buckets.pending, closures, checklistItems, inspectionItems])
 
   const counts = useMemo(() => ({
     workflow_pending:  (buckets.pending || []).length,
     closures_pending:  closures.length,
     checklist_pending: checklistItems.length,
+    inspection_pending: inspectionItems.length,
     total_pending:     mergedPending.length,
     overdue:           (buckets.overdue || []).length,
     returned:          (buckets.returned || []).length,
     rejected:          (buckets.rejected || []).length,
     recently_approved: (buckets.recently_approved || []).length,
     signoff_gaps:      signoffGaps.length,
-  }), [buckets, closures, checklistItems, mergedPending, signoffGaps])
+  }), [buckets, closures, checklistItems, inspectionItems, mergedPending, signoffGaps])
 
   const metrics = useMemo(() => {
     const m = metricsRaw && typeof metricsRaw === 'object' ? metricsRaw : {}
@@ -783,9 +827,9 @@ export default function Approvals() {
   // Site options across the non-workflow items (workflow instances carry no site).
   const siteOptions = useMemo(() => {
     const set = new Set()
-    ;[...closures, ...checklistItems, ...signoffGaps].forEach(i => i.site && set.add(i.site))
+    ;[...closures, ...checklistItems, ...inspectionItems, ...signoffGaps].forEach(i => i.site && set.add(i.site))
     return Array.from(set).sort()
-  }, [closures, checklistItems, signoffGaps])
+  }, [closures, checklistItems, inspectionItems, signoffGaps])
 
   const q = search.trim().toLowerCase()
 
@@ -834,7 +878,7 @@ export default function Approvals() {
   // specific approver, and pressing Approve on a list of them would skip exactly
   // the requirements the engine exists to enforce. A missed sign-off is a fact to
   // correct rather than a decision to make, so it is not bulk-decidable either.
-  const BULKABLE = [SOURCE.accident_closure, SOURCE.checklist]
+  const BULKABLE = [SOURCE.accident_closure, SOURCE.checklist, SOURCE.inspection]
   const bulkableList = useMemo(
     () => activeList.filter(i => BULKABLE.includes(i.source)),
     [activeList],
@@ -897,7 +941,7 @@ export default function Approvals() {
     <div className="text-[var(--text-primary)] space-y-6">
       <PageHeader
         title="Approval Dashboard"
-        subtitle="Every pending approval across your organisation — workflows, accident closures and checklist sign-offs"
+        subtitle="Every pending approval across your organisation — workflows, accident closures, checklist and inspection sign-offs"
         icon={CheckSquare}
         badge={loading ? undefined : (metrics.total_pending ? `${metrics.total_pending} pending` : undefined)}
         onRefresh={load}
@@ -963,6 +1007,7 @@ export default function Approvals() {
                 <option value={SOURCE.workflow}>Workflow</option>
                 <option value={SOURCE.accident_closure}>Accident closure</option>
                 <option value={SOURCE.checklist}>Checklist sign-off</option>
+                <option value={SOURCE.inspection}>Inspection sign-off</option>
               </select>
             </div>
             {siteOptions.length > 0 && (

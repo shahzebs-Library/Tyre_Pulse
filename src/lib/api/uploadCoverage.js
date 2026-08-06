@@ -92,6 +92,90 @@ export function problemAreas(src) {
   return (src?.sites || []).filter((s) => !s.dormant && Number(s.missing_count) > 0)
 }
 
+/**
+ * A feed whose date column is only the row's insert time answers a DIFFERENT
+ * question - "when did the file land" rather than "which day does the data
+ * cover" - so a late upload backdates nothing and the squares read as arrival.
+ * Say so on the card; a reader who assumes business dates would misread it.
+ */
+export function feedBasisNote(src) {
+  return src?.date_basis === 'arrival'
+    ? 'Counted by the day the rows landed in the system, not the day the work happened - this table carries no business date.'
+    : ''
+}
+
+/* -------------------------------------------------------------------------
+ * The watched-feed registry.
+ *
+ * Coverage used to hardcode four tables, so anything else the owner uploaded
+ * could go stale in silence. The feed list now lives in `upload_feeds` and both
+ * the panel and the morning alert read it, which is what lets a new table be
+ * watched without a code change. Writes are super-admin only (RLS), and a
+ * database trigger refuses any table or column that does not exist, so a typo
+ * is rejected at the point of saving rather than breaking the whole panel.
+ * ---------------------------------------------------------------------- */
+
+const FEED_COLS = 'id,src,label,table_name,date_column,site_column,active,sort_order,site_day_policed,date_basis'
+
+/** Every registered feed, watched or paused. `[]` if the registry is absent. */
+export async function listUploadFeeds() {
+  const { data, error } = await supabase
+    .from('upload_feeds').select(FEED_COLS).order('sort_order').order('src')
+  if (error) {
+    const m = String(error.message || error.code || '').toLowerCase()
+    if (m.includes('does not exist') || m.includes('schema cache') || m.includes('could not find')) return []
+    throw error
+  }
+  return data || []
+}
+
+/**
+ * Tables that COULD be watched: they carry organisation_id and country (so
+ * coverage can scope to the company and a country that stops is not hidden
+ * behind the ones that did not) and at least one date column. Super-admin only.
+ */
+export async function listUploadFeedCandidates() {
+  const { data, error } = await supabase.rpc('list_upload_feed_candidates')
+  if (error) {
+    const m = String(error.message || error.code || '').toLowerCase()
+    if (m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache')) return []
+    throw error
+  }
+  return Array.isArray(data?.tables) ? data.tables : []
+}
+
+/** Add or update one feed. `src` is the stable key the alert dedupes on. */
+export async function saveUploadFeed(feed) {
+  const row = {
+    src: String(feed.src || '').trim(),
+    label: String(feed.label || '').trim(),
+    table_name: feed.table_name,
+    date_column: feed.date_column,
+    site_column: feed.site_column || null,
+    active: feed.active !== false,
+    sort_order: Number.isFinite(Number(feed.sort_order)) ? Number(feed.sort_order) : 100,
+    site_day_policed: feed.site_day_policed === true,
+    date_basis: feed.date_basis === 'arrival' ? 'arrival' : 'business',
+  }
+  const q = feed.id
+    ? supabase.from('upload_feeds').update(row).eq('id', feed.id)
+    : supabase.from('upload_feeds').insert(row)
+  const { error } = await q
+  if (error) throw error
+  return true
+}
+
+/**
+ * Pause or resume a feed. Pausing is the right move for a table that genuinely
+ * stopped being uploaded on purpose - deleting the row would lose the label and
+ * the alert's dedupe history along with it.
+ */
+export async function setUploadFeedActive(id, active) {
+  const { error } = await supabase.from('upload_feeds').update({ active: !!active }).eq('id', id)
+  if (error) throw error
+  return true
+}
+
 /** Countries worst first: most problems, then most rows at stake. */
 export function sortCountries(countries = []) {
   return [...(countries || [])].sort((a, b) => {

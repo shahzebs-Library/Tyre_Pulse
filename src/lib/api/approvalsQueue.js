@@ -156,6 +156,55 @@ export async function decideChecklist(id, { approved, approverName = null, appro
   )
 }
 
+// ─── Inspection sign-off approvals ──────────────────────────────────────────────
+
+const INSPECTION_COLS =
+  'id,title,inspection_type,asset_no,tyre_serial,site,country,inspection_date,' +
+  'inspector,severity,created_at,approval_status'
+
+/**
+ * Field inspections awaiting sign-off (`approval_status = 'pending_approval'`,
+ * the token the mobile submit path writes), oldest first. This is the queue the
+ * tyre crews feed from their phones; it previously only surfaced on the
+ * Inspections page, never on the unified Approval Dashboard.
+ * @param {{ country?: string }} [opts]
+ * @returns {Promise<Array<object>>}
+ */
+export async function listInspectionApprovals({ country } = {}) {
+  try {
+    let q = supabase
+      .from('inspections')
+      .select(INSPECTION_COLS)
+      .eq('approval_status', 'pending_approval')
+      .order('created_at', { ascending: true })
+      .limit(500)
+    q = applyCountry(q, country)
+    return unwrap(await q) || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
+}
+
+/**
+ * Decide an inspection through the guarded server RPC (V320): the approver
+ * identity + timestamp are derived server-side, only a row still in
+ * 'pending_approval' transitions, and a second decider gets a clean
+ * "already decided" error. Approve locks it (status Done); reject returns it
+ * to In Progress for rework.
+ * @param {string} id
+ * @param {{ approved:boolean, reviewNote?:string|null }} decision
+ */
+export async function decideInspection(id, { approved, reviewNote = null } = {}) {
+  return unwrap(
+    await supabase.rpc('decide_inspection_approval', {
+      p_inspection_id: id,
+      p_decision: approved ? 'approved' : 'rejected',
+      p_note: reviewNote && String(reviewNote).trim() ? String(reviewNote).trim().slice(0, 8000) : null,
+    }),
+  )
+}
+
 // ─── Data-intake pending count (deep-link only, never duplicated here) ───────────
 
 /**
@@ -281,6 +330,11 @@ export async function bulkDecide(items, action, opts = {}) {
       if (item.source === 'accident_closure') {
         if (approve) await approveAccidentClosure(item.id)
         else await rejectAccidentClosure(item.id, opts.reason || null)
+      } else if (item.source === 'inspection') {
+        await decideInspection(item.id, {
+          approved: approve,
+          reviewNote: approve ? null : (opts.reason || null),
+        })
       } else if (item.source === 'checklist') {
         await decideChecklist(item.id, {
           approved: approve,

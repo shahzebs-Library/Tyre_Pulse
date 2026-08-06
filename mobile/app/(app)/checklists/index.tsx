@@ -372,6 +372,12 @@ function ChecklistsScreen() {
  * chosen asset. Country-scoped and offline-friendly (asset options + templates
  * are fetched once; template open works from cached data).
  */
+/**
+ * How many assets to show at once. The list is browsable by default, so this
+ * bounds what an old phone has to render; typing narrows it further.
+ */
+const ASSET_LIST_LIMIT = 40
+
 function TyreManChecklistFlow() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
@@ -415,10 +421,18 @@ function TyreManChecklistFlow() {
   useEffect(() => { load() }, [load])
 
   const query = search.trim().toLowerCase()
+  // Show the assets straight away and let typing NARROW them. Requiring two
+  // characters before anything appeared meant a crew who did not already know
+  // the asset number had nothing to look at - they used to be able to see the
+  // list and pick from it, and that is how it works again. Typing still filters,
+  // for anyone who does know the number.
   const matches = useMemo(() => {
-    if (query.length < 2) return []
-    return assets.filter(a => a.toLowerCase().includes(query)).slice(0, 40)
+    const base = query.length === 0 ? assets : assets.filter(a => a.toLowerCase().includes(query))
+    return base.slice(0, ASSET_LIST_LIMIT)
   }, [assets, query])
+  const moreThanShown = Math.max(
+    (query.length === 0 ? assets.length : assets.filter(a => a.toLowerCase().includes(query)).length)
+      - matches.length, 0)
 
   const pickAsset = useCallback(async (asset: string) => {
     setSelectedAsset(asset)
@@ -499,7 +513,7 @@ function TyreManChecklistFlow() {
             )}
           </View>
 
-          {query.length < 2 ? (
+          {matches.length === 0 ? (
             <View style={styles.hintBox}>
               <Ionicons name="car-outline" size={26} color={theme.color.textMuted} />
               <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textSecondary, textAlign: 'center' }]}>
@@ -513,6 +527,10 @@ function TyreManChecklistFlow() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.list}
               showsVerticalScrollIndicator={false}
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={7}
+              removeClippedSubviews
               renderItem={({ item }) => (
                 <TouchableOpacity style={[styles.assetRow, isRTL && styles.rowR]} activeOpacity={0.75} onPress={() => pickAsset(item)}>
                   <Ionicons name="car-outline" size={18} color={theme.color.primary} />
@@ -520,6 +538,11 @@ function TyreManChecklistFlow() {
                   <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={16} color={theme.color.textMuted} />
                 </TouchableOpacity>
               )}
+              ListFooterComponent={moreThanShown > 0 ? (
+                <AppText style={[typography.caption, { color: theme.color.textMuted, textAlign: 'center', paddingVertical: 12 }]}>
+                  {`+${moreThanShown} more - type to narrow`}
+                </AppText>
+              ) : null}
               ListEmptyComponent={
                 <View style={styles.hintBox}>
                   <Ionicons name="search-outline" size={24} color={theme.color.textMuted} />

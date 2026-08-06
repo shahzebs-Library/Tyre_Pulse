@@ -5,6 +5,7 @@
  * Reads use supabase directly; the only WRITE goes through recordQueue.
  */
 import { supabase } from './supabase'
+import { loadAllFleetAssets } from './fleetSearch'
 import { saveCommand } from './recordQueue'
 import { uploadModulePhoto } from './photoUpload'
 import { safeUuid } from './ids'
@@ -103,11 +104,11 @@ export async function listAssetOptions(country?: string | null): Promise<string[
     })
     if (!error && Array.isArray(data) && data.length) return uniqSorted(data.map((r: any) => r.asset_no))
   } catch { /* fall through */ }
-  let q = supabase.from('vehicle_fleet').select('asset_no')
-  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-  const { data, error } = await q.limit(3000)
-  if (error) throw error
-  return uniqSorted((data ?? []).map((r: any) => r.asset_no))
+  // Paged, not capped. .limit(3000) looked like a generous bound but the server
+  // stops at 1000 whatever the client asks for, so the tail of the fleet was
+  // missing from the asset picker.
+  const { rows } = await loadAllFleetAssets(country && country !== 'All' ? country : null)
+  return uniqSorted(rows.map((r) => r.asset_no).filter(Boolean) as string[])
 }
 
 /** Org users as display names (full_name || username). */

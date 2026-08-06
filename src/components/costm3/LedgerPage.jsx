@@ -131,12 +131,21 @@ export default function LedgerPage({
         if (p?.total) setImportPct(Math.round((p.done / p.total) * 100))
       })
       const parts = [`Read ${res.read ?? dataRows.length}`, `imported ${res.inserted || 0}`]
-      if (res.skipped) parts.push(`${res.skipped} skipped (missing country/amount/date)`)
+      if (res.skipped) {
+        const rr = res.skip_reasons || {}
+        const why = [
+          rr.no_date && `${rr.no_date} with an unreadable date`,
+          rr.no_amount && `${rr.no_amount} with no amount`,
+          rr.no_country && `${rr.no_country} with no country`,
+        ].filter(Boolean).join(', ')
+        parts.push(`${res.skipped} skipped${why ? ` (${why})` : ' (missing country/amount/date)'}`)
+      }
       if (res.failed) parts.push(`${res.failed} failed`)
       if (res.updated) parts.splice(2, 0, `${res.updated} updated`)
       let msg = `${file.name}: ${parts.join(', ')}.`
       if (res.failed && res.errors?.length) msg += ` First error: ${res.errors[0]}`
-      if (res.failed) setError(msg); else setNotice(msg)
+      // Nothing imported is a problem to fix, not a success to skim past.
+      if (res.failed || !res.inserted) setError(msg); else setNotice(msg)
       logIntakeToHistory({ filename: file.name, sizeBytes: file.size, module: kind, country, result: res, at: new Date().toISOString() })
       load()
     } catch (err) {

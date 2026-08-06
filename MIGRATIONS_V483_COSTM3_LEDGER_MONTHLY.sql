@@ -1,0 +1,12 @@
+-- ============================================================================
+-- V483 — SCO/SANY LEDGER MONTHLY SUMMARY (STATUS: APPLIED LIVE 2026-08-06 via
+-- MCP migration v483_costm3_ledger_monthly; this file is the repo record)
+-- ============================================================================
+-- get_costm3_ledger_monthly(p_kind 'sco'|'sany', p_country, p_from, p_to)
+-- -> jsonb array, one element per month (newest first): entries, amount and a
+-- per-region split. SANY amounts count only doc_type <> 'detail' (matching
+-- get_cost_per_m3 - part lines are never double-counted) with detail_entries
+-- reported separately. SECURITY INVOKER (RLS is the boundary); EXECUTE revoked
+-- from PUBLIC + anon, granted to authenticated. Mirrors V482 (production).
+-- Rollback: DROP FUNCTION public.get_costm3_ledger_monthly(text, text, date, date);
+-- ============================================================================

@@ -162,3 +162,31 @@ describe('SCO Values mapping + SANY proforma passthrough', () => {
     expect(row.doc_type).toBe('detail')
   })
 })
+
+describe('SCO issue grid (bj_griddetails) format', () => {
+  it('maps Issue Number/Transaction Type/Store Code/Item Description/Values and keeps WO+Asset in notes', () => {
+    const [row] = mapImportRows('sco', [{
+      '#': 1,
+      'Issue Number': 'GC/SCO/0006/0826',
+      'Work Order Number': 'GCKR/JC/2306/0726',
+      'Transaction Type': new Date(2026, 7, 2),
+      'Asset Code': 'MP079',
+      'Asset Description': 'CONCRETE PUMP',
+      'Asset Type': 'PUMPS',
+      'Store Code': 'NHC-ST',
+      'Cost Center': '100054',
+      Itemcode: 'SC-001',
+      Qty: 1,
+      'Item Description': 'Hydraulic Pipe For MP079 Pump',
+      Values: 160.87,
+      'Spare Parts': 160.87, Trye: 0, Oil: 0, 'Total Parts Consumption': 160.87,
+    }])
+    expect(row.ref_no).toBe('GC/SCO/0006/0826')
+    expect(row.period_date).toBe('2026-08-01')
+    expect(row.site).toBe('NHC-ST')
+    expect(row.cost_center).toBe('100054')
+    expect(row.description).toBe('Hydraulic Pipe For MP079 Pump')
+    expect(row.amount).toBeCloseTo(160.87, 2)
+    expect(row.notes).toBe('WO GCKR/JC/2306/0726 / Asset MP079')
+  })
+})

@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../../lib/supabase'
+import { searchFleetAssets } from '../../lib/fleetSearch'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -62,8 +62,11 @@ function VehiclesScreen() {
   const s = useMemo(() => makeStyles(theme), [theme])
   const [rows, setRows] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -73,49 +76,53 @@ function VehiclesScreen() {
   const textAlign = isRTL ? 'right' : 'left'
   const mayInspect = canInspect(profile?.role)
 
-  const load = useCallback(async () => {
-    try {
-      setError(null)
-      let q = supabase
-        .from('vehicle_fleet')
-        .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
-        .order('asset_no')
-        .limit(2000)
-      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-      const { data, error: qErr } = await q
-      if (qErr) throw qErr
-      setRows((data as Vehicle[]) ?? [])
-    } catch (e: any) {
-      if (__DEV__) console.warn('[vehicles] load failed:', e?.message)
+  // Searching and paging happen in the DATABASE. The old version read the fleet
+  // into memory with .limit(2000) and filtered locally, which silently lost
+  // every asset past the server's 1000 row ceiling - 22 of KSA's 1,022 were
+  // unreachable on the phone while the web showed them all.
+  const load = useCallback(async (opts?: { search?: string, append?: boolean }) => {
+    const search = opts?.search ?? query
+    const append = opts?.append === true
+    const offset = append ? rows.length : 0
+    if (!append) setLoading(true)
+    const page = await searchFleetAssets(search, profile?.country ?? null, offset)
+    if (page.failed) {
       setError(t('modules.vehicles.loadError'))
-      setRows([])
-    } finally {
-      setLoading(false)
+      if (!append) setRows([])
+    } else {
+      setError(null)
+      setRows((prev) => (append ? prev.concat(page.rows) : page.rows))
+      setTotal(page.total)
+      setHasMore(page.hasMore)
     }
-  }, [profile?.country])
+    setLoading(false)
+    setLoadingMore(false)
+  }, [profile?.country, query, rows.length, t])
 
-  useEffect(() => { load() }, [load])
+  // Debounced so a search is one query when typing stops, not one per keystroke
+  // - the difference between a responsive box and a stuttering one on a slow
+  // connection.
+  useEffect(() => {
+    const id = setTimeout(() => { load({ search: query, append: false }) }, 300)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, profile?.country])
 
   async function onRefresh() {
     setRefreshing(true)
-    await load()
+    await load({ search: query, append: false })
     setRefreshing(false)
   }
 
-  const shown = useMemo(() => {
-    const term = query.trim().toLowerCase()
-    if (!term) return rows
-    return rows.filter(v =>
-      v.asset_no?.toLowerCase().includes(term) ||
-      v.fleet_number?.toLowerCase().includes(term) ||
-      v.make?.toLowerCase().includes(term) ||
-      v.model?.toLowerCase().includes(term) ||
-      v.vehicle_type?.toLowerCase().includes(term) ||
-      v.operator_name?.toLowerCase().includes(term) ||
-      v.registration_no?.toLowerCase().includes(term) ||
-      v.site?.toLowerCase().includes(term),
-    )
-  }, [rows, query])
+  function onEndReached() {
+    if (loadingMore || loading || !hasMore) return
+    setLoadingMore(true)
+    load({ search: query, append: true })
+  }
+
+  // Every row returned already matched on the server; filtering again here
+  // would only re-hide what the server correctly found.
+  const shown = rows
 
   if (!allowed) return null
 
@@ -127,8 +134,10 @@ function VehiclesScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <AppText variant="h2" style={{ textAlign }}>{t('modules.vehicles.title')}</AppText>
+          {/* The honest number is the TOTAL that matched, not how many have
+              been scrolled into view so far. */}
           <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
-            {rows.length} {t('modules.vehicles.inFleet')}
+            {total} {t('modules.vehicles.inFleet')}
           </AppText>
         </View>
       </View>
@@ -163,6 +172,13 @@ function VehiclesScreen() {
           windowSize={9}
           removeClippedSubviews
           showsVerticalScrollIndicator={false}
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={loadingMore
+            ? <AppText variant="caption" color="muted" style={{ textAlign: 'center', paddingVertical: spacing.md }}>
+                {t('common.loading')}
+              </AppText>
+            : null}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={
             error ? (

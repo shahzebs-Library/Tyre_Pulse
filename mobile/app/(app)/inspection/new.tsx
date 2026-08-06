@@ -13,6 +13,7 @@ import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import { clientId } from '../../../lib/ids'
+import { loadAllFleetAssets } from '../../../lib/fleetSearch'
 import * as Network from 'expo-network'
 import { captureInspectionLocation, LocationStatus } from '../../../lib/location'
 import { uploadAllPositionPhotos } from '../../../lib/photoUpload'
@@ -339,12 +340,11 @@ function NewInspectionScreen() {
   async function loadVehicles() {
     setLoadingVehicles(true)
     try {
-      const { data } = await supabase
-        .from('vehicle_fleet')
-        .select('id, site, asset_no, vehicle_type, make, model')
-        .order('asset_no')
-        .limit(2000)
-      const rows = data ?? []
+      // Paged, not capped: a .limit() above the server's 1000 row ceiling is
+      // ignored, so the tail of the fleet was missing from the screen a crew
+      // uses to find their own vehicle.
+      const { rows: all } = await loadAllFleetAssets(profile?.country ?? null)
+      const rows = all as unknown as typeof vehicles
       setVehicles(rows)
       setFilteredVehicles(rows)
     } catch {

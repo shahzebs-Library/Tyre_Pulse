@@ -1,0 +1,42 @@
+-- V490 - the phone can see EVERY asset, and stops carrying the fleet in memory.
+-- STATUS: APPLIED LIVE (project jhssdmeruxtrlqnwfksc) + verified as a real Tyre Man.
+--
+-- THE DEFECT. The mobile Assets screen read vehicle_fleet with .limit(2000),
+-- believing that raised the ceiling. It does not: PostgREST caps a plain query
+-- at its server max-rows (1000 here) and a larger .limit() is ignored. KSA has
+-- 1,022 assets, so a KSA user saw 1,000 of them ordered by asset number and the
+-- last 22 did not exist as far as the phone was concerned - while the web pages
+-- its reads and showed all of them. That is exactly the reported "I can see it
+-- on the web but not in the app", and it gets quietly worse with every asset.
+--
+-- The same mistaken belief was in two more places, with a comment in one of
+-- them stating outright that "the bound sits above any per-country fleet":
+--   app/(app)/inspection/new.tsx   .limit(2000)
+--   app/(app)/accident/report.tsx  .limit(3000)  (FLEET_SEARCH_CAP)
+-- So the tail of the fleet was missing from the two forms a crew uses to find
+-- their own vehicle. Both now page until the server says there is no more.
+--
+-- Raising the limit again cannot fix a ceiling enforced on the server, and
+-- holding 1,000+ rows on a 2GB handset was the wrong shape regardless - it made
+-- the Assets screen the slowest in the app. So the search moves into the
+-- database and the phone takes a page at a time.
+--
+-- SECURITY INVOKER on purpose: row level security applies exactly as it does to
+-- a direct read, so a country-scoped user still searches only their own
+-- country. This function widens nothing.
+--
+-- VERIFIED live by impersonating a real Tyre Man (KSA scoped):
+--   total 1,022 - the true KSA fleet, not 1,000
+--   offset 1000 returns WL044 and offset 1021 returns WTP02, both of which no
+--     phone could reach before
+--   free-text search returns 99 matches for "TM6"
+--   a page is exactly 40 rows with has_more true
+--   a '%' query returns 0, not the whole fleet - the LIKE wildcards are escaped
+--
+-- ROLLBACK: drop function if exists public.search_fleet_assets(text,text,text,int,int);
+--
+-- Full body is the live definition:
+--   select pg_get_functiondef('public.search_fleet_assets(text,text,text,int,int)'::regprocedure);
+--
+-- RULE: never "fix" a truncated list by raising .limit(). The ceiling is on the
+-- server. Page it, or search server side.

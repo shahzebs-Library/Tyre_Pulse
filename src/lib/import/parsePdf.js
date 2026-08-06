@@ -191,16 +191,27 @@ export function parseSanyProformaPdf(linesOrText) {
     prevEnd = negRe.lastIndex
   }
 
-  // Reference number (Ref. No. SYDU202 504 15 -> SYDU20250415).
+  // Reference number (Ref. No. SYDU202 504 15 -> SYDU20250415). A continuation
+  // token is only part of the split ref if it carries a DIGIT - otherwise the
+  // following prose ("Service Merchant ...") glues onto the number.
   const refM = text.match(/Ref\.?\s*No\.?\s*:?\s*([A-Z0-9]+(?:\s+[A-Z0-9]+){0,2})/i)
-  let invoiceNo = refM ? refM[1].replace(/\s+/g, '') : ''
+  let invoiceNo = ''
+  if (refM) {
+    const toks = refM[1].split(/\s+/)
+    const kept = [toks[0]]
+    for (const t of toks.slice(1)) { if (/\d/.test(t)) kept.push(t); else break }
+    invoiceNo = kept.join('')
+  }
   if (!invoiceNo) {
     const scM = text.match(/Service\s*Contract\s*NO\.?\s*:?\s*([A-Z0-9]+)/i)
     invoiceNo = scM ? scM[1] : `SANY-${grossUsd}`
   }
 
-  // Service period + invoice date from YYYY-Mon-DD tokens (digits are fragmented, so
-  // match against the whitespace-stripped text). First = period start, last = invoice date.
+  // Service period from YYYY-Mon-DD tokens (digits are fragmented, so match against
+  // the whitespace-stripped text). The FIRST TWO dates are the PI Duration (period
+  // start/end); the invoice date = the period END, never the document's last date -
+  // the signature page carries a hand-typed date SANY has shipped with the wrong
+  // YEAR ("2025-Apr-15th" on a 2026 invoice), which used to pull the row a year back.
   const compact = text.replace(/\s+/g, '')
   const dre = /(\d{4})-([A-Za-z]{3})[a-z]*-(\d{1,2})/g
   const isoDates = []
@@ -210,7 +221,7 @@ export function parseSanyProformaPdf(linesOrText) {
     if (mm) isoDates.push(`${dt[1]}-${mm}-${String(dt[3]).padStart(2, '0')}`)
   }
   const startDate = isoDates[0] || null
-  const invoiceDate = isoDates[isoDates.length - 1] || startDate
+  const invoiceDate = isoDates[1] || startDate
   const periodMonth = invoiceDate ? `${invoiceDate.slice(0, 7)}-01` : null
 
   const periodText = startDate && invoiceDate ? `${startDate} to ${invoiceDate}` : (invoiceDate || '')

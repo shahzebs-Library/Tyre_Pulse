@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { fetchAllRows } from '../../../lib/fetchAllRows'
+import { assetClassOf, classChips } from '../../../lib/assetClasses'
 import { toUserMessage } from '../../../lib/safeError'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import { clientId } from '../../../lib/ids'
@@ -101,6 +103,10 @@ function NewInspectionScreen() {
   const [vehicles, setVehicles] = useState<VehicleFleet[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
   const [vehicleQuery, setVehicleQuery] = useState('')
+  // Asset-class chip filter (TM / MP / WL ...). Tapping a chip lets the crew
+  // BROWSE that class without typing - tyre-carrying classes come first, so
+  // the useful list stays small even with a 1000+ asset register.
+  const [classFilter, setClassFilter] = useState<string | null>(null)
   const [selectedSite, setSelectedSite] = useState(params.site ?? profile?.site ?? '')
   // Site dropdown (replaces the old chip grid): open state + in-picker search.
   const [sitePickerOpen, setSitePickerOpen] = useState(false)
@@ -144,19 +150,28 @@ function NewInspectionScreen() {
   // inspector types a search (or arrives via scan/asset param, which preselects
   // the vehicle directly). An empty query returns an empty list so the picker
   // shows a "search or scan" prompt instead of every asset on the site.
-  const hasVehicleQuery = vehicleQuery.trim().length > 0
+  const hasVehicleQuery = vehicleQuery.trim().length > 0 || classFilter != null
+  const vehicleClassChips = useMemo(() => classChips(filteredVehicles), [filteredVehicles])
   const shownVehicles = useMemo(() => {
     const q = vehicleQuery.trim().toLowerCase()
-    if (!q) return []
-    // Capped: the pool is now the whole visible fleet, and a broad term like
-    // "mixer" would otherwise render hundreds of cards.
-    return filteredVehicles.filter(v =>
-      v.asset_no?.toLowerCase().includes(q) ||
-      v.vehicle_type?.toLowerCase().includes(q) ||
-      v.make?.toLowerCase().includes(q) ||
-      v.model?.toLowerCase().includes(q)
-    ).slice(0, 30)
-  }, [filteredVehicles, vehicleQuery])
+    if (!q && !classFilter) return []
+    // A typed search always covers the WHOLE visible fleet - the class chips
+    // only shape browsing, they must never make an asset unfindable.
+    let pool = filteredVehicles
+    if (q) {
+      pool = pool.filter(v =>
+        v.asset_no?.toLowerCase().includes(q) ||
+        v.vehicle_type?.toLowerCase().includes(q) ||
+        v.make?.toLowerCase().includes(q) ||
+        v.model?.toLowerCase().includes(q)
+      )
+    } else if (classFilter) {
+      pool = pool.filter(v => assetClassOf(v.asset_no) === classFilter)
+    }
+    // Capped: a broad term like "mixer" (or a big class like TM) would
+    // otherwise render hundreds of cards - refine with the search box.
+    return pool.slice(0, 60)
+  }, [filteredVehicles, vehicleQuery, classFilter])
 
   // Manual-entry guard: flag when a hand-typed asset does not match any vehicle
   // in the selected site's fleet, and surface the closest real asset. This
@@ -339,12 +354,13 @@ function NewInspectionScreen() {
   async function loadVehicles() {
     setLoadingVehicles(true)
     try {
-      const { data } = await supabase
+      // Paged: the server caps any single response at 1000 rows, and the KSA
+      // fleet alone is past that - a .limit(2000) still lost the tail.
+      const rows = await fetchAllRows<any>((from, to) => supabase
         .from('vehicle_fleet')
         .select('id, site, asset_no, vehicle_type, make, model')
-        .order('asset_no')
-        .limit(2000)
-      const rows = data ?? []
+        .order('asset_no').order('id')
+        .range(from, to), { max: 5000 })
       setVehicles(rows)
       setFilteredVehicles(rows)
     } catch {
@@ -610,6 +626,29 @@ function NewInspectionScreen() {
                         </TouchableOpacity>
                       )}
                     </View>
+
+                    {/* Asset-class chips: tap TM / MP / WL ... to browse that
+                        class without typing. Tyre-carrying classes lead. */}
+                    {vehicleClassChips.length > 0 && (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.classChipRow}>
+                        <TouchableOpacity
+                          style={[styles.classChip, classFilter == null && styles.classChipActive]}
+                          onPress={() => setClassFilter(null)}
+                        >
+                          <Text style={[styles.classChipText, classFilter == null && styles.classChipTextActive]}>{t('common.all')}</Text>
+                        </TouchableOpacity>
+                        {vehicleClassChips.map((ch) => (
+                          <TouchableOpacity
+                            key={ch.cls}
+                            style={[styles.classChip, classFilter === ch.cls && styles.classChipActive]}
+                            onPress={() => setClassFilter(classFilter === ch.cls ? null : ch.cls)}
+                          >
+                            <Text style={[styles.classChipText, classFilter === ch.cls && styles.classChipTextActive]}>{ch.cls}</Text>
+                            <Text style={[styles.classChipCount, classFilter === ch.cls && styles.classChipTextActive]}>{ch.count}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
 
                     {loadingVehicles ? (
                       <ActivityIndicator size="small" color={theme.color.primary} style={{ marginTop: 10 }} />
@@ -1465,6 +1504,22 @@ function makeStyles(theme: Theme) {
   },
   searchBoxRTL: { flexDirection: 'row-reverse' },
   searchInput: { flex: 1, fontSize: 15, color: c.text },
+  classChipRow: { flexDirection: 'row', gap: spacing.xs + 2, marginTop: spacing.sm, paddingBottom: 2 },
+  classChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
+  },
+  classChipActive: { backgroundColor: c.primary, borderColor: c.primary },
+  classChipText: { fontSize: 12, fontWeight: '700', color: c.text },
+  classChipTextActive: { color: c.onPrimary },
+  classChipCount: { fontSize: 11, color: c.textMuted, fontWeight: '600' },
   vehicleEmpty: {
     flexDirection: 'row',
     alignItems: 'center',

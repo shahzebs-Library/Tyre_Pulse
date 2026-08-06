@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, TextInput,
+  RefreshControl, TextInput, ScrollView,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../lib/fetchAllRows'
+import { assetClassOf, classChips, isTyreAsset } from '../../lib/assetClasses'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -64,6 +66,10 @@ function VehiclesScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
+  // Class filter: 'TYRES' (default) = only classes that carry tyres (TM/MP/WL/
+  // SL/PL/BH...), keeping the list well under the full register; null = all
+  // equipment; or one specific class code.
+  const [classFilter, setClassFilter] = useState<string | null>('TYRES')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -76,15 +82,18 @@ function VehiclesScreen() {
   const load = useCallback(async () => {
     try {
       setError(null)
-      let q = supabase
-        .from('vehicle_fleet')
-        .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
-        .order('asset_no')
-        .limit(2000)
-      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-      const { data, error: qErr } = await q
-      if (qErr) throw qErr
-      setRows((data as Vehicle[]) ?? [])
+      // Paged: the server caps any single response at 1000 rows, and the KSA
+      // fleet alone is past that - a .limit(2000) still lost the tail.
+      const data = await fetchAllRows<Vehicle>((from, to) => {
+        let q = supabase
+          .from('vehicle_fleet')
+          .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
+          .order('asset_no').order('id')
+          .range(from, to)
+        if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+        return q
+      }, { max: 5000 })
+      setRows(data ?? [])
     } catch (e: any) {
       if (__DEV__) console.warn('[vehicles] load failed:', e?.message)
       setError(t('modules.vehicles.loadError'))
@@ -102,9 +111,18 @@ function VehiclesScreen() {
     setRefreshing(false)
   }
 
+  const chips = useMemo(() => classChips(rows), [rows])
+  const classed = useMemo(() => {
+    if (classFilter === 'TYRES') return rows.filter(v => isTyreAsset(v.asset_no))
+    if (classFilter) return rows.filter(v => assetClassOf(v.asset_no) === classFilter)
+    return rows
+  }, [rows, classFilter])
+
   const shown = useMemo(() => {
     const term = query.trim().toLowerCase()
-    if (!term) return rows
+    if (!term) return classed
+    // A typed search always covers the WHOLE fleet - the class chips only
+    // shape browsing, they must never make an asset unfindable.
     return rows.filter(v =>
       v.asset_no?.toLowerCase().includes(term) ||
       v.fleet_number?.toLowerCase().includes(term) ||
@@ -115,7 +133,7 @@ function VehiclesScreen() {
       v.registration_no?.toLowerCase().includes(term) ||
       v.site?.toLowerCase().includes(term),
     )
-  }, [rows, query])
+  }, [rows, classed, query])
 
   if (!allowed) return null
 
@@ -150,6 +168,39 @@ function VehiclesScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Class chips: default shows only tyre-carrying classes (TM/MP/WL...),
+          which keeps the list small; All reveals the full register. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipScroll} contentContainerStyle={s.chipRow}>
+        <TouchableOpacity
+          style={[s.chip, classFilter === 'TYRES' && s.chipActive]}
+          onPress={() => setClassFilter('TYRES')}
+        >
+          <Ionicons name="ellipse-outline" size={12} color={classFilter === 'TYRES' ? theme.color.onPrimary : theme.color.primary} />
+          <AppText variant="caption" style={[s.chipText, classFilter === 'TYRES' && s.chipTextActive]}>
+            {t('modules.vehicles.tyreAssets')}
+          </AppText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.chip, classFilter == null && s.chipActive]}
+          onPress={() => setClassFilter(null)}
+        >
+          <AppText variant="caption" style={[s.chipText, classFilter == null && s.chipTextActive]}>
+            {t('common.all')}
+          </AppText>
+        </TouchableOpacity>
+        {chips.map(ch => (
+          <TouchableOpacity
+            key={ch.cls}
+            style={[s.chip, classFilter === ch.cls && s.chipActive]}
+            onPress={() => setClassFilter(classFilter === ch.cls ? 'TYRES' : ch.cls)}
+          >
+            <AppText variant="caption" style={[s.chipText, classFilter === ch.cls && s.chipTextActive]}>
+              {ch.cls} {ch.count}
+            </AppText>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {loading ? (
         <Loading label={t('modules.vehicles.loadingLabel')} />
@@ -271,6 +322,17 @@ function makeStyles(theme: Theme) {
       borderWidth: 1.5, borderColor: c.border,
     },
     search: { flex: 1, paddingVertical: 12, fontSize: 15, fontWeight: '500' },
+    chipScroll: { flexGrow: 0, marginBottom: spacing.sm },
+    chipRow: { paddingHorizontal: spacing.lg, gap: spacing.xs + 2 },
+    chip: {
+      flexDirection: 'row', alignItems: 'center', gap: 4,
+      paddingHorizontal: spacing.sm + 2, paddingVertical: 6,
+      borderRadius: radius.md, borderWidth: 1,
+      borderColor: c.border, backgroundColor: c.surface,
+    },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipText: { fontWeight: '700' },
+    chipTextActive: { color: c.onPrimary },
     list: { paddingHorizontal: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md, paddingTop: spacing.xs },
 
     card: { overflow: 'hidden' },

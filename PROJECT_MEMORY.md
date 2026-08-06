@@ -3,6 +3,45 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-06 (part 3) — SCO/SANY FILES LOADED + IMPORTER TAUGHT THEIR FORMATS + THE 1000-ROW PICKER CAP + TYRE-CLASS CHIPS. No migration; next free **V488**. PRs #276/#278 merged; Play build triggered.
+- **SCO ISSUE GRID LOADED EXACT (user file, "uploaded sco it didnt show at all").** The real SCO export
+  (sheet `bj_griddetails`) titles its DATE column **"Transaction Type"** and its reference **"Issue Number"** -
+  neither was in HEADER_SYNONYMS, so every row mapped empty and LedgerPage steered the file to Data Intake as a
+  parts grid. Loaded the file DIRECTLY into `sco_costs` via chunked dedup-guarded INSERTs: **672 rows /
+  SAR 1,207,478.46 (Sep 2025 - Aug 2026), reconciles byte-exact** (two genuinely repeated source lines kept;
+  NOTE the NOT EXISTS dedup guard on ref+desc+amount+date suppressed a SAME-KEY row that was a DIFFERENT job -
+  REC04 vs REC05 both "Fabrication Of Re-Claimer Bush" 2500 - reconcile totals after any guarded load).
+  IMPORTER FIX (#276): HEADER_SYNONYMS += 'transaction type'->period_date, 'issue number'/'issue no'->ref_no;
+  sco template += notes; mapImportRows sco branch composes `WO <n> / Asset <code>` into notes from unmapped
+  headers; LedgerPage looksLikeGrid EXEMPTS kind==='sco' with an Issue Number header.
+- **4 SANY PROFORMA PDFs LOADED (SAR 4,333,144.54): Apr 2026 = 2,114,490.71 + Jul 2026 = 2,218,653.83** (each
+  quarter = SANY Automobile gross + the local Sany International generator contract; gross USD x 3.75 per the
+  standing rule, net + per-deduction detail on the rows). `sany_invoices` was EMPTY before - the user's browser
+  was running a stale PWA build (prompt-mode: reload needed). TWO REAL PARSER DEFECTS fixed (#278,
+  `parseSanyProformaPdf`): (1) **SANY ships a WRONG-YEAR hand-typed signature date** ("2025-April-15th" on a
+  2026 invoice) and the parser took the document's LAST date as the invoice date -> would file a quarter a year
+  back. Invoice date = the **PI Duration period END** (isoDates[1]), never the last date. (2) A single-token
+  `Ref. No. SYDU20250415` glued following prose into the ref - continuation tokens now require a digit.
+- **"CANT FIND MANY ASSETS IN KSA" = THE SERVER'S 1000-ROW RESPONSE CAP.** KSA fleet crossed **1,022** assets;
+  PostgREST caps EVERY response at 1000 REGARDLESS of `.limit(2000)`/`.limit(3000)` - the mobile vehicles list,
+  inspection picker and accident picker all silently lost the tail. **RULE: `.limit(N>1000)` is a lie on mobile
+  too; only `.range()` pages get past the cap.** New `mobile/lib/fetchAllRows.ts` (pages 1000 at a time, max
+  5000, order MUST carry the `.order('id')` tiebreak) applied to all three surfaces. DB itself was clean
+  (0 orphans, all KSA users sites=['ALL']).
+- **TYRE-CLASS CHIPS (owner ask "show those which we have assigned tyres... under 1000").** Measured live:
+  tyre_records exist ONLY under classes **TM/MP/PL/WL/BH/SL (+LP KSA, +MB Egypt)** = 735 of KSA's 1,022; the
+  overflow is no-tyre equipment (GN/BP/IP/SP/PB/HD/REC...). Pure `mobile/lib/assetClasses.ts`
+  (TYRE_ASSET_CLASSES + assetClassOf + classChips). Vehicles screen defaults to a "Tyre assets" chip (All one
+  tap away); inspection picker gained per-class browse chips with counts. **RULE (user caught it): a typed
+  SEARCH always covers the WHOLE fleet - chips only shape browsing, they must never make an asset unfindable.**
+  en+ar `modules.vehicles.tyreAssets`.
+- **CI note:** one Web-job failure this session was GitHub's own infra ("Service Unavailable" resolving
+  actions), not code - re-run, don't debug. The `tyre-pulse-eezl` (marketing/) Vercel project still fails on
+  EVERY commit (pre-existing, not a merge gate; offered fix, not requested).
+- **OPEN:** Play build (release-play.yml on main) was triggered for the picker/chips fixes - testers must
+  UPDATE from the Play Closed track; web users must reload the browser (prompt-mode PWA) before judging any
+  import fix.
+
 ## SESSION 2026-08-06 (part 2) — PDF EXPORTS FIXED APP-WIDE + DAILY COVERAGE IS A REGISTRY + UPLOAD-GAP PUSH. Migrations through **V487**, next free **V488**.
 - **EVERY PDF THAT DRAWS A TABLE WAS BROKEN (user: "i cant downlaod it like inspection and many more areas").**
   `jspdf-autotable@3.8.4` declares peer `jspdf: ^2.5.1`; the app runs **jspdf 4.2.1**, and under that pairing the

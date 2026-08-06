@@ -305,8 +305,10 @@ function resolveOne(vt?: string | null): string | null {
   // (Tr-Mixer, Wheel_Loader, Line/Spider/Stationary Pump, Placing Boom, ...).
   if (s.includes('tri') || s.includes('mixer') || s.includes('transit')) return 'Tri-mixer'
   if (s.includes('boom') || s.includes('placing'))         return 'Concrete pump'
-  // Stationary / skid-mounted pumps are NOT the 5-axle truck-mounted pump -
-  // fall back to the minimal 2-axle default instead of 3 steer axles.
+  // Stationary pumps have NO tyres at all (owner confirmed) - the tyreless
+  // check (NO_TYRE_EQUIPMENT) short-circuits before this resolver runs. This
+  // line stays as a DEFENSIVE stop so any caller that skips that check can
+  // never fall through to the 'pump' branch below and draw 14 tyres.
   if (s.includes('stationary'))                            return 'Pickup'
   // Line pump: its own 12-tyre pump layout (fleet owner confirmed), NOT the
   // 10-tyre 6x4 it used to share with the spider pump.
@@ -389,6 +391,10 @@ export const NO_TYRE_EQUIPMENT = [
   // a different machine from the truck-mounted concrete pump and must not
   // borrow that pump's 14 tyres.
   'placing boom', 'placing',
+  // A stationary pump is skid-mounted concrete pumping gear with NO wheels
+  // (fleet owner confirmed, 2026-08-05). It used to draw 4 tyres via the
+  // Pickup fallback.
+  'stationary',
   'building',
 ]
 

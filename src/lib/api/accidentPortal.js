@@ -70,9 +70,32 @@ export async function revokeCasePortalLink(id) {
 }
 
 /**
- * Absolute external portal URL for a token. Builds the string only; the
- * /accident-portal/<token> route may not exist yet (that is fine - this never
- * navigates, it just produces the shareable link).
+ * Read the PII-lean snapshot behind a portal token. ANON-callable by design -
+ * this is the one read an insurer makes from the public viewer page. Returns
+ * the RPC payload verbatim: `{ ok:true, case_no, reference_no, status,
+ * severity, workflow_stage, incident_date, workstreams, claim, generated_at }`
+ * or `{ ok:false, reason:'invalid'|'revoked'|'expired'|'password'|'unavailable' }`.
+ * Never throws for the viewer - a transport failure maps to 'unavailable'.
+ *
+ * @param {string} token portal share token ('acp_...')
+ * @param {string} [password] required only when the link was minted with one
+ */
+export async function getCasePortalSnapshot(token, password) {
+  try {
+    const { data, error } = await supabase.rpc('get_accident_portal_snapshot', {
+      p_token: String(token || ''),
+      p_password: (password && String(password)) || null,
+    })
+    if (error) return { ok: false, reason: 'unavailable' }
+    return data || { ok: false, reason: 'unavailable' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
+/**
+ * Absolute external portal URL for a token, served by the public viewer page
+ * at /accident-portal/<token> (src/pages/AccidentPortalView.jsx).
  *
  * @param {string} token portal share token ('acp_...')
  * @returns {string}

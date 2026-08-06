@@ -108,11 +108,6 @@ export const NOT_BUILT = [
     who: 'you',
     what: 'Built but switched off by your decision: new users join your company after approval; creating a brand-new company is not open to the public.',
   },
-  {
-    title: 'External insurer portal screens',
-    who: 'build',
-    what: 'The secure links for an insurer to view one accident case exist at the database level; the polished web page an insurer would see is not built yet.',
-  },
 ]
 
 /** Console section rows: merge the live nav with the descriptions. */

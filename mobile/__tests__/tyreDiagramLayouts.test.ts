@@ -43,6 +43,9 @@ describe('equipment with no wheels asks for no tyres', () => {
   it.each([
     'PLACING BOOM', 'BT-PLANT', 'ICE PLANT', 'WATER TREATMENT PLANT',
     'BATCHING PLANT', 'BUILDINGS', 'GENERATOR', 'CHILLER', 'RECLAIMER',
+    // Skid-mounted concrete pumping gear with no wheels - owner confirmed
+    // 2026-08-05. It used to draw 4 tyres via the Pickup fallback.
+    'STATIONARY PUMP', 'Stationary pump',
   ])('%s asks for zero tyres', (vt) => {
     expect(isTyrelessEquipment(vt)).toBe(true)
     expect(tyreCount(vt)).toBe(0)

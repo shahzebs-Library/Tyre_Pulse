@@ -314,6 +314,7 @@ const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
 const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
 const MasterAccessControl    = lazy(() => import('./pages/MasterAccessControl'))
 const ReportShare            = lazy(() => import('./pages/ReportShare'))
+const AccidentPortalView     = lazy(() => import('./pages/AccidentPortalView'))
 const DataDeletion           = lazy(() => import('./pages/DataDeletion'))
 const Privacy                = lazy(() => import('./pages/Privacy'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
@@ -477,6 +478,10 @@ function MainApp() {
                 row; the page degrades gracefully until the migrations are applied. */}
             <Route path="/report/:token" element={<Safe><ReportShare /></Safe>} />
             <Route path="/workshop-tv/:token" element={<Safe><WorkshopTv /></Safe>} />
+            {/* Insurer / authority case summary (anon token link minted from the
+                accident case's Share panel). PII-lean by construction: the
+                snapshot RPC excludes money + driver fields at the DB level. */}
+            <Route path="/accident-portal/:token" element={<Safe><AccidentPortalView /></Safe>} />
             {/* TV display mode: authed, but rendered WITHOUT the Layout chrome */}
             <Route
               path="/display"

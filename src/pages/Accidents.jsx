@@ -28,6 +28,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import * as accidentsApi from '../lib/api/accidents'
 import { getAssetByNo } from '../lib/api/assets'
+import { listSites } from '../lib/api/sites'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
@@ -587,7 +588,21 @@ export default function Accidents() {
     return () => clearTimeout(t)
   }, [form.asset_no, fleetAssets, applyAssetMaster])
 
-  const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
+  // Site options = the full registered site list (sites registry, country-scoped)
+  // merged with any site already on an accident record. Deriving from records
+  // alone hid every area with no accident yet, so the form could not offer it.
+  const [registrySites, setRegistrySites] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    listSites({ country: activeCountry, activeOnly: true })
+      .then(rows => { if (!cancelled) setRegistrySites(rows.map(s => s.name).filter(Boolean)) })
+      .catch(() => { /* best-effort: record-derived sites still render */ })
+    return () => { cancelled = true }
+  }, [activeCountry])
+  const sites = useMemo(
+    () => [...new Set([...registrySites, ...records.map(r => r.site).filter(Boolean)])].sort(),
+    [records, registrySites],
+  )
 
   // Distinct case stage / current-status values actually present in the data,
   // for the stage filter (honest — only real values, no placeholder options).

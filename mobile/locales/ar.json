@@ -935,7 +935,8 @@
       "region": "المنطقة",
       "country": "الدولة",
       "tyreSize": "مقاس الإطار",
-      "registration": "التسجيل"
+      "registration": "التسجيل",
+      "tyreAssets": "أصول الإطارات"
     },
     "workOrders": {
       "title": "أوامر العمل",

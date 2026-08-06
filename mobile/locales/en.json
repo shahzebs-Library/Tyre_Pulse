@@ -934,7 +934,8 @@
       "region": "Region",
       "country": "Country",
       "tyreSize": "Tyre Size",
-      "registration": "Registration"
+      "registration": "Registration",
+      "tyreAssets": "Tyre assets"
     },
     "workOrders": {
       "title": "Work Orders",

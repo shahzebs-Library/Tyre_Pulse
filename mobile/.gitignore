@@ -18,6 +18,14 @@ dist/
 web-build/
 # Google Play service account key (provided via CI secret, never commit)
 google-service-account.json
-# Firebase config for FCM push (per-environment, never commit)
-google-services.json
+# Firebase CLIENT config for FCM push. This one IS committed, deliberately.
+# It is not a secret - it ships inside every APK, and its API key is restricted
+# to this package name plus the signing certificate. More importantly, EAS builds
+# from what git tracks, so ignoring it produces a build with no Firebase config
+# at all: the app installs, looks fine, silently never obtains a push token, and
+# every push is delivered to nobody. That is the failure this rule caused.
+# The SECRET half is the FCM service account key, which is uploaded to expo.dev
+# and never lives in this repo (see google-service-account.json above for the
+# separate Google Play key).
+!google-services.json
 GoogleService-Info.plist

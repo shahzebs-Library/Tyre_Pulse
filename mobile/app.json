@@ -20,7 +20,8 @@
       }
     },
     "android": {
-      "edgeToEdgeEnabled": true,
+            "googleServicesFile": "./google-services.json",
+"edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

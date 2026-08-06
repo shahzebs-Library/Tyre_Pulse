@@ -3,6 +3,64 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-06 (part 2) — PDF EXPORTS FIXED APP-WIDE + DAILY COVERAGE IS A REGISTRY + UPLOAD-GAP PUSH. Migrations through **V487**, next free **V488**.
+- **EVERY PDF THAT DRAWS A TABLE WAS BROKEN (user: "i cant downlaod it like inspection and many more areas").**
+  `jspdf-autotable@3.8.4` declares peer `jspdf: ^2.5.1`; the app runs **jspdf 4.2.1**, and under that pairing the
+  package's ESM `default` export resolves to an **OBJECT**, so the documented `autoTable(doc, opts)` call threw
+  `TypeError: autoTable is not a function` on **30 surfaces**. **WHY NOTHING CAUGHT IT: the build was clean,
+  lint was clean, and 6,500 tests were green because EVERY existing PDF test mocks jspdf** - the failure only
+  existed against the real library. FIX = one resolver `src/lib/pdfEngine.js`: `loadAutoTable()` prefers a
+  genuine function default (any future/compatible release) and otherwise calls through
+  `jsPDF.prototype.autoTable`, which the plugin still patches on import and which produces a valid PDF;
+  `loadPdf()` also picks whichever jsPDF binding is CALLABLE (bundlers expose `default`, plain Node ESM exposes
+  the named `jsPDF` - picking blindly yields "jsPDF is not a constructor" in one of the two). 30 call sites
+  converted from `const { default: autoTable } = await import('jspdf-autotable')`. **`src/test/pdfEngine.test.js`
+  uses the REAL libraries, no mocks**, and asserts a table actually rendered (`lastAutoTable.finalY` advanced,
+  real PDF bytes out) - that is the assertion that would have caught this. There is NO autotable release
+  supporting jsPDF 4 (5.x still declares `^2 || ^3`), so pinning a version is not an available fix today.
+  **RULE: never `await import('jspdf-autotable')` directly - go through `loadAutoTable()`; and any new
+  PDF/export test must exercise the real library at least once, because a mock cannot see a peer-range break.**
+- **DAILY COVERAGE NOW WATCHES ANY TABLE THE OWNER UPLOADS (V484-V487, applied live + verified).** It hardcoded
+  FOUR sources (job_cards/expenses/tyre_records/production_m3) in a union-all CTE, a `srcs` VALUES list, AND a
+  per-site rule naming two of them - so SCO, SANY, inspections, meter readings, washing, accidents and job-card
+  line items could go stale for weeks in silence. **V484 `upload_feeds`** registry (src/label/table_name/
+  date_column/site_column/active/sort_order; RLS authenticated-read via app_is_active + super-admin write) with
+  a BEFORE trigger `upload_feeds_validate()` that REFUSES any table/column absent from information_schema -
+  that is what makes the dynamic SQL safe. **V485** added `site_day_policed` + `date_basis` and rewrote
+  `_upload_coverage_detail_for_org` to build its counting half from the registry with `format(%I/%L)` +
+  `EXECUTE` (**a STABLE function cannot create a temp table**, so string-building is the available route);
+  analysis half unchanged, original four behave IDENTICALLY (same site counts/missed days). **V486** did the
+  same for `_upload_coverage_for_org` (the 05:30 cron's source - the panel and the alert MUST read one list).
+  **V487 `list_upload_feed_candidates()`** (super-admin) offers only tables carrying BOTH `organisation_id` and
+  `country` - 189 candidates, 12 seeded, and the ONLY unwatched table with >500 rows is `vehicle_fleet` (a
+  master, not a daily feed). Measured the moment it went in: engine hours silent 8d/7 missed, tyre records
+  7d/6 missed, SCO costs 4 missed - none of which the old checker could report. Cost: 455 ms -> ~1.5 s for 3x
+  the feeds. Client: `listUploadFeeds`/`listUploadFeedCandidates`/`saveUploadFeed`/`setUploadFeedActive` +
+  pure `feedBasisNote` in `src/lib/api/uploadCoverage.js`, new `UploadFeedManager.jsx` mounted INSIDE the
+  existing Daily coverage tab (single-surface rule - do NOT add a second feed screen).
+  **RULE: `date_basis='arrival'` means the date column is only the row's insert time, so coverage shows when
+  the file LANDED not when the work happened - the panel labels it, because reading arrival squares as
+  business days is how someone concludes a late upload never happened. RULE: `site_day_policed` false for any
+  event-driven feed, or every quiet site is reported as a gap.**
+- **A MISSED UPLOAD NOW REACHES A PHONE (V486b).** `cron_check_upload_gaps` queues a PUSH on the SAME dedupe
+  key as the bell (`upload_gap_notices`), so it is ONE push per gap, never a daily nag. It reuses the whole
+  existing chain unchanged - `workflow_notifications` -> the V119 pg_cron deliverer -> the `workflow-notify`
+  edge fn - by passing a **pre-rendered `push:{title,body}`**, which that function ALREADY supports (the
+  accident path uses it). **NO EDGE REDEPLOY.** Switches: `system_config.upload_gap_push` (this alert) and
+  `push_notifications` (all push, checked by the edge fn). **ALSO FIXED: the bell called
+  `notify_elevated_users()`, which is NOT org scoped** - every Admin/Manager/Director in EVERY organisation was
+  notified about every other org's missing upload; this caller now inserts an org-scoped row itself (no-op
+  today with one tenant, would have cross-notified the moment a second company was added). `notify_elevated_users`
+  itself was NOT changed (many callers). VERIFIED live rolled back: 3 pushes queued `pending` with the right
+  token and NO email address attached, second run 0/0, switch off leaves the bell working and queues nothing,
+  and neither coverage helper is executable by anon OR authenticated (V378 lesson held).
+- **PUSH DELIVERS TO NOBODY TODAY AND THAT IS A DEVICE GAP, NOT A CODE GAP.** Measured live:
+  `profiles.push_token` non-null **0**, `user_devices` active **0**, 5 elevated users. The registration code
+  (`mobile/lib/notifications.ts registerPushToken`) runs on login and is correct. The standing blocker is that
+  **`mobile/google-services.json` does not exist**, so Android has no FCM credentials - the same item already
+  open in this file since 2026-07-26. Until a tester signs into a build that can obtain a token, every push
+  correctly queues and delivers to zero recipients.
+
 ## SESSION 2026-08-05 — TREND LINES + BOARD-OVERVIEW CRASH + CONSOLE ENTRY HARDENED + WEB AUDIT. No migration; next free **V481**. Mobile 1.3.2 (code 38) LIVE on both Play tracks (alpha + internal).
 - **STUDIO TREND LINES (pushed `919219c`).** `src/lib/presentTrend.js` (pure; REUSES expenseTrends.linearFit -
   one regression in the codebase) + a "Trend line" toggle in PresentationStudio. RULES: only on ORDERED axes

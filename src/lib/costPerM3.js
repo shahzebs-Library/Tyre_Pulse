@@ -46,8 +46,11 @@ export function fmtCostPerM3(value, currency = '') {
 export const IMPORT_TEMPLATES = {
   sco: {
     label: 'SCO cost',
-    headers: ['Country', 'Region', 'Site', 'Month', 'Cost Center', 'Description', 'Amount', 'Currency', 'Ref No'],
-    fields: ['country', 'region', 'site', 'period_date', 'cost_center', 'description', 'amount', 'currency', 'ref_no'],
+    // Also accepts the ERP SCO issue grid export ("bj_griddetails"): Issue Number ->
+    // Ref No, Transaction Type -> date, Store Code -> Site, Item Description ->
+    // Description, Values -> Amount; Work Order / Asset Code land in Notes.
+    headers: ['Country', 'Region', 'Site', 'Month', 'Cost Center', 'Description', 'Amount', 'Currency', 'Ref No', 'Notes'],
+    fields: ['country', 'region', 'site', 'period_date', 'cost_center', 'description', 'amount', 'currency', 'ref_no', 'notes'],
   },
   sany: {
     label: 'SANY invoice (summary, detail or PDF proforma)',
@@ -94,7 +97,8 @@ const HEADER_SYNONYMS = {
   site: ['site', 'location', 'plant', 'station', 'store code', 'store'],
   asset_no: ['asset', 'asset no', 'asset_no', 'equipment', 'truck number', 'truck no', 'truck'],
   pump_no: ['pump number', 'pump no', 'pump'],
-  period_date: ['month', 'period', 'date', 'period date', 'batching time', 'batch time', 'batching date', 'transaction', 'transaction date', 'txn date'],
+  // 'transaction type' is the (mislabelled) DATE column of the SCO issue grid export.
+  period_date: ['month', 'period', 'date', 'period date', 'batching time', 'batch time', 'batching date', 'transaction', 'transaction date', 'transaction type', 'txn date'],
   cost_center: ['cost center', 'cost centre', 'cost_center'],
   description: ['description', 'desc', 'details', 'item', 'parts description', 'part description', 'item desc', 'item description'],
   // 'values' (the ERP/SCO grid cost column) maps to the cost amount.
@@ -105,7 +109,7 @@ const HEADER_SYNONYMS = {
   net_amount: ['net amount (usd)', 'net amount', 'net', 'net (usd)'],
   fx_rate: ['fx rate', 'fx_rate', 'currency rate', 'fx'],
   deductions: ['deductions', 'deduction'],
-  ref_no: ['ref no', 'ref', 'reference', 'ref_no'],
+  ref_no: ['ref no', 'ref', 'reference', 'ref_no', 'issue number', 'issue no'],
   invoice_no: ['invoice no', 'invoice', 'invoice_no', 'inv no', 'quotation no', 'quot no', 'quot. no', 'quotation', 'quot no.'],
   invoice_date: ['invoice date', 'invoice_date', 'inv date', 'date'],
   status: ['status'],
@@ -268,6 +272,22 @@ export function mapImportRows(kind, rawRows = []) {
     }
     if (kind === 'sco' || kind === 'sany' || kind === 'sites') {
       if ('region' in out) out.region = normalizeRegion(out.region)
+    }
+    if (kind === 'sco' && !out.notes) {
+      // The SCO issue grid has no Notes column but carries Work Order + Asset -
+      // keep both as provenance (sco_costs has no asset column of its own).
+      const pick = (names) => {
+        for (const [k, v] of Object.entries(raw || {})) {
+          if (names.includes(norm(k)) && v != null && String(v).trim()) return String(v).trim()
+        }
+        return null
+      }
+      const wo = pick(['work order number', 'work order no', 'work order', 'wo number', 'wo no'])
+      const asset = pick(['asset code', 'asset no', 'asset'])
+      const bits = []
+      if (wo) bits.push(`WO ${wo}`)
+      if (asset) bits.push(`Asset ${asset}`)
+      if (bits.length) out.notes = bits.join(' / ')
     }
     if (kind === 'sany') {
       // An explicit Doc Type (e.g. the PDF proforma) wins; otherwise a row carrying

@@ -118,8 +118,12 @@ export default function LedgerPage({
         // A Ramco parts/expense grid ("griddetails") is an ERP expense file, not a
         // Cost/M3 ledger - steer it to the Data Intake Center rather than a bare
         // column-mismatch error.
-        const looksLikeGrid = /grid\s*detail|parts?\s*consumption|trye|item\s*desc/i.test(file.name)
-          || Object.keys(dataRows[0] || {}).join(' ').toLowerCase().includes('trye')
+        const headerLine = Object.keys(dataRows[0] || {}).join(' ').toLowerCase()
+        // The SCO issue grid ("bj_griddetails" with an Issue Number column) IS a
+        // valid SCO cost file despite its Trye/Spare columns - never steer it away.
+        const isScoIssueGrid = kind === 'sco' && /issue\s*n(umber|o)/.test(headerLine)
+        const looksLikeGrid = !isScoIssueGrid
+          && (/grid\s*detail|parts?\s*consumption|trye|item\s*desc/i.test(file.name) || headerLine.includes('trye'))
         setError(
           looksLikeGrid
             ? `${file.name} looks like an ERP expense/parts grid. Upload it in the Data Intake Center (ERP Import), not here. This page only takes ${title} files (columns: ${tpl?.headers?.join(', ') || 'see below'}).`

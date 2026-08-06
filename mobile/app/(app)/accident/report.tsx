@@ -27,6 +27,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { Theme, radius, spacing, statusColor, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Button } from '../../../components/ui'
 import { supabase } from '../../../lib/supabase'
+import { fetchAllRows } from '../../../lib/fetchAllRows'
 import { toUserMessage } from '../../../lib/safeError'
 import { saveCommand } from '../../../lib/recordQueue'
 import { safeUuid } from '../../../lib/ids'
@@ -358,14 +359,19 @@ function AccidentReportScreen() {
   async function loadVehicles() {
     setLoadingVehicles(true)
     try {
-      let q = supabase
-        .from('vehicle_fleet')
-        .select('id, site, asset_no, vehicle_type, make, model, registration_no, fleet_number, country')
-        .order('asset_no')
-        .limit(FLEET_SEARCH_CAP)
-      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-      const { data } = await q
-      if (data) setVehicles(data as FleetVehicle[])
+      // Paged: the server caps any single response at 1000 rows regardless of
+      // .limit(), and the KSA fleet alone is past that - assets after the cap
+      // were unfindable in this picker.
+      const data = await fetchAllRows<FleetVehicle>((from, to) => {
+        let q = supabase
+          .from('vehicle_fleet')
+          .select('id, site, asset_no, vehicle_type, make, model, registration_no, fleet_number, country')
+          .order('asset_no').order('id')
+          .range(from, to)
+        if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+        return q
+      }, { max: FLEET_SEARCH_CAP })
+      if (data) setVehicles(data)
     } catch (e: any) {
       if (__DEV__) console.warn('[accident/report] loadVehicles failed:', e?.message)
     } finally {

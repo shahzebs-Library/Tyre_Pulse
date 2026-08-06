@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../lib/fetchAllRows'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -74,15 +75,18 @@ function VehiclesScreen() {
   const load = useCallback(async () => {
     try {
       setError(null)
-      let q = supabase
-        .from('vehicle_fleet')
-        .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
-        .order('asset_no')
-        .limit(2000)
-      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-      const { data, error: qErr } = await q
-      if (qErr) throw qErr
-      setRows((data as Vehicle[]) ?? [])
+      // Paged: the server caps any single response at 1000 rows, and the KSA
+      // fleet alone is past that - a .limit(2000) still lost the tail.
+      const data = await fetchAllRows<Vehicle>((from, to) => {
+        let q = supabase
+          .from('vehicle_fleet')
+          .select('id,asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name,tyre_size,current_km,country,department,region,registration_no,year')
+          .order('asset_no').order('id')
+          .range(from, to)
+        if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+        return q
+      }, { max: 5000 })
+      setRows(data ?? [])
     } catch (e: any) {
       if (__DEV__) console.warn('[vehicles] load failed:', e?.message)
       setError(t('modules.vehicles.loadError'))

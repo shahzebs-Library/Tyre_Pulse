@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { fetchAllRows } from '../../../lib/fetchAllRows'
 import { toUserMessage } from '../../../lib/safeError'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import { clientId } from '../../../lib/ids'
@@ -339,12 +340,13 @@ function NewInspectionScreen() {
   async function loadVehicles() {
     setLoadingVehicles(true)
     try {
-      const { data } = await supabase
+      // Paged: the server caps any single response at 1000 rows, and the KSA
+      // fleet alone is past that - a .limit(2000) still lost the tail.
+      const rows = await fetchAllRows<any>((from, to) => supabase
         .from('vehicle_fleet')
         .select('id, site, asset_no, vehicle_type, make, model')
-        .order('asset_no')
-        .limit(2000)
-      const rows = data ?? []
+        .order('asset_no').order('id')
+        .range(from, to), { max: 5000 })
       setVehicles(rows)
       setFilteredVehicles(rows)
     } catch {

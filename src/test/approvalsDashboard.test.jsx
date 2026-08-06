@@ -21,6 +21,8 @@ vi.mock('../lib/api/approvalsQueue', () => ({
   rejectAccidentClosure: vi.fn(),
   decideChecklist: vi.fn(),
   listChecklistSignoffGaps: vi.fn(),
+  listInspectionApprovals: vi.fn(),
+  decideInspection: vi.fn(),
   bulkDecide: vi.fn(),
 }))
 
@@ -104,6 +106,8 @@ beforeEach(() => {
   queue.rejectAccidentClosure.mockResolvedValue(undefined)
   queue.decideChecklist.mockResolvedValue({ id: 'cl-1', approval_status: 'approved' })
   queue.listChecklistSignoffGaps.mockResolvedValue([])
+  queue.listInspectionApprovals.mockResolvedValue([])
+  queue.decideInspection.mockResolvedValue({ ok: true })
   queue.bulkDecide.mockResolvedValue({ ok: [], failed: [] })
 })
 

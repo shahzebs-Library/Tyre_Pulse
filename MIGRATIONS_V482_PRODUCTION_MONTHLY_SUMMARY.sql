@@ -1,0 +1,18 @@
+-- ============================================================================
+-- V482 — PRODUCTION MONTHLY SUMMARY (STATUS: APPLIED LIVE 2026-08-06 via MCP
+-- migration v482_production_monthly_summary; this file is the repo record)
+-- ============================================================================
+-- get_production_monthly(p_country, p_from, p_to) -> jsonb array, one element
+-- per month (newest first): loads, supplied_m3, approved_m3 (= coalesce(
+-- approved_m3, m3) matching the ledger's render), not_approved_m3,
+-- rejected_loads, rejected_m3, and reasons[] = {reason, loads, m3,
+-- remarks[<=3 distinct]} over rows that are rejected OR carry a reason.
+-- SECURITY INVOKER (org + country RLS on production_logs is the boundary);
+-- EXECUTE revoked from PUBLIC + anon, granted to authenticated.
+-- WHY: production_logs is 279k+ rows after the customer's uploads - the
+-- /production-m3 monthly view must aggregate server-side (V456 index
+-- (organisation_id, country, period_date) carries it).
+-- VERIFIED LIVE by impersonating the super admin: KSA -> 9 months, latest
+-- 2026-08 = 5,559 loads / 59,272 m3 with real reasons + remarks.
+-- Rollback: DROP FUNCTION public.get_production_monthly(text, date, date);
+-- ============================================================================

@@ -26,6 +26,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } f
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -522,7 +523,7 @@ export default function WarrantyTracker() {
 
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape' })
     const brand = await resolvePdfBrand(branding)
 

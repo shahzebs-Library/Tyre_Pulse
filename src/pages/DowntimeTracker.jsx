@@ -22,6 +22,7 @@ import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfE
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -714,7 +715,7 @@ export default function DowntimeTracker() {
   // ── Export PDF ────────────────────────────────────────────────────────────────
   async function handleExportPdf() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'Fleet Downtime & Availability Report', `Period: ${period} · ${usingActual ? 'Actual + Estimated' : 'Estimated'} Data`, company, brand)

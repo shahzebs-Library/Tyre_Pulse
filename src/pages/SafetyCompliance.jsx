@@ -25,6 +25,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exp
 import PageHeader from '../components/ui/PageHeader'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -266,7 +267,7 @@ export default function SafetyCompliance() {
   async function exportPdf() {
     try {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     if (!compliance) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)

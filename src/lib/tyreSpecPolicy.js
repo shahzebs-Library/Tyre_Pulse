@@ -1,3 +1,4 @@
+import { loadAutoTable } from './pdfEngine'
 /**
  * Tyre Fitment & Specification Policy - controlled governance document generator.
  *
@@ -289,7 +290,7 @@ export async function renderTyreSpecPolicyPdf({
   save = true,
 } = {}) {
   const { default: jsPDF } = await import('jspdf')
-  const { default: autoTable } = await import('jspdf-autotable')
+  const autoTable = await loadAutoTable()
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const brand = await resolvePdfBrand(branding)

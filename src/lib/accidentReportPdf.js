@@ -19,6 +19,7 @@ import {
 } from './accidentReport'
 import { formatCurrencyCompact } from './formatters'
 import { reportFileName, reportDateLabel } from './exportUtils'
+import { loadAutoTable } from './pdfEngine'
 
 /**
  * BLANK-SPACE FILL tuning + math (pure, deterministic, margin-safe).
@@ -103,8 +104,7 @@ export async function renderAccidentReportPdf({
   const ctx = buildReportContext(records, currency)
   const money = (v) => (v == null || v === '' ? 'N/A' : formatCurrencyCompact(v, currency))
 
-  const [{ default: JsPDF }, auto] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
-  const autoTable = auto.default
+  const [{ default: JsPDF }, autoTable] = await Promise.all([import('jspdf'), loadAutoTable()])
   const doc = new JsPDF({ orientation, unit: 'mm', format: 'a4' })
   const PW = doc.internal.pageSize.width, PH = doc.internal.pageSize.height
   const MX = 14

@@ -25,6 +25,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exp
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import { loadAutoTable } from '../lib/pdfEngine'
 import {
   computeCpkFleet, computeAvgTyreLife, computeFailureRate,
   computeScrapRate, computePressureCompliance, computeInspectionCompliance,
@@ -812,7 +813,7 @@ export default function KpiCommandCenter() {
 
   async function exportPdf() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     pdfHeader(doc, 'KPI Command Center', `Period: ${from} to ${to}  |  Overall Fleet Score: ${overallScore.toFixed(0)}/100  |  ${formatDate(new Date())}`, company, brand)

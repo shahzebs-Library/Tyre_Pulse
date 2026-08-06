@@ -22,6 +22,7 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -585,7 +586,7 @@ export default function TyreSizeAnalysis() {
   // ── PDF Export ───────────────────────────────────────────────────────────────
   async function exportPDF() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })

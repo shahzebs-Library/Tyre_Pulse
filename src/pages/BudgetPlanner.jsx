@@ -18,6 +18,7 @@ import BudgetTabs from '../components/budgets/BudgetTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { fetchAllPages } from '../lib/fetchAll'
+import { loadAutoTable } from '../lib/pdfEngine'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Download, RefreshCw, Loader2, FileSpreadsheet,
@@ -599,7 +600,7 @@ export default function BudgetPlanner() {
   // ── PDF Export ────────────────────────────────────────────────────────────
   async function handleExportPdf() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })

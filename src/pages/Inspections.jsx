@@ -23,6 +23,7 @@ import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -721,7 +722,7 @@ export default function Inspections() {
   async function exportChecklistPdf(preview = false) {
     if (!clSaved) return
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const tyreData = clPositions.length > 0 ? clPositions
       : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
 

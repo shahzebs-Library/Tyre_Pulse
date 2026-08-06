@@ -23,8 +23,10 @@ import {
 } from 'lucide-react'
 import {
   getUploadCoverageDetail, feedCadenceLabel, feedProblem, problemAreas, sortCountries,
+  feedBasisNote,
 } from '../../../lib/api/uploadCoverage'
 import FeedFileHelp from './FeedFileHelp'
+import UploadFeedManager from './UploadFeedManager'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   Panel, Note, Badge, Btn, Segmented, Toolbar, LoadingState, EmptyState, ErrorState,
@@ -141,6 +143,11 @@ function FeedCard({ src, today, country }) {
             {problem && <Badge tone="warning" icon={AlertTriangle}>{problem}</Badge>}
           </p>
           <p className="text-[11px] text-gray-500 mt-0.5">{feedCadenceLabel(src)}</p>
+          {/* An arrival-dated feed answers a different question; say so rather
+              than letting the squares be read as business days. */}
+          {feedBasisNote(src) && (
+            <p className="text-[11px] text-amber-400/80 mt-0.5">{feedBasisNote(src)}</p>
+          )}
         </div>
         <div className="text-right shrink-0">
           <p className="text-[11px] text-gray-500">Last data</p>
@@ -349,12 +356,19 @@ export default function UploadCoveragePanel() {
         )}
       </Panel>
 
+      {/* The feed list is data, not code, so this is where a new upload becomes
+          watched. It sits under the results because reading the gaps is the
+          daily job and changing what is watched is occasional. */}
+      <UploadFeedManager />
+
       <Note icon={Info}>
         Days are counted by the date the work happened, not the date you uploaded, so a file
         uploaded late still fills its own day. Today is never marked missing. Whether a feed is
         treated as daily comes from six months of its own history, so a feed that stops does not
         quietly stop being watched. A feed that arrives in batches is judged against its own
-        normal gap instead of a fixed number of days.
+        normal gap instead of a fixed number of days. When a gap first appears you also get a
+        notification in the bell and, if you have the phone app signed in, a push - once per gap,
+        not once a day.
       </Note>
     </div>
   )

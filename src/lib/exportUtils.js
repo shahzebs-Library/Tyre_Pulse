@@ -1,5 +1,6 @@
 import { formatCurrencyCompact, formatDate } from './formatters.js'
 import { configBool, configNum } from './api/systemConfig.js'
+import { loadAutoTable } from './pdfEngine'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -40,9 +41,9 @@ async function ensureXlsx() {
 }
 async function ensurePdf() {
   if (!jsPDF) {
-    const [j, a] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+    const [j, at] = await Promise.all([import('jspdf'), loadAutoTable()])
     jsPDF = j.default
-    autoTable = a.default
+    autoTable = at
   }
   return { jsPDF, autoTable }
 }

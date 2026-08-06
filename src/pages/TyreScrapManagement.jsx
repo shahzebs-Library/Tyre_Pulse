@@ -27,6 +27,7 @@ import { formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
+import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -633,7 +634,7 @@ export default function TyreScrapManagement() {
   // ── Exports ───────────────────────────────────────────────────────────────────
   async function exportDisposalPdf() {
     const { default: jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     const filename = `TyrePulse_Scrap_Disposal_Manifest_${new Date().toISOString().slice(0, 10)}.pdf`

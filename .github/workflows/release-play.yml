@@ -1,8 +1,8 @@
-name: Release to Google Play (Internal)
+name: Release to Google Play (Closed testing)
 
-# Builds a production AAB on EAS and submits it to the Play Console "internal"
-# testing track. Testers on that track receive the update automatically from
-# the Play Store — no APK sharing, no manual installs.
+# Builds a production AAB on EAS and submits it to the Play Console "alpha"
+# track, which is Play's Closed testing. Testers on that track receive the
+# update automatically from the Play Store - no APK sharing, no manual installs.
 #
 # Trigger: manually (Actions -> Run workflow) or by pushing a tag like
 # `mobile-v1.1.0`. Each run auto-increments the Android versionCode (EAS remote
@@ -23,7 +23,7 @@ on:
 
 jobs:
   release:
-    name: Build AAB + submit to Play internal
+    name: Build AAB + submit to Play closed testing
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -59,7 +59,7 @@ jobs:
             echo "SUBMIT=0" >> "$GITHUB_ENV"
           fi
 
-      - name: Build AAB and auto-submit to Play (internal)
+      - name: Build AAB and auto-submit to Play (closed testing)
         if: env.SUBMIT == '1'
         working-directory: mobile
         run: eas build --platform android --profile production --auto-submit --non-interactive

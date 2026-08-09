@@ -665,18 +665,31 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
     doc.setTextColor(210, 215, 225)
     doc.text(t.id, cx, cy, { align: 'center', baseline: 'middle' })
 
-    // Pressure label BESIDE each tyre (owner ask: "the SVG with colors and
-    // their pressure as a label is enough"): left-side tyres label to the
-    // left, right-side to the right, on the dark panel.
-    const pRaw = (typeof cond === 'object' && cond)
-      ? (cond.pressure ?? cond.pressure_psi ?? cond.psi ?? null) : null
-    if (pRaw != null && String(pRaw).trim() !== '') {
-      const isLeft = (t.x + t.w / 2) < (layout.body.x + layout.body.w / 2)
-      doc.setFontSize(clamp(5.5 * (scale / 0.55), 4.5, 7))
-      doc.setTextColor(235, 238, 245)
-      const label = `${String(pRaw).trim()} PSI`
-      if (isLeft) doc.text(label, tx - 1.5, cy, { align: 'right', baseline: 'middle' })
-      else doc.text(label, tx + tw + 1.5, cy, { align: 'left', baseline: 'middle' })
+    // Pressure label BESIDE each side of an axle (owner ask: pressure as a
+    // label on the map). Only the OUTERMOST tyre of each side carries the
+    // label - on dual wheels a per-tyre label overlapped its neighbour. When
+    // the inner tyre's pressure differs it renders as "outer/inner PSI".
+    const pOf = (c) => {
+      const v = (typeof c === 'object' && c) ? (c.pressure ?? c.pressure_psi ?? c.psi ?? null) : null
+      return v != null && String(v).trim() !== '' ? String(v).trim() : null
+    }
+    const isLeft = (t.x + t.w / 2) < (layout.body.x + layout.body.w / 2)
+    const sameSide = tyres.filter((o) =>
+      Math.abs(o.y - t.y) < 2
+      && ((o.x + o.w / 2) < (layout.body.x + layout.body.w / 2)) === isLeft)
+    const outermost = sameSide.reduce((best, o) =>
+      (isLeft ? o.x < best.x : (o.x + o.w) > (best.x + best.w)) ? o : best, sameSide[0])
+    if (outermost && outermost.id === t.id) {
+      const pressures = [...new Set(sameSide
+        .sort((a, b) => (isLeft ? a.x - b.x : (b.x + b.w) - (a.x + a.w)))
+        .map((o) => pOf(tc[o.id])).filter(Boolean))]
+      if (pressures.length) {
+        doc.setFontSize(clamp(5.5 * (scale / 0.55), 4.5, 7))
+        doc.setTextColor(235, 238, 245)
+        const label = `${pressures.join('/')} PSI`
+        if (isLeft) doc.text(label, tx - 1.5, cy, { align: 'right', baseline: 'middle' })
+        else doc.text(label, tx + tw + 1.5, cy, { align: 'left', baseline: 'middle' })
+      }
     }
   })
 }
@@ -1101,67 +1114,74 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const ftr     = { footerText: brand.footerText }
 
   // ── PAGE 1 ─────────────────────────────────────────────────────────────────
-  _pageHeader(doc, 'Vehicle Inspection Report', `Asset: ${row.asset_no || '-'}`, company, hdr)
-  let y = 30
+  // Owner spec: the header shows the company LOGO when one is set (Console ->
+  // Report Colors), the report is titled "Vehicle Tyres Inspection Report",
+  // and every report carries a unique document number derived from the
+  // inspection id (stable: re-downloading yields the same number).
+  const docNo = `INS-${String(row.id || '').replace(/-/g, '').slice(0, 8).toUpperCase() || 'DRAFT'}`
+  _pageHeader(doc, 'Vehicle Tyres Inspection Report', `Asset: ${row.asset_no || '-'}`, brand.logoData ? '' : company, hdr)
+  doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+  doc.text(`Document No: ${docNo}`, pw - MX, 20.5, { align: 'right' })
+  let y = 28
 
-  // Title card with severity ribbon
+  // Compact title line (owner: keep it small, no big card)
   const sevColorMap = { Low: P.emerald, Medium: P.ochre, High: P.scarlet, Critical: P.crimson }
   const sevRgb = sevColorMap[row.severity] ?? P.ochre
-  doc.setFillColor(...P.offWhite)
-  doc.setDrawColor(...P.silver)
-  doc.setLineWidth(0.4)
-  doc.roundedRect(mx, y, pw - mx * 2, 16, 2, 2, 'FD')
+  doc.setFontSize(9.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+  doc.text(row.title || 'Inspection Record', mx, y + 4)
   doc.setFillColor(...sevRgb)
-  doc.roundedRect(mx, y, 4, 16, 2, 0, 'F')
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.ink)
-  doc.text(row.title || 'Inspection Record', mx + 8, y + 7)
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(...P.ghost)
-  doc.text(`${row.inspection_type || '-'}  |  ${row.status || '-'}`, mx + 8, y + 13)
-  // Severity badge
-  doc.setFillColor(...sevRgb)
-  doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.white)
-  doc.text((row.severity || 'MEDIUM').toUpperCase(), pw - mx - 17, y + 9.5, { align: 'center' })
-  y += 21
+  doc.roundedRect(pw - mx - 24, y, 24, 6.5, 1.5, 1.5, 'F')
+  doc.setFontSize(6.5); doc.setTextColor(...P.white)
+  doc.text((row.severity || 'MEDIUM').toUpperCase(), pw - mx - 12, y + 4.4, { align: 'center' })
+  y += 9
 
-  // Meta grid - 2-col, 4 rows
+  // Meta grid - 2-col, 3 rows. Owner spec: the person is the TYREMAN, status
+  // reads Complete/Incomplete, odometer + hour meter live HERE (not in notes),
+  // and company / findings-count rows are dropped.
+  const isComplete = /^(done|completed|approved)$/i.test(String(row.status || ''))
+  const meterVal = [
+    row.odometer_km != null && row.odometer_km !== '' ? `${Number(row.odometer_km).toLocaleString('en-US')} km` : null,
+    row.hour_meter != null && row.hour_meter !== '' ? `${Number(row.hour_meter).toLocaleString('en-US')} hrs` : null,
+  ].filter(Boolean).join('  |  ') || '-'
   const metaL = [
-    ['Scheduled Date', row.scheduled_date || '-'],
-    ['Site',           row.site || '-'],
-    ['Inspector',      row.inspector || row.attendees || '-'],
-    ['Company',        company || '-'],
+    ['Inspection Date', row.inspection_date || row.scheduled_date || '-'],
+    ['Site',            row.site || '-'],
+    ['Tyreman',         row.inspector || row.attendees || '-'],
   ]
   const metaR = [
-    ['Asset No.',      row.asset_no || '-'],
-    ['Vehicle Type',   row.vehicle_type || '-'],
-    ['Status',         row.status || '-'],
-    ['Findings Count', String(Object.keys(row.tyre_conditions || {}).length || '-')],
+    ['Asset No.',        row.asset_no || '-'],
+    ['Vehicle Type',     row.vehicle_type || '-'],
+    ['Status / Meters',  `${isComplete ? 'Complete' : 'Incomplete'}  |  ${meterVal}`],
   ]
   const half = (pw - mx * 2) / 2
   metaL.forEach(([lbl, val], i) => {
-    const my = y + i * 10
-    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
+    const my = y + i * 9
+    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
     doc.text(lbl, mx, my)
-    doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
-    doc.text(val, mx, my + 5)
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+    doc.text(val, mx, my + 4.5)
     doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
-    doc.line(mx, my + 7.5, mx + half - 4, my + 7.5)
+    doc.line(mx, my + 6.5, mx + half - 4, my + 6.5)
 
-    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
+    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
     doc.text(metaR[i][0], mx + half, my)
-    doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
-    doc.text(metaR[i][1], mx + half, my + 5)
-    doc.line(mx + half, my + 7.5, pw - mx, my + 7.5)
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+    doc.text(metaR[i][1], mx + half, my + 4.5)
+    doc.line(mx + half, my + 6.5, pw - mx, my + 6.5)
   })
-  y += 46
+  y += 31
 
   // ── Tyre Diagram section ───────────────────────────────────────────────────
+  // Page-space check FIRST so the section title can never overlap other text
+  // by starting a tall map at the bottom of a page.
+  {
+    const lk = _resolveLayoutKey(row.vehicle_type)
+    const ly = lk ? _TYRE_LAYOUTS[lk] : null
+    if (ly) {
+      const estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
+      if (y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, hdr); y = 30 }
+    }
+  }
   y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
 
   // Normalize tyre conditions
@@ -1365,55 +1385,76 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
 
   // ── Notes ──────────────────────────────────────────────────────────────────
-  if (row.notes) {
+  // The meters are shown in the top meta grid; strip the auto-added
+  // "Odometer: ... / Hour meter: ..." lines so this section carries only the
+  // tyreman's REAL notes (and is omitted entirely when nothing else remains).
+  const realNotes = String(row.notes || '')
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*(odometer|hour\s*meter)\b/i.test(l))
+    .join('\n')
+    .trim()
+  if (realNotes) {
     if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
     y = _sectionBar(doc, 'Additional Notes', y, mx, brand.accent) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
-    const nl = doc.splitTextToSize(row.notes, pw - mx * 2)
+    const nl = doc.splitTextToSize(realNotes, pw - mx * 2)
     doc.text(nl, mx, y); y += nl.length * 4.5 + 6
   }
 
   // ── Signature block ─────────────────────────────────────────────────────────
-  // The INSPECTOR who performed the inspection (row.inspector - never the user
-  // downloading the report), with their actual drawn signature embedded. The
-  // signature arrives either as an SVG string (mobile SignaturePad) or a
-  // data-url image (web); both render, and a missing one leaves a blank line.
-  let sigPng = null
-  const rawSig = row.inspector_signature
-  if (typeof rawSig === 'string' && rawSig.trim()) {
-    if (/^data:image\//i.test(rawSig)) sigPng = rawSig
-    else if (/<svg[\s>]/i.test(rawSig) && typeof DOMParser !== 'undefined') {
+  // Owner spec: TWO signatures - the TYREMAN who performed the inspection and
+  // the APPROVER who signed it off - each with their actual drawn signature
+  // (mobile SVG string or web data-url both render) and name. Never the person
+  // downloading the report. A pending approval shows honestly as pending.
+  const toSigPng = async (raw) => {
+    if (typeof raw !== 'string' || !raw.trim()) return null
+    if (/^data:image\//i.test(raw)) return raw
+    if (/<svg[\s>]/i.test(raw) && typeof DOMParser !== 'undefined') {
       try {
-        const el = new DOMParser().parseFromString(rawSig, 'image/svg+xml').documentElement
+        const el = new DOMParser().parseFromString(raw, 'image/svg+xml').documentElement
         if (el && el.nodeName.toLowerCase() === 'svg') {
           const got = await svgToPngDataUrl(el, 2, '#FFFFFF')
-          if (got) sigPng = got.dataUrl
+          return got ? got.dataUrl : null
         }
-      } catch { /* leave the blank line */ }
+      } catch { return null }
     }
+    return null
   }
-  if (y + 36 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-  y += 5
-  doc.setFillColor(...P.offWhite)
-  doc.setDrawColor(...P.silver)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(mx, y, pw - mx * 2, 30, 2, 2, 'FD')
-  doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ghost)
-  doc.text('INSPECTOR CERTIFICATION', mx + 4, y + 7)
-  doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-  doc.text('I certify this inspection was conducted in accordance with operational standards.', mx + 4, y + 12)
-  if (sigPng) {
-    try { doc.addImage(sigPng, 'PNG', mx + 4, y + 14, 60, 12, undefined, 'FAST') } catch { /* line stays */ }
+  const tyremanSig  = await toSigPng(row.inspector_signature)
+  const approverSig = await toSigPng(row.approver_signature)
+  const approverName = row.approved_by || row.approver_email || null
+  const isApproved   = String(row.approval_status || '').toLowerCase() === 'approved'
+
+  if (y + 40 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+  y += 4
+  const sigBoxW = (pw - mx * 2 - 6) / 2
+  const drawSigBox = (x, title, png, name, dateLbl) => {
+    doc.setFillColor(...P.offWhite)
+    doc.setDrawColor(...P.silver)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(x, y, sigBoxW, 34, 2, 2, 'FD')
+    doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ghost)
+    doc.text(title, x + 4, y + 6)
+    if (png) {
+      try { doc.addImage(png, 'PNG', x + 4, y + 8, Math.min(sigBoxW - 8, 56), 13, undefined, 'FAST') } catch { /* line stays */ }
+    } else {
+      doc.setFontSize(6.5); doc.setFont('helvetica','italic'); doc.setTextColor(...P.mist)
+      doc.text(name ? 'No drawn signature on record' : 'Pending', x + 4, y + 15)
+    }
+    doc.setDrawColor(...P.ghost); doc.setLineWidth(0.4)
+    doc.line(x + 4, y + 24, x + sigBoxW - 4, y + 24)
+    doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+    doc.text(name || 'Not recorded', x + 4, y + 28.5)
+    doc.setFontSize(6); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
+    doc.text(dateLbl, x + 4, y + 32)
   }
-  doc.setDrawColor(...P.ghost); doc.setLineWidth(0.4)
-  doc.line(mx + 4, y + 26, mx + 74, y + 26)
-  doc.line(mx + 84, y + 26, pw - mx - 4, y + 26)
-  doc.setFontSize(6.5); doc.setTextColor(...P.mist)
-  doc.text('Inspector Signature', mx + 4, y + 29.5)
-  doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-  doc.text(`Inspector: ${row.inspector || 'Not recorded'}`, mx + 84, y + 24)
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
-  doc.text(`Date: ${row.inspection_date || row.completed_date || row.scheduled_date || '-'}`, mx + 84, y + 29.5)
+  drawSigBox(mx, 'TYREMAN SIGNATURE', tyremanSig, row.inspector || row.attendees || null,
+    `Inspected: ${row.inspection_date || row.completed_date || row.scheduled_date || '-'}`)
+  drawSigBox(mx + sigBoxW + 6, 'APPROVER SIGNATURE',
+    isApproved ? approverSig : null,
+    isApproved ? approverName : null,
+    isApproved ? `Approved: ${String(row.approved_at || '').slice(0, 10) || '-'}` : 'Approval pending')
+  y += 38
 
   // ── Footers ─────────────────────────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages()

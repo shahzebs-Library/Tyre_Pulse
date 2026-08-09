@@ -3,6 +3,40 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-09 — RUNNING & REMAINING (V488/V489) + INSPECTION REPORT OWNER SPEC + KSA TM FITMENT-KM FIX FROM OWNER FILE. Migrations V488/V489 applied; next free **V490**. PRs #280-#285 merged; Aug-5 corrections REVERTED earlier this session per owner.
+- **AUG-5 CORRECTIONS REVERTED on owner instruction ("i upload data only for august month"):** the job-card
+  date repair (`_bak.wo_dates_fix_20260805`, 28,986 rows) and the tyre-price backfill batch
+  `c66fbfd5-...` (1,819 prices) were both undone byte-exact; snapshots retained to re-apply if ever wanted.
+  Their own Aug 6-9 uploads + SCO/SANY loads stayed. Standing warning given: those KSA expense files lack the
+  `#` column (no import_uid) - re-uploading the same files WILL duplicate; map `#` next time.
+- **RUNNING & REMAINING view** (`/tyre-lifecycle` section, `TyreRunningLife.jsx` + pure `tyreRunningLife.js` +
+  V488 `get_tyre_running_life(country)`): per ACTIVE tyre vs the asset's CURRENT meters (km AND engine hours) -
+  km run, expected life, remaining km/days, Due?, state bands. **V489** added `tyre_life_targets` (manual
+  per-size/type targets, most-specific wins), vehicle-type baselines (sample>=3, size fallback), life_basis/
+  life_sample, days-on/expected/remaining. Basis column later REPLACED by a compact "Life history" strip
+  (counts by basis; hover Expected life for a tyre's exact basis). Tiles + strip follow the on-screen filters
+  (summarize(filtered)); exports export the FILTERED rows. RULE: bands = overdue(remaining 0) / due-soon
+  (<10k km or >=90% used) / mid-life / healthy / unknown; null never fabricated.
+- **INSPECTION REPORT PDF = the owner's marked-up spec** (`exportInspectionDetailPdf`): title "Vehicle Tyres
+  Inspection Report", stable Document No INS-<id8>, logo-aware header, 3-row meta grid (Tyreman /
+  Complete-Incomplete / odometer+hour meter), compact; TWO signature boxes (Tyreman = inspector_signature SVG,
+  Approver only when approved else "Approval pending"); photos grid; expected-life lines. **The report embeds
+  the ACTUAL app diagram SVG** (offscreen VehicleTyreDiagram capture, PSI printed INSIDE each wheel via new
+  `subLabels` prop, compact <=105mm so page 1 fits). ROOT CAUSE of the old grey capture: LEVEL_TO_RISK did not
+  map the inspection vocabulary (Wear/Damage/Puncture) and read v.risk not v.condition - fixed in the diagram
+  (also fixes on-screen coloring). Logo: report falls back to the Console -> Report Colors `company_logo`
+  (brandingForPdf in Inspections.jsx) because the tenant-branding editor page is unreachable.
+- **KSA TM FITMENT-KM FIX from the owner's rules_for_trye_fitment.xlsx** (12 monthly Transit-Mixer meter
+  sheets Jan-Dec 2025; GCC.NO=asset, "final kilometer" authoritative). 600 KSA tyres fitted 2025 with
+  placeholder fitment km (null/<=1): **368 filled with the matching month's FINAL km** + **279 of them had
+  total_km stored as removal-1 (the whole odometer, not the tyre life) - recomputed = removal - fitment**
+  (avg life 69,775 -> 42,132 km); **232 tyres on 14 NEW mixers (TM685-TM715, first metered Oct) set fitment
+  km = 0 per owner OK (factory tyres)** - required disabling `tyre_records_master_process_tg` for the batch
+  because that trigger NULLIFIES km 0 as an import blank (re-enabled, verified 'O'). Snapshot
+  `_bak.tyre_fitkm_fix_20260809` (600 rows, old fitment+total). RULE: after filling a placeholder fitment km,
+  ALWAYS recompute total_km where removal exists - the placeholder poisons total_km too.
+- Play/mobile still frozen per owner ("Dont pushed anything for mobile"); paging+chips fixes wait on main.
+
 ## SESSION 2026-08-06 (part 3) — SCO/SANY FILES LOADED + IMPORTER TAUGHT THEIR FORMATS + THE 1000-ROW PICKER CAP + TYRE-CLASS CHIPS. No migration; next free **V488**. PRs #276/#278 merged; Play build triggered.
 - **SCO ISSUE GRID LOADED EXACT (user file, "uploaded sco it didnt show at all").** The real SCO export
   (sheet `bj_griddetails`) titles its DATE column **"Transaction Type"** and its reference **"Issue Number"** -

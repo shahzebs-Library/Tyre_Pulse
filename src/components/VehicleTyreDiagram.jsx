@@ -1495,8 +1495,10 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
         <span className="text-gray-500 font-normal text-xs">· {tyres.length} tyres</span>
       </div>
 
-      {/* SVG */}
+      {/* SVG (data-tyre-map marks THE map for PDF capture - the Illustration
+          above is also an svg, so a bare querySelector('svg') grabs the wrong one) */}
       <svg
+        data-tyre-map="1"
         viewBox={`-10 -5 220 ${viewH + 10}`}
         width={width}
         height={(viewH + 15) * scale}

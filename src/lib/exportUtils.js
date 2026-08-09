@@ -1308,20 +1308,37 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     y += 15
   }
 
-  // ── Expected tyre life (owner ask: minimal - the diagram + expected life) ──
+  // ── Expected tyre life (owner ask: a PROPER accurate table, not text lines) ──
   const lifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows.slice(0, 16) : []
   if (lifeRows.length) {
-    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
+    if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Expected Tyre Life', y, mx, brand.accent) + 4
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
     const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
-    for (const lr of lifeRows) {
-      if (y > ph - 18) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-      const line = `${lr.position || '-'}  ${lr.serial ? `(${lr.serial})` : ''}  run ${n(lr.kmRun)} km  |  expected ${n(lr.expectedLifeKm)} km  |  remaining ${n(lr.remainingKm)} km${lr.lifeUsedPct != null ? `  |  ${lr.lifeUsedPct}% used` : ''}`
-      doc.text(doc.splitTextToSize(line, pw - mx * 2), mx, y)
-      y += 5
-    }
-    y += 4
+    const lifeStartPage = doc.internal.getNumberOfPages()
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 30, left: mx, right: mx, bottom: FOOTER_SPACE },
+      head: [['Position', 'Serial', 'Km run', 'Expected life (km)', 'Remaining km', 'Remaining days', 'Life used']],
+      body: lifeRows.map((lr) => [
+        lr.position || 'N/A',
+        lr.serial || 'N/A',
+        n(lr.kmRun),
+        n(lr.expectedLifeKm),
+        n(lr.remainingKm),
+        n(lr.remainingDays),
+        lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : 'N/A',
+      ]),
+      styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
+      headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: P.cloud },
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+      didDrawPage: (data) => {
+        // Continuation pages only - redrawing on the first page would paint
+        // the white header band over the Document No already printed there.
+        if (data.pageNumber > lifeStartPage) _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
+      },
+    })
+    y = (doc.lastAutoTable?.finalY || y) + 6
   }
 
   // ── Photos captured during the inspection ──────────────────────────────────

@@ -2043,7 +2043,7 @@ export default function Inspections() {
                           className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors">
                           {t('inspections.row.edit')}
                         </button>
-                        <button onClick={async () => exportInspectionDetailPdf(r, { branding: await brandingForPdf(branding), company })}
+                        <button onClick={() => setPdfRow(r)}
                           className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors"
                           title={t('inspections.row.titleExportPdf')}>
                           <FileText size={11} className="inline" />

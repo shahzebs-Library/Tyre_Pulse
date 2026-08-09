@@ -329,7 +329,8 @@ function _pageHeader(doc, title, subtitle, company = '', opts = {}) {
   const pw = doc.internal.pageSize.width
   const accent = opts.accent || P.indigo
   const hasLogo = !!opts.logoData
-  const tx = hasLogo ? 33 : MX   // shift text right when a logo is present
+  const logoSize = opts.logoSize || 14
+  const tx = hasLogo ? MX + logoSize + 5 : MX   // shift text right when a logo is present
 
   // Clean corporate band: brand accent bar + white field + hairline base rule
   doc.setFillColor(...P.white)
@@ -340,14 +341,17 @@ function _pageHeader(doc, title, subtitle, company = '', opts = {}) {
   // Tenant logo (best-effort)
   if (hasLogo) {
     const fmt = /image\/jpe?g/i.test(opts.logoData) ? 'JPEG' : 'PNG'
-    try { doc.addImage(opts.logoData, fmt, MX, 5.5, 14, 14, undefined, 'FAST') } catch { /* ignore */ }
+    const ly = Math.max(3, (HEADER_BOTTOM - logoSize) / 2)
+    try { doc.addImage(opts.logoData, fmt, MX, ly, logoSize, logoSize, undefined, 'FAST') } catch { /* ignore */ }
   }
 
-  // Company name - small uppercase eyebrow
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.ghost)
-  doc.text((company || 'FLEET OPERATIONS').toUpperCase(), tx, 9, { charSpace: 0.5 })
+  // Company name - small uppercase eyebrow (suppressible)
+  if (!opts.hideEyebrow) {
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...P.ghost)
+    doc.text((company || 'FLEET OPERATIONS').toUpperCase(), tx, 9, { charSpace: 0.5 })
+  }
 
   // Report title - large bold ink
   doc.setFontSize(15)
@@ -1118,22 +1122,14 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // Report Colors), the report is titled "Vehicle Tyres Inspection Report",
   // and every report carries a unique document number derived from the
   // inspection id (stable: re-downloading yields the same number).
+  // Owner spec: big logo, no eyebrow text, no duplicated title/asset lines -
+  // the meta grid below is the single place each fact appears.
   const docNo = `INS-${String(row.id || '').replace(/-/g, '').slice(0, 8).toUpperCase() || 'DRAFT'}`
-  _pageHeader(doc, 'Vehicle Tyres Inspection Report', `Asset: ${row.asset_no || '-'}`, brand.logoData ? '' : company, hdr)
+  const insHdr = { ...hdr, hideEyebrow: true, logoSize: 18 }
+  _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
   doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
   doc.text(`Document No: ${docNo}`, pw - MX, 20.5, { align: 'right' })
   let y = 28
-
-  // Compact title line (owner: keep it small, no big card)
-  const sevColorMap = { Low: P.emerald, Medium: P.ochre, High: P.scarlet, Critical: P.crimson }
-  const sevRgb = sevColorMap[row.severity] ?? P.ochre
-  doc.setFontSize(9.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
-  doc.text(row.title || 'Inspection Record', mx, y + 4)
-  doc.setFillColor(...sevRgb)
-  doc.roundedRect(pw - mx - 24, y, 24, 6.5, 1.5, 1.5, 'F')
-  doc.setFontSize(6.5); doc.setTextColor(...P.white)
-  doc.text((row.severity || 'MEDIUM').toUpperCase(), pw - mx - 12, y + 4.4, { align: 'center' })
-  y += 9
 
   // Meta grid - 2-col, 3 rows. Owner spec: the person is the TYREMAN, status
   // reads Complete/Incomplete, odometer + hour meter live HERE (not in notes),
@@ -1183,7 +1179,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       const ly = lk ? _TYRE_LAYOUTS[lk] : null
       if (ly) estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
     }
-    if (estH != null && y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, hdr); y = 30 }
+    if (estH != null && y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
   }
   y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
 
@@ -1315,12 +1311,12 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // ── Expected tyre life (owner ask: minimal - the diagram + expected life) ──
   const lifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows.slice(0, 16) : []
   if (lifeRows.length) {
-    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Expected Tyre Life', y, mx, brand.accent) + 4
     doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
     const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
     for (const lr of lifeRows) {
-      if (y > ph - 18) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+      if (y > ph - 18) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
       const line = `${lr.position || '-'}  ${lr.serial ? `(${lr.serial})` : ''}  run ${n(lr.kmRun)} km  |  expected ${n(lr.expectedLifeKm)} km  |  remaining ${n(lr.remainingKm)} km${lr.lifeUsedPct != null ? `  |  ${lr.lifeUsedPct}% used` : ''}`
       doc.text(doc.splitTextToSize(line, pw - mx * 2), mx, y)
       y += 5
@@ -1357,7 +1353,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
     const omitted  = Math.max(0, photoItems.length - MAX_INSPECTION_PHOTOS)
     const toRender = photoItems.slice(0, MAX_INSPECTION_PHOTOS)
-    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, `Photos (${omitted ? `${toRender.length} of ${photoItems.length}` : toRender.length})`, y, mx, brand.accent) + 4
 
     const cols = 3, gap = 6
@@ -1369,7 +1365,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     let rowTop = y
     for (const item of toRender) {
       if (col === 0) {
-        if (y > ph - boxH - FOOTER_SPACE - 4) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+        if (y > ph - boxH - FOOTER_SPACE - 4) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
         rowTop = y
       }
       const x = mx + col * (boxW + gap)
@@ -1412,7 +1408,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   // ── Findings ───────────────────────────────────────────────────────────────
   if (row.findings) {
-    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Findings & Observations', y, mx, brand.accent) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
     const fl = doc.splitTextToSize(row.findings, pw - mx * 2)
@@ -1429,7 +1425,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     .join('\n')
     .trim()
   if (realNotes) {
-    if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+    if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Additional Notes', y, mx, brand.accent) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
     const nl = doc.splitTextToSize(realNotes, pw - mx * 2)
@@ -1460,7 +1456,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const approverName = row.approved_by || row.approver_email || null
   const isApproved   = String(row.approval_status || '').toLowerCase() === 'approved'
 
-  if (y + 40 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+  if (y + 40 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
   y += 4
   const sigBoxW = (pw - mx * 2 - 6) / 2
   const drawSigBox = (x, title, png, name, dateLbl) => {

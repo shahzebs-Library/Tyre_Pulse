@@ -24,6 +24,9 @@ import { enqueueInspection, syncPendingInspections, getPendingCount } from '../l
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
+import { resolveStorageUrl } from '../lib/storageRefs'
+import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
+import { shapeRunningLife } from '../lib/tyreRunningLife'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -346,9 +349,30 @@ export default function Inspections() {
     if (!pdfRow) return
     let cancelled = false
     const t = setTimeout(async () => {
-      const svgEl = pdfDiagramRef.current?.querySelector('svg')
-      try { await exportInspectionDetailPdf(pdfRow, { svgEl, branding, company }) }
-      finally { if (!cancelled) setPdfRow(null) }
+      try {
+        // Photos captured during the inspection: per-position tp-storage refs
+        // (mobile) + the row-level photo, resolved to signed URLs. Best-effort -
+        // an unresolvable photo is skipped, never a blocked report.
+        const photoRefs = []
+        for (const [pos, d] of Object.entries(pdfRow.tyre_conditions || {})) {
+          const ref = d && typeof d === 'object' ? (d.photo_url || d.photo_uri) : null
+          if (ref) photoRefs.push({ label: pos, ref })
+        }
+        if (pdfRow.photo_data) photoRefs.push({ label: 'Inspection photo', ref: pdfRow.photo_data })
+        const photos = (await Promise.all(photoRefs.map(async (p) => {
+          try { const url = await resolveStorageUrl(p.ref); return url ? { label: p.label, url } : null }
+          catch { return null }
+        }))).filter(Boolean)
+
+        // Expected life for this asset's fitted tyres (best-effort).
+        let lifeRows = []
+        try {
+          const payload = await getTyreRunningLife({ country: pdfRow.country })
+          lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === pdfRow.asset_no)
+        } catch { lifeRows = [] }
+
+        await exportInspectionDetailPdf(pdfRow, { branding, company, photos, lifeRows })
+      } finally { if (!cancelled) setPdfRow(null) }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
   }, [pdfRow])

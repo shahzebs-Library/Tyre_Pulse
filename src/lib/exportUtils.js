@@ -664,6 +664,20 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
     doc.setFontSize(clamp(tw < 18 ? 3 : tw < 22 ? 4 : 5, 2.5, 6))
     doc.setTextColor(210, 215, 225)
     doc.text(t.id, cx, cy, { align: 'center', baseline: 'middle' })
+
+    // Pressure label BESIDE each tyre (owner ask: "the SVG with colors and
+    // their pressure as a label is enough"): left-side tyres label to the
+    // left, right-side to the right, on the dark panel.
+    const pRaw = (typeof cond === 'object' && cond)
+      ? (cond.pressure ?? cond.pressure_psi ?? cond.psi ?? null) : null
+    if (pRaw != null && String(pRaw).trim() !== '') {
+      const isLeft = (t.x + t.w / 2) < (layout.body.x + layout.body.w / 2)
+      doc.setFontSize(clamp(5.5 * (scale / 0.55), 4.5, 7))
+      doc.setTextColor(235, 238, 245)
+      const label = `${String(pRaw).trim()} PSI`
+      if (isLeft) doc.text(label, tx - 1.5, cy, { align: 'right', baseline: 'middle' })
+      else doc.text(label, tx + tw + 1.5, cy, { align: 'left', baseline: 'middle' })
+    }
   })
 }
 
@@ -1157,8 +1171,9 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     if (typeof data === 'object' && data !== null) {
       normTc[pos] = {
         risk:      data.risk ?? (COND_TO_RISK[data.condition] ?? 'none'),
-        pressure:  data.pressure ?? data.psi ?? null,
-        tread:     data.tread ?? data.tread_depth ?? null,
+        // Mobile inspections store pressure_psi / tread_depth_mm.
+        pressure:  data.pressure ?? data.pressure_psi ?? data.psi ?? null,
+        tread:     data.tread ?? data.tread_depth ?? data.tread_depth_mm ?? null,
         condition: data.condition ?? null,
         notes:     data.notes ?? null,
       }
@@ -1167,59 +1182,17 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     }
   })
 
-  // Try DOM SVG capture first (if svgEl passed from calling component)
+  // Programmatic drawing ONLY. The old DOM-capture path rendered the WEB
+  // diagram, whose position vocabulary does not match the mobile inspection's
+  // (F1L/R1Lo...) - the captured picture came out uncolored and "different".
+  // The built-in layouts use the SAME codes the inspections store, so drawing
+  // from the data is always correct, and carries the pressure labels.
   let diagramH = 0
-  let diagramPlaced = false
-
-  if (opts.svgEl) {
-    const captured = await svgToPngDataUrl(opts.svgEl, 2, '#080C1C')
-    if (captured) {
-      const maxW = pw - mx * 2 - 55 // leave room for legend
-      const aspect = captured.w / captured.h
-      const dW  = clamp(maxW, 40, maxW)
-      const dH  = dW / aspect
-      const bgX = mx
-      const bgW = pw - mx * 2
-      const bgH = dH + 12
-
-      doc.setFillColor(8, 12, 28)
-      doc.setDrawColor(...P.iron)
-      doc.setLineWidth(0.3)
-      doc.roundedRect(bgX, y, bgW, bgH, 3, 3, 'FD')
-
-      // Subtle dot grid
-      doc.setFillColor(20, 28, 48)
-      for (let gx = bgX + 6; gx < bgX + bgW - 6; gx += 10)
-        for (let gy = y + 6; gy < y + bgH - 3; gy += 10)
-          doc.circle(gx, gy, 0.25, 'F')
-
-      doc.addImage(captured.dataUrl, 'PNG', mx + 2, y + 4, dW, dH)
-      diagramH = bgH
-
-      // Legend - right side
-      const legendX = mx + dW + 8
-      let legendY   = y + 8
-      doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.mist)
-      doc.text('LEGEND', legendX, legendY); legendY += 6
-      Object.entries(RISK_LABEL).forEach(([key, label]) => {
-        const [r, g, b] = RISK_RGB[key]
-        doc.setFillColor(r, g, b)
-        doc.roundedRect(legendX, legendY - 2, 4, 4, 0.5, 0.5, 'F')
-        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
-        doc.text(label, legendX + 6, legendY + 1.5)
-        legendY += 8
-      })
-
-      diagramPlaced = true
-    }
-  }
-
-  // Fallback: programmatic drawing
-  if (!diagramPlaced) {
+  {
     const layoutKey = _resolveLayoutKey(row.vehicle_type)
     const layout    = layoutKey ? _TYRE_LAYOUTS[layoutKey] : null
     if (layout) {
-      const maxDiagW = 90
+      const maxDiagW = 108
       const scale    = maxDiagW / 200
       const bodyBtm  = layout.body.y + layout.body.h
       const dH       = (bodyBtm + 10) * scale
@@ -1246,7 +1219,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         const [r, g, b] = RISK_RGB[key]
         doc.setFillColor(r, g, b)
         doc.roundedRect(legendX, legendY - 2, 4, 4, 0.5, 0.5, 'F')
-        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(220, 225, 235)
         doc.text(label, legendX + 6, legendY + 1.5)
         legendY += 8
       })
@@ -1284,64 +1257,102 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     y += 15
   }
 
-  // ── Tyre condition table ───────────────────────────────────────────────────
-  const tyreEntries = Object.entries(normTc)
-  if (tyreEntries.length > 0) {
-    if (y > ph - 70) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'Detailed Tyre Analysis', y, mx, brand.accent) + 3
-
-    autoTable(doc, {
-      ..._tableTheme(brand.accent),
-      startY: y,
-      head: [['Position', 'Pressure', 'Tread', 'Condition', 'Risk', 'Notes']],
-      body: tyreEntries.map(([pos, d]) => [
-        pos,
-        d.pressure ? `${d.pressure} PSI` : '-',
-        d.tread    ? `${d.tread} mm`     : '-',
-        d.condition ?? RISK_LABEL[d.risk] ?? '-',
-        RISK_LABEL[d.risk] ?? 'Unknown',
-        d.notes ?? '-',
-      ]),
-      margin: { left: mx, right: mx },
-      columnStyles: {
-        0: { cellWidth: 18, fontStyle: 'bold' },
-        1: { cellWidth: 22, halign: 'right' }, 2: { cellWidth: 20, halign: 'right' },
-        3: { cellWidth: 26 }, 4: { cellWidth: 22 },
-        5: { cellWidth: 'auto' },
-      },
-      didParseCell: (data) => {
-        if (data.section === 'body' && data.column.index === 4) {
-          const v = String(data.cell.raw ?? '').toLowerCase()
-          if (v === 'critical') { data.cell.styles.fillColor = P.rCream; data.cell.styles.textColor = P.crimson; data.cell.styles.fontStyle = 'bold' }
-          else if (v === 'warning') { data.cell.styles.fillColor = P.oCream; data.cell.styles.textColor = P.scarlet }
-          else if (v === 'good') { data.cell.styles.fillColor = P.eCream; data.cell.styles.textColor = P.emerald }
-        }
-      },
-    })
-    y = (doc.lastAutoTable?.finalY ?? y) + 8
+  // ── Expected tyre life (owner ask: minimal - the diagram + expected life) ──
+  const lifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows.slice(0, 16) : []
+  if (lifeRows.length) {
+    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+    y = _sectionBar(doc, 'Expected Tyre Life', y, mx, brand.accent) + 4
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
+    const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+    for (const lr of lifeRows) {
+      if (y > ph - 18) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+      const line = `${lr.position || '-'}  ${lr.serial ? `(${lr.serial})` : ''}  run ${n(lr.kmRun)} km  |  expected ${n(lr.expectedLifeKm)} km  |  remaining ${n(lr.remainingKm)} km${lr.lifeUsedPct != null ? `  |  ${lr.lifeUsedPct}% used` : ''}`
+      doc.text(doc.splitTextToSize(line, pw - mx * 2), mx, y)
+      y += 5
+    }
+    y += 4
   }
 
-  // ── Risk progress bars ─────────────────────────────────────────────────────
-  if (totalT > 0) {
-    if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'Risk Distribution', y, mx, brand.accent) + 6
-    Object.entries(RISK_RGB).forEach(([key, [r, g, b]]) => {
-      const cnt = riskCounts[key] ?? 0
-      const fraction = totalT > 0 ? cnt / totalT : 0
-      const bw = pw - mx * 2 - 60
-      doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
-      doc.text(RISK_LABEL[key], mx, y + 3.5)
-      doc.setFillColor(...P.silver)
-      doc.roundedRect(mx + 36, y, bw, 6, 1.5, 1.5, 'F')
-      if (fraction > 0) {
-        doc.setFillColor(r, g, b)
-        doc.roundedRect(mx + 36, y, Math.max(3, bw * fraction), 6, 1.5, 1.5, 'F')
+  // ── Photos captured during the inspection ──────────────────────────────────
+  const photoItems = Array.isArray(opts.photos) ? opts.photos.filter((it) => it && it.url) : []
+  if (photoItems.length) {
+    const MAX_INSPECTION_PHOTOS = 12
+    const fetchImageDataUrl = async (url) => {
+      if (!url || typeof url !== 'string') return null
+      if (typeof fetch !== 'function' || typeof FileReader === 'undefined') return null
+      try {
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null
+        let res
+        try { res = await fetch(url, { mode: 'cors', signal: ctrl ? ctrl.signal : undefined }) }
+        finally { if (timer) clearTimeout(timer) }
+        if (!res || !res.ok) return null
+        const blob = await res.blob()
+        if (!blob.type || !blob.type.startsWith('image/') || blob.size > 8_000_000) return null
+        const fmt = /png/i.test(blob.type) ? 'PNG' : /webp/i.test(blob.type) ? 'WEBP' : 'JPEG'
+        const dataUrl = await new Promise((resolve) => {
+          const fr = new FileReader()
+          fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null)
+          fr.onerror = () => resolve(null)
+          fr.readAsDataURL(blob)
+        })
+        return dataUrl ? { dataUrl, fmt } : null
+      } catch { return null }
+    }
+
+    const omitted  = Math.max(0, photoItems.length - MAX_INSPECTION_PHOTOS)
+    const toRender = photoItems.slice(0, MAX_INSPECTION_PHOTOS)
+    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+    y = _sectionBar(doc, `Photos (${omitted ? `${toRender.length} of ${photoItems.length}` : toRender.length})`, y, mx, brand.accent) + 4
+
+    const cols = 3, gap = 6
+    const boxW = (pw - mx * 2 - gap * (cols - 1)) / cols
+    const imgH = boxW * 0.72
+    const capH = 7
+    const boxH = imgH + capH
+    let col = 0
+    let rowTop = y
+    for (const item of toRender) {
+      if (col === 0) {
+        if (y > ph - boxH - FOOTER_SPACE - 4) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+        rowTop = y
       }
-      doc.setFontSize(7); doc.setTextColor(...P.ghost)
-      doc.text(`${cnt} (${pct(cnt, totalT)}%)`, pw - mx, y + 4.5, { align: 'right' })
-      y += 10
-    })
-    y += 4
+      const x = mx + col * (boxW + gap)
+      doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+      doc.roundedRect(x, rowTop, boxW, boxH, 2, 2, 'FD')
+      let embedded = false
+      const got = await fetchImageDataUrl(item.url)
+      if (got) {
+        try {
+          const availW = boxW - 4, availH = imgH - 4
+          let dW = availW, dH = availH, ox = x + 2, oy = rowTop + 2
+          try {
+            const props = doc.getImageProperties ? doc.getImageProperties(got.dataUrl) : null
+            if (props && props.width && props.height) {
+              const ar = props.width / props.height
+              if (ar > availW / availH) { dW = availW; dH = availW / ar; oy = rowTop + 2 + (availH - dH) / 2 }
+              else { dH = availH; dW = availH * ar; ox = x + 2 + (availW - dW) / 2 }
+            }
+          } catch { /* box-fill sizing */ }
+          doc.addImage(got.dataUrl, got.fmt, ox, oy, dW, dH, undefined, 'FAST')
+          embedded = true
+        } catch { embedded = false }
+      }
+      if (!embedded) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+        doc.text('image unavailable', x + boxW / 2, rowTop + imgH / 2, { align: 'center' })
+      }
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(String(item.label || '-'), x + 2, rowTop + imgH + 4.5)
+      col++
+      if (col >= cols) { col = 0; y = rowTop + boxH + gap }
+    }
+    if (col !== 0) y = rowTop + boxH + gap
+    if (omitted) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(...P.mist)
+      doc.text(`${omitted} additional photo(s) omitted.`, mx, y)
+      y += 6
+    }
   }
 
   // ── Findings ───────────────────────────────────────────────────────────────
@@ -1362,42 +1373,47 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     doc.text(nl, mx, y); y += nl.length * 4.5 + 6
   }
 
-  // ── Auto-recommendations ────────────────────────────────────────────────────
-  const recs = _buildRecommendations(riskCounts, totalT, row)
-  if (recs.length > 0) {
-    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'Recommended Actions', y, mx, brand.accent) + 4
-    recs.forEach(rec => {
-      if (y > ph - 20) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-      const [r, g, b] = rec.urgent ? P.crimson : P.indigo
-      doc.setFillColor(r, g, b)
-      doc.circle(mx + 3, y + 2.5, 2, 'F')
-      doc.setFontSize(7.5); doc.setFont('helvetica', rec.urgent ? 'bold' : 'normal')
-      doc.setTextColor(...P.ink)
-      const rl = doc.splitTextToSize(rec.text, pw - mx * 2 - 12)
-      doc.text(rl, mx + 8, y + 3)
-      y += rl.length * 4.2 + 4
-    })
-    y += 4
-  }
-
   // ── Signature block ─────────────────────────────────────────────────────────
-  if (y + 34 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+  // The INSPECTOR who performed the inspection (row.inspector - never the user
+  // downloading the report), with their actual drawn signature embedded. The
+  // signature arrives either as an SVG string (mobile SignaturePad) or a
+  // data-url image (web); both render, and a missing one leaves a blank line.
+  let sigPng = null
+  const rawSig = row.inspector_signature
+  if (typeof rawSig === 'string' && rawSig.trim()) {
+    if (/^data:image\//i.test(rawSig)) sigPng = rawSig
+    else if (/<svg[\s>]/i.test(rawSig) && typeof DOMParser !== 'undefined') {
+      try {
+        const el = new DOMParser().parseFromString(rawSig, 'image/svg+xml').documentElement
+        if (el && el.nodeName.toLowerCase() === 'svg') {
+          const got = await svgToPngDataUrl(el, 2, '#FFFFFF')
+          if (got) sigPng = got.dataUrl
+        }
+      } catch { /* leave the blank line */ }
+    }
+  }
+  if (y + 36 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
   y += 5
   doc.setFillColor(...P.offWhite)
   doc.setDrawColor(...P.silver)
   doc.setLineWidth(0.3)
-  doc.roundedRect(mx, y, pw - mx * 2, 28, 2, 2, 'FD')
+  doc.roundedRect(mx, y, pw - mx * 2, 30, 2, 2, 'FD')
   doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ghost)
   doc.text('INSPECTOR CERTIFICATION', mx + 4, y + 7)
   doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-  doc.text('I certify this inspection was conducted in accordance with operational standards.', mx + 4, y + 13)
+  doc.text('I certify this inspection was conducted in accordance with operational standards.', mx + 4, y + 12)
+  if (sigPng) {
+    try { doc.addImage(sigPng, 'PNG', mx + 4, y + 14, 60, 12, undefined, 'FAST') } catch { /* line stays */ }
+  }
   doc.setDrawColor(...P.ghost); doc.setLineWidth(0.4)
-  doc.line(mx + 4, y + 23, mx + 74, y + 23)
-  doc.line(mx + 84, y + 23, pw - mx - 4, y + 23)
+  doc.line(mx + 4, y + 26, mx + 74, y + 26)
+  doc.line(mx + 84, y + 26, pw - mx - 4, y + 26)
   doc.setFontSize(6.5); doc.setTextColor(...P.mist)
-  doc.text('Inspector Signature', mx + 4, y + 27)
-  doc.text(`Name: ${row.inspector || '_______________'}`, mx + 84, y + 27)
+  doc.text('Inspector Signature', mx + 4, y + 29.5)
+  doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+  doc.text(`Inspector: ${row.inspector || 'Not recorded'}`, mx + 84, y + 24)
+  doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+  doc.text(`Date: ${row.inspection_date || row.completed_date || row.scheduled_date || '-'}`, mx + 84, y + 29.5)
 
   // ── Footers ─────────────────────────────────────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages()

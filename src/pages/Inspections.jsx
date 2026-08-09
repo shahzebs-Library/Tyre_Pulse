@@ -382,7 +382,11 @@ export default function Inspections() {
           lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === pdfRow.asset_no)
         } catch { lifeRows = [] }
 
-        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows })
+        // The ACTUAL app diagram (colored per condition + PSI marked), rendered
+        // offscreen below - captured so the report embeds the same SVG the
+        // operator sees. Falls back to the programmatic map when absent.
+        const svgEl = pdfDiagramRef.current?.querySelector('svg') || null
+        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl })
       } finally { if (!cancelled) setPdfRow(null) }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
@@ -2366,6 +2370,9 @@ export default function Inspections() {
           <VehicleTyreDiagram
             vehicleType={pdfRow.vehicle_type || inferVehicleTypeFromAsset(pdfRow.asset_no) || 'Pickup'}
             tyreData={pdfRow.tyre_conditions || {}}
+            subLabels={Object.fromEntries(Object.entries(pdfRow.tyre_conditions || {})
+              .filter(([, d]) => d && typeof d === 'object' && Number(d.pressure_psi) > 0)
+              .map(([pos, d]) => [pos, `${Math.round(Number(d.pressure_psi))} PSI`]))}
             width={340}
           />
         </div>

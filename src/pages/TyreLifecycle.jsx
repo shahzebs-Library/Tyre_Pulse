@@ -19,6 +19,7 @@ import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import EmailPdfButton from '../components/EmailPdfButton'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
+import TyreRunningLife from '../components/tyre/TyreRunningLife'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -797,6 +798,8 @@ export default function TyreLifecycle() {
           </div>
         )}
       </div>
+
+      <TyreRunningLife />
     </div>
   )
 }

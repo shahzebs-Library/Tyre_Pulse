@@ -1175,12 +1175,15 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // Page-space check FIRST so the section title can never overlap other text
   // by starting a tall map at the bottom of a page.
   {
-    const lk = _resolveLayoutKey(row.vehicle_type)
-    const ly = lk ? _TYRE_LAYOUTS[lk] : null
-    if (ly) {
-      const estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
-      if (y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, hdr); y = 30 }
+    let estH = null
+    if (opts.svgEl) {
+      estH = 150
+    } else {
+      const lk = _resolveLayoutKey(row.vehicle_type)
+      const ly = lk ? _TYRE_LAYOUTS[lk] : null
+      if (ly) estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
     }
+    if (estH != null && y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, hdr); y = 30 }
   }
   y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
 
@@ -1202,13 +1205,43 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     }
   })
 
-  // Programmatic drawing ONLY. The old DOM-capture path rendered the WEB
-  // diagram, whose position vocabulary does not match the mobile inspection's
-  // (F1L/R1Lo...) - the captured picture came out uncolored and "different".
-  // The built-in layouts use the SAME codes the inspections store, so drawing
-  // from the data is always correct, and carries the pressure labels.
+  // Owner spec: embed the ACTUAL app diagram (the same SVG used while making
+  // the checklist), colored per condition with the PSI marked on each tyre.
+  // The earlier "uncolored capture" was a risk-token gap in the diagram, now
+  // fixed; the programmatic drawing remains the fallback when no live SVG is
+  // available (e.g. detached callers).
   let diagramH = 0
-  {
+  const svgCap = opts.svgEl ? await svgToPngDataUrl(opts.svgEl, 3, '#0A0F1E') : null
+  if (svgCap && svgCap.dataUrl) {
+    const bgW  = pw - mx * 2
+    const availH = Math.min(165, ph - FOOTER_SPACE - y - 24)
+    let iw = bgW - 60                                  // leave room for the legend
+    let ih = iw * (svgCap.h / svgCap.w)
+    if (ih > availH) { ih = availH; iw = ih * (svgCap.w / svgCap.h) }
+    const bgH = ih + 10
+
+    doc.setFillColor(8, 12, 28)
+    doc.setDrawColor(...P.iron)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(mx, y, bgW, bgH, 3, 3, 'FD')
+    try { doc.addImage(svgCap.dataUrl, 'PNG', mx + (bgW - 50 - iw) / 2, y + 5, iw, ih, undefined, 'FAST') } catch { /* fall through to legend only */ }
+
+    // Legend
+    const legendX = mx + bgW - 50
+    let legendY   = y + 10
+    doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.mist)
+    doc.text('LEGEND', legendX, legendY); legendY += 7
+    Object.entries(RISK_LABEL).forEach(([key, label]) => {
+      const [r, g, b] = RISK_RGB[key]
+      doc.setFillColor(r, g, b)
+      doc.roundedRect(legendX, legendY - 2, 4, 4, 0.5, 0.5, 'F')
+      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(220, 225, 235)
+      doc.text(label, legendX + 6, legendY + 1.5)
+      legendY += 8
+    })
+
+    diagramH = bgH
+  } else {
     const layoutKey = _resolveLayoutKey(row.vehicle_type)
     const layout    = layoutKey ? _TYRE_LAYOUTS[layoutKey] : null
     if (layout) {

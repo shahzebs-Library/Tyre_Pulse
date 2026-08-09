@@ -50,7 +50,7 @@ const RISK = {
 function rc(risk) { return RISK[risk] ?? RISK.none; }
 
 // ── Realistic 3D Tyre ──────────────────────────────────────────────────────────
-function Tyre({ x, y, w, h, id, risk = 'none', onClick, label }) {
+function Tyre({ x, y, w, h, id, risk = 'none', onClick, label, sub }) {
   const col  = rc(risk);
   const cx   = x + w / 2;
   const cy   = y + h / 2;
@@ -134,12 +134,23 @@ function Tyre({ x, y, w, h, id, risk = 'none', onClick, label }) {
         fill={`url(#${uid}-hub)`} stroke="#374151" strokeWidth="0.4" />
 
       {/* Label */}
-      <text x={cx} y={cy + 0.4} textAnchor="middle" dominantBaseline="middle"
+      <text x={cx} y={sub ? cy - h * 0.12 : cy + 0.4} textAnchor="middle" dominantBaseline="middle"
         fontSize={Math.max(3.5, Math.min(w * 0.5, 8))} fontWeight="800"
         fill="white" style={{ userSelect: 'none', pointerEvents: 'none' }}
         filter="url(#textShadow)">
         {label}
       </text>
+
+      {/* Optional sub-label (e.g. measured pressure), inside the tyre so dual
+          wheels can never overlap each other's text */}
+      {sub && (
+        <text x={cx} y={cy + h * 0.24} textAnchor="middle" dominantBaseline="middle"
+          fontSize={Math.max(2.6, Math.min(w * 0.3, 4.5))} fontWeight="700"
+          fill="#fef08a" style={{ userSelect: 'none', pointerEvents: 'none' }}
+          filter="url(#textShadow)">
+          {sub}
+        </text>
+      )}
     </g>
   );
 }
@@ -1400,6 +1411,10 @@ const LEVEL_TO_RISK = {
   warning: 'warning', Warning: 'warning', Medium: 'warning', medium: 'warning', High: 'warning', high: 'warning',
   critical: 'critical', Critical: 'critical',
   none: 'none',
+  // Inspection condition vocabulary (mobile tyre_conditions.condition)
+  Wear: 'warning', wear: 'warning',
+  Damage: 'critical', damage: 'critical',
+  Puncture: 'critical', puncture: 'critical',
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -1411,7 +1426,7 @@ export function isTyrelessEquipment(vt) {
   return NO_TYRE_EQUIPMENT.some((k) => s.includes(k))
 }
 
-export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240 }) {
+export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240, subLabels }) {
   const resolved = resolveVehicleType(vehicleType)
 
   // Custom layouts designed in the console Vehicle Designer (V268). Loaded
@@ -1453,7 +1468,8 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
     positions.forEach(p => { riskMap[p.position] = LEVEL_TO_RISK[p.risk_level] || 'none' })
   } else if (tyreData && typeof tyreData === 'object') {
     Object.entries(tyreData).forEach(([id, v]) => {
-      riskMap[id] = LEVEL_TO_RISK[typeof v === 'string' ? v : v?.risk] || 'none'
+      const token = typeof v === 'string' ? v : (v?.risk || v?.risk_level || v?.condition)
+      riskMap[id] = LEVEL_TO_RISK[token] || 'none'
     })
   }
 
@@ -1502,6 +1518,7 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
             key={t.id}
             {...t}
             risk={riskMap[t.id] ?? 'none'}
+            sub={subLabels?.[t.id] || null}
             onClick={handleClick}
           />
         ))}

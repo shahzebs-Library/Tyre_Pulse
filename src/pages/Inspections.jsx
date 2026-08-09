@@ -385,7 +385,7 @@ export default function Inspections() {
         // The ACTUAL app diagram (colored per condition + PSI marked), rendered
         // offscreen below - captured so the report embeds the same SVG the
         // operator sees. Falls back to the programmatic map when absent.
-        const svgEl = pdfDiagramRef.current?.querySelector('svg') || null
+        const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
         await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl })
       } finally { if (!cancelled) setPdfRow(null) }
     }, 80)
@@ -815,8 +815,8 @@ export default function Inspections() {
     // ── Vehicle diagram - capture the SAME diagram rendered in the DOM. In the
     // saved view the on-screen form diagram is unmounted, so fall back to the
     // always-mounted offscreen copy so the report is never missing the diagram.
-    const svgEl = diagramRef.current?.querySelector('svg')
-      || checklistPdfDiagramRef.current?.querySelector('svg')
+    const svgEl = diagramRef.current?.querySelector('svg[data-tyre-map]')
+      || checklistPdfDiagramRef.current?.querySelector('svg[data-tyre-map]')
     if (svgEl) {
       try {
         const svgStr  = new XMLSerializer().serializeToString(svgEl)

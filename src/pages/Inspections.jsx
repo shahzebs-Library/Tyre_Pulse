@@ -27,6 +27,17 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife } from '../lib/tyreRunningLife'
+import { getCompanyLogo } from '../lib/api/brandLogo'
+
+// Report logo: tenant branding wins; otherwise fall back to the org-wide
+// company logo set in Console -> Report Colors (system_config.company_logo).
+async function brandingForPdf(branding) {
+  if (branding?.logo_url) return branding
+  try {
+    const logo = await getCompanyLogo()
+    return logo ? { ...(branding || {}), logo_url: logo } : branding
+  } catch { return branding }
+}
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -371,7 +382,7 @@ export default function Inspections() {
           lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === pdfRow.asset_no)
         } catch { lifeRows = [] }
 
-        await exportInspectionDetailPdf(pdfRow, { branding, company, photos, lifeRows })
+        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows })
       } finally { if (!cancelled) setPdfRow(null) }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
@@ -756,7 +767,7 @@ export default function Inspections() {
     const mx     = 14
 
     // ── Branded header ─────────────────────────────────────────────────────────
-    const brand = await resolvePdfBrand(branding)
+    const brand = await resolvePdfBrand(await brandingForPdf(branding))
     pdfHeader(doc, 'Daily Tyre Inspection Report', `Asset: ${clAsset || clSaved.asset_no || 'n/a'}`, company, brand)
 
     // ── Empty state: checklist has no tyre positions ──
@@ -2028,7 +2039,7 @@ export default function Inspections() {
                           className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors">
                           {t('inspections.row.edit')}
                         </button>
-                        <button onClick={() => exportInspectionDetailPdf(r, { branding, company })}
+                        <button onClick={async () => exportInspectionDetailPdf(r, { branding: await brandingForPdf(branding), company })}
                           className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors"
                           title={t('inspections.row.titleExportPdf')}>
                           <FileText size={11} className="inline" />

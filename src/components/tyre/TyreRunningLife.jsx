@@ -34,7 +34,7 @@ const EXPORT_COLS = [
   ['fittedOn', 'Fitted on'], ['daysOn', 'Days on vehicle'],
   ['kmAtFitment', 'Km at fitment'], ['currentKm', 'Current km'],
   ['kmRun', 'Km run'], ['currentHours', 'Current hours'], ['hoursRun', 'Hours run'],
-  ['expectedLifeKm', 'Expected life (km)'], ['lifeBasis', 'Life basis'],
+  ['expectedLifeKm', 'Expected life (km)'],
   ['remainingKm', 'Remaining km'], ['remainingDays', 'Remaining days'],
   ['due', 'Due?'], ['lifeUsedPct', 'Life used %'],
 ]
@@ -141,6 +141,31 @@ export default function TyreRunningLife() {
             ))}
           </div>
 
+          {/* Overall life-history strip (replaces the per-row Basis column):
+              where the expected-life figures come from, in one line. Hover any
+              Expected life value for that tyre's exact basis. */}
+          {(() => {
+            const counts = { manual: 0, measured_type: 0, measured_size: 0, none: 0 }
+            let samples = 0
+            for (const r of state.rows) {
+              if (r.lifeBasis && counts[r.lifeBasis] != null) counts[r.lifeBasis] += 1
+              else counts.none += 1
+              if (r.lifeSample) samples = Math.max(samples, r.lifeSample)
+            }
+            const bits = []
+            if (counts.manual) bits.push(`${fmtNum(counts.manual)} on your targets`)
+            if (counts.measured_type) bits.push(`${fmtNum(counts.measured_type)} on measured vehicle-type history`)
+            if (counts.measured_size) bits.push(`${fmtNum(counts.measured_size)} on measured size history`)
+            if (counts.none) bits.push(`${fmtNum(counts.none)} with no history yet`)
+            return (
+              <div className="mb-4 rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>Life history: </span>
+                expected life comes from your own fleet's completed tyre lives{bits.length ? ` - ${bits.join(', ')}` : ''}.
+                Hover any Expected life figure for that tyre's exact basis.
+              </div>
+            )
+          })()}
+
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="flex items-center gap-1 rounded-md border border-[var(--border-subtle)] px-2 py-1.5">
               <Search size={14} style={{ color: 'var(--text-dim)' }} />
@@ -188,7 +213,6 @@ export default function TyreRunningLife() {
                   <th className="py-2 pr-2 text-right">Km run</th>
                   <th className="py-2 pr-2 text-right">Hours run</th>
                   <th className="py-2 pr-2 text-right">Expected life</th>
-                  <th className="py-2 pr-2">Basis</th>
                   <th className="py-2 pr-2 text-right">Remaining km</th>
                   <th className="py-2 pr-2 text-right">Remaining days</th>
                   <th className="py-2 pr-2">Due?</th>
@@ -212,8 +236,7 @@ export default function TyreRunningLife() {
                       <td className="py-1.5 pr-2 text-right">{fmtNum(r.currentKm)}</td>
                       <td className="py-1.5 pr-2 text-right font-medium">{fmtNum(r.kmRun)}</td>
                       <td className="py-1.5 pr-2 text-right">{fmtNum(r.hoursRun)}</td>
-                      <td className="py-1.5 pr-2 text-right">{fmtNum(r.expectedLifeKm)}</td>
-                      <td className="py-1.5 pr-2 text-[10px]" style={{ color: 'var(--text-secondary)' }}>{basisLabel(r)}</td>
+                      <td className="py-1.5 pr-2 text-right" title={basisLabel(r)}>{fmtNum(r.expectedLifeKm)}</td>
                       <td className="py-1.5 pr-2 text-right font-semibold">{fmtNum(r.remainingKm)}</td>
                       <td className="py-1.5 pr-2 text-right" title={r.daySample ? `Day life from ${r.daySample} removed tyres` : ''}>{fmtNum(r.remainingDays)}</td>
                       <td className="py-1.5 pr-2 font-semibold" style={{ color: dueLabel(r) === 'Due' ? '#f87171' : dueLabel(r) === 'Not due' ? '#34d399' : 'var(--text-dim)' }}>
@@ -240,12 +263,9 @@ export default function TyreRunningLife() {
           )}
 
           <p className="mt-3 text-[11px]" style={{ color: 'var(--text-dim)' }}>
-            Expected life basis, per tyre (the Basis column): "Your target" = a number your admin set in
-            Life targets; "Type avg (n)" = the measured average of your own removed tyres of the same size
-            AND vehicle type (n = how many); "Size avg (n)" = same size across all vehicle types. Days use
-            the measured day-life the same way. Remaining figures are a guide from those bases, not a
-            promise. "Not measurable" = the vehicle has no current meter reading or the fitment km is
-            missing - meter logs and inspections make more tyres measurable.
+            Remaining figures are a guide from your fleet's own measured life (or your set
+            targets), not a promise. "Not measurable" = the vehicle has no current meter reading or
+            the fitment km is missing - meter logs and inspections make more tyres measurable.
           </p>
         </>
       )}

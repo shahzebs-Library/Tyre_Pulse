@@ -13,7 +13,7 @@ import {
   getTyreRunningLife, listTyreLifeTargets, saveTyreLifeTarget, deleteTyreLifeTarget,
 } from '../../lib/api/tyreRunningLife'
 import {
-  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel, dueLabel,
+  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel, dueLabel, summarize,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
@@ -65,7 +65,9 @@ export default function TyreRunningLife() {
   )
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const shown = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
-  const s = state.summary
+  // Tiles + life-history strip follow the on-screen filters, same as the table.
+  const s = useMemo(() => summarize(filtered), [filtered])
+  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all'
 
   function doExport(kind) {
     if (!filtered.length) return
@@ -127,7 +129,7 @@ export default function TyreRunningLife() {
         <>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
             {[
-              ['Active tyres', fmtNum(s.total)],
+              [hasFilter ? 'Tyres (filtered)' : 'Active tyres', fmtNum(s.total)],
               ['Measured vs km', fmtNum(s.measurableKm)],
               ['Measured vs hours', fmtNum(s.measurableHours)],
               ['Past expected life', fmtNum(s.overdue)],
@@ -147,7 +149,7 @@ export default function TyreRunningLife() {
           {(() => {
             const counts = { manual: 0, measured_type: 0, measured_size: 0, none: 0 }
             let samples = 0
-            for (const r of state.rows) {
+            for (const r of filtered) {
               if (r.lifeBasis && counts[r.lifeBasis] != null) counts[r.lifeBasis] += 1
               else counts.none += 1
               if (r.lifeSample) samples = Math.max(samples, r.lifeSample)

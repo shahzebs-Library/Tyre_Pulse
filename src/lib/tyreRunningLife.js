@@ -107,6 +107,14 @@ export function filterRows(rows = [], { search = '', band = 'all', unit = 'all' 
 
 export const fmtNum = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
 
+/** Binary due flag from the band: Due / Not due / Unknown. */
+export function dueLabel(row) {
+  const b = bandFor(row)
+  if (b === 'overdue' || b === 'due-soon') return 'Due'
+  if (b === 'unknown') return 'Unknown'
+  return 'Not due'
+}
+
 /** Plain-English label for what an expected life is based on. */
 export const BASIS_META = {
   manual: { label: 'Your target', tone: 'info' },

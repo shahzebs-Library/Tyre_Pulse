@@ -99,3 +99,13 @@ describe('V489 additions: days + basis', () => {
     expect(basisLabel(shapeRow({}))).toBe('No baseline')
   })
 })
+
+describe('dueLabel', () => {
+  it('Due for overdue/due-soon, Not due otherwise, Unknown when unmeasurable', async () => {
+    const { dueLabel } = await import('../lib/tyreRunningLife')
+    expect(dueLabel(shapeRow(row({ remaining_km: 0, life_used_pct: 130 })))).toBe('Due')
+    expect(dueLabel(shapeRow(row({ remaining_km: 3000, life_used_pct: 95 })))).toBe('Due')
+    expect(dueLabel(shapeRow(row({ remaining_km: 30000, life_used_pct: 50 })))).toBe('Not due')
+    expect(dueLabel(shapeRow(row({ km_run: null, remaining_km: null, life_used_pct: null })))).toBe('Unknown')
+  })
+})

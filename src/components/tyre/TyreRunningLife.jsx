@@ -13,7 +13,7 @@ import {
   getTyreRunningLife, listTyreLifeTargets, saveTyreLifeTarget, deleteTyreLifeTarget,
 } from '../../lib/api/tyreRunningLife'
 import {
-  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel,
+  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel, dueLabel,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
@@ -36,7 +36,7 @@ const EXPORT_COLS = [
   ['kmRun', 'Km run'], ['currentHours', 'Current hours'], ['hoursRun', 'Hours run'],
   ['expectedLifeKm', 'Expected life (km)'], ['lifeBasis', 'Life basis'],
   ['remainingKm', 'Remaining km'], ['remainingDays', 'Remaining days'],
-  ['lifeUsedPct', 'Life used %'],
+  ['due', 'Due?'], ['lifeUsedPct', 'Life used %'],
 ]
 
 export default function TyreRunningLife() {
@@ -73,7 +73,7 @@ export default function TyreRunningLife() {
     const headers = EXPORT_COLS.map(([, h]) => h)
     const rows = filtered.map((r) => {
       const o = {}
-      for (const k of keys) o[k] = r[k] ?? ''
+      for (const k of keys) o[k] = k === 'due' ? dueLabel(r) : (r[k] ?? '')
       return o
     })
     const name = reportFileName('TyrePulse Tyre Running Life', activeCountry || 'All')
@@ -191,6 +191,7 @@ export default function TyreRunningLife() {
                   <th className="py-2 pr-2">Basis</th>
                   <th className="py-2 pr-2 text-right">Remaining km</th>
                   <th className="py-2 pr-2 text-right">Remaining days</th>
+                  <th className="py-2 pr-2">Due?</th>
                   <th className="py-2 pr-2">State</th>
                 </tr>
               </thead>
@@ -215,6 +216,9 @@ export default function TyreRunningLife() {
                       <td className="py-1.5 pr-2 text-[10px]" style={{ color: 'var(--text-secondary)' }}>{basisLabel(r)}</td>
                       <td className="py-1.5 pr-2 text-right font-semibold">{fmtNum(r.remainingKm)}</td>
                       <td className="py-1.5 pr-2 text-right" title={r.daySample ? `Day life from ${r.daySample} removed tyres` : ''}>{fmtNum(r.remainingDays)}</td>
+                      <td className="py-1.5 pr-2 font-semibold" style={{ color: dueLabel(r) === 'Due' ? '#f87171' : dueLabel(r) === 'Not due' ? '#34d399' : 'var(--text-dim)' }}>
+                        {dueLabel(r)}
+                      </td>
                       <td className="py-1.5 pr-2">
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={tone}>
                           {meta.label}{r.lifeUsedPct != null ? ` ${r.lifeUsedPct}%` : ''}

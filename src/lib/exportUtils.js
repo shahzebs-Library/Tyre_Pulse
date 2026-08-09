@@ -1177,7 +1177,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   {
     let estH = null
     if (opts.svgEl) {
-      estH = 150
+      estH = 120
     } else {
       const lk = _resolveLayoutKey(row.vehicle_type)
       const ly = lk ? _TYRE_LAYOUTS[lk] : null
@@ -1213,9 +1213,11 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   let diagramH = 0
   const svgCap = opts.svgEl ? await svgToPngDataUrl(opts.svgEl, 3, '#0A0F1E') : null
   if (svgCap && svgCap.dataUrl) {
+    // Owner spec: the diagram stays COMPACT so the whole report auto-fits one
+    // page (photos may flow to page 2) - never a full-page picture.
     const bgW  = pw - mx * 2
-    const availH = Math.min(165, ph - FOOTER_SPACE - y - 24)
-    let iw = bgW - 60                                  // leave room for the legend
+    const availH = Math.max(60, Math.min(105, ph - FOOTER_SPACE - y - 24))
+    let iw = Math.min(80, bgW - 60)                    // leave room for the legend
     let ih = iw * (svgCap.h / svgCap.w)
     if (ih > availH) { ih = availH; iw = ih * (svgCap.w / svgCap.h) }
     const bgH = ih + 10

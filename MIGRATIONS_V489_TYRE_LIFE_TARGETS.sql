@@ -1,0 +1,31 @@
+-- V489 TYRE LIFE TARGETS + VEHICLE-TYPE BASELINES + DAYS
+-- STATUS: APPLIED LIVE (2026-08-09) via Supabase MCP (v489_tyre_life_targets_and_basis).
+--
+-- Extends the V488 Running & Remaining view per the owner's asks:
+--  1. VEHICLE-WISE baseline: expected life prefers the measured average of
+--     removed tyres of the same country+size+VEHICLE TYPE (sample >= 3),
+--     falling back to the size-only average. Vehicle type resolves via the
+--     fleet register when the tyre row lacks it.
+--  2. MANUAL TARGETS: new org-scoped `tyre_life_targets` table (country
+--     nullable / size / vehicle_type nullable / target_km 1k..400k). A target
+--     OVERRIDES every measured average on matching tyres (most specific match
+--     wins: vehicle_type set > country set), so life-used % tracks the fleet
+--     against the owner's own standard - the improvement view.
+--  3. BASIS ON SCREEN: every row carries `life_basis`
+--     ('manual'|'measured_type'|'measured_size') + `life_sample`, rendered as
+--     a Basis column ("Your target" / "Type avg (n)" / "Size avg (n)").
+--  4. DAYS: `days_on` (today - fitment), `expected_days` (measured average
+--     day-life, type-first), `remaining_days`. 4,953 removed tyres carry a
+--     measured day-life, so the days baseline is strong.
+-- RLS: restrictive org isolation + app_is_active read + app_is_elevated write
+-- on tyre_life_targets; RPC stays SECURITY INVOKER, anon+PUBLIC revoked.
+--
+-- Verified live (rolled back): a planted 315/80R22.5 target flipped 160 rows
+-- to basis 'manual'; 3,339 rows ride type averages, 14 size fallback; days on
+-- 3,430 rows / remaining-days on 3,421.
+--
+-- The full applied SQL is in supabase migration v489_tyre_life_targets_and_basis
+-- (table + policies + the CREATE OR REPLACE of get_tyre_running_life with
+-- removed/base_size/base_type/targets lateral + final basis resolution).
+-- Rollback: delete the table's rows / drop tyre_life_targets and re-apply the
+-- V488 function body from MIGRATIONS_V488_TYRE_RUNNING_LIFE.sql.

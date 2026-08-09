@@ -6,12 +6,16 @@
  * baseline is missing - nothing is fabricated.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Search, X, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
+import { Gauge, Search, X, FileSpreadsheet, FileText, RefreshCw, Target, Trash2 } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
-import { getTyreRunningLife } from '../../lib/api/tyreRunningLife'
+import { useAuth } from '../../contexts/AuthContext'
 import {
-  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum,
+  getTyreRunningLife, listTyreLifeTargets, saveTyreLifeTarget, deleteTyreLifeTarget,
+} from '../../lib/api/tyreRunningLife'
+import {
+  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel,
 } from '../../lib/tyreRunningLife'
+import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
 
 const PAGE_SIZE = 25
@@ -27,19 +31,24 @@ const TONE_STYLE = {
 const EXPORT_COLS = [
   ['serial', 'Serial'], ['asset', 'Asset'], ['position', 'Position'],
   ['vehicleType', 'Type'], ['site', 'Site'], ['brand', 'Brand'], ['size', 'Size'],
-  ['fittedOn', 'Fitted on'], ['kmAtFitment', 'Km at fitment'], ['currentKm', 'Current km'],
+  ['fittedOn', 'Fitted on'], ['daysOn', 'Days on vehicle'],
+  ['kmAtFitment', 'Km at fitment'], ['currentKm', 'Current km'],
   ['kmRun', 'Km run'], ['currentHours', 'Current hours'], ['hoursRun', 'Hours run'],
-  ['expectedLifeKm', 'Expected life (km)'], ['remainingKm', 'Remaining km'],
+  ['expectedLifeKm', 'Expected life (km)'], ['lifeBasis', 'Life basis'],
+  ['remainingKm', 'Remaining km'], ['remainingDays', 'Remaining days'],
   ['lifeUsedPct', 'Life used %'],
 ]
 
 export default function TyreRunningLife() {
   const { activeCountry } = useSettings()
+  const { profile, isSuperAdmin } = useAuth()
   const [state, setState] = useState({ loading: true, ok: true, rows: [], summary: null })
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('all')
   const [unit, setUnit] = useState('all')
   const [page, setPage] = useState(0)
+  const [targetsOpen, setTargetsOpen] = useState(false)
+  const canSetTargets = isSuperAdmin || ['Admin', 'Manager', 'Director'].includes(profile?.role)
 
   async function load() {
     setState((s) => ({ ...s, loading: true }))
@@ -86,6 +95,11 @@ export default function TyreRunningLife() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {canSetTargets && (
+            <button type="button" onClick={() => setTargetsOpen(true)} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-primary)' }}>
+              <Target size={13} /> Life targets
+            </button>
+          )}
           <button type="button" onClick={load} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} /> Refresh
           </button>
@@ -168,12 +182,15 @@ export default function TyreRunningLife() {
                   <th className="py-2 pr-2">Pos</th>
                   <th className="py-2 pr-2">Site</th>
                   <th className="py-2 pr-2">Size</th>
+                  <th className="py-2 pr-2 text-right">Days on</th>
                   <th className="py-2 pr-2 text-right">Fit km</th>
                   <th className="py-2 pr-2 text-right">Current km</th>
                   <th className="py-2 pr-2 text-right">Km run</th>
                   <th className="py-2 pr-2 text-right">Hours run</th>
                   <th className="py-2 pr-2 text-right">Expected life</th>
+                  <th className="py-2 pr-2">Basis</th>
                   <th className="py-2 pr-2 text-right">Remaining km</th>
+                  <th className="py-2 pr-2 text-right">Remaining days</th>
                   <th className="py-2 pr-2">State</th>
                 </tr>
               </thead>
@@ -189,12 +206,15 @@ export default function TyreRunningLife() {
                       <td className="py-1.5 pr-2">{r.position || 'N/A'}</td>
                       <td className="py-1.5 pr-2">{r.site || 'N/A'}</td>
                       <td className="py-1.5 pr-2">{r.size || 'N/A'}</td>
+                      <td className="py-1.5 pr-2 text-right" title={r.fittedOn ? `Fitted ${r.fittedOn}` : ''}>{fmtNum(r.daysOn)}</td>
                       <td className="py-1.5 pr-2 text-right">{fmtNum(r.kmAtFitment)}</td>
                       <td className="py-1.5 pr-2 text-right">{fmtNum(r.currentKm)}</td>
                       <td className="py-1.5 pr-2 text-right font-medium">{fmtNum(r.kmRun)}</td>
                       <td className="py-1.5 pr-2 text-right">{fmtNum(r.hoursRun)}</td>
-                      <td className="py-1.5 pr-2 text-right" title={r.lifeSample ? `From ${r.lifeSample} removed tyres of this size` : ''}>{fmtNum(r.expectedLifeKm)}</td>
+                      <td className="py-1.5 pr-2 text-right">{fmtNum(r.expectedLifeKm)}</td>
+                      <td className="py-1.5 pr-2 text-[10px]" style={{ color: 'var(--text-secondary)' }}>{basisLabel(r)}</td>
                       <td className="py-1.5 pr-2 text-right font-semibold">{fmtNum(r.remainingKm)}</td>
+                      <td className="py-1.5 pr-2 text-right" title={r.daySample ? `Day life from ${r.daySample} removed tyres` : ''}>{fmtNum(r.remainingDays)}</td>
                       <td className="py-1.5 pr-2">
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={tone}>
                           {meta.label}{r.lifeUsedPct != null ? ` ${r.lifeUsedPct}%` : ''}
@@ -216,13 +236,151 @@ export default function TyreRunningLife() {
           )}
 
           <p className="mt-3 text-[11px]" style={{ color: 'var(--text-dim)' }}>
-            Expected life = the average measured life of your own removed tyres of the same size in this
-            country (hover the figure for the sample size). Remaining km is a guide from that average, not
-            a promise. A tyre shows "Not measurable" when the vehicle has no current meter reading or the
-            fitment km is missing - meter logs and inspections make more tyres measurable.
+            Expected life basis, per tyre (the Basis column): "Your target" = a number your admin set in
+            Life targets; "Type avg (n)" = the measured average of your own removed tyres of the same size
+            AND vehicle type (n = how many); "Size avg (n)" = same size across all vehicle types. Days use
+            the measured day-life the same way. Remaining figures are a guide from those bases, not a
+            promise. "Not measurable" = the vehicle has no current meter reading or the fitment km is
+            missing - meter logs and inspections make more tyres measurable.
           </p>
         </>
       )}
+
+      {targetsOpen && (
+        <LifeTargetsModal
+          rows={state.rows}
+          country={activeCountry}
+          onClose={(changed) => { setTargetsOpen(false); if (changed) load() }}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Admin modal: force your own expected-life numbers per tyre size (optionally
+ * per vehicle type / country). A manual target OVERRIDES the measured average
+ * on every matching tyre, so life-used % then tracks improvement against YOUR
+ * number instead of history.
+ */
+function LifeTargetsModal({ rows, country, onClose }) {
+  const [targets, setTargets] = useState(null)
+  const [form, setForm] = useState({ size: '', vehicle_type: '', target_km: '', note: '' })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [changed, setChanged] = useState(false)
+
+  const sizes = useMemo(() => [...new Set(rows.map((r) => r.size).filter(Boolean))].sort(), [rows])
+  const types = useMemo(() => [...new Set(rows.map((r) => r.vehicleType).filter(Boolean))].sort(), [rows])
+
+  async function loadTargets() { setTargets(await listTyreLifeTargets()) }
+  useEffect(() => { loadTargets() }, [])
+
+  async function save() {
+    setBusy(true); setError('')
+    try {
+      await saveTyreLifeTarget({
+        country,
+        size: form.size,
+        vehicle_type: form.vehicle_type || null,
+        target_km: form.target_km,
+        note: form.note,
+      })
+      setForm({ size: '', vehicle_type: '', target_km: '', note: '' })
+      setChanged(true)
+      await loadTargets()
+    } catch (e) { setError(toUserMessage(e)) } finally { setBusy(false) }
+  }
+
+  async function remove(id) {
+    try { await deleteTyreLifeTarget(id); setChanged(true); await loadTargets() } catch (e) { setError(toUserMessage(e)) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => onClose(changed)}>
+      <div className="card w-full max-w-xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Target size={15} /> Tyre life targets
+          </h3>
+          <button type="button" onClick={() => onClose(changed)}><X size={16} style={{ color: 'var(--text-dim)' }} /></button>
+        </div>
+        <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+          Set the km life YOU expect per tyre size (optionally only for one vehicle type). A target
+          overrides the measured average on every matching tyre, so the Remaining and Life-used figures
+          then measure your fleet against your own standard.
+        </p>
+
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Tyre size *
+            <select value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <option value="">Pick a size</option>
+              {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Vehicle type (optional)
+            <select value={form.vehicle_type} onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <option value="">All vehicle types</option>
+              {types.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Target life (km) *
+            <input type="number" min="1000" max="400000" value={form.target_km}
+              onChange={(e) => setForm({ ...form, target_km: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Note
+            <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+          </label>
+        </div>
+        {error && <p className="text-xs mb-2" style={{ color: '#f87171' }}>{error}</p>}
+        <button type="button" disabled={busy || !form.size || !form.target_km} onClick={save}
+          className="px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-40"
+          style={{ background: 'var(--brand)', color: '#fff' }}>
+          {busy ? 'Saving...' : 'Save target'}
+        </button>
+
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Current targets</h4>
+          {targets == null ? (
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+          ) : !targets.length ? (
+            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+              No targets set - every tyre uses its measured fleet average.
+            </p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
+                  <th className="py-1.5 pr-2">Size</th>
+                  <th className="py-1.5 pr-2">Vehicle type</th>
+                  <th className="py-1.5 pr-2">Country</th>
+                  <th className="py-1.5 pr-2 text-right">Target km</th>
+                  <th className="py-1.5 pr-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {targets.map((t) => (
+                  <tr key={t.id} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
+                    <td className="py-1.5 pr-2">{t.size}</td>
+                    <td className="py-1.5 pr-2">{t.vehicle_type || 'All types'}</td>
+                    <td className="py-1.5 pr-2">{t.country || 'All'}</td>
+                    <td className="py-1.5 pr-2 text-right">{fmtNum(t.target_km)}</td>
+                    <td className="py-1.5 pr-2 text-right">
+                      <button type="button" onClick={() => remove(t.id)} title="Remove target">
+                        <Trash2 size={13} style={{ color: 'var(--text-dim)' }} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

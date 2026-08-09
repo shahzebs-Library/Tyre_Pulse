@@ -78,3 +78,24 @@ describe('tyreRunningLife', () => {
     expect(good.summary.total).toBe(1)
   })
 })
+
+describe('V489 additions: days + basis', () => {
+  it('shapes days and basis fields', () => {
+    const r = shapeRow({
+      serial_no: 'S9', asset_no: 'TM1', km_run: 30000, expected_life_km: 60000,
+      remaining_km: 30000, life_used_pct: 50, days_on: 120, expected_days: 300,
+      day_sample: 40, remaining_days: 180, life_basis: 'measured_type', life_sample: 25,
+    })
+    expect(r.daysOn).toBe(120)
+    expect(r.remainingDays).toBe(180)
+    expect(r.lifeBasis).toBe('measured_type')
+  })
+
+  it('basisLabel: manual has no sample, measured shows it, missing is honest', async () => {
+    const { basisLabel } = await import('../lib/tyreRunningLife')
+    expect(basisLabel(shapeRow({ life_basis: 'manual' }))).toBe('Your target')
+    expect(basisLabel(shapeRow({ life_basis: 'measured_type', life_sample: 25 }))).toBe('Type avg (25)')
+    expect(basisLabel(shapeRow({ life_basis: 'measured_size', life_sample: 7 }))).toBe('Size avg (7)')
+    expect(basisLabel(shapeRow({}))).toBe('No baseline')
+  })
+})

@@ -26,6 +26,11 @@ export function shapeRow(r = {}) {
     brand: r.brand || '',
     size: r.size || '',
     fittedOn: r.fitted_on || null,
+    daysOn: num(r.days_on),
+    expectedDays: num(r.expected_days),
+    daySample: num(r.day_sample),
+    remainingDays: num(r.remaining_days),
+    lifeBasis: r.life_basis || null,
     kmAtFitment: num(r.km_at_fitment),
     currentKm: num(r.current_km),
     kmRun: num(r.km_run),
@@ -96,7 +101,22 @@ export function filterRows(rows = [], { search = '', band = 'all', unit = 'all' 
       || r.site.toLowerCase().includes(q)
       || r.brand.toLowerCase().includes(q)
       || r.size.toLowerCase().includes(q)
+      || r.vehicleType.toLowerCase().includes(q)
   })
 }
 
 export const fmtNum = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+
+/** Plain-English label for what an expected life is based on. */
+export const BASIS_META = {
+  manual: { label: 'Your target', tone: 'info' },
+  measured_type: { label: 'Type avg', tone: 'good' },
+  measured_size: { label: 'Size avg', tone: 'quiet' },
+}
+export function basisLabel(row) {
+  if (!row || !row.lifeBasis) return 'No baseline'
+  const meta = BASIS_META[row.lifeBasis]
+  if (!meta) return 'No baseline'
+  if (row.lifeBasis === 'manual') return meta.label
+  return row.lifeSample != null ? `${meta.label} (${row.lifeSample})` : meta.label
+}

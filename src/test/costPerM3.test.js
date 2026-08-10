@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   fmtMoney, fmtM3, fmtCostPerM3, toMonthStart, mapImportRows, IMPORT_TEMPLATES,
   assetFromTruck, toRejectedBool, toDateDay, normalizeRegion,
+  summarizeLedger, rejectedRowsDetail, sourceShares,
 } from '../lib/costPerM3'
 
 describe('formatters', () => {
@@ -188,5 +189,130 @@ describe('SCO issue grid (bj_griddetails) format', () => {
     expect(row.description).toBe('Hydraulic Pipe For MP079 Pump')
     expect(row.amount).toBeCloseTo(160.87, 2)
     expect(row.notes).toBe('WO GCKR/JC/2306/0726 / Asset MP079')
+  })
+})
+
+describe('summarizeLedger', () => {
+  const scoRows = [
+    { period_date: '2026-07-01', site: 'NHC', amount: 100, currency: 'SAR' },
+    { period_date: '2026-07-01', site: 'NHC', amount: 50, currency: 'SAR' },
+    { period_date: '2026-06-01', site: 'RED SEA', amount: 200, currency: 'SAR' },
+  ]
+
+  it('totals rows, value, sites, months and period covered (sco)', () => {
+    const s = summarizeLedger(scoRows, 'sco')
+    expect(s.totals.rows).toBe(3)
+    expect(s.totals.value).toBe(350)
+    expect(s.totals.sites).toBe(2)
+    expect(s.totals.months).toBe(2)
+    expect(s.totals.firstMonth).toBe('2026-06')
+    expect(s.totals.lastMonth).toBe('2026-07')
+    expect(s.totals.currencies).toEqual(['SAR'])
+    expect(s.totals.mixedCurrency).toBe(false)
+  })
+
+  it('byMonth is newest first with per-month rows + value', () => {
+    const s = summarizeLedger(scoRows, 'sco')
+    expect(s.byMonth).toEqual([
+      { month: '2026-07', rows: 2, value: 150 },
+      { month: '2026-06', rows: 1, value: 200 },
+    ])
+  })
+
+  it('bySite is sorted by value desc; blank site falls back to region then Not stated', () => {
+    const s = summarizeLedger([
+      { period_date: '2026-07-01', site: '', region: 'Western', amount: 10 },
+      { period_date: '2026-07-01', amount: 5 },
+      { period_date: '2026-07-01', site: 'NHC', amount: 99 },
+    ], 'sco')
+    expect(s.bySite[0]).toEqual({ site: 'NHC', rows: 1, value: 99 })
+    expect(s.bySite.map((r) => r.site)).toEqual(['NHC', 'Western', 'Not stated'])
+  })
+
+  it('flags mixed currencies instead of blending them silently', () => {
+    const s = summarizeLedger([
+      { period_date: '2026-07-01', amount: 10, currency: 'SAR' },
+      { period_date: '2026-07-01', amount: 10, currency: 'AED' },
+    ], 'sco')
+    expect(s.totals.mixedCurrency).toBe(true)
+    expect(s.totals.currencies).toEqual(['AED', 'SAR'])
+  })
+
+  it('production sums approved m3 with supplied fallback + rejection counts', () => {
+    const s = summarizeLedger([
+      { period_date: '2026-07-02', site: 'NHC', m3: 12, approved_m3: 12, rejected: false },
+      { period_date: '2026-07-03', site: 'NHC', m3: 10, approved_m3: 7, rejected: true },
+      { period_date: '2026-07-04', site: 'NHC', m3: 8 }, // approved blank -> falls back to supplied
+    ], 'production')
+    expect(s.totals.value).toBe(27) // 12 + 7 + 8
+    expect(s.totals.supplied_m3).toBe(30)
+    expect(s.totals.approved_m3).toBe(27)
+    expect(s.totals.rejected_loads).toBe(1)
+    expect(s.totals.rejected_m3).toBe(3)
+  })
+
+  it('sany splits counted (non-detail) value from detail lines', () => {
+    const s = summarizeLedger([
+      { period_date: '2026-07-01', amount: 1000, doc_type: 'summary' },
+      { period_date: '2026-07-01', amount: 400, doc_type: 'proforma' },
+      { period_date: '2026-07-01', amount: 99, doc_type: 'detail' },
+    ], 'sany')
+    expect(s.totals.value).toBe(1499)
+    expect(s.totals.counted_value).toBe(1400)
+    expect(s.totals.detail_rows).toBe(1)
+  })
+
+  it('a row with no readable month lands in the Unknown bucket, sorted last', () => {
+    const s = summarizeLedger([
+      { period_date: '2026-07-01', amount: 1 },
+      { period_date: null, amount: 2 },
+    ], 'sco')
+    expect(s.byMonth.map((m) => m.month)).toEqual(['2026-07', 'Unknown'])
+    expect(s.totals.firstMonth).toBe('2026-07')
+  })
+
+  it('empty input -> honest nulls, never fabricated zero values', () => {
+    const s = summarizeLedger([], 'sco')
+    expect(s.totals.rows).toBe(0)
+    expect(s.totals.value).toBeNull()
+    expect(s.byMonth).toEqual([])
+    expect(s.bySite).toEqual([])
+  })
+})
+
+describe('rejectedRowsDetail', () => {
+  it('keeps only rejected rows, newest first, with reason + remarks null-safe', () => {
+    const rows = rejectedRowsDetail([
+      { id: 1, period_date: '2026-07-01', site: 'NHC', dn_number: 'DN1', m3: 10, approved_m3: 7, rejected: true, reason: 'Slump high', remarks: 'Sent back' },
+      { id: 2, period_date: '2026-07-05', site: 'RED SEA', dn_number: null, m3: 8, approved_m3: null, rejected: true, reason: '', remarks: null },
+      { id: 3, period_date: '2026-07-03', site: 'NHC', m3: 12, approved_m3: 12, rejected: false },
+    ])
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ id: 2, site: 'RED SEA', dn_number: null, supplied_m3: 8, approved_m3: null, not_approved_m3: 8, reason: null, remarks: null })
+    expect(rows[1]).toMatchObject({ id: 1, dn_number: 'DN1', supplied_m3: 10, not_approved_m3: 3, reason: 'Slump high', remarks: 'Sent back' })
+  })
+
+  it('never invents a quantity: no supplied m3 -> null gap', () => {
+    const [r] = rejectedRowsDetail([{ id: 9, period_date: '2026-07-01', rejected: true }])
+    expect(r.supplied_m3).toBeNull()
+    expect(r.not_approved_m3).toBeNull()
+  })
+})
+
+describe('sourceShares', () => {
+  it('computes per-source share of the grand total; tyre is a sub-line', () => {
+    const s = sourceShares({ internal_cost: 600, tyre_cost: 100, sco_cost: 300, sany_cost: 100, grand_total: 1000 })
+    const byKey = Object.fromEntries(s.map((x) => [x.key, x]))
+    expect(byKey.internal.share).toBeCloseTo(60, 5)
+    expect(byKey.sco.share).toBeCloseTo(30, 5)
+    expect(byKey.sany.share).toBeCloseTo(10, 5)
+    expect(byKey.tyre.sub).toBe(true)
+    expect(byKey.tyre.share).toBeCloseTo(10, 5)
+  })
+
+  it('null shares when there is no positive grand total; empty on null input', () => {
+    const s = sourceShares({ internal_cost: 0, sco_cost: 0, sany_cost: 0, grand_total: 0 })
+    expect(s.every((x) => x.share === null)).toBe(true)
+    expect(sourceShares(null)).toEqual([])
   })
 })

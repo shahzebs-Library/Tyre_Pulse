@@ -150,6 +150,30 @@ export async function insertPartsConsumption(rows = [], { country = null, onProg
  * the backend is not provisioned so the report degrades to an honest empty state.
  * @param {{ site?:string, country?:string, from?:string, to?:string }} [opts]
  */
+/**
+ * Raw expense rows for download - the REAL lines behind every total, scoped to
+ * country + date window. Paged with an id tiebreak (never a bare select) and
+ * bounded: 100k rows max, with a truncated flag so the caller can say so.
+ */
+export async function listExpenseRows({ country, from, to, max = 100000 } = {}) {
+  const { fetchAllPages } = await import('../fetchAll')
+  const build = (fromIdx, toIdx) => {
+    let q = supabase
+      .from('parts_consumption')
+      .select('event_date, work_order_no, item_code, item_description, qty, unit_cost, line_cost, tyre_cost, oil_cost, site, store_code, currency, country')
+      .order('event_date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(fromIdx, toIdx)
+    if (country && country !== 'All') q = q.eq('country', country)
+    if (from) q = q.gte('event_date', from)
+    if (to) q = q.lte('event_date', to)
+    return q
+  }
+  const { rows, truncated, error } = await fetchAllPages(build, { max })
+  if (error) throw error
+  return { rows: rows || [], truncated: Boolean(truncated) }
+}
+
 export async function getPartsExpenseSnapshot({ site, country, from, to } = {}) {
   const { data, error } = await supabase.rpc('get_parts_expense_snapshot', {
     p_site: site || null, p_country: country || null, p_from: from || null, p_to: to || null,

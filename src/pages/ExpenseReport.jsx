@@ -25,7 +25,7 @@ import DateField from '../components/ui/DateField'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
-import { getPartsExpenseSnapshot, getExpenseByCountry, getCostCpkOverview } from '../lib/api/partsConsumption'
+import { getPartsExpenseSnapshot, getExpenseByCountry, getCostCpkOverview, listExpenseRows } from '../lib/api/partsConsumption'
 import { listTcoActualRecords } from '../lib/api/tyreRecords'
 import { getExpenseYearlyTrend } from '../lib/api/expenseTrends'
 import { forecastTyreDemand } from '../lib/tyreDemandForecast'
@@ -855,6 +855,55 @@ export default function ExpenseReport() {
     }
   }
 
+  // Download the REAL expense rows (not aggregates) for the current country +
+  // period as Excel - every line exactly as stored, category derived by the
+  // same rule the totals use. Bounded at 100k rows with an honest note.
+  async function exportRowsExcel() {
+    setExporting(true)
+    setError('')
+    try {
+      const company = appSettings?.company_name || 'TyrePulse'
+      const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
+      const { rows: raw, truncated } = await listExpenseRows({
+        country: scopedCountry, from: from || undefined, to: to || undefined,
+      })
+      if (!raw.length) { setError('No expense rows in this period.'); return }
+      const data = raw.map((r) => ({
+        event_date: r.event_date || '',
+        work_order_no: r.work_order_no || '',
+        item_code: r.item_code || '',
+        item_description: r.item_description || '',
+        qty: r.qty,
+        unit_cost: r.unit_cost,
+        line_cost: r.line_cost,
+        category: Number(r.tyre_cost) > 0 ? 'Tyre' : Number(r.oil_cost) > 0 ? 'Oil' : 'Spare',
+        site: r.site || '',
+        store_code: r.store_code || '',
+        currency: r.currency || '',
+        country: r.country || '',
+      }))
+      await exportToExcel(
+        data,
+        ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost', 'category', 'site', 'store_code', 'currency', 'country'],
+        ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value', 'Category', 'Site', 'Store', 'Currency', 'Country'],
+        reportFileName(company, 'Expense Rows', reportDateLabel()),
+        'Expense rows',
+        {
+          company,
+          title: `${company} Expense Rows`,
+          meta: {
+            Scope: scopedCountry || 'All countries - each row carries its own currency',
+            Rows: String(data.length) + (truncated ? ' (capped at 100,000 - narrow the date range for the rest)' : ''),
+          },
+        },
+      )
+    } catch (e) {
+      setError(toUserMessage(e, 'Export failed. Please try again.'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Save one store_code -> site mapping then refresh the by-site panel. The
   // country comes from the row's own group so an All-view mapping is still
   // stored against the right country (store_site_map is keyed per country).
@@ -921,6 +970,9 @@ export default function ExpenseReport() {
           </button>
           <button onClick={exportExcel} disabled={exporting || !hasAny} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
             <Boxes size={14} /> Export Excel
+          </button>
+          <button onClick={exportRowsExcel} disabled={exporting || !hasAny} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50" title="Every stored expense line for this country and period">
+            <Download size={14} /> Download rows (Excel)
           </button>
         </div>
       </div>

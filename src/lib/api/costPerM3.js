@@ -236,6 +236,48 @@ export async function listProduction({ country, from, to, limit = 1000 } = {}) {
 }
 
 /**
+ * Rejected production loads only (server-filtered, bounded) so the rejections
+ * report can show row-level Reason + Remarks without pulling the whole table.
+ */
+export async function listRejectedProduction({ country, from, to, limit = 1000 } = {}) {
+  try {
+    let q = supabase.from('production_logs')
+      .select(PROD_COLS)
+      .eq('rejected', true)
+      .order('period_date', { ascending: false }).order('id')
+    if (country && country !== 'All') q = q.eq('country', country)
+    if (from) q = q.gte('period_date', from)
+    if (to) q = q.lte('period_date', to)
+    const { data, error } = await q.limit(limit)
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/**
+ * Exact server-side row counts for the three Cost/M3 ledgers in a country +
+ * period (head-only count queries - never a capped .length). A count that
+ * cannot be read returns null so the UI says N/A, never a silent zero.
+ */
+export async function countCostM3Rows({ country, from, to } = {}) {
+  const one = async (table) => {
+    try {
+      let q = supabase.from(table).select('id', { count: 'exact', head: true })
+      if (country && country !== 'All') q = q.eq('country', country)
+      if (from) q = q.gte('period_date', from)
+      if (to) q = q.lte('period_date', to)
+      const { count, error } = await q
+      if (error) return null
+      return count ?? 0
+    } catch { return null }
+  }
+  const [sco, sany, production] = await Promise.all([
+    one('sco_costs'), one('sany_invoices'), one('production_logs'),
+  ])
+  return { sco, sany, production }
+}
+
+/**
  * Monthly production summary (V482 get_production_monthly): one row per month
  * with loads, supplied/approved/not-approved m3, rejected loads + m3, and the
  * rejection reasons carrying sample remarks. Server-aggregated (the table holds

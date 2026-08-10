@@ -39,6 +39,151 @@ export function fmtCostPerM3(value, currency = '') {
 }
 
 /**
+ * Summarize ledger rows (already filtered by country + period by the caller)
+ * into a professional summary-first shape: totals + byMonth + bySite.
+ * kind: 'sco' | 'sany' | 'production'. Production sums approved m3 (falls back
+ * to supplied m3 when approved is blank); the money ledgers sum `amount`.
+ * Currency-aware: distinct currencies are reported and `mixedCurrency` is true
+ * when more than one appears - the caller must NOT label a blended figure with
+ * a single currency. Null-safe; never fabricates a value.
+ *
+ * @param {Array<object>} rows
+ * @param {'sco'|'sany'|'production'} kind
+ * @returns {{ totals: object, byMonth: Array<object>, bySite: Array<object> }}
+ */
+export function summarizeLedger(rows = [], kind = 'sco') {
+  const list = Array.isArray(rows) ? rows : []
+  const valueOf = (r) => (kind === 'production' ? (num(r?.approved_m3) ?? num(r?.m3)) : num(r?.amount))
+  const monthOf = (r) => {
+    const s = String(r?.period_date || r?.invoice_date || '').slice(0, 7)
+    return /^\d{4}-\d{2}$/.test(s) ? s : 'Unknown'
+  }
+  const siteOf = (r) => {
+    const s = String(r?.site ?? '').trim() || String(r?.region ?? '').trim()
+    return s || 'Not stated'
+  }
+
+  const byMonthMap = new Map()
+  const bySiteMap = new Map()
+  const currencies = new Set()
+  let value = 0
+  let supplied = 0
+  let approved = 0
+  let rejectedLoads = 0
+  let rejectedM3 = 0
+  let countedValue = 0 // sany: doc_type <> 'detail' (what feeds Cost/M3)
+  let detailRows = 0
+
+  for (const r of list) {
+    const v = valueOf(r) ?? 0
+    value += v
+    const cur = String(r?.currency ?? '').trim()
+    if (cur) currencies.add(cur)
+    const m = monthOf(r)
+    const s = siteOf(r)
+    const mo = byMonthMap.get(m) || { month: m, rows: 0, value: 0 }
+    mo.rows += 1; mo.value += v; byMonthMap.set(m, mo)
+    const si = bySiteMap.get(s) || { site: s, rows: 0, value: 0 }
+    si.rows += 1; si.value += v; bySiteMap.set(s, si)
+    if (kind === 'production') {
+      const sup = num(r?.m3) ?? num(r?.supplied_m3)
+      if (sup != null) supplied += sup
+      const app = num(r?.approved_m3) ?? num(r?.m3)
+      if (app != null) approved += app
+      if (r?.rejected === true || r?.rejected === 'true') {
+        rejectedLoads += 1
+        const gap = (sup ?? 0) - (num(r?.approved_m3) ?? 0)
+        if (gap > 0) rejectedM3 += gap
+      }
+    }
+    if (kind === 'sany') {
+      if (r?.doc_type === 'detail') detailRows += 1
+      else countedValue += v
+    }
+  }
+
+  const byMonth = Array.from(byMonthMap.values()).sort((a, b) => {
+    if (a.month === 'Unknown') return 1
+    if (b.month === 'Unknown') return -1
+    return a.month < b.month ? 1 : a.month > b.month ? -1 : 0
+  })
+  const bySite = Array.from(bySiteMap.values()).sort((a, b) => (b.value - a.value) || (b.rows - a.rows))
+  const knownMonths = byMonth.filter((m) => m.month !== 'Unknown').map((m) => m.month)
+
+  const totals = {
+    rows: list.length,
+    value: list.length ? value : null,
+    sites: bySiteMap.size,
+    months: byMonthMap.size,
+    firstMonth: knownMonths.length ? knownMonths[knownMonths.length - 1] : null,
+    lastMonth: knownMonths.length ? knownMonths[0] : null,
+    currencies: Array.from(currencies).sort(),
+    mixedCurrency: currencies.size > 1,
+  }
+  if (kind === 'production') {
+    totals.supplied_m3 = list.length ? supplied : null
+    totals.approved_m3 = list.length ? approved : null
+    totals.rejected_loads = rejectedLoads
+    totals.rejected_m3 = rejectedM3
+  }
+  if (kind === 'sany') {
+    totals.counted_value = list.length ? countedValue : null
+    totals.detail_rows = detailRows
+  }
+  return { totals, byMonth, bySite }
+}
+
+/**
+ * Rejected production loads, row-level detail for the rejections report:
+ * Date, Site, DN number, Supplied / Approved / Not approved m3, Reason, Remarks.
+ * Null-safe; newest first. Never invents a quantity.
+ * @param {Array<object>} rows production_logs rows
+ */
+export function rejectedRowsDetail(rows = []) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((r) => r?.rejected === true || r?.rejected === 'true')
+    .map((r) => {
+      const sup = num(r?.m3) ?? num(r?.supplied_m3)
+      const app = num(r?.approved_m3)
+      const gap = sup != null ? Math.max(sup - (app ?? 0), 0) : null
+      return {
+        id: r?.id ?? null,
+        period_date: r?.period_date ?? null,
+        site: String(r?.site ?? '').trim() || null,
+        dn_number: String(r?.dn_number ?? '').trim() || null,
+        supplied_m3: sup,
+        approved_m3: app,
+        not_approved_m3: gap,
+        reason: String(r?.reason ?? '').trim() || null,
+        remarks: String(r?.remarks ?? '').trim() || null,
+      }
+    })
+    .sort((a, b) => String(b.period_date || '').localeCompare(String(a.period_date || '')))
+}
+
+/**
+ * Per-source share of the Cost per M3 grand total, from the get_cost_per_m3
+ * `total` object. share is a 0..100 percentage, null when there is no positive
+ * grand total or the source value is null (honest N/A, never a fabricated 0%).
+ * Tyre is a sub-line of Internal (flagged `sub`) so shares of the top-level
+ * sources still add up to ~100.
+ */
+export function sourceShares(total) {
+  if (!total || typeof total !== 'object') return []
+  const grand = num(total.grand_total)
+  const items = [
+    { key: 'internal', label: 'Internal (ERP expenses)', value: num(total.internal_cost), sub: false },
+    { key: 'tyre', label: 'Tyre (of Internal)', value: num(total.tyre_cost), sub: true },
+    { key: 'sco', label: 'SCO cost', value: num(total.sco_cost), sub: false },
+    { key: 'sany', label: 'SANY invoices', value: num(total.sany_cost), sub: false },
+  ]
+  return items.map((it) => ({
+    ...it,
+    share: grand != null && grand > 0 && it.value != null ? (it.value / grand) * 100 : null,
+  }))
+}
+
+/**
  * Import templates. `headers` are the exact column names an upload should carry;
  * `map` translates a normalised (lowercased, trimmed) header to a row field.
  * period is a month; accept 'YYYY-MM' or a date and normalise to the 1st.

@@ -1125,7 +1125,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // Owner spec: big logo, no eyebrow text, no duplicated title/asset lines -
   // the meta grid below is the single place each fact appears.
   const docNo = `INS-${String(row.id || '').replace(/-/g, '').slice(0, 8).toUpperCase() || 'DRAFT'}`
-  const insHdr = { ...hdr, hideEyebrow: true, logoSize: 18 }
+  const insHdr = { ...hdr, hideEyebrow: true, logoSize: 20 }
   _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
   doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
   doc.text(`Document No: ${docNo}`, pw - MX, 20.5, { align: 'right' })
@@ -1318,12 +1318,14 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     autoTable(doc, {
       startY: y,
       margin: { top: 30, left: mx, right: mx, bottom: FOOTER_SPACE },
-      head: [['Position', 'Serial', 'Km run', 'Hours run', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
+      head: [['Position', 'Serial', 'Brand', 'Km run', 'Hours run', 'Current km', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
       body: lifeRows.map((lr) => [
         lr.position || 'N/A',
         lr.serial || 'N/A',
+        lr.brand || 'N/A',
         n(lr.kmRun),
         n(lr.hoursRun),
+        n(lr.currentKm),
         n(lr.expectedLifeKm),
         n(lr.remainingKm),
         n(lr.remainingDays),
@@ -1332,7 +1334,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
       headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: P.cloud },
-      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+      columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' } },
       didDrawPage: (data) => {
         // Continuation pages only - redrawing on the first page would paint
         // the white header band over the Document No already printed there.

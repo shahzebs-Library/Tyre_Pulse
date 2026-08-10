@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import DateField from '../components/ui/DateField'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
@@ -29,14 +30,17 @@ const DATA_QUALITY_LABEL = 'Data Quality'
 const DATA_QUALITY_DESC = 'Records missing cost, issue date or asset number needed for analytics'
 
 // Per-type presentation metadata (icon + accent) for the rich engine types + DQ.
+// Clean semantic accents - red = serious repeat/identity issues, amber = cost or
+// cadence patterns worth a look, gray = data quality. No decorative rainbow:
+// the color IS the meaning (green stays reserved for "good" app-wide).
 const TYPE_META = {
-  [ANOMALY_TYPES.SHORT_INTERVAL]:   { icon: Clock,        accent: 'text-amber-400' },
-  [ANOMALY_TYPES.SAME_DAY_BURST]:   { icon: Layers,       accent: 'text-orange-400' },
   [ANOMALY_TYPES.RAPID_RECURRENCE]: { icon: Repeat,       accent: 'text-red-400' },
-  [ANOMALY_TYPES.COST_SPIKE]:       { icon: DollarSign,   accent: 'text-emerald-400' },
-  [ANOMALY_TYPES.SERIAL_REUSE]:     { icon: Fingerprint,  accent: 'text-sky-400' },
-  [ANOMALY_TYPES.DUPLICATE_ENTRY]:  { icon: Copy,         accent: 'text-violet-400' },
-  [ANOMALY_TYPES.FREQUENT_VISITS]:  { icon: Wrench,       accent: 'text-rose-400' },
+  [ANOMALY_TYPES.SERIAL_REUSE]:     { icon: Fingerprint,  accent: 'text-red-400' },
+  [ANOMALY_TYPES.DUPLICATE_ENTRY]:  { icon: Copy,         accent: 'text-red-400' },
+  [ANOMALY_TYPES.FREQUENT_VISITS]:  { icon: Wrench,       accent: 'text-amber-400' },
+  [ANOMALY_TYPES.SHORT_INTERVAL]:   { icon: Clock,        accent: 'text-amber-400' },
+  [ANOMALY_TYPES.SAME_DAY_BURST]:   { icon: Layers,       accent: 'text-amber-400' },
+  [ANOMALY_TYPES.COST_SPIKE]:       { icon: DollarSign,   accent: 'text-amber-400' },
   [DATA_QUALITY]:                   { icon: ShieldQuestion, accent: 'text-gray-400' },
 }
 
@@ -58,7 +62,7 @@ const DESCS = { ...ANOMALY_TYPE_DESC, [DATA_QUALITY]: DATA_QUALITY_DESC }
 const SEVERITY_BADGE = {
   [ANOMALY_SEVERITY.HIGH]:   'bg-red-900/40 text-red-400 border border-red-500/30',
   [ANOMALY_SEVERITY.MEDIUM]: 'bg-amber-900/40 text-amber-400 border border-amber-500/30',
-  [ANOMALY_SEVERITY.LOW]:    'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30',
+  [ANOMALY_SEVERITY.LOW]:    'bg-sky-900/40 text-sky-400 border border-sky-500/30',
 }
 
 /**
@@ -102,6 +106,10 @@ export default function Anomalies() {
   const [activeType, setActiveType] = useState('ALL')
   const [view, setView] = useState('anomalies') // 'anomalies' | 'visits'
   const [search, setSearch] = useState('')
+  // Optional date range - blank = all time. Applied server-side so detection
+  // runs over exactly the chosen window.
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -112,6 +120,8 @@ export default function Anomalies() {
         .order('issue_date', { ascending: false, nullsFirst: false })
         .limit(5000)
       if (activeCountry !== 'All' && activeCountry) q = q.eq('country', activeCountry)
+      if (fromDate) q = q.gte('issue_date', fromDate)
+      if (toDate) q = q.lte('issue_date', toDate)
       const { data, error: err } = await q
       if (err) throw err
       const rows = data || []
@@ -127,6 +137,8 @@ export default function Anomalies() {
           .not('opened_at', 'is', null)
           .limit(5000)
         if (activeCountry !== 'All' && activeCountry) wq = wq.eq('country', activeCountry)
+        if (fromDate) wq = wq.gte('opened_at', fromDate)
+        if (toDate) wq = wq.lte('opened_at', `${toDate}T23:59:59`)
         const { data: wo } = await wq
         workOrders = wo || []
       } catch { /* best-effort */ }
@@ -141,7 +153,7 @@ export default function Anomalies() {
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, fromDate, toDate])
 
   useEffect(() => { load() }, [load])
 
@@ -327,6 +339,22 @@ export default function Anomalies() {
             </button>
           )}
         </div>
+        {/* Date range - detection re-runs over the chosen window */}
+        <div className="flex items-center gap-2">
+          <CalendarClock size={15} className="text-gray-500 shrink-0" />
+          <DateField value={fromDate} onChange={setFromDate} placeholder="From" aria-label="Anomaly range from" />
+          <span className="text-gray-600 text-xs">to</span>
+          <DateField value={toDate} onChange={setToDate} placeholder="To" aria-label="Anomaly range to" />
+          {(fromDate || toDate) && (
+            <button
+              type="button"
+              onClick={() => { setFromDate(''); setToDate('') }}
+              className="text-xs text-gray-400 hover:text-gray-200 underline whitespace-nowrap"
+            >
+              All dates
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -369,7 +397,7 @@ export default function Anomalies() {
             />
             <SeverityCard
               label="Low Severity" value={summary.bySeverity.low} icon={ShieldQuestion}
-              valueClass="text-emerald-400" ringClass="ring-emerald-500/20"
+              valueClass="text-sky-400" ringClass="ring-sky-500/20"
               hint="Data quality / minor"
             />
             <SeverityCard
@@ -415,7 +443,9 @@ export default function Anomalies() {
           {anomalies.length === 0 ? (
             <div className="card py-16 text-center">
               <Activity className="w-10 h-10 mx-auto mb-3 text-gray-700" />
-              <p className="text-gray-400 font-medium">No anomalies detected</p>
+              <p className="text-gray-400 font-medium">
+                {fromDate || toDate ? 'No anomalies detected in this date range' : 'No anomalies detected'}
+              </p>
               <p className="text-gray-600 text-sm mt-1">
                 Rule-based checks run automatically over the latest {`5,000`} records. Anomalies appear here when detected.
               </p>

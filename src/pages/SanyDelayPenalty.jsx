@@ -120,7 +120,11 @@ export default function SanyDelayPenalty() {
   const [manual, setManual] = useState(null)
   async function saveManual() {
     if (!manual) return
-    const res = await createDelayPenalty({ ...manual, country, currency: 'SAR', status: 'draft', source: 'manual', rate_per_hour: manual.rate_per_hour || DEFAULT_RATE_PER_HOUR })
+    const hours = Number(manual.downtime_hours)
+    const rate = Number(manual.rate_per_hour || DEFAULT_RATE_PER_HOUR)
+    if (!Number.isFinite(hours) || hours <= 0) { setError('Downtime hours must be a number greater than 0.'); return }
+    if (!Number.isFinite(rate) || rate <= 0) { setError('Rate per hour must be a number greater than 0.'); return }
+    const res = await createDelayPenalty({ ...manual, country, currency: 'SAR', status: 'draft', source: 'manual', downtime_hours: hours, rate_per_hour: rate })
     if (res.ok) { setManual(null); loadLedger() } else setError(res.error)
   }
 

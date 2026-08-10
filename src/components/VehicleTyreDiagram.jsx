@@ -642,11 +642,6 @@ function ConcretePumpBody() {
           <stop offset="50%"  stopColor="#16a34a" />
           <stop offset="100%" stopColor="#14532d" />
         </radialGradient>
-        <linearGradient id="cpOutrigger" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stopColor="#004d26" />
-          <stop offset="50%"  stopColor="#006C35" />
-          <stop offset="100%" stopColor="#004d26" />
-        </linearGradient>
         <linearGradient id="cpBoom" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%"   stopColor="#004d26" />
           <stop offset="50%"  stopColor="#006C35" />
@@ -723,21 +718,8 @@ function ConcretePumpBody() {
       <rect x="68" y="129" width="11" height="222" fill="#334155" />
       <rect x="121" y="129" width="11" height="222" fill="#334155" />
 
-      {/* === OUTRIGGER BEAMS - green === */}
-      <rect x="20" y="142" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
-      <rect x="130" y="142" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
-      {/* Front stabiliser pads */}
-      <rect x="12" y="138" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" strokeWidth="1.5" />
-      <rect x="174" y="138" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" strokeWidth="1.5" />
-      <rect x="14" y="140" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
-      <rect x="176" y="140" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
-      {/* Rear outriggers */}
-      <rect x="20" y="238" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
-      <rect x="130" y="238" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
-      <rect x="12" y="234" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" strokeWidth="1.5" />
-      <rect x="174" y="234" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" strokeWidth="1.5" />
-      <rect x="14" y="236" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
-      <rect x="176" y="236" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
+      {/* Outrigger beams/pads REMOVED per owner - the green pads read as extra
+          tyres beside the real wheel slots on the inspection diagram. */}
 
       {/* === PUMP BODY - white === */}
       <rect x="58" y="129" width="84" height="220" rx="4" fill="url(#cpPump)" />

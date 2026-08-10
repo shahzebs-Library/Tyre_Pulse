@@ -3,7 +3,20 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-09 — RUNNING & REMAINING (V488/V489) + INSPECTION REPORT OWNER SPEC + KSA TM FITMENT-KM FIX FROM OWNER FILE. Migrations V488/V489 applied; next free **V490**. PRs #280-#285 merged; Aug-5 corrections REVERTED earlier this session per owner.
+## SESSION 2026-08-09 — RUNNING & REMAINING (V488/V489) + INSPECTION REPORT OWNER SPEC + KSA TM FITMENT-KM FIX FROM OWNER FILE. Migrations V488/V489 applied; next free **V490**. PRs #280-#288 merged; Aug-5 corrections REVERTED earlier this session per owner.
+- **INSPECTION REPORT FOLLOW-UPS (#287/#288) — why "the SVG still isn't there" took THREE fixes, so it is
+  never re-diagnosed from scratch:** (1) the row's PDF button called `exportInspectionDetailPdf` DIRECTLY,
+  skipping the offscreen-diagram/photos/lifeRows path entirely - it must call `setPdfRow(r)` (the effect does
+  everything); (2) the diagram wrapper holds TWO svgs - the small vehicle `Illustration` renders FIRST, so a
+  bare `querySelector('svg')` captures the icon, not the map. The map svg now carries **`data-tyre-map="1"`**
+  and all three capture sites select `svg[data-tyre-map]` - RULE: never capture the diagram with a bare svg
+  selector; (3) header per owner marks: `_pageHeader` gained `hideEyebrow` + `logoSize` opts (inspection uses
+  18mm logo, no "FLEET OPERATIONS" eyebrow), duplicated title-line/severity-chip/Asset-subtitle removed (each
+  fact once, in the meta grid). Expected Tyre Life = a real autoTable (Position|Serial|Km run|Expected|
+  Remaining km|Remaining days|Life used); its `didDrawPage` draws the header ONLY on continuation pages
+  (`data.pageNumber > startPage`) or it paints the white band over the Document No. Logo fallback (#284):
+  `brandingForPdf` in Inspections.jsx pulls Console->Report Colors `company_logo` when tenant branding has no
+  logo_url (the tenant-branding editor page is unreachable - OrgBrandingPanel only lives on legacy /users).
 - **AUG-5 CORRECTIONS REVERTED on owner instruction ("i upload data only for august month"):** the job-card
   date repair (`_bak.wo_dates_fix_20260805`, 28,986 rows) and the tyre-price backfill batch
   `c66fbfd5-...` (1,819 prices) were both undone byte-exact; snapshots retained to re-apply if ever wanted.

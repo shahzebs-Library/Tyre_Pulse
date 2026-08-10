@@ -862,6 +862,7 @@ export default function ExpenseReport() {
     setExporting(true)
     setError('')
     try {
+      const company = appSettings?.company_name || 'TyrePulse'
       const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
       const { rows: raw, truncated } = await listExpenseRows({
         country: scopedCountry, from: from || undefined, to: to || undefined,

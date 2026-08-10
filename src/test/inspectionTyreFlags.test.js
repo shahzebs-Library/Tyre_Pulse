@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, conditionCounts, siteSummary } from '../lib/inspectionTyreFlags'
 
 // Shaped running-life rows (bandFor vocabulary):
 // overdue = remainingKm === 0; due-soon = remainingKm < 10000 or used >= 90.
@@ -117,5 +117,44 @@ describe('inspectionOverview', () => {
     const o = inspectionOverview(inspections, null)
     expect(o.vehiclesWithTyresDue).toBe(0)
     expect(o.inspectionsDone).toBe(4)
+  })
+})
+
+
+describe('conditionCounts', () => {
+  it('buckets good/wear/damage and tolerates object shape', () => {
+    const c = conditionCounts({ tyre_conditions: { LHF1: 'Good', RHF1: 'Wear', LHRI: { condition: 'Damage' }, RHRI: 'Puncture' } })
+    expect(c).toEqual({ good: 1, wear: 1, damage: 2, other: 0 })
+  })
+  it('returns zeros on garbage', () => {
+    expect(conditionCounts({ tyre_conditions: 'not json' })).toEqual({ good: 0, wear: 0, damage: 0, other: 0 })
+    expect(conditionCounts(null)).toEqual({ good: 0, wear: 0, damage: 0, other: 0 })
+  })
+})
+
+describe('siteSummary', () => {
+  const fm = { TM1: { overdue: [{}, {}], dueSoon: [{}], count: 3 } }
+  const insp = [
+    { asset_no: 'TM1', site: 'NHC', inspection_date: '2026-08-01', tyre_conditions: { A: 'Good', B: 'Damage' } },
+    { asset_no: 'TM2', site: 'NHC', inspection_date: '2026-08-02', tyre_conditions: { A: 'Wear' } },
+    { asset_no: 'TM3', site: 'JED', inspection_date: '2026-07-01', tyre_conditions: { A: 'Good' } },
+  ]
+  it('groups per site with vehicles, findings and flagged tyres + totals', () => {
+    const { rows, totals } = siteSummary(insp, fm, {})
+    const nhc = rows.find((r) => r.site === 'NHC')
+    expect(nhc).toEqual({ site: 'NHC', inspections: 2, vehicles: 2, good: 1, wear: 1, damage: 1, tyresDue: 3 })
+    expect(totals.inspections).toBe(3)
+    expect(totals.tyresDue).toBe(3)
+  })
+  it('honours the date window and site filter', () => {
+    const aug = siteSummary(insp, fm, { from: '2026-08-01', to: '2026-08-31' })
+    expect(aug.rows.map((r) => r.site)).toEqual(['NHC'])
+    const jed = siteSummary(insp, fm, { site: 'JED' })
+    expect(jed.rows).toHaveLength(1)
+    expect(jed.rows[0].tyresDue).toBe(0)
+  })
+  it('is honest with an empty flag map', () => {
+    const { totals } = siteSummary(insp, {}, {})
+    expect(totals.tyresDue).toBe(0)
   })
 })

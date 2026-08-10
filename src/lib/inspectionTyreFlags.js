@@ -83,6 +83,84 @@ function inWindow(r, from, to) {
  * from/to, YYYY-MM-DD string-prefix compare - same rule as the page filter).
  * Honest zeros; flagMap-derived figures are 0 when flagMap is empty.
  */
+const WEAR_RE = /wear|worn/i
+const GOOD_RE = /good|ok/i
+
+/**
+ * Count one inspection's tyre conditions into good / wear / damage / other.
+ * Same shape tolerance as damagedPositions; zeros on anything unparseable.
+ */
+export function conditionCounts(inspection) {
+  let tc = inspection ? inspection.tyre_conditions : null
+  if (typeof tc === 'string') {
+    try { tc = JSON.parse(tc) } catch { return { good: 0, wear: 0, damage: 0, other: 0 } }
+  }
+  const out = { good: 0, wear: 0, damage: 0, other: 0 }
+  if (!tc || typeof tc !== 'object') return out
+  const values = Array.isArray(tc) ? tc : Object.values(tc)
+  for (const v of values) {
+    const cond = conditionOf(v)
+    if (!cond) continue
+    if (DAMAGE_RE.test(cond)) out.damage += 1
+    else if (WEAR_RE.test(cond)) out.wear += 1
+    else if (GOOD_RE.test(cond)) out.good += 1
+    else out.other += 1
+  }
+  return out
+}
+
+/**
+ * Shareable per-site summary: one row per site (Site, Inspections, Vehicles,
+ * Good, Wear, Damage, Tyres due) + a totals row, over the given date window
+ * and optional single-site filter. Tyres due = flagged tyres (overdue +
+ * due soon) on the site's INSPECTED assets only - honest zeros when the
+ * running-life feed is unavailable.
+ */
+export function siteSummary(inspections = [], flagMap = {}, { from = '', to = '', site = '' } = {}) {
+  const fm = flagMap && typeof flagMap === 'object' ? flagMap : {}
+  const list = (Array.isArray(inspections) ? inspections : []).filter((r) => {
+    if (!r || !inWindow(r, from, to)) return false
+    if (site && String(r.site || '') !== site) return false
+    return true
+  })
+  const bySite = {}
+  for (const r of list) {
+    const key = String(r.site || '') || 'No site'
+    if (!bySite[key]) bySite[key] = { site: key, inspections: 0, assets: new Set(), good: 0, wear: 0, damage: 0 }
+    const b = bySite[key]
+    b.inspections += 1
+    if (r.asset_no) b.assets.add(r.asset_no)
+    const c = conditionCounts(r)
+    b.good += c.good; b.wear += c.wear; b.damage += c.damage
+  }
+  const rows = Object.values(bySite).map((b) => {
+    let tyresDue = 0
+    for (const asset of b.assets) {
+      const entry = fm[asset]
+      if (entry && entry.count) tyresDue += entry.count
+    }
+    return {
+      site: b.site,
+      inspections: b.inspections,
+      vehicles: b.assets.size,
+      good: b.good,
+      wear: b.wear,
+      damage: b.damage,
+      tyresDue,
+    }
+  }).sort((a, b) => b.inspections - a.inspections || a.site.localeCompare(b.site))
+  const totals = rows.reduce((t, r) => ({
+    site: 'Total',
+    inspections: t.inspections + r.inspections,
+    vehicles: t.vehicles + r.vehicles,
+    good: t.good + r.good,
+    wear: t.wear + r.wear,
+    damage: t.damage + r.damage,
+    tyresDue: t.tyresDue + r.tyresDue,
+  }), { site: 'Total', inspections: 0, vehicles: 0, good: 0, wear: 0, damage: 0, tyresDue: 0 })
+  return { rows, totals }
+}
+
 export function inspectionOverview(inspections = [], flagMap = {}, { from = '', to = '' } = {}) {
   const list = (Array.isArray(inspections) ? inspections : []).filter((r) => r && inWindow(r, from, to))
   const fm = flagMap && typeof flagMap === 'object' ? flagMap : {}

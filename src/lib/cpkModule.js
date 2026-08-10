@@ -44,24 +44,47 @@ export const CPK_PERIODS = [
   { key: 'quarter', label: 'This quarter' },
   { key: 'ytd', label: 'Year to date' },
   { key: 'last_12m', label: 'Last 12 months' },
+  { key: 'custom', label: 'Custom range' },
 ]
 
+/** The calendar custom-range preset (last entry of CPK_PERIODS). */
+export const CUSTOM_PERIOD = CPK_PERIODS[CPK_PERIODS.length - 1]
+
 export const DEFAULT_PERIOD = 'current_month'
+
+/** True when v is a plausible 'YYYY-MM-DD' ISO date string. */
+const isIsoDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 
 /**
  * Resolve a preset key to ISO {from,to} bounds relative to an anchor date.
  * Unknown keys fall back to the current month. The anchor is read in UTC so the
  * bounds match the server's date arithmetic.
  *
+ * The 'custom' key takes its bounds from the optional third argument
+ * ({from,to}, both 'YYYY-MM-DD', from <= to). An incomplete / invalid custom
+ * range falls back to the current-month bounds but keeps key 'custom' with the
+ * label 'Custom range (pick both dates)' so the UI says what is shown.
+ *
  * @param {string} key one of CPK_PERIODS[].key
  * @param {Date} [anchor] the "now" to compute against (defaults to new Date())
+ * @param {{from?:string, to?:string}} [custom] the picked dates for key 'custom'
  * @returns {{ from:string, to:string, key:string, label:string }}
  */
-export function periodBounds(key = DEFAULT_PERIOD, anchor = new Date()) {
+export function periodBounds(key = DEFAULT_PERIOD, anchor = new Date(), custom = null) {
   const a = anchor instanceof Date && !Number.isNaN(anchor.getTime()) ? anchor : new Date()
   const y = a.getUTCFullYear()
   const m = a.getUTCMonth() // 0-based
   const d = a.getUTCDate()
+  if (key === 'custom') {
+    const cf = custom?.from
+    const ct = custom?.to
+    if (isIsoDay(cf) && isIsoDay(ct) && cf <= ct) {
+      return { from: cf, to: ct, key: 'custom', label: `${cf} to ${ct}` }
+    }
+    // Incomplete or reversed range: fall back to the current-month bounds
+    // (the module default) but say so honestly in the label.
+    return { from: iso(y, m, 1), to: iso(y, m, d), key: 'custom', label: 'Custom range (pick both dates)' }
+  }
   const meta = CPK_PERIODS.find((p) => p.key === key)
     || CPK_PERIODS.find((p) => p.key === DEFAULT_PERIOD)
     || CPK_PERIODS[0]
@@ -129,6 +152,10 @@ export function periodBounds(key = DEFAULT_PERIOD, anchor = new Date()) {
 /** A short human label for a resolved {from,to,label}. */
 export function periodLabel(bounds) {
   if (!bounds) return ''
+  // A valid custom range's label IS the range; avoid printing it twice.
+  if (bounds.key === 'custom' && bounds.label === `${bounds.from} to ${bounds.to}`) {
+    return `Custom range (${bounds.from} to ${bounds.to})`
+  }
   return `${bounds.label} (${bounds.from} to ${bounds.to})`
 }
 

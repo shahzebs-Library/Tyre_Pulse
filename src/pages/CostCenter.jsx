@@ -17,6 +17,7 @@ import { applyCountry } from '../lib/api/_client'
 import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import EmailPdfButton from '../components/EmailPdfButton'
 import BudgetTabs from '../components/budgets/BudgetTabs'
@@ -646,14 +647,16 @@ export default function CostCenter() {
               </button>
             ))}
           </div>
-          <input
-            type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPreset('custom') }}
-            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
+          <DateField
+            className="text-sm w-40" value={dateFrom}
+            onChange={(v) => { setDateFrom(v); setPreset('custom') }}
+            placeholder="From date" ariaLabel="From date"
           />
-          <span className="text-gray-600 text-xs">→</span>
-          <input
-            type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPreset('custom') }}
-            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
+          <span className="text-gray-600 text-xs">to</span>
+          <DateField
+            className="text-sm w-40" value={dateTo}
+            onChange={(v) => { setDateTo(v); setPreset('custom') }}
+            placeholder="To date" ariaLabel="To date" min={dateFrom || undefined}
           />
           <button
             onClick={fetchData}
@@ -1662,13 +1665,13 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[11px] text-[var(--panel-ink-4)]">From</label>
-          <input type="date" value={from} onChange={e => { setFrom(e.target.value); setRangeKey('custom') }}
-            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+          <DateField className="text-sm w-40" value={from} onChange={v => { setFrom(v); setRangeKey('custom') }}
+            placeholder="From date" ariaLabel="From date" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[11px] text-[var(--panel-ink-4)]">To</label>
-          <input type="date" value={to} onChange={e => { setTo(e.target.value); setRangeKey('custom') }}
-            className="text-xs bg-gray-900 border border-gray-700 text-[var(--panel-ink-2)] rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600" />
+          <DateField className="text-sm w-40" value={to} onChange={v => { setTo(v); setRangeKey('custom') }}
+            placeholder="To date" ariaLabel="To date" min={from || undefined} />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[11px] text-[var(--panel-ink-4)]">Site</label>

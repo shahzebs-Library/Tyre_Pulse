@@ -26,6 +26,7 @@ import {
   Filter, X, Building2, Truck, Gauge,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { listAllAccidentsForPage } from '../lib/api/accidents'
@@ -307,8 +308,8 @@ export default function ClaimsSummary() {
       {/* Filters */}
       <div className="card">
         <div className="flex flex-wrap items-end gap-3">
-          <div><label className="label">From</label><input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div><label className="label">To</label><input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div><label className="label">From</label><DateField className="text-sm w-40" value={from} onChange={setFrom} placeholder="From date" ariaLabel="From date" /></div>
+          <div><label className="label">To</label><DateField className="text-sm w-40" value={to} onChange={setTo} placeholder="To date" ariaLabel="To date" min={from || undefined} /></div>
           <div><label className="label">Insurer</label>
             <select className="input" value={insurerF} onChange={(e) => setInsurerF(e.target.value)}>
               <option value="">All insurers</option>

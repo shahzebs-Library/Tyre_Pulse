@@ -8,6 +8,7 @@ import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import EmailPdfButton from '../components/EmailPdfButton'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -276,20 +277,21 @@ export default function FleetAnalytics() {
         </div>
         <div className="flex flex-wrap gap-3 mb-4 items-center">
           <span className="text-xs text-gray-400">{t('fleetanalytics.filters.dateRange')}</span>
-          <input
-            type="date"
-            className="input w-40"
+          <DateField
+            className="text-sm w-40"
             value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
+            onChange={setDateFrom}
             placeholder={t('fleetanalytics.filters.fromPlaceholder')}
+            ariaLabel="From date"
           />
           <span className="text-gray-500 text-xs">{t('fleetanalytics.filters.to')}</span>
-          <input
-            type="date"
-            className="input w-40"
+          <DateField
+            className="text-sm w-40"
             value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
+            onChange={setDateTo}
             placeholder={t('fleetanalytics.filters.toPlaceholder')}
+            ariaLabel="To date"
+            min={dateFrom || undefined}
           />
           {(dateFrom || dateTo) && (
             <button

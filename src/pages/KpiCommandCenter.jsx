@@ -23,6 +23,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import { loadAutoTable } from '../lib/pdfEngine'
@@ -927,11 +928,11 @@ export default function KpiCommandCenter() {
 
           {period === 'custom' && (
             <div className="flex items-center gap-1">
-              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                className="px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-white text-xs focus:outline-none" />
+              <DateField className="text-sm w-40" value={customFrom} onChange={setCustomFrom}
+                placeholder="From date" ariaLabel="From date" />
               <span className="text-[var(--text-muted)] text-xs">{t('kpicommand.filters.to')}</span>
-              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-                className="px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-white text-xs focus:outline-none" />
+              <DateField className="text-sm w-40" value={customTo} onChange={setCustomTo}
+                placeholder="To date" ariaLabel="To date" min={customFrom || undefined} />
             </div>
           )}
 

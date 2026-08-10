@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Calendar, ChevronDown, X } from 'lucide-react'
+import DateField from './DateField'
 
 /**
  * PeriodFilter — universal, data-aware period selection for analytics pages.
@@ -63,20 +64,28 @@ export default function PeriodFilter({ records = [], dateField = 'issue_date', v
 
       {openCustom && v.mode === 'custom' && (
         <div className="flex items-center gap-1.5">
-          <input
-            type="date" value={v.from || ''} min={minDate || undefined} max={v.to || maxDate || undefined}
-            onChange={(e) => onChange({ ...v, from: e.target.value })}
-            className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-200"
+          <DateField
+            className="text-sm w-40"
+            value={v.from || ''}
+            onChange={(next) => onChange({ ...v, from: next })}
+            placeholder="From date"
+            ariaLabel="From date"
+            min={minDate || undefined}
+            max={v.to || maxDate || undefined}
           />
-          <span className="text-gray-500 text-xs">→</span>
-          <input
-            type="date" value={v.to || ''} min={v.from || minDate || undefined} max={maxDate || undefined}
-            onChange={(e) => onChange({ ...v, to: e.target.value })}
-            className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-gray-200"
+          <span className="text-[var(--text-muted)] text-xs">to</span>
+          <DateField
+            className="text-sm w-40"
+            value={v.to || ''}
+            onChange={(next) => onChange({ ...v, to: next })}
+            placeholder="To date"
+            ariaLabel="To date"
+            min={v.from || minDate || undefined}
+            max={maxDate || undefined}
           />
           <button
             onClick={() => { setOpenCustom(false); onChange({ mode: 'all' }) }}
-            className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-500" title="Clear range"
+            className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)]" title="Clear range"
           >
             <X size={14} />
           </button>

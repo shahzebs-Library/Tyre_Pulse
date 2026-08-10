@@ -84,6 +84,44 @@ describe('periodBounds', () => {
     expect(new Date(wk.to) - new Date(wk.from)).toBe(6 * 24 * 3600 * 1000)
   })
 
+  it('custom key with a valid range returns exactly that range', () => {
+    const b = periodBounds('custom', anchor, { from: '2026-02-03', to: '2026-03-10' })
+    expect(b.key).toBe('custom')
+    expect(b.from).toBe('2026-02-03')
+    expect(b.to).toBe('2026-03-10')
+    expect(b.label).toBe('2026-02-03 to 2026-03-10')
+  })
+
+  it('custom key with a same-day range is valid', () => {
+    const b = periodBounds('custom', anchor, { from: '2026-05-05', to: '2026-05-05' })
+    expect(b.from).toBe('2026-05-05')
+    expect(b.to).toBe('2026-05-05')
+  })
+
+  it('custom key with an incomplete range falls back to current month, key stays custom', () => {
+    for (const custom of [null, {}, { from: '2026-02-03' }, { to: '2026-03-10' }, { from: 'garbage', to: '2026-03-10' }]) {
+      const b = periodBounds('custom', anchor, custom)
+      expect(b.key).toBe('custom')
+      expect(b.from).toBe('2026-07-01')
+      expect(b.to).toBe('2026-07-15')
+      expect(b.label).toBe('Custom range (pick both dates)')
+    }
+  })
+
+  it('custom key with a reversed range falls back to current month', () => {
+    const b = periodBounds('custom', anchor, { from: '2026-03-10', to: '2026-02-03' })
+    expect(b.key).toBe('custom')
+    expect(b.from).toBe('2026-07-01')
+    expect(b.to).toBe('2026-07-15')
+    expect(b.label).toBe('Custom range (pick both dates)')
+  })
+
+  it('existing preset keys ignore the custom argument', () => {
+    const b = periodBounds('last_month', anchor, { from: '2020-01-01', to: '2020-02-01' })
+    expect(b.from).toBe('2026-06-01')
+    expect(b.to).toBe('2026-06-30')
+  })
+
   it('every preset resolves to valid ISO bounds', () => {
     for (const p of CPK_PERIODS) {
       const b = periodBounds(p.key, anchor)
@@ -101,6 +139,10 @@ describe('periodLabel', () => {
   })
   it('is safe on null', () => {
     expect(periodLabel(null)).toBe('')
+  })
+  it('does not print a valid custom range twice', () => {
+    const b = periodBounds('custom', new Date(Date.UTC(2026, 6, 15)), { from: '2026-02-03', to: '2026-03-10' })
+    expect(periodLabel(b)).toBe('Custom range (2026-02-03 to 2026-03-10)')
   })
 })
 

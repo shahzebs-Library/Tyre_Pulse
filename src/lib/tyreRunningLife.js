@@ -38,9 +38,12 @@ export function shapeRow(r = {}) {
     currentHours: num(r.current_hours),
     hoursRun: num(r.hours_run),
     expectedLifeKm: num(r.expected_life_km),
+    expectedLifeHours: num(r.expected_life_hours),
     lifeSample: num(r.life_sample),
     remainingKm: num(r.remaining_km),
+    remainingHours: num(r.remaining_hours),
     lifeUsedPct: num(r.life_used_pct),
+    hoursUsedPct: num(r.hours_used_pct),
   }
 }
 
@@ -61,23 +64,36 @@ function emptySummary() {
  */
 export function summarize(rows = []) {
   const total = rows.length
-  const withRemaining = rows.filter((r) => r.remainingKm != null)
   const measurableKm = rows.filter((r) => r.kmRun != null).length
   const measurableHours = rows.filter((r) => r.hoursRun != null).length
-  const overdue = withRemaining.filter((r) => r.remainingKm === 0).length
-  const dueSoon = withRemaining.filter((r) => r.remainingKm > 0
-    && (r.remainingKm < 10000 || (r.lifeUsedPct != null && r.lifeUsedPct >= 90))).length
-  const pcts = rows.map((r) => r.lifeUsedPct).filter((v) => v != null)
+  // Tiles and row badges share ONE judgement (bandFor) so they can never disagree.
+  const overdue = rows.filter((r) => bandFor(r) === 'overdue').length
+  const dueSoon = rows.filter((r) => bandFor(r) === 'due-soon').length
+  const pcts = rows.map((r) => (r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct)).filter((v) => v != null)
   const avgUsedPct = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null
   return { total, measurableKm, measurableHours, overdue, dueSoon, avgUsedPct }
 }
 
-/** Traffic-light band for a row (drives the row badge). */
+/**
+ * Traffic-light band for a row (drives the row badge). Judged in km when the
+ * tyre has a km reading; an hour-metered tyre with only an hours target is
+ * judged against that target instead (never 'unknown' just because the asset
+ * runs on the hour meter).
+ */
 export function bandFor(row) {
-  if (!row || row.remainingKm == null) return 'unknown'
-  if (row.remainingKm === 0) return 'overdue'
-  if (row.remainingKm < 10000 || (row.lifeUsedPct != null && row.lifeUsedPct >= 90)) return 'due-soon'
-  if (row.lifeUsedPct != null && row.lifeUsedPct >= 60) return 'mid-life'
+  if (!row) return 'unknown'
+  let rem = row.remainingKm
+  let used = row.lifeUsedPct
+  let soon = rem != null && rem < 10000
+  if (rem == null && row.remainingHours != null) {
+    rem = row.remainingHours
+    used = row.hoursUsedPct
+    soon = rem < 500
+  }
+  if (rem == null) return 'unknown'
+  if (rem === 0) return 'overdue'
+  if (soon || (used != null && used >= 90)) return 'due-soon'
+  if (used != null && used >= 60) return 'mid-life'
   return 'healthy'
 }
 
@@ -106,6 +122,14 @@ export function filterRows(rows = [], { search = '', band = 'all', unit = 'all' 
 }
 
 export const fmtNum = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+
+/** "60,000 km / 8,000 hrs" - whichever of the two dimensions is set; N/A when neither. */
+export function lifeDisplay(kmVal, hoursVal) {
+  const parts = []
+  if (kmVal != null) parts.push(`${fmtNum(kmVal)} km`)
+  if (hoursVal != null) parts.push(`${fmtNum(hoursVal)} hrs`)
+  return parts.length ? parts.join(' / ') : 'N/A'
+}
 
 /** Binary due flag from the band: Due / Not due / Unknown. */
 export function dueLabel(row) {

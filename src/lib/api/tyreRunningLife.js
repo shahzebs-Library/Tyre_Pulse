@@ -17,7 +17,7 @@ export async function getTyreRunningLife({ country } = {}) {
   }
 }
 
-const TARGET_COLS = 'id, country, size, vehicle_type, target_km, note, updated_at'
+const TARGET_COLS = 'id, country, size, vehicle_type, target_km, target_hours, note, updated_at'
 
 /** List the org's manual tyre life targets ([] on any failure). */
 export async function listTyreLifeTargets() {
@@ -34,16 +34,19 @@ export async function listTyreLifeTargets() {
  * A target may pin a size, a vehicle type, or BOTH - the most specific match
  * wins on every tyre (size+type > type only > size only).
  */
-export async function saveTyreLifeTarget({ id, country, size, vehicle_type, target_km, note }) {
+export async function saveTyreLifeTarget({ id, country, size, vehicle_type, target_km, target_hours, note }) {
+  const km = target_km === '' || target_km == null ? null : Number(target_km)
+  const hrs = target_hours === '' || target_hours == null ? null : Number(target_hours)
   const row = {
     country: country && country !== 'All' ? country : null,
     size: String(size || '').trim() || null,
     vehicle_type: vehicle_type ? String(vehicle_type).trim() : null,
-    target_km: Number(target_km),
+    target_km: Number.isFinite(km) ? km : null,
+    target_hours: Number.isFinite(hrs) ? hrs : null,
     note: note || null,
   }
   if (!row.size && !row.vehicle_type) throw new Error('Pick a tyre size or a vehicle type (or both).')
-  if (!Number.isFinite(row.target_km)) throw new Error('A target km is required.')
+  if (row.target_km == null && row.target_hours == null) throw new Error('Set a target in km, in hours, or both.')
   if (id) {
     const { data, error } = await supabase.from('tyre_life_targets')
       .update({ ...row, updated_at: new Date().toISOString() }).eq('id', id).select(TARGET_COLS).single()

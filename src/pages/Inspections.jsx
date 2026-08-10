@@ -928,6 +928,8 @@ export default function Inspections() {
           doc.text('Expected Tyre Life', mx, finalY)
           finalY += 3
           const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+          const both = (km, hrs) => (km == null && hrs == null ? 'N/A'
+            : [km != null ? `${n(km)} km` : null, hrs != null ? `${n(hrs)} hrs` : null].filter(Boolean).join(' / '))
           autoTable(doc, {
             ...pdfTableTheme(brand.accent),
             startY: finalY,
@@ -940,10 +942,10 @@ export default function Inspections() {
               n(lr.kmRun),
               n(lr.hoursRun),
               n(lr.currentKm),
-              n(lr.expectedLifeKm),
-              n(lr.remainingKm),
+              both(lr.expectedLifeKm, lr.expectedLifeHours),
+              both(lr.remainingKm, lr.remainingHours),
               n(lr.remainingDays),
-              lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : 'N/A',
+              (lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : (lr.hoursUsedPct != null ? `${lr.hoursUsedPct}%` : 'N/A')),
             ]),
           })
           finalY = (doc.lastAutoTable?.finalY ?? finalY) + 8

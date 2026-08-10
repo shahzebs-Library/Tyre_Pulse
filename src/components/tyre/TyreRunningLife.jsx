@@ -13,7 +13,7 @@ import {
   getTyreRunningLife, listTyreLifeTargets, saveTyreLifeTarget, deleteTyreLifeTarget,
 } from '../../lib/api/tyreRunningLife'
 import {
-  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel, dueLabel, summarize,
+  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel, summarize,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import EnterpriseTable from '../ui/EnterpriseTable'
@@ -88,10 +88,10 @@ export default function TyreRunningLife() {
       cell: ({ getValue }) => <span className="font-medium">{fmtNum(getValue())}</span> },
     { id: 'hoursRun', header: 'Hours run', accessorFn: (r) => r.hoursRun, size: 90, meta: { align: 'right' },
       cell: ({ getValue }) => fmtNum(getValue()) },
-    { id: 'expectedLifeKm', header: 'Expected life', accessorFn: (r) => r.expectedLifeKm, size: 100, meta: { align: 'right' },
-      cell: ({ row }) => <span title={basisLabel(row.original)}>{fmtNum(row.original.expectedLifeKm)}</span> },
-    { id: 'remainingKm', header: 'Remaining km', accessorFn: (r) => r.remainingKm, size: 105, meta: { align: 'right' },
-      cell: ({ getValue }) => <span className="font-semibold">{fmtNum(getValue())}</span> },
+    { id: 'expectedLifeKm', header: 'Expected life', accessorFn: (r) => r.expectedLifeKm, size: 120, meta: { align: 'right', exportValue: (r) => lifeDisplay(r.expectedLifeKm, r.expectedLifeHours) },
+      cell: ({ row }) => <span title={basisLabel(row.original)}>{lifeDisplay(row.original.expectedLifeKm, row.original.expectedLifeHours)}</span> },
+    { id: 'remainingKm', header: 'Remaining', accessorFn: (r) => r.remainingKm, size: 120, meta: { align: 'right', exportValue: (r) => lifeDisplay(r.remainingKm, r.remainingHours) },
+      cell: ({ row }) => <span className="font-semibold">{lifeDisplay(row.original.remainingKm, row.original.remainingHours)}</span> },
     { id: 'remainingDays', header: 'Remaining days', accessorFn: (r) => r.remainingDays, size: 110, meta: { align: 'right' },
       cell: ({ row }) => <span title={row.original.daySample ? `Day life from ${row.original.daySample} removed tyres` : ''}>{fmtNum(row.original.remainingDays)}</span> },
     { id: 'due', header: 'Due?', accessorFn: (r) => dueLabel(r), size: 80,
@@ -104,13 +104,14 @@ export default function TyreRunningLife() {
         )
       } },
     { id: 'state', header: 'State', accessorFn: (r) => BAND_META[bandFor(r)].label, size: 130,
-      meta: { exportValue: (r) => `${BAND_META[bandFor(r)].label}${r.lifeUsedPct != null ? ` ${r.lifeUsedPct}%` : ''}` },
+      meta: { exportValue: (r) => { const p = r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct; return `${BAND_META[bandFor(r)].label}${p != null ? ` ${p}%` : ''}` } },
       cell: ({ row }) => {
         const meta = BAND_META[bandFor(row.original)]
         const tone = TONE_STYLE[meta.tone] || TONE_STYLE.quiet
+        const p = row.original.lifeUsedPct != null ? row.original.lifeUsedPct : row.original.hoursUsedPct
         return (
           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={tone}>
-            {meta.label}{row.original.lifeUsedPct != null ? ` ${row.original.lifeUsedPct}%` : ''}
+            {meta.label}{p != null ? ` ${p}%` : ''}
           </span>
         )
       } },
@@ -281,7 +282,7 @@ export default function TyreRunningLife() {
  */
 function LifeTargetsModal({ rows, country, onClose }) {
   const [targets, setTargets] = useState(null)
-  const [form, setForm] = useState({ size: '', vehicle_type: '', target_km: '', note: '' })
+  const [form, setForm] = useState({ size: '', vehicle_type: '', target_km: '', target_hours: '', note: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [changed, setChanged] = useState(false)
@@ -295,9 +296,18 @@ function LifeTargetsModal({ rows, country, onClose }) {
   async function save() {
     // Server-agnostic validation: the input's min/max attributes are bypassable
     // and a 0/negative target would poison the remaining-life bands.
-    const km = Number(form.target_km)
-    if (!Number.isFinite(km) || km < 1 || km > 400000) {
-      setError('Expected life must be a number between 1 and 400,000 km.')
+    const km = form.target_km === '' ? null : Number(form.target_km)
+    const hrs = form.target_hours === '' ? null : Number(form.target_hours)
+    if (km != null && (!Number.isFinite(km) || km < 1 || km > 400000)) {
+      setError('Target km must be a number between 1 and 400,000.')
+      return
+    }
+    if (hrs != null && (!Number.isFinite(hrs) || hrs < 1 || hrs > 100000)) {
+      setError('Target hours must be a number between 1 and 100,000.')
+      return
+    }
+    if (km == null && hrs == null) {
+      setError('Set a target in km, in hours, or both.')
       return
     }
     if (!form.size && !form.vehicle_type) {
@@ -311,9 +321,10 @@ function LifeTargetsModal({ rows, country, onClose }) {
         size: form.size,
         vehicle_type: form.vehicle_type || null,
         target_km: km,
+        target_hours: hrs,
         note: form.note,
       })
-      setForm({ size: '', vehicle_type: '', target_km: '', note: '' })
+      setForm({ size: '', vehicle_type: '', target_km: '', target_hours: '', note: '' })
       setChanged(true)
       await loadTargets()
     } catch (e) { setError(toUserMessage(e)) } finally { setBusy(false) }
@@ -333,8 +344,9 @@ function LifeTargetsModal({ rows, country, onClose }) {
           <button type="button" onClick={() => onClose(changed)}><X size={16} style={{ color: 'var(--text-dim)' }} /></button>
         </div>
         <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Set the km life YOU expect - by tyre size, by vehicle type, or both. The most specific
-          target wins on every tyre: size + vehicle type first, then vehicle type, then size.
+          Set the life YOU expect - in km, in hour-meter hours, or both - by tyre size, by vehicle
+          type, or both. The most specific target wins on every tyre: size + vehicle type first,
+          then vehicle type, then size.
           A target overrides the measured average, so Remaining and Life-used then measure your
           fleet against your own standard. Size spelling does not matter (315/80R22.5 and
           315/80 R 22.5 are the same size).
@@ -355,9 +367,14 @@ function LifeTargetsModal({ rows, country, onClose }) {
               {types.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
-          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Target life (km) *
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Target life (km)
             <input type="number" min="1000" max="400000" value={form.target_km}
               onChange={(e) => setForm({ ...form, target_km: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Target life (hour meter)
+            <input type="number" min="1" max="100000" value={form.target_hours}
+              onChange={(e) => setForm({ ...form, target_hours: e.target.value })}
               className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
           </label>
           <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Note
@@ -366,7 +383,7 @@ function LifeTargetsModal({ rows, country, onClose }) {
           </label>
         </div>
         {error && <p className="text-xs mb-2" style={{ color: '#f87171' }}>{error}</p>}
-        <button type="button" disabled={busy || (!form.size && !form.vehicle_type) || !form.target_km} onClick={save}
+        <button type="button" disabled={busy || (!form.size && !form.vehicle_type) || (!form.target_km && !form.target_hours)} onClick={save}
           className="px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-40"
           style={{ background: 'var(--brand)', color: '#fff' }}>
           {busy ? 'Saving...' : 'Save target'}
@@ -388,6 +405,7 @@ function LifeTargetsModal({ rows, country, onClose }) {
                   <th className="py-1.5 pr-2">Vehicle type</th>
                   <th className="py-1.5 pr-2">Country</th>
                   <th className="py-1.5 pr-2 text-right">Target km</th>
+                  <th className="py-1.5 pr-2 text-right">Target hrs</th>
                   <th className="py-1.5 pr-2" />
                 </tr>
               </thead>
@@ -397,7 +415,8 @@ function LifeTargetsModal({ rows, country, onClose }) {
                     <td className="py-1.5 pr-2">{t.size || 'All sizes'}</td>
                     <td className="py-1.5 pr-2">{t.vehicle_type || 'All types'}</td>
                     <td className="py-1.5 pr-2">{t.country || 'All'}</td>
-                    <td className="py-1.5 pr-2 text-right">{fmtNum(t.target_km)}</td>
+                    <td className="py-1.5 pr-2 text-right">{t.target_km != null ? fmtNum(t.target_km) : 'N/A'}</td>
+                    <td className="py-1.5 pr-2 text-right">{t.target_hours != null ? fmtNum(t.target_hours) : 'N/A'}</td>
                     <td className="py-1.5 pr-2 text-right">
                       <button type="button" onClick={() => remove(t.id)} title="Remove target">
                         <Trash2 size={13} style={{ color: 'var(--text-dim)' }} />

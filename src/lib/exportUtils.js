@@ -1314,6 +1314,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Expected Tyre Life', y, mx, brand.accent) + 4
     const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+    // Expected/Remaining show BOTH dimensions when both targets exist
+    // ("60,000 km / 8,000 hrs") - hour-metered plant is judged on hours.
+    const both = (km, hrs) => (km == null && hrs == null ? 'N/A'
+      : [km != null ? `${n(km)} km` : null, hrs != null ? `${n(hrs)} hrs` : null].filter(Boolean).join(' / '))
     const lifeStartPage = doc.internal.getNumberOfPages()
     autoTable(doc, {
       startY: y,
@@ -1326,10 +1330,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         n(lr.kmRun),
         n(lr.hoursRun),
         n(lr.currentKm),
-        n(lr.expectedLifeKm),
-        n(lr.remainingKm),
+        both(lr.expectedLifeKm, lr.expectedLifeHours),
+        both(lr.remainingKm, lr.remainingHours),
         n(lr.remainingDays),
-        lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : 'N/A',
+        (lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : (lr.hoursUsedPct != null ? `${lr.hoursUsedPct}%` : 'N/A')),
       ]),
       styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
       headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },

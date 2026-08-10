@@ -170,9 +170,11 @@ export function analyzeClaims(rows, { now } = {}) {
       monthMap.set(ym, m)
     }
 
-    // Closed-claim cycle time (incident → release)
-    if (closedFlag) {
-      const dd = daysBetween(r.incident_date, r.release_date || today)
+    // Closed-claim cycle time (incident to release). A closed claim with no
+    // release date has no honest duration: substituting today made finished
+    // claims age forever and drifted the average upward daily.
+    if (closedFlag && r.release_date) {
+      const dd = daysBetween(r.incident_date, r.release_date)
       if (dd != null && dd >= 0) { closedDaysSum += dd; closedDaysCount++ }
     }
 

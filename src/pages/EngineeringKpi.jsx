@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
@@ -743,7 +744,7 @@ export default function EngineeringKpi() {
         value: costTrend.trend === 'improving' ? '▼ Improving'
           : costTrend.trend === 'worsening' ? '▲ Worsening' : '- Stable',
         subValue: `Slope: ${costTrend.slope > 0 ? '+' : ''}${currency} ${Math.round(Math.abs(costTrend.slope)).toLocaleString()}/month`,
-        description: `Forecast next month: ${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()} | Avg monthly: ${currency} ${Math.round(costTrend.avgMonthlyCost).toLocaleString()}`,
+        description: `Forecast next month: ${costTrend.forecastNextMonth == null ? 'N/A' : `${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}`} | Avg monthly: ${currency} ${Math.round(costTrend.avgMonthlyCost).toLocaleString()}`,
         status: trendStatus,
         trend: costTrend.trend === 'improving' ? 'down' : costTrend.trend === 'worsening' ? 'up' : null,
         trendLabel: costTrend.trend === 'improving' ? 'Costs declining'
@@ -894,22 +895,25 @@ export default function EngineeringKpi() {
           {/* Date From */}
           <div className="flex flex-col gap-1">
             <label className="label text-xs">From</label>
-            <input
-              type="date"
-              className="input w-38 text-sm"
+            <DateField
+              className="text-sm w-40"
               value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
+              onChange={setDateFrom}
+              placeholder="From date"
+              ariaLabel="From date"
             />
           </div>
 
           {/* Date To */}
           <div className="flex flex-col gap-1">
             <label className="label text-xs">To</label>
-            <input
-              type="date"
-              className="input w-38 text-sm"
+            <DateField
+              className="text-sm w-40"
               value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
+              onChange={setDateTo}
+              placeholder="To date"
+              ariaLabel="To date"
+              min={dateFrom || undefined}
             />
           </div>
 
@@ -1360,7 +1364,7 @@ function buildKpiSummaryRows(kpis, currency) {
     { kpi: 'Scrap Rate (%)',                   value: (scrapRate.scrapRate * 100).toFixed(1),                                   status: scrapRate.scrapRate > 0.20 ? 'Critical' : scrapRate.scrapRate > 0.10 ? 'Warning' : 'Good', description: `${scrapRate.scrapCount} scrapped | Est. cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}` },
     { kpi: 'Fleet Availability Impact (%)',    value: fleetAvailability.availabilityPct.toFixed(1),                             status: fleetAvailability.availabilityPct > 90 ? 'Good' : fleetAvailability.availabilityPct > 75 ? 'Warning' : 'Critical', description: `${fleetAvailability.unavailableCount} critical of ${fleetAvailability.fleetSize}` },
     { kpi: 'Vehicle Downtime Impact (hrs)',    value: downtimeImpact.totalDowntimeHours.toLocaleString(),                       status: downtimeImpact.totalDowntimeHours > 500 ? 'Critical' : 'Informational', description: `Avg ${downtimeImpact.avgDowntimePerVehicle.toFixed(1)} hrs/vehicle` },
-    { kpi: 'Cost Trend',                       value: costTrend.trend,                                                          status: costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'worsening' ? 'Critical' : 'Neutral', description: `Slope: ${currency} ${Math.round(costTrend.slope)}/month | Forecast: ${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}` },
+    { kpi: 'Cost Trend',                       value: costTrend.trend,                                                          status: costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'worsening' ? 'Critical' : 'Neutral', description: `Slope: ${currency} ${Math.round(costTrend.slope)}/month | Forecast: ${costTrend.forecastNextMonth == null ? 'N/A' : `${currency} ${Math.round(Math.max(0, costTrend.forecastNextMonth)).toLocaleString()}`}` },
     { kpi: 'Vendor Performance (Top Brand)',   value: vendorPerformance[0]?.brand ?? 'N/A',                                     status: 'Informational', description: vendorPerformance[0] ? `Score: ${vendorPerformance[0].score.toFixed(3)} | CPK: ${vendorPerformance[0].avgCpk.toFixed(4)}` : '' },
     { kpi: 'Workshop Performance (Best Site)', value: workshopPerformance.bySite[0]?.site ?? 'N/A',                            status: 'Informational', description: workshopPerformance.bySite[0] ? `Score: ${workshopPerformance.bySite[0].score.toFixed(3)}` : '' },
     { kpi: 'Fleet CPK Coverage (%)',           value: cpk.coveragePct.toFixed(1),                                              status: cpk.coveragePct > 80 ? 'Good' : cpk.coveragePct > 50 ? 'Warning' : 'Critical', description: `${cpk.validCount} valid / ${cpk.totalCount - cpk.validCount} missing km data` },

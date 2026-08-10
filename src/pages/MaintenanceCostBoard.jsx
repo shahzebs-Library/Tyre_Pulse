@@ -21,6 +21,7 @@ import {
   Download, RefreshCw, Eye, EyeOff, FileSpreadsheet,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
@@ -91,6 +92,9 @@ export default function MaintenanceCostBoard() {
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // Optional calendar date range. Empty = all time (the previous behavior).
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   const [sections, setSections] = useState(() => {
     try {
@@ -110,7 +114,11 @@ export default function MaintenanceCostBoard() {
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
     try {
-      const snap = await getMaintenanceSnapshot({ country: activeCountry })
+      const snap = await getMaintenanceSnapshot({
+        country: activeCountry,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+      })
       setSnapshot(snap && snap.ok !== false ? snap : { ok: false })
       setUpdatedAt(new Date())
     } catch (e) {
@@ -118,7 +126,7 @@ export default function MaintenanceCostBoard() {
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, fromDate, toDate])
 
   useEffect(() => { load() }, [load])
 
@@ -241,7 +249,17 @@ export default function MaintenanceCostBoard() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <DateField className="text-sm w-40" value={fromDate} onChange={setFromDate} placeholder="From date" ariaLabel="From date" max={toDate || undefined} />
+          <DateField className="text-sm w-40" value={toDate} onChange={setToDate} placeholder="To date" ariaLabel="To date" min={fromDate || undefined} />
+          {(fromDate || toDate) && (
+            <button
+              onClick={() => { setFromDate(''); setToDate('') }}
+              className="btn-secondary text-sm px-3 py-1.5"
+            >
+              Clear dates
+            </button>
+          )}
           {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}
           <button onClick={load} disabled={refreshing} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh

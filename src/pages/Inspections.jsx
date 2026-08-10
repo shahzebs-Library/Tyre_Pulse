@@ -17,6 +17,7 @@ import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { legacyPositionCode } from '../lib/tyrePositions'
 import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
@@ -281,6 +282,10 @@ export default function Inspections() {
   const [saveError, setSaveError] = useState(null)
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterSite, setFilterSite]     = useState('all')
+  // Client-side date range on the register (scheduled_date, falling back to
+  // completed_date, then created_at). Empty = existing behavior.
+  const [filterFrom, setFilterFrom]     = useState('')
+  const [filterTo, setFilterTo]         = useState('')
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
@@ -504,6 +509,18 @@ export default function Inspections() {
     let r = tabFiltered
     if (filterStatus !== 'all') r = r.filter(x => x.status === filterStatus)
     if (filterSite !== 'all')   r = r.filter(x => x.site === filterSite)
+    if (filterFrom || filterTo) {
+      // String-safe 'YYYY-MM-DD' prefix comparison (never new Date(string)).
+      // A row with no usable date is excluded while a range is active.
+      r = r.filter(x => {
+        const raw = x.scheduled_date || x.completed_date || x.created_at
+        const d = raw ? String(raw).slice(0, 10) : ''
+        if (!d) return false
+        if (filterFrom && d < filterFrom) return false
+        if (filterTo && d > filterTo) return false
+        return true
+      })
+    }
     if (search) {
       const q = search.toLowerCase()
       r = r.filter(x =>
@@ -516,7 +533,7 @@ export default function Inspections() {
       )
     }
     return r
-  }, [tabFiltered, filterStatus, filterSite, search])
+  }, [tabFiltered, filterStatus, filterSite, filterFrom, filterTo, search])
 
   const counts = useMemo(() => {
     const c = { all: rows.length, inspections: 0, observations: 0, training: 0 }
@@ -1891,6 +1908,16 @@ export default function Inspections() {
           <option value="all">{t('inspections.filters.allSites')}</option>
           {sites.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <DateField className="text-sm w-40" value={filterFrom} onChange={setFilterFrom} placeholder="From date" ariaLabel="From date" />
+        <DateField className="text-sm w-40" value={filterTo} onChange={setFilterTo} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
+        {(filterFrom || filterTo) && (
+          <button
+            onClick={() => { setFilterFrom(''); setFilterTo('') }}
+            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline self-center"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Bulk selection bar (Admin only) */}

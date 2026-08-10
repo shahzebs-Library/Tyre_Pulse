@@ -1653,7 +1653,7 @@ export default function Accidents() {
     const { error: err } = editId
       ? await accidentsApi.updateAccidentForPage(editId, payload)
       : await accidentsApi.createAccidentForPage(payload)
-    if (err) { setFormError(err.message); setSaving(false); return }
+    if (err) { setFormError(toUserMessage(err, 'Could not save the incident.')); setSaving(false); return }
     setShowForm(false)
     loadRecords()
     setSaving(false)

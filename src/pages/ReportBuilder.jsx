@@ -12,6 +12,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
@@ -795,24 +796,45 @@ export default function ReportBuilder() {
                       {ops.map(op => <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>)}
                     </select>
                     {f.op && !VALUELESS_OPS.includes(f.op) && (
-                      <input
-                        type={LIST_OPS.includes(f.op) ? 'text' : inputType}
-                        className="input py-1.5 px-2 text-xs flex-1 min-w-32"
-                        value={f.value}
-                        placeholder={LIST_OPS.includes(f.op) ? 'value1, value2, …' : 'Value'}
-                        onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
-                        aria-label="Filter value"
-                      />
+                      inputType === 'date' && !LIST_OPS.includes(f.op) ? (
+                        <DateField
+                          className="text-sm flex-1 min-w-32"
+                          value={f.value}
+                          placeholder="Value"
+                          onChange={v => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: v } : x))}
+                          ariaLabel="Filter value"
+                        />
+                      ) : (
+                        <input
+                          type={LIST_OPS.includes(f.op) ? 'text' : inputType}
+                          className="input py-1.5 px-2 text-xs flex-1 min-w-32"
+                          value={f.value}
+                          placeholder={LIST_OPS.includes(f.op) ? 'value1, value2, …' : 'Value'}
+                          onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
+                          aria-label="Filter value"
+                        />
+                      )
                     )}
                     {RANGE_OPS.includes(f.op) && (
-                      <input
-                        type={inputType}
-                        className="input py-1.5 px-2 text-xs flex-1 min-w-32"
-                        value={f.value2}
-                        placeholder="and…"
-                        onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value2: e.target.value } : x))}
-                        aria-label="Filter upper value"
-                      />
+                      inputType === 'date' ? (
+                        <DateField
+                          className="text-sm flex-1 min-w-32"
+                          value={f.value2}
+                          placeholder="and"
+                          onChange={v => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value2: v } : x))}
+                          ariaLabel="Filter upper value"
+                          min={f.value || undefined}
+                        />
+                      ) : (
+                        <input
+                          type={inputType}
+                          className="input py-1.5 px-2 text-xs flex-1 min-w-32"
+                          value={f.value2}
+                          placeholder="and…"
+                          onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value2: e.target.value } : x))}
+                          aria-label="Filter upper value"
+                        />
+                      )
                     )}
                     <button
                       type="button"

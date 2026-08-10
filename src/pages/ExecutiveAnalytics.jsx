@@ -9,6 +9,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
 import { SkeletonChart } from '../components/ui/Skeleton'
 import EChart from '../components/charts/EChart'
@@ -683,14 +684,14 @@ export default function ExecutiveAnalytics() {
           <Filter size={13} /> Filters
         </span>
         <div>
-          <label htmlFor="ea-from" className="block text-[11px] text-muted mb-1">From</label>
-          <input id="ea-from" type="date" className="input text-sm" value={dateFrom}
-            max={dateTo} onChange={(e) => setDateFrom(e.target.value)} />
+          <label className="block text-[11px] text-muted mb-1">From</label>
+          <DateField className="text-sm w-40" value={dateFrom} onChange={setDateFrom}
+            placeholder="From date" ariaLabel="From date" max={dateTo || undefined} />
         </div>
         <div>
-          <label htmlFor="ea-to" className="block text-[11px] text-muted mb-1">To</label>
-          <input id="ea-to" type="date" className="input text-sm" value={dateTo}
-            min={dateFrom} onChange={(e) => setDateTo(e.target.value)} />
+          <label className="block text-[11px] text-muted mb-1">To</label>
+          <DateField className="text-sm w-40" value={dateTo} onChange={setDateTo}
+            placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
         </div>
         <div>
           <label htmlFor="ea-country" className="block text-[11px] text-muted mb-1">Country</label>

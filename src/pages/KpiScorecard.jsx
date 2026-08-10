@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
@@ -61,6 +62,11 @@ export default function KpiScorecard() {
   const [saving, setSaving]           = useState(false)
   const [yearFilter, setYearFilter]   = useState(new Date().getFullYear())
   const [countryChip, setCountryChip] = useState('All')
+  // Custom calendar range. When BOTH dates are set the month axis is derived
+  // from the range (clamped to the most recent 24 months); when empty the
+  // existing rolling-12-months behavior is unchanged.
+  const [rangeFrom, setRangeFrom]     = useState('')
+  const [rangeTo, setRangeTo]         = useState('')
   const [showYoY, setShowYoY]         = useState(false)
   const [yoyRecords, setYoyRecords]   = useState([])
   const [yoyLoading, setYoyLoading]   = useState(false)
@@ -124,16 +130,44 @@ export default function KpiScorecard() {
     })
   }, [pmState.data])
 
-  // Build last 12 months axis
-  const months = useMemo(() => {
+  // Month axis. Default = rolling last 12 months anchored to today (existing
+  // behavior). With a full custom range (both dates set) the axis is derived
+  // from the range's months, clamped to the most recent 24 so the chart stays
+  // readable. String-safe: months come from 'YYYY-MM' prefixes, never
+  // `new Date(string)`.
+  const customRange = Boolean(rangeFrom && rangeTo && rangeFrom <= rangeTo)
+  const { months, monthsClamped } = useMemo(() => {
+    if (customRange) {
+      const out = []
+      let y = Number(rangeFrom.slice(0, 4))
+      let m = Number(rangeFrom.slice(5, 7))
+      const endKey = rangeTo.slice(0, 7)
+      let key = `${y}-${String(m).padStart(2, '0')}`
+      while (key <= endKey && out.length < 480) {
+        out.push(key)
+        m += 1
+        if (m > 12) { m = 1; y += 1 }
+        key = `${y}-${String(m).padStart(2, '0')}`
+      }
+      if (out.length > 24) return { months: out.slice(-24), monthsClamped: true }
+      return { months: out, monthsClamped: false }
+    }
     const result = []
     const now = new Date()
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
     }
-    return result
-  }, [])
+    return { months: result, monthsClamped: false }
+  }, [customRange, rangeFrom, rangeTo])
+
+  // YoY stays meaningful only while the window is 12 months or less: the
+  // comparison is the same months one year earlier, which would overlap a
+  // longer range. Auto-off when it stops being meaningful.
+  const yoyAvailable = !customRange || months.length <= 12
+  useEffect(() => {
+    if (!yoyAvailable && showYoY) setShowYoY(false)
+  }, [yoyAvailable, showYoY])
 
   // Same 12-month window one year prior
   const yoyMonths = useMemo(() => months.map(m => {
@@ -386,7 +420,9 @@ export default function KpiScorecard() {
           {/* YoY toggle */}
           <button
             onClick={() => setShowYoY(v => !v)}
-            className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+            disabled={!yoyAvailable}
+            title={yoyAvailable ? undefined : 'YoY comparison is unavailable for ranges longer than 12 months'}
+            className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
               showYoY
                 ? 'bg-purple-900/40 border-purple-600 text-purple-300'
                 : 'bg-gray-800 border-gray-700 text-[var(--panel-ink-3)] hover:border-gray-500'
@@ -461,7 +497,29 @@ export default function KpiScorecard() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-2">
+          <DateField className="text-sm w-40" value={rangeFrom} onChange={setRangeFrom} placeholder="From date" ariaLabel="From date" />
+          <DateField className="text-sm w-40" value={rangeTo} onChange={setRangeTo} placeholder="To date" ariaLabel="To date" min={rangeFrom || undefined} />
+          {(rangeFrom || rangeTo) && (
+            <button
+              onClick={() => { setRangeFrom(''); setRangeTo('') }}
+              className="text-xs text-[var(--panel-ink-3)] hover:text-[var(--panel-ink-2)] underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
+
+      {(rangeFrom || rangeTo) && (
+        <p className="text-[11px] text-[var(--panel-ink-4)]">
+          {!customRange
+            ? 'Set both From and To dates to apply the range; otherwise the rolling last 12 months are shown.'
+            : `Custom range applied at month granularity (${months.length} month${months.length !== 1 ? 's' : ''}).`}
+          {customRange && monthsClamped ? ' Range is longer than 24 months - showing last 24 months of range.' : ''}
+          {customRange && !yoyAvailable ? ' YoY comparison is hidden for ranges longer than 12 months.' : ''}
+        </p>
+      )}
 
       {/* Mixed-currency notice (blended 'All' countries view) */}
       {multiCurrencyBlend && (

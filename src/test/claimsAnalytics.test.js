@@ -150,3 +150,24 @@ describe('delayed intelligence (overdueDays + delayedDetail)', () => {
     expect(d.worst).toEqual([])
   })
 })
+
+describe('avgCycleDays only measures closed claims with a real release date', () => {
+  it('a settled claim with no release date is excluded (no honest duration)', () => {
+    const closedWithRelease = {
+      asset_no: 'A1', incident_date: '2026-05-01', claim_amount: 1000,
+      claim_status: 'Settled', release_date: '2026-05-31',
+    }
+    const closedNoRelease = {
+      asset_no: 'A2', incident_date: '2026-01-01', claim_amount: 1000,
+      claim_status: 'Settled',
+    }
+    const a = analyzeClaims([closedWithRelease, closedNoRelease], { now: NOW })
+    expect(a.avgCycleDays).toBe(30)
+  })
+  it('null when no closed claim carries a release date', () => {
+    const a = analyzeClaims([
+      { asset_no: 'A3', incident_date: '2026-01-01', claim_amount: 500, claim_status: 'Settled' },
+    ], { now: NOW })
+    expect(a.avgCycleDays).toBeNull()
+  })
+})

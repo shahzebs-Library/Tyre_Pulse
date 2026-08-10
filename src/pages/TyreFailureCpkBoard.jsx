@@ -21,6 +21,7 @@ import {
   Table, FileSpreadsheet,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { listAllRecords } from '../lib/api/tyreRecords'
@@ -44,6 +45,19 @@ const SECTION_DEFAULTS = { kpis: true, failure: true, cpk: true, life: true, ass
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 const pct = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : `${Number(v)}%`)
+
+/**
+ * String-safe 'YYYY-MM-DD' prefix range test (never `new Date(string)`).
+ * No range active = every row passes; range active = a row with no usable
+ * date is excluded, never a crash.
+ */
+const inDateRange = (d, from, to) => {
+  const s = d ? String(d).slice(0, 10) : ''
+  if (!s) return !(from || to)
+  if (from && s < from) return false
+  if (to && s > to) return false
+  return true
+}
 
 const chartBase = (legend = false) => ({
   responsive: true,
@@ -94,6 +108,10 @@ export default function TyreFailureCpkBoard() {
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
+  // Client-side date range on tyre issue_date; also passed to the expense grid
+  // so the grid-sourced tyre cost matches the same window. Empty = full history.
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   const [sections, setSections] = useState(() => {
     try {
@@ -112,9 +130,18 @@ export default function TyreFailureCpkBoard() {
     try {
       const [{ data }, grid] = await Promise.all([
         listAllRecords({ country: activeCountry }),
-        loadGridTyreByAsset({ country: activeCountry }),
+        loadGridTyreByAsset({
+          country: activeCountry,
+          from: fromDate || undefined,
+          to: toDate || undefined,
+        }),
       ])
-      const built = buildTyreFailureBoard(data || [])
+      // Client-side date window on the tyre records (issue_date). Empty range
+      // passes every row through unchanged (existing behavior).
+      const rows = (fromDate || toDate)
+        ? (data || []).filter((r) => inDateRange(r.issue_date, fromDate, toDate))
+        : (data || [])
+      const built = buildTyreFailureBoard(rows)
       // Reconcile the per-asset "Total cost" column to the authoritative expense
       // grid (key = asset_no UPPER/trim); ranking + Avg CPK stay on tyre_records.
       // Absent grid, or an asset it does not carry, keeps the tyre_records total.
@@ -131,7 +158,7 @@ export default function TyreFailureCpkBoard() {
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, fromDate, toDate])
 
   useEffect(() => { load() }, [load])
 
@@ -251,6 +278,18 @@ export default function TyreFailureCpkBoard() {
               <Icon size={13} /> {label} {sections[key] ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
           ))}
+          <div className="flex items-center gap-2">
+            <DateField className="text-sm w-40" value={fromDate} onChange={setFromDate} placeholder="From date" ariaLabel="From date" />
+            <DateField className="text-sm w-40" value={toDate} onChange={setToDate} placeholder="To date" ariaLabel="To date" min={fromDate || undefined} />
+            {(fromDate || toDate) && (
+              <button
+                onClick={() => { setFromDate(''); setToDate('') }}
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}

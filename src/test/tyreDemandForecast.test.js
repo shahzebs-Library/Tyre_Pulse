@@ -181,3 +181,32 @@ describe('forecastTableRows', () => {
     expect(forecastTableRows(null)).toEqual([])
   })
 })
+
+describe('priced share is windowed to the analysis months', () => {
+  it('old priced fitments outside the window never inflate pricedPct past 100', () => {
+    const rows = [
+      // 30 priced fitments far outside a 3-month window
+      ...Array.from({ length: 30 }, () => rec('315/80R22.5', '2023-01-05', 1, 900)),
+      // 5 unpriced fitments inside the window
+      ...['2026-05', '2026-06', '2026-07'].flatMap((mk) => [rec('315/80R22.5', `${mk}-01`, 1, 0)]),
+      ...['2026-06', '2026-07'].map((mk) => rec('315/80R22.5', `${mk}-15`, 1, 0)),
+    ]
+    const fc = forecastTyreDemand(rows, { window: 3, ahead: 1 })
+    const s = fc.sizes.find((x) => x.size === '315/80R22.5')
+    expect(s.pricedQty).toBe(0)
+    expect(s.avgUnitCost).toBeNull()
+    expect(s.projectedSpend).toBeNull()
+    expect(s.pricedPct === null || s.pricedPct <= 100).toBe(true)
+  })
+  it('in-window priced fitments still price the forecast', () => {
+    const rows = ['2026-04', '2026-05', '2026-06', '2026-07'].flatMap((mk, i) => ([
+      rec('315/80R22.5', `${mk}-01`, 1, i < 2 ? 900 : 0),
+      rec('315/80R22.5', `${mk}-15`, 1, 0),
+    ]))
+    const fc = forecastTyreDemand(rows, { window: 4, ahead: 2 })
+    const s = fc.sizes[0]
+    expect(s.pricedQty).toBe(2)
+    expect(s.avgUnitCost).toBe(900)
+    expect(s.pricedPct).toBe(25)
+  })
+})

@@ -150,11 +150,15 @@ export function forecastTyreDemand(rows = [], opt = {}) {
     if (!maxKey || mk > maxKey) maxKey = mk
     const s = canon(r?.size)
     let e = bySize.get(s)
-    if (!e) { e = { months: new Map(), pricedQty: 0, costSum: 0 }; bySize.set(s, e) }
+    if (!e) { e = { months: new Map(), priced: new Map() }; bySize.set(s, e) }
     const q = qtyOf(r)
     e.months.set(mk, (e.months.get(mk) || 0) + q)
     const unit = Number(r?.cost_per_tyre)
-    if (Number.isFinite(unit) && unit > 0) { e.pricedQty += q; e.costSum += unit * q }
+    if (Number.isFinite(unit) && unit > 0) {
+      const p = e.priced.get(mk) || { qty: 0, cost: 0 }
+      p.qty += q; p.cost += unit * q
+      e.priced.set(mk, p)
+    }
   }
   if (!maxKey) return EMPTY
 
@@ -188,15 +192,21 @@ export function forecastTyreDemand(rows = [], opt = {}) {
     const confidence = nonZero >= MIN_TREND_MONTHS ? (nonZero >= 8 ? 'high' : 'medium')
       : (nonZero >= 1 ? 'low' : 'none')
 
-    const avgUnitCost = e.pricedQty > 0 ? e.costSum / e.pricedQty : null
-    const pricedPct = total > 0 ? Math.round((e.pricedQty / total) * 100) : null
+    // Price evidence restricted to the analysis window so the priced share
+    // and projected spend describe the same months the demand history does.
+    let pricedQty = 0, costSum = 0
+    for (const [k, p] of e.priced.entries()) {
+      if (k >= startKey && k <= maxKey) { pricedQty += p.qty; costSum += p.cost }
+    }
+    const avgUnitCost = pricedQty > 0 ? costSum / pricedQty : null
+    const pricedPct = total > 0 ? Math.min(100, Math.round((pricedQty / total) * 100)) : null
     const projectedSpend = avgUnitCost != null ? avgUnitCost * forecastTotal : null
 
     sizes.push({
       size, history, total, avgPerMonth,
       slopePerMonth: fit ? fit.slope : 0,
       forecast, forecastTotal, confidence, method,
-      avgUnitCost, pricedQty: e.pricedQty, pricedPct, projectedSpend,
+      avgUnitCost, pricedQty, pricedPct, projectedSpend,
     })
   }
   sizes.sort((a, b) => b.forecastTotal - a.forecastTotal || b.total - a.total)

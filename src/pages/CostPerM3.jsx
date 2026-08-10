@@ -15,6 +15,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { getCostPerM3, getCostPerM3Trend, getProductionRejections } from '../lib/api/costPerM3'
@@ -89,7 +90,14 @@ export default function CostPerM3() {
   const initialCountry = activeCountry && activeCountry !== 'All' ? activeCountry : COUNTRIES[0]
   const [country, setCountry] = useState(initialCountry)
   const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD)
-  const bounds = useMemo(() => periodBounds(periodKey, new Date()), [periodKey])
+  // Calendar custom range (used only when periodKey === 'custom'). An incomplete
+  // range falls back to the current-month bounds inside periodBounds.
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const bounds = useMemo(
+    () => periodBounds(periodKey, new Date(), { from: customFrom, to: customTo }),
+    [periodKey, customFrom, customTo],
+  )
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -277,6 +285,12 @@ export default function CostPerM3() {
         <select value={periodKey} onChange={(e) => setPeriodKey(e.target.value)} className="rounded-md border border-[var(--border-subtle)] bg-transparent px-3 py-1.5 text-sm">
           {CPK_PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
+        {periodKey === 'custom' && (
+          <>
+            <DateField className="text-sm w-40" value={customFrom} onChange={setCustomFrom} placeholder="From date" ariaLabel="From date" max={customTo || undefined} />
+            <DateField className="text-sm w-40" value={customTo} onChange={setCustomTo} placeholder="To date" ariaLabel="To date" min={customFrom || undefined} />
+          </>
+        )}
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{periodLabel(bounds)}</span>
       </div>
 

@@ -21,6 +21,7 @@ import { workOrders } from '../lib/api'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -662,10 +663,10 @@ export default function WorkOrders() {
               {opts.map(o => <option key={o}>{o}</option>)}
             </select>
           ))}
-          <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-          <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
+          <DateField className="text-sm w-40" value={dateFrom} onChange={v => { setDateFrom(v); setPage(1) }}
+            placeholder="From date" ariaLabel="From date" />
+          <DateField className="text-sm w-40" value={dateTo} onChange={v => { setDateTo(v); setPage(1) }}
+            placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
           {(search || statusFilter !== 'All' || priorityFilter !== 'All' || typeFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setPriority('All'); setType('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">

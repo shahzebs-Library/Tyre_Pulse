@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import ReferencePicker from '../components/checklist/ReferencePicker'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -441,14 +442,14 @@ export default function VehicleWashing() {
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
+              <div className="text-xs text-[var(--text-muted)] space-y-1">
                 <span>From</span>
-                <input type="date" value={filters.from} onChange={(e) => setFilter('from', e.target.value)} className={inputCls} />
-              </label>
-              <label className="text-xs text-[var(--text-muted)] space-y-1">
+                <DateField className="text-sm" value={filters.from} onChange={(v) => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
+              </div>
+              <div className="text-xs text-[var(--text-muted)] space-y-1">
                 <span>To</span>
-                <input type="date" value={filters.to} onChange={(e) => setFilter('to', e.target.value)} className={inputCls} />
-              </label>
+                <DateField className="text-sm" value={filters.to} onChange={(v) => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filters.from || undefined} />
+              </div>
               <label className="text-xs text-[var(--text-muted)] space-y-1">
                 <span>Site</span>
                 <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)} className={inputCls}>

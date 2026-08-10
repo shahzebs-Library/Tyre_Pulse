@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { FileText, ChevronRight, Download, ArrowLeft, Printer, Mail } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
@@ -531,9 +532,9 @@ export default function Reports() {
                 ))}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <input type="date" className="input w-36 text-sm" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDateShortcut('Custom') }} />
+                <DateField className="text-sm w-40" value={dateFrom} onChange={v => { setDateFrom(v); setDateShortcut('Custom') }} placeholder="From date" ariaLabel="From date" />
                 <span className="text-gray-600">{t('reports.config.to')}</span>
-                <input type="date" className="input w-36 text-sm" value={dateTo} onChange={e => { setDateTo(e.target.value); setDateShortcut('Custom') }} />
+                <DateField className="text-sm w-40" value={dateTo} onChange={v => { setDateTo(v); setDateShortcut('Custom') }} placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
               </div>
             </div>
 

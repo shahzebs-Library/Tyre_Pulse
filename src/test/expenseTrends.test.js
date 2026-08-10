@@ -143,3 +143,19 @@ describe('date-range window', () => {
     expect(availableYears(c)).toEqual(['2023', '2024'])
   })
 })
+
+describe('cagr counts elapsed periods, not just measurable ones', () => {
+  it('a zero period in the middle still counts as elapsed time', () => {
+    // 100 -> 400 over 2 elapsed periods = 100% per period (not 300%)
+    const ys = [{ total: 100 }, { total: 0 }, { total: 400 }]
+    expect(cagr(ys)).toBeCloseTo(100, 5)
+  })
+  it('contiguous positive series unchanged', () => {
+    const ys = [{ total: 100 }, { total: 200 }, { total: 400 }]
+    expect(cagr(ys)).toBeCloseTo(100, 5)
+  })
+  it('null when fewer than two measurable periods', () => {
+    expect(cagr([{ total: 0 }, { total: 500 }])).toBeNull()
+    expect(cagr([])).toBeNull()
+  })
+})

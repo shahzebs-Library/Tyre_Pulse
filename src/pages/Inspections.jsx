@@ -28,7 +28,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife } from '../lib/tyreRunningLife'
-import { getCompanyLogo } from '../lib/api/brandLogo'
+import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
 
 // Report logo: tenant branding wins; otherwise fall back to the org-wide
 // company logo set in Console -> Report Colors (system_config.company_logo).
@@ -392,7 +392,8 @@ export default function Inspections() {
         // offscreen below - captured so the report embeds the same SVG the
         // operator sees. Falls back to the programmatic map when absent.
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
-        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl })
+        const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
+        await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg })
       } finally { if (!cancelled) setPdfRow(null) }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
@@ -835,6 +836,7 @@ export default function Inspections() {
     // always-mounted offscreen copy so the report is never missing the diagram.
     const svgEl = diagramRef.current?.querySelector('svg[data-tyre-map]')
       || checklistPdfDiagramRef.current?.querySelector('svg[data-tyre-map]')
+    const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
     if (svgEl) {
       try {
         const svgStr  = new XMLSerializer().serializeToString(svgEl)
@@ -851,7 +853,7 @@ export default function Inspections() {
             canvas.height = svgH * scale
             const ctx = canvas.getContext('2d')
             ctx.scale(scale, scale)
-            ctx.fillStyle = '#000000'
+            ctx.fillStyle = diagramBg
             ctx.fillRect(0, 0, svgW, svgH)
             ctx.drawImage(img, 0, 0, svgW, svgH)
             URL.revokeObjectURL(url)

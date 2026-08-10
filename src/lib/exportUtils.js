@@ -1207,7 +1207,12 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // fixed; the programmatic drawing remains the fallback when no live SVG is
   // available (e.g. detached callers).
   let diagramH = 0
-  const svgCap = opts.svgEl ? await svgToPngDataUrl(opts.svgEl, 3, '#000000') : null
+  // Diagram background follows Console -> Report Colors (report_diagram_bg);
+  // black when unset. Legend ink flips dark automatically on a light background.
+  const diagBg = (typeof opts.diagramBg === 'string' && /^#[0-9a-f]{6}$/i.test(opts.diagramBg)) ? opts.diagramBg : '#000000'
+  const dbgRgb = [parseInt(diagBg.slice(1, 3), 16), parseInt(diagBg.slice(3, 5), 16), parseInt(diagBg.slice(5, 7), 16)]
+  const dbgLight = (0.299 * dbgRgb[0] + 0.587 * dbgRgb[1] + 0.114 * dbgRgb[2]) > 150
+  const svgCap = opts.svgEl ? await svgToPngDataUrl(opts.svgEl, 3, diagBg) : null
   if (svgCap && svgCap.dataUrl) {
     // Owner spec: the diagram stays COMPACT so the whole report auto-fits one
     // page (photos may flow to page 2) - never a full-page picture.
@@ -1218,7 +1223,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     if (ih > availH) { ih = availH; iw = ih * (svgCap.w / svgCap.h) }
     const bgH = ih + 10
 
-    doc.setFillColor(0, 0, 0)
+    doc.setFillColor(...dbgRgb)
     doc.setDrawColor(...P.iron)
     doc.setLineWidth(0.3)
     doc.roundedRect(mx, y, bgW, bgH, 3, 3, 'FD')
@@ -1227,13 +1232,15 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     // Legend
     const legendX = mx + bgW - 50
     let legendY   = y + 10
-    doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.mist)
+    doc.setFontSize(6.5); doc.setFont('helvetica','bold')
+    if (dbgLight) doc.setTextColor(55, 65, 81); else doc.setTextColor(...P.mist)
     doc.text('LEGEND', legendX, legendY); legendY += 7
     Object.entries(RISK_LABEL).forEach(([key, label]) => {
       const [r, g, b] = RISK_RGB[key]
       doc.setFillColor(r, g, b)
       doc.roundedRect(legendX, legendY - 2, 4, 4, 0.5, 0.5, 'F')
-      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(220, 225, 235)
+      doc.setFontSize(7); doc.setFont('helvetica','normal')
+      if (dbgLight) doc.setTextColor(31, 41, 55); else doc.setTextColor(220, 225, 235)
       doc.text(label, legendX + 6, legendY + 1.5)
       legendY += 8
     })

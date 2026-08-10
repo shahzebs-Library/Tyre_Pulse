@@ -28,7 +28,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary } from '../lib/inspectionTyreFlags'
 import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
 
 // Report logo: tenant branding wins; otherwise fall back to the org-wide
@@ -71,6 +71,133 @@ function OverviewSlide({ title, items }) {
             <div className="text-xs text-[var(--text-secondary)]">{label}</div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// Shareable per-site inspection summary: date range + site filter, a compact
+// table (vehicles done + findings per site), PDF and Excel export. All numbers
+// come from the pure siteSummary helper - no parallel maths.
+function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country, company, branding, onClose }) {
+  const [from, setFrom] = useState(defaultFrom || '')
+  const [to, setTo] = useState(defaultTo || '')
+  const [site, setSite] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const sites = useMemo(
+    () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
+    [rows],
+  )
+  const summary = useMemo(
+    () => siteSummary(rows, flagMap, { from, to, site }),
+    [rows, flagMap, from, to, site],
+  )
+  const rangeLabel = `${from || 'Start'} to ${to || 'Today'}${site ? ` | Site: ${site}` : ''}${country && country !== 'All' ? ` | ${country}` : ''}`
+  const COLS = ['site', 'inspections', 'vehicles', 'good', 'wear', 'damage', 'tyresDue']
+  const HEADS = ['Site', 'Inspections', 'Vehicles', 'Good', 'Wear', 'Damage', 'Tyres due']
+
+  async function exportPdf() {
+    setBusy(true)
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const autoTable = await loadAutoTable()
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const brand = await resolvePdfBrand(await brandingForPdf(branding))
+      pdfHeader(doc, 'Inspection Summary by Site', rangeLabel, company, brand)
+      autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
+        startY: 30,
+        margin: { left: 14, right: 14 },
+        head: [HEADS],
+        body: [
+          ...summary.rows.map((r) => COLS.map((k) => String(r[k]))),
+          COLS.map((k) => String(summary.totals[k])),
+        ],
+        didParseCell(data) {
+          if (data.section === 'body' && data.row.index === summary.rows.length) {
+            data.cell.styles.fontStyle = 'bold'
+          }
+        },
+      })
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(`TyrePulse Inspection Summary ${from || 'all'} to ${to || 'today'}.pdf`)
+    } finally { setBusy(false) }
+  }
+
+  async function exportExcel() {
+    setBusy(true)
+    try {
+      await exportToExcel(
+        [...summary.rows, summary.totals], COLS, HEADS,
+        `TyrePulse Inspection Summary ${from || 'all'} to ${to || 'today'}`,
+      )
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose}>
+      <div className="card w-full max-w-2xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Inspection summary by site</h3>
+          <button type="button" onClick={onClose}><X size={16} style={{ color: 'var(--text-dim)' }} /></button>
+        </div>
+        <div className="flex flex-wrap items-end gap-3 mb-3">
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>From
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+              className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>To
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+              className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+          </label>
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Site
+            <select value={site} onChange={(e) => setSite(e.target.value)}
+              className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <option value="">All sites</option>
+              {sites.map((sv) => <option key={sv} value={sv}>{sv}</option>)}
+            </select>
+          </label>
+          <div className="flex gap-2 ml-auto">
+            <button type="button" disabled={busy || !summary.rows.length} onClick={exportExcel}
+              className="px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs disabled:opacity-40" style={{ color: 'var(--text-primary)' }}>
+              Excel
+            </button>
+            <button type="button" disabled={busy || !summary.rows.length} onClick={exportPdf}
+              className="px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-40" style={{ background: 'var(--brand)', color: '#fff' }}>
+              {busy ? 'Working...' : 'Download PDF'}
+            </button>
+          </div>
+        </div>
+        {!summary.rows.length ? (
+          <p className="text-xs py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No inspections in this range.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
+                {HEADS.map((h, i) => <th key={h} className={`py-1.5 pr-2 ${i > 0 ? 'text-right' : ''}`}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {summary.rows.map((r) => (
+                <tr key={r.site} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
+                  {COLS.map((k, i) => (
+                    <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}
+                      style={k === 'tyresDue' && r.tyresDue > 0 ? { color: '#b91c1c', fontWeight: 600 } : k === 'damage' && r.damage > 0 ? { color: '#b45309', fontWeight: 600 } : undefined}>
+                      {r[k]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                {COLS.map((k, i) => <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}>{summary.totals[k]}</td>)}
+              </tr>
+            </tbody>
+          </table>
+        )}
+        <p className="text-[11px] mt-3" style={{ color: 'var(--text-dim)' }}>
+          Tyres due counts flagged tyres (past life or due soon) on the vehicles inspected in this range.
+        </p>
       </div>
     </div>
   )
@@ -328,6 +455,7 @@ export default function Inspections() {
   // Multi-select bulk delete (Admin only)
   const [selectedIds, setSelectedIds]     = useState(() => new Set())
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [summaryOpen, setSummaryOpen]     = useState(false)
   const [bulkError, setBulkError]         = useState('')
   const [bulkBusy, setBulkBusy]           = useState(false)
   const [loading, setLoading]   = useState(true)
@@ -2143,7 +2271,27 @@ export default function Inspections() {
               ]}
             />
           )}
+          <button
+            type="button"
+            onClick={() => setSummaryOpen(true)}
+            className="self-start px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs font-medium flex items-center gap-1.5"
+            style={{ color: 'var(--text-primary)', background: 'var(--surface-2)' }}
+          >
+            <Share2 size={13} /> Share summary
+          </button>
         </div>
+      )}
+      {summaryOpen && (
+        <InspectionSummaryModal
+          rows={rows}
+          flagMap={flagMap || {}}
+          defaultFrom={filterFrom}
+          defaultTo={filterTo}
+          country={activeCountry}
+          company={company}
+          branding={branding}
+          onClose={() => setSummaryOpen(false)}
+        />
       )}
       <div className="flex flex-wrap gap-2">
         {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],

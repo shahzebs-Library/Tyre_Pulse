@@ -370,9 +370,10 @@ export default function Inspections() {
         // (mobile) + the row-level photo, resolved to signed URLs. Best-effort -
         // an unresolvable photo is skipped, never a blocked report.
         const photoRefs = []
+        const vtForPos = pdfRow.vehicle_type || inferVehicleTypeFromAsset(pdfRow.asset_no) || ''
         for (const [pos, d] of Object.entries(pdfRow.tyre_conditions || {})) {
           const ref = d && typeof d === 'object' ? (d.photo_url || d.photo_uri) : null
-          if (ref) photoRefs.push({ label: pos, ref })
+          if (ref) photoRefs.push({ label: legacyPositionCode(vtForPos, pos) || pos, ref })
         }
         if (pdfRow.photo_data) photoRefs.push({ label: 'Inspection photo', ref: pdfRow.photo_data })
         const photos = (await Promise.all(photoRefs.map(async (p) => {
@@ -931,12 +932,14 @@ export default function Inspections() {
             ...pdfTableTheme(brand.accent),
             startY: finalY,
             margin: { left: mx, right: mx },
-            head: [['Position', 'Serial', 'Km run', 'Hours run', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
+            head: [['Position', 'Serial', 'Brand', 'Km run', 'Hours run', 'Current km', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
             body: lifeRows.map((lr) => [
               lr.position || 'N/A',
               lr.serial || 'N/A',
+              lr.brand || 'N/A',
               n(lr.kmRun),
               n(lr.hoursRun),
+              n(lr.currentKm),
               n(lr.expectedLifeKm),
               n(lr.remainingKm),
               n(lr.remainingDays),

@@ -135,7 +135,8 @@ function Tyre({ x, y, w, h, id, risk = 'none', onClick, label, sub }) {
 
       {/* Label */}
       <text x={cx} y={sub ? cy - h * 0.12 : cy + 0.4} textAnchor="middle" dominantBaseline="middle"
-        fontSize={Math.max(3.5, Math.min(w * 0.5, 8))} fontWeight="800"
+        fontSize={Math.max(2.6, Math.min(w * 0.5, 8, (w * 1.7) / Math.max(1, String(label || '').length)))}
+        fontWeight="800"
         fill="white" style={{ userSelect: 'none', pointerEvents: 'none' }}
         filter="url(#textShadow)">
         {label}

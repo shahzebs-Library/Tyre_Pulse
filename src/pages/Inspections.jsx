@@ -27,7 +27,8 @@ import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
-import { shapeRunningLife } from '../lib/tyreRunningLife'
+import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview } from '../lib/inspectionTyreFlags'
 import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
 
 // Report logo: tenant branding wins; otherwise fall back to the org-wide
@@ -54,6 +55,63 @@ const SEV_CONFIG = {
   High:     { color: 'text-orange-400', bg: 'bg-orange-900/20', border: 'border-orange-700/40' },
   Critical: { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700/40' },
 }
+
+// --- Tyre-change flag UI (additive) -----------------------------------------
+// Muted slide-style overview card: big numbers, subtle borders, app tokens.
+function OverviewSlide({ title, items }) {
+  return (
+    <div className="card flex-1 min-w-[260px]">
+      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{title}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        {items.map(([label, value, accent]) => (
+          <div key={label}>
+            <div className="text-2xl font-bold tabular-nums" style={{ color: accent && Number(value) > 0 ? '#b91c1c' : 'var(--text-primary)' }}>
+              {value == null ? 'N/A' : value}
+            </div>
+            <div className="text-xs text-[var(--text-secondary)]">{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Immediate flag banner: shown when the vehicle carries tyres at/near end of
+// life (judged by the ONE running-life calc via buildAssetFlagMap) or when
+// the inspection itself found damaged/punctured positions.
+function TyreDueBanner({ entry, damaged = [] }) {
+  const due = entry ? [...(entry.overdue || []), ...(entry.dueSoon || [])] : []
+  if (due.length === 0 && damaged.length === 0) return null
+  return (
+    <div className="rounded-xl border px-4 py-3 mb-4"
+      style={{ borderColor: 'rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.07)' }}>
+      <div className="flex items-center gap-2 mb-1">
+        <AlertTriangle size={15} style={{ color: '#dc2626', flexShrink: 0 }} />
+        <span className="text-sm font-semibold" style={{ color: '#ef4444' }}>
+          {due.length > 0
+            ? `${due.length} tyre${due.length === 1 ? '' : 's'} on this vehicle ${due.length === 1 ? 'is' : 'are'} at or near end of life - due for change`
+            : 'Damage found on this vehicle'}
+        </span>
+      </div>
+      {due.length > 0 && (
+        <ul className="text-xs space-y-0.5 text-[var(--text-secondary)]">
+          {due.slice(0, 8).map((r, i) => (
+            <li key={`${r.serial || 'tyre'}-${r.position || i}`} className="font-mono">
+              {(r.serial || 'N/A')} at {(r.position || 'N/A')}: remaining {lifeDisplay(r.remainingKm, r.remainingHours)}
+            </li>
+          ))}
+          {due.length > 8 && <li>and {due.length - 8} more</li>}
+        </ul>
+      )}
+      {damaged.length > 0 && (
+        <p className="text-xs mt-1 text-[var(--text-secondary)]">
+          Damage found: {damaged.map((d) => d.position || 'N/A').join(', ')}
+        </p>
+      )}
+    </div>
+  )
+}
+// ---------------------------------------------------------------------------
 
 const VEHICLE_TYPES = ['Pickup', 'Canter', 'Tri-mixer', 'Concrete pump', 'Wheel loader', 'Skid loader', 'Bus', 'Tata', 'Ashok Leyland']
 const RISK_LEVELS   = ['good', 'warning', 'critical', 'none']
@@ -286,6 +344,9 @@ export default function Inspections() {
   // completed_date, then created_at). Empty = existing behavior.
   const [filterFrom, setFilterFrom]     = useState('')
   const [filterTo, setFilterTo]         = useState('')
+  // Tyre-change flags: per-asset overdue/due-soon tyres from the running-life
+  // calc. null = data unavailable (fetch failed) - the UI says so honestly.
+  const [flagMap, setFlagMap]           = useState(null)
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
@@ -498,6 +559,19 @@ export default function Inspections() {
     load()
   }, [activeCountry, authLoading, isTyreMan])
 
+  // Best-effort running-life fetch (never blocks the page): builds the
+  // per-asset tyre-due flag map used by the slides, row chips and banners.
+  useEffect(() => {
+    if (authLoading) return
+    let cancelled = false
+    getTyreRunningLife({ country: activeCountry }).then((payload) => {
+      if (cancelled) return
+      const shaped = shapeRunningLife(payload)
+      setFlagMap(shaped.ok ? buildAssetFlagMap(shaped.rows) : null)
+    }).catch(() => { if (!cancelled) setFlagMap(null) })
+    return () => { cancelled = true }
+  }, [activeCountry, authLoading])
+
   const sites = useMemo(() => [...new Set(rows.map(r => r.site).filter(Boolean))].sort(), [rows])
 
   const tabFiltered = useMemo(() => {
@@ -536,6 +610,12 @@ export default function Inspections() {
     }
     return r
   }, [tabFiltered, filterStatus, filterSite, filterFrom, filterTo, search])
+
+  // Slide numbers: follow the same date window as the list (from/to only).
+  const overview = useMemo(
+    () => inspectionOverview(tabFiltered, flagMap || {}, { from: filterFrom, to: filterTo }),
+    [tabFiltered, flagMap, filterFrom, filterTo]
+  )
 
   const counts = useMemo(() => {
     const c = { all: rows.length, inspections: 0, observations: 0, training: 0 }
@@ -1314,6 +1394,12 @@ export default function Inspections() {
                 )}
               </div>
 
+              {/* Immediate tyre-change flag for the just-inspected vehicle */}
+              <TyreDueBanner
+                entry={flagMap?.[clSaved.asset_no || clAsset]}
+                damaged={damagedPositions({ tyre_conditions: clPositions })}
+              />
+
               <div className="flex gap-3 flex-wrap">
                 {!clOffline && (
                   <button onClick={() => exportChecklistPdf(false)} className="btn-secondary flex items-center gap-2 text-sm">
@@ -2029,6 +2115,36 @@ export default function Inspections() {
 
       {/* Status filter pills, search, and table - hidden in checklist mode */}
       {activeTab !== 'checklist' && <>
+      {/* Overview slides: two compact cards with the big clear numbers */}
+      {activeTab === 'all' && (
+        <div className="flex flex-wrap gap-4">
+          <OverviewSlide
+            title="Inspections"
+            items={[
+              ['Inspections done', overview.inspectionsDone],
+              ['Vehicles inspected', overview.vehiclesInspected],
+              ['Approved', overview.approved],
+              ['Pending approval', overview.pendingApproval],
+            ]}
+          />
+          {flagMap === null ? (
+            <div className="card flex-1 min-w-[260px]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
+              <p className="text-sm text-[var(--text-secondary)]">Tyre life data unavailable</p>
+            </div>
+          ) : (
+            <OverviewSlide
+              title="Tyre change flags"
+              items={[
+                ['Vehicles with tyres due', overview.vehiclesWithTyresDue, true],
+                ['Tyres past life', overview.tyresOverdue, true],
+                ['Tyres due soon', overview.tyresDueSoon, true],
+                ['Damaged found', overview.damagedFound, true],
+              ]}
+            />
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],
           ['Overdue', t('inspections.filters.status.overdue'), 'bg-red-900/30 text-red-400 border-red-700/50'],
@@ -2168,7 +2284,18 @@ export default function Inspections() {
                     <div className="px-3 text-[var(--text-secondary)] text-sm truncate">{r.site}</div>
 
                     {/* Asset */}
-                    <div className="px-3 font-mono text-xs text-[var(--text-secondary)] truncate">{r.asset_no || '-'}</div>
+                    <div className="px-3 font-mono text-xs text-[var(--text-secondary)] overflow-hidden">
+                      <span className="truncate block">{r.asset_no || '-'}</span>
+                      {r.asset_no && flagMap?.[r.asset_no]?.count > 0 && (
+                        <span
+                          className="inline-block mt-0.5 px-1.5 py-px rounded-full text-[10px] font-sans font-medium whitespace-nowrap"
+                          style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.3)' }}
+                          title="Tyres at or near end of life on this vehicle"
+                        >
+                          Tyres due ({flagMap[r.asset_no].count})
+                        </span>
+                      )}
+                    </div>
 
                     {/* Date */}
                     <div className="px-3 text-[var(--text-secondary)] text-xs tabular-nums">{r.scheduled_date}</div>
@@ -2242,6 +2369,11 @@ export default function Inspections() {
           <h3 className="text-lg font-bold text-[var(--text-primary)] mb-5">
             {form.id ? t('inspections.modal.editRecord') : t('inspections.modal.addRecord')}
           </h3>
+
+          {/* Immediate tyre-change flag for this vehicle (open detail) */}
+          {form.asset_no && (
+            <TyreDueBanner entry={flagMap?.[form.asset_no]} damaged={damagedPositions(form)} />
+          )}
 
           {/* Universal Approval & Workflow Engine — inspection approval + lock.
               Only for persisted records (needs a stable entity id). While the

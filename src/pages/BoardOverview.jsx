@@ -19,6 +19,7 @@ import {
   Gauge, Clock, Layers, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
@@ -81,6 +82,19 @@ const monthLabel = (key) => {
   return d.toLocaleDateString('en', { month: 'short', year: '2-digit' })
 }
 
+/**
+ * String-safe 'YYYY-MM-DD' prefix range test (never `new Date(string)` - the
+ * timezone trap). With NO range active every row passes (existing behavior);
+ * with a range active a row with no usable date is EXCLUDED, never a crash.
+ */
+const inDateRange = (d, from, to) => {
+  const s = d ? String(d).slice(0, 10) : ''
+  if (!s) return !(from || to)
+  if (from && s < from) return false
+  if (to && s > to) return false
+  return true
+}
+
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 // Takes the ACTIVE currency: the fleet spans countries with different currencies
 // (KSA SAR, UAE AED, Egypt EGP), so omitting it silently labelled every figure SAR.
@@ -129,8 +143,11 @@ function ChartCard({ title, children, refCb }) {
 
 export default function BoardOverview() {
   const { activeCountry, appSettings, activeCurrency } = useSettings()
-  const [data, setData] = useState(null)
+  const [raw, setRaw] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Client-side date range (calendar from/to). Empty = existing behavior.
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -167,11 +184,9 @@ export default function BoardOverview() {
       const fleetSize = (fleetQ?.data ?? []).length
       const accidents = accRes?.data ?? []
       setTruncated(Boolean(tyresRes.truncated || inspRes.truncated || actionsQ.truncated || fleetQ.truncated))
-      const now = new Date()
-      setData({
-        kpis: buildBoardKpis({ tyres, inspections, actions, fleetSize, accidents, workOrders: workOrders || [], stock: stock || [], now }),
-        trends: buildTrends({ tyres, accidents, inspections, now }),
-        breakdowns: buildBreakdowns({ accidents, tyres }),
+      setRaw({
+        tyres, inspections, actions, fleetSize, accidents,
+        workOrders: workOrders || [], stock: stock || [],
       })
       setUpdatedAt(new Date())
     } catch (e) {
@@ -183,6 +198,26 @@ export default function BoardOverview() {
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
+
+  // Recompute the board from the loaded rows with the client-side date range
+  // applied to tyres (issue_date), accidents (incident_date), inspections
+  // (completed_date, falling back to scheduled_date) and work orders
+  // (completed_at, falling back to created_at). Empty range = the raw arrays
+  // pass through untouched, so the output is identical to the unfiltered board.
+  const rangeActive = Boolean(fromDate || toDate)
+  const data = useMemo(() => {
+    if (!raw) return null
+    const tyres = rangeActive ? raw.tyres.filter((r) => inDateRange(r.issue_date, fromDate, toDate)) : raw.tyres
+    const accidents = rangeActive ? raw.accidents.filter((r) => inDateRange(r.incident_date, fromDate, toDate)) : raw.accidents
+    const inspections = rangeActive ? raw.inspections.filter((r) => inDateRange(r.completed_date || r.scheduled_date, fromDate, toDate)) : raw.inspections
+    const workOrders = rangeActive ? raw.workOrders.filter((r) => inDateRange(r.completed_at || r.created_at, fromDate, toDate)) : raw.workOrders
+    const now = new Date()
+    return {
+      kpis: buildBoardKpis({ tyres, inspections, actions: raw.actions, fleetSize: raw.fleetSize, accidents, workOrders, stock: raw.stock, now }),
+      trends: buildTrends({ tyres, accidents, inspections, now }),
+      breakdowns: buildBreakdowns({ accidents, tyres }),
+    }
+  }, [raw, rangeActive, fromDate, toDate])
 
   const recs = useMemo(() => buildBoardRecommendations(data?.kpis), [data])
 
@@ -390,6 +425,18 @@ export default function BoardOverview() {
               <Icon size={13} /> {label} {sections[key] ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
           ))}
+          <div className="flex items-center gap-2">
+            <DateField className="text-sm w-40" value={fromDate} onChange={setFromDate} placeholder="From date" ariaLabel="From date" />
+            <DateField className="text-sm w-40" value={toDate} onChange={setToDate} placeholder="To date" ariaLabel="To date" min={fromDate || undefined} />
+            {rangeActive && (
+              <button
+                onClick={() => { setFromDate(''); setToDate('') }}
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}
@@ -415,6 +462,12 @@ export default function BoardOverview() {
           />
         </div>
       </div>
+
+      {rangeActive && (
+        <p className="text-[11px] text-[var(--text-muted)]">
+          Date range applies to tyres, accidents, inspections and work orders. The fleet register count, Fleet CPK (last 365 days) and the expense-grid cost panels keep their own windows.
+        </p>
+      )}
 
       {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
       {loading ? (

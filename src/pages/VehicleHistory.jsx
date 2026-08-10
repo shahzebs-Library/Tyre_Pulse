@@ -15,6 +15,7 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import { Search, AlertTriangle, X, FileText, Car, TrendingUp } from 'lucide-react'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
 
@@ -257,6 +258,10 @@ export default function VehicleHistory() {
   // Filters
   const [search, setSearch]               = useState('')
   const [siteFilter, setSiteFilter]       = useState('')
+  // Client-side issue_date range windowing the per-vehicle roll-ups. Anomalies
+  // always evaluate FULL history regardless of this range.
+  const [fromDate, setFromDate]           = useState('')
+  const [toDate, setToDate]               = useState('')
   const [anomalyFilter, setAnomalyFilter] = useState('all')  // 'all' | 'has' | 'clean'
   const [sortBy, setSortBy]               = useState('misuse') // 'misuse' | 'cost' | 'count' | 'date'
 
@@ -312,13 +317,39 @@ export default function VehicleHistory() {
   }, [activeCountry, reloadKey])
 
   // ── Detect anomalies across full fleet ───────────────────────────────────────
+  // Deliberately over the FULL unfiltered history: the date range below only
+  // windows the per-vehicle roll-up numbers, never the anomaly evaluation.
   const allAnomalies = useMemo(() => {
     if (!allRecords.length) return []
     return detectAnomalies(allRecords)
   }, [allRecords])
 
-  // ── Compute asset metrics ────────────────────────────────────────────────────
-  const assetMetrics = useMemo(() => computeAssetMetrics(allRecords, dc), [allRecords, dc])
+  // ── Date-range window (string-safe on 'YYYY-MM-DD' prefixes) ────────────────
+  const rangeActive = Boolean(fromDate || toDate)
+  const windowedRecords = useMemo(() => {
+    if (!rangeActive) return allRecords
+    return allRecords.filter(r => {
+      const d = r.issue_date ? String(r.issue_date).slice(0, 10) : ''
+      if (!d) return false
+      if (fromDate && d < fromDate) return false
+      if (toDate && d > toDate) return false
+      return true
+    })
+  }, [allRecords, rangeActive, fromDate, toDate])
+
+  // Full-history records per asset, so red-flag evaluation is never windowed.
+  const fullRecordsByAsset = useMemo(() => {
+    const m = {}
+    allRecords.forEach(r => {
+      const k = r.asset_no
+      if (!m[k]) m[k] = []
+      m[k].push(r)
+    })
+    return m
+  }, [allRecords])
+
+  // ── Compute asset metrics (windowed roll-ups: count, km, cost) ──────────────
+  const assetMetrics = useMemo(() => computeAssetMetrics(windowedRecords, dc), [windowedRecords, dc])
 
   // ── Build per-asset enriched rows ────────────────────────────────────────────
   const vehicleRows = useMemo(() => {
@@ -331,15 +362,20 @@ export default function VehicleHistory() {
       })
 
       const fleetRecord   = fleetMap[asset.assetNo] || null
-      const localFlags    = computeLocalRedFlags(asset.records)
-      const policyFlags   = computeFleetPolicyFlags(asset.records, fleetRecord)
+      // Red flags evaluate the FULL history for this asset even when a date
+      // range windows the roll-up numbers.
+      const flagRecords   = fullRecordsByAsset[asset.assetNo] || asset.records
+      const localFlags    = computeLocalRedFlags(flagRecords)
+      const policyFlags   = computeFleetPolicyFlags(flagRecords, fleetRecord)
       const allFlags      = [...assetAnomalies, ...localFlags, ...policyFlags]
       const misuseScore   = computeMisuseScore(assetAnomalies, asset.highRiskCount, asset.count, asset.spanMonths)
       const avgDays       = asset.count > 1 ? Math.round((asset.spanMonths * 30) / asset.count) : null
 
       // Per-asset Total Cost = authoritative expense-grid tyre spend for this asset
       // when the grid has it; otherwise keep the tyre_records-derived total.
-      const gridCost      = gridByAsset?.map?.get(String(asset.assetNo ?? '').trim().toUpperCase())
+      // With a date range active the grid total (full history) would not match
+      // the window, so the windowed tyre_records total is used instead.
+      const gridCost      = rangeActive ? null : gridByAsset?.map?.get(String(asset.assetNo ?? '').trim().toUpperCase())
       const totalCost     = gridCost != null ? gridCost : asset.totalCost
 
       return {
@@ -354,7 +390,7 @@ export default function VehicleHistory() {
         fleetRecord,
       }
     })
-  }, [assetMetrics, allAnomalies, fleetMap, gridByAsset])
+  }, [assetMetrics, allAnomalies, fleetMap, gridByAsset, fullRecordsByAsset, rangeActive])
 
   // ── Filter + sort ────────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -453,8 +489,10 @@ export default function VehicleHistory() {
           {
             label: t('vehiclehistory.summary.totalFleetCost'),
             // Authoritative fleet tyre spend from the expense grid; falls back to
-            // the sum of per-asset totals when the grid is unavailable.
-            value: `${activeCurrency} ${Math.round(costTyreTotal != null ? costTyreTotal : vehicleRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
+            // the sum of per-asset totals when the grid is unavailable, and to
+            // the windowed tyre-record totals whenever a date range is active
+            // (the grid total covers full history only).
+            value: `${activeCurrency} ${Math.round(!rangeActive && costTyreTotal != null ? costTyreTotal : vehicleRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
             color: 'text-green-400',
           },
         ].map(({ label, value, color }, i) => (

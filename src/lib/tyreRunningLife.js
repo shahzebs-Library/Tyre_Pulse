@@ -139,6 +139,55 @@ export function dueLabel(row) {
   return 'Not due'
 }
 
+/**
+ * Fitted-date range test (string-safe 'YYYY-MM-DD' prefix comparison).
+ * With no range set every row passes; with a range active, a row that has no
+ * fitment date is excluded (its date is unknown, not "inside the range").
+ */
+export function inFittedRange(row, from = '', to = '') {
+  if (!from && !to) return true
+  const d = row && row.fittedOn ? String(row.fittedOn).slice(0, 10) : ''
+  if (!d) return false
+  if (from && d < from) return false
+  if (to && d > to) return false
+  return true
+}
+
+/** Plain-English description of the active filters, for report headers. */
+export function filterDescription({ search = '', band = 'all', unit = 'all', fromDate = '', toDate = '' } = {}) {
+  const parts = []
+  const q = String(search || '').trim()
+  if (q) parts.push(`search "${q}"`)
+  if (band !== 'all') parts.push(`state: ${BAND_META[band] ? BAND_META[band].label : band}`)
+  if (unit !== 'all') parts.push(unit === 'km' ? 'km-measured assets only' : 'hour-measured assets only')
+  if (fromDate && toDate) parts.push(`fitted ${fromDate} to ${toDate}`)
+  else if (fromDate) parts.push(`fitted from ${fromDate}`)
+  else if (toDate) parts.push(`fitted up to ${toDate}`)
+  return parts.length ? parts.join(', ') : 'All active tyres'
+}
+
+/**
+ * The rows a manager acts on: overdue first, then due-soon, each group sorted
+ * by life-used % descending (most consumed first). Unmeasured pct sorts last.
+ */
+export function actionRows(rows = []) {
+  const rank = { overdue: 0, 'due-soon': 1 }
+  const usedOf = (r) => {
+    const p = r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct
+    return p != null ? p : -1
+  }
+  return rows
+    .filter((r) => {
+      const b = bandFor(r)
+      return b === 'overdue' || b === 'due-soon'
+    })
+    .sort((a, b) => {
+      const d = rank[bandFor(a)] - rank[bandFor(b)]
+      if (d) return d
+      return usedOf(b) - usedOf(a)
+    })
+}
+
 /** Plain-English label for what an expected life is based on. */
 export const BASIS_META = {
   manual: { label: 'Your target', tone: 'info' },

@@ -1099,6 +1099,105 @@ export async function exportDocumentPdf({ title, subject, to, sections = [], fil
 }
 
 // ── Inspection Detail PDF - captures DOM SVG if provided ──────────────────────
+// Muted corporate status tones (small dots / thin borders + plain dark text -
+// never large colored cell fills). Private to the inspection detail renderer.
+const _MUTED_STATUS = {
+  good:     [22, 101, 52],
+  warning:  [146, 64, 14],
+  critical: [153, 27, 27],
+  none:     [100, 116, 139],
+}
+
+// Compute the "Inspection summary" figures from the normalized tyre-condition
+// map. Honest: averages only over RECORDED values, null when nothing recorded.
+function _inspectionStats(normTc) {
+  const counts = { good: 0, warning: 0, critical: 0, none: 0 }
+  const pressures = []
+  const treads = []
+  let lowTread = null
+  Object.entries(normTc).forEach(([pos, d]) => {
+    const r = d?.risk ?? 'none'
+    counts[r] = (counts[r] || 0) + 1
+    const p = Number(d?.pressure)
+    if (Number.isFinite(p) && p > 0) pressures.push(p)
+    const t = Number(d?.tread)
+    if (Number.isFinite(t) && t > 0) {
+      treads.push(t)
+      if (!lowTread || t < lowTread.value) lowTread = { pos, value: t }
+    }
+  })
+  const avg = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null)
+  const median = (a) => {
+    if (!a.length) return null
+    const s = [...a].sort((x, y) => x - y)
+    const m = Math.floor(s.length / 2)
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+  }
+  return {
+    total: Object.keys(normTc).length,
+    counts,
+    avgPressure: avg(pressures),
+    avgTread: avg(treads),
+    lowTread,
+    medianPressure: median(pressures),
+    recordedPressures: pressures.length,
+  }
+}
+
+// Compact two-line "Inspection summary" strip: position counts by condition on
+// line 1 (small muted dots + dark text) and recorded averages on line 2.
+// Returns the y below the strip.
+function _inspectionSummaryStrip(doc, stats, y, mx, accent) {
+  const pw = doc.internal.pageSize.width
+  const w = pw - mx * 2
+  const h = 15
+  doc.setFillColor(...P.offWhite)
+  doc.setDrawColor(...P.silver)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(mx, y, w, h, 1.5, 1.5, 'FD')
+  doc.setFillColor(...accent)
+  doc.roundedRect(mx, y, 1.4, h, 0.7, 0.7, 'F')
+
+  doc.setFontSize(6.3)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...P.ghost)
+  doc.text('INSPECTION SUMMARY', mx + 5, y + 4.4, { charSpace: 0.4 })
+
+  // Line 1 - counts, each with a small muted dot
+  let cx = mx + 5
+  const l1y = y + 8.6
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...P.ink)
+  doc.text(`Positions checked: ${stats.total}`, cx, l1y)
+  cx += doc.getTextWidth(`Positions checked: ${stats.total}`) + 7
+  const segs = [
+    ['good', 'Good'], ['warning', 'Wear'], ['critical', 'Damage'], ['none', 'No data'],
+  ]
+  doc.setFont('helvetica', 'normal')
+  segs.forEach(([key, label]) => {
+    const txt = `${label} ${stats.counts[key] ?? 0}`
+    doc.setFillColor(..._MUTED_STATUS[key])
+    doc.circle(cx + 1.2, l1y - 1.1, 1.1, 'F')
+    doc.setTextColor(...P.ink)
+    doc.text(txt, cx + 3.4, l1y)
+    cx += doc.getTextWidth(txt) + 10
+  })
+
+  // Line 2 - honest averages over recorded values only
+  const one = (v) => Math.round(v * 10) / 10
+  const parts = [
+    `Avg pressure: ${stats.avgPressure != null ? `${one(stats.avgPressure)} PSI` : 'N/A'}`,
+    `Avg tread: ${stats.avgTread != null ? `${one(stats.avgTread)} mm` : 'N/A'}`,
+    `Lowest tread: ${stats.lowTread ? `${stats.lowTread.pos} (${one(stats.lowTread.value)} mm)` : 'N/A'}`,
+  ]
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...P.iron)
+  doc.text(parts.join('   |   '), mx + 5, y + 13)
+  return y + h + 5
+}
+
 /**
  * @param {Object}  row          - inspection record
  * @param {Object}  [opts]
@@ -1167,23 +1266,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   })
   y += 31
 
-  // ── Tyre Diagram section ───────────────────────────────────────────────────
-  // Page-space check FIRST so the section title can never overlap other text
-  // by starting a tall map at the bottom of a page.
-  {
-    let estH = null
-    if (opts.svgEl) {
-      estH = 120
-    } else {
-      const lk = _resolveLayoutKey(row.vehicle_type)
-      const ly = lk ? _TYRE_LAYOUTS[lk] : null
-      if (ly) estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
-    }
-    if (estH != null && y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-  }
-  y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
-
-  // Normalize tyre conditions
+  // Normalize tyre conditions (needed by the summary strip, diagram + tables)
   const rawTc = row.tyre_conditions || {}
   const normTc = {}
   Object.entries(rawTc).forEach(([pos, data]) => {
@@ -1200,6 +1283,29 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       normTc[pos] = { risk: COND_TO_RISK[String(data)] ?? 'none' }
     }
   })
+
+  // ── Inspection summary strip (right under the info grid) ───────────────────
+  // Position counts by condition + recorded-only averages; honest N/A.
+  const insStats = _inspectionStats(normTc)
+  if (insStats.total > 0) {
+    y = _inspectionSummaryStrip(doc, insStats, y, mx, brand.accent)
+  }
+
+  // ── Tyre Diagram section ───────────────────────────────────────────────────
+  // Page-space check FIRST so the section title can never overlap other text
+  // by starting a tall map at the bottom of a page.
+  {
+    let estH = null
+    if (opts.svgEl) {
+      estH = 120
+    } else {
+      const lk = _resolveLayoutKey(row.vehicle_type)
+      const ly = lk ? _TYRE_LAYOUTS[lk] : null
+      if (ly) estH = ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 14 + 12
+    }
+    if (estH != null && y + estH > ph - FOOTER_SPACE) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
+  }
+  y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
 
   // Owner spec: embed the ACTUAL app diagram (the same SVG used while making
   // the checklist), colored per condition with the PSI marked on each tyre.
@@ -1288,31 +1394,77 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   y += diagramH + 8
 
-  // ── Risk summary chips ─────────────────────────────────────────────────────
-  const riskCounts = { critical: 0, warning: 0, good: 0, none: 0 }
-  Object.values(normTc).forEach(d => {
-    const r = d?.risk ?? 'none'
-    riskCounts[r] = (riskCounts[r] || 0) + 1
-  })
-  const totalT = Object.keys(normTc).length
-  if (totalT > 0) {
-    const chipW = (pw - mx * 2 - 9) / 4
-    const chipBg = { good: P.eCream, warning: P.oCream, critical: P.rCream, none: P.cloud }
-    Object.entries(RISK_RGB).forEach(([key, rgb], i) => {
-      const cnt = riskCounts[key] ?? 0
-      const [r, g, b] = rgb
-      const cx = mx + i * (chipW + 3)
-      doc.setFillColor(...(chipBg[key] || P.cloud))
-      doc.setDrawColor(...P.silver)
-      doc.setLineWidth(0.3)
-      doc.roundedRect(cx, y, chipW, 10, 2, 2, 'FD')
-      doc.setFillColor(r, g, b)
-      doc.circle(cx + 5, y + 5, 2.2, 'F')
-      doc.setFontSize(7.5); doc.setFont('helvetica','bold')
-      doc.setTextColor(r, g, b)
-      doc.text(`${RISK_LABEL[key]}: ${cnt}`, cx + 10, y + 6.3)
+  // ── Tyre readings table (per-position detail) ──────────────────────────────
+  // (The old colored risk chips are superseded by the Inspection summary strip,
+  // which carries the same counts in the muted corporate style.)
+  // Rows render only when a position carries a recorded detail; condition shows
+  // a small muted status dot + plain dark text (no colored cell fills). When 4+
+  // pressures are recorded, each is compared to the median of recorded values
+  // and flagged 'Check' at >15% off - column labelled honestly "vs median".
+  const readingRows = Object.entries(normTc)
+    .filter(([, d]) => d && (d.condition || d.pressure != null || d.tread != null || d.notes))
+  if (readingRows.length) {
+    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
+    y = _sectionBar(doc, 'Tyre Readings', y, mx, brand.accent) + 4
+    const flagOn = insStats.recordedPressures >= 4 && insStats.medianPressure > 0
+    const numOr = (v, unit) => {
+      const n = Number(v)
+      return Number.isFinite(n) && n > 0 ? `${n}${unit}` : 'N/A'
+    }
+    const devLabel = (v) => {
+      const n = Number(v)
+      if (!Number.isFinite(n) || n <= 0) return 'N/A'
+      const dev = (n - insStats.medianPressure) / insStats.medianPressure
+      if (Math.abs(dev) > 0.15) return `Check ${dev > 0 ? '+' : '-'}${Math.round(Math.abs(dev) * 100)}%`
+      return 'OK'
+    }
+    const head = ['Position', 'Condition', 'Pressure (PSI)', 'Tread (mm)']
+    if (flagOn) head.push('Pressure vs median')
+    head.push('Notes')
+    const readStartPage = doc.internal.getNumberOfPages()
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 30, left: mx, right: mx, bottom: FOOTER_SPACE },
+      head: [head],
+      body: readingRows.map(([pos, d]) => {
+        const r = [
+          pos,
+          d.condition || RISK_LABEL[d.risk] || 'N/A',
+          numOr(d.pressure, ''),
+          numOr(d.tread, ''),
+        ]
+        if (flagOn) r.push(devLabel(d.pressure))
+        r.push(d.notes ? String(d.notes) : 'N/A')
+        return r
+      }),
+      styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
+      headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: P.cloud },
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+      didParseCell: (data) => {
+        if (data.section !== 'body') return
+        if (data.column.index === 1) {
+          // room for the muted status dot before the condition text
+          data.cell.styles.cellPadding = { left: 5.5, right: 1.6, top: 1.6, bottom: 1.6 }
+        }
+        if (flagOn && data.column.index === 4 && /^Check/.test(String(data.cell.raw))) {
+          data.cell.styles.fontStyle = 'bold'
+          data.cell.styles.textColor = _MUTED_STATUS.critical
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section !== 'body' || data.column.index !== 1) return
+        const riskKey = readingRows[data.row.index]?.[1]?.risk ?? 'none'
+        doc.setFillColor(...(_MUTED_STATUS[riskKey] || _MUTED_STATUS.none))
+        doc.circle(data.cell.x + 3, data.cell.y + data.cell.height / 2, 1.1, 'F')
+      },
+      didDrawPage: (data) => {
+        // Continuation pages only - a repaint on page 1 would cover the
+        // Document No printed in the header area.
+        if (data.pageNumber > readStartPage) _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
+      },
     })
-    y += 15
+    y = (doc.lastAutoTable?.finalY || y) + 6
   }
 
   // ── Expected tyre life (owner ask: a PROPER accurate table, not text lines) ──

@@ -17,6 +17,7 @@ import {
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import DateField from '../ui/DateField'
 
 const PAGE_SIZE = 25
 
@@ -46,6 +47,10 @@ export default function TyreRunningLife() {
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('all')
   const [unit, setUnit] = useState('all')
+  // Fitment-date range (row.fittedOn). Feeds the SAME filtered set the tiles,
+  // life-history strip, table and exports all read, so they stay consistent.
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
   const [page, setPage] = useState(0)
   const [targetsOpen, setTargetsOpen] = useState(false)
   const canSetTargets = isSuperAdmin || ['Admin', 'Manager', 'Director'].includes(profile?.role)
@@ -59,15 +64,24 @@ export default function TyreRunningLife() {
   }
   useEffect(() => { load() }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filtered = useMemo(
-    () => filterRows(state.rows, { search, band, unit }),
-    [state.rows, search, band, unit],
-  )
+  const filtered = useMemo(() => {
+    const base = filterRows(state.rows, { search, band, unit })
+    if (!fromDate && !toDate) return base
+    // String-safe 'YYYY-MM-DD' prefix comparison on the fitment date; a row
+    // with no fitment date is excluded while a range is active.
+    return base.filter((r) => {
+      const d = r.fittedOn ? String(r.fittedOn).slice(0, 10) : ''
+      if (!d) return false
+      if (fromDate && d < fromDate) return false
+      if (toDate && d > toDate) return false
+      return true
+    })
+  }, [state.rows, search, band, unit, fromDate, toDate])
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const shown = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   // Tiles + life-history strip follow the on-screen filters, same as the table.
   const s = useMemo(() => summarize(filtered), [filtered])
-  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all'
+  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all' || Boolean(fromDate || toDate)
 
   function doExport(kind) {
     if (!filtered.length) return
@@ -96,7 +110,19 @@ export default function TyreRunningLife() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <DateField className="text-sm w-40" value={fromDate} onChange={setFromDate} placeholder="Fitted from" ariaLabel="Fitted from date" />
+          <DateField className="text-sm w-40" value={toDate} onChange={setToDate} placeholder="Fitted to" ariaLabel="Fitted to date" min={fromDate || undefined} />
+          {(fromDate || toDate) && (
+            <button
+              type="button"
+              onClick={() => { setFromDate(''); setToDate('') }}
+              className="text-xs underline"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              Clear
+            </button>
+          )}
           {canSetTargets && (
             <button type="button" onClick={() => setTargetsOpen(true)} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-primary)' }}>
               <Target size={13} /> Life targets
@@ -303,13 +329,20 @@ function LifeTargetsModal({ rows, country, onClose }) {
   useEffect(() => { loadTargets() }, [])
 
   async function save() {
+    // Server-agnostic validation: the input's min/max attributes are bypassable
+    // and a 0/negative target would poison the remaining-life bands.
+    const km = Number(form.target_km)
+    if (!Number.isFinite(km) || km < 1 || km > 400000) {
+      setError('Expected life must be a number between 1 and 400,000 km.')
+      return
+    }
     setBusy(true); setError('')
     try {
       await saveTyreLifeTarget({
         country,
         size: form.size,
         vehicle_type: form.vehicle_type || null,
-        target_km: form.target_km,
+        target_km: km,
         note: form.note,
       })
       setForm({ size: '', vehicle_type: '', target_km: '', note: '' })

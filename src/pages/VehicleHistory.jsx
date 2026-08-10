@@ -536,7 +536,22 @@ export default function VehicleHistory() {
             <option value="count">{t('vehiclehistory.filters.sortCount')}</option>
             <option value="date">{t('vehiclehistory.filters.sortDate')}</option>
           </select>
+          <DateField className="text-sm w-40" value={fromDate} onChange={setFromDate} placeholder="From date" ariaLabel="From date" />
+          <DateField className="text-sm w-40" value={toDate} onChange={setToDate} placeholder="To date" ariaLabel="To date" min={fromDate || undefined} />
+          {rangeActive && (
+            <button
+              onClick={() => { setFromDate(''); setToDate('') }}
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline self-center"
+            >
+              Clear
+            </button>
+          )}
         </div>
+        {rangeActive && (
+          <p className="text-[11px] text-[var(--text-muted)] mt-2">
+            Date range windows the per-vehicle roll-ups (tyre counts, km and cost from tyre records). Anomalies always evaluate full history; the expense-grid cost total is not applied inside a range.
+          </p>
+        )}
       </div>
 
       {/* Vehicle fleet table */}

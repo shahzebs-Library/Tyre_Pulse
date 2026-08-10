@@ -376,7 +376,7 @@ export default function UserManagement() {
   )
   // Role label with a raw-name fallback for custom roles (no i18n key).
   const roleLabel = useCallback((r) => {
-    const k = `roles.${r}`; const lbl = t(k)
+    const k = `roles.${r}`; const raw = t(k); const lbl = raw === k ? r : raw
     return !lbl || lbl === k ? r : lbl
   }, [t])
 
@@ -956,7 +956,7 @@ export default function UserManagement() {
                           <div className="flex items-center gap-2">
                             {isSelf ? (
                               <span className={`badge text-xs ${ROLE_BADGE[u.role] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
-                                {u.role ? t(`roles.${u.role}`) : t('usermgmt.states.na')}
+                                {u.role ? (t(`roles.${u.role}`) === `roles.${u.role}` ? u.role : t(`roles.${u.role}`)) : t('usermgmt.states.na')}
                               </span>
                             ) : (
                               <div className="relative">

@@ -260,7 +260,7 @@ export function RouteLoading() {
 
 function AccessDenied({ role, allowed, moduleKey }) {
   const { t } = useLanguage()
-  const roleNames = allowed?.map(r => t(`roles.${r}`)).join(' / ')
+  const roleNames = allowed?.map(r => { const k = `roles.${r}`; const v = t(k); return v === k ? r : v }).join(' / ')
   return (
     <div className="flex flex-col items-center justify-center h-96 text-center px-4">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
@@ -275,7 +275,7 @@ function AccessDenied({ role, allowed, moduleKey }) {
         {' '}{t('auth.contactAdmin')}
       </p>
       <p className="text-gray-600 text-xs mt-3">
-        {t('auth.currentRole')} <span className="text-gray-400 font-semibold">{role ? t(`roles.${role}`) : t('auth.unknown')}</span>
+        {t('auth.currentRole')} <span className="text-gray-400 font-semibold">{role ? (t(`roles.${role}`) === `roles.${role}` ? role : t(`roles.${role}`)) : t('auth.unknown')}</span>
       </p>
     </div>
   )

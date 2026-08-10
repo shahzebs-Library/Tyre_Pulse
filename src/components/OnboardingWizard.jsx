@@ -267,7 +267,7 @@ export default function OnboardingWizard() {
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: content.accent }}>
-                  {role ? t(`roles.${role}`) : t('common.language')}
+                  {role ? (t(`roles.${role}`) === `roles.${role}` ? role : t(`roles.${role}`)) : t('common.language')}
                 </p>
                 <h2 className="text-lg font-extrabold leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
                   {current === 'welcome'
@@ -320,7 +320,7 @@ export default function OnboardingWizard() {
                     >
                       <Rocket size={16} style={{ color: content.accent }} className="flex-shrink-0" />
                       <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        {t('onboarding.tailored')}: <span style={{ color: content.accent }} className="font-bold">{t(`roles.${role}`)}</span>
+                        {t('onboarding.tailored')}: <span style={{ color: content.accent }} className="font-bold">{t(`roles.${role}`) === `roles.${role}` ? role : t(`roles.${role}`)}</span>
                       </span>
                     </div>
                   </div>

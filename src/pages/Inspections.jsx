@@ -850,7 +850,7 @@ export default function Inspections() {
             canvas.height = svgH * scale
             const ctx = canvas.getContext('2d')
             ctx.scale(scale, scale)
-            ctx.fillStyle = '#0a1628'
+            ctx.fillStyle = '#000000'
             ctx.fillRect(0, 0, svgW, svgH)
             ctx.drawImage(img, 0, 0, svgW, svgH)
             URL.revokeObjectURL(url)
@@ -912,6 +912,41 @@ export default function Inspections() {
     // ── Notes ───────────────────────────────────────────────────────────────────
     let finalY = doc.lastAutoTable?.finalY ?? (y + 40)
     finalY += 8
+
+    // ── Expected tyre life (lifecycle - km AND hours), best-effort ─────────────
+    try {
+      const assetNo = clAsset || clSaved.asset_no
+      if (assetNo) {
+        const payload = await getTyreRunningLife({ country: activeCountry })
+        const lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === assetNo).slice(0, 16)
+        if (lifeRows.length) {
+          if (finalY + 30 > ph - 20) { doc.addPage(); finalY = 20 }
+          doc.setTextColor(31, 41, 55)
+          doc.setFontSize(9)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Expected Tyre Life', mx, finalY)
+          finalY += 3
+          const n = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+          autoTable(doc, {
+            ...pdfTableTheme(brand.accent),
+            startY: finalY,
+            margin: { left: mx, right: mx },
+            head: [['Position', 'Serial', 'Km run', 'Hours run', 'Expected life', 'Remaining', 'Remaining days', 'Life used']],
+            body: lifeRows.map((lr) => [
+              lr.position || 'N/A',
+              lr.serial || 'N/A',
+              n(lr.kmRun),
+              n(lr.hoursRun),
+              n(lr.expectedLifeKm),
+              n(lr.remainingKm),
+              n(lr.remainingDays),
+              lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : 'N/A',
+            ]),
+          })
+          finalY = (doc.lastAutoTable?.finalY ?? finalY) + 8
+        }
+      }
+    } catch { /* best-effort - the checklist report never blocks on lifecycle data */ }
 
     if (clNotes) {
       doc.setTextColor(31, 41, 55)

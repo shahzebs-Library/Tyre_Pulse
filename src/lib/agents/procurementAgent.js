@@ -47,7 +47,7 @@ export async function runProcurementAgent(query, { records = [], site = null } =
 
   const digest = [
     `Records in context: ${data.length}`,
-    `Fleet avg tyre life: ${life.avgKm?.toFixed?.(0) ?? 'N/A'} km | failure rate: ${((failure.failureRate ?? 0) * 100).toFixed(1)}%`,
+    `Fleet avg tyre life: ${life.avgKm?.toFixed?.(0) ?? 'N/A'} km | failure rate: ${failure.failureRate == null ? 'not measured' : ((failure.failureRate * 100).toFixed(1) + '%')}`,
     `Distinct brands: ${byBrand.length}`,
     'Brand ranking (best CPK first):',
     brandLines,

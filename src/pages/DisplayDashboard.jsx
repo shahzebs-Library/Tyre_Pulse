@@ -330,7 +330,9 @@ export default function DisplayDashboard() {
         run: async () => {
           const { data, error } = await fetchAllPages((from, to) => supabase
             .from('inspections')
-            .select('asset_no,scheduled_date,status,findings,site')
+            // tyre_conditions carries the recorded pressure_psi per position -
+            // pressure compliance is measured from it, not from findings text.
+            .select('asset_no,scheduled_date,status,findings,site,tyre_conditions')
             .gte('scheduled_date', windowStart)
             .order('scheduled_date', { ascending: false })
             .range(from, to), { max: 5000 })
@@ -999,15 +1001,23 @@ export default function DisplayDashboard() {
               <Panel title="Pressure Compliance" icon={ShieldCheck} className="h-full">
                 <SliceGuard slice={inspections} lines={4}>
                   <div className="flex flex-col h-full">
-                    <div className="flex-1 min-h-[200px]">
-                      <EChart option={gaugeOption(compliance.pct, { label: 'Compliant' })}
-                        ariaLabel="Pressure compliance" style={{ height: '100%', width: '100%' }} />
+                    <div className="flex-1 min-h-[200px] flex items-center justify-center">
+                      {compliance.pct == null ? (
+                        <p className="text-slate-400 text-lg text-center px-4">Not measured</p>
+                      ) : (
+                        <EChart option={gaugeOption(compliance.pct, { label: 'Compliant' })}
+                          ariaLabel="Pressure compliance" style={{ height: '100%', width: '100%' }} />
+                      )}
                     </div>
                     <p className="text-slate-400 text-base text-center">
-                      <span className="text-white font-bold tabular-nums">{compliance.compliant}</span>
-                      {' of '}
-                      <span className="text-white font-bold tabular-nums">{compliance.total}</span>
-                      {' compliant (90 days)'}
+                      {compliance.pct == null ? 'No tyre pressures recorded in the last 90 days' : (
+                        <>
+                          <span className="text-white font-bold tabular-nums">{compliance.compliant}</span>
+                          {' of '}
+                          <span className="text-white font-bold tabular-nums">{compliance.total}</span>
+                          {' readings within 15% of the vehicle median (90 days)'}
+                        </>
+                      )}
                     </p>
                   </div>
                 </SliceGuard>
@@ -1545,9 +1555,13 @@ export default function DisplayDashboard() {
                 </SliceGuard>
               </Panel>
               <div className="grid grid-cols-2 gap-6">
-                <StatTile label="Pressure Compliance" value={inspections.error ? '—' : `${compliance.pct}`} unit="%"
-                  tone={compliance.pct >= 90 ? 'accent' : compliance.pct >= 70 ? 'warn' : 'crit'} icon={ShieldCheck}
-                  sub="Rolling 90 days" />
+                <StatTile label="Pressure Compliance"
+                  value={inspections.error || compliance.pct == null ? 'N/A' : `${compliance.pct}`}
+                  unit={compliance.pct == null ? '' : '%'}
+                  tone={compliance.pct == null ? 'neutral'
+                    : compliance.pct >= 90 ? 'accent' : compliance.pct >= 70 ? 'warn' : 'crit'}
+                  icon={ShieldCheck}
+                  sub={compliance.pct == null ? 'No pressures recorded' : 'Rolling 90 days'} />
                 <StatTile label="Overdue Today" value={inspections.error ? '—' : todayInsp.overdue}
                   tone={todayInsp.overdue > 0 ? 'crit' : 'accent'} icon={ClipboardList}
                   sub="Inspections past due" />

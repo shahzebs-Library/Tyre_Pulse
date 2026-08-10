@@ -184,17 +184,28 @@ describe('buildMonthlyCombo', () => {
 // ── gauges ────────────────────────────────────────────────────────────────────
 
 describe('buildGauges', () => {
-  it('pressure compliance matches the kpiEngine formula (Done + findings / non-Cancelled)', () => {
+  // This used to assert the OLD proxy (Done + non-empty findings text), which
+  // measured typing rather than pressure. It now asserts the real measurement:
+  // recorded PSI compared to that vehicle's own median.
+  it('pressure compliance is measured from recorded PSI, not findings text', () => {
+    const withPsi = (...psi) => ({
+      status: 'Done',
+      tyre_conditions: Object.fromEntries(psi.map((p, i) => [`P${i}`, { pressure_psi: String(p) }])),
+    })
     const inspections = [
-      { status: 'Done', findings: 'ok' },
-      { status: 'Done', findings: '' },      // done but no findings → not compliant
-      { status: 'Scheduled', findings: '' },
-      { status: 'Cancelled', findings: 'x' }, // excluded entirely
+      withPsi(100, 100, 100, 60),             // median 100, the 60 is 40% low
+      { status: 'Done', findings: 'ok' },      // no pressures - not measurable
+      { status: 'Cancelled', findings: 'x' },  // excluded entirely
     ]
     const g = buildGauges({ inspections, fleet: [] })
-    expect(g.pressure.total).toBe(3)
-    expect(g.pressure.compliant).toBe(1)
-    expect(g.pressure.value).toBeCloseTo(33.3, 1)
+    expect(g.pressure.total).toBe(4)          // readings, not inspections
+    expect(g.pressure.compliant).toBe(3)
+    expect(g.pressure.value).toBeCloseTo(75, 1)
+  })
+
+  it('reports null - not 0% - when no pressures were recorded', () => {
+    const g = buildGauges({ inspections: [{ status: 'Done', findings: 'all good' }], fleet: [] })
+    expect(g.pressure.value).toBe(null)
   })
 
   it('availability = Active share of vehicle_fleet (case-insensitive)', () => {
@@ -209,7 +220,7 @@ describe('buildGauges', () => {
 
   it('empty inputs give zero denominators without NaN', () => {
     const g = buildGauges({})
-    expect(g.pressure.value).toBe(0)
+    expect(g.pressure.value).toBe(null)   // not measured, never a flattering 0
     expect(g.availability.value).toBe(0)
   })
 })
@@ -280,7 +291,12 @@ describe('toExcelRows', () => {
     const c = buildMonthlyCombo([tyre({ issue_date: '2026-06-01' })], { months: 1, now: NOW })
     expect(toExcelRows('combo', c).rows).toEqual([{ month: '2026-06', spend: 2000, tyres: 2 }])
 
-    const g = buildGauges({ inspections: [{ status: 'Done', findings: 'ok' }], fleet: [{ status: 'Active' }] })
+    const allGood = {
+      status: 'Done',
+      tyre_conditions: { A: { pressure_psi: '100' }, B: { pressure_psi: '100' },
+                         C: { pressure_psi: '100' }, D: { pressure_psi: '100' } },
+    }
+    const g = buildGauges({ inspections: [allGood], fleet: [{ status: 'Active' }] })
     const gRows = toExcelRows('gauges', g).rows
     expect(gRows).toHaveLength(2)
     expect(gRows[0].value_pct).toBe(100)

@@ -85,7 +85,7 @@ export async function runTyreEngineerAgent(query, {
   // Build engineering context summary
   const engineeringSummary = [
     records.length
-      ? `Records analysed: ${records.length} | Failure rate: ${((failureStats.failureRate ?? 0) * 100).toFixed(1)}% | Critical: ${((failureStats.criticalRate ?? 0) * 100).toFixed(1)}%`
+      ? `Records analysed: ${records.length} | Failure rate: ${failureStats.failureRate == null ? 'not measured' : ((failureStats.failureRate * 100).toFixed(1) + '%')} | Critical: ${failureStats.criticalRate == null ? 'not measured' : ((failureStats.criticalRate * 100).toFixed(1) + '%')}`
       : '',
     failureStats.bySite?.length
       ? `Worst site by failure rate: ${failureStats.bySite[0]?.site} (${(failureStats.bySite[0]?.rate * 100).toFixed(1)}%)`

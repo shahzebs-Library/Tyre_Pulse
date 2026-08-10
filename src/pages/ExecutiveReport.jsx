@@ -231,6 +231,11 @@ function fmtNum(n, decimals = 0) {
   return v.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 function fmtPct(n) { return `${fmtNum(n, 1)}%` }
+// A KPI with no measurable input must read N/A, never 0.0%. fmtNum maps null to
+// '0', which on a safety metric is a claim the data does not support.
+function fmtPctOrNA(n) {
+  return (n == null || !Number.isFinite(Number(n))) ? 'N/A' : fmtPct(n)
+}
 function fmtCpk(n, currency) {
   const v = Number(n)
   if (n == null || !Number.isFinite(v) || v === 0) return `${currency} 0.00`
@@ -243,12 +248,17 @@ function cpkStatus(cpk) {
   if (cpk <= 0.012) return 'amber'
   return 'red'
 }
+// Both guard null FIRST. Without it `null >= 85` is false so an unmeasured
+// percentage renders red (unknown is not bad), and `null <= 0.1` is TRUE so an
+// unmeasured failure rate renders GREEN - a healthy fleet drawn from no data.
 function pctStatus(pct, goodAbove = 85) {
+  if (pct == null || !Number.isFinite(Number(pct))) return 'neutral'
   if (pct >= goodAbove) return 'green'
   if (pct >= goodAbove * 0.7) return 'amber'
   return 'red'
 }
 function failStatus(rate) {
+  if (rate == null || !Number.isFinite(Number(rate))) return 'neutral'
   if (rate <= 0.1) return 'green'
   if (rate <= 0.25) return 'amber'
   return 'red'
@@ -257,6 +267,8 @@ const STATUS_COLORS = {
   green: { text: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/30', dot: 'bg-emerald-400' },
   amber: { text: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30', dot: 'bg-amber-400' },
   red:   { text: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30', dot: 'bg-red-400' },
+  // "not measured" - deliberately colourless so an unknown never reads as a verdict
+  neutral: { text: 'text-slate-400', bg: 'bg-slate-400/10', border: 'border-slate-400/30', dot: 'bg-slate-400' },
 }
 
 const PRIORITY_STYLES = {
@@ -972,22 +984,24 @@ export default function ExecutiveReport() {
     },
     {
       label: t('execreport.kpi.pressureCompliance'),
-      value: fmtPct(kpis.pressureCompliance.compliancePct),
+      value: fmtPctOrNA(kpis.pressureCompliance.compliancePct),
       status: pctStatus(kpis.pressureCompliance.compliancePct),
       target: '>= 90%',
       icon: Target,
     },
     {
       label: t('execreport.kpi.failureRate'),
-      value: fmtPct(kpis.failureRate.failureRate * 100),
+      value: kpis.failureRate.failureRate == null ? 'N/A' : fmtPct(kpis.failureRate.failureRate * 100),
       status: failStatus(kpis.failureRate.failureRate),
       target: '< 10%',
       icon: AlertTriangle,
     },
     {
       label: t('execreport.kpi.criticalRate'),
-      value: fmtPct(kpis.failureRate.criticalRate * 100),
-      status: kpis.failureRate.criticalRate <= 0.05 ? 'green' : kpis.failureRate.criticalRate <= 0.15 ? 'amber' : 'red',
+      value: kpis.failureRate.criticalRate == null ? 'N/A' : fmtPct(kpis.failureRate.criticalRate * 100),
+      status: kpis.failureRate.criticalRate == null ? 'neutral'
+        : kpis.failureRate.criticalRate <= 0.05 ? 'green'
+        : kpis.failureRate.criticalRate <= 0.15 ? 'amber' : 'red',
       target: '< 5%',
       icon: ShieldAlert,
     },

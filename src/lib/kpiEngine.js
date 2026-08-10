@@ -281,26 +281,45 @@ export function computeRemovalRate(records = [], fleetKmTotal) {
  * @returns {{ failureRate, failureCount, totalCount, criticalRate, highRate, bySite, byBrand }}
  */
 export function computeFailureRate(records = []) {
-  const total    = records.length
-  const critical = records.filter(r => r.risk_level === 'Critical')
-  const high     = records.filter(r => r.risk_level === 'High')
-  const failures = records.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
+  // Failure rate is derived from risk_level, which is populated on a MINORITY of
+  // rows (0 of 11,132 in the live fleet at the time of writing, because nothing
+  // in the intake pipeline sets it). Dividing by every record therefore produced
+  // 0/total = 0% and rendered as a perfect fleet.
+  //
+  // The rate is now computed over the RATED SUBSET only, and is null - not zero -
+  // when nothing is rated. A rate of "not measured" is honest; a rate of 0% on
+  // unrated data is a safety claim the data cannot support. Callers must treat
+  // null as "no data" (boardOverview and the report tiles already do).
+  const total = records.length
+  const rated = records.filter(r => r.risk_level != null && String(r.risk_level).trim() !== '')
+  const ratedCount = rated.length
+
+  const critical = rated.filter(r => r.risk_level === 'Critical')
+  const high     = rated.filter(r => r.risk_level === 'High')
+  const failures = rated.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
 
   const _ratesByGroup = (groupKey) =>
-    Object.entries(_groupBy(records, r => r[groupKey] ?? 'Unknown'))
+    Object.entries(_groupBy(rated, r => r[groupKey] ?? 'Unknown'))
       .map(([key, rows]) => ({
         [groupKey]: key,
-        rate:  rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length / rows.length,
+        rate:  rows.length > 0
+          ? rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length / rows.length
+          : null,
         count: rows.length,
       }))
-      .sort((a, b) => b.rate - a.rate)
+      .sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1))
 
   return {
-    failureRate:  total > 0 ? failures.length / total : 0,
-    failureCount: failures.length,
+    failureRate:  ratedCount > 0 ? failures.length / ratedCount : null,
+    failureCount: ratedCount > 0 ? failures.length : null,
     totalCount:   total,
-    criticalRate: total > 0 ? critical.length / total : 0,
-    highRate:     total > 0 ? high.length / total : 0,
+    // How much of the fleet the rate actually rests on - surface this wherever
+    // the rate is shown, the way the accident analytics surface their basis.
+    ratedCount,
+    coveragePct:  total > 0 ? (ratedCount / total) * 100 : null,
+    measured:     ratedCount > 0,
+    criticalRate: ratedCount > 0 ? critical.length / ratedCount : null,
+    highRate:     ratedCount > 0 ? high.length / ratedCount : null,
     bySite:       _ratesByGroup('site'),
     byBrand:      _ratesByGroup('brand'),
   }
@@ -343,31 +362,103 @@ export function computeReplacementRate(records = []) {
   }
 }
 
+/** Minimum recorded pressures on one inspection before its median is trusted. */
+export const PRESSURE_MIN_READINGS = 4
+/** A reading this far off its vehicle's own median is treated as non-compliant. */
+export const PRESSURE_TOLERANCE = 0.15
+
 /**
- * Pressure compliance approximation from inspections.
- * @param {Object[]} inspections
+ * Pull the recorded PSI readings out of one inspection's tyre_conditions.
+ * Tolerates every shape the app stores: an object keyed by position, an array of
+ * position objects, or a JSON string of either. Mobile writes `pressure_psi`.
+ * @returns {number[]} finite, positive readings only
+ */
+export function pressureReadings(inspection) {
+  let tc = inspection ? inspection.tyre_conditions : null
+  if (typeof tc === 'string') {
+    try { tc = JSON.parse(tc) } catch { return [] }
+  }
+  if (!tc || typeof tc !== 'object') return []
+  const entries = Array.isArray(tc) ? tc : Object.values(tc)
+  const out = []
+  for (const e of entries) {
+    if (!e || typeof e !== 'object') continue
+    const n = Number(e.pressure_psi ?? e.pressure ?? e.psi)
+    if (Number.isFinite(n) && n > 0) out.push(n)
+  }
+  return out
+}
+
+/**
+ * Pressure compliance measured from the ACTUAL recorded PSI readings.
+ *
+ * THIS USED TO MEASURE NOTHING. The previous implementation counted inspections
+ * whose free-text `findings` box was non-empty - so an inspector typing "ok"
+ * scored as compliant, and one recording 40 PSI on a 120 PSI tyre while leaving
+ * the notes blank did not. It never read a pressure.
+ *
+ * There is no stored per-size target pressure anywhere in the schema, so the
+ * only defensible reference is the one the inspection PDF already uses: each
+ * reading is compared to the MEDIAN of the readings taken on that same vehicle,
+ * and is non-compliant when it is more than PRESSURE_TOLERANCE off. That makes
+ * this a measure of pressure CONSISTENCY across a vehicle's own tyres, not
+ * conformance to a manufacturer spec - `basis` says so, and it is the same
+ * single judgement the PDF prints so the two can never disagree.
+ *
+ * An inspection with fewer than PRESSURE_MIN_READINGS readings has no trustworthy
+ * median and is counted in NEITHER the numerator nor the denominator. When
+ * nothing is measurable the result is null - never a flattering percentage.
+ *
+ * @param {Object[]} inspections rows INCLUDING tyre_conditions
  * @param {number}   [targetPct=90]
- * @returns {{ compliancePct, compliantCount, totalCount, bySite }}
+ * @returns {{ compliancePct:(number|null), compliantCount, totalCount, measuredInspections,
+ *             notMeasuredInspections, readings, basis, targetPct, bySite }}
  */
 export function computePressureCompliance(inspections = [], targetPct = 90) {
   const nonCancelled = inspections.filter(i => i.status !== 'Cancelled')
-  const compliant    = nonCancelled.filter(
-    i => i.status === 'Done' && i.findings && String(i.findings).trim() !== ''
-  )
+
+  // one entry per inspection that carries a usable median
+  const measure = (rows) => {
+    let compliant = 0
+    let readings  = 0
+    let measured  = 0
+    for (const i of rows) {
+      const ps = pressureReadings(i)
+      // _median returns 0 for an empty array, which the guard below rejects
+      const med = _median(ps)
+      if (ps.length < PRESSURE_MIN_READINGS || !med || med <= 0) continue
+      measured += 1
+      for (const p of ps) {
+        readings += 1
+        if (Math.abs((p - med) / med) <= PRESSURE_TOLERANCE) compliant += 1
+      }
+    }
+    return {
+      compliancePct: readings > 0 ? (compliant / readings) * 100 : null,
+      compliant, readings, measured,
+    }
+  }
+
+  const all = measure(nonCancelled)
 
   const bySite = Object.entries(_groupBy(nonCancelled, i => i.site ?? 'Unknown'))
     .map(([site, rows]) => {
-      const comp = rows.filter(
-        i => i.status === 'Done' && i.findings && String(i.findings).trim() !== ''
-      )
-      return { site, compliancePct: rows.length > 0 ? (comp.length / rows.length) * 100 : 0, count: rows.length }
+      const m = measure(rows)
+      return { site, compliancePct: m.compliancePct, count: rows.length, readings: m.readings }
     })
-    .sort((a, b) => a.compliancePct - b.compliancePct)
+    // unmeasured sites sort last rather than pretending to be the worst
+    .sort((a, b) => (a.compliancePct ?? Infinity) - (b.compliancePct ?? Infinity))
 
   return {
-    compliancePct:  nonCancelled.length > 0 ? (compliant.length / nonCancelled.length) * 100 : 0,
-    compliantCount: compliant.length,
-    totalCount:     nonCancelled.length,
+    compliancePct:          all.compliancePct,
+    compliantCount:         all.readings > 0 ? all.compliant : null,
+    totalCount:             all.readings,
+    measuredInspections:    all.measured,
+    notMeasuredInspections: nonCancelled.length - all.measured,
+    readings:               all.readings,
+    basis: all.readings > 0
+      ? `${all.readings} recorded pressures across ${all.measured} of ${nonCancelled.length} inspections, each compared to its own vehicle median`
+      : 'no pressure readings recorded',
     targetPct,
     bySite,
   }

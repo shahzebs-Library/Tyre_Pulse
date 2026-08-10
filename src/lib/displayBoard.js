@@ -11,6 +11,7 @@
  */
 
 import { severityRank } from './severity'
+import { computePressureCompliance } from './kpiEngine'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 
@@ -88,17 +89,22 @@ export function computeMonthlyTyreCost(tyres = [], now = new Date()) {
 }
 
 /**
- * Pressure-compliance approximation — the same proxy kpiEngine.js uses:
- * of non-cancelled inspections, the share that are Done WITH findings text.
- * @returns {{ pct:number, compliant:number, total:number }}
+ * Pressure compliance for the TV board. DELEGATES to the single measurement in
+ * kpiEngine - this file used to carry a second copy of the old "counts inspections
+ * with findings text" proxy, which measured typing rather than pressure and would
+ * now disagree with every other surface.
+ *
+ * `pct` is null when nothing measurable was recorded; the board must render that
+ * as "not measured", never as 0.
+ * @returns {{ pct:(number|null), compliant:(number|null), total:number }}
  */
 export function computePressureCompliancePct(inspections = []) {
-  const rows = inspections.filter(i => i.status !== 'Cancelled')
-  if (!rows.length) return { pct: 0, compliant: 0, total: 0 }
-  const compliant = rows.filter(
-    i => i.status === 'Done' && i.findings && String(i.findings).trim() !== ''
-  ).length
-  return { pct: Math.round((compliant / rows.length) * 100), compliant, total: rows.length }
+  const pc = computePressureCompliance(inspections)
+  return {
+    pct:       pc.compliancePct == null ? null : Math.round(pc.compliancePct),
+    compliant: pc.compliantCount,
+    total:     pc.readings,
+  }
 }
 
 /**

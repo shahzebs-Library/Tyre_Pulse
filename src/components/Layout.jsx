@@ -63,6 +63,7 @@ import { useWakeLock } from '../hooks/useWakeLock'
 import { useRealtimeSync } from '../hooks/useRealtime'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
 import TpLogo from '../assets/logo.svg'
+import { getCompanyLogo } from '../lib/api/brandLogo'
 import { useTenant } from '../contexts/TenantContext'
 import { resolveBrandLogo } from '../lib/brand/library'
 import BrandIcon from './ui/BrandIcon'
@@ -411,6 +412,15 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   return true
 }
 
+// Translated role label; a CUSTOM role has no i18n entry, so the raw key
+// ("roles.Fleet Supervisor") would leak to the UI - show the plain name instead.
+function roleLabel(t, role) {
+  if (!role) return ''
+  const key = `roles.${role}`
+  const v = t(key)
+  return v === key ? role : v
+}
+
 function roleBadgeClass(role) {
   switch (role) {
     case 'Admin':     return 'bg-red-900/40 text-red-300 border border-red-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
@@ -437,6 +447,7 @@ const TYRE_MAN_TABS = [
 ]
 
 function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
+  const hasCustomIcon = Boolean(customAppIcon)
   const { signOut, profile } = useAuth()
   const { t } = useLanguage()
   const location = useLocation()
@@ -523,7 +534,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
             className="w-7 h-7 rounded-lg flex items-center justify-center"
             style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)' }}
           >
-            <BrandIcon src={appIcon} custom={!!customAppIcon} size={16} />
+            <BrandIcon src={appIcon} custom={hasCustomIcon} size={16} />
           </div>
           <span
             className="font-extrabold text-sm tracking-tight"
@@ -673,7 +684,18 @@ export default function Layout({ children }) {
   // logo is framed on a light chip via <BrandIcon> so it stays legible on the
   // dark/green badges.
   const customAppIcon = resolveBrandLogo(branding, 'app_icon')
-  const appIcon = customAppIcon || TpLogo
+  // Second fallback: the Console -> Report Colors company logo (same chain the
+  // PDF reports use), so the org's real mark shows in the header without a
+  // separate app-icon upload. Best-effort; the built-in mark still closes the chain.
+  const [companyLogo, setCompanyLogo] = useState('')
+  useEffect(() => {
+    if (customAppIcon) return
+    let on = true
+    getCompanyLogo().then((url) => { if (on && url) setCompanyLogo(url) }).catch(() => {})
+    return () => { on = false }
+  }, [customAppIcon])
+  const appIcon = customAppIcon || companyLogo || TpLogo
+  const hasCustomIcon = Boolean(customAppIcon || companyLogo)
   const { activeCountry, setActiveCountry } = useSettings()
   const navigate     = useNavigate()
   const location     = useLocation()
@@ -821,7 +843,7 @@ export default function Layout({ children }) {
     : {}
 
   if (profile?.role === 'Tyre Man') {
-    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={customAppIcon}>{children}</TyreManShell>
+    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}>{children}</TyreManShell>
   }
 
   const navItemVariants = {
@@ -878,7 +900,7 @@ export default function Layout({ children }) {
                 boxShadow: '0 0 20px rgba(22,163,74,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
               }}
             >
-              <BrandIcon src={appIcon} custom={!!customAppIcon} size={18} />
+              <BrandIcon src={appIcon} custom={hasCustomIcon} size={18} />
               {/* pulse ring */}
               <div className="absolute inset-0 rounded-xl animate-ping-green opacity-0 group-hover:opacity-100"
                 style={{ background: 'rgba(22,163,74,0.15)' }} />
@@ -893,15 +915,7 @@ export default function Layout({ children }) {
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                   className="min-w-0"
                 >
-                  <span
-                    className="font-extrabold text-[15px] tracking-tight whitespace-nowrap leading-none block"
-                    style={{
-                      background: 'linear-gradient(135deg, #ffffff 25%, #86efac 75%, #4ade80 100%)',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      backgroundClip: 'text',
-                    }}
-                  >
+                  <span className="tp-wordmark font-extrabold text-[15px] tracking-tight whitespace-nowrap leading-none block">
                     TyrePulse
                   </span>
                   <span className="text-[9px] text-gray-600 tracking-[0.12em] uppercase font-medium">
@@ -1137,7 +1151,7 @@ export default function Layout({ children }) {
                     </p>
                     {profile?.role && (
                       <span className={`flex-shrink-0 leading-none ${roleBadgeClass(profile.role)}`}>
-                        {t(`roles.${profile.role}`)}
+                        {roleLabel(t, profile.role)}
                       </span>
                     )}
                   </div>
@@ -1193,16 +1207,8 @@ export default function Layout({ children }) {
           </button>
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <BrandIcon src={appIcon} custom={!!customAppIcon} size={20} className="flex-shrink-0" />
-            <span
-              className="font-extrabold text-sm tracking-tight"
-              style={{
-                background: 'linear-gradient(135deg, #ffffff 25%, #86efac 75%, #4ade80 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}
-            >
+            <BrandIcon src={appIcon} custom={hasCustomIcon} size={20} className="flex-shrink-0" />
+            <span className="tp-wordmark font-extrabold text-sm tracking-tight">
               TyrePulse
             </span>
           </div>

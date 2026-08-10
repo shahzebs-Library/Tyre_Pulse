@@ -1398,3 +1398,19 @@ select.input-dark option { background: rgb(31,41,55); }
   background-size: 18px 18px;
   background-position: 0 0, 0 9px, 9px -9px, -9px 0;
 }
+
+/* Brand wordmark - the dark-shell gradient starts WHITE, which disappears on the
+   light theme's white header (read as "yrePulse"). Light mode swaps to a dark
+   green gradient; dark output is byte-identical to the old inline style. */
+.tp-wordmark {
+  background: linear-gradient(135deg, #ffffff 25%, #86efac 75%, #4ade80 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+html.light .tp-wordmark {
+  background: linear-gradient(135deg, #14532d 0%, #166534 55%, #16a34a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

@@ -3,6 +3,80 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-10 — EXPENSE COUNTRY GUARD (V491) + "CORRECT ALL DATA" RUN + LIFE TARGETS KM/HOURS (V492/V493) + INSPECTION FLAGS/SUMMARY + COST-M3 SUMMARY-FIRST + REPORT PROFESSIONALIZATION. Migrations V490-V493 applied live; next free **V494**. PRs #289-#300 ALL merged to main; branch realigned clean.
+- **EXPENSE CROSS-COUNTRY CONTAMINATION — root cause + permanent guard.** The KSA August expense file
+  (uploaded 2026-08-08 07:50, ONE "ERP grid import" window) contained 886 UAE (RM job-card) lines; pre-Aug-1
+  data was NEVER mixed. Fixed in `_bak.expense_fix_20260810` (211 KSA-RM dupes deleted + 675 moved to UAE/AED;
+  11 UAE-EG dupes + 5 moved to Egypt/EGP; 1 exact dupe; 479 DIRYAH-ST2 typo + alias). **V491
+  `trg_aa_expense_country_guard`** BEFORE INSERT on parts_consumption: a row whose work_order_no prefix
+  (AFKR/GCKR=KSA, RM=UAE, EG=Egypt - measured 201,861 rows, ZERO conflicts) contradicts its country is
+  SKIPPED + logged to `expense_import_rejects`. TRIGGER NAME IS LOAD-BEARING (aa_ sorts before trg_classify_*
+  or the classifier runs + writes brain_cache for a row that is then skipped). Verified live rolled back.
+- **UAE RE-UPLOAD DUPLICATED AGAIN THE SAME DAY** (13:57, # column unmapped AGAIN): 15,565 rows landed, 9,051
+  exact-content duplicates of pre-existing rows deleted with per-fingerprint multiplicity capping
+  (`_bak.uae_reupload_fix_20260810`); 6,514 genuinely new kept (AED 1,451,949). Totals reconcile:
+  KSA 40,981,402.97 SAR / UAE 15,581,823.70 AED / Egypt 79,315,468.10 EGP. STANDING: KSA/UAE expense files
+  MUST map the `#` column or every re-upload duplicates.
+- **"CORRECT ALL DATA" 3-agent run (all snapshotted):** SCO costs restored to the exact original 672 rows /
+  SAR 1,207,478.46 (file was loaded 3x; 1,344 currency-NULL re-load rows = SAR 2.41M removed,
+  `_bak.sco_reload_fix_20260810`); 4 sany_invoices currency USD->SAR; 14 orphan fleet rows inserted + 65 UAE
+  vehicle_type fills + inspection typo TN520->TM520 via trg_lock_inspection_content disable/enable
+  (`_bak.fleet_backfill_20260810`); tyres: 219 padded serial/position trims + 3 identical dup fitments deleted
+  + 8 implausible >400k lives nulled via guard-trigger bypass (`_bak.tyre_fix_20260810`). FLAGGED for owner
+  (NOT fixed): UAE 691 no-position active tyres; 627 placeholder fitment-km (mostly MP class - needs MP meter
+  files like the TM ones); ~300 rows with literal site 'KSA'; production_logs 291,655 rows on numeric station
+  codes (needs station->site key); 273 blank brands; engine-hours regressions 271 assets. Excel reports
+  delivered (correction report + expense rows Jun-Aug + monthly totals full history).
+- **LIFE TARGETS - km AND hours, size/type/both, most specific wins (V492/V493).** tyre_life_targets: size
+  nullable + target_hours added; CHECK size-or-type + CHECK km-or-hours; unique on (org, coalesce country/
+  size/type). get_tyre_running_life target lateral: specificity COUNT desc (size+type > type > size), then
+  vehicle_type, then country; **NEW `tyre_size_key()`** (upper, strip ALL whitespace) used for the target
+  match AND base_size/base_type joins - the owner's own targets carried 3 spellings of 315/80R22.5, which was
+  the real "one tyre different numbers" complaint. Hours: expected_life_hours/remaining_hours/hours_used_pct
+  emitted (manual target ONLY - no measured hours baseline exists, never fabricate). Client: bandFor + tiles
+  judge hour-only plant against its hours target (shared judgement - tiles and badges use ONE bandFor);
+  lifeDisplay() renders "60,000 km / 8,000 hrs"; BOTH inspection PDFs' Expected Tyre Life tables show the
+  combined display (single calc service via getTyreRunningLife).
+- **INSPECTIONS: immediate tyre-change flags + 2-slide overview + shareable site summary (#297/#298).** Pure
+  `src/lib/inspectionTyreFlags.js` (buildAssetFlagMap over bandFor; damagedPositions tolerant of all
+  tyre_conditions shapes; inspectionOverview; conditionCounts; siteSummary). Register: "Tyres due (N)" chip
+  per row + TyreDueBanner on saved checklist/detail; two OverviewSlide cards (inspections done/vehicles/
+  approved/pending + tyres-due/past-life/due-soon/damaged) following the page date filters; "Share summary"
+  modal = per-site table (Inspections/Vehicles/Good/Wear/Damage/Tyres due + totals) with own From/To + site
+  picker + branded PDF + Excel.
+- **REPORT PROFESSIONALIZATION (2-agent pass, #296).** Both inspection PDFs: muted corporate palette (status
+  = small dots + dark text, NEVER loud cell fills), "Inspection summary" strip (condition counts, avg
+  PSI/tread, lowest tread), "Pressure vs median" flag column (only when >=4 recorded; >15% off = Check),
+  Tyre Readings table with its own continuation-header guard. Running & Remaining: NEW
+  `src/lib/tyreLifeReportPdf.js` (branded A4 landscape: summary tiles + Action-needed overdue/due-soon table
+  + full filtered table) wired as Download PDF report; Basis column + row-detail popup; muted badge tones.
+- **DIAGRAM BACKGROUND CONFIGURABLE (#296):** system_config `report_diagram_bg` via getDiagramBg/setDiagramBg
+  in api/brandLogo.js + a color picker card on Console -> Report Colors; both PDF capture sites +
+  exportInspectionDetailPdf (opts.diagramBg) honor it; legend ink flips dark automatically on a light bg.
+- **EXPENSES: real-rows Excel download (#299).** `listExpenseRows` (fetchAllPages, event_date+id order,
+  {max:100000}) + "Download rows (Excel)" on /expense-report (date/job card/item/qty/unit cost/Value/
+  Tyre-Spare-Oil category/site/store/currency). CI caught a no-undef (`company` not in scope in the new fn) -
+  local `| tail -2` had TRUNCATED the eslint error line; always grep the ✖ line, not tail.
+- **COST/M3 SUMMARY-FIRST OVERHAUL (agent, #299).** LedgerPage (shared by /sco-costs, /sany-invoices,
+  /production-m3 AND the Data Intake tabs) now opens with summary tiles + by-month + by-site; raw table
+  collapsed behind "Show all rows (N)" (nothing removed). ProductionRejectionsPanel: rejected-loads detail
+  table WITH Reason + Remarks + own Excel. CostPerM3 page: "Cost sources" panel (Internal/Tyre/SCO/SANY
+  amount + share + row counts via sourceShares/countCostM3Rows). Pure summarizeLedger/rejectedRowsDetail in
+  costPerM3.js (35 tests).
+- **HEADER + ROLES (#300).** The TyrePulse wordmark's white->green gradient VANISHED on the light theme's
+  white header ("yrePulse") - now `.tp-wordmark` class (dark output byte-identical; html.light swaps to a
+  dark-green gradient). CUSTOM roles leaked their raw i18n key ("roles.Fleet Supervisor") in the sidebar
+  badge/ProtectedRoute/Onboarding/UserManagement - all fall back to the plain role name. Header logo falls
+  back branding app_icon -> Console company_logo -> built-in TpLogo.
+- **V490 (earlier today): asset codes ALL CAPS NO WHITESPACE** - normalize_asset_no/_code strip all
+  whitespace; triggers added to asset_utilization/production_logs/odometer_logs/engine_hours_logs; 5,693-row
+  backfill (`_bak.asset_no_space_fix_20260810`); asset_utilization fleet linkage 402->550/556.
+- **PROCESS NOTES:** Vercel tyre-pulse-eezl fails on EVERY commit (never a gate); actions_list results always
+  oversize - parse the saved JSON file with python; before any post-squash force-with-lease realign CHECK
+  `git log origin/main..origin/<branch>` for parallel-session commits (a clobber happened + was restored
+  earlier this session-family). Ancient job-card dates + tyre-price backfill stay REVERTED per owner - never
+  re-apply. Mobile/Play builds remain frozen ("Dont pushed anything for mobile").
+
 ## SESSION 2026-08-09 — RUNNING & REMAINING (V488/V489) + INSPECTION REPORT OWNER SPEC + KSA TM FITMENT-KM FIX FROM OWNER FILE. Migrations V488/V489 applied; next free **V490**. PRs #280-#288 merged; Aug-5 corrections REVERTED earlier this session per owner.
 - **INSPECTION REPORT FOLLOW-UPS (#287/#288) — why "the SVG still isn't there" took THREE fixes, so it is
   never re-diagnosed from scratch:** (1) the row's PDF button called `exportInspectionDetailPdf` DIRECTLY,

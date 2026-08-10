@@ -6,7 +6,7 @@
  * baseline is missing - nothing is fabricated.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Search, X, FileSpreadsheet, FileText, RefreshCw, Target, Trash2 } from 'lucide-react'
+import { Gauge, Search, X, RefreshCw, Target, Trash2 } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -16,10 +16,8 @@ import {
   shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, basisLabel, dueLabel, summarize,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
-import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
+import EnterpriseTable from '../ui/EnterpriseTable'
 import DateField from '../ui/DateField'
-
-const PAGE_SIZE = 25
 
 const TONE_STYLE = {
   danger: { color: '#f87171', background: 'rgba(248,113,113,0.12)' },
@@ -28,17 +26,6 @@ const TONE_STYLE = {
   good: { color: '#34d399', background: 'rgba(52,211,153,0.12)' },
   quiet: { color: 'var(--text-dim)', background: 'rgba(148,163,184,0.12)' },
 }
-
-const EXPORT_COLS = [
-  ['serial', 'Serial'], ['asset', 'Asset'], ['position', 'Position'],
-  ['vehicleType', 'Type'], ['site', 'Site'], ['brand', 'Brand'], ['size', 'Size'],
-  ['fittedOn', 'Fitted on'], ['daysOn', 'Days on vehicle'],
-  ['kmAtFitment', 'Km at fitment'], ['currentKm', 'Current km'],
-  ['kmRun', 'Km run'], ['currentHours', 'Current hours'], ['hoursRun', 'Hours run'],
-  ['expectedLifeKm', 'Expected life (km)'],
-  ['remainingKm', 'Remaining km'], ['remainingDays', 'Remaining days'],
-  ['due', 'Due?'], ['lifeUsedPct', 'Life used %'],
-]
 
 export default function TyreRunningLife() {
   const { activeCountry } = useSettings()
@@ -51,7 +38,6 @@ export default function TyreRunningLife() {
   // life-history strip, table and exports all read, so they stay consistent.
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [page, setPage] = useState(0)
   const [targetsOpen, setTargetsOpen] = useState(false)
   const canSetTargets = isSuperAdmin || ['Admin', 'Manager', 'Director'].includes(profile?.role)
 
@@ -60,7 +46,6 @@ export default function TyreRunningLife() {
     const payload = await getTyreRunningLife({ country: activeCountry })
     const shaped = shapeRunningLife(payload)
     setState({ loading: false, ok: shaped.ok, rows: shaped.rows, summary: shaped.summary })
-    setPage(0)
   }
   useEffect(() => { load() }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -77,25 +62,59 @@ export default function TyreRunningLife() {
       return true
     })
   }, [state.rows, search, band, unit, fromDate, toDate])
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const shown = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   // Tiles + life-history strip follow the on-screen filters, same as the table.
   const s = useMemo(() => summarize(filtered), [filtered])
   const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all' || Boolean(fromDate || toDate)
 
-  function doExport(kind) {
-    if (!filtered.length) return
-    const keys = EXPORT_COLS.map(([k]) => k)
-    const headers = EXPORT_COLS.map(([, h]) => h)
-    const rows = filtered.map((r) => {
-      const o = {}
-      for (const k of keys) o[k] = k === 'due' ? dueLabel(r) : (r[k] ?? '')
-      return o
-    })
-    const name = reportFileName('TyrePulse Tyre Running Life', activeCountry || 'All')
-    if (kind === 'xlsx') exportToExcel(rows, keys, headers, `${name}.xlsx`)
-    else exportToPdf(rows, keys.map((k, i) => ({ key: k, header: headers[i] })), 'Tyre Running Life', `${name}.pdf`, 'landscape')
-  }
+  // App-standard table columns (EnterpriseTable) - hide/show any column and the
+  // export menu downloads exactly the visible set, like every other module.
+  const columns = useMemo(() => [
+    { id: 'serial', header: 'Serial', accessorFn: (r) => r.serial || 'N/A', size: 130,
+      cell: ({ getValue }) => <span className="font-medium">{getValue()}</span> },
+    { id: 'asset', header: 'Asset', accessorFn: (r) => r.asset, size: 100,
+      cell: ({ row }) => <span>{row.original.asset}{row.original.unit === 'hours' ? ' (hrs)' : ''}</span> },
+    { id: 'brand', header: 'Brand', accessorFn: (r) => r.brand || 'N/A', size: 110 },
+    { id: 'position', header: 'Pos', accessorFn: (r) => r.position || 'N/A', size: 70 },
+    { id: 'vehicleType', header: 'Type', accessorFn: (r) => r.vehicleType || 'N/A', size: 100 },
+    { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 100 },
+    { id: 'size', header: 'Size', accessorFn: (r) => r.size || 'N/A', size: 110 },
+    { id: 'daysOn', header: 'Days on', accessorFn: (r) => r.daysOn, size: 85, meta: { align: 'right' },
+      cell: ({ row }) => <span title={row.original.fittedOn ? `Fitted ${row.original.fittedOn}` : ''}>{fmtNum(row.original.daysOn)}</span> },
+    { id: 'kmAtFitment', header: 'Fit km', accessorFn: (r) => r.kmAtFitment, size: 90, meta: { align: 'right' },
+      cell: ({ getValue }) => fmtNum(getValue()) },
+    { id: 'currentKm', header: 'Current km', accessorFn: (r) => r.currentKm, size: 95, meta: { align: 'right' },
+      cell: ({ getValue }) => fmtNum(getValue()) },
+    { id: 'kmRun', header: 'Km run', accessorFn: (r) => r.kmRun, size: 90, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="font-medium">{fmtNum(getValue())}</span> },
+    { id: 'hoursRun', header: 'Hours run', accessorFn: (r) => r.hoursRun, size: 90, meta: { align: 'right' },
+      cell: ({ getValue }) => fmtNum(getValue()) },
+    { id: 'expectedLifeKm', header: 'Expected life', accessorFn: (r) => r.expectedLifeKm, size: 100, meta: { align: 'right' },
+      cell: ({ row }) => <span title={basisLabel(row.original)}>{fmtNum(row.original.expectedLifeKm)}</span> },
+    { id: 'remainingKm', header: 'Remaining km', accessorFn: (r) => r.remainingKm, size: 105, meta: { align: 'right' },
+      cell: ({ getValue }) => <span className="font-semibold">{fmtNum(getValue())}</span> },
+    { id: 'remainingDays', header: 'Remaining days', accessorFn: (r) => r.remainingDays, size: 110, meta: { align: 'right' },
+      cell: ({ row }) => <span title={row.original.daySample ? `Day life from ${row.original.daySample} removed tyres` : ''}>{fmtNum(row.original.remainingDays)}</span> },
+    { id: 'due', header: 'Due?', accessorFn: (r) => dueLabel(r), size: 80,
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return (
+          <span className="font-semibold" style={{ color: v === 'Due' ? '#f87171' : v === 'Not due' ? '#34d399' : 'var(--text-dim)' }}>
+            {v}
+          </span>
+        )
+      } },
+    { id: 'state', header: 'State', accessorFn: (r) => BAND_META[bandFor(r)].label, size: 130,
+      meta: { exportValue: (r) => `${BAND_META[bandFor(r)].label}${r.lifeUsedPct != null ? ` ${r.lifeUsedPct}%` : ''}` },
+      cell: ({ row }) => {
+        const meta = BAND_META[bandFor(row.original)]
+        const tone = TONE_STYLE[meta.tone] || TONE_STYLE.quiet
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={tone}>
+            {meta.label}{row.original.lifeUsedPct != null ? ` ${row.original.lifeUsedPct}%` : ''}
+          </span>
+        )
+      } },
+  ], [])
 
   return (
     <div className="card p-5 mt-6">
@@ -130,12 +149,6 @@ export default function TyreRunningLife() {
           )}
           <button type="button" onClick={load} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} /> Refresh
-          </button>
-          <button type="button" onClick={() => doExport('xlsx')} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-            <FileSpreadsheet size={13} /> Excel
-          </button>
-          <button type="button" onClick={() => doExport('pdf')} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-            <FileText size={13} /> PDF
           </button>
         </div>
       </div>
@@ -199,7 +212,7 @@ export default function TyreRunningLife() {
               <Search size={14} style={{ color: 'var(--text-dim)' }} />
               <input
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search serial, asset, site, brand, size"
                 className="bg-transparent text-xs outline-none w-56"
                 style={{ color: 'var(--text-primary)' }}
@@ -208,7 +221,7 @@ export default function TyreRunningLife() {
                 <button type="button" onClick={() => setSearch('')}><X size={13} style={{ color: 'var(--text-dim)' }} /></button>
               )}
             </div>
-            <select value={band} onChange={(e) => { setBand(e.target.value); setPage(0) }}
+            <select value={band} onChange={(e) => setBand(e.target.value)}
               className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
               <option value="all">All states</option>
               <option value="overdue">Past expected life</option>
@@ -217,7 +230,7 @@ export default function TyreRunningLife() {
               <option value="healthy">Healthy</option>
               <option value="unknown">Not measurable</option>
             </select>
-            <select value={unit} onChange={(e) => { setUnit(e.target.value); setPage(0) }}
+            <select value={unit} onChange={(e) => setUnit(e.target.value)}
               className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
               <option value="all">Km and hours assets</option>
               <option value="km">Km-measured assets</option>
@@ -226,69 +239,20 @@ export default function TyreRunningLife() {
             <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{filtered.length} tyres</span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ color: 'var(--text-secondary)' }} className="text-left border-b border-[var(--border-subtle)]">
-                  <th className="py-2 pr-2">Serial</th>
-                  <th className="py-2 pr-2">Asset</th>
-                  <th className="py-2 pr-2">Pos</th>
-                  <th className="py-2 pr-2">Site</th>
-                  <th className="py-2 pr-2">Size</th>
-                  <th className="py-2 pr-2 text-right">Days on</th>
-                  <th className="py-2 pr-2 text-right">Fit km</th>
-                  <th className="py-2 pr-2 text-right">Current km</th>
-                  <th className="py-2 pr-2 text-right">Km run</th>
-                  <th className="py-2 pr-2 text-right">Hours run</th>
-                  <th className="py-2 pr-2 text-right">Expected life</th>
-                  <th className="py-2 pr-2 text-right">Remaining km</th>
-                  <th className="py-2 pr-2 text-right">Remaining days</th>
-                  <th className="py-2 pr-2">Due?</th>
-                  <th className="py-2 pr-2">State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((r) => {
-                  const b = bandFor(r)
-                  const meta = BAND_META[b]
-                  const tone = TONE_STYLE[meta.tone] || TONE_STYLE.quiet
-                  return (
-                    <tr key={`${r.serial}|${r.asset}|${r.position}`} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
-                      <td className="py-1.5 pr-2 font-medium">{r.serial || 'N/A'}</td>
-                      <td className="py-1.5 pr-2">{r.asset}{r.unit === 'hours' ? ' (hrs)' : ''}</td>
-                      <td className="py-1.5 pr-2">{r.position || 'N/A'}</td>
-                      <td className="py-1.5 pr-2">{r.site || 'N/A'}</td>
-                      <td className="py-1.5 pr-2">{r.size || 'N/A'}</td>
-                      <td className="py-1.5 pr-2 text-right" title={r.fittedOn ? `Fitted ${r.fittedOn}` : ''}>{fmtNum(r.daysOn)}</td>
-                      <td className="py-1.5 pr-2 text-right">{fmtNum(r.kmAtFitment)}</td>
-                      <td className="py-1.5 pr-2 text-right">{fmtNum(r.currentKm)}</td>
-                      <td className="py-1.5 pr-2 text-right font-medium">{fmtNum(r.kmRun)}</td>
-                      <td className="py-1.5 pr-2 text-right">{fmtNum(r.hoursRun)}</td>
-                      <td className="py-1.5 pr-2 text-right" title={basisLabel(r)}>{fmtNum(r.expectedLifeKm)}</td>
-                      <td className="py-1.5 pr-2 text-right font-semibold">{fmtNum(r.remainingKm)}</td>
-                      <td className="py-1.5 pr-2 text-right" title={r.daySample ? `Day life from ${r.daySample} removed tyres` : ''}>{fmtNum(r.remainingDays)}</td>
-                      <td className="py-1.5 pr-2 font-semibold" style={{ color: dueLabel(r) === 'Due' ? '#f87171' : dueLabel(r) === 'Not due' ? '#34d399' : 'var(--text-dim)' }}>
-                        {dueLabel(r)}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={tone}>
-                          {meta.label}{r.lifeUsedPct != null ? ` ${r.lifeUsedPct}%` : ''}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {pages > 1 && (
-            <div className="flex items-center justify-end gap-2 mt-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-              <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)} className="px-2 py-1 rounded border border-[var(--border-subtle)] disabled:opacity-40">Prev</button>
-              <span>Page {page + 1} of {pages}</span>
-              <button type="button" disabled={page >= pages - 1} onClick={() => setPage(page + 1)} className="px-2 py-1 rounded border border-[var(--border-subtle)] disabled:opacity-40">Next</button>
-            </div>
-          )}
+          <EnterpriseTable
+            columns={columns}
+            data={filtered}
+            getRowId={(r) => `${r.serial}|${r.asset}|${r.position}`}
+            enableGlobalFilter={false}
+            enableColumnFilters={false}
+            enableSorting
+            enableColumnVisibility
+            enableExport
+            exportFileName="tyre_running_life"
+            initialPageSize={25}
+            pageSizeOptions={[10, 25, 50, 100]}
+            emptyMessage="No tyres match these filters."
+          />
 
           <p className="mt-3 text-[11px]" style={{ color: 'var(--text-dim)' }}>
             Remaining figures are a guide from your fleet's own measured life (or your set

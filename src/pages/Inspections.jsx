@@ -28,7 +28,8 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction } from '../lib/inspectionTyreFlags'
+import { raiseActionsForInspection } from '../lib/api/correctiveActions'
 import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
 
 // Report logo: tenant branding wins; otherwise fall back to the org-wide
@@ -206,8 +207,40 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
 // Immediate flag banner: shown when the vehicle carries tyres at/near end of
 // life (judged by the ONE running-life calc via buildAssetFlagMap) or when
 // the inspection itself found damaged/punctured positions.
-function TyreDueBanner({ entry, damaged = [] }) {
+/**
+ * Flags the tyres that need changing on the just-inspected vehicle, AND lets the
+ * finding become tracked work.
+ *
+ * Before this, a recorded defect ended at the report - 13 live inspections found
+ * damage across 12 assets while the whole system held 3 corrective actions. The
+ * button lives HERE, on the one component both the saved checklist and the
+ * record detail render, so the flag and the action can never be shown on
+ * different surfaces or driven by different rules.
+ *
+ * `inspection` is optional: an unsaved form has no id to attach an action to, so
+ * the button simply does not appear.
+ */
+function TyreDueBanner({ entry, damaged = [], inspection = null }) {
   const due = entry ? [...(entry.overdue || []), ...(entry.dueSoon || [])] : []
+  const [raising, setRaising] = useState(false)
+  const [raised, setRaised] = useState(null)   // { created, skipped, failed } | { error }
+
+  const canRaise = Boolean(inspection?.id) && !String(inspection.id).startsWith('offline-')
+  const defects = canRaise
+    ? defectsForAction(inspection, inspection.asset_no ? { [inspection.asset_no]: entry } : {})
+    : []
+
+  const raise = async () => {
+    setRaising(true); setRaised(null)
+    try {
+      setRaised(await raiseActionsForInspection(inspection, defects))
+    } catch (e) {
+      setRaised({ error: toUserMessage(e) })
+    } finally {
+      setRaising(false)
+    }
+  }
+
   if (due.length === 0 && damaged.length === 0) return null
   return (
     <div className="rounded-xl border px-4 py-3 mb-4"
@@ -234,6 +267,30 @@ function TyreDueBanner({ entry, damaged = [] }) {
         <p className="text-xs mt-1 text-[var(--text-secondary)]">
           Damage found: {damaged.map((d) => d.position || 'N/A').join(', ')}
         </p>
+      )}
+
+      {canRaise && defects.length > 0 && (
+        <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <button
+            type="button" onClick={raise} disabled={raising}
+            className="btn-secondary text-xs flex items-center gap-2 disabled:opacity-60"
+          >
+            <ClipboardList size={13} />
+            {raising ? 'Raising...' : `Raise corrective action (${defects.length})`}
+          </button>
+          {raised?.error && (
+            <span className="text-xs" style={{ color: '#ef4444' }}>{raised.error}</span>
+          )}
+          {raised && !raised.error && (
+            <span className="text-xs text-[var(--text-secondary)]">
+              {raised.created.length > 0 && `${raised.created.length} action${raised.created.length === 1 ? '' : 's'} raised. `}
+              {raised.skipped > 0 && `${raised.skipped} already open. `}
+              {raised.failed.length > 0 && `${raised.failed.length} could not be raised. `}
+              {raised.created.length === 0 && raised.skipped > 0 && raised.failed.length === 0
+                && 'Nothing new to raise.'}
+            </span>
+          )}
+        </div>
       )}
     </div>
   )
@@ -1526,6 +1583,7 @@ export default function Inspections() {
               <TyreDueBanner
                 entry={flagMap?.[clSaved.asset_no || clAsset]}
                 damaged={damagedPositions({ tyre_conditions: clPositions })}
+                inspection={{ ...clSaved, asset_no: clSaved.asset_no || clAsset, tyre_conditions: clPositions }}
               />
 
               <div className="flex gap-3 flex-wrap">
@@ -2520,7 +2578,7 @@ export default function Inspections() {
 
           {/* Immediate tyre-change flag for this vehicle (open detail) */}
           {form.asset_no && (
-            <TyreDueBanner entry={flagMap?.[form.asset_no]} damaged={damagedPositions(form)} />
+            <TyreDueBanner entry={flagMap?.[form.asset_no]} damaged={damagedPositions(form)} inspection={form} />
           )}
 
           {/* Universal Approval & Workflow Engine — inspection approval + lock.

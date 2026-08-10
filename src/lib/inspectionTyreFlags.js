@@ -161,6 +161,101 @@ export function siteSummary(inspections = [], flagMap = {}, { from = '', to = ''
   return { rows, totals }
 }
 
+/**
+ * The defects on ONE inspection that warrant a tracked corrective action.
+ *
+ * Two independent sources, both already computed elsewhere and reused here so a
+ * single judgement governs the flag, the badge and the action:
+ *   - damagedPositions(inspection) - a tyre recorded as damaged or punctured
+ *   - flagMap[asset] (from bandFor) - a tyre overdue or due soon on its life target
+ *
+ * `key` is the stable identity of the defect. It is what stops the same
+ * inspection raising a second open action for the same tyre, and it is stored
+ * as corrective_actions.source_detail, so it must stay stable for a given
+ * defect: position first, because a position is what a fitter is sent to.
+ *
+ * @returns {Array<{key,kind,position,condition,serial,title,priority,description}>}
+ */
+export function defectsForAction(inspection, flagMap = {}) {
+  if (!inspection) return []
+  const asset = inspection.asset_no || ''
+  const out = []
+  const seen = new Set()
+  const push = (d) => { if (!seen.has(d.key)) { seen.add(d.key); out.push(d) } }
+
+  for (const d of damagedPositions(inspection)) {
+    const pos = d.position || 'unknown position'
+    push({
+      key: `damage:${pos}`,
+      kind: 'damage',
+      position: pos,
+      condition: d.condition,
+      serial: '',
+      title: `Tyre ${d.condition} at ${pos} on ${asset || 'asset'}`,
+      // A puncture or damaged casing is a road-safety item, not housekeeping.
+      priority: 'High',
+      description: `Inspection recorded "${d.condition}" at position ${pos}. Inspect and replace or repair the tyre before the vehicle returns to service.`,
+    })
+  }
+
+  const entry = asset ? flagMap[asset] : null
+  if (entry) {
+    for (const row of entry.overdue || []) {
+      const pos = row.position || 'unknown position'
+      push({
+        key: `overdue:${pos}:${row.serial || ''}`,
+        kind: 'overdue',
+        position: pos,
+        condition: 'Past expected life',
+        serial: row.serial || '',
+        title: `Tyre past expected life at ${pos} on ${asset}`,
+        priority: 'High',
+        description: `The tyre at position ${pos}${row.serial ? ` (serial ${row.serial})` : ''} has passed its expected life. Schedule replacement.`,
+      })
+    }
+    for (const row of entry.dueSoon || []) {
+      const pos = row.position || 'unknown position'
+      push({
+        key: `duesoon:${pos}:${row.serial || ''}`,
+        kind: 'due_soon',
+        position: pos,
+        condition: 'Due soon',
+        serial: row.serial || '',
+        title: `Tyre due for change at ${pos} on ${asset}`,
+        // Due soon is planning work, not a stop-the-vehicle item.
+        priority: 'Medium',
+        description: `The tyre at position ${pos}${row.serial ? ` (serial ${row.serial})` : ''} is approaching its expected life. Plan a replacement.`,
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * Build the corrective_actions rows for an inspection's defects. Pure - the
+ * caller does the insert, so this stays testable and has no I/O.
+ * `existingKeys` are the source_detail values already raised and still open;
+ * they are skipped so pressing the button twice cannot duplicate an action.
+ */
+export function actionRowsForInspection(inspection, defects = [], { existingKeys = [] } = {}) {
+  const skip = new Set(existingKeys)
+  return (defects || [])
+    .filter((d) => d && !skip.has(d.key))
+    .map((d) => ({
+      title: d.title.slice(0, 300),
+      description: d.description,
+      priority: d.priority,
+      status: 'Open',
+      asset_no: inspection?.asset_no || null,
+      tyre_serial: d.serial || null,
+      site: inspection?.site || null,
+      country: inspection?.country || null,
+      source_type: 'inspection',
+      source_id: inspection?.id || null,
+      source_detail: d.key,
+    }))
+}
+
 export function inspectionOverview(inspections = [], flagMap = {}, { from = '', to = '' } = {}) {
   const list = (Array.isArray(inspections) ? inspections : []).filter((r) => r && inWindow(r, from, to))
   const fm = flagMap && typeof flagMap === 'object' ? flagMap : {}

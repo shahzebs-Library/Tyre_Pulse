@@ -300,6 +300,10 @@ function LifeTargetsModal({ rows, country, onClose }) {
       setError('Expected life must be a number between 1 and 400,000 km.')
       return
     }
+    if (!form.size && !form.vehicle_type) {
+      setError('Pick a tyre size or a vehicle type (or both).')
+      return
+    }
     setBusy(true); setError('')
     try {
       await saveTyreLifeTarget({
@@ -329,20 +333,22 @@ function LifeTargetsModal({ rows, country, onClose }) {
           <button type="button" onClick={() => onClose(changed)}><X size={16} style={{ color: 'var(--text-dim)' }} /></button>
         </div>
         <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Set the km life YOU expect per tyre size (optionally only for one vehicle type). A target
-          overrides the measured average on every matching tyre, so the Remaining and Life-used figures
-          then measure your fleet against your own standard.
+          Set the km life YOU expect - by tyre size, by vehicle type, or both. The most specific
+          target wins on every tyre: size + vehicle type first, then vehicle type, then size.
+          A target overrides the measured average, so Remaining and Life-used then measure your
+          fleet against your own standard. Size spelling does not matter (315/80R22.5 and
+          315/80 R 22.5 are the same size).
         </p>
 
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Tyre size *
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Tyre size
             <select value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })}
               className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-              <option value="">Pick a size</option>
+              <option value="">All sizes</option>
               {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Vehicle type (optional)
+          <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Vehicle type
             <select value={form.vehicle_type} onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })}
               className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
               <option value="">All vehicle types</option>
@@ -360,7 +366,7 @@ function LifeTargetsModal({ rows, country, onClose }) {
           </label>
         </div>
         {error && <p className="text-xs mb-2" style={{ color: '#f87171' }}>{error}</p>}
-        <button type="button" disabled={busy || !form.size || !form.target_km} onClick={save}
+        <button type="button" disabled={busy || (!form.size && !form.vehicle_type) || !form.target_km} onClick={save}
           className="px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-40"
           style={{ background: 'var(--brand)', color: '#fff' }}>
           {busy ? 'Saving...' : 'Save target'}
@@ -388,7 +394,7 @@ function LifeTargetsModal({ rows, country, onClose }) {
               <tbody>
                 {targets.map((t) => (
                   <tr key={t.id} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
-                    <td className="py-1.5 pr-2">{t.size}</td>
+                    <td className="py-1.5 pr-2">{t.size || 'All sizes'}</td>
                     <td className="py-1.5 pr-2">{t.vehicle_type || 'All types'}</td>
                     <td className="py-1.5 pr-2">{t.country || 'All'}</td>
                     <td className="py-1.5 pr-2 text-right">{fmtNum(t.target_km)}</td>

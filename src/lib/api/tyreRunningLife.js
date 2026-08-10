@@ -29,16 +29,21 @@ export async function listTyreLifeTargets() {
   } catch { return [] }
 }
 
-/** Create or update a manual target (unique per country+size+vehicle_type). */
+/**
+ * Create or update a manual target (unique per country+size+vehicle_type).
+ * A target may pin a size, a vehicle type, or BOTH - the most specific match
+ * wins on every tyre (size+type > type only > size only).
+ */
 export async function saveTyreLifeTarget({ id, country, size, vehicle_type, target_km, note }) {
   const row = {
     country: country && country !== 'All' ? country : null,
-    size: String(size || '').trim(),
+    size: String(size || '').trim() || null,
     vehicle_type: vehicle_type ? String(vehicle_type).trim() : null,
     target_km: Number(target_km),
     note: note || null,
   }
-  if (!row.size || !Number.isFinite(row.target_km)) throw new Error('A size and a target km are required.')
+  if (!row.size && !row.vehicle_type) throw new Error('Pick a tyre size or a vehicle type (or both).')
+  if (!Number.isFinite(row.target_km)) throw new Error('A target km is required.')
   if (id) {
     const { data, error } = await supabase.from('tyre_life_targets')
       .update({ ...row, updated_at: new Date().toISOString() }).eq('id', id).select(TARGET_COLS).single()

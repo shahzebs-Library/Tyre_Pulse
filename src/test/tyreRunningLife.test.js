@@ -100,6 +100,58 @@ describe('V489 additions: days + basis', () => {
   })
 })
 
+describe('inFittedRange', () => {
+  it('passes everything with no range; excludes undated rows when a range is active', async () => {
+    const { inFittedRange } = await import('../lib/tyreRunningLife')
+    const dated = shapeRow(row({ fitted_on: '2026-03-15' }))
+    const undated = shapeRow(row({ fitted_on: null }))
+    expect(inFittedRange(dated)).toBe(true)
+    expect(inFittedRange(undated)).toBe(true)
+    expect(inFittedRange(dated, '2026-03-01', '2026-03-31')).toBe(true)
+    expect(inFittedRange(dated, '2026-04-01', '')).toBe(false)
+    expect(inFittedRange(dated, '', '2026-02-28')).toBe(false)
+    expect(inFittedRange(undated, '2026-01-01', '')).toBe(false)
+  })
+})
+
+describe('filterDescription', () => {
+  it('describes no filters honestly', async () => {
+    const { filterDescription } = await import('../lib/tyreRunningLife')
+    expect(filterDescription()).toBe('All active tyres')
+    expect(filterDescription({ search: '  ', band: 'all', unit: 'all' })).toBe('All active tyres')
+  })
+
+  it('composes search, band, unit and date range in plain English', async () => {
+    const { filterDescription } = await import('../lib/tyreRunningLife')
+    expect(filterDescription({ search: 'TM1', band: 'due-soon', unit: 'km', fromDate: '2026-01-01', toDate: '2026-06-30' }))
+      .toBe('search "TM1", state: Due soon, km-measured assets only, fitted 2026-01-01 to 2026-06-30')
+    expect(filterDescription({ fromDate: '2026-01-01' })).toBe('fitted from 2026-01-01')
+    expect(filterDescription({ toDate: '2026-06-30' })).toBe('fitted up to 2026-06-30')
+    expect(filterDescription({ unit: 'hours' })).toBe('hour-measured assets only')
+  })
+})
+
+describe('actionRows', () => {
+  it('selects only overdue + due-soon, overdue first, most-used first within a group', async () => {
+    const { actionRows } = await import('../lib/tyreRunningLife')
+    const rows = [
+      shapeRow(row({ serial_no: 'HEALTHY', remaining_km: 40000, life_used_pct: 30 })),
+      shapeRow(row({ serial_no: 'SOON-93', remaining_km: 4000, life_used_pct: 93 })),
+      shapeRow(row({ serial_no: 'OVER-150', remaining_km: 0, life_used_pct: 150 })),
+      shapeRow(row({ serial_no: 'SOON-98', remaining_km: 1000, life_used_pct: 98 })),
+      shapeRow(row({ serial_no: 'UNKNOWN', km_run: null, remaining_km: null, life_used_pct: null })),
+    ]
+    const out = actionRows(rows)
+    expect(out.map((r) => r.serial)).toEqual(['OVER-150', 'SOON-98', 'SOON-93'])
+  })
+
+  it('empty in, empty out', async () => {
+    const { actionRows } = await import('../lib/tyreRunningLife')
+    expect(actionRows([])).toEqual([])
+    expect(actionRows()).toEqual([])
+  })
+})
+
 describe('dueLabel', () => {
   it('Due for overdue/due-soon, Not due otherwise, Unknown when unmeasurable', async () => {
     const { dueLabel } = await import('../lib/tyreRunningLife')

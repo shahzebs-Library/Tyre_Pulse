@@ -9,7 +9,7 @@ import { useConsoleAuth } from '../ConsoleAuthContext'
 import {
   PRESETS, PRESET_KEYS, PRESET_LABELS, DEFAULT_PRESET, setReportPalette,
 } from '../../lib/reportColors'
-import { getCompanyLogo, setCompanyLogo } from '../../lib/api/brandLogo'
+import { getCompanyLogo, setCompanyLogo, getDiagramBg, setDiagramBg } from '../../lib/api/brandLogo'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -41,6 +41,10 @@ export default function ConsoleReportAppearance() {
   const [logoSaving, setLogoSaving] = useState(false)
   const [logoSaved, setLogoSaved] = useState(false)
   const [logoError, setLogoError] = useState('')
+  const [diagBg, setDiagBg] = useState('#000000')     // persisted diagram background
+  const [diagBgSaving, setDiagBgSaving] = useState(false)
+  const [diagBgSaved, setDiagBgSaved] = useState(false)
+  const [diagBgError, setDiagBgError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true); setSaved(false); setError('')
@@ -63,6 +67,8 @@ export default function ConsoleReportAppearance() {
     try {
       const url = await getCompanyLogo()
       setLogoUrl(url); setLogoInput(url)
+      const bg = await getDiagramBg()
+      setDiagBg(bg || '#000000')
     } catch (e) {
       setLogoError(toUserMessage(e))
     } finally {
@@ -83,6 +89,20 @@ export default function ConsoleReportAppearance() {
       setLogoError(toUserMessage(e))
     } finally {
       setLogoSaving(false)
+    }
+  }
+
+  async function saveDiagBg(value) {
+    setDiagBgSaving(true); setDiagBgError(''); setDiagBgSaved(false)
+    try {
+      await setDiagramBg(value)
+      setDiagBg(value || '#000000')
+      await logAction('update_config', null, 'report_diagram_bg', { value: value || 'default' })
+      setDiagBgSaved(true)
+    } catch (e) {
+      setDiagBgError(toUserMessage(e))
+    } finally {
+      setDiagBgSaving(false)
     }
   }
 
@@ -264,6 +284,45 @@ export default function ConsoleReportAppearance() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Inspection diagram background - the colour painted behind the tyre map
+          on every inspection + checklist PDF (black by default). */}
+      <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-3">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-base font-bold text-white">Inspection diagram background</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              The colour behind the tyre map on inspection and checklist reports.
+              Keep it DARK - the wheel labels are light and disappear on a light background.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => saveDiagBg('')} disabled={diagBgSaving}
+              className="text-xs px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50">
+              Reset to black
+            </button>
+            <button onClick={() => saveDiagBg(diagBg)} disabled={diagBgSaving}
+              className="text-sm px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold inline-flex items-center gap-1.5 disabled:opacity-50">
+              <Save size={14} /> {diagBgSaving ? 'Saving...' : 'Save colour'}
+            </button>
+          </div>
+        </div>
+        {diagBgError && <div className="rounded-lg border border-red-800 bg-red-950/40 text-red-300 text-sm px-4 py-2">{diagBgError}</div>}
+        {diagBgSaved && <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 text-emerald-300 text-sm px-4 py-2 inline-flex items-center gap-2"><CheckCircle size={15} /> Saved. Every new inspection and checklist PDF uses this colour now.</div>}
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            Colour
+            <input type="color" value={diagBg}
+              onChange={(e) => { setDiagBg(e.target.value); setDiagBgSaved(false); setDiagBgError('') }}
+              className="h-9 w-14 rounded border border-slate-700 bg-slate-900 cursor-pointer" />
+            <span className="font-mono text-xs text-slate-400">{diagBg}</span>
+          </label>
+          <div className="rounded-xl border border-slate-700 px-6 py-3 text-xs font-semibold"
+            style={{ background: diagBg, color: (0.299 * parseInt(diagBg.slice(1, 3), 16) + 0.587 * parseInt(diagBg.slice(3, 5), 16) + 0.114 * parseInt(diagBg.slice(5, 7), 16)) > 150 ? '#1f2937' : '#fef08a' }}>
+            Diagram preview text
+          </div>
+        </div>
       </div>
     </div>
   )

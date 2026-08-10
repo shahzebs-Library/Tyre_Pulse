@@ -6,29 +6,61 @@
  * baseline is missing - nothing is fabricated.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Search, X, RefreshCw, Target, Trash2 } from 'lucide-react'
+import { Gauge, Search, X, RefreshCw, Target, Trash2, FileDown } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   getTyreRunningLife, listTyreLifeTargets, saveTyreLifeTarget, deleteTyreLifeTarget,
 } from '../../lib/api/tyreRunningLife'
 import {
-  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel, summarize,
+  shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel,
+  summarize, inFittedRange, filterDescription,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import EnterpriseTable from '../ui/EnterpriseTable'
 import DateField from '../ui/DateField'
 
-const TONE_STYLE = {
-  danger: { color: '#f87171', background: 'rgba(248,113,113,0.12)' },
-  warning: { color: '#fbbf24', background: 'rgba(251,191,36,0.12)' },
-  info: { color: '#60a5fa', background: 'rgba(96,165,250,0.12)' },
-  good: { color: '#34d399', background: 'rgba(52,211,153,0.12)' },
-  quiet: { color: 'var(--text-dim)', background: 'rgba(148,163,184,0.12)' },
+// Muted, professional status dots (theme-neutral dark hues; the text itself
+// stays on the theme's own tokens instead of loud colored text).
+const DOT_COLOR = {
+  danger: '#b91c1c',
+  warning: '#b45309',
+  info: '#64748b',
+  good: '#15803d',
+  quiet: '#94a3b8',
+}
+
+function StatusDot({ tone }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 7, height: 7, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
+        background: DOT_COLOR[tone] || DOT_COLOR.quiet,
+      }}
+    />
+  )
+}
+
+/** Restrained status pill: subtle border + small dot, neutral text. */
+function StatusBadge({ tone, children }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium"
+      style={{
+        color: 'var(--text-secondary)',
+        border: '1px solid var(--border-subtle)',
+        background: 'rgba(148,163,184,0.06)',
+      }}
+    >
+      <StatusDot tone={tone} />
+      {children}
+    </span>
+  )
 }
 
 export default function TyreRunningLife() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
   const { profile, isSuperAdmin } = useAuth()
   const [state, setState] = useState({ loading: true, ok: true, rows: [], summary: null })
   const [search, setSearch] = useState('')
@@ -39,6 +71,9 @@ export default function TyreRunningLife() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [targetsOpen, setTargetsOpen] = useState(false)
+  const [detailRow, setDetailRow] = useState(null)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfError, setPdfError] = useState('')
   const canSetTargets = isSuperAdmin || ['Admin', 'Manager', 'Director'].includes(profile?.role)
 
   async function load() {
@@ -52,19 +87,30 @@ export default function TyreRunningLife() {
   const filtered = useMemo(() => {
     const base = filterRows(state.rows, { search, band, unit })
     if (!fromDate && !toDate) return base
-    // String-safe 'YYYY-MM-DD' prefix comparison on the fitment date; a row
-    // with no fitment date is excluded while a range is active.
-    return base.filter((r) => {
-      const d = r.fittedOn ? String(r.fittedOn).slice(0, 10) : ''
-      if (!d) return false
-      if (fromDate && d < fromDate) return false
-      if (toDate && d > toDate) return false
-      return true
-    })
+    return base.filter((r) => inFittedRange(r, fromDate, toDate))
   }, [state.rows, search, band, unit, fromDate, toDate])
   // Tiles + life-history strip follow the on-screen filters, same as the table.
   const s = useMemo(() => summarize(filtered), [filtered])
   const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all' || Boolean(fromDate || toDate)
+
+  // Branded PDF report of the FILTERED rows - always matches the screen.
+  async function downloadPdfReport() {
+    setPdfBusy(true); setPdfError('')
+    try {
+      const { renderTyreLifeReportPdf } = await import('../../lib/tyreLifeReportPdf')
+      await renderTyreLifeReportPdf({
+        rows: filtered,
+        summary: s,
+        country: activeCountry,
+        company: appSettings?.company_name || 'Tyre Pulse',
+        filters: filterDescription({ search, band, unit, fromDate, toDate }),
+      })
+    } catch (e) {
+      setPdfError(toUserMessage(e))
+    } finally {
+      setPdfBusy(false)
+    }
+  }
 
   // App-standard table columns (EnterpriseTable) - hide/show any column and the
   // export menu downloads exactly the visible set, like every other module.
@@ -94,25 +140,28 @@ export default function TyreRunningLife() {
       cell: ({ row }) => <span className="font-semibold">{lifeDisplay(row.original.remainingKm, row.original.remainingHours)}</span> },
     { id: 'remainingDays', header: 'Remaining days', accessorFn: (r) => r.remainingDays, size: 110, meta: { align: 'right' },
       cell: ({ row }) => <span title={row.original.daySample ? `Day life from ${row.original.daySample} removed tyres` : ''}>{fmtNum(row.original.remainingDays)}</span> },
-    { id: 'due', header: 'Due?', accessorFn: (r) => dueLabel(r), size: 80,
+    { id: 'basis', header: 'Basis', accessorFn: (r) => basisLabel(r), size: 130,
+      cell: ({ getValue }) => <span style={{ color: 'var(--text-secondary)' }}>{getValue()}</span> },
+    { id: 'due', header: 'Due?', accessorFn: (r) => dueLabel(r), size: 90,
       cell: ({ getValue }) => {
         const v = getValue()
+        const tone = v === 'Due' ? 'danger' : v === 'Not due' ? 'good' : 'quiet'
         return (
-          <span className="font-semibold" style={{ color: v === 'Due' ? '#f87171' : v === 'Not due' ? '#34d399' : 'var(--text-dim)' }}>
+          <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: v === 'Unknown' ? 'var(--text-dim)' : 'var(--text-primary)' }}>
+            <StatusDot tone={tone} />
             {v}
           </span>
         )
       } },
-    { id: 'state', header: 'State', accessorFn: (r) => BAND_META[bandFor(r)].label, size: 130,
+    { id: 'state', header: 'State', accessorFn: (r) => BAND_META[bandFor(r)].label, size: 140,
       meta: { exportValue: (r) => { const p = r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct; return `${BAND_META[bandFor(r)].label}${p != null ? ` ${p}%` : ''}` } },
       cell: ({ row }) => {
         const meta = BAND_META[bandFor(row.original)]
-        const tone = TONE_STYLE[meta.tone] || TONE_STYLE.quiet
         const p = row.original.lifeUsedPct != null ? row.original.lifeUsedPct : row.original.hoursUsedPct
         return (
-          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium" style={tone}>
+          <StatusBadge tone={meta.tone}>
             {meta.label}{p != null ? ` ${p}%` : ''}
-          </span>
+          </StatusBadge>
         )
       } },
   ], [])
@@ -148,11 +197,24 @@ export default function TyreRunningLife() {
               <Target size={13} /> Life targets
             </button>
           )}
+          <button
+            type="button"
+            onClick={downloadPdfReport}
+            disabled={pdfBusy || state.loading || !state.ok || !state.rows.length}
+            className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1 disabled:opacity-40"
+            style={{ color: 'var(--text-primary)' }}
+            title="Download a branded PDF report of the rows currently on screen"
+          >
+            <FileDown size={13} /> {pdfBusy ? 'Building PDF...' : 'Download PDF report'}
+          </button>
           <button type="button" onClick={load} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} /> Refresh
           </button>
         </div>
       </div>
+      {pdfError && (
+        <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>{pdfError}</p>
+      )}
 
       {state.loading ? (
         <div className="py-10 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Loading tyre running life...</div>
@@ -253,7 +315,11 @@ export default function TyreRunningLife() {
             initialPageSize={25}
             pageSizeOptions={[10, 25, 50, 100]}
             emptyMessage="No tyres match these filters."
+            onRowClick={(r) => setDetailRow(r)}
           />
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            Click any row for that tyre's full life story.
+          </p>
 
           <p className="mt-3 text-[11px]" style={{ color: 'var(--text-dim)' }}>
             Remaining figures are a guide from your fleet's own measured life (or your set
@@ -270,6 +336,68 @@ export default function TyreRunningLife() {
           onClose={(changed) => { setTargetsOpen(false); if (changed) load() }}
         />
       )}
+      {detailRow && <TyreLifeDetailModal row={detailRow} onClose={() => setDetailRow(null)} />}
+    </div>
+  )
+}
+
+/** Read-only "full life story" modal for one tyre - plain labeled grid, honest N/A. */
+function TyreLifeDetailModal({ row, onClose }) {
+  const meta = BAND_META[bandFor(row)]
+  const usedPct = row.lifeUsedPct != null ? row.lifeUsedPct : row.hoursUsedPct
+  const fields = [
+    ['Serial', row.serial || 'N/A'],
+    ['Asset', row.asset || 'N/A'],
+    ['Position', row.position || 'N/A'],
+    ['Vehicle type', row.vehicleType || 'N/A'],
+    ['Site', row.site || 'N/A'],
+    ['Size', row.size || 'N/A'],
+    ['Brand', row.brand || 'N/A'],
+    ['Measured in', row.unit === 'hours' ? 'Engine hours' : 'Kilometres'],
+    ['Fitted on', row.fittedOn ? String(row.fittedOn).slice(0, 10) : 'N/A'],
+    ['Days on vehicle', fmtNum(row.daysOn)],
+    ['Km at fitment', fmtNum(row.kmAtFitment)],
+    ['Current km', fmtNum(row.currentKm)],
+    ['Km run', fmtNum(row.kmRun)],
+    ['Hours at fitment', fmtNum(row.hoursAtFitment)],
+    ['Current hours', fmtNum(row.currentHours)],
+    ['Hours run', fmtNum(row.hoursRun)],
+    ['Expected life', lifeDisplay(row.expectedLifeKm, row.expectedLifeHours)],
+    ['Remaining', lifeDisplay(row.remainingKm, row.remainingHours)],
+    ['Remaining days', fmtNum(row.remainingDays)],
+    ['Life used', usedPct != null ? `${usedPct}%` : 'N/A'],
+    ['Expected life basis', basisLabel(row)],
+  ]
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose}>
+      <div className="card w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Gauge size={15} style={{ color: 'var(--brand)' }} />
+            Tyre {row.serial || 'N/A'} on {row.asset || 'N/A'}
+          </h3>
+          <button type="button" onClick={onClose} aria-label="Close">
+            <X size={16} style={{ color: 'var(--text-dim)' }} />
+          </button>
+        </div>
+        <div className="mb-3">
+          <StatusBadge tone={meta.tone}>
+            {meta.label}{usedPct != null ? ` ${usedPct}%` : ''}
+          </StatusBadge>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5">
+          {fields.map(([label, value]) => (
+            <div key={label}>
+              <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-dim)' }}>{label}</div>
+              <div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{value}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px]" style={{ color: 'var(--text-dim)' }}>
+          Figures come from this tyre's fitment record and the vehicle's current meters. N/A means
+          the value was never recorded - nothing here is estimated beyond the stated basis.
+        </p>
+      </div>
     </div>
   )
 }
@@ -382,7 +510,7 @@ function LifeTargetsModal({ rows, country, onClose }) {
               className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
           </label>
         </div>
-        {error && <p className="text-xs mb-2" style={{ color: '#f87171' }}>{error}</p>}
+        {error && <p className="text-xs mb-2" style={{ color: '#b91c1c' }}>{error}</p>}
         <button type="button" disabled={busy || (!form.size && !form.vehicle_type) || (!form.target_km && !form.target_hours)} onClick={save}
           className="px-3 py-1.5 rounded-md text-xs font-medium disabled:opacity-40"
           style={{ background: 'var(--brand)', color: '#fff' }}>

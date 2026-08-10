@@ -19,6 +19,53 @@ import { supabase, ServiceError } from './_client'
 /** system_config key that both this service and get_report_snapshot read. */
 export const LOGO_CONFIG_KEY = 'company_logo'
 
+/** system_config key for the inspection/checklist diagram background colour. */
+export const DIAGRAM_BG_CONFIG_KEY = 'report_diagram_bg'
+
+/** True for a #rrggbb hex colour. */
+export function isValidHexColor(v) {
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim())
+}
+
+/**
+ * Read the org-wide diagram background colour ('' when unset/error - callers
+ * fall back to black). Never throws.
+ */
+export async function getDiagramBg() {
+  try {
+    const { data, error } = await supabase
+      .from('system_config')
+      .select('value_text, value')
+      .eq('key', DIAGRAM_BG_CONFIG_KEY)
+      .maybeSingle()
+    if (error) return ''
+    const v = data?.value_text ?? data?.value ?? ''
+    return isValidHexColor(v) ? v.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Store (or clear with '') the diagram background colour. Only a #rrggbb hex
+ * is accepted - the value is painted behind the tyre map on every inspection
+ * and checklist PDF.
+ */
+export async function setDiagramBg(hex) {
+  const value = typeof hex === 'string' ? hex.trim() : ''
+  if (value !== '' && !isValidHexColor(value)) {
+    throw new ServiceError('Pick a colour (a #rrggbb value).', 'invalid_color')
+  }
+  const { error } = await supabase
+    .from('system_config')
+    .upsert(
+      [{ key: DIAGRAM_BG_CONFIG_KEY, value_text: value, value, updated_at: new Date().toISOString() }],
+      { onConflict: 'key', ignoreDuplicates: false },
+    )
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return { ok: true }
+}
+
 /**
  * Return true when `url` is safe to store as a company logo image source: an
  * absolute http(s) URL or a `data:image/*` URI. Everything else (javascript:,

@@ -41,6 +41,11 @@ function _groupBy(arr, keyFn) {
 
 function _toMonthKey(dateStr) {
   if (!dateStr) return null
+  // ISO-shaped dates bucket by string slice: new Date('YYYY-MM-DD') parses UTC
+  // while getFullYear/getMonth read local time, shifting first-of-month rows
+  // into the previous month for negative-UTC-offset viewers.
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})/)
+  if (m) return `${m[1]}-${m[2]}`
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return null
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -607,7 +612,11 @@ export function computeCostTrend(records = [], defaultCost = 0) {
   // Regression using numeric month index
   const points = byMonth.map((m, i) => ({ x: i, y: m.totalCost }))
   const { slope, intercept } = _linearRegression(points)
-  const forecastNextMonth    = intercept + slope * byMonth.length
+  // A single month cannot support a regression (slope/intercept fall back to 0,
+  // which fabricated a "next month: 0" forecast beside a real positive spend).
+  const forecastNextMonth = byMonth.length >= 2
+    ? intercept + slope * byMonth.length
+    : (byMonth.length === 1 ? byMonth[0].totalCost : null)
 
   const trend = Math.abs(slope) < 50
     ? 'stable'

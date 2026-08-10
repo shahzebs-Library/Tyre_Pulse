@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeCpkFleet, computeRemovalRate, computeFailureRate } from '../lib/kpiEngine'
+import { computeCpkFleet, computeRemovalRate, computeFailureRate, computeCostTrend } from '../lib/kpiEngine'
 
 /**
  * Core guarantees of the canonical KPI engine.
@@ -95,5 +95,33 @@ describe('computeFailureRate - Critical counts as a failure', () => {
     const r = computeFailureRate(recs)
     expect(r.failureCount).toBe(2)
     expect(r.totalCount).toBe(4)
+  })
+})
+
+describe('computeCostTrend - forecast honesty', () => {
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-15`
+  it('single month of data forecasts that month, never a fabricated 0', () => {
+    const now = new Date()
+    const recs = [
+      { issue_date: iso(now), cost_per_tyre: 1200, qty: 1 },
+      { issue_date: iso(now), cost_per_tyre: 800, qty: 1 },
+    ]
+    const t = computeCostTrend(recs)
+    expect(t.byMonth.length).toBe(1)
+    expect(t.forecastNextMonth).toBe(2000)
+  })
+  it('no data yields a null forecast', () => {
+    const t = computeCostTrend([])
+    expect(t.forecastNextMonth).toBeNull()
+  })
+  it('two months regress normally', () => {
+    const now = new Date()
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15)
+    const recs = [
+      { issue_date: iso(prev), cost_per_tyre: 1000, qty: 1 },
+      { issue_date: iso(now), cost_per_tyre: 2000, qty: 1 },
+    ]
+    const t = computeCostTrend(recs)
+    expect(t.forecastNextMonth).toBe(3000)
   })
 })

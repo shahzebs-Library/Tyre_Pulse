@@ -151,10 +151,17 @@ export function linearFit(values) {
 
 /** Compound annual growth rate (%) between first and last measurable totals. */
 export function cagr(years) {
-  const vals = (years || []).map((y) => y.total).filter((v) => v > 0)
-  if (vals.length < 2) return null
-  const first = vals[0], last = vals[vals.length - 1]
-  const periods = vals.length - 1
+  // Periods = index distance between the first and last measurable totals,
+  // so a zero-spend period in between still counts as elapsed time
+  // (filtering zeros out of the exponent inflated the growth rate).
+  const idx = (years || [])
+    .map((y, i) => [i, Number(y?.total)])
+    .filter(([, v]) => Number.isFinite(v) && v > 0)
+  if (idx.length < 2) return null
+  const [firstI, first] = idx[0]
+  const [lastI, last] = idx[idx.length - 1]
+  const periods = lastI - firstI
+  if (periods <= 0) return null
   return (Math.pow(last / first, 1 / periods) - 1) * 100
 }
 

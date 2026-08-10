@@ -9,7 +9,7 @@
  * Every read degrades to an empty-but-shaped value on a missing relation / RPC
  * error so a not-yet-migrated org shows an honest empty state, never a throw.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllPages } from './_client'
 
 /**
  * Insert many rows fast and reliably: batches of CHUNK, a small concurrency pool,
@@ -221,17 +221,32 @@ export async function deleteSanyInvoice(id) {
 
 const PROD_COLS = 'id, country, site, asset_no, pump_no, period_date, m3, approved_m3, supplied_m3, rejected, reason, remarks, dn_number, order_number, mix_code, mix_description, customer_name, project_name, source, notes, created_at'
 
-export async function listProduction({ country, from, to, limit = 1000 } = {}) {
+/**
+ * Production rows for the ledger page.
+ *
+ * WAS `.limit(1000)`. production_logs holds 297,354 rows, so the ledger summary
+ * was computed from 0.3% of the table and the button still read "Show all rows
+ * (1,000)". Worse, `.limit(20000)` would NOT have fixed it: PostgREST caps every
+ * response at 1,000 whatever the limit says - only `.range()` paging gets past
+ * it (the standing rule in PROJECT_MEMORY, and the exact trap this hit).
+ *
+ * Now paged, ordered on (period_date, id) so a page boundary can neither drop
+ * nor repeat a row, and bounded at 20,000 to match api/production.js. The page
+ * fetches the TRUE count separately and states the gap when one remains.
+ */
+export async function listProduction({ country, from, to, limit = 20000 } = {}) {
   try {
-    let q = supabase.from('production_logs')
-      .select(PROD_COLS)
-      .order('period_date', { ascending: false }).order('id')
-    if (country && country !== 'All') q = q.eq('country', country)
-    if (from) q = q.gte('period_date', from)
-    if (to) q = q.lte('period_date', to)
-    const { data, error } = await q.limit(limit)
-    if (error) return []
-    return Array.isArray(data) ? data : []
+    const res = await fetchAllPages((pFrom, pTo) => {
+      let q = supabase.from('production_logs')
+        .select(PROD_COLS)
+        .order('period_date', { ascending: false }).order('id')
+      if (country && country !== 'All') q = q.eq('country', country)
+      if (from) q = q.gte('period_date', from)
+      if (to) q = q.lte('period_date', to)
+      return q.range(pFrom, pTo)
+    }, { max: limit })
+    const rows = res?.data ?? res
+    return Array.isArray(rows) ? rows : []
   } catch { return [] }
 }
 

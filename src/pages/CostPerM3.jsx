@@ -18,9 +18,9 @@ import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { getCostPerM3, getCostPerM3Trend, getProductionRejections } from '../lib/api/costPerM3'
+import { getCostPerM3, getCostPerM3Trend, getProductionRejections, countCostM3Rows } from '../lib/api/costPerM3'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../lib/cpkModule'
-import { fmtMoney, fmtM3, fmtCostPerM3 } from '../lib/costPerM3'
+import { fmtMoney, fmtM3, fmtCostPerM3, sourceShares } from '../lib/costPerM3'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
@@ -104,6 +104,7 @@ export default function CostPerM3() {
   // Date-wise monthly trend (last 12 months, independent of the period chip).
   const [trend, setTrend] = useState({ ok: false, months: [] })
   const [rejections, setRejections] = useState(null)
+  const [counts, setCounts] = useState(null)
   const [reviewCopied, setReviewCopied] = useState(false)
 
   const load = useCallback(() => {
@@ -113,11 +114,13 @@ export default function CostPerM3() {
       getCostPerM3({ country, from: bounds.from, to: bounds.to }).catch(() => null),
       getCostPerM3Trend({ country }).catch(() => ({ ok: false, months: [] })),
       getProductionRejections({ country, from: bounds.from, to: bounds.to }).catch(() => null),
-    ]).then(([d, t, rej]) => {
+      countCostM3Rows({ country, from: bounds.from, to: bounds.to }).catch(() => null),
+    ]).then(([d, t, rej, c]) => {
       if (cancelled) return
       setData(d)
       setTrend(t || { ok: false, months: [] })
       setRejections(rej)
+      setCounts(c)
     }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [country, bounds.from, bounds.to])
@@ -314,6 +317,53 @@ export default function CostPerM3() {
           </div>
         )}
       </div>
+
+      {/* Cost sources at a glance: per-source total, share of grand total and
+          ledger row counts for the selected period - everything in one place. */}
+      {!loading && total && (
+        <div className="mb-6 rounded-xl border border-[var(--border-subtle)] p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Layers size={16} /> Cost sources - {periodLabel(bounds)}</h3>
+          <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
+            <table className="w-full text-sm border-collapse">
+              <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
+                <tr>
+                  {['Source', `Amount (${currency})`, 'Share of total', 'Ledger rows'].map((h, i) => (
+                    <th key={h} className={`px-3 py-2 font-semibold whitespace-nowrap ${i === 0 ? 'text-left' : 'text-right'}`} style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sourceShares(total).map((s) => {
+                  const entries = s.key === 'sco' ? counts?.sco : s.key === 'sany' ? counts?.sany : null
+                  return (
+                    <tr key={s.key} className="border-t border-[var(--border-subtle)]">
+                      <td className={`px-3 py-2 text-left ${s.sub ? 'pl-8 text-xs' : ''}`} style={s.sub ? { color: 'var(--text-secondary)' } : undefined}>{s.label}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(s.value, currency)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.share == null ? 'N/A' : `${s.share.toFixed(1)}%`}</td>
+                      <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>{entries == null ? 'N/A' : entries.toLocaleString()}</td>
+                    </tr>
+                  )
+                })}
+                <tr className="border-t border-[var(--border-subtle)] font-semibold">
+                  <td className="px-3 py-2 text-left">Grand total</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(total.grand_total, currency)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{Number(total.grand_total) > 0 ? '100%' : 'N/A'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }} />
+                </tr>
+                <tr className="border-t border-[var(--border-subtle)]">
+                  <td className="px-3 py-2 text-left" style={{ color: 'var(--text-secondary)' }}>Approved production</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtM3(total.production_m3)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>denominator</td>
+                  <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>{counts?.production == null ? 'N/A' : counts.production.toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+            Tyre is a sub-line of Internal (not added twice). Internal rows come from the ERP expense grid; SCO / SANY / Production row counts are the ledger entries in this period.
+          </p>
+        </div>
+      )}
 
       {/* Region breakdown */}
       <div className="rounded-xl border border-[var(--border-subtle)] p-4">

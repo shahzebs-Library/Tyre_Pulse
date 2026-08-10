@@ -10,11 +10,11 @@
  * import, table, delete, totals, honest states - is generic here.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Plus, Upload, Trash2, RefreshCcw, X, FileSpreadsheet } from 'lucide-react'
+import { Plus, Upload, Trash2, RefreshCcw, X, FileSpreadsheet, ChevronDown, ChevronUp } from 'lucide-react'
 import PageHeader from '../ui/PageHeader'
 import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../lib/cpkModule'
-import { IMPORT_TEMPLATES, mapImportRows } from '../../lib/costPerM3'
+import { IMPORT_TEMPLATES, mapImportRows, summarizeLedger } from '../../lib/costPerM3'
 import { parseWorkbook } from '../../lib/import/parseWorkbook'
 import { logIntakeToHistory } from '../../lib/api/costPerM3'
 import { exportToExcel } from '../../lib/exportUtils'
@@ -49,6 +49,9 @@ export default function LedgerPage({
   const [importing, setImporting] = useState(false)
   const [importPct, setImportPct] = useState(0)
   const [notice, setNotice] = useState('')
+  // Summary-first (owner preference): the raw row table is collapsed by default
+  // behind "Show all rows"; the summary above answers the everyday questions.
+  const [showRows, setShowRows] = useState(false)
   const fileRef = useRef(null)
 
   const tpl = IMPORT_TEMPLATES[kind]
@@ -69,6 +72,20 @@ export default function LedgerPage({
     () => rows.reduce((s, r) => s + (num(r[amountKey]) || 0), 0),
     [rows, amountKey],
   )
+
+  // Summary-first applies to the three period ledgers; the sites register keeps
+  // its plain always-visible table (no amounts, tiny dataset).
+  const hasSummary = kind === 'sco' || kind === 'sany' || kind === 'production'
+  const summary = useMemo(() => (hasSummary ? summarizeLedger(rows, kind) : null), [hasSummary, rows, kind])
+  const isProd = kind === 'production'
+  const oneCurrency = summary && !summary.totals.mixedCurrency ? (summary.totals.currencies[0] || '') : ''
+  const fmtSummaryVal = (v) => {
+    if (v == null) return 'N/A'
+    if (isProd) return `${Math.round(v).toLocaleString()} M3`
+    if (summary?.totals.mixedCurrency) return `${Math.round(v).toLocaleString()} (mixed currencies)`
+    return `${oneCurrency ? oneCurrency + ' ' : ''}${Math.round(v).toLocaleString()}`
+  }
+  const rowsVisible = !hasSummary || showRows
 
   function openForm() {
     const blank = { country, period_date: bounds.from }
@@ -284,7 +301,84 @@ export default function LedgerPage({
         </div>
       )}
 
+      {/* Summary first: tiles + by-month + by-site over the filtered rows. */}
+      {hasSummary && (
+        <div className="mb-4 rounded-xl border border-[var(--border-subtle)] p-4">
+          <h3 className="mb-3 text-sm font-semibold">Summary - {country}{hidePeriod ? '' : `, ${periodLabel(bounds)}`}</h3>
+          {loading ? (
+            <p className="py-4 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+          ) : summary.totals.rows === 0 ? (
+            <p className="py-4 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+              No rows for {country} in this period. Add one or import a file.
+            </p>
+          ) : (
+            <>
+              <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <SummaryTile label="Rows" value={summary.totals.rows.toLocaleString()} />
+                <SummaryTile label={isProd ? 'Approved M3' : 'Total value'} value={fmtSummaryVal(summary.totals.value)} strong />
+                <SummaryTile label="Sites" value={summary.totals.sites.toLocaleString()} />
+                <SummaryTile
+                  label="Period covered"
+                  value={summary.totals.firstMonth
+                    ? (summary.totals.firstMonth === summary.totals.lastMonth
+                      ? summary.totals.firstMonth
+                      : `${summary.totals.firstMonth} to ${summary.totals.lastMonth}`)
+                    : 'N/A'}
+                />
+                {isProd && <SummaryTile label="Supplied M3" value={fmtSummaryVal(summary.totals.supplied_m3)} />}
+                {isProd && <SummaryTile label="Rejected loads" value={summary.totals.rejected_loads.toLocaleString()} />}
+                {kind === 'sany' && <SummaryTile label="Counted for Cost/M3 (non-detail)" value={fmtSummaryVal(summary.totals.counted_value)} />}
+                {kind === 'sany' && <SummaryTile label="Detail lines" value={summary.totals.detail_rows.toLocaleString()} />}
+              </div>
+              {summary.totals.rows >= 500 && (
+                <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Summary covers the {summary.totals.rows.toLocaleString()} loaded rows for this period (the list is bounded). The server-side monthly summary above this page covers every row.
+                </p>
+              )}
+              {summary.totals.mixedCurrency && (
+                <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  Rows carry more than one currency ({summary.totals.currencies.join(', ')}) - totals are not labelled with a single currency.
+                </p>
+              )}
+              <div className="grid md:grid-cols-2 gap-4">
+                <SummaryTable
+                  title="By month"
+                  nameHeader="Month"
+                  valueHeader={isProd ? 'Approved M3' : 'Value'}
+                  rows={summary.byMonth.map((m) => ({ name: m.month, rows: m.rows, value: m.value }))}
+                  fmtVal={fmtSummaryVal}
+                />
+                <SummaryTable
+                  title="By site"
+                  nameHeader="Site"
+                  valueHeader={isProd ? 'Approved M3' : 'Value'}
+                  rows={summary.bySite.slice(0, 10).map((s) => ({ name: s.site, rows: s.rows, value: s.value }))}
+                  fmtVal={fmtSummaryVal}
+                  footnote={summary.bySite.length > 10 ? `and ${summary.bySite.length - 10} more sites - see all rows below` : ''}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* All-rows toggle: raw detail stays available, collapsed by default. */}
+      {hasSummary && !loading && (
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setShowRows((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            {showRows ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            {showRows ? 'Hide rows' : `Show all rows (${rows.length.toLocaleString()})`}
+          </button>
+        </div>
+      )}
+
       {/* Table */}
+      {rowsVisible && (
       <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
         <table className="w-full text-sm border-collapse">
           <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
@@ -313,6 +407,45 @@ export default function LedgerPage({
           </tbody>
         </table>
       </div>
+      )}
+    </div>
+  )
+}
+
+function SummaryTile({ label, value, strong }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
+      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</div>
+      <div className={`mt-1 tabular-nums ${strong ? 'text-lg font-bold' : 'text-base font-semibold'}`}>{value}</div>
+    </div>
+  )
+}
+
+function SummaryTable({ title, nameHeader, valueHeader, rows = [], fmtVal, footnote }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+      <div className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{title}</div>
+      <table className="w-full text-sm border-collapse">
+        <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
+          <tr>
+            <th className="px-3 py-1.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>{nameHeader}</th>
+            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Rows</th>
+            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>{valueHeader}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={3} className="px-3 py-3 text-center" style={{ color: 'var(--text-secondary)' }}>None</td></tr>
+          ) : rows.map((r, i) => (
+            <tr key={r.name || i} className="border-t border-[var(--border-subtle)]">
+              <td className="px-3 py-1.5">{r.name}</td>
+              <td className="px-3 py-1.5 text-right tabular-nums">{r.rows.toLocaleString()}</td>
+              <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtVal(r.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {footnote ? <p className="px-3 py-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>{footnote}</p> : null}
     </div>
   )
 }

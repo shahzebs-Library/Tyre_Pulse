@@ -9,8 +9,12 @@ import { supabase, unwrap, applyCountry } from './_client'
 
 const TEMPLATE_COLS =
   'id,organisation_id,country,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,created_by,created_at,updated_at'
+// Approval columns (V212) are part of the row a reader needs: a checklist that
+// was rejected, or is still waiting for a signature, reads very differently from
+// one that was accepted, and leaving them out made every submission look final.
 const SUBMISSION_COLS =
-  'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at'
+  'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at,'
+  + 'approval_status,approver_name,approved_at,review_note,locked'
 
 const PHOTO_BUCKET = 'tyre-photos' // shared media bucket (private — served via signed URLs)
 const SIGNED_URL_TTL_SECONDS = 60 * 60

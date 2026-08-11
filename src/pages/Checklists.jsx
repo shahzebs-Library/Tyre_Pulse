@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardList, Plus, Search, Filter, FileText, PenLine, ShieldCheck,
   Play, Pencil, RefreshCw, AlertTriangle, ChevronRight, ListChecks,
@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { listTemplates, listSubmissions } from '../lib/api/checklists'
 import { isValueField } from '../lib/checklist/fieldTypes'
 import { toUserMessage } from '../lib/safeError'
+import ChecklistViewerDrawer from '../components/checklist/ChecklistViewerDrawer'
 
 const ELEVATED = ['admin', 'manager', 'director']
 
@@ -50,11 +51,15 @@ const TABS = [
 
 export default function Checklists() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { activeCountry } = useSettings()
   const { profile } = useAuth()
   const isElevated = ELEVATED.includes(String(profile?.role || '').toLowerCase())
 
-  const [tab, setTab] = useState('templates')
+  // Arriving from Insights with ?template=<id> opens the submissions for that one
+  // template. Insights only ever showed a count; this is where that count is.
+  const templateParam = searchParams.get('template') || ''
+  const [tab, setTab] = useState(templateParam ? 'submissions' : 'templates')
   const [templates, setTemplates] = useState([])
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +69,8 @@ export default function Checklists() {
 
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
+  // The submission open in the quick viewer, if any.
+  const [viewId, setViewId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(''); setMissing(false)
@@ -102,10 +109,20 @@ export default function Checklists() {
 
   const filteredSubmissions = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return submissions
-    return submissions.filter((s) =>
+    const byTemplate = templateParam
+      ? submissions.filter((s) => String(s.template_id) === templateParam)
+      : submissions
+    if (!q) return byTemplate
+    return byTemplate.filter((s) =>
       [s.template_name, s.title, s.asset_no, s.site, s.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
-  }, [submissions, search])
+  }, [submissions, search, templateParam])
+
+  // Name the template we were sent to look at, so a filtered-to-nothing list
+  // reads as "this template has no submissions" rather than as a broken page.
+  const templateParamName = useMemo(() => {
+    if (!templateParam) return null
+    return templates.find((t) => String(t.id) === templateParam)?.name || null
+  }, [templates, templateParam])
 
   const headerActions = isElevated ? (
     <button onClick={() => navigate('/checklist-builder')} className="btn-primary text-sm inline-flex items-center gap-2">
@@ -294,6 +311,20 @@ export default function Checklists() {
       )}
 
       {/* Submissions tab */}
+      {!loading && !missing && !error && tab === 'submissions' && templateParam && (
+        <div className="card flex items-center justify-between gap-3 py-3">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Showing submissions for{' '}
+            <span className="text-[var(--text-primary)] font-medium">
+              {templateParamName || 'one template'}
+            </span>
+          </p>
+          <button onClick={() => navigate('/checklists')} className="btn-secondary text-xs">
+            Show all
+          </button>
+        </div>
+      )}
+
       {!loading && !missing && !error && tab === 'submissions' && (
         filteredSubmissions.length === 0 ? (
           <div className="card text-center py-16 space-y-3">
@@ -323,7 +354,10 @@ export default function Checklists() {
                 {filteredSubmissions.map((s) => (
                   <tr
                     key={s.id}
-                    onClick={() => navigate(`/checklists/submission/${s.id}`)}
+                    // Opens in place rather than navigating away. Reading a
+                    // checklist should not cost a page load, and it certainly
+                    // should not cost a download.
+                    onClick={() => setViewId(s.id)}
                     className="border-t border-[var(--border-dim)] cursor-pointer"
                   >
                     <td className="table-cell">
@@ -352,6 +386,12 @@ export default function Checklists() {
           </div>
         )
       )}
+
+      <ChecklistViewerDrawer
+        submissionId={viewId}
+        onClose={() => setViewId(null)}
+        onOpenFull={(id) => navigate(`/checklists/submission/${id}`)}
+      />
     </div>
   )
 }

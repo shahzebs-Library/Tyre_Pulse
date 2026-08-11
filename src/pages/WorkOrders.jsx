@@ -34,6 +34,9 @@ import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '
 import { toUserMessage } from '../lib/safeError'
 import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
 import { loadAutoTable } from '../lib/pdfEngine'
+import { monthBounds } from '../lib/defaultPeriod'
+import { defaultPeriodFor } from '../lib/api/latestActivity'
+import PeriodNotice from '../components/ui/PeriodNotice'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -156,8 +159,13 @@ export default function WorkOrders() {
   const [statusFilter, setStatus]   = useState('All')
   const [priorityFilter, setPriority] = useState('All')
   const [typeFilter, setType]       = useState('All')
-  const [dateFrom, setDateFrom]     = useState('')
-  const [dateTo, setDateTo]         = useState('')
+  // The page opens on the CURRENT MONTH and fetches only that month. It used to
+  // pull all 88,773 job cards over ~89 paged requests and then filter by date in
+  // the browser, so every visit paid for the whole table to show a few weeks of
+  // it. Clearing both dates still fetches everything, deliberately.
+  const [dateFrom, setDateFrom]     = useState(() => monthBounds(new Date()).from)
+  const [dateTo, setDateTo]         = useState(() => monthBounds(new Date()).to)
+  const [defaultPeriod, setDefaultPeriod] = useState(null)
   const [sortField, setSortField]   = useState('opened_at')
   const [sortDir, setSortDir]       = useState('desc')
   const [page, setPage]             = useState(1)
@@ -178,7 +186,11 @@ export default function WorkOrders() {
     setLoading(true)
     setError(null)
     try {
-      const data = await workOrders.listWorkOrdersForPage({ country: activeCountry })
+      const data = await workOrders.listWorkOrdersForPage({
+        country: activeCountry,
+        openedFrom: dateFrom || undefined,
+        openedTo: dateTo || undefined,
+      })
       // Normalise status to the shared canonical vocabulary on read so filters,
       // badges and stats agree with the Workshop Live dashboard.
       setOrders((data || []).map((o) => ({ ...o, status: normalizeWoStatus(o.status) })))
@@ -187,9 +199,22 @@ export default function WorkOrders() {
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, dateFrom, dateTo])
 
   useEffect(() => { load() }, [load])
+
+  // If no job card was opened this month, fall back to the last month that has
+  // one and say so - an empty current month otherwise reads as a broken page.
+  useEffect(() => {
+    let cancelled = false
+    const scoped = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
+    defaultPeriodFor('work_orders', { country: scoped }).then((p) => {
+      if (cancelled || !p) return
+      setDefaultPeriod(p)
+      if (p.fellBack) { setDateFrom(p.from); setDateTo(p.to) }
+    })
+    return () => { cancelled = true }
+  }, [activeCountry])
 
   // Reset the approval lock whenever a different record (or none) is opened in the
   // detail drawer; EntityApprovalPanel re-reports the true state via onStateChange.
@@ -578,6 +603,8 @@ export default function WorkOrders() {
           </div>
         }
       />
+
+      <PeriodNotice period={defaultPeriod} onShowAll={() => { setDateFrom(''); setDateTo('') }} />
 
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">

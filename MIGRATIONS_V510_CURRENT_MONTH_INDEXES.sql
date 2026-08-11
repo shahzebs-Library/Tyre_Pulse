@@ -1,0 +1,36 @@
+-- V510 - indexes for the current-month default. APPLIED LIVE 2026-08-11.
+--
+-- WHY
+-- Result screens opened on all of history. Reading 208,375 expense lines to show
+-- a page of them is most of the wait, so the screens now open on the current
+-- month. That is only faster if the month predicate can be answered from an
+-- index.
+--
+-- WHAT WAS ALREADY THERE - do NOT re-add these:
+--   parts_consumption (organisation_id, country, event_date)      V456
+--   production_logs   (organisation_id, country, period_date)     V456
+--   tyre_records      (organisation_id, country, issue_date desc)
+--   work_orders       (organisation_id, country, opened_at desc)
+--
+-- THE ONE REAL GAP
+-- work_order_line_items holds 184,025 rows and carried NO date index at all, so
+-- both the month filter and the single-row "newest record" probe fell back to a
+-- parallel sequential scan of the whole table.
+--
+--   before: Parallel Seq Scan, 8,227 buffers, 46.5 ms  (probe returning ONE row)
+--   after : Index Scan,            4 buffers,  2.6 ms
+--
+-- Measured with the predicate the app actually sends (organisation_id + country
+-- come from RLS and applyCountry on every read). An unfiltered probe still seq
+-- scans, which is correct: without an org there is nothing for the leading
+-- column to match.
+--
+-- DELIBERATELY NOT INDEXED
+-- inspections (244 rows), accidents (38), checklist_submissions, wash_records.
+-- Each is a few hundred rows at most; an index there costs more to maintain on
+-- every write than it could ever save on a read.
+--
+-- Reversible: drop index if exists public.work_order_line_items_org_country_created_idx;
+
+create index if not exists work_order_line_items_org_country_created_idx
+  on public.work_order_line_items (organisation_id, country, created_at desc);

@@ -26,6 +26,7 @@ import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { getFleetCpk } from '../lib/api/fleetCpk'
+import { getTyrePriceBasis, priceBasisNote } from '../lib/api/tyrePriceBackfill'
 import { getCpkDrivers } from '../lib/api/cpkDrivers'
 import { getBrandSizeCpk } from '../lib/api/brandSizeCpk'
 import {
@@ -91,6 +92,19 @@ export default function CpkIntelligence() {
   }, [country, bounds.from, bounds.to])
 
   useEffect(() => load(), [load])
+
+  // What the cost side rests on. Cost per km is only as sound as its price
+  // input, and 2,989 of the fleet's 6,832 priced tyres carry a price the
+  // backfill engine worked out from a comparable tyre rather than one anyone
+  // paid. Loaded beside the CPK figures so the qualification travels with them.
+  const [priceBasis, setPriceBasis] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    getTyrePriceBasis({ country })
+      .then((b) => { if (!cancelled) setPriceBasis(b) })
+      .catch(() => { if (!cancelled) setPriceBasis(null) })
+    return () => { cancelled = true }
+  }, [country])
 
   // Advanced tabs fetch only when opened.
   const [drivers, setDrivers] = useState({ ok: false, windows: null, segments: [] })
@@ -203,6 +217,12 @@ export default function CpkIntelligence() {
           </button>
         }
       />
+      {priceBasisNote(priceBasis) && (
+        <p className="mb-4 text-xs rounded-lg px-3 py-2"
+          style={{ color: 'var(--text-secondary)', background: 'rgba(148,163,184,0.07)' }}>
+          {priceBasisNote(priceBasis)}
+        </p>
+      )}
 
       {/* Controls: country + period. Loads one bounded window at a time. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

@@ -59,6 +59,59 @@ export async function getTyrePriceCoverage() {
   return { ok: true, rows: Array.isArray(data) ? data : [] }
 }
 
+/**
+ * How much of the priced tyre set is a MACHINE ESTIMATE rather than a real
+ * measured price.
+ *
+ * Cost per km is only as sound as its price input. Measured on the live fleet:
+ * of 11,132 tyres, 6,832 carry a price - but 2,989 of those were filled by the
+ * backfill engine from a comparable tyre, so only 3,843 (34.5%) rest on a price
+ * someone actually paid. Nothing on screen said so, which makes an estimate
+ * read as a measurement.
+ *
+ * Three exact server counts (head-only, no rows transferred) rather than a new
+ * RPC - tyre_price_backfill_log already records exactly which tyres the machine
+ * priced, and carries its own country, so nothing needs to be derived.
+ *
+ * Returns nulls rather than zeros when a count cannot be read: "we could not
+ * look" must not render as "none are estimated".
+ */
+export async function getTyrePriceBasis({ country } = {}) {
+  const scoped = (q) => (country && country !== 'All' ? q.eq('country', country) : q)
+  const countOf = async (build) => {
+    try {
+      const { count, error } = await build()
+      return error ? null : (count ?? null)
+    } catch { return null }
+  }
+
+  const [total, priced, estimated] = await Promise.all([
+    countOf(() => scoped(supabase.from('tyre_records').select('id', { count: 'exact', head: true }))),
+    countOf(() => scoped(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).gt('cost_per_tyre', 0))),
+    countOf(() => scoped(supabase.from('tyre_price_backfill_log').select('id', { count: 'exact', head: true }))),
+  ])
+
+  const real = priced != null && estimated != null ? Math.max(priced - estimated, 0) : null
+  return {
+    total, priced, estimated, real,
+    realPctOfPriced: priced ? (real == null ? null : Math.round((real / priced) * 100)) : null,
+  }
+}
+
+/**
+ * One plain sentence stating what the cost figures rest on, or '' when the
+ * basis is unknown or nothing was estimated (saying "0 estimated" on a clean
+ * fleet is noise).
+ */
+export function priceBasisNote(basis) {
+  if (!basis || !basis.priced || basis.estimated == null || basis.estimated <= 0) return ''
+  return `Cost figures use ${basis.priced.toLocaleString()} priced tyres, of which ` +
+    `${basis.estimated.toLocaleString()} carry an estimated price worked out from a comparable tyre ` +
+    `rather than one that was actually paid` +
+    (basis.total ? `, and ${(basis.total - basis.priced).toLocaleString()} tyres have no price at all` : '') +
+    '. Treat cost per km as indicative until those prices are loaded.'
+}
+
 /** Currency per country - the same map the rest of the app uses. */
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 

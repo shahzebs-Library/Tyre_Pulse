@@ -38,35 +38,46 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
-// Only the user-facing read surfaces are scanned - pages and the service layer.
-const SCAN_DIRS = ['src/pages', 'src/lib/api']
+// Read surfaces scanned by this guard. It originally covered only src/pages and
+// src/lib/api, which left the components, console pages and the rest of the lib
+// entirely unpoliced - and that is where several unbounded reads were living.
+const SCAN_DIRS = ['src/pages', 'src/lib/api', 'src/components', 'src/console', 'src/lib']
 
 // Tables measured over 1000 rows on the live database. A table below the cap
 // cannot be truncated, so it is not worth guarding for the bare-select rule.
+//
+// COUNTS ARE FROM 2026-08-11 AND MUST BE REFRESHED, because a stale count here
+// is not a documentation nit - it silently decides which reads get policed. The
+// previous revision recorded production_logs at 5,699 and exempted it as "cheap
+// to read whole"; it is now 297,354 rows, the SECOND LARGEST table in the
+// database, and an unbounded read of it passed CI the whole time.
 const LARGE_TABLES = [
-  'parts_consumption',      // 217,083
-  'work_orders',            //  86,539
+  'audit_log_v2',           // 499,238
+  'production_logs',        // 297,354  (was recorded as 5,699 - 52x out of date)
+  'parts_consumption',      // 208,375
   'work_order_line_items',  // 184,025
-  'tyre_records',           //   7,508
-  'audit_log_v2',           // 317,477
-  'inspections',
-  'accidents',
-  'vehicle_fleet',          //   1,523
-  'production_logs',        //   5,699
+  'work_orders',            //  88,773
+  'brain_cache',            //  28,284  (was missing from this list entirely)
+  'material_master',        //  22,162  (was missing from this list entirely)
+  'tyre_records',           //  11,132
+  'engine_hours_logs',      //   4,379
+  'vehicle_fleet',          //   1,610
+  'inspections',            //     241  - kept: grows per inspection
+  'accidents',              //      38  - kept: grows per incident
   'fleet_master',
-  'engine_hours_logs',
 ]
 
 // The genuinely massive tables where an uncapped `fetchAllPages` full read is a
 // real hazard (hundreds of thousands of rows into the browser). A `fetchAllPages`
 // with no `max` against one of these must be justified. The smaller tables above
-// (tyre_records, vehicle_fleet, production_logs, ...) are cheap to read whole, so
-// their complete reads are deliberately NOT policed here.
+// (tyre_records, vehicle_fleet, ...) are cheap to read whole, so their complete
+// reads are deliberately NOT policed here.
 const MASSIVE_TABLES = [
-  'parts_consumption',
-  'work_orders',
-  'work_order_line_items',
   'audit_log_v2',
+  'production_logs',        // promoted: 297,354 rows is not "cheap to read whole"
+  'parts_consumption',
+  'work_order_line_items',
+  'work_orders',
 ]
 
 /**

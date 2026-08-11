@@ -91,6 +91,11 @@ describe('global dialog fit net', () => {
     expect(css).toContain('@media (min-width: 1920px)')
   })
 
+  it('lets a card panelled dialog scroll, since .card would otherwise clip it', () => {
+    // Deliberately not a :where() rule: it has to outrank .card overflow:hidden.
+    expect(css).toContain('.fixed.inset-0.flex.items-center.justify-center > .card')
+  })
+
   it('leaves side drawers full height and only widens them', () => {
     expect(css).toContain('.fixed.inset-0 > .tp-drawer-panel')
   })

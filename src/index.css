@@ -1441,6 +1441,17 @@ html.light .tp-wordmark {
   overscroll-behavior: contain;
 }
 
+/* 141 dialogs use `.card` as their panel, and `.card` sets overflow:hidden for
+   its accent hairline. Left alone, capping the height above would clip the
+   content dead instead of scrolling it, which is worse than the overflow it
+   replaced. This needs real specificity to beat `.card`, so it is not a
+   `:where()` fallback like the rule above. */
+.fixed.inset-0.flex.items-center.justify-center > .card,
+.fixed.inset-0.flex.items-end.justify-center > .card {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 @media (min-width: 1280px) {
   .fixed.inset-0.flex.items-center.justify-center > .max-w-xs,
   .fixed.inset-0.flex.items-end.justify-center > .max-w-xs { max-width: 22rem; }

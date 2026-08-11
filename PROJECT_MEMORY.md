@@ -3,6 +3,75 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-11 (part 2) — THE KSA MASTER SHEET: WHAT IT IS, WHAT IT IS NOT (V502/V503). Next free **V504**.
+Owner sent `Table_making_table.xlsx` (a Data tab + a Mapping tab explaining every column) asking to "correct
+this mapping", to take **cost up to 2025 from this sheet**, to read serials out of the job-card work-done text
+where the tyre columns are blank, and whether they can keep uploading into the same Supabase table.
+- **THE FILE IS 5 DAYS, NOT HISTORY.** 1,290 rows / 569 job cards, **6-10 Aug 2026 only** (the owner believed it
+  carried 2019-2025). The history is already in `ksa_country_upload_template_staging`: 192,198 rows,
+  **2019-12-08 to 2026-07-26**, 59,983 job cards. Of the file's 569 cards, **315 are already in work_orders**
+  (which holds GCKR/JC/0001..1004/0826) and 254 are newer than anything loaded.
+- **THE STAGING TABLE HAS ZERO TRIGGERS - an upload there lands and changes nothing.** It is READ by V468
+  (brand), V469 (meters) and V472 (completeness) and is otherwise inert. That is the whole "mapping" mystery:
+  the Mapping tab describes columns nothing consumes. Column shape is an EXACT 45/45 match to the live table,
+  so a Table Editor CSV import maps 1:1 - it just has no downstream effect by itself.
+- **MY OWN FIRST FINDING WAS WRONG AND THE CORRECTION IS THE LESSON. `btrim()` STRIPS SPACES ONLY.** I measured
+  "3,521 tyre fitments missing / 3,392 serials never seen" and was about to build a loader for them. **50,713 of
+  the sheet's 51,154 tyre rows store the serial TAB-PADDED (`YLY59042\t\t`) and 0 live rows do**, so every
+  comparison failed and every already-loaded tyre looked new. Cleaned with `btrim(x, E' \t\r\n')` the real
+  numbers are **6,013 fitments, 5,991 already loaded, 22 missing - and all 22 have a serial Excel destroyed**
+  (`1.25121E+11`, or a tyre SIZE sitting in the serial column). **NO LOADER WAS BUILT; one keyed on the dirty
+  value would have DUPLICATED ~3,500 tyres.** V502 adds `master_clean_value()` and every read of this sheet must
+  go through it. RULE: a dedupe key built on `btrim()` alone silently stops matching and the "missing rows" it
+  reports are its own bug. (Same tab pollution already recorded for V468 - it bit again.)
+- **COST MUST NOT COME FROM THIS SHEET - measured, and it contradicts the owner's instruction.** Per year the
+  sheet's per-job-card totals vs the expense grid's line items: 2019 166,351 vs **4,010,957**; 2020 3,697,387 vs
+  4,092,371; 2021 2,813,008 vs 3,303,253; 2022 4,964,588 vs 4,920,887; 2023 6,300,858 vs 6,279,104; 2024
+  7,655,365 vs 7,723,087; 2025 6,366,122 vs 6,441,815; 2018 nothing vs 645,834. **The grid is equal or more
+  complete in every single year**, carries line-item detail, and the sheet leaves Tyre Value at 0 for every year
+  before 2022 while the grid has real tyre cost from 2018. Loading it would DOUBLE the KSA ledger. The job-card
+  side needs nothing either: **all 59,983 sheet job cards are already in work_orders**, every one with a
+  description, 55,464 with breakdown hours, 55,490 with production-out.
+- **V502 `v_ksa_master_tyre_fitments`** = the one honest reading surface: collapses 51,154 raw rows to fitment
+  grain (the ERP repeats the tyre columns on every job-card line), cleans tokens, **corrects reversed fit/remove
+  PER AXIS** (1,892 fitments have fix_date later than remove_date - the owner's "sometimes its opposite"; a row
+  can have dates swapped while km read correctly, so date/km/hours are ordered independently), recomputes the
+  life as removal-fitment (the sheet's own total_km reaches **1,081,000 km on a transit mixer**), and flags
+  `serial_suspect`. `tyre_life_km_cap()` encodes the owner's ceilings: **mixer 80k, pump 56k, wheel loader 15k,
+  other 100k**.
+- **V503 THE OWNER'S CEILING RULE FINDS 174 REAL ERRORS** (`v_tyre_life_over_cap`, worst +231,872 km over):
+  106 "meters agree - needs a person", **58 traced to a placeholder fitment km** (a tyre recorded as fitted at
+  0/1 km takes the whole odometer as its life), 10 missing meters. **89 of the 174 have no vehicle_type at all**
+  and only fall under the 100k default - a separate gap. Read-only by design: overwriting the number would hide
+  the placeholder instead of fixing it.
+- **V503 FREE-TEXT TYRE READER - the owner was right about where the data is, wrong about which column.** The
+  ERP tyre COLUMNS are never blank: all 51,154 rows with `tire_pos` also carry `srno`. The gap is job cards
+  where the ONLY record is the mechanic's sentence: **4,601 such rows**. `extract_tyre_freetext_candidates`
+  reads them -> **1,000 position+serial pairs, 918 job cards, 392 serials never seen before**. Idempotent
+  (unique key; second run created 0). **IT WRITES NOTHING TO tyre_records** - candidates land in
+  `tyre_freetext_candidates` for review, because the text genuinely contradicts itself: *"CHANGE THE TYRE 4TH
+  AXLE **LEFT** SIDE **RHBB1**-YMT93964"* (words say left, code says right) and *"REPAIRED TYRE FIXED IN LHRI &
+  LHRO - YMY10885 & YMA12933"* (which serial belongs to which position is word order, not grammar).
+  **`event_kind` is the load-bearing column: "REPLACED TYRE OLD ONE LHF2-YMY32586" names the tyre that came
+  OFF** - 153 of the 1,000 are `removed_old` and accepting one as a fitment puts a removed tyre back on the
+  wheel. Split: unclear 652 / removed_old 153 / fitted_new 133 / fitted_used 62.
+- **POSITION VOCABULARIES DO NOT MATCH AND THIS IS LEFT HONEST.** ERP columns use LHF1/RHCO/LHRI; mechanics
+  write LHST1 (steer), LHBF1 (bogie front), LHBB1 (bogie back). Mapping BF/BB onto centre/rear inner-outer is an
+  unconfirmed inference about axle layout, so `position_text` is stored VERBATIM. **Do NOT add a silent alias
+  table for these** - ask the owner.
+- **THE V500 ANON TRAP BIT AGAIN**: `revoke execute ... from public` left `anon` executing the new extractor
+  (Supabase grants EXECUTE to anon at CREATE time). Order is grant authenticated+service_role, revoke PUBLIC,
+  **then revoke anon by name**. Verified all four new functions anon=false, table anon SELECT=false, RLS on with
+  4 policies (org restrictive + country restrictive + active read + elevated write).
+- Surfaces: `src/lib/api/tyreFreetext.js` + `FreetextTyreSection.jsx` + `TyreLifeCapSection.jsx`, both mounted in
+  the Integrity group of the EXISTING `/data-reconciliation` page (single-surface rule - no new page). Tests
+  `tyreFreetext.test.js` (9). **A test mock for PostgREST must be a THENABLE builder** - `select(_, {head:true})`
+  has `.eq()` called on it afterwards, so returning a bare promise from `select` fails 4 ways.
+- **ANSWER TO "can i upload in same table there": yes** - same 45 columns, Table Editor maps 1:1, and re-running
+  the reader after an upload is idempotent. But an upload there does not by itself reach work_orders /
+  parts_consumption / tyre_records, and the **`#` column must be mapped on any expense file or a re-upload
+  duplicates** (standing rule).
+
 ## SESSION 2026-08-11 — REMAINING BUYER POINTS (V501) + GUARD REFRESH + PRICE BASIS. Next free **V502**. PR #302.
 - **V501 THE KPI-TARGET WRITE GATES WERE INERT.** `kpi_targets` had 4 policies expressing a clear intent
   (select=authenticated, insert/update=Manager|Admin, delete=Admin) PLUS `kpi_targets_authenticated` granting

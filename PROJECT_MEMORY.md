@@ -3,6 +3,18 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## VERCEL: THE PREVIEW SUPPRESSION LIST IS KEYED ON THE BRANCH NAME - UPDATE IT WHEN THE BRANCH CHANGES
+`vercel.json` -> `git.deploymentEnabled` lists the working branches whose pushes must NOT build a preview.
+It named ONLY the retired `claude/accident-builder-report-ui-2bkwb5`, so every push to the current branch
+built a preview. Measured on 2026-08-11: of the last 20 deployments **exactly ONE carried
+`target: "production"`** - all the rest were branch previews - and those previews exhausted the free plan's
+**100 deployments per day**, after which the PRODUCTION builds for four merged PRs (#308-#311) were refused
+with `api-deployments-free-per-day`. So main was live on an older commit while the owner was told the work
+had shipped. **RULE: when the working branch is renamed, add the new name to `git.deploymentEnabled` in the
+SAME change. Vercel takes literal branch names here - there is no wildcard.** Second habit that caused it:
+merging each change as its own PR. Owner instruction 2026-08-11: **batch the work and merge once.** Every
+merge to main costs a production build, so one merge of ten changes costs one build, not ten.
+
 ## SESSION 2026-08-11 (part 9) — INSPECTION EVIDENCE, ZERO-ROW LEDGERS, STATIONS, REPORT COST, DIALOGS (V519-V523). Next free **V524**. PR #308 merged.
 - **THE INSPECTION VIEWER SHOWED THE ANSWERS AND NOTHING ELSE.** Owner: "it must sheo thr svg and picture".
   `InspectionAnswers` now renders the WHOLE record - summary, meta, the tyre-map SVG with each wheel's reading,

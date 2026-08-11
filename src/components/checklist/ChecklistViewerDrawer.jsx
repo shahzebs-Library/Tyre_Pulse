@@ -68,7 +68,7 @@ export default function ChecklistViewerDrawer({ submissionId, onClose, onOpenFul
       role="presentation"
     >
       <div
-        className="h-full w-full max-w-2xl overflow-y-auto shadow-2xl"
+        className="tp-drawer-panel h-full w-full max-w-2xl overflow-y-auto shadow-2xl"
         style={{ background: 'var(--surface)' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"

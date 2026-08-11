@@ -1070,7 +1070,7 @@ export default function WorkOrders() {
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/60 backdrop-blur-sm">
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="w-full sm:w-[480px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl">
+              className="tp-drawer-panel w-full sm:w-[480px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl">
               <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
                 <div>
                   <h2 className="text-[var(--text-primary)] font-bold">{viewOrder.work_order_no}</h2>

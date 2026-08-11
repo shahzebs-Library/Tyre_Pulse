@@ -548,7 +548,7 @@ export default function KnowledgeBase() {
       {viewDoc && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setViewDoc(null)}>
           <div
-            className="w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col"
+            className="tp-drawer-panel w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] shadow-2xl flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}

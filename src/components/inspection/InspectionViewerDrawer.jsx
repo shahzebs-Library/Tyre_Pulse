@@ -92,7 +92,7 @@ export default function InspectionViewerDrawer({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="h-full w-full max-w-2xl flex flex-col shadow-2xl outline-none"
+        className="tp-drawer-panel h-full w-full max-w-2xl flex flex-col shadow-2xl outline-none"
         style={{ background: 'var(--surface)' }}
         onClick={stop}
         role="dialog"

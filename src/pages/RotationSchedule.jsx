@@ -383,7 +383,7 @@ function RotationDrawer({ vehicle, onClose }) {
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="w-full max-w-2xl h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
+          className="tp-drawer-panel w-full max-w-2xl h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
@@ -1778,7 +1778,7 @@ export default function RotationSchedule() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
+              className="tp-drawer-panel w-full max-w-lg h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">

@@ -1162,7 +1162,7 @@ export default function Procurement() {
             <motion.div
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="w-full sm:w-[520px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl"
+              className="tp-drawer-panel w-full sm:w-[520px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
               {/* Drawer header */}

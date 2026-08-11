@@ -910,6 +910,16 @@ export default function ExpenseReport() {
         unit_cost: r.unit_cost,
         line_cost: r.line_cost,
         category: Number(r.tyre_cost) > 0 ? 'Tyre' : Number(r.oil_cost) > 0 ? 'Oil' : 'Spare',
+        // The three buckets are exported as their OWN columns, not just a label.
+        // A label plus one Value column cannot be summed safely: the label says
+        // which bucket the line leans to, while Value is the WHOLE line, so
+        // summing Value where the label reads Tyre is only right while no line
+        // is split. Today none are, but the sums must not depend on that holding.
+        // With the split columns present the reader can add up exactly what the
+        // system means by tyre spend and see where any difference sits.
+        tyre_value: Number(r.tyre_cost) || 0,
+        spare_value: Number(r.spare_cost) || 0,
+        oil_value: Number(r.oil_cost) || 0,
         site: r.site || '',
         store_code: r.store_code || '',
         currency: r.currency || '',
@@ -917,8 +927,10 @@ export default function ExpenseReport() {
       }))
       await exportToExcel(
         data,
-        ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost', 'category', 'site', 'store_code', 'currency', 'country'],
-        ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value', 'Category', 'Site', 'Store', 'Currency', 'Country'],
+        ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost',
+          'category', 'tyre_value', 'spare_value', 'oil_value', 'site', 'store_code', 'currency', 'country'],
+        ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value',
+          'Category', 'Tyre value', 'Spare value', 'Oil value', 'Site', 'Store', 'Currency', 'Country'],
         reportFileName(company, 'Expense Rows', reportDateLabel()),
         'Expense rows',
         {

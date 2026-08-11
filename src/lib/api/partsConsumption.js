@@ -160,7 +160,7 @@ export async function listExpenseRows({ country, from, to, max = 100000 } = {}) 
   const build = (fromIdx, toIdx) => {
     let q = supabase
       .from('parts_consumption')
-      .select('event_date, work_order_no, item_code, item_description, qty, unit_cost, line_cost, tyre_cost, oil_cost, site, store_code, currency, country')
+      .select('event_date, work_order_no, item_code, item_description, qty, unit_cost, line_cost, tyre_cost, spare_cost, oil_cost, site, store_code, currency, country')
       .order('event_date', { ascending: true })
       .order('id', { ascending: true })
       .range(fromIdx, toIdx)

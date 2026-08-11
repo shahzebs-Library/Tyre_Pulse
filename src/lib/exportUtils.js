@@ -1,6 +1,14 @@
 import { formatCurrencyCompact, formatDate } from './formatters.js'
 import { configBool, configNum } from './api/systemConfig.js'
 import { loadAutoTable } from './pdfEngine'
+// One definition of "what the inspector recorded", shared with the on-screen
+// viewer. Keeping a private copy here is exactly how the report and the screen
+// would start disagreeing about a reading somebody signed off.
+import {
+  RISK_LABEL, COND_TO_RISK,
+  normalizeTyreConditions, inspectionStats,
+  pressureFlagAvailable, pressureDeviation,
+} from './inspectionView'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -484,8 +492,8 @@ const RISK_RGB = {
   critical: [...P.crimson],
   none:     [...P.iron],
 }
-const RISK_LABEL = { good: 'Good', warning: 'Warning', critical: 'Critical', none: 'No Data' }
-const COND_TO_RISK = { Good: 'good', Wear: 'warning', Damage: 'critical', Puncture: 'critical', None: 'none' }
+// RISK_LABEL / COND_TO_RISK now come from ./inspectionView (imported above) so
+// the report and the on-screen viewer read a condition the same way.
 
 // ── Tyre Diagram Layouts ───────────────────────────────────────────────────────
 const _TYRE_LAYOUTS = {
@@ -1110,39 +1118,9 @@ const _MUTED_STATUS = {
 
 // Compute the "Inspection summary" figures from the normalized tyre-condition
 // map. Honest: averages only over RECORDED values, null when nothing recorded.
-function _inspectionStats(normTc) {
-  const counts = { good: 0, warning: 0, critical: 0, none: 0 }
-  const pressures = []
-  const treads = []
-  let lowTread = null
-  Object.entries(normTc).forEach(([pos, d]) => {
-    const r = d?.risk ?? 'none'
-    counts[r] = (counts[r] || 0) + 1
-    const p = Number(d?.pressure)
-    if (Number.isFinite(p) && p > 0) pressures.push(p)
-    const t = Number(d?.tread)
-    if (Number.isFinite(t) && t > 0) {
-      treads.push(t)
-      if (!lowTread || t < lowTread.value) lowTread = { pos, value: t }
-    }
-  })
-  const avg = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null)
-  const median = (a) => {
-    if (!a.length) return null
-    const s = [...a].sort((x, y) => x - y)
-    const m = Math.floor(s.length / 2)
-    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
-  }
-  return {
-    total: Object.keys(normTc).length,
-    counts,
-    avgPressure: avg(pressures),
-    avgTread: avg(treads),
-    lowTread,
-    medianPressure: median(pressures),
-    recordedPressures: pressures.length,
-  }
-}
+// _inspectionStats moved to ./inspectionView as inspectionStats - the viewer
+// needs the same counts and recorded-only averages.
+const _inspectionStats = inspectionStats
 
 // Compact two-line "Inspection summary" strip: position counts by condition on
 // line 1 (small muted dots + dark text) and recorded averages on line 2.
@@ -1266,23 +1244,9 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   })
   y += 31
 
-  // Normalize tyre conditions (needed by the summary strip, diagram + tables)
-  const rawTc = row.tyre_conditions || {}
-  const normTc = {}
-  Object.entries(rawTc).forEach(([pos, data]) => {
-    if (typeof data === 'object' && data !== null) {
-      normTc[pos] = {
-        risk:      data.risk ?? (COND_TO_RISK[data.condition] ?? 'none'),
-        // Mobile inspections store pressure_psi / tread_depth_mm.
-        pressure:  data.pressure ?? data.pressure_psi ?? data.psi ?? null,
-        tread:     data.tread ?? data.tread_depth ?? data.tread_depth_mm ?? null,
-        condition: data.condition ?? null,
-        notes:     data.notes ?? null,
-      }
-    } else {
-      normTc[pos] = { risk: COND_TO_RISK[String(data)] ?? 'none' }
-    }
-  })
+  // Normalize tyre conditions (needed by the summary strip, diagram + tables).
+  // Shared with the on-screen viewer so both read a recording identically.
+  const normTc = normalizeTyreConditions(row)
 
   // ── Inspection summary strip (right under the info grid) ───────────────────
   // Position counts by condition + recorded-only averages; honest N/A.
@@ -1406,17 +1370,15 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   if (readingRows.length) {
     if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
     y = _sectionBar(doc, 'Tyre Readings', y, mx, brand.accent) + 4
-    const flagOn = insStats.recordedPressures >= 4 && insStats.medianPressure > 0
+    const flagOn = pressureFlagAvailable(insStats)
     const numOr = (v, unit) => {
       const n = Number(v)
       return Number.isFinite(n) && n > 0 ? `${n}${unit}` : 'N/A'
     }
     const devLabel = (v) => {
-      const n = Number(v)
-      if (!Number.isFinite(n) || n <= 0) return 'N/A'
-      const dev = (n - insStats.medianPressure) / insStats.medianPressure
-      if (Math.abs(dev) > 0.15) return `Check ${dev > 0 ? '+' : '-'}${Math.round(Math.abs(dev) * 100)}%`
-      return 'OK'
+      const f = pressureDeviation(v, insStats)
+      if (!f) return 'N/A'
+      return f.check ? `Check ${f.dev > 0 ? '+' : '-'}${f.pct}%` : 'OK'
     }
     const head = ['Position', 'Condition', 'Pressure (PSI)', 'Tread (mm)']
     if (flagOn) head.push('Pressure vs median')

@@ -1,0 +1,44 @@
+-- V516 - remove the production rows a re-upload added twice on 2026-08-06.
+-- APPLIED LIVE 2026-08-11. 84,787 rows / 903,014.1 m3 removed. Fully reversible.
+--
+-- THIS OVERTURNS A STANDING RULE IN THIS FILE, and only because the earlier rule
+-- was tested on the wrong key. production_logs was previously REJECTED as a
+-- dedupe target because site+date+m3+truck repeats are genuine separate
+-- deliveries - TM514 to Diriyah-G2 ten times in one day is ten real loads. That
+-- finding STANDS for that key. It simply did not consider dn_number.
+--
+-- THE DELIVERY NOTE IS A DOCUMENT ID, and the proof that it is unique here is
+-- decisive: WITHIN EVERY UPLOAD RUN, rows = distinct dn_numbers EXACTLY, zero
+-- repeats. A DN never repeats inside a file; it only repeats ACROSS runs.
+--
+--   run     rows    distinct DN   m3
+--   A 08:32 19,368  19,368        205,166.8
+--   B 08:39 27,837  27,837        293,560.5
+--   C 08:42 63,999  63,999        684,754.5
+--   D 08:47 78,461  78,461        835,520.1   <-- same file
+--   E 08:59  5,559   5,559         59,272.0
+--   F 09:07 78,461  78,461        835,520.1   <-- loaded again, 20 minutes later
+--   G 13:32 15,078  15,078        162,616.5
+--
+-- D and F match on row count, DN count, first DN, last DN and m3 total. E and G
+-- share 5,559. A, B and C overlap nothing - distinct, correctly loaded files.
+--
+-- WHY IT MATTERS: production is the DENOMINATOR of cost per m3. KSA production
+-- read 3,169,096.5 m3 and the true figure is 2,266,082.4, so cost per m3 has
+-- been UNDERSTATED by about 28%. Removing these makes it RISE ~40% - that is the
+-- correction, not a regression. Approved m3 now 2,193,569.9.
+--
+-- KEEP RULE: earliest row per (dn_number + full content); every later copy goes.
+-- Every duplicate group was exactly 2 - no triples.
+--
+-- DELIBERATELY EXCLUDED: DN '39-61441', whose two rows match on every core field
+-- but differ in a free-text field, so it does not meet "exact". Almost certainly
+-- the same re-insert, but held for a person rather than swept into a bulk delete.
+-- 315 rows carry no dn_number and were untouched.
+--
+-- VERIFIED AFTER: 0 duplicate groups remain, production_logs 212,567 rows.
+--
+-- ROLLBACK: insert into public.production_logs select * from _bak.production_dup_v516;
+--
+-- The applied body is in the Supabase migration history under
+-- v516_production_logs_reupload_duplicates.

@@ -10,7 +10,9 @@ import { toUserMessage } from '../safeError'
  * In-flight and recent results, keyed by country.
  *
  * This RPC is expensive: measured live, get_tyre_running_life('KSA') takes
- * 832 ms of server time and returns 3,612 rows / 2.2 MB. The Inspections page
+ * ~814 ms of server time and returns 3,595 rows. It is read in pages of 1,000
+ * because the whole set in one response is 2.2 MB, which the browser was
+ * dropping outright. The Inspections page
  * asks for it on mount to build its tyre-due flags, and then asked for the WHOLE
  * payload again on every single row PDF export just to filter it to one asset.
  *
@@ -41,13 +43,32 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0 } = {}) {
   // opposite statements; the reason is carried so the page can say which.
   const promise = (async () => {
     try {
-      const { data, error } = await supabase.rpc('get_tyre_running_life', {
-        p_country: country && country !== 'All' ? country : null,
-      })
-      if (error) return { ok: false, reason: toUserMessage(error) }
-      if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }
-      if (data.ok === false) return { ok: false, reason: data.reason || 'The running-life service could not build this view.' }
-      return data
+      const p_country = country && country !== 'All' ? country : null
+      // Paged. The whole payload is 3,595 rows / 2.2 MB for KSA in ONE response,
+      // and the browser was dropping it - the screen showed "Network error"
+      // while the server had answered in 814 ms. Each page is about 600 kB.
+      // The rows are ordered server-side inside the slice, so page 2 is the
+      // next rows and not an arbitrary set.
+      const PAGE = 1000
+      const MAX_ROWS = 8000 // a stop, not an expectation: KSA is 3,595
+      let out = null
+      for (let offset = 0; offset < MAX_ROWS; offset += PAGE) {
+        // eslint-disable-next-line no-await-in-loop
+        const { data, error } = await supabase.rpc('get_tyre_running_life', {
+          p_country, p_limit: PAGE, p_offset: offset,
+        })
+        if (error) return { ok: false, reason: toUserMessage(error) }
+        if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }
+        if (data.ok === false) return { ok: false, reason: data.reason || 'The running-life service could not build this view.' }
+        const page = Array.isArray(data.rows) ? data.rows : []
+        if (!out) out = { ...data, rows: page }
+        else out.rows = out.rows.concat(page)
+        const total = Number(data.total)
+        // Stop on the server's own count when it gives one, else on a short page.
+        if (Number.isFinite(total) ? out.rows.length >= total : page.length < PAGE) break
+        if (!page.length) break
+      }
+      return out || { ok: false, reason: 'The running-life service returned nothing.' }
     } catch (e) {
       return { ok: false, reason: toUserMessage(e) }
     }

@@ -6,7 +6,7 @@
  * baseline is missing - nothing is fabricated.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Search, X, RefreshCw, Target, Trash2, FileDown } from 'lucide-react'
+import { Gauge, Search, X, RefreshCw, Target, Trash2, FileDown, FileSpreadsheet } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../lib/api/tyreRunningLife'
 import {
   shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel,
-  summarize, inFittedRange, filterDescription,
+  summarize, inFittedRange, filterDescription, coverageNote,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import EnterpriseTable from '../ui/EnterpriseTable'
@@ -62,7 +62,7 @@ function StatusBadge({ tone, children }) {
 export default function TyreRunningLife() {
   const { activeCountry, appSettings } = useSettings()
   const { profile, isSuperAdmin } = useAuth()
-  const [state, setState] = useState({ loading: true, ok: true, rows: [], summary: null })
+  const [state, setState] = useState({ loading: true, ok: true, rows: [], summary: null, reason: '' })
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('all')
   const [unit, setUnit] = useState('all')
@@ -73,6 +73,7 @@ export default function TyreRunningLife() {
   const [targetsOpen, setTargetsOpen] = useState(false)
   const [detailRow, setDetailRow] = useState(null)
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [xlsBusy, setXlsBusy] = useState(false)
   const [pdfError, setPdfError] = useState('')
   const canSetTargets = isSuperAdmin || ['Admin', 'Manager', 'Director'].includes(profile?.role)
 
@@ -80,7 +81,10 @@ export default function TyreRunningLife() {
     setState((s) => ({ ...s, loading: true }))
     const payload = await getTyreRunningLife({ country: activeCountry })
     const shaped = shapeRunningLife(payload)
-    setState({ loading: false, ok: shaped.ok, rows: shaped.rows, summary: shaped.summary })
+    setState({
+      loading: false, ok: shaped.ok, rows: shaped.rows, summary: shaped.summary,
+      reason: payload?.reason || '',
+    })
   }
   useEffect(() => { load() }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -112,6 +116,54 @@ export default function TyreRunningLife() {
     }
   }
 
+  /**
+   * Branded Excel report of the FILTERED rows - the same set the PDF and the
+   * screen show, so the three can never disagree.
+   *
+   * The table's own export menu could already produce Excel, but it is a
+   * sub-menu inside the toolbar and the owner could not find it. A report is a
+   * deliverable, so it gets a visible button next to the PDF one.
+   */
+  async function downloadExcelReport() {
+    setXlsBusy(true); setPdfError('')
+    try {
+      const { exportToExcel, reportFileName } = await import('../../lib/exportUtils')
+      const cols = [
+        ['serial', 'Serial'], ['asset', 'Asset'], ['brand', 'Brand'], ['position', 'Position'],
+        ['vehicleType', 'Vehicle type'], ['site', 'Site'], ['country', 'Country'], ['size', 'Size'],
+        ['daysOn', 'Days on'], ['kmAtFitment', 'Fit km'], ['currentKm', 'Current km'],
+        ['kmRun', 'Km run'], ['hoursRun', 'Hours run'],
+        ['expectedLife', 'Expected life'], ['remaining', 'Remaining'],
+        ['remainingDays', 'Remaining days'], ['basis', 'Basis'], ['state', 'State'],
+      ]
+      // Flatten to the exact values shown on screen: the combined km/hrs display
+      // for life figures, and the shared bandFor judgement for State - never a
+      // second opinion computed here.
+      const rows = filtered.map((r) => ({
+        ...r,
+        expectedLife: lifeDisplay(r.expectedLifeKm, r.expectedLifeHours),
+        remaining: lifeDisplay(r.remainingKm, r.remainingHours),
+        basis: basisLabel(r),
+        state: BAND_META[bandFor(r)].label,
+      }))
+      await exportToExcel(
+        rows, cols.map((c) => c[0]), cols.map((c) => c[1]),
+        reportFileName('Tyre Running and Remaining Life',
+          activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'),
+        'Running life',
+        {
+          title: 'Tyre Running & Remaining Life',
+          company: appSettings?.company_name || 'Tyre Pulse',
+          dateRange: filterDescription({ search, band, unit, fromDate, toDate }),
+        },
+      )
+    } catch (e) {
+      setPdfError(toUserMessage(e))
+    } finally {
+      setXlsBusy(false)
+    }
+  }
+
   // App-standard table columns (EnterpriseTable) - hide/show any column and the
   // export menu downloads exactly the visible set, like every other module.
   const columns = useMemo(() => [
@@ -123,6 +175,9 @@ export default function TyreRunningLife() {
     { id: 'position', header: 'Pos', accessorFn: (r) => r.position || 'N/A', size: 70 },
     { id: 'vehicleType', header: 'Type', accessorFn: (r) => r.vehicleType || 'N/A', size: 100 },
     { id: 'site', header: 'Site', accessorFn: (r) => r.site || 'N/A', size: 100 },
+    // Without this the All-countries view gives no way to tell a KSA tyre from
+    // a UAE one - every other column looks identical across countries.
+    { id: 'country', header: 'Country', accessorFn: (r) => r.country || 'N/A', size: 90 },
     { id: 'size', header: 'Size', accessorFn: (r) => r.size || 'N/A', size: 110 },
     { id: 'daysOn', header: 'Days on', accessorFn: (r) => r.daysOn, size: 85, meta: { align: 'right' },
       cell: ({ row }) => <span title={row.original.fittedOn ? `Fitted ${row.original.fittedOn}` : ''}>{fmtNum(row.original.daysOn)}</span> },
@@ -207,6 +262,16 @@ export default function TyreRunningLife() {
           >
             <FileDown size={13} /> {pdfBusy ? 'Building PDF...' : 'Download PDF report'}
           </button>
+          <button
+            type="button"
+            onClick={downloadExcelReport}
+            disabled={xlsBusy || state.loading || !state.ok || !state.rows.length}
+            className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1 disabled:opacity-40"
+            style={{ color: 'var(--text-primary)' }}
+            title="Download an Excel report of the rows currently on screen"
+          >
+            <FileSpreadsheet size={13} /> {xlsBusy ? 'Building Excel...' : 'Download Excel report'}
+          </button>
           <button type="button" onClick={load} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} /> Refresh
           </button>
@@ -221,14 +286,28 @@ export default function TyreRunningLife() {
       ) : !state.ok ? (
         <div className="py-8 text-center">
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Could not load the running-life data.</p>
+          {/* The real reason, not a generic blank - a denied read and an empty
+              fleet used to look identical on this screen. */}
+          {state.reason && (
+            <p className="mt-1 text-xs" style={{ color: 'var(--text-dim)' }}>{state.reason}</p>
+          )}
           <button type="button" onClick={load} className="mt-2 px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs" style={{ color: 'var(--text-primary)' }}>Retry</button>
         </div>
       ) : !state.rows.length ? (
         <p className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-          No active tyres in this view.
+          No active tyres for {activeCountry && activeCountry !== 'All' ? activeCountry : 'any country'}.
         </p>
       ) : (
         <>
+          {/* Why cells are blank, counted. An empty "Km run" column reads as a
+              broken report; the same blank explained reads as a meter-reading
+              backlog, which is the true and actionable statement. */}
+          {coverageNote(s) && (
+            <p className="mb-3 text-xs rounded-lg px-3 py-2"
+              style={{ color: 'var(--text-secondary)', background: 'rgba(148,163,184,0.07)' }}>
+              {coverageNote(s)}
+            </p>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
             {[
               [hasFilter ? 'Tyres (filtered)' : 'Active tyres', fmtNum(s.total)],

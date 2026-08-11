@@ -261,7 +261,9 @@ export function buildGauges({ inspections = [], fleet = [] } = {}) {
 
   return {
     pressure: {
-      value: Math.round(pc.compliancePct * 10) / 10,
+      // null when no pressures were recorded - null * 10 is 0, which would draw
+      // a full "0% compliant" gauge from an absence of data.
+      value: pc.compliancePct == null ? null : Math.round(pc.compliancePct * 10) / 10,
       compliant: pc.compliantCount,
       total: pc.totalCount,
     },

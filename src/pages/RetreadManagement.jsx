@@ -23,6 +23,7 @@ import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfT
 import { formatMonthYear } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { loadAutoTable } from '../lib/pdfEngine'
 
@@ -884,6 +885,8 @@ export default function RetreadManagement() {
           </div>
         }
       />
+      <NotInUseNotice count={records.length} label="retread records"
+        hint="Records appear once a casing is sent for retreading." />
 
       {/* Country/Site filter bar */}
       <div className="flex flex-wrap items-center gap-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-3">

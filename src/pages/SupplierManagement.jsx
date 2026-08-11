@@ -14,6 +14,7 @@ import { toUserMessage } from '../lib/safeError'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
@@ -865,6 +866,8 @@ export default function SupplierManagement() {
           </div>
         }
       />
+      <NotInUseNotice count={records.length} label="suppliers"
+        hint="Suppliers appear once they are added here or arrive with a purchase order import." />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">

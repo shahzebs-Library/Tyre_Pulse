@@ -190,7 +190,7 @@ function ActionCard({ a, onEdit, onStatusChange, country }) {
   )
 }
 
-function TableRow({ a, onEdit, onStatusChange, country }) {
+function TableRow({ a, onEdit, onStatusChange, onRaiseJob, raisingJob, country }) {
   const { t } = useLanguage()
   const od = overdueDays(a.due_date, a.status)
   const meta = STATUS_META[a.status] ?? STATUS_META.Open
@@ -206,6 +206,15 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
         </div>
         {a.root_cause && (
           <span className="text-xs text-indigo-400 opacity-70">{a.root_cause}</span>
+        )}
+        {/* Where this action came from, and whether it became scheduled work.
+            An action raised by an inspection used to be indistinguishable from
+            one typed by hand, and nothing recorded whether a job followed. */}
+        {a.source_type && a.source_type !== 'manual' && (
+          <span className="block text-xs text-gray-500">
+            Raised from {a.source_type}
+            {a.source_detail ? ` (${a.source_detail})` : ''}
+          </span>
         )}
       </td>
       <td className="px-3 py-2.5">
@@ -234,7 +243,19 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
         </select>
       </td>
       <td className="px-3 py-2.5">
-        <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{t('correctiveactions.card.edit')}</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{t('correctiveactions.card.edit')}</button>
+          {a.work_order_id ? (
+            <span className="text-xs text-emerald-400" title="A job has been raised for this action">Job raised</span>
+          ) : a.asset_no ? (
+            <button
+              onClick={() => onRaiseJob(a)} disabled={raisingJob === a.id}
+              className="text-xs text-gray-400 hover:text-emerald-400 transition-colors disabled:opacity-50"
+            >
+              {raisingJob === a.id ? 'Raising...' : 'Raise job'}
+            </button>
+          ) : null}
+        </div>
       </td>
     </tr>
   )
@@ -266,6 +287,8 @@ export default function CorrectiveActions() {
   const [saving, setSaving]       = useState(false)
   const [formError, setFormError] = useState('')
   const [showAnalytics, setShowAnalytics] = useState(false)
+  const [raisingJob, setRaisingJob] = useState(null)
+  const [jobNotice, setJobNotice] = useState(null)
 
   const photoRef = useRef(null)
 
@@ -388,6 +411,27 @@ export default function CorrectiveActions() {
       })
     } catch { /* original ignored update errors here */ }
     load(true)
+  }
+
+  /**
+   * Turn an action into scheduled work. Delegates to the service, which reuses
+   * the ONE work-order creator (workshopLive.createJob) and writes the link back,
+   * so the job number, status vocabulary and payload cannot drift from the
+   * workshop's own. Errors surface instead of failing silently - a job that was
+   * created but not linked must be visible, not lost.
+   */
+  async function handleRaiseJob(a) {
+    setRaisingJob(a.id)
+    setJobNotice(null)
+    try {
+      const job = await correctiveActions.createWorkOrderForAction(a)
+      setJobNotice({ ok: true, text: `Job ${job.work_order_no} raised for ${a.asset_no}.` })
+      load(true)
+    } catch (e) {
+      setJobNotice({ ok: false, text: toUserMessage(e) })
+    } finally {
+      setRaisingJob(null)
+    }
   }
 
   function handlePhoto(e) {
@@ -632,6 +676,21 @@ export default function CorrectiveActions() {
         </div>
       )}
 
+      {/* Outcome of raising a job. Shown rather than toasted so a failure to
+          LINK a created job (which leaves a real job needing manual attachment)
+          stays on screen until the operator has read it. */}
+      {jobNotice && (
+        <div className="mb-4 rounded-lg border px-4 py-2.5 text-sm flex items-start justify-between gap-4"
+          style={jobNotice.ok
+            ? { borderColor: 'rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.08)', color: '#34d399' }
+            : { borderColor: 'rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.08)', color: '#f87171' }}>
+          <span>{jobNotice.text}</span>
+          <button onClick={() => setJobNotice(null)} className="opacity-70 hover:opacity-100" aria-label="Dismiss">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <LoadingState />
@@ -666,7 +725,8 @@ export default function CorrectiveActions() {
               </thead>
               <tbody>
                 {filtered.map(a => (
-                  <TableRow key={a.id} a={a} country={activeCountry} onEdit={startEdit} onStatusChange={handleStatusChange} />
+                  <TableRow key={a.id} a={a} country={activeCountry} onEdit={startEdit} onStatusChange={handleStatusChange}
+                    onRaiseJob={handleRaiseJob} raisingJob={raisingJob} />
                 ))}
               </tbody>
             </table>

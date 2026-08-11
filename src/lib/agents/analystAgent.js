@@ -71,7 +71,7 @@ export async function runAnalystAgent(query, {
     `Fleet CPK: ${kpis.cpk.fleetAvgCpk?.toFixed(3) ?? 'N/A'} (median: ${kpis.cpk.medianCpk?.toFixed(3) ?? 'N/A'})`,
     `Data Coverage: ${kpis.cpk.coveragePct?.toFixed(1) ?? 0}% (${kpis.cpk.validCount ?? 0} / ${kpis.cpk.totalCount ?? 0} records valid)`,
     `Avg Tyre Life: ${tyreLife.avgKm?.toFixed(0) ?? 'N/A'} km (median: ${tyreLife.medianKm?.toFixed(0) ?? 'N/A'} km)`,
-    `Failure Rate: ${((failureRate.failureRate ?? 0) * 100).toFixed(1)}% | Critical: ${((failureRate.criticalRate ?? 0) * 100).toFixed(1)}%`,
+    `Failure Rate: ${failureRate.failureRate == null ? 'not measured' : ((failureRate.failureRate * 100).toFixed(1) + '%')} | Critical: ${failureRate.criticalRate == null ? 'not measured' : ((failureRate.criticalRate * 100).toFixed(1) + '%')}`,
     `Inspection Compliance: ${kpis.inspectionCompliance?.compliancePct?.toFixed(1) ?? 'N/A'}%`,
     `Monthly Cost Trend: ${costTrend.trend} (slope: ${costTrend.slope?.toFixed(0) ?? 'N/A'} / month, forecast: ${costTrend.forecastNextMonth?.toFixed(0) ?? 'N/A'})`,
     `Avg Monthly Cost: ${costTrend.avgMonthlyCost?.toFixed(0) ?? 'N/A'}`,

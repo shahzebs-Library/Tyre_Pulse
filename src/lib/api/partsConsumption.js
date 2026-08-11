@@ -169,9 +169,12 @@ export async function listExpenseRows({ country, from, to, max = 100000 } = {}) 
     if (to) q = q.lte('event_date', to)
     return q
   }
-  const { rows, truncated, error } = await fetchAllPages(build, { max })
+  // fetchAllPages resolves { data, error, truncated } - NOT { rows }. This read
+  // the wrong key, so `rows` was always undefined and the export wrote an empty
+  // workbook over a table holding 208,375 lines, with no error to show for it.
+  const { data, truncated, error } = await fetchAllPages(build, { max })
   if (error) throw error
-  return { rows: rows || [], truncated: Boolean(truncated) }
+  return { rows: data || [], truncated: Boolean(truncated) }
 }
 
 export async function getPartsExpenseSnapshot({ site, country, from, to } = {}) {

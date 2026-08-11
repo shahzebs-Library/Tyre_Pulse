@@ -60,6 +60,7 @@ export default function KpiScorecard() {
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState(null)
   const [saving, setSaving]           = useState(false)
+  const [saveError, setSaveError]     = useState('')
   const [yearFilter, setYearFilter]   = useState(new Date().getFullYear())
   const [countryChip, setCountryChip] = useState('All')
   // Custom calendar range. When BOTH dates are set the month axis is derived
@@ -324,9 +325,22 @@ export default function KpiScorecard() {
       created_by: profile?.id ?? null,
       updated_at: new Date().toISOString(),
     }))
-    await kpiTargets.upsertKpiTargets(upserts)
+    // The result was ignored and the new values shown as saved regardless.
+    // That was harmless while every authenticated user could write kpi_targets;
+    // V501 restored the Manager/Admin gate the table's own policies always
+    // intended, so a save can now legitimately be refused - and under RLS a
+    // blocked UPDATE affects zero rows SILENTLY rather than raising. Showing
+    // "saved" over that is worse than the refusal: the targets look changed
+    // until the next reload.
+    const { error } = await kpiTargets.upsertKpiTargets(upserts) || {}
+    if (error) {
+      setSaveError(toUserMessage(error, 'Could not save the targets.'))
+      setSaving(false)
+      return
+    }
     setTargets(draftTargets)
     setEditing(false)
+    setSaveError('')
     setSaving(false)
   }
 
@@ -467,6 +481,17 @@ export default function KpiScorecard() {
           }
         </div>
       </div>
+
+      {/* A refused save must be visible. Setting KPI targets is Manager/Admin
+          only (the table's own policies, restored in V501), and a blocked
+          UPDATE affects zero rows silently rather than raising - so without
+          this the targets would look changed until the next reload. */}
+      {saveError && (
+        <p className="text-sm rounded-lg px-3 py-2" role="alert"
+          style={{ color: '#f87171', background: 'rgba(220,38,38,0.08)' }}>
+          {saveError}
+        </p>
+      )}
 
       {/* Filter row: year + country chips */}
       <div className="flex flex-wrap items-center gap-3">

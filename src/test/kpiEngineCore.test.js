@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeCpkFleet, computeRemovalRate, computeFailureRate, computeCostTrend } from '../lib/kpiEngine'
+import { computeCpkFleet, computeRemovalRate, computeFailureRate, computeCostTrend, computePressureCompliance } from '../lib/kpiEngine'
 
 /**
  * Core guarantees of the canonical KPI engine.
@@ -95,6 +95,76 @@ describe('computeFailureRate - Critical counts as a failure', () => {
     const r = computeFailureRate(recs)
     expect(r.failureCount).toBe(2)
     expect(r.totalCount).toBe(4)
+  })
+
+  // risk_level is populated on 0 of 11,132 live tyres, so dividing by every
+  // record produced 0/total = 0% and rendered a perfect fleet from no data.
+  it('reports null - not 0% - when nothing carries a risk_level', () => {
+    const r = computeFailureRate([{ asset_no: 'A' }, { asset_no: 'B' }, { risk_level: '  ' }])
+    expect(r.failureRate).toBe(null)
+    expect(r.criticalRate).toBe(null)
+    expect(r.measured).toBe(false)
+    expect(r.ratedCount).toBe(0)
+    expect(r.totalCount).toBe(3)   // the fleet size is still honest
+  })
+
+  it('rates over the rated subset only, and publishes its coverage', () => {
+    // 1 of 4 rows is rated, and that row is a failure -> 100% OF WHAT WAS RATED,
+    // never 25% (which would silently treat unrated tyres as healthy).
+    const r = computeFailureRate([{ risk_level: 'High' }, {}, {}, {}])
+    expect(r.failureRate).toBe(1)
+    expect(r.ratedCount).toBe(1)
+    expect(r.coveragePct).toBe(25)
+    expect(r.measured).toBe(true)
+  })
+})
+
+describe('computePressureCompliance - measures pressure, not typing', () => {
+  const withPsi = (...psi) => ({
+    status: 'Done',
+    tyre_conditions: Object.fromEntries(psi.map((p, i) => [`P${i}`, { pressure_psi: String(p) }])),
+  })
+
+  it('scores each reading against its own vehicle median', () => {
+    // median 100: 60 is 40% low and fails; the other three are within 15%
+    const r = computePressureCompliance([withPsi(100, 100, 100, 60)])
+    expect(r.compliancePct).toBe(75)
+    expect(r.readings).toBe(4)
+    expect(r.measuredInspections).toBe(1)
+  })
+
+  it('does NOT count findings text as a pressure reading', () => {
+    // the exact defect this replaced: an inspector typing "ok" used to score
+    // as compliant without a single pressure being recorded
+    const r = computePressureCompliance([
+      { status: 'Done', findings: 'ok' },
+      { status: 'Done', findings: 'pressures fine' },
+    ])
+    expect(r.compliancePct).toBe(null)
+    expect(r.readings).toBe(0)
+    expect(r.notMeasuredInspections).toBe(2)
+  })
+
+  it('ignores an inspection with too few readings to trust its median', () => {
+    expect(computePressureCompliance([withPsi(100, 100, 40)]).compliancePct).toBe(null)
+  })
+
+  it('tolerates a JSON string and an array of positions', () => {
+    const asString = { status: 'Done', tyre_conditions: JSON.stringify({
+      A: { pressure_psi: 100 }, B: { pressure_psi: 100 },
+      C: { pressure_psi: 100 }, D: { pressure_psi: 100 } }) }
+    const asArray = { status: 'Done', tyre_conditions: [
+      { position: 'A', pressure_psi: 100 }, { position: 'B', pressure_psi: 100 },
+      { position: 'C', pressure_psi: 100 }, { position: 'D', pressure_psi: 100 } ] }
+    expect(computePressureCompliance([asString]).compliancePct).toBe(100)
+    expect(computePressureCompliance([asArray]).compliancePct).toBe(100)
+  })
+
+  it('excludes Cancelled inspections and survives junk', () => {
+    const cancelled = { ...withPsi(100, 100, 100, 100), status: 'Cancelled' }
+    expect(computePressureCompliance([cancelled]).compliancePct).toBe(null)
+    expect(computePressureCompliance([{ status: 'Done', tyre_conditions: 'not json' }]).compliancePct).toBe(null)
+    expect(computePressureCompliance([]).compliancePct).toBe(null)
   })
 })
 

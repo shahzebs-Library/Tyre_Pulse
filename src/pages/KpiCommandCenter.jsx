@@ -225,7 +225,8 @@ function extractKpiValues(records, inspections) {
   return {
     cpk: cpkData.fleetAvgCpk,
     tyre_life: lifeData.avgKm,
-    failure_rate: failData.failureRate * 100,
+    // null when no tyre carries a risk_level - the KPI is not measured, not 0%
+    failure_rate: failData.failureRate == null ? null : failData.failureRate * 100,
     scrap_rate: scrapData.scrapRate * 100,
     pressure_compliance: pressData.compliancePct,
     inspection_compliance: inspData.compliancePct,
@@ -598,7 +599,9 @@ export default function KpiCommandCenter() {
         ).range(from_, to_), { max: ROW_CAP }),
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('inspections')
-            .select('id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type')
+            // tyre_conditions carries the recorded pressure_psi that pressure
+            // compliance is measured from (see kpiEngine.computePressureCompliance)
+            .select('id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type,tyre_conditions')
             .gte('inspection_date', from).lte('inspection_date', to)
         ).range(from_, to_), { max: ROW_CAP }),
         fetchAllPages((from_, to_) => applyFilters(

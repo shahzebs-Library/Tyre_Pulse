@@ -3,6 +3,196 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-11 — REMAINING BUYER POINTS (V501) + GUARD REFRESH + PRICE BASIS. Next free **V502**. PR #302.
+- **V501 THE KPI-TARGET WRITE GATES WERE INERT.** `kpi_targets` had 4 policies expressing a clear intent
+  (select=authenticated, insert/update=Manager|Admin, delete=Admin) PLUS `kpi_targets_authenticated` granting
+  **FOR ALL to any authenticated user with no check**. Same-command policies are OR'd, so that fifth policy did
+  not add a case, it ANNULLED the other three - every write gate someone wrote was dead code. PROVEN as a real
+  approved Reporter: an UPDATE wrote all 7 rows. Dropped the blanket policy; reads unchanged.
+  **MEASUREMENT TRAP: under RLS a blocked UPDATE affects ZERO rows SILENTLY, it does not raise - counting the
+  table afterwards counts what is READABLE, not what was written, and looks like a pass. Count rows actually
+  written: `with u as (update ... returning 1) select count(*) from u`.** My first check made exactly that
+  mistake. Verified after: Reporter 0 rows written (still reads 7), Manager 7 rows written.
+- **THE "140 UNSCOPED COUNTRY TABLES" FINDING, MEASURED PROPERLY: it is 128, and only 20 hold ANY rows.** Of
+  those 20, all but kpi_targets are either org-walled, super-admin only (dup_resolve_archive 9,812 deleted
+  expense rows, reclassify_log), or **deny-all snapshots - RLS enabled with ZERO policies returns nothing**,
+  which is why `_bucket_snapshot_20260727` (216,792 rows, a copy of the financial ledger, no org wall) is NOT
+  reachable. kpi_targets was the only genuine hole. Do not re-raise the other 127 without re-measuring.
+- **ROW-CAP GUARD WAS 52x OUT OF DATE AND HALF-BLIND.** `src/test/rowCapGuard.test.js` recorded
+  production_logs at 5,699 and EXEMPTED it as "cheap to read whole" - it is **297,354 rows, the 2nd largest
+  table**, so an unbounded read passed CI the whole time. Counts refreshed live; production_logs promoted to
+  MASSIVE_TABLES; brain_cache (28,284) + material_master (22,162) added (both over the cap, missing entirely).
+  SCAN_DIRS was only `src/pages` + `src/lib/api` -> added `src/components`, `src/console`, `src/lib`. PROVEN by
+  planting a bare select in src/components and watching it fail. **RULE: the counts in that file are not
+  documentation - they decide what gets policed. Refresh them.**
+  CLAIM THAT DID NOT SURVIVE: "WidgetRenderer + GlobalSearch read heavy tables unguarded" is FALSE -
+  WidgetRenderer pages with a max + exact server count + truncation flag; GlobalSearch limits every read to 6.
+- **COST PER KM NOW STATES ITS BASIS.** Of 11,132 tyres 6,832 are priced, but **2,989 of those were machine
+  -filled by the backfill engine from a comparable tyre**, so only 3,843 (34.5%) rest on a price anyone paid,
+  and 4,300 have no price at all. `getTyrePriceBasis` (3 head-only counts; `tyre_price_backfill_log` already
+  records which tyres the machine priced and carries its own country - no new RPC) + pure `priceBasisNote`,
+  surfaced on `/cpk-intelligence`. Returns NULLs not zeros when a count fails.
+- **PROCESS: `tyre-pulse-eezl` (marketing/) Vercel failing on a PR is NEVER a gate** - confirm with
+  `git diff --name-only origin/main...HEAD | grep ^marketing/` (0 = cannot be yours).
+- **PROCESS: the GitHub REST API is NOT reachable by `curl` in this session** - it returns
+  `{"message":"GitHub access is not enabled for this session..."}`. ONLY the `mcp__github__*` tools work. A
+  Monitor script that curls `/check-runs` therefore gets an empty body, sees "no pending runs" and prints
+  **ALL CHECKS COMPLETE while CI is still running** - which is exactly what happened here. Poll CI with
+  `mcp__github__pull_request_read method=get_check_runs`, never a curl loop.
+
+## SESSION 2026-08-10 (part 3) — BUYER REMARKS FIXED IN A LOOP (V498-V500). Next free **V501**.
+Owner: "u saw buyer remarks go ahead fix it ... make a loop until its successful". Continued straight on from
+the audit below. All applied live + verified; branch `claude/ksa-asset-mobile-visibility-xlnp7m`.
+- **V498 A PLAIN ADMIN COULD CROSS EVERY COUNTRY.** 50 `*_country_isolation` policies on 50 tables bypassed
+  the country wall via `app_is_org_admin()` = `is_super_admin() OR app_role()='admin'`. Country scoping is a
+  DATA-VISIBILITY boundary so its only legitimate bypass is the platform owner -> swapped to
+  `is_super_admin()`. **Ordinary administration keeps `app_is_org_admin()` - the 4 policies OUTSIDE the
+  country-isolation set were deliberately untouched.** BLAST RADIUS: 36 profiles, 2 super admins, **0 plain
+  Admins**, so nobody's visibility changed today; this is the only moment it can be closed without removing
+  access from a real person. **4 of the 50 are FOR ALL and carry the expression in WITH CHECK too - both
+  halves are regenerated together and the migration ABORTS if any policy still carries the bypass** (V396's
+  lesson; half a boundary is worse than none). Originals in `_rls_policy_backup_v498` (50 rows).
+- **V499 THE AUDIT TRAIL COULD NOT NAME AN ACTOR FOR 97% OF ROWS - and the real defect was not the missing
+  human.** 485,231 of 499,217 rows have `user_id` NULL; the bulk is ONE table (work_orders 440,257 of
+  441,632) written by ERP imports/cron where `auth.uid()` is NULL. Many of those legitimately have no person -
+  the fault was that "an automated import changed this" and "an unknown person changed this" were stored
+  IDENTICALLY as a blank, so a genuinely suspicious write was buried among 440k routine ones. Trigger now
+  records `actor_type` = user | service | unknown (+ `actor_detail` = connection role + optional
+  `app.actor_label`), and fills `user_email` with that label because a blank there reads as a missing person.
+  **NO BACKFILL, DELIBERATELY**: stamping 485k rows rewrites a 546 MB table AND would assert a provenance
+  nobody measured - NULL `actor_type` means "written before attribution existed" and `auditActor()` renders
+  exactly that. **To name an import: `select set_config('app.actor_label','ERP import',true)` before its
+  writes.** Trigger keeps its exception-swallowing tail on purpose (auditing must never block the business
+  write). STILL OPEN: the audit trigger covers 16 of 351 tables and is already 71% of the insert cost on
+  work_orders - widening it trades write throughput for coverage and needs the owner's call.
+- **EMPTY MODULES NO LONGER READ AS MEASUREMENTS.** 14 modules are complete interfaces over 0-row tables, each
+  rendering KPI tiles of 0 that a reader takes as "we have no warranty claims" rather than "nothing was
+  entered" - the 5th reason the buyer gave for not purchasing. NEW `src/components/ui/NotInUseNotice.jsx`
+  states it in one line above the zeros, renders NOTHING once a single row exists (so it cannot go stale) and
+  renders nothing on an UNKNOWN count ("we could not look" and "there is nothing" are opposite claims). Wired
+  into SupplierManagement / GoodsReceipt / WarrantyTracker / RetreadManagement / RetreadClaims / TyrePool.
+  **Deliberately NOT a gate** - the page still works so the first record can be entered; hiding a module
+  outright already belongs to Module Control (/console/module-control) and is NOT duplicated.
+- **V500 ANON COULD EXECUTE 126 SECURITY DEFINER FUNCTIONS -> now 10.** A definer fn runs as its OWNER and
+  BYPASSES RLS, so this is the ONE surface where RLS is not the backstop. Nothing leaked (app_current_org() is
+  NULL for anon so org-scoped fns refuse) but that is a coincidence of how each fn is written, not a boundary.
+  **THE TRAP, hit on the first attempt: `REVOKE ... FROM anon` is a NO-OP against a PUBLIC grant** - the first
+  run left 100 still anon-executable and the migration's own guard ABORTED and rolled everything back rather
+  than reporting success. **But revoking PUBLIC alone ALSO strips `authenticated`** (most of these have no
+  explicit authenticated grant and reach the fn THROUGH public) - that would have broken half the app for
+  every signed-in user. ORDER IS LOAD-BEARING: (1) grant execute to authenticated + service_role, (2) revoke
+  from PUBLIC, (3) revoke from anon. **The 10-fn allowlist was enumerated from the CALL SITES (Login,
+  ReportShare, WorkshopTv, AccidentPortalView, mobile login/register + their services), never from a name
+  regex - `get_report_tyre_maintenance` is a public-board RPC a name sweep WOULD have missed and a live board
+  would have broken on.** Allowlist: get_email_by_identifier / get_public_config / login_attempt_status /
+  record_login_failure / reset_login_attempts / get_report_snapshot / get_report_tyre_maintenance /
+  get_workshop_snapshot / get_accident_portal_snapshot / get_display_snapshot. Trigger fns need no EXECUTE
+  grant so none broke. VERIFIED as anon (login lookup ok, report token ok:false, get_fleet_cpk permission
+  denied) AND as a signed-in KSA Manager (get_fleet_cpk still works). 116 signatures in
+  `_anon_execute_revoked_v500` for rollback.
+- **SUPER-ADMIN EMAIL ORACLE - EXPLAINED TO THE OWNER, NOT PATCHED.** `get_email_by_identifier('shahzeb')`
+  returns the super-admin's real address to an unauthenticated caller. It CANNOT be reduced to a boolean
+  because `signIn` needs the address to call `signInWithPassword`. Real fix = move sign-in into an edge
+  function that takes identifier+password and returns a session, so the address never reaches the browser.
+  That is an authentication change and was NOT made unattended on a live system. Interim mitigation available
+  without code: rename the super-admin username so it is not guessable, and turn on 2FA for it.
+
+## SESSION 2026-08-10 (part 2) — ENTERPRISE BUYER AUDIT + 4 BLOCKERS CLOSED (V494-V497). Migrations V494-V497 applied live; next free **V498**.
+Owner asked for a full independent enterprise-buyer due-diligence simulation, then "make things in loop until
+complete". Six read-only audit tracks ran against the LIVE db + source; **every finding that changed a
+decision was re-verified by hand before acting** (several agent claims did NOT survive that check - see below).
+Verdict artifact: https://claude.ai/code/artifact/2f74ca12-97b3-41ad-8a06-638abf3d92b2 (scorecard 4.2/10,
+"pilot after fixes", 30 buyer questions each marked with evidence).
+- **V494 THE FINANCIAL LEDGER HAD NO COUNTRY WALL - reproduced, not theorised.** `parts_consumption` (208,375
+  rows) + `work_order_line_items` (184,025) carried org isolation ONLY while `tyre_records` carries org +
+  country + site. Impersonating a REAL approved KSA-only Manager returned **UAE 59,745 (AED 15.58M) + Egypt
+  40,246 (EGP 79.3M)** alongside KSA. Fixed with the tyre_records predicate verbatim (SELECT only; zero-arg
+  scope readers wrapped in `(select ...)` so they stay InitPlans - V396's lesson). BLAST RADIUS MEASURED FIRST:
+  of 36 approved users 31 KSA / 2 Egypt / 1 tri-country / 2 org admins and **0 with no country scope**, so
+  nobody was blacked out. **GOTCHA that invalidated my first test: `app_country_scope()` is STABLE so it
+  CACHES WITHIN ONE STATEMENT - a combined multi-user impersonation test silently reports one user's scope for
+  all of them. Impersonate ONE user per transaction.** Egypt Director `a4fd5401` sees 0 rows before AND after
+  (the standing empty-org `e340fa7a` issue, unrelated).
+- **V495 BACKUPS WERE DEAD 20 DAYS AND IT WAS A DESIGN FAULT, NOT CRON.** `backups._do_snapshot` built EACH
+  WHOLE TABLE as ONE `jsonb_agg` value. It worked while the db was small (last good run 2026-07-21 captured
+  **work_orders = 1 row**) and OOM-killed the backend ("server restarted") every night once the ERP loads
+  landed. Now: chunked 5,000 rows (keyset on id), **per-table exception isolation** (proved itself immediately -
+  the first run hit the max(uuid) bug on all 8 tables, recorded all 8, and still finished), honest
+  `status='skipped_too_large'` carrying the true row count instead of silent non-coverage, and cron writes a
+  **critical system_logs row on failure** so it can never be silent again. **V495c: this Postgres has NO
+  `max(uuid)` aggregate** - the keyset cursor now takes the last id positionally from an ordered `array_agg`
+  (`max(t.id::text)::uuid` would work only because uuids render lowercase canonical - a coincidence, not a
+  contract). Restore had to learn to read chunks (scalar subquery -> LATERAL; **column list MUST be qualified
+  `b.` because snapshot_tables has its own `id`**). **TESTED RESTORE (the audit said none existed): 11,132 ->
+  delete 3 -> preview reports 3 missing -> restore 3 -> 11,132, field-for-field identical, rolled back.**
+  RULE: this is row recovery, NOT disaster recovery - real DR is platform PITR. work_orders + the financial
+  tables are deliberately OUT of `_core_tables()` (a nightly jsonb copy of ~800k rows x 30 days would add tens
+  of GB to a 1.6 GB database for a mechanism that is not DR anyway).
+- **SAFETY KPIs REPORTED NUMBERS THEY DID NOT MEASURE (code, no migration).** (a) `computePressureCompliance`
+  counted inspections whose free-text `findings` box was non-empty - it NEVER read a pressure, so an inspector
+  typing "ok" scored compliant and one recording 40 PSI on a 120 PSI tyre did not. It now measures the real
+  `tyre_conditions.pressure_psi` against **that vehicle's own median** at 15% tolerance with a 4-reading
+  minimum - the SAME rule the inspection PDF already prints, so the two can never disagree - and returns null
+  when nothing is measurable. There is NO stored target pressure anywhere in the schema (tyre_specifications
+  has no pressure column, 10 rows), so median-consistency is the only defensible reference; `basis` says so.
+  (b) `computeFailureRate` divided by every record while **`risk_level` is populated on 0 of 11,132 tyres**
+  (`tread_depth` and `supplier` likewise 0), so it reported a flat 0% = a perfect fleet from no data. It now
+  rates the RATED SUBSET only and returns null + `ratedCount`/`coveragePct` when nothing is rated.
+  **Two display bugs fell out: `fmtPct(null)` rendered "0.0%" and `failStatus(null)` returned GREEN because
+  `null <= 0.1` is true.** `displayBoard` carried a SECOND copy of the old proxy - it now delegates.
+  **The 5 failing tests were asserting the fake behaviour IN THEIR OWN NAMES** ("matches the kpiEngine proxy:
+  Done with findings") - same alibi class as the old coerceDate test. Rewritten to assert the measurement.
+  RULE: `risk_level` is referenced by 110 source files, so this class must be fixed at the ENGINE, never
+  consumer-by-consumer.
+- **V496 FAILURE-TO-ACTION CHAIN.** An inspector could record a damaged/punctured tyre and NOTHING downstream
+  was created: **13 inspections found damage across 12 assets while the whole db held 3 corrective actions.**
+  `corrective_actions` gains work_order_id / source_type / source_id / source_detail = both ends of
+  `inspection defect -> corrective_actions -> work_orders`, with NO new module. The defects come from pure
+  `inspectionTyreFlags.defectsForAction` (over `bandFor` + `damagedPositions`) - the SAME function that draws
+  the register flag, so what the user sees and what is raised cannot diverge. Damage/past-life = High,
+  due-soon = Medium. **The partial unique index is the product decision: one OPEN action per (source, asset,
+  defect) so pressing twice cannot duplicate even under a race, BUT a new action IS allowed once the previous
+  is closed, because the same position genuinely can fail again** - a plain unique constraint would silently
+  suppress the recurrence, the more dangerous failure. A 23505 is therefore reported as `skipped`, not an
+  error. Raising a job REUSES `workshopLive.createJob` (never a second work-order creator).
+- **V497 A WHOLE SHIPPED MODULE COULD NEVER SAVE - found by wiring the chain, not by the audit.** Inserting a
+  job with status `'New'` (exactly what `createJob` writes) violated `work_orders_status_check`, which allowed
+  only 6 values while V294 unified the app onto 11 canonical ones. **`normalizeWoStatus` FOLDS the legacy
+  values on READ (open->New, closed->Completed), which is why this was invisible: every read rendered fine and
+  only writes failed.** Measured: of 88,773 orders the statuses in use are Closed 56,882 / Completed 31,784 /
+  Open 63 / In Progress 43 / Cancelled 1 - **not ONE row carries New, Assigned, Waiting for Parts, Quality
+  Inspection, Overdue or On Hold**, because the db never accepted them. So Workshop Live's "New Job" button,
+  the kanban status moves and the QC pass/fail flow could not write at all (consistent with an assigned owner
+  on 20 of 88,773). Widened to the UNION of both vocabularies (widening cannot invalidate a stored row;
+  narrowing the app would delete real kanban states). **RULE: `WO_STATUSES` and this CHECK are a PAIR - adding
+  a canonical status without widening the CHECK ships a feature that renders correctly and cannot save.**
+- **LEDGER SUMMARIES WERE COMPUTED FROM 0.3% OF THE TABLE.** `costPerM3.listProduction` used `.limit(1000)`
+  against **297,354 production_logs rows**, and LedgerPage's summary tiles + "Show all rows (1,000)" presented
+  that as the total. **`.limit(20000)` would NOT have fixed it - PostgREST caps every response at 1000
+  whatever the limit says; only `.range()` paging gets past it** (the standing rule, and this hit the trap).
+  Now paged via fetchAllPages (order period_date + id) bounded 20,000, AND the page fetches the TRUE server
+  count (`countCostM3Rows`, keyed off `kind`) so it states the exact gap - or says nothing when the read
+  genuinely covered the window. The old note fired on a row-count guess and called the list "bounded".
+- **CLAIMS THAT DID NOT SURVIVE VERIFICATION (do not re-raise without re-measuring):** (1) "module_permissions
+  leaks the cross-tenant permission matrix" - all **742 rows are GLOBAL (org_id null), 0 per-org**, so there is
+  nothing cross-tenant to leak and scoping it would hide the matrix from everyone and break the app. It becomes
+  real only once per-org rows exist; the fix then is `org_id is null or org_id = app_current_org()`.
+  (2) "cost-per-m3 aggregates computed from 0.3% of the table" - the Cost/M3 HEADLINE comes from the
+  `get_cost_per_m3` server RPC and was never affected; only the intake ledger's own summary was.
+- **DELIBERATELY NOT FIXED (needs the owner, or is too risky unattended):** the **anon email oracle**
+  (`get_email_by_identifier('shahzeb')` returns the super-admin's real address to an unauthenticated caller) -
+  it CANNOT be reduced to a boolean because `signIn` needs the address for `signInWithPassword`; the real fix
+  is moving sign-in server-side into an edge function, an auth change not to be made unattended on a live
+  system. Also open: **97% of audit rows (485,231 of 499,217) have no actor** (bulk/trigger writes run with
+  `auth.uid()` NULL; the tyre-scrap path is the exception at 201/201 and is the standard to copy); 126
+  anon-executable SECURITY DEFINER functions (held back only by `app_current_org()` being NULL for anon); 52
+  policies where `app_is_org_admin()` lets ANY plain Admin cross countries; 140 of 219 country-bearing tables
+  still unscoped; capability enforcement on 37 of 351 tables; two competing "done" work-order statuses.
+- **14 MODULES ARE COMPLETE INTERFACES OVER EMPTY TABLES** (measured): suppliers/purchase_orders/goods_receipts/
+  tyre_rotations/tyre_service_events/retread_claims/warranty_claims/tyre_disposals/tyre_pool/pm_programs(active)/
+  pm_service_records/alerts/alert_thresholds/api_keys all 0; stock_records 1, stock_movements 3. Only ~34.5% of
+  tyre prices are real (2,989 of 6,832 filled are machine estimates). Do NOT demo these.
+
 ## SESSION 2026-08-10 — EXPENSE COUNTRY GUARD (V491) + "CORRECT ALL DATA" RUN + LIFE TARGETS KM/HOURS (V492/V493) + INSPECTION FLAGS/SUMMARY + COST-M3 SUMMARY-FIRST + REPORT PROFESSIONALIZATION. Migrations V490-V493 applied live; next free **V494**. PRs #289-#300 ALL merged to main; branch realigned clean.
 - **EXPENSE CROSS-COUNTRY CONTAMINATION — root cause + permanent guard.** The KSA August expense file
   (uploaded 2026-08-08 07:50, ONE "ERP grid import" window) contained 886 UAE (RM job-card) lines; pre-Aug-1

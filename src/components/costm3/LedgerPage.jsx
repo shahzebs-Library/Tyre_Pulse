@@ -16,7 +16,7 @@ import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../lib/cpkModule'
 import { IMPORT_TEMPLATES, mapImportRows, summarizeLedger } from '../../lib/costPerM3'
 import { parseWorkbook } from '../../lib/import/parseWorkbook'
-import { logIntakeToHistory } from '../../lib/api/costPerM3'
+import { logIntakeToHistory, countCostM3Rows } from '../../lib/api/costPerM3'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -52,6 +52,9 @@ export default function LedgerPage({
   // Summary-first (owner preference): the raw row table is collapsed by default
   // behind "Show all rows"; the summary above answers the everyday questions.
   const [showRows, setShowRows] = useState(false)
+  // The true number of rows in the current window, or null when unknown. Only
+  // ever used to be HONEST about a bounded read - never to fake a total.
+  const [totalRows, setTotalRows] = useState(null)
   const fileRef = useRef(null)
 
   const tpl = IMPORT_TEMPLATES[kind]
@@ -59,12 +62,24 @@ export default function LedgerPage({
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true); setError('')
+    setTotalRows(null)
     service.list({ country, from: bounds.from, to: bounds.to })
       .then((res) => { if (!cancelled) setRows(Array.isArray(res) ? res : []) })
       .catch((e) => { if (!cancelled) { setRows([]); setError(toUserMessage(e)) } })
       .finally(() => { if (!cancelled) setLoading(false) })
+
+    // The TRUE row count for this window, straight from the server. Every list
+    // here is bounded, and a summary computed from a truncated read used to
+    // present itself as the total - production_logs holds 297,354 rows against
+    // a 1,000-row read. Counting separately is the only way the page can know,
+    // and it degrades to null (say nothing) rather than guessing.
+    if (kind === 'sco' || kind === 'sany' || kind === 'production') {
+      countCostM3Rows({ country, from: bounds.from, to: bounds.to })
+        .then((c) => { if (!cancelled) setTotalRows(c?.[kind] ?? null) })
+        .catch(() => { if (!cancelled) setTotalRows(null) })
+    }
     return () => { cancelled = true }
-  }, [country, bounds.from, bounds.to, service])
+  }, [country, bounds.from, bounds.to, service, kind])
 
   useEffect(() => load(), [load])
 
@@ -85,6 +100,13 @@ export default function LedgerPage({
     if (summary?.totals.mixedCurrency) return `${Math.round(v).toLocaleString()} (mixed currencies)`
     return `${oneCurrency ? oneCurrency + ' ' : ''}${Math.round(v).toLocaleString()}`
   }
+  // A bounded read that did not reach the end of the window. `truncated` is the
+  // only thing that may weaken a stated figure, and it is derived from the
+  // SERVER count, not from whether we happened to hit the page size.
+  const truncated = totalRows != null && totalRows > rows.length
+  const rowsLabel = truncated
+    ? `${rows.length.toLocaleString()} of ${totalRows.toLocaleString()}`
+    : rows.length.toLocaleString()
   const rowsVisible = !hasSummary || showRows
 
   function openForm() {
@@ -314,7 +336,7 @@ export default function LedgerPage({
           ) : (
             <>
               <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <SummaryTile label="Rows" value={summary.totals.rows.toLocaleString()} />
+                <SummaryTile label="Rows" value={rowsLabel} />
                 <SummaryTile label={isProd ? 'Approved M3' : 'Total value'} value={fmtSummaryVal(summary.totals.value)} strong />
                 <SummaryTile label="Sites" value={summary.totals.sites.toLocaleString()} />
                 <SummaryTile
@@ -330,9 +352,16 @@ export default function LedgerPage({
                 {kind === 'sany' && <SummaryTile label="Counted for Cost/M3 (non-detail)" value={fmtSummaryVal(summary.totals.counted_value)} />}
                 {kind === 'sany' && <SummaryTile label="Detail lines" value={summary.totals.detail_rows.toLocaleString()} />}
               </div>
-              {summary.totals.rows >= 500 && (
+              {/* Say exactly what the summary rests on. This used to fire on a
+                  row-count guess and describe the list as "bounded"; it now
+                  states the real gap from the server count, and says nothing at
+                  all when the read genuinely covered the whole window. */}
+              {truncated && (
                 <p className="mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  Summary covers the {summary.totals.rows.toLocaleString()} loaded rows for this period (the list is bounded). The server-side monthly summary above this page covers every row.
+                  These figures cover the {rows.length.toLocaleString()} most recent rows of{' '}
+                  {totalRows.toLocaleString()} in this period, not the full window. Narrow the
+                  period for a complete summary, or use the monthly summary above, which is
+                  computed on the server over every row.
                 </p>
               )}
               {summary.totals.mixedCurrency && (
@@ -372,7 +401,7 @@ export default function LedgerPage({
             style={{ color: 'var(--text-secondary)' }}
           >
             {showRows ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {showRows ? 'Hide rows' : `Show all rows (${rows.length.toLocaleString()})`}
+            {showRows ? 'Hide rows' : `Show rows (${rowsLabel})`}
           </button>
         </div>
       )}

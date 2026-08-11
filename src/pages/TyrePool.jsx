@@ -30,6 +30,7 @@ import {
   Lightbulb, MapPin, Warehouse, Gauge, Truck, Wrench, CheckCircle2, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import NotInUseNotice from '../components/ui/NotInUseNotice'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listPoolCandidates, listPoolEntries, addToPool, assignFromPool,
@@ -340,6 +341,8 @@ export default function TyrePool() {
           )
         }
       />
+      <NotInUseNotice count={entries?.length} label="tyres in the pool"
+        hint="Tyres appear once one is added to the spare pool." />
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--input-border)]">

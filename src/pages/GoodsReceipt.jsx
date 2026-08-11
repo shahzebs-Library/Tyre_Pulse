@@ -22,6 +22,7 @@ import {
   Trash2, Search, X, Filter, FileSpreadsheet, FileText,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import NotInUseNotice from '../components/ui/NotInUseNotice'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listGoodsReceipts, createGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt,
@@ -240,6 +241,8 @@ export default function GoodsReceipt() {
           </div>
         }
       />
+      <NotInUseNotice count={rows?.length} label="goods receipts"
+        hint="Receipts appear once stock is received against a purchase order." />
 
       {missing && (
         <div className="card border border-amber-800/50 flex items-start gap-3">

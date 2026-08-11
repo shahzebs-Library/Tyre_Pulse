@@ -81,18 +81,40 @@ describe('computeMonthlyTyreCost', () => {
 })
 
 describe('computePressureCompliancePct', () => {
-  it('matches the kpiEngine proxy: Done with findings, excluding Cancelled', () => {
-    const r = computePressureCompliancePct([
-      { status: 'Done', findings: 'PSI ok' },
-      { status: 'Done', findings: '  ' },        // blank findings — not compliant
-      { status: 'Scheduled' },
-      { status: 'Cancelled', findings: 'x' },    // excluded entirely
-    ])
-    expect(r).toEqual({ pct: 33, compliant: 1, total: 3 })
+  // These tests previously asserted the OLD proxy - "Done with non-empty findings
+  // text" - which measured typing rather than pressure and was the defect's alibi.
+  // They now assert the real measurement: recorded PSI against the vehicle median.
+  const insp = (...psi) => ({
+    status: 'Done',
+    tyre_conditions: Object.fromEntries(psi.map((p, i) => [`P${i}`, { pressure_psi: String(p) }])),
   })
 
-  it('returns zeros for empty input', () => {
-    expect(computePressureCompliancePct([])).toEqual({ pct: 0, compliant: 0, total: 0 })
+  it('measures recorded PSI against the vehicle median, not findings text', () => {
+    // median 100; 60 is 40% low so it fails, the other three are within 15%
+    const r = computePressureCompliancePct([insp(100, 100, 100, 60)])
+    expect(r).toEqual({ pct: 75, compliant: 3, total: 4 })
+  })
+
+  it('ignores an inspection with too few readings to trust a median', () => {
+    // 3 readings is below PRESSURE_MIN_READINGS - counted in neither half
+    expect(computePressureCompliancePct([insp(100, 100, 40)]).pct).toBe(null)
+  })
+
+  it('is not fooled by findings text with no pressures recorded', () => {
+    const r = computePressureCompliancePct([
+      { status: 'Done', findings: 'all good' },
+      { status: 'Done', findings: 'ok' },
+    ])
+    expect(r.pct).toBe(null)
+  })
+
+  it('excludes Cancelled inspections', () => {
+    const cancelled = { ...insp(100, 100, 100, 100), status: 'Cancelled' }
+    expect(computePressureCompliancePct([cancelled]).pct).toBe(null)
+  })
+
+  it('returns null - not zero - for empty input', () => {
+    expect(computePressureCompliancePct([])).toEqual({ pct: null, compliant: null, total: 0 })
   })
 })
 

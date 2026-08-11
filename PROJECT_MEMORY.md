@@ -3,6 +3,35 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-11 (part 3) — THE KSA ASSET REGISTER APPLIED (V504/V505). Next free **V506**.
+Owner sent `Asset_Report082026_UPDATED.xlsx` sheet "ALL IN ONE ASSETS" (618 KSA assets) as "the final updated"
+list, to be reflected in the KSA asset list.
+- **APPLIED, AND IT WAS A LARGE CLEAN GAIN.** 611 of the 618 already existed, 7 did not. On the 611 the register
+  was **EMPTY on three fields**: model year **0 -> 592**, chassis number **0 -> 388**, engine number **0 -> 507**;
+  plus make +17 and plate +5 blanks filled. Every clause requires the live value to be BLANK so nothing already
+  recorded could be overwritten. 7 new assets added (HD021-023, PB014/016/017, SL027). KSA fleet 1,023 -> 1,030.
+- **"FINAL UPDATED" DOES NOT MEAN "DELETE THE REST" - and the measurement is what proves it.** Live KSA holds
+  1,023 against the sheet's 618, so a replacement reading would retire **412 assets**. Of those 412: **152 had a
+  job card in the LAST 90 DAYS**, 188 within the year, 96 carry tyre records, and **NOT ONE has never had a job
+  card**. 177 are transit mixers with 119 worked on inside 90 days - TM502 has 112 job cards + 23 tyres, TM355
+  has 133 + 17. They are in service. **NOTHING was deactivated.** The 412 go back to the owner as a question.
+- **SITE HELD BACK - 379 assets would have moved, into a vocabulary the app does not report on.** The sheet says
+  **DIRIYAH-1 (84), QIDDIYAH-LP (37), DIRIYAH-2 (35), QIDDIYAH-UP (27)** - none is a registered site, all hold
+  ZERO assets today, while the app uses DIRIYAH-G1/G2 and QIDDIYA-UP/LP (note QIDDIYA vs QIDDIYAH). Writing them
+  raw creates parallel sites and splits every per-site cost and tyre report in two - the V246/V247 defect class.
+  **V247 recorded these gates/plateaus as DELIBERATELY distinct**, so collapsing them is the owner's call.
+  AMALA / METRO / REDSEA already resolve via `site_aliases`; the rest do not. FIX WHEN CONFIRMED: insert an
+  alias row per pair and the existing `normalize_site` trigger applies it to every future write.
+- **PLATE HELD BACK - 22 assets** where the sheet contradicts a plate already on file. One side is wrong and the
+  sheet does not say which.
+- Landing table `ksa_asset_master_upload` (elevated read / super-admin write) keeps the sheet verbatim so the
+  comparison can be re-run; snapshot `_bak.vehicle_fleet_asset_register_v505` (611 rows) is the rollback, and the
+  7 inserts carry `fleet_number = 'ASSET-REGISTER-2026-08'`.
+- **DATA NOTE:** one chassis in the sheet (TM545) contains **Cyrillic Р characters** where Latin P is meant -
+  it landed as given; worth a look if that VIN is ever matched externally.
+- **PROCESS:** loading 618 rows through the MCP SQL tool is best done as a pipe-delimited blob split by
+  `string_to_array(...)` rather than 618 VALUES tuples - roughly 40% fewer characters per call.
+
 ## SESSION 2026-08-11 (part 2) — THE KSA MASTER SHEET: WHAT IT IS, WHAT IT IS NOT (V502/V503). Next free **V504**.
 Owner sent `Table_making_table.xlsx` (a Data tab + a Mapping tab explaining every column) asking to "correct
 this mapping", to take **cost up to 2025 from this sheet**, to read serials out of the job-card work-done text

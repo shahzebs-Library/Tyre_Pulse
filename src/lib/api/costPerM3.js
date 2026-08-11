@@ -219,7 +219,7 @@ export async function deleteSanyInvoice(id) {
 
 // ---- Production (approved M3) ----------------------------------------------
 
-const PROD_COLS = 'id, country, site, asset_no, pump_no, period_date, m3, approved_m3, supplied_m3, rejected, reason, remarks, dn_number, order_number, mix_code, mix_description, customer_name, project_name, source, notes, created_at'
+const PROD_COLS = 'id, country, site, station, asset_no, pump_no, period_date, m3, approved_m3, supplied_m3, rejected, reason, remarks, dn_number, order_number, mix_code, mix_description, customer_name, project_name, source, notes, created_at'
 
 /**
  * Production rows for the ledger page.

@@ -60,16 +60,22 @@ describe('mapImportRows', () => {
     })
   })
 
-  it('maps the concrete batching format (Station->site, Truck->asset, Approved/Signed->approved)', () => {
+  // The file's Station column is a PLANT NUMBER, not a place. It used to land
+  // in `site`, which is how 25 plant numbers ended up where site names belong -
+  // production could not be read per site, nor set against parts spend. It now
+  // lands in `station` and the station-to-site map resolves the real site.
+  it('maps the concrete batching format (Station->station, Truck->asset, Approved/Signed->approved)', () => {
     const rows = mapImportRows('production', [
       { Station: 'Qiddiya-Lower Plateau', 'Batching Time': '2026-05-01 00:00:00',
         'Truck Number': 'TM505     9772 BSA', 'Pump Number': 'MP-130', 'DN Number': '86-03901',
         'Supplied Qty': '12', 'Approved/Signed Qty': '12', 'Rejection Type': 'No', Reason: '', Remarks: '' },
     ])
     expect(rows[0]).toMatchObject({
-      site: 'Qiddiya-Lower Plateau', period_date: '2026-05-01', asset_no: 'TM505', pump_no: 'MP-130',
+      station: 'Qiddiya-Lower Plateau', period_date: '2026-05-01', asset_no: 'TM505', pump_no: 'MP-130',
       dn_number: '86-03901', m3: 12, approved_m3: 12, rejected: false,
     })
+    // The site is the database's to resolve, not the importer's to guess.
+    expect(rows[0].site).toBeUndefined()
   })
 
   it('maps a rejected batching row (Rejection Type Yes + reason)', () => {
@@ -77,7 +83,7 @@ describe('mapImportRows', () => {
       { Station: 'NHC', 'Batching Time': '2026-05-02', 'Supplied Qty': '10',
         'Approved/Signed Qty': '7', 'Rejection Type': 'Yes', Reason: 'Slump high' },
     ])
-    expect(rows[0]).toMatchObject({ site: 'NHC', m3: 10, approved_m3: 7, rejected: true, reason: 'Slump high' })
+    expect(rows[0]).toMatchObject({ station: 'NHC', m3: 10, approved_m3: 7, rejected: true, reason: 'Slump high' })
   })
 
   it('ignores unknown headers and drops empty rows', () => {

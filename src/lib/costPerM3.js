@@ -360,7 +360,10 @@ export const IMPORT_TEMPLATES = {
     headers: ['Station', 'Batching Time', 'Truck Number', 'Pump Number', 'DN Number', 'Order Number',
       'Mix Code', 'Mix Description', 'Customer Name', 'Project Name',
       'Supplied Qty', 'Approved/Signed Qty', 'Rejection Type', 'Reason', 'Remarks'],
-    fields: ['site', 'period_date', 'asset_no', 'pump_no', 'dn_number', 'order_number',
+    // The file's Station column is a PLANT NUMBER. It lands in `station`, and
+    // the station-to-site map turns it into a real place on write. Mapping it
+    // onto `site` is what put plant numbers where site names belong.
+    fields: ['station', 'period_date', 'asset_no', 'pump_no', 'dn_number', 'order_number',
       'mix_code', 'mix_description', 'customer_name', 'project_name',
       'm3', 'approved_m3', 'rejected', 'reason', 'remarks'],
   },
@@ -372,7 +375,11 @@ const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 const HEADER_SYNONYMS = {
   country: ['country'],
   region: ['region', 'area'],
-  site: ['site', 'location', 'plant', 'station', 'store code', 'store'],
+  site: ['site', 'location', 'store code', 'store'],
+  // A batching plant number is NOT a site. It lands in its own column and the
+  // station-to-site map turns it into a place; mapping it straight onto `site`
+  // is what put plant numbers where site names belong.
+  station: ['station', 'plant', 'plant no', 'station no', 'batching plant'],
   asset_no: ['asset', 'asset no', 'asset_no', 'equipment', 'truck number', 'truck no', 'truck'],
   pump_no: ['pump number', 'pump no', 'pump'],
   // 'transaction type' is the (mislabelled) DATE column of the SCO issue grid export.

@@ -1,0 +1,49 @@
+-- V521 - a batching STATION is not a site
+-- STATUS: APPLIED LIVE 2026-08-11 (as V521 / V521b)
+--
+-- 25 KSA station codes ('39', '40', '81'...) were sitting in
+-- production_logs.site, so every per-site production figure read as a number
+-- nobody could place, and production could never be set against parts spend,
+-- which uses real site names resolved through store_site_map.
+--
+-- A STATION CANNOT BE DERIVED FROM THE DATA. Measured: stations 39, 40, 81 and
+-- 23 all serve the same projects and the same customers, because a batching
+-- plant supplies whatever is near it. Only the owner knows which plant number
+-- stands at which site, so this is a map they fill in - the same shape as the
+-- store-to-site map parts already uses.
+--
+-- WHAT CHANGED
+--   production_logs.station          NEW, holds the file's value verbatim
+--   production_station_map           NEW, station -> site, org + country scoped
+--   resolve_production_station()     BEFORE INSERT OR UPDATE trigger
+--   get_production_stations(country)          NEW, feeds the mapping screen
+--   apply_production_station_map(country, dry_run) NEW, re-resolves stored rows
+--
+-- THE RAW VALUE IS KEPT. `station` is what the file said; `site` is where the
+-- work happened. Overwriting the station in place would destroy the only link
+-- back to the source file, and a re-upload would then disagree with what is
+-- stored.
+--
+-- AN UNMAPPED STATION KEEPS SHOWING AS ITSELF rather than becoming blank. An
+-- unmapped plant is a gap to go and fill, not a row to hide.
+--
+-- apply_production_station_map EXISTS BECAUSE THE TRIGGER ONLY FIRES ON WRITE.
+-- Without it a new mapping would take effect on future uploads only and the
+-- 212,567 rows already stored would keep showing plant numbers. It touches the
+-- row and lets the trigger do the resolving, so the rule lives in one place.
+-- Dry run by default, since it rewrites the site on a lot of rows.
+--
+-- VERIFIED (rolled back): mapping station 87 to QIDDIYA-UPPER PLATEAU reported
+-- 15,683 rows in the dry run, moved exactly 15,683, left station '87' intact,
+-- and get_production_stations then reported it mapped.
+--
+-- CLIENT: the import now maps the file's Station column to `station`, not
+-- `site` (src/lib/costPerM3.js IMPORT_TEMPLATES.production + HEADER_SYNONYMS),
+-- pinned by a test. StationMapPanel on /production-m3 is where the owner names
+-- each plant; its site list comes from the site register, the same names parts
+-- resolves to, so the two sides cannot drift into separate vocabularies.
+--
+-- STILL OPEN, NOT TOUCHED: 5,699 KSA loads dated 1-9 Jul 2026 carry a real site
+-- name and NO dn_number, overlapping 8,458 numbered-station loads on the same
+-- days. They may be the same deliveries recorded twice under different labels.
+-- V516's dedupe keys on dn_number and so could not test them. Needs the owner.

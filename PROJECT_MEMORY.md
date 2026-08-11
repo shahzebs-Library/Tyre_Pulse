@@ -3,6 +3,60 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-11 (part 11) — THE REAL INSURANCE PORTFOLIO LOADED (V526). Next free **V527**. PR #314 merged.
+Owner supplied 23 Walaa/GGCI documents ("this is over all insurance policy and everything related to our company")
+and asked for 3 agents. Split: extract+load / engine+matcher / UI. Schema was authored FIRST as the contract the
+three agents coded against - that is what let them run in parallel without colliding.
+- **V526 four tables** extending the V466 policy model: `insurance_policy_assets` (per-machine + per-vehicle
+  schedule), `insurance_property_risks` (PAR interest list), `insurance_claim_register` (the insurer's own claims),
+  `insurance_loss_runs` (claims experience). Org restrictive + country restrictive-select + elevated write; anon
+  revoked. **The claim register is app_is_elevated() READ, not app_is_active()** - it carries driver national IDs
+  and names. The other three are active-read because fleet and finance need the values.
+- **LOADED, all reconciled to the documents: policies 3 -> 23 · policy_assets 2,041 · property_risks 122 ·
+  claim_register 59 · loss_runs 64.** Sum insured on the schedules SAR 408,015,172.57; claims SAR 483,287.26.
+  Ties EXACTLY: the Walaa CPM interest list (428 machines, 168,822,868.47 SI + 422,057.63 premium), PAR
+  (109,403,250.63 over 17 risks, and each printed "Risk Total"), the claims workbook total, and all 4
+  claims-experience forms' 12 monthly lines against their own printed year total.
+- **TWO GAPS STATED, NOT CLOSED BY INVENTION.** (a) GGCI CPM 210-PE-2026-11950716-000: items sum to
+  186,920,955.27 vs the schedule's stated 186,920,953.11 = **+2.16 SAR**, because the schedule prints per-item SI
+  rounded to whole riyals while the total is computed unrounded. Both left as printed. (b) `CPM Plant and
+  Machinery - 14 Mar 2026.pdf` states **"Sum Insured : SAR 135,533,545.33 as per attached schedule" and THE
+  SCHEDULE IS NOT IN THE FILE** - pages 5-365 are 361 CERTIFICATES carrying no money at all, and they reference
+  the PRIOR policy P-C01-24-40120-002444. So those rows are attributed to the 2024/25 policy and nothing in the
+  set can be summed against 135.5M. **ASK THE BROKER for that bordereau; do not derive it.**
+- **THE ASSET-ID FIELD IS NOT AN ASSET ID ON THREE OF THE SEVEN SCHEDULES, and this is the whole matching story.**
+  405 of 2,041 rows state an asset id; only **276 distinct codes join `vehicle_fleet`**. Walaa CMI (290 certs)
+  puts the vehicle TYPE ("MIXER") in the asset-number field; the GGCI CPM schedule's column LABELLED "Plate No"
+  actually holds Tyre Pulse asset codes (TM335, BP099...); 63 CPM certs carry a malformed id (`MP-031`, `MP -042`,
+  a plate, or a chassis). All loaded VERBATIM with source_file/source_page + `raw`; normalising them is a matching
+  decision, deliberately not an extraction one.
+- **STRONG-KEY MATCHING CAN ONLY REACH ~38% OF THE FLEET TODAY: KSA has 1,030 assets but only 389 carry a
+  chassis_no and 396 a registration_no.** `reconcileCoverage().basis` publishes this and the UI warns above the
+  list, because where key coverage is thin the "uninsured" list OVERSTATES exposure. **The engine keeps three
+  buckets strictly apart - `uninsured` (real gap) / `orphanSchedule` (confidently not in the register = wasted
+  premium) / `unresolved` (OUR matching gap)** - collapsing them would bill the owner for our own data gap.
+  Filling chassis/plate on the remaining assets is the single highest-value data action available.
+- Code: pure `src/lib/insurancePortfolio.js` + `src/lib/insuranceMatch.js` (chassis -> plate -> asset code;
+  **plates compare with ALL whitespace stripped but NEVER reordered** - V509 proved 5 "conflicts" were spacing,
+  and a transposition is a judgement; Excel-mangled serials `1.25121E+11` rejected; identity is country+code per
+  V376) + service `src/lib/api/insurancePortfolio.js` (planClaimMatches -> persistClaimMatches ->
+  clearClaimMatches, auto links tagged `auto:` so an undo can never wipe a human's link). 48 tests.
+- UI: **five tabs on the EXISTING `/insurance-policies`** (Portfolio / Coverage gaps / Claims register / Loss
+  experience / Property risks), lazy-loaded, plus an insurance block on Asset Detail and the insurer's own record
+  on the accident Claim tab. NO new route, NO nav item. `src/components/insurance/InsuranceUi.jsx` holds the
+  shared primitives. **An empty analysis renders "could not be produced", never an empty list - an empty gap list
+  reads as a clean bill of health.**
+- **DELIBERATELY NOT BUILT: any cut by driver NATIONALITY** (the register carries it). It would render as analysis
+  while being a protected-characteristic profile of the workforce, and nationality is not a cause of loss. Per
+  DRIVER repetition is built. The service does not even `select` driver_id or nationality - a column never read
+  cannot leak into an export or a tooltip.
+- Mixed currency is never summed: `sumMoney` returns total null + `mixedCurrency` with a per-currency breakdown.
+- **OPEN:** the loss-run premium is per POLICY not per machine, so a per-asset loss ratio would be invented and is
+  not built. `210-TPL-2026-GREENCONCRETE` is a PLACEHOLDER row for the same cover as the real
+  `210-CTB-2026-11949344-000` (now loaded alongside it) - merging them is the owner's call. One chassis carries
+  **Cyrillic Р** for Latin P (same class as TM545). Opening these tabs beyond the Admin-only route needs a PII
+  decision first.
+
 ## VERCEL: THE PREVIEW SUPPRESSION LIST IS KEYED ON THE BRANCH NAME - UPDATE IT WHEN THE BRANCH CHANGES
 `vercel.json` -> `git.deploymentEnabled` lists the working branches whose pushes must NOT build a preview.
 It named ONLY the retired `claude/accident-builder-report-ui-2bkwb5`, so every push to the current branch

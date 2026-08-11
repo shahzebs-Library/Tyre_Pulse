@@ -48,7 +48,8 @@ import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { defaultWindow, periodName, previousPeriodName } from '../lib/defaultPeriod'
+import { defaultWindow } from '../lib/defaultPeriod'
+import SiteOperatingCostPanel from '../components/expense/SiteOperatingCostPanel'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
 
@@ -1135,6 +1136,12 @@ export default function ExpenseReport() {
                 {sections.assets && <ChartCard title="Top assets by spend" refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
               </div>
             </section>
+          )}
+
+          {/* What each site COSTS TO RUN - cost read through the asset, because an
+              expense line's own site is the store the parts came from. */}
+          {sections.bysite && (
+            <SiteOperatingCostPanel country={activeCountry} from={from} to={to} money={money} />
           )}
 
           {/* By site (store_code -> site map). One table per country on the All view. */}

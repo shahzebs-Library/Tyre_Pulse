@@ -20,7 +20,7 @@ import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { getCostPerM3, getCostPerM3Trend, getProductionRejections, countCostM3Rows } from '../lib/api/costPerM3'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../lib/cpkModule'
-import { fmtMoney, fmtM3, fmtCostPerM3, sourceShares } from '../lib/costPerM3'
+import { fmtMoney, fmtM3, fmtCostPerM3, fmtCostPerM3Guarded, costPerM3Reliable, sourceShares } from '../lib/costPerM3'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
@@ -150,7 +150,11 @@ export default function CostPerM3() {
         region: r.region, internal: Math.round(r.internal_cost || 0), tyre: Math.round(r.tyre_cost || 0),
         sco: Math.round(r.sco_cost || 0), sany: Math.round(r.sany_cost || 0),
         grand_total: Math.round(r.grand_total || 0), production_m3: Math.round(r.production_m3 || 0),
-        cost_per_m3: r.cost_per_m3 == null ? 'N/A' : Number(r.cost_per_m3).toFixed(2),
+        // Same guard as the screen. A spreadsheet outlives the page it came
+        // from, so it must not be the one place the unreadable rate survives.
+        cost_per_m3: r.cost_per_m3 == null ? 'N/A'
+          : costPerM3Reliable(r.production_m3) ? Number(r.cost_per_m3).toFixed(2)
+          : 'Too little production to measure',
       })),
     ]
     if (total) rows.push({
@@ -194,7 +198,12 @@ export default function CostPerM3() {
       })
       out.push({
         key: 'cpm3_region', label: 'Cost per M3 by region', kind: 'flat', valueKind: 'money',
-        rows: regions.map((r) => ({ label: r.region, value: Number(r.cost_per_m3) || 0 })),
+        // A region whose production is still untagged produces a rate dozens of
+        // times the fleet figure, and one bar that tall flattens every real one
+        // into the axis. Such regions are left out of the chart entirely rather
+        // than drawn - the table names them and says why.
+        rows: regions.filter((r) => costPerM3Reliable(r.production_m3))
+          .map((r) => ({ label: r.region, value: Number(r.cost_per_m3) || 0 })),
       })
       out.push({
         key: 'm3_region', label: 'Production M3 by region', kind: 'flat', valueKind: 'count',
@@ -395,7 +404,14 @@ export default function CostPerM3() {
                   <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(r.sany_cost, currency)}</td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtMoney(r.grand_total, currency)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{Math.round(r.production_m3 || 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtCostPerM3(r.cost_per_m3, currency)}</td>
+                  {/* A region can carry real cost while its production is still
+                      untagged, and dividing one by the other then prints a rate
+                      dozens of times the fleet figure. Withheld rather than
+                      shown, because that number reads as a crisis. */}
+                  <td className={`px-3 py-2 text-right font-semibold ${costPerM3Reliable(r.production_m3) ? 'tabular-nums' : 'text-[11px]'}`}
+                      style={costPerM3Reliable(r.production_m3) ? undefined : { color: 'var(--text-dim)' }}>
+                    {fmtCostPerM3Guarded(r.cost_per_m3, r.production_m3, currency)}
+                  </td>
                 </tr>
               ))}
             </tbody>

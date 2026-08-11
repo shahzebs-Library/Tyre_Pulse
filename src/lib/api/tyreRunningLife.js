@@ -20,13 +20,10 @@ import { toUserMessage } from '../safeError'
  */
 const _cache = new Map()
 
-/** Drop cached running-life payloads (after a change that would alter them). */
-export function clearTyreRunningLifeCache() { _cache.clear() }
-
 /**
  * @param {{country?:string, maxAgeMs?:number}} [opts] `maxAgeMs` lets a caller
- *   reuse a recent payload; omit it to always hit the server (the default, so
- *   no existing caller's freshness changes).
+ *   reuse a recent payload. Omitting it is the default AND the way to insist on
+ *   a fresh read, so a screen with its own refresh control needs nothing extra.
  */
 export async function getTyreRunningLife({ country, maxAgeMs = 0 } = {}) {
   const key = country && country !== 'All' ? country : '__all__'

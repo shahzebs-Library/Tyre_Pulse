@@ -13,7 +13,8 @@
  * /production-m3); Internal reuses parts_consumption (ERP intake).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy } from 'lucide-react'
+import { RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy, ArrowUpRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
@@ -83,6 +84,19 @@ export function buildSiteManagerReview({ regions = [], total = null, rejections 
     }
   }
   return { lines, issues }
+}
+
+/**
+ * Where each cost source keeps its own full table. The dashboard answers "how
+ * much and what share"; these pages answer "which lines", which is a different
+ * question and needs a different screen. Internal has no ledger page of its own
+ * because it is the ERP expense grid, read on /expense-report.
+ */
+const SOURCE_LEDGER = {
+  internal: '/expense-report',
+  tyre: '/expense-report',
+  sco: '/sco-costs',
+  sany: '/sany-invoices',
 }
 
 export default function CostPerM3() {
@@ -336,7 +350,7 @@ export default function CostPerM3() {
             <table className="w-full text-sm border-collapse">
               <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
                 <tr>
-                  {['Source', `Amount (${currency})`, 'Share of total', 'Ledger rows'].map((h, i) => (
+                  {['Source', `Amount (${currency})`, 'Share of total', 'Ledger rows', 'Open'].map((h, i) => (
                     <th key={h} className={`px-3 py-2 font-semibold whitespace-nowrap ${i === 0 ? 'text-left' : 'text-right'}`} style={{ color: 'var(--text-secondary)' }}>{h}</th>
                   ))}
                 </tr>
@@ -344,12 +358,18 @@ export default function CostPerM3() {
               <tbody>
                 {sourceShares(total).map((s) => {
                   const entries = s.key === 'sco' ? counts?.sco : s.key === 'sany' ? counts?.sany : null
+                  const to = SOURCE_LEDGER[s.key]
                   return (
                     <tr key={s.key} className="border-t border-[var(--border-subtle)]">
                       <td className={`px-3 py-2 text-left ${s.sub ? 'pl-8 text-xs' : ''}`} style={s.sub ? { color: 'var(--text-secondary)' } : undefined}>{s.label}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(s.value, currency)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{s.share == null ? 'N/A' : `${s.share.toFixed(1)}%`}</td>
                       <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>{entries == null ? 'N/A' : entries.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {to
+                          ? <Link to={to} className="inline-flex items-center gap-1 text-xs underline" style={{ color: 'var(--accent)' }}>View table <ArrowUpRight size={12} /></Link>
+                          : <span className="text-xs" style={{ color: 'var(--text-dim)' }}>-</span>}
+                      </td>
                     </tr>
                   )
                 })}
@@ -358,18 +378,23 @@ export default function CostPerM3() {
                   <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(total.grand_total, currency)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{Number(total.grand_total) > 0 ? '100%' : 'N/A'}</td>
                   <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }} />
+                  <td />
                 </tr>
                 <tr className="border-t border-[var(--border-subtle)]">
                   <td className="px-3 py-2 text-left" style={{ color: 'var(--text-secondary)' }}>Approved production</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtM3(total.production_m3)}</td>
                   <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>denominator</td>
                   <td className="px-3 py-2 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>{counts?.production == null ? 'N/A' : counts.production.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <Link to="/production-m3" className="inline-flex items-center gap-1 text-xs underline" style={{ color: 'var(--accent)' }}>View table <ArrowUpRight size={12} /></Link>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="mt-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
             Tyre is a sub-line of Internal (not added twice). Internal rows come from the ERP expense grid; SCO / SANY / Production row counts are the ledger entries in this period.
+            Every source keeps its own full table: use View table to open it, then press "Show rows" there to read every line.
           </p>
         </div>
       )}

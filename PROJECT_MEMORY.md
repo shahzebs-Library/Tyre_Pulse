@@ -3,7 +3,30 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 6) — YEAR DEFAULT FIXES THE BLANK SCREENS + MASTER TYRE LOAD (V511/V511b). Next free **V512**.
+## SESSION 2026-08-11 (part 6) — YEAR DEFAULT FIXES THE BLANK SCREENS + MASTER TYRE LOAD + TRUE SITE COST (V511-V512b). Next free **V513**.
+- **V512 `get_site_operating_cost(country,from,to)` - PER-SITE COST WAS ANSWERING THE WRONG QUESTION, and the
+  owner's own "ST2 means its spare parts store" is what made the right one possible.** The -ST names are STORES,
+  so `parts_consumption.site` is where stock was ISSUED FROM, not where the machine worked. Measured KSA YTD:
+  **DIRIYAH store issued SAR 729,121 while only 2,335 of work happened at a site called DIRIYAH**; QIDDIYA
+  303,997 vs 24,360; DHAHBAN 221,899 vs nothing. Not error - the machines are at DIRIYAH-G1/G2 and
+  QIDDIYA-UPPER/LOWER PLATEAU and draw from the one store that serves them. **Attribution is expense line ->
+  job card -> asset -> the asset's registered site; coverage 99.4% (18,345/18,459) and the function PUBLISHES
+  it** (a per-site total silently dropping 1 line in 200 cannot be reconciled). Read this way **DIRIYAH-G1 alone
+  is SAR 488,874 across 70 assets** - a gate-level figure the system could not produce before. `by_store` is
+  returned too and is NOT noise: "which store issues stock" is a real, different question.
+  **THE FLEET JOIN MUST BE `left join lateral ... limit 1` PREFERRING THE ROW'S OWN COUNTRY** - vehicle_fleet is
+  unique per (org, country, asset_no) and the same code exists in more than one country, so a plain join
+  DUPLICATES the expense line (the V356 lesson).
+  **V512b: a STABLE function may NOT `create table as`** (already recorded from V485, hit again) - rewritten with
+  `with ... as materialized` for the same single-pass behaviour. Security: DEFINER + app_current_org +
+  app_can_see_country, granted authenticated/service_role, revoked from PUBLIC **then from anon BY NAME** (V500
+  ordering); verified anon=false. Client `src/lib/api/siteOperatingCost.js` (+ pure `storeVsOperating`, null
+  worked-total means "serves other sites", never 0) + `SiteOperatingCostPanel` mounted on the EXISTING
+  `/expense-report` bysite section - no new page.
+- **STANDING RULE (now enforced by a real surface): per-site OPERATING cost is read THROUGH THE ASSET. Never
+  group cost by `parts_consumption.site` and call it a site total.**
+
+## SESSION 2026-08-11 (part 6a) — YEAR DEFAULT + MASTER TYRE LOAD (V511/V511b).
 Owner: "dahsbaords and many areas are showing blank can u fixed it now ... thsoe one month makke it 3 months year
 keep it current year i jaut want speed and accuracy ... in the expesne dont say this prriod previous instead write
 name of month or year what applicable" plus "why these kob cards line are not been extracted from it. Tyre records

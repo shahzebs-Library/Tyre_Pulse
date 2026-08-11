@@ -48,6 +48,7 @@ import CaseCompletionPanel from './accidents/CaseCompletionPanel'
 import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
+import AccidentInsurerRecord from './insurance/AccidentInsurerRecord'
 import { loadCase } from '../lib/api/accidentCase'
 import { updateAccidentForPage } from '../lib/api/accidents'
 import { renderAccidentCasePdf } from '../lib/accidentCasePdf'
@@ -1113,6 +1114,11 @@ function ClaimTab({ acc, elevated, fmtCurrency, onEditIncident, editLocked }) {
         <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{fmtCurrency(Number(acc.recovered_amount) || 0)}</p></div>
         <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{fmtCurrency(netCost)}</p></div>
       </div>
+
+      {/* What the insurer has already recorded for this case. Read only, and a
+          separate record from the claim fields above - neither overwrites the other. */}
+      <AccidentInsurerRecord accident={acc} />
+
       <EditIncidentHint elevated={elevated} onEdit={onEditIncident} locked={editLocked} />
     </div>
   )

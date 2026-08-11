@@ -34,6 +34,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   surfaced on `/cpk-intelligence`. Returns NULLs not zeros when a count fails.
 - **PROCESS: `tyre-pulse-eezl` (marketing/) Vercel failing on a PR is NEVER a gate** - confirm with
   `git diff --name-only origin/main...HEAD | grep ^marketing/` (0 = cannot be yours).
+- **PROCESS: the GitHub REST API is NOT reachable by `curl` in this session** - it returns
+  `{"message":"GitHub access is not enabled for this session..."}`. ONLY the `mcp__github__*` tools work. A
+  Monitor script that curls `/check-runs` therefore gets an empty body, sees "no pending runs" and prints
+  **ALL CHECKS COMPLETE while CI is still running** - which is exactly what happened here. Poll CI with
+  `mcp__github__pull_request_read method=get_check_runs`, never a curl loop.
 
 ## SESSION 2026-08-10 (part 3) — BUYER REMARKS FIXED IN A LOOP (V498-V500). Next free **V501**.
 Owner: "u saw buyer remarks go ahead fix it ... make a loop until its successful". Continued straight on from

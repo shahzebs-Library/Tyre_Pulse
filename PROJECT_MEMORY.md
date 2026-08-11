@@ -3,7 +3,55 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 5) — READ A CHECKLIST WITHOUT DOWNLOADING IT + CURRENT-MONTH DEFAULT (V510). Next free **V511**.
+## SESSION 2026-08-11 (part 6) — YEAR DEFAULT FIXES THE BLANK SCREENS + MASTER TYRE LOAD (V511/V511b). Next free **V512**.
+Owner: "dahsbaords and many areas are showing blank can u fixed it now ... thsoe one month makke it 3 months year
+keep it current year i jaut want speed and accuracy ... in the expesne dont say this prriod previous instead write
+name of month or year what applicable" plus "why these kob cards line are not been extracted from it. Tyre records
+as wll from this one master file".
+- **THE BLANK SCREENS WERE THE CURRENT-MONTH DEFAULT AND PART 5 MADE IT WORSE.** `/dashboard` had defaulted to
+  "This Month" long before this week; part 5 then applied a month default in more places. Measured: tyre_records,
+  accidents and work_order_line_items have **ZERO rows in the current month**, so the tyre + accident panels
+  rendered empty while the data sat there. **DEFAULT IS NOW THE CURRENT YEAR** (`defaultWindow`), which has data
+  in EVERY feed (tyre 3,653 / accidents 38 / inspections 244 / WO lines all 184,025) and still reads 4-5x less
+  than all history (expenses 43,755 of 208,375, job cards 21,338 of 88,773). Applied to Dashboard, WorkOrders,
+  ExpenseReport. **`MIN_MONTHS = 3` FLOOR IS LOAD-BEARING** - without it "this year" on 2 January is two days and
+  every screen goes blank again on New Year's Day.
+- **RULE (supersedes part 5's month rule): the opening window is YEAR-TO-DATE, floored at 3 months, falling back
+  to the most recent YEAR with data.** Do NOT re-introduce a month default on any screen that reads an
+  upload-driven feed.
+- **NO SCREEN SAYS "this period" / "previous" ANY MORE.** `periodName(from,to)` names the window - "2026 to date",
+  "August 2026", "2025" - and `previousPeriodName` names the comparison. Wired through PeriodBar + ComparisonStrip
+  (heading AND column headers). REASON: an exported or forwarded report headed "This period" is unreadable a week
+  later; nobody can tell which months it covers.
+- **"WHY ARE JOB-CARD LINES NOT EXTRACTED FROM THE MASTER FILE" - THEY CANNOT BE, AND THIS IS THE HONEST ANSWER.**
+  `ksa_country_upload_template_staging` (now **282,352 rows / 60,993 job cards**) has NO item-level columns at all:
+  it carries per-card TOTALS (Spare Value / Oil Value / Tyre Value / Net Material Value) and no item code,
+  description, qty or unit cost. Line detail lives only in the expense grid, which is already loaded (184,025
+  work_order_line_items). Do NOT build a line-item extractor against this file - the rows are not in it.
+- **V511 TYRE FITMENTS: 196 LOADED, and the reason they were missing is a DATE PARSER GAP, not the file.**
+  `erp_parse_date` cannot read a TWO-DIGIT year and the master file writes `fix_date` as `29-06-26`, so all 223
+  candidates parsed NULL and were skipped. They were the NEWEST tyre changes (Aug 2025 - Aug 2026).
+  **NEW `master_parse_date()`** tries erp_parse_date FIRST (4-digit years byte-identical) then DD-MM-YY / DD/MM/YY
+  as a FALLBACK - ordering is load-bearing given V388 (a 2-digit year read as year 0026 on 33,626 job cards).
+  27 rows held back: serial destroyed by Excel into `1.25121E+11` - a mangled serial is a tyre that can never be
+  matched to the real one. Snapshots `_bak.tyre_master_load_v511_inserted` / `_superseded`.
+- **V511b - MY OWN THREE-VALUED-LOGIC BUG, SAME CLASS AS V370a.** V511 tested `n.fd > cur.issue_date` to decide if
+  a new fitment supersedes the tyre on that wheel. **The tyres already on those wheels have `issue_date` NULL**,
+  so the comparison is NULL (not false) and BOTH branches fell through to 'Active' - **67 wheels ended up with two
+  active tyres**. Fixed by ranking one active per wheel, latest fitment date wins, undated loses to dated; scope
+  limited to wheels V511 touched so unrelated history is not rewritten. **VERIFIED AFTER: double-active 0** (was
+  134 mid-flight), reversed 0, future-dated 0, KSA tyre_records 8,282. **RULE: coalesce any nullable value before
+  comparing it in a branch that decides a status.**
+- **OWNER RULINGS RECORDED:** KSP **T1 and T2 (KSP-T1 / KSP-TP) are SEPARATE locations** - the V507 parent-collapse
+  guard was right and must stay; an idle/inactive asset should still show at its own terminal. Wheel POSITION is
+  known from the job card and other facts, so it is not needed from free text - **the serial is the product**.
+  Asset code is the identity that matters; an asset not in the sheet was previously here and is HISTORICAL.
+- **STILL OPEN:** the 17 real plate conflicts (owner said "plates are fine" but did not pick a side per asset);
+  Analytics / CostCenter / KpiCommandCenter still on their own windows (they are TREND screens - a one-month
+  default makes a 12-month chart a single point, so they were deliberately left; the year default is safe for them
+  and is the next wiring).
+
+## SESSION 2026-08-11 (part 5) — READ A CHECKLIST WITHOUT DOWNLOADING IT + MONTH DEFAULT, SUPERSEDED BY PART 6 (V510). Next free **V511** (now taken; V512 free).
 Owner: "make the chekc which don't is clickable and show checklist directly ... without each time downloading each
 file" AND "all reault data should be shown as an curent month applied everywhere make index and all corrext".
 - **READING A CHECKLIST COST A PAGE LOAD OR A PDF DOWNLOAD - AND AN APPROVER COULD NOT SEE ONE AT ALL.** The

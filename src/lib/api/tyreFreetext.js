@@ -7,14 +7,20 @@
  * it. `extract_tyre_freetext_candidates` reads those sentences and files what it
  * found in `tyre_freetext_candidates`. A row there is a PROPOSAL, never a tyre
  * record - it is not counted anywhere, it does not appear in CPK, and nothing
- * downstream reads it. That separation is deliberate: the sentences contradict
- * themselves often enough that a machine cannot settle them.
- *   "CHANGE THE TYRE 4TH AXLE LEFT SIDE RHBB1-YMT93964" - words say left, the
- *   position code says right.
+ * downstream reads it.
+ *
+ * THE SERIAL IS THE PRODUCT HERE; THE POSITION IS NOT. Owner's ruling, and the
+ * text bears it out: the serial numbers read out of these sentences are reliable,
+ * the positions are not.
+ *   "CHANGE THE TYRE 4TH AXLE LEFT SIDE RHBB1-YMT93964" - the words say left, the
+ *   position code says right. The serial is unambiguous; the wheel is not.
  *   "REPAIRED TYRE FIXED IN LHRI & LHRO - YMY10885 & YMA12933" - two positions,
  *   two serials, and which belongs to which is word order, not grammar.
- * A wrong tyre record is worse than a missing one, because it puts a serial on a
- * wheel it was never on and quietly corrupts brand performance and cost per km.
+ * So `position_text` is kept only as EVIDENCE of what the sentence said and must
+ * not be treated as the tyre's position. It still earns its place in the
+ * extraction itself: the position token is what anchors the serial match, which is
+ * how the engine avoids dragging in part numbers and job references. Finding a
+ * serial by its neighbour is sound; publishing that neighbour as fact is not.
  *
  * `event_kind` is the field that matters most when reviewing. "REPLACED TYRE OLD
  * ONE LHF2-YMY32586" names the tyre that came OFF, not one going on - accepting

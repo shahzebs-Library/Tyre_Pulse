@@ -63,10 +63,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   reachable, and it PORTALS to `document.body` so `.card`'s `overflow:hidden` can never clip it. A `:where()` CSS
   net catches the overlays not yet converted. Applied across the app AND the console. **RULE: new dialogs use
   `Modal`; never hand-roll a `fixed inset-0` panel with a fixed `max-w-*` and no height cap.**
+- **OWNER RULED ON THE DN-LESS LOADS: "If no dn number let it be".** The 5,699 July loads that carry no
+  `dn_number` and overlap 8,458 numbered-station loads on the same nine days STAY IN THE TABLE. Do NOT delete
+  them and do NOT propose a dedupe on them again. They are already out of the cost per m3 denominator for the
+  honest reason that none of them carries an approved quantity (V523), so nothing further is needed - the
+  ruling and the arithmetic already agree.
 - **STILL THE OWNER'S CALL:** SANY is booked at **gross SAR 4,333,145, not net ~3,189,000** (SAR 1.14M of cost
-  per m3) - verified NOT double counted (4 distinct documents, 2 quarters); the **5,699 DN-less July loads** that
-  overlap 8,458 numbered-station loads on the same nine days are excluded from the denominator but still in the
-  table; and **92% of KSA production still has no region set** - the new station panel is where that is fixed.
+  per m3) - verified NOT double counted (4 distinct documents, 2 quarters); and the KSA production region is
+  set by mapping each plant number to a registered site in the station panel (V524).
 
 ## SESSION 2026-08-11 (part 8) — ZERO-COST LINES PRICED, AUGUST CLEARED, TM47 PADDED (V517/V518). Superseded: next free **V524**.
 Owner: "Where it has code matching take it from other item codes match zero cost add there unless it's warranty

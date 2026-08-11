@@ -54,20 +54,25 @@ export default function StationMapPanel() {
 
   useEffect(() => load(), [load])
 
-  const siteOptions = useMemo(() => {
-    const names = new Set()
-    for (const s of sites) {
-      const n = String(s?.name ?? '').trim()
-      if (n) names.add(n)
-    }
-    // A station already resolved to a real name is itself a valid target, so a
-    // site that exists only in production is still offered rather than lost.
-    for (const s of stations) {
-      const v = String(s?.site ?? '').trim()
-      if (v && v !== String(s?.station ?? '').trim() && !/^\d+$/.test(v)) names.add(v)
-    }
-    return Array.from(names).sort()
-  }, [sites, stations])
+  // The register IS the list. A free-text box here would let a typo invent a
+  // 39th site that nothing else knows about, which is how production and parts
+  // grew separate vocabularies in the first place.
+  const siteOptions = useMemo(
+    () => sites
+      .map((s) => ({ name: String(s?.name ?? '').trim(), region: String(s?.region ?? '').trim() }))
+      .filter((s) => s.name)
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [sites],
+  )
+
+  // Region is NOT stored here and there is no field for it: it belongs to the
+  // site, so it is read back from Site Management. Set it there once and every
+  // plant standing at that site reports under it.
+  const regionOf = useMemo(() => {
+    const m = new Map()
+    for (const s of siteOptions) m.set(s.name.toUpperCase(), s.region)
+    return (name) => m.get(String(name ?? '').trim().toUpperCase()) ?? null
+  }, [siteOptions])
 
   const unmapped = stations.filter((s) => !s.mapped)
   // Only plant NUMBERS are the problem. A row that already names a real site
@@ -145,18 +150,37 @@ export default function StationMapPanel() {
       )),
     },
     {
+      key: 'region',
+      header: 'Region',
+      render: (r) => {
+        const reg = regionOf(r.site)
+        if (reg) return <span style={{ color: 'var(--text-primary)' }}>{reg}</span>
+        if (!r.mapped) return <span style={{ color: 'var(--text-dim)' }}>-</span>
+        // The site is known but carries no region. That is a Site Management
+        // job, not a field to add here, so say where to go instead of
+        // offering a second place to record the same fact.
+        return <span style={{ color: 'var(--text-dim)' }}>Set in Site Management</span>
+      },
+    },
+    {
       key: 'set',
       header: 'Set site',
       render: (r) => (
         <div className="flex items-center gap-2">
-          <input
-            list="tp-station-sites"
+          <select
             value={draft[r.station] ?? ''}
             onChange={(e) => setDraft((d) => ({ ...d, [r.station]: e.target.value }))}
-            placeholder={r.mapped ? 'Change site' : 'Pick a site'}
-            className="min-w-[150px] rounded-md border border-[var(--border-subtle)] px-2 py-1 text-sm"
+            disabled={!siteOptions.length}
+            className="min-w-[170px] rounded-md border border-[var(--border-subtle)] px-2 py-1 text-sm"
             style={{ background: 'var(--surface)', color: 'var(--text-primary)' }}
-          />
+          >
+            <option value="">{r.mapped ? 'Change site...' : 'Pick a site...'}</option>
+            {siteOptions.map((s) => (
+              <option key={s.name} value={s.name}>
+                {s.region ? `${s.name} (${s.region})` : s.name}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => save(r.station)}
@@ -181,7 +205,8 @@ export default function StationMapPanel() {
           <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
             The production file names a batching plant by number. Say once where each plant
             stands and every figure, past and future, is reported against the real site - the
-            same site names used for parts and expenses.
+            same site names used for parts and expenses. The list below is your Site Management
+            register, and the region comes with the site, so there is nothing to set twice.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -199,9 +224,14 @@ export default function StationMapPanel() {
         </div>
       </div>
 
-      <datalist id="tp-station-sites">
-        {siteOptions.map((s) => <option key={s} value={s} />)}
-      </datalist>
+      {!loading && !siteOptions.length && (
+        <p className="mb-3 text-sm rounded-lg px-3 py-2 flex items-center gap-2"
+           style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--text-primary)' }}>
+          <AlertTriangle size={14} />
+          No sites are registered for {country}. Add them in Site Management first - that is
+          where the site list and its region come from.
+        </p>
+      )}
 
       {error && (
         <p className="mb-3 text-sm rounded-lg px-3 py-2 flex items-center gap-2"

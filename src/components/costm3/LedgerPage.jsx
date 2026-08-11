@@ -250,11 +250,15 @@ export default function LedgerPage({
 
   function exportExcel() {
     if (!rows.length) return
-    const keys = columns.map((c) => c.key)
-    const headers = columns.map((c) => c.header)
+    // A `__`-prefixed column is an on-screen control (a link into a detail
+    // panel), not a value. Its render returns an element, which would land in
+    // the sheet as an unreadable object, so it is left out of the export.
+    const exportable = columns.filter((c) => !String(c.key).startsWith('__'))
+    const keys = exportable.map((c) => c.key)
+    const headers = exportable.map((c) => c.header)
     const flat = rows.map((r) => {
       const o = {}
-      for (const c of columns) {
+      for (const c of exportable) {
         const v = c.render ? c.render(r) : r[c.key]
         o[c.key] = c.kind === 'money' || c.kind === 'int' ? (num(v) ?? '') : (v ?? '')
       }

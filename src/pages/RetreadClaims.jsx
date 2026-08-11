@@ -29,6 +29,7 @@ import {
   RotateCw, Percent, Clock, Wallet, Building2, LayoutGrid, BarChart3, ArrowUpDown,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import NotInUseNotice from '../components/ui/NotInUseNotice'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
@@ -330,6 +331,8 @@ export default function RetreadClaims() {
           </div>
         }
       />
+      <NotInUseNotice count={rows?.length} label="retread claims"
+        hint="Claims appear once one is raised with a retread supplier." />
 
       {missing && (
         <div className="card border border-amber-800/50 flex items-start gap-3">

@@ -24,6 +24,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatDate } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
@@ -776,6 +777,8 @@ export default function WarrantyTracker() {
         </div>
         }
       />
+      <NotInUseNotice count={claims.length} label="warranty claims"
+        hint="Claims appear once one is raised against a tyre." />
 
       {activeCountry === 'All' && (
         <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">

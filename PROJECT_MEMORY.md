@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 4) — OWNER RULINGS APPLIED: SITES, HISTORY, SERIAL-ONLY (V506-V508). Next free **V509**.
+## SESSION 2026-08-11 (part 4) — OWNER RULINGS APPLIED: SITES, HISTORY, SERIAL-ONLY, PLATES (V506-V509). Next free **V510**.
 The owner answered the three questions from part 3. All applied live + verified.
 - **"ST2 MEANS ITS SPARE PARTS STORE LOCATION" - THIS CLOSES A STANDING OPEN QUESTION AND EXPLAINS A SPLIT
   NOBODY COULD ACCOUNT FOR.** `DIRIYAH-ST2` survived the fleet-wide -ST retirement because it ends ST2 not ST
@@ -42,7 +42,17 @@ The owner answered the three questions from part 3. All applied live + verified.
   INSIDE the extractor** - the position token is what anchors the serial regex and stops it dragging in part
   numbers and job references. Finding a serial by its neighbour is sound; publishing that neighbour as fact is
   not. `position_text` stays on the row for provenance.
-- **NOT DONE, still the owner's call: the 22 plate conflicts** (sheet contradicts a plate already on file).
+- **V509 PLATE CONFLICTS 22 -> 17. FIVE WERE NOT CONFLICTS AT ALL** - strip the spaces and the two strings are
+  the same plate (BH018 `2041  XXB`, PL077 `6957 H X A`, SL019 `1843ZAA`, TM655 `8448 G X A`, TM736
+  `1981  JTA`). Normalised to the sheet's spacing under an EXACT guard - the update fires only when the two
+  values are identical once every space is removed, so it can never settle a real difference by accident.
+- **THE REMAINING 17 ARE THE OWNER'S CALL and each is a claim the data cannot settle:** **MP114/MP119 hold
+  each other's plates** (4205/4206 SXA) and so do **TM400/TM402** (7326/7332 HRA) - a transposition, but
+  guessing the side swaps two real vehicles' identities; **nine mixers read AXA on file vs JXA in the sheet**
+  (TM579/585/588/591/594/595/597/602/604) plus TM412 HRA vs NRA, which looks like one bulk entry error;
+  MP049 (4691 KRB vs 3786 AXA) and MT001 (8271 VTA vs 8231 BKB) are entirely different plates; SL017 is
+  `KAA 4746` vs `4746 KAA`, the same characters reversed - probably a flipped entry but a judgement, not a
+  whitespace fix. Rollback `_bak.vehicle_fleet_plate_v509`. Next free **V510**.
 
 ## SESSION 2026-08-11 (part 3) — THE KSA ASSET REGISTER APPLIED (V504/V505). Next free **V506**.
 Owner sent `Asset_Report082026_UPDATED.xlsx` sheet "ALL IN ONE ASSETS" (618 KSA assets) as "the final updated"

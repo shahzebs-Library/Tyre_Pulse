@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Download, FileText, FileSpreadsheet, FileType, Check, Loader2 } from 'lucide-react'
+import useAnchoredPopover from './useAnchoredPopover'
 import {
   runTableExport,
   buildReportDefinition,
@@ -31,11 +33,17 @@ export default function ExportMenu({
   const [busy, setBusy] = useState(null) // format currently exporting
   const [errored, setErrored] = useState(false)
   const menuRef = useRef(null)
+  const popRef = useRef(null)
+  // Portalled, so the popover is no longer a DOM child of the trigger and has
+  // to be excluded from the outside-click test explicitly.
+  const { triggerRef, coords } = useAnchoredPopover(open, { width: 240, height: 320, align: 'right' })
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false)
+      const inTrigger = menuRef.current?.contains(e.target)
+      const inPop = popRef.current?.contains(e.target)
+      if (!inTrigger && !inPop) setOpen(false)
     }
     function onKey(e) {
       if (e.key === 'Escape') setOpen(false)
@@ -105,6 +113,7 @@ export default function ExportMenu({
   return (
     <div className="relative" ref={menuRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={disabled}
@@ -116,8 +125,12 @@ export default function ExportMenu({
         <Download size={13} /> Export
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-30 w-60 rounded-xl border border-[var(--border-dim)] bg-surface-2 shadow-float p-2">
+      {open && coords && createPortal(
+        <div
+          ref={popRef}
+          className="tp-popover w-60 p-2"
+          style={{ top: coords.top, left: coords.left, maxHeight: coords.maxHeight }}
+        >
           <p className="px-2 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
             Rows to export
           </p>
@@ -179,7 +192,8 @@ export default function ExportMenu({
               Export failed, please retry.
             </p>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

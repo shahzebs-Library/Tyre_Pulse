@@ -14,6 +14,10 @@
  * null and reads as "Not recorded", never as 0.
  */
 
+import { resolveLayoutKey, canonicalToSlotId, BUILTIN_LAYOUT_SLOTS } from './tyreBay'
+import { legacyPositionCode, canonicalCode } from './tyrePositions'
+import { damagedPositions } from './inspectionTyreFlags'
+
 /** Condition word -> risk band. The vocabulary the app writes. */
 export const COND_TO_RISK = {
   Good: 'good', Wear: 'warning', Damage: 'critical', Puncture: 'critical', None: 'none',
@@ -229,5 +233,146 @@ export function inspectionSummary(row) {
     damaged: stats.counts.critical || 0,
     avgPressure: stats.avgPressure,
     lowTread: stats.lowTread,
+  }
+}
+
+// ── The wheel map ────────────────────────────────────────────────────────────
+// Everything below turns one inspection into the props VehicleTyreDiagram
+// needs. It lives here, beside the reading helpers, because the map and the
+// table are two views of the SAME answer - splitting them is how a wheel ends
+// up green while the row beneath it says "Damage".
+
+/** An explicit pickup signal, as opposed to the resolver's fallback. */
+const PICKUP_HINT = /pickup|pick[\s-]?up/i
+
+/**
+ * Does this vehicle type actually have a known wheel layout?
+ *
+ * `resolveLayoutKey` answers "Pickup" for anything it does not recognise, which
+ * is a safe default for a picker and a lie on an inspection report: drawing four
+ * wheels for a machine nobody classified states a layout we do not know. So a
+ * Pickup result only counts when the string genuinely says pickup.
+ */
+export function vehicleTypeIsKnown(vt) {
+  const s = String(vt || '').trim()
+  if (!s) return false
+  if (BUILTIN_LAYOUT_SLOTS[s]) return true
+  if (resolveLayoutKey(s) !== 'Pickup') return true
+  return PICKUP_HINT.test(s) || /^PL/i.test(s)
+}
+
+/** The canonical GCC code a slot displays (LHF1, RHR1-O ...). */
+function slotCode(layoutKey, slot) {
+  return canonicalCode(legacyPositionCode(layoutKey, slot)) || slot
+}
+
+/** Short reading printed inside the wheel. Never prints a zero it did not read. */
+function wheelSubLabel(pressure, tread) {
+  if (pressure != null) return `${Math.round(pressure)} PSI`
+  if (tread != null) return `${tread} mm`
+  return null
+}
+
+/**
+ * Turn one inspection row into the wheel map.
+ *
+ * @param {object} row  the inspection (tyre_conditions in any stored shape)
+ * @param {object} [opts]
+ * @param {Function} [opts.isTyreless]  predicate "this type has no tyres".
+ *   Injected rather than imported so this module stays free of the React
+ *   component that owns that list - one list, still only one place.
+ *
+ * @returns {{
+ *   renderable: boolean, reason: string|null, vehicleType: string|null,
+ *   layoutKey: string|null, slots: string[],
+ *   tyreData: Object<string,{risk:string,condition:string|null}>,
+ *   subLabels: Object<string,string>,
+ *   readings: Array<{slot,code,condition,risk,pressure,tread}>,
+ *   unrecorded: string[], unmatched: Array<{position,condition}>,
+ *   stats: object|null
+ * }}
+ */
+export function inspectionDiagramModel(row, { isTyreless } = {}) {
+  const blank = {
+    renderable: false, reason: null, vehicleType: null, layoutKey: null,
+    slots: [], tyreData: {}, subLabels: {}, readings: [],
+    unrecorded: [], unmatched: [], stats: null,
+  }
+  if (!row) return { ...blank, reason: 'Inspection not loaded.' }
+
+  const recordedType = String(row.vehicle_type || '').trim()
+  // The asset code carries the class (TM, MP, WL ...) when nobody filled the
+  // vehicle type in, and the layout resolver already reads that prefix.
+  const typeHint = recordedType || String(row.asset_no || '').trim()
+
+  if (recordedType && typeof isTyreless === 'function' && isTyreless(recordedType)) {
+    return { ...blank, vehicleType: recordedType, reason: `${recordedType} has no tyres to inspect.` }
+  }
+  if (!vehicleTypeIsKnown(typeHint)) {
+    return {
+      ...blank,
+      vehicleType: recordedType || null,
+      reason: typeHint
+        ? `No wheel layout is defined for "${typeHint}", so the tyre map cannot be drawn.`
+        : 'Vehicle type was not recorded, so the tyre map cannot be drawn.',
+    }
+  }
+
+  const layoutKey = resolveLayoutKey(typeHint)
+  const slots = BUILTIN_LAYOUT_SLOTS[layoutKey] || []
+  const normTc = normalizeTyreConditions(row)
+  const stats = inspectionStats(normTc)
+
+  // Damage and puncture are judged by damagedPositions - the same function that
+  // raises the register's "tyres due" flag and the corrective action. A word it
+  // catches that the exact-match condition map does not ("Damaged") must still
+  // burn the wheel red, or the map would contradict the flag on a safety item.
+  const damagedSlots = new Set()
+  for (const d of damagedPositions(row)) {
+    const slot = canonicalToSlotId(typeHint, d.position)
+    if (slot) damagedSlots.add(slot)
+  }
+
+  const tyreData = {}
+  const subLabels = {}
+  const readings = []
+  const unmatched = []
+
+  for (const [position, d] of Object.entries(normTc)) {
+    // A position with nothing against it is not a reading; it stays unrecorded
+    // so the wheel renders as "No Data" rather than as a silent pass.
+    if (!d || !(d.condition || d.pressure != null || d.tread != null)) continue
+    const slot = canonicalToSlotId(typeHint, position)
+    if (!slot) { unmatched.push({ position, condition: d.condition || null }); continue }
+
+    const risk = damagedSlots.has(slot) ? 'critical' : (d.risk || 'none')
+    tyreData[slot] = { risk, condition: d.condition || null }
+    const sub = wheelSubLabel(d.pressure, d.tread)
+    if (sub) subLabels[slot] = sub
+    readings.push({
+      slot,
+      code: slotCode(layoutKey, slot),
+      condition: d.condition || RISK_LABEL[risk] || null,
+      risk,
+      pressure: d.pressure,
+      tread: d.tread,
+    })
+  }
+
+  // Layout order, so the caption reads front to rear like the picture.
+  readings.sort((a, b) => slots.indexOf(a.slot) - slots.indexOf(b.slot))
+
+  return {
+    renderable: true,
+    reason: null,
+    vehicleType: typeHint,
+    layoutKey,
+    slots,
+    tyreData,
+    subLabels,
+    readings,
+    unrecorded: slots.filter((s) => !(s in tyreData)),
+    unmatched,
+    stats,
   }
 }

@@ -1414,3 +1414,192 @@ html.light .tp-wordmark {
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ─── Dialogs: fit the screen, not a fixed box ───────────────────────────────
+   Dialogs across the app were hand rolled, each with its own `max-w-*` picked
+   for a laptop. On a large display or a TV they stayed a small box in the
+   middle while their content scrolled inside it, and on a phone a panel with no
+   height cap pushed its own buttons off screen.
+
+   Two rules below, deliberately shaped so they can never fight a panel that
+   already states its intent:
+
+   1. A zero specificity `:where()` fallback that only fills gaps. A panel that
+      already declares its own max-height keeps it; one that declares none stops
+      growing past the viewport instead of hiding its actions.
+   2. A width ladder that only applies from large viewports up. It bumps each
+      named Tailwind bucket one notch per breakpoint, so a confirm prompt stays
+      a prompt while a data heavy dialog uses the room it has.
+
+   Both are scoped to the centred overlay shape (`fixed inset-0 flex
+   items-center justify-center`), so side drawers, backdrops and full bleed
+   viewers are untouched. `dvh` keeps mobile browser chrome out of the maths. */
+:where(.fixed.inset-0.flex.items-center.justify-center) > *,
+:where(.fixed.inset-0.flex.items-end.justify-center) > * {
+  max-height: 92dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 141 dialogs use `.card` as their panel, and `.card` sets overflow:hidden for
+   its accent hairline. Left alone, capping the height above would clip the
+   content dead instead of scrolling it, which is worse than the overflow it
+   replaced. This needs real specificity to beat `.card`, so it is not a
+   `:where()` fallback like the rule above. */
+.fixed.inset-0.flex.items-center.justify-center > .card,
+.fixed.inset-0.flex.items-end.justify-center > .card {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 1280px) {
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-xs,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-xs { max-width: 22rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-sm,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-sm { max-width: 26rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-md,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-md { max-width: 32rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-lg,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-lg { max-width: 40rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-xl { max-width: 48rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-2xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-2xl { max-width: 56rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-3xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-3xl { max-width: 68rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-4xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-4xl { max-width: 78rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-5xl,
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-6xl,
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-7xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-5xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-6xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-7xl { max-width: min(94vw, 88rem); }
+}
+
+@media (min-width: 1920px) {
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-xs,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-xs { max-width: 26rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-sm,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-sm { max-width: 30rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-md,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-md { max-width: 36rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-lg,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-lg { max-width: 46rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-xl { max-width: 56rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-2xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-2xl { max-width: 68rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-3xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-3xl { max-width: 82rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-4xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-4xl { max-width: 92rem; }
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-5xl,
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-6xl,
+  .fixed.inset-0.flex.items-center.justify-center > .max-w-7xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-5xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-6xl,
+  .fixed.inset-0.flex.items-end.justify-center > .max-w-7xl { max-width: min(94vw, 108rem); }
+}
+
+/* Side drawers: a 480px rail is generous on a laptop and a sliver on a wall
+   display, so let it grow with the viewport while staying readable. */
+@media (min-width: 1600px) {
+  .fixed.inset-0 > .tp-drawer-panel {
+    width: min(40vw, 52rem);
+    /* The panel's own `max-w-*` would otherwise pin it back to laptop width. */
+    max-width: min(40vw, 52rem);
+  }
+}
+
+/* ─── Shared dialog shell (src/components/ui/Modal.jsx) ──────────────────────
+   Header and footer stay put; only the body scrolls, so the actions a user
+   needs are never the part that scrolled away. */
+.tp-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.5rem, 2vw, 1.5rem);
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+}
+
+.tp-dialog-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--tp-dialog-w, 44rem);
+  max-height: 92dvh;
+  min-height: 0;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-card, 1rem);
+  box-shadow: var(--shadow-float, 0 24px 60px rgba(0, 0, 0, 0.45));
+  overflow: hidden;
+}
+
+.tp-dialog-panel--sm   { --tp-dialog-w: 26rem; }
+.tp-dialog-panel--md   { --tp-dialog-w: 34rem; }
+.tp-dialog-panel--lg   { --tp-dialog-w: 48rem; }
+.tp-dialog-panel--xl   { --tp-dialog-w: 64rem; }
+.tp-dialog-panel--full { --tp-dialog-w: 96rem; }
+
+@media (min-width: 1280px) {
+  .tp-dialog-panel--sm   { --tp-dialog-w: 30rem; }
+  .tp-dialog-panel--md   { --tp-dialog-w: 42rem; }
+  .tp-dialog-panel--lg   { --tp-dialog-w: 60rem; }
+  .tp-dialog-panel--xl   { --tp-dialog-w: 80rem; }
+  .tp-dialog-panel--full { --tp-dialog-w: min(94vw, 110rem); }
+}
+
+@media (min-width: 1920px) {
+  .tp-dialog-panel--sm   { --tp-dialog-w: 34rem; }
+  .tp-dialog-panel--md   { --tp-dialog-w: 50rem; }
+  .tp-dialog-panel--lg   { --tp-dialog-w: 72rem; }
+  .tp-dialog-panel--xl   { --tp-dialog-w: 96rem; }
+  .tp-dialog-panel--full { --tp-dialog-w: min(94vw, 128rem); }
+}
+
+.tp-dialog-head,
+.tp-dialog-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem clamp(0.9rem, 2vw, 1.5rem);
+  background: var(--surface-1);
+}
+.tp-dialog-head { border-bottom: 1px solid var(--border-dim); }
+.tp-dialog-foot {
+  border-top: 1px solid var(--border-dim);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.tp-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(0.9rem, 2vw, 1.5rem);
+}
+
+/* A popover rendered inside `.card` is clipped, because `.card` sets
+   overflow:hidden for its accent hairline. Portalled popovers carry this class
+   so they share one look wherever they land. */
+.tp-popover {
+  position: fixed;
+  z-index: 1000;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  max-height: min(70dvh, 32rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

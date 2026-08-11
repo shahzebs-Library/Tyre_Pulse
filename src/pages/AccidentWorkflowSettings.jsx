@@ -23,6 +23,7 @@ import {
   Eye, ShieldAlert, Power, PowerOff, Info,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import SharedModal from '../components/ui/Modal'
 import { useAuth } from '../contexts/AuthContext'
 import {
   listDepartments, createDepartment, updateDepartment, deleteDepartment,
@@ -242,17 +243,14 @@ function EmptyState({ icon: Icon, text }) {
   )
 }
 
+// Thin wrapper over the shared shell so this page's six dialogs keep their call
+// signature while gaining viewport sizing, a pinned header, Escape and a focus
+// trap. The panel used to be a `.card`, which clips anything inside it.
 function Modal({ title, onClose, children, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className={`card w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-2 mb-4">
-          <h3 className="font-semibold text-[var(--text-primary)]">{title}</h3>
-          <button onClick={onClose} className="ml-auto p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={16} /></button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <SharedModal open onClose={onClose} title={title} size={wide ? 'lg' : 'md'}>
+      {children}
+    </SharedModal>
   )
 }
 

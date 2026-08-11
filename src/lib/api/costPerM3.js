@@ -219,7 +219,7 @@ export async function deleteSanyInvoice(id) {
 
 // ---- Production (approved M3) ----------------------------------------------
 
-const PROD_COLS = 'id, country, site, asset_no, pump_no, period_date, m3, approved_m3, supplied_m3, rejected, reason, remarks, dn_number, order_number, mix_code, mix_description, customer_name, project_name, source, notes, created_at'
+const PROD_COLS = 'id, country, site, station, asset_no, pump_no, period_date, m3, approved_m3, supplied_m3, rejected, reason, remarks, dn_number, order_number, mix_code, mix_description, customer_name, project_name, source, notes, created_at'
 
 /**
  * Production rows for the ledger page.
@@ -254,7 +254,7 @@ export async function listProduction({ country, from, to, limit = 20000 } = {}) 
  * Rejected production loads only (server-filtered, bounded) so the rejections
  * report can show row-level Reason + Remarks without pulling the whole table.
  */
-export async function listRejectedProduction({ country, from, to, limit = 1000 } = {}) {
+export async function listRejectedProduction({ country, from, to, reason, limit = 1000 } = {}) {
   try {
     let q = supabase.from('production_logs')
       .select(PROD_COLS)
@@ -263,7 +263,100 @@ export async function listRejectedProduction({ country, from, to, limit = 1000 }
     if (country && country !== 'All') q = q.eq('country', country)
     if (from) q = q.gte('period_date', from)
     if (to) q = q.lte('period_date', to)
+    // The picker offers '(none)' for a load with no reason recorded, which is a
+    // real answer and not the same as "any reason".
+    if (reason === NO_REASON) q = q.or('reason.is.null,reason.eq.')
+    else if (reason) q = q.eq('reason', reason)
     const { data, error } = await q.limit(limit)
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/**
+ * The batching stations that produced anything in a country, biggest first,
+ * with where each currently resolves to and whether it is mapped yet.
+ * A station is a PLANT, not a place - 25 KSA station codes sit in the site
+ * column, so per-site production reads as numbers nobody can place and cannot
+ * be compared with parts spend, which uses real site names.
+ * Degrades to [].
+ */
+export async function getProductionStations({ country } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_production_stations', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/** Map a station code to a real site. Elevated only, enforced by RLS. */
+export async function setProductionStation({ country, station, site, note }) {
+  const { data, error } = await supabase
+    .from('production_station_map')
+    .upsert(
+      { country: country && country !== 'All' ? country : null, station, site, note: note || null },
+      { onConflict: 'organisation_id,country,station' },
+    )
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function removeProductionStation(id) {
+  const { error } = await supabase.from('production_station_map').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listProductionStationMap({ country } = {}) {
+  try {
+    let q = supabase.from('production_station_map').select('*').order('station')
+    if (country && country !== 'All') q = q.eq('country', country)
+    const { data, error } = await q
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/**
+ * Re-resolve rows already stored through the map. The trigger only fires on
+ * write, so without this a new mapping would apply to future uploads only and
+ * every row already loaded would keep showing a plant number.
+ * Dry run by default; returns { ok, dry_run, rows }.
+ */
+export async function applyProductionStationMap({ country, dryRun = true } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('apply_production_station_map', {
+      p_country: country && country !== 'All' ? country : null,
+      p_dry_run: dryRun,
+    })
+    if (error) return { ok: false, rows: 0 }
+    return data ?? { ok: false, rows: 0 }
+  } catch { return { ok: false, rows: 0 } }
+}
+
+/**
+ * The value the picker uses for a load with NO reason recorded. It is a real
+ * answer - 210,051 KSA loads carry no reason - and folding it into "all" would
+ * hide the largest group in the data.
+ */
+export const NO_REASON = '(none)'
+
+/**
+ * The rejection reasons that actually occur in a country + period, biggest
+ * first, with their size (V520 get_production_reasons). Read from the data so
+ * the picker cannot drift from what is stored, which a hardcoded list would.
+ * Degrades to [] - an empty picker, never a wrong one.
+ * @param {{ country?: string, from?: string, to?: string }} [opts]
+ * @returns {Promise<Array<{reason:string, loads:number, rejected_loads:number, m3:number}>>}
+ */
+export async function getProductionReasons({ country, from, to } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_production_reasons', {
+      p_country: country && country !== 'All' ? country : null,
+      p_from: from || null, p_to: to || null,
+    })
     if (error) return []
     return Array.isArray(data) ? data : []
   } catch { return [] }
@@ -316,11 +409,12 @@ export async function getLedgerMonthly(kind, { country, from, to } = {}) {
   } catch { return [] }
 }
 
-export async function getProductionMonthly({ country, from, to } = {}) {
+export async function getProductionMonthly({ country, from, to, reason } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_production_monthly', {
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null, p_to: to || null,
+      p_reason: reason || null,
     })
     if (error) return []
     return Array.isArray(data) ? data : []
@@ -332,11 +426,12 @@ export async function getProductionMonthly({ country, from, to } = {}) {
  * country + period. Returns { ok, total:{supplied_m3, approved_m3, not_approved_m3,
  * rejected_loads}, by_site[], by_reason[] }. Degrades to an empty shape.
  */
-export async function getProductionRejections({ country, from, to } = {}) {
+export async function getProductionRejections({ country, from, to, reason } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_production_rejections', {
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null, p_to: to || null,
+      p_reason: reason || null,
     })
     if (error || !data || data.ok === false) {
       return { ok: false, total: null, by_site: [], by_reason: [] }

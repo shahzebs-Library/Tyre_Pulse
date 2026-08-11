@@ -1,0 +1,46 @@
+-- V519 - get_production_monthly gains a per-site breakdown
+-- STATUS: APPLIED LIVE 2026-08-11
+--
+-- WHY: the production ledger now opens on this aggregate ALONE and reads no
+-- rows at all. It used to pull up to 20,000 rows into the browser purely to add
+-- them up, against a table holding 212,567 rows, and the sums then only covered
+-- as far as that bounded read reached.
+--
+-- Its by-site panel was built in the browser from those fetched rows. Without
+-- the sites in the aggregate the panel would simply go blank, which reads as
+-- "this country has no sites" rather than "we stopped fetching the rows that
+-- used to answer this". So the breakdown moves to the server with the totals.
+--
+-- ADDITIVE: every existing key is unchanged and a client that predates this
+-- ignores the new one. Verified after apply: the aggregate reconciles to the
+-- table exactly (KSA approved 2,254,614.9 both ways) and the first month
+-- carries 19 sites.
+--
+-- Client: summaryFromMonthly() in src/lib/costPerM3.js builds the same summary
+-- shape summarizeLedger() built from rows, and a test pins the two against each
+-- other so the page cannot change its numbers the moment somebody opens the rows.
+--
+-- NOTE (pre-existing, not introduced here): production_logs.site often holds a
+-- numeric batching-station code such as '40' rather than a site name. The
+-- breakdown reports what is stored; a station-to-site key is a separate job.
+
+-- Full body applied: see the v519_production_monthly_by_site migration. The only
+-- change from the previous definition is the `sites` CTE, the `sites_j`
+-- aggregation, and the extra 'sites' key on the returned object:
+--
+--   sites AS (
+--     SELECT month, coalesce(nullif(btrim(site), ''), 'Not stated') AS site,
+--            count(*) AS loads,
+--            round(sum(coalesce(approved_m3, m3, 0))::numeric, 1) AS approved_m3,
+--            round(sum(coalesce(m3, 0))::numeric, 1) AS supplied_m3
+--       FROM rows GROUP BY 1, 2
+--   ),
+--   sites_j AS (
+--     SELECT month, jsonb_agg(jsonb_build_object(
+--              'site', site, 'loads', loads,
+--              'approved_m3', approved_m3, 'supplied_m3', supplied_m3
+--            ) ORDER BY approved_m3 DESC) AS sites
+--       FROM sites GROUP BY month
+--   )
+--   ... 'sites', coalesce(s.sites, '[]'::jsonb) ...
+--   LEFT JOIN sites_j s USING (month)

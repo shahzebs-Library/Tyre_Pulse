@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Image as ImageIcon } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { getInspectionForPage } from '../../lib/api/inspections'
 import {
   tyreReadingRows, inspectionMeta, inspectionSummary, readingText, isComplete,
 } from '../../lib/inspectionView'
-import { resolveStorageUrl } from '../../lib/storageRefs'
-import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
+import InspectionDiagram from './InspectionDiagram'
+import InspectionPhotos from './InspectionPhotos'
 
 const RISK_TONE = {
   good: '#15803d',
@@ -27,19 +27,24 @@ const RISK_TONE = {
  * row is deliberate: the register no longer carries the signature columns, so
  * they arrive here, when somebody actually asks to see the record.
  *
+ * It renders the WHOLE record - the wheel map, the readings, the photographs,
+ * the meters and the signatures. Splitting those across components a caller has
+ * to remember to mount is how the evidence goes missing on one surface and not
+ * another, which is the defect this component exists to end.
+ *
  * @param {object}  props
  * @param {object}  [props.inspection]     already-loaded row
  * @param {string}  [props.inspectionId]   id to load when no row is supplied
  * @param {boolean} [props.showSummary]    headline tiles (default true)
+ * @param {boolean} [props.showMedia]      wheel map, photos, signatures (default true)
  * @param {Function}[props.onLoaded]       called with the loaded row
  */
 export default function InspectionAnswers({
-  inspection, inspectionId, showSummary = true, onLoaded,
+  inspection, inspectionId, showSummary = true, showMedia = true, onLoaded,
 }) {
   const [fetched, setFetched] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [photos, setPhotos] = useState([])
 
   const needsFetch = !inspection && !!inspectionId
 
@@ -66,23 +71,6 @@ export default function InspectionAnswers({
   const { rows, stats } = useMemo(() => tyreReadingRows(row), [row])
   const meta = useMemo(() => inspectionMeta(row), [row])
   const summary = useMemo(() => inspectionSummary(row), [row])
-
-  // Photos are stored as tp-storage refs and have to be signed before they can
-  // be shown. Best-effort per photo: one that will not resolve is reported as
-  // unavailable rather than blocking the whole record.
-  useEffect(() => {
-    if (!row) { setPhotos([]); return undefined }
-    let cancelled = false
-    const refs = []
-    for (const r of rows) if (r.photo) refs.push({ label: r.label || r.position, ref: r.photo })
-    if (row.photo_data) refs.push({ label: 'Inspection photo', ref: row.photo_data })
-    if (!refs.length) { setPhotos([]); return undefined }
-    Promise.all(refs.map(async (p) => {
-      try { const url = await resolveStorageUrl(p.ref); return url ? { label: p.label, url } : { label: p.label, url: null } }
-      catch { return { label: p.label, url: null } }
-    })).then((out) => { if (!cancelled) setPhotos(out) })
-    return () => { cancelled = true }
-  }, [row, rows])
 
   if (loading) {
     return (
@@ -139,6 +127,11 @@ export default function InspectionAnswers({
           ))}
         </div>
       )}
+
+      {/* The map first. Someone opening an inspection wants to see WHICH wheel,
+          and reading that off a table of position codes is work the picture
+          does for them. It is the same diagram the PDF captures. */}
+      {showMedia && <InspectionDiagram inspection={row} className="mb-5" />}
 
       <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
         Tyre readings
@@ -227,64 +220,13 @@ export default function InspectionAnswers({
         </div>
       )}
 
-      {photos.length > 0 && (
-        <div className="mt-5">
-          <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-            Photos
-          </h3>
-          <div className="flex flex-wrap gap-3">
-            {photos.map((p, i) => {
-              const src = p.url ? safeImageSrc(p.url) : null
-              return src ? (
-                <a key={i} href={src} target="_blank" rel="noopener noreferrer" className="block">
-                  <img
-                    src={src}
-                    alt={`${p.label} photo`}
-                    className="w-24 h-24 object-cover rounded"
-                    style={{ border: '1px solid var(--border-subtle)' }}
-                  />
-                  <div className="text-[11px] mt-1 text-center" style={{ color: 'var(--text-secondary)' }}>{p.label}</div>
-                </a>
-              ) : (
-                <span key={i} className="text-xs inline-flex items-center gap-1" style={{ color: 'var(--text-dim)' }}>
-                  <ImageIcon className="w-3 h-3" /> {p.label}: photo unavailable
-                </span>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {/* Photographs, meters and signatures. The old copy here was a grid of
+          unlabelled thumbnails, and it rendered a mobile signature through
+          safeImageSrc, which correctly rejects a raw SVG string - so every
+          signature drawn on a phone showed as a broken image. Both now come
+          from InspectionPhotos, which handles the real stored shapes. */}
+      {showMedia && <InspectionPhotos inspection={row} />}
 
-      {(row.inspector_signature || row.approver_signature) && (
-        <div className="mt-6 pt-4 grid grid-cols-2 gap-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-          {row.inspector_signature && (
-            <div>
-              <div className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Signed by {row.inspector || 'the inspector'}
-              </div>
-              <img
-                src={safeImageSrc(row.inspector_signature) || undefined}
-                alt="Inspector signature"
-                className="max-h-24 rounded"
-                style={{ background: '#fff', padding: 6 }}
-              />
-            </div>
-          )}
-          {row.approver_signature && (
-            <div>
-              <div className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-                Approved{row.approved_at ? ` on ${String(row.approved_at).slice(0, 10)}` : ''}
-              </div>
-              <img
-                src={safeImageSrc(row.approver_signature) || undefined}
-                alt="Approver signature"
-                className="max-h-24 rounded"
-                style={{ background: '#fff', padding: 6 }}
-              />
-            </div>
-          )}
-        </div>
-      )}
     </>
   )
 }

@@ -1269,6 +1269,19 @@ function CostPerUnitPage({ snapshot }) {
   const total = arr(c?.trend?.total)
   const m3 = arr(c?.trend?.m3)
   const trendEmpty = !labels.length || !someNonZero(total)
+  const byCountry = arr(c?.by_country)
+  // Each country reports in its own currency, so with more than one in scope
+  // there is no single total to show - the server returns null rather than a
+  // blended figure, and the board shows the countries side by side instead.
+  const mixed = Boolean(c?.mixed_currency)
+  const money = (v, cur) => (v == null ? 'N/A' : `${cur ? cur + ' ' : ''}${Math.round(Number(v)).toLocaleString()}`)
+  const basisNote = [
+    c.basis ? `Cost from the ${c.basis}.` : '',
+    c.m3_too_thin ? 'Too little production recorded to state a rate per m3.' : '',
+    Number(c.hours_assets_dropped) > 0
+      ? `${Number(c.hours_assets_dropped).toLocaleString()} assets left out of the engine-hour total: their readings imply more running than the period contains.`
+      : '',
+  ].filter(Boolean).join(' ')
   return (
     <div className="rs-page">
       <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
@@ -1277,11 +1290,54 @@ function CostPerUnitPage({ snapshot }) {
         <CostTile label="Cost / m3" value={c.cost_per_m3} decimals={2} suffix="per m3" icon={Grid} tone="indigo" />
         <CostTile label="Tyre CPK" value={c.tyre_cpk} decimals={2} suffix="per km" icon={CircleDot} tone="green" />
       </div>
-      <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
-        <CostTile label="Total operating cost" value={c.total_cost} icon={Wallet} tone="amber" />
-        <CostTile label="Tyre cost" value={c.tyre_cost} icon={CircleDot} tone="teal" />
-        <CostTile label="Maintenance cost" value={c.maintenance_cost} icon={Wrench} tone="blue" />
-      </div>
+      {mixed && byCountry.length > 0 ? (
+        <section className="rs-card rs-card-wide">
+          <div className="rs-card-head">
+            <Wallet size={18} className="rs-card-icon" aria-hidden="true" />
+            <div className="rs-card-titles">
+              <h3 className="rs-card-title">Operating cost by country</h3>
+              <p className="rs-card-sub">
+                Each country reports in its own currency, so they are not added together.
+                Pick a country above to see one total and a rate per unit.
+              </p>
+            </div>
+          </div>
+          <div className="rs-tablewrap">
+            <table className="rs-table">
+              <thead>
+                <tr>
+                  <th>Country</th><th>Total</th><th>Tyres</th>
+                  <th>Maintenance</th><th>SCO</th><th>SANY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byCountry.map((r) => (
+                  <tr key={r.country}>
+                    <td>{r.country}</td>
+                    <td>{money(r.total, r.currency)}</td>
+                    <td>{money(r.tyre, r.currency)}</td>
+                    <td>{money(r.maintenance, r.currency)}</td>
+                    <td>{money(r.sco, r.currency)}</td>
+                    <td>{money(r.sany, r.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* Say what the figures rest on, and where they are thin. A rate
+                withheld for a good reason must say so or it reads as broken. */}
+            {basisNote && <p className="rs-table-more">{basisNote}</p>}
+          </div>
+        </section>
+      ) : (
+        <>
+          <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
+            <CostTile label="Total operating cost" value={c.total_cost} icon={Wallet} tone="amber" />
+            <CostTile label="Tyre cost" value={c.tyre_cost} icon={CircleDot} tone="teal" />
+            <CostTile label="Maintenance cost" value={c.maintenance_cost} icon={Wrench} tone="blue" />
+          </div>
+          {basisNote && <p className="rs-table-more">{basisNote}</p>}
+        </>
+      )}
       <ChartCard
         wide
         title="Operating cost trend"

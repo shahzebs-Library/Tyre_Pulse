@@ -14,11 +14,15 @@ import { Plus, Upload, Trash2, RefreshCcw, X, FileSpreadsheet, ChevronDown, Chev
 import PageHeader from '../ui/PageHeader'
 import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../lib/cpkModule'
-import { IMPORT_TEMPLATES, mapImportRows, summarizeLedger } from '../../lib/costPerM3'
+import { IMPORT_TEMPLATES, mapImportRows, summaryFromMonthly } from '../../lib/costPerM3'
 import { parseWorkbook } from '../../lib/import/parseWorkbook'
-import { logIntakeToHistory, countCostM3Rows } from '../../lib/api/costPerM3'
+import {
+  logIntakeToHistory, countCostM3Rows, getProductionMonthly, getLedgerMonthly,
+} from '../../lib/api/costPerM3'
+import { currencyFor } from '../../lib/api/tyrePriceBackfill'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import CostM3Table, { MEASURE_COLUMNS } from './CostM3Table'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
 
@@ -52,46 +56,86 @@ export default function LedgerPage({
   // Summary-first (owner preference): the raw row table is collapsed by default
   // behind "Show all rows"; the summary above answers the everyday questions.
   const [showRows, setShowRows] = useState(false)
+  const [rowsLoading, setRowsLoading] = useState(false)
+  // The server's monthly aggregate. null until it lands, so "no data" and
+  // "not asked yet" stay different statements.
+  const [monthly, setMonthly] = useState(null)
   // The true number of rows in the current window, or null when unknown. Only
   // ever used to be HONEST about a bounded read - never to fake a total.
   const [totalRows, setTotalRows] = useState(null)
   const fileRef = useRef(null)
 
   const tpl = IMPORT_TEMPLATES[kind]
+  // One country, one currency. The monthly aggregate carries amounts but not a
+  // currency code, and the page is always scoped to a single country.
+  const currency = currencyFor(country)
+
+  // Summary-first applies to the three period ledgers; the sites register keeps
+  // its plain always-visible table (no amounts, tiny dataset).
+  const hasSummary = kind === 'sco' || kind === 'sany' || kind === 'production'
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true); setError('')
     setTotalRows(null)
+    setMonthly(null)
+    setRows([])
+    setShowRows(false)
+
+    if (hasSummary) {
+      // NOT ONE ROW IS READ TO OPEN THIS PAGE. It used to pull up to 20,000
+      // rows into the browser purely to add them up, over a production table
+      // holding hundreds of thousands - slow, and the sums only ever covered
+      // as far as the bounded read reached. The database already groups these
+      // by month, so the page asks for the summary and nothing else.
+      const monthlyFor = kind === 'production'
+        ? getProductionMonthly({ country, from: bounds.from, to: bounds.to })
+        : getLedgerMonthly(kind, { country, from: bounds.from, to: bounds.to })
+      monthlyFor
+        .then((res) => { if (!cancelled) setMonthly(Array.isArray(res) ? res : []) })
+        .catch((e) => { if (!cancelled) { setMonthly([]); setError(toUserMessage(e)) } })
+        .finally(() => { if (!cancelled) setLoading(false) })
+
+      // The true number of rows behind the summary. Shown so "Show all rows"
+      // can say what it is about to fetch, never used to fake a total.
+      countCostM3Rows({ country, from: bounds.from, to: bounds.to })
+        .then((c) => { if (!cancelled) setTotalRows(c?.[kind] ?? null) })
+        .catch(() => { if (!cancelled) setTotalRows(null) })
+      return () => { cancelled = true }
+    }
+
     service.list({ country, from: bounds.from, to: bounds.to })
       .then((res) => { if (!cancelled) setRows(Array.isArray(res) ? res : []) })
       .catch((e) => { if (!cancelled) { setRows([]); setError(toUserMessage(e)) } })
       .finally(() => { if (!cancelled) setLoading(false) })
-
-    // The TRUE row count for this window, straight from the server. Every list
-    // here is bounded, and a summary computed from a truncated read used to
-    // present itself as the total - production_logs holds 297,354 rows against
-    // a 1,000-row read. Counting separately is the only way the page can know,
-    // and it degrades to null (say nothing) rather than guessing.
-    if (kind === 'sco' || kind === 'sany' || kind === 'production') {
-      countCostM3Rows({ country, from: bounds.from, to: bounds.to })
-        .then((c) => { if (!cancelled) setTotalRows(c?.[kind] ?? null) })
-        .catch(() => { if (!cancelled) setTotalRows(null) })
-    }
     return () => { cancelled = true }
-  }, [country, bounds.from, bounds.to, service, kind])
+  }, [country, bounds.from, bounds.to, service, kind, hasSummary])
 
   useEffect(() => load(), [load])
 
-  const total = useMemo(
-    () => rows.reduce((s, r) => s + (num(r[amountKey]) || 0), 0),
-    [rows, amountKey],
+  // Rows arrive only when somebody actually asks to see them.
+  const loadRows = useCallback(() => {
+    setShowRows(true)
+    if (rows.length || rowsLoading) return
+    setRowsLoading(true)
+    service.list({ country, from: bounds.from, to: bounds.to })
+      .then((res) => setRows(Array.isArray(res) ? res : []))
+      .catch((e) => setError(toUserMessage(e)))
+      .finally(() => setRowsLoading(false))
+  }, [country, bounds.from, bounds.to, service, rows.length, rowsLoading])
+
+  const summary = useMemo(
+    () => (hasSummary && monthly ? summaryFromMonthly(monthly, kind, { totalRows, currency }) : null),
+    [hasSummary, monthly, kind, totalRows, currency],
   )
 
-  // Summary-first applies to the three period ledgers; the sites register keeps
-  // its plain always-visible table (no amounts, tiny dataset).
-  const hasSummary = kind === 'sco' || kind === 'sany' || kind === 'production'
-  const summary = useMemo(() => (hasSummary ? summarizeLedger(rows, kind) : null), [hasSummary, rows, kind])
+  // The window total. From the summary when there is one, so it covers the
+  // whole period rather than only the rows that happen to be loaded.
+  const total = useMemo(() => {
+    if (hasSummary) return summary?.totals?.value ?? 0
+    return rows.reduce((s, r) => s + (num(r[amountKey]) || 0), 0)
+  }, [hasSummary, summary, rows, amountKey])
+
   const isProd = kind === 'production'
   const oneCurrency = summary && !summary.totals.mixedCurrency ? (summary.totals.currencies[0] || '') : ''
   const fmtSummaryVal = (v) => {
@@ -103,9 +147,9 @@ export default function LedgerPage({
   // A bounded read that did not reach the end of the window. `truncated` is the
   // only thing that may weaken a stated figure, and it is derived from the
   // SERVER count, not from whether we happened to hit the page size.
-  const truncated = totalRows != null && totalRows > rows.length
-  const rowsLabel = truncated
-    ? `${rows.length.toLocaleString()} of ${totalRows.toLocaleString()}`
+  const truncated = showRows && rows.length > 0 && totalRows != null && totalRows > rows.length
+  const rowsLabel = totalRows != null
+    ? totalRows.toLocaleString()
     : rows.length.toLocaleString()
   const rowsVisible = !hasSummary || showRows
 
@@ -219,6 +263,39 @@ export default function LedgerPage({
     exportToExcel(flat, keys, headers, `TyrePulse_${kind}_${country}`, title)
   }
 
+  // The headline figures, as table rows. Same order the tiles were in, so the
+  // page still reads top-down the way it did.
+  const summaryMeasures = !summary ? [] : [
+    { key: 'rows', label: 'Rows', value: rowsLabel },
+    { key: 'value', label: isProd ? 'Approved M3' : 'Total value', value: fmtSummaryVal(summary.totals.value), strong: true },
+    { key: 'sites', label: 'Sites', value: summary.totals.sites.toLocaleString() },
+    {
+      key: 'period',
+      label: 'Period covered',
+      value: summary.totals.firstMonth
+        ? (summary.totals.firstMonth === summary.totals.lastMonth
+          ? summary.totals.firstMonth
+          : `${summary.totals.firstMonth} to ${summary.totals.lastMonth}`)
+        : 'N/A',
+    },
+    ...(isProd ? [
+      { key: 'supplied', label: 'Supplied M3', value: fmtSummaryVal(summary.totals.supplied_m3) },
+      { key: 'rejected', label: 'Rejected loads', value: summary.totals.rejected_loads.toLocaleString() },
+    ] : []),
+    ...(kind === 'sany' ? [
+      { key: 'counted', label: 'Counted for Cost/M3 (non-detail)', value: fmtSummaryVal(summary.totals.counted_value) },
+      { key: 'detail', label: 'Detail lines', value: summary.totals.detail_rows.toLocaleString() },
+    ] : []),
+  ]
+
+  // By month and by site answer the same question about a different grouping,
+  // so they take the same three columns.
+  const groupColumns = (nameHeader, valueHeader) => ([
+    { key: 'name', header: nameHeader, align: 'left' },
+    { key: 'rows', header: 'Rows', align: 'right', render: (r) => r.rows.toLocaleString() },
+    { key: 'value', header: valueHeader, align: 'right', render: (r) => <span className="font-medium">{fmtSummaryVal(r.value)}</span> },
+  ])
+
   function fmtCell(col, row) {
     if (col.render) return col.render(row)
     const raw = row[col.key]
@@ -323,7 +400,7 @@ export default function LedgerPage({
         </div>
       )}
 
-      {/* Summary first: tiles + by-month + by-site over the filtered rows. */}
+      {/* Summary first: headline figures + by-month + by-site, all as tables. */}
       {hasSummary && (
         <div className="mb-4 rounded-xl border border-[var(--border-subtle)] p-4">
           <h3 className="mb-3 text-sm font-semibold">Summary - {country}{hidePeriod ? '' : `, ${periodLabel(bounds)}`}</h3>
@@ -335,22 +412,14 @@ export default function LedgerPage({
             </p>
           ) : (
             <>
-              <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <SummaryTile label="Rows" value={rowsLabel} />
-                <SummaryTile label={isProd ? 'Approved M3' : 'Total value'} value={fmtSummaryVal(summary.totals.value)} strong />
-                <SummaryTile label="Sites" value={summary.totals.sites.toLocaleString()} />
-                <SummaryTile
-                  label="Period covered"
-                  value={summary.totals.firstMonth
-                    ? (summary.totals.firstMonth === summary.totals.lastMonth
-                      ? summary.totals.firstMonth
-                      : `${summary.totals.firstMonth} to ${summary.totals.lastMonth}`)
-                    : 'N/A'}
+              <div className="mb-4">
+                <CostM3Table
+                  dense
+                  columns={MEASURE_COLUMNS}
+                  rows={summaryMeasures}
+                  rowKey="key"
+                  empty="No figures for this period."
                 />
-                {isProd && <SummaryTile label="Supplied M3" value={fmtSummaryVal(summary.totals.supplied_m3)} />}
-                {isProd && <SummaryTile label="Rejected loads" value={summary.totals.rejected_loads.toLocaleString()} />}
-                {kind === 'sany' && <SummaryTile label="Counted for Cost/M3 (non-detail)" value={fmtSummaryVal(summary.totals.counted_value)} />}
-                {kind === 'sany' && <SummaryTile label="Detail lines" value={summary.totals.detail_rows.toLocaleString()} />}
               </div>
               {/* Say exactly what the summary rests on. This used to fire on a
                   row-count guess and describe the list as "bounded"; it now
@@ -370,19 +439,21 @@ export default function LedgerPage({
                 </p>
               )}
               <div className="grid md:grid-cols-2 gap-4">
-                <SummaryTable
+                <CostM3Table
+                  dense
                   title="By month"
-                  nameHeader="Month"
-                  valueHeader={isProd ? 'Approved M3' : 'Value'}
+                  columns={groupColumns('Month', isProd ? 'Approved M3' : 'Value')}
                   rows={summary.byMonth.map((m) => ({ name: m.month, rows: m.rows, value: m.value }))}
-                  fmtVal={fmtSummaryVal}
+                  rowKey="name"
+                  empty="None"
                 />
-                <SummaryTable
+                <CostM3Table
+                  dense
                   title="By site"
-                  nameHeader="Site"
-                  valueHeader={isProd ? 'Approved M3' : 'Value'}
+                  columns={groupColumns('Site', isProd ? 'Approved M3' : 'Value')}
                   rows={summary.bySite.slice(0, 10).map((s) => ({ name: s.site, rows: s.rows, value: s.value }))}
-                  fmtVal={fmtSummaryVal}
+                  rowKey="name"
+                  empty="None"
                   footnote={summary.bySite.length > 10 ? `and ${summary.bySite.length - 10} more sites - see all rows below` : ''}
                 />
               </div>
@@ -391,90 +462,59 @@ export default function LedgerPage({
         </div>
       )}
 
-      {/* All-rows toggle: raw detail stays available, collapsed by default. */}
+      {/* The raw rows are never fetched to open this page. They are fetched
+          here, on the press, because that is the only moment anyone wants them.
+          The button says how many are coming so a large window is a choice. */}
       {hasSummary && !loading && (
-        <div className="mb-3">
+        <div className="mb-3 flex items-center gap-3 flex-wrap">
           <button
             type="button"
-            onClick={() => setShowRows((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm"
+            onClick={() => (showRows ? setShowRows(false) : loadRows())}
+            disabled={rowsLoading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm disabled:opacity-60"
             style={{ color: 'var(--text-secondary)' }}
           >
             {showRows ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {showRows ? 'Hide rows' : `Show rows (${rowsLabel})`}
+            {rowsLoading ? 'Loading rows...' : showRows ? 'Hide rows' : `Show rows (${rowsLabel})`}
           </button>
+          {!showRows && (
+            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
+              The summary above is the whole period. Rows load only when you open them.
+            </span>
+          )}
         </div>
       )}
 
       {/* Table */}
       {rowsVisible && (
-      <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
-        <table className="w-full text-sm border-collapse">
-          <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
-            <tr>
-              {columns.map((c) => (
-                <th key={c.key} className={`px-3 py-2 font-semibold whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}`} style={{ color: 'var(--text-secondary)' }}>{c.header}</th>
-              ))}
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={columns.length + 1} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={columns.length + 1} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No rows for {country} in this period. Add one or import a file.</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--border-subtle)]">
-                {columns.map((c) => (
-                  <td key={c.key} className={`px-3 py-2 whitespace-nowrap ${c.align === 'right' ? 'text-right tabular-nums' : 'text-left'}`}>{fmtCell(c, r)}</td>
-                ))}
-                <td className="px-3 py-2 text-right">
-                  <button type="button" onClick={() => remove(r.id)} title="Delete" className="opacity-60 hover:opacity-100"><Trash2 size={14} /></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <CostM3Table
+          columns={[
+            ...columns.map((c) => ({
+              key: c.key,
+              header: c.header,
+              align: c.align,
+              cellClass: 'whitespace-nowrap',
+              render: (r) => fmtCell(c, r),
+            })),
+            {
+              key: '__actions',
+              header: '',
+              align: 'right',
+              width: '1%',
+              render: (r) => (
+                <button type="button" onClick={() => remove(r.id)} title="Delete" className="opacity-60 hover:opacity-100">
+                  <Trash2 size={14} />
+                </button>
+              ),
+            },
+          ]}
+          rows={rows}
+          // "Still fetching" is not "there is nothing here" - the lazy row read
+          // must not render the add-or-import prompt while it is in flight.
+          loading={loading || rowsLoading}
+          empty={`No rows for ${country} in this period. Add one or import a file.`}
+        />
       )}
-    </div>
-  )
-}
-
-function SummaryTile({ label, value, strong }) {
-  return (
-    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
-      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</div>
-      <div className={`mt-1 tabular-nums ${strong ? 'text-lg font-bold' : 'text-base font-semibold'}`}>{value}</div>
-    </div>
-  )
-}
-
-function SummaryTable({ title, nameHeader, valueHeader, rows = [], fmtVal, footnote }) {
-  return (
-    <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-      <div className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{title}</div>
-      <table className="w-full text-sm border-collapse">
-        <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
-          <tr>
-            <th className="px-3 py-1.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>{nameHeader}</th>
-            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Rows</th>
-            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>{valueHeader}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr><td colSpan={3} className="px-3 py-3 text-center" style={{ color: 'var(--text-secondary)' }}>None</td></tr>
-          ) : rows.map((r, i) => (
-            <tr key={r.name || i} className="border-t border-[var(--border-subtle)]">
-              <td className="px-3 py-1.5">{r.name}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{r.rows.toLocaleString()}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtVal(r.value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {footnote ? <p className="px-3 py-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>{footnote}</p> : null}
     </div>
   )
 }

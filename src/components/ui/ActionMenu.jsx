@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
+import useAnchoredPopover from './useAnchoredPopover'
 
 /**
  * ActionMenu - a single button that opens a small dropdown of actions.
@@ -32,11 +34,15 @@ export default function ActionMenu({
 }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
+  const popRef = useRef(null)
+  // Portalled out of the trigger, so it survives `.card`'s overflow:hidden.
+  const { triggerRef, coords } = useAnchoredPopover(open, { width: 224, height: 280, align })
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+      const inside = rootRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      if (!inside) setOpen(false)
     }
     function onKey(e) {
       if (e.key === 'Escape') setOpen(false)
@@ -54,6 +60,7 @@ export default function ActionMenu({
   return (
     <div className="relative" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => !disabled && !busy && setOpen((o) => !o)}
         disabled={disabled || busy}
@@ -75,11 +82,12 @@ export default function ActionMenu({
         )}
       </button>
 
-      {open && (
+      {open && coords && createPortal(
         <div
+          ref={popRef}
           role="menu"
-          className={`absolute z-50 mt-1.5 min-w-52 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-1.5 shadow-xl ${align === 'left' ? 'left-0' : 'right-0'}`}
-          style={{ boxShadow: '0 10px 30px rgba(0,0,0,0.28)' }}
+          className="tp-popover min-w-52 p-1.5"
+          style={{ top: coords.top, left: coords.left, maxHeight: coords.maxHeight }}
         >
           {visibleItems.map((item, i) => {
             const ItemIcon = item.icon
@@ -106,7 +114,8 @@ export default function ActionMenu({
               </button>
             )
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -11,6 +11,7 @@ import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../li
 import { getProductionRejections, listRejectedProduction } from '../../lib/api/costPerM3'
 import { rejectedRowsDetail } from '../../lib/costPerM3'
 import { exportToExcel } from '../../lib/exportUtils'
+import CostM3Table, { MEASURE_COLUMNS } from './CostM3Table'
 
 const REJECT_DETAIL_LIMIT = 1000
 
@@ -95,12 +96,19 @@ export default function ProductionRejectionsPanel() {
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{periodLabel(bounds)}</span>
       </div>
 
-      {/* KPI strip */}
-      <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Supplied M3" value={int(total.supplied_m3)} />
-        <Kpi label="Approved M3" value={int(total.approved_m3)} />
-        <Kpi label="Not approved M3" value={int(total.not_approved_m3)} strong />
-        <Kpi label="Rejected loads" value={int(total.rejected_loads)} />
+      {/* Headline figures */}
+      <div className="mb-4">
+        <CostM3Table
+          dense
+          columns={MEASURE_COLUMNS}
+          rows={[
+            { key: 'supplied', label: 'Supplied M3', value: int(total.supplied_m3) },
+            { key: 'approved', label: 'Approved M3', value: int(total.approved_m3) },
+            { key: 'not_approved', label: 'Not approved M3', value: int(total.not_approved_m3), strong: true },
+            { key: 'rejected_loads', label: 'Rejected loads', value: int(total.rejected_loads) },
+          ]}
+          rowKey="key"
+        />
       </div>
 
       {loading ? (
@@ -112,48 +120,25 @@ export default function ProductionRejectionsPanel() {
       ) : (
         <>
           <div className="grid md:grid-cols-2 gap-4">
-            <RejTable title="By site" rows={data.by_site} nameKey="site" />
-            <RejTable title="By reason" rows={data.by_reason} nameKey="reason" />
+            <CostM3Table dense title="By site" columns={groupColumns('Site')} rows={data.by_site} rowKey="site" empty="None" />
+            <CostM3Table dense title="By reason" columns={groupColumns('Reason')} rows={data.by_reason} rowKey="reason" empty="None" />
           </div>
 
           {/* Row-level rejected loads with their Reason + Remarks (owner ask). */}
-          <div className="mt-4 rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                Rejected loads (detail) - {detailRows.length.toLocaleString()}{detailRows.length >= REJECT_DETAIL_LIMIT ? ` (showing the newest ${REJECT_DETAIL_LIMIT.toLocaleString()})` : ''}
-              </span>
-              <button type="button" onClick={exportDetailExcel} disabled={!detailRows.length}
-                className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs disabled:opacity-50">
-                <FileSpreadsheet size={12} /> Export detail
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
-                  <tr>
-                    {['Date', 'Site', 'DN Number', 'Supplied M3', 'Approved M3', 'Not Approved M3', 'Reason', 'Remarks'].map((h, i) => (
-                      <th key={h} className={`px-3 py-1.5 font-semibold whitespace-nowrap ${i >= 3 && i <= 5 ? 'text-right' : 'text-left'}`} style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {detailRows.length === 0 ? (
-                    <tr><td colSpan={8} className="px-3 py-3 text-center" style={{ color: 'var(--text-secondary)' }}>None</td></tr>
-                  ) : detailRows.map((r, i) => (
-                    <tr key={r.id || i} className="border-t border-[var(--border-subtle)]">
-                      <td className="px-3 py-1.5 whitespace-nowrap">{r.period_date || 'N/A'}</td>
-                      <td className="px-3 py-1.5">{r.site || 'N/A'}</td>
-                      <td className="px-3 py-1.5 whitespace-nowrap">{r.dn_number || 'N/A'}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{r.supplied_m3 == null ? 'N/A' : int(r.supplied_m3)}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{r.approved_m3 == null ? 'N/A' : int(r.approved_m3)}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums font-medium">{r.not_approved_m3 == null ? 'N/A' : int(r.not_approved_m3)}</td>
-                      <td className="px-3 py-1.5">{r.reason || 'Not stated'}</td>
-                      <td className="px-3 py-1.5 max-w-[320px]">{r.remarks || 'N/A'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="mt-4">
+            <CostM3Table
+              title={`Rejected loads (detail) - ${detailRows.length.toLocaleString()}${detailRows.length >= REJECT_DETAIL_LIMIT ? ` (showing the newest ${REJECT_DETAIL_LIMIT.toLocaleString()})` : ''}`}
+              actions={
+                <button type="button" onClick={exportDetailExcel} disabled={!detailRows.length}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs disabled:opacity-50">
+                  <FileSpreadsheet size={12} /> Export detail
+                </button>
+              }
+              columns={DETAIL_COLUMNS}
+              rows={detailRows}
+              rowKey={(r, i) => r.id || i}
+              empty="None"
+            />
           </div>
         </>
       )}
@@ -161,39 +146,26 @@ export default function ProductionRejectionsPanel() {
   )
 }
 
-function Kpi({ label, value, strong }) {
-  return (
-    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
-      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</div>
-      <div className={`mt-1 tabular-nums ${strong ? 'text-lg font-bold' : 'text-base font-semibold'}`}>{value}</div>
-    </div>
-  )
+/**
+ * By-site and by-reason are the same question grouped two ways, so they share
+ * one column set; only the name column's header and source field differ.
+ */
+function groupColumns(nameHeader) {
+  const nameKey = nameHeader.toLowerCase()
+  return [
+    { key: 'name', header: nameHeader, align: 'left', render: (r) => r[nameKey] || 'Not stated' },
+    { key: 'not_approved_m3', header: 'Not approved M3', align: 'right', render: (r) => <span className="font-medium">{int(r.not_approved_m3)}</span> },
+    { key: 'loads', header: 'Loads', align: 'right' },
+  ]
 }
 
-function RejTable({ title, rows = [], nameKey }) {
-  return (
-    <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-      <div className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{title}</div>
-      <table className="w-full text-sm border-collapse">
-        <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
-          <tr>
-            <th className="px-3 py-1.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>{title.replace('By ', '')}</th>
-            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Not approved M3</th>
-            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Loads</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr><td colSpan={3} className="px-3 py-3 text-center" style={{ color: 'var(--text-secondary)' }}>None</td></tr>
-          ) : rows.map((r, i) => (
-            <tr key={(r[nameKey] || i)} className="border-t border-[var(--border-subtle)]">
-              <td className="px-3 py-1.5">{r[nameKey] || 'Not stated'}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums font-medium">{int(r.not_approved_m3)}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{r.loads}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
+const DETAIL_COLUMNS = [
+  { key: 'period_date', header: 'Date', align: 'left', cellClass: 'whitespace-nowrap', render: (r) => r.period_date || 'N/A' },
+  { key: 'site', header: 'Site', align: 'left', render: (r) => r.site || 'N/A' },
+  { key: 'dn_number', header: 'DN Number', align: 'left', cellClass: 'whitespace-nowrap', render: (r) => r.dn_number || 'N/A' },
+  { key: 'supplied_m3', header: 'Supplied M3', align: 'right', render: (r) => (r.supplied_m3 == null ? 'N/A' : int(r.supplied_m3)) },
+  { key: 'approved_m3', header: 'Approved M3', align: 'right', render: (r) => (r.approved_m3 == null ? 'N/A' : int(r.approved_m3)) },
+  { key: 'not_approved_m3', header: 'Not Approved M3', align: 'right', render: (r) => <span className="font-medium">{r.not_approved_m3 == null ? 'N/A' : int(r.not_approved_m3)}</span> },
+  { key: 'reason', header: 'Reason', align: 'left', render: (r) => r.reason || 'Not stated' },
+  { key: 'remarks', header: 'Remarks', align: 'left', cellClass: 'max-w-[320px]', render: (r) => r.remarks || 'N/A' },
+]

@@ -18,7 +18,10 @@
  *    takes a reason, because "no rows" and "we could not look" read identically
  *    on screen and mean opposite things.
  */
+import { useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Loader2, Inbox, AlertTriangle, Search, X, ChevronDown } from 'lucide-react'
+import useDialogBehavior from '../../../components/ui/useDialogBehavior'
 
 /* ── surfaces ─────────────────────────────────────────────────────────────── */
 
@@ -343,23 +346,37 @@ export function ErrorState({ message, onRetry }) {
  * anything that tries to escape a panel. Overlays here are always fixed.
  */
 export function Modal({ open, title, subtitle, onClose, children, footer, width = 'max-w-2xl' }) {
+  const panelRef = useRef(null)
+  useDialogBehavior(open, panelRef, onClose)
   if (!open) return null
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
-      <div className={`w-full ${width} max-h-[88vh] flex flex-col rounded-xl bg-gray-950 border border-gray-800 shadow-2xl`}>
-        <header className="flex items-start gap-3 px-5 py-3.5 border-b border-gray-800">
+  // Portalled so the console's own scroll container cannot clip or offset it,
+  // and sized off the viewport (dvh) so the footer buttons stay reachable on a
+  // laptop and the panel uses the room it has on a wall display. The `width`
+  // bucket widens at large breakpoints via the dialog ladder in index.css.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 console-root"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
+        tabIndex={-1}
+        className={`w-full ${width} max-h-[92dvh] flex flex-col rounded-xl bg-gray-950 border border-gray-800 shadow-2xl overflow-hidden`}
+      >
+        <header className="flex items-start gap-3 px-5 py-3.5 border-b border-gray-800 shrink-0">
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
             {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-800 shrink-0">
+          <button onClick={onClose} aria-label="Close" className="p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-gray-800 shrink-0">
             <X size={16} />
           </button>
         </header>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <footer className="flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-gray-800">{footer}</footer>}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
+        {footer && <footer className="flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-gray-800 shrink-0">{footer}</footer>}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

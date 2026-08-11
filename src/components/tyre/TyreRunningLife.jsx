@@ -17,6 +17,7 @@ import {
   summarize, inFittedRange, filterDescription, coverageNote,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
+import Modal from '../ui/Modal'
 import EnterpriseTable from '../ui/EnterpriseTable'
 import DateField from '../ui/DateField'
 
@@ -542,14 +543,11 @@ function LifeTargetsModal({ rows, country, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => onClose(changed)}>
-      <div className="card w-full max-w-xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Target size={15} /> Tyre life targets
-          </h3>
-          <button type="button" onClick={() => onClose(changed)}><X size={16} style={{ color: 'var(--text-dim)' }} /></button>
-        </div>
+    // The targets list grows with the fleet, so this cannot be a fixed box:
+    // the shared shell sizes from the viewport and scrolls only its body, which
+    // keeps the heading and the Save action reachable on a phone and uses the
+    // room available on a wall display.
+    <Modal open onClose={() => onClose(changed)} title="Tyre life targets" size="lg">
         <p className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
           Set the life YOU expect - in km, in hour-meter hours, or both - by tyre size, by vehicle
           type, or both. The most specific target wins on every tyre: size + vehicle type first,
@@ -635,7 +633,6 @@ function LifeTargetsModal({ rows, country, onClose }) {
             </table>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

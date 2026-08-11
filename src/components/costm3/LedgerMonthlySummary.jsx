@@ -14,6 +14,7 @@ import { useSettings } from '../../contexts/SettingsContext'
 import { getLedgerMonthly } from '../../lib/api/costPerM3'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import CostM3Table, { MEASURE_COLUMNS } from './CostM3Table'
 
 const int = (v) => (v == null ? 'N/A' : Math.round(Number(v)).toLocaleString())
 
@@ -52,6 +53,28 @@ export default function LedgerMonthlySummary({ kind, title }) {
 
   const isAll = !activeCountry || activeCountry === 'All'
   const cur = isAll ? '' : (activeCurrency || '')
+
+  // Built here rather than at module level because the amount header carries
+  // the active country's currency, and SANY alone has a detail-line column.
+  const monthColumns = [
+    { key: 'month', header: 'Month', align: 'left', cellClass: 'whitespace-nowrap font-semibold', render: (m) => monthLabel(m.month) },
+    { key: 'entries', header: 'Entries', align: 'right', render: (m) => int(m.entries) },
+    { key: 'amount', header: `Amount${cur ? ` (${cur})` : ''}`, align: 'right', render: (m) => <span className="font-semibold">{int(m.amount)}</span> },
+    ...(kind === 'sany'
+      ? [{ key: 'detail_entries', header: 'Detail lines', align: 'right', render: (m) => int(m.detail_entries) }]
+      : []),
+    {
+      key: 'regions',
+      header: 'By region',
+      align: 'left',
+      cellClass: 'min-w-[220px]',
+      render: (m) => (
+        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          {(m.regions || []).map((r) => `${r.region} · ${int(r.amount)}`).join('   |   ') || 'N/A'}
+        </span>
+      ),
+    },
+  ]
 
   function exportRows() {
     const rows = months.map((m) => ({
@@ -102,47 +125,28 @@ export default function LedgerMonthlySummary({ kind, title }) {
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-            {[
-              ['Months', int(months.length)],
-              ['Entries', int(totals.entries)],
-              [`Amount${cur ? ` (${cur})` : ''}`, isAll ? 'Pick a country' : int(totals.amount)],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">{value}</p>
-              </div>
-            ))}
+          <div className="mb-4">
+            <CostM3Table
+              dense
+              columns={MEASURE_COLUMNS}
+              rows={[
+                { key: 'months', label: 'Months', value: int(months.length) },
+                { key: 'entries', label: 'Entries', value: int(totals.entries) },
+                // On the all-countries view the amounts are in different
+                // currencies, so there is no single number to state.
+                { key: 'amount', label: `Amount${cur ? ` (${cur})` : ''}`, value: isAll ? 'Pick a country' : int(totals.amount), strong: true },
+              ]}
+              rowKey="key"
+            />
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-dim)]">
-                  <th className="py-2 pr-3">Month</th>
-                  <th className="py-2 pr-3 text-right">Entries</th>
-                  <th className="py-2 pr-3 text-right">Amount{cur ? ` (${cur})` : ''}</th>
-                  {kind === 'sany' && <th className="py-2 pr-3 text-right">Detail lines</th>}
-                  <th className="py-2">By region</th>
-                </tr>
-              </thead>
-              <tbody>
-                {months.map((m) => (
-                  <tr key={m.month} className="border-b border-[var(--border-dim)] align-top">
-                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-primary)] whitespace-nowrap">{monthLabel(m.month)}</td>
-                    <td className="py-2.5 pr-3 text-right text-[var(--text-secondary)]">{int(m.entries)}</td>
-                    <td className="py-2.5 pr-3 text-right font-semibold text-green-400">{int(m.amount)}</td>
-                    {kind === 'sany' && <td className="py-2.5 pr-3 text-right text-[var(--text-muted)]">{int(m.detail_entries)}</td>}
-                    <td className="py-2.5 min-w-[220px]">
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        {(m.regions || []).map(r => `${r.region} · ${int(r.amount)}`).join('   |   ') || 'N/A'}
-                      </p>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <CostM3Table
+            alignTop
+            columns={monthColumns}
+            rows={months}
+            rowKey="month"
+            empty="Nothing recorded yet for this scope."
+          />
         </>
       )}
     </div>

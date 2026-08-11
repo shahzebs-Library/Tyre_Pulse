@@ -1,0 +1,79 @@
+-- V520 - filter production by REJECTION REASON, on the server
+-- STATUS: APPLIED LIVE 2026-08-11 (as V520 / V520b / V520c)
+--
+-- The reason is why a load was not approved - Low Slump, Time Over, Pump
+-- Breakdown - and it is the question the owner actually asks of this data.
+-- Filtering it in the browser would mean fetching the rows again, which is
+-- exactly what the summary-first ledger (V519) stopped doing, so it belongs
+-- on the server beside the aggregate.
+--
+-- WHAT CHANGED
+--   get_production_monthly(p_country, p_from, p_to, p_reason)     + p_reason
+--   get_production_rejections(p_country, p_from, p_to, p_reason)  + p_reason
+--   get_production_reasons(p_country, p_from, p_to)               NEW
+--
+-- p_reason NULL means every load, exactly as before.
+--
+-- BOTH OLD 3-ARGUMENT VERSIONS WERE DROPPED, AND THAT IS LOAD-BEARING.
+-- Leaving the old signature beside the new one made EVERY call ambiguous -
+-- PostgREST sends three named arguments and Postgres cannot choose a candidate,
+-- so the function failed for both shapes with 42725. One signature only; the
+-- new one defaults p_reason to NULL so three-argument callers are unaffected.
+-- (V520b dropped the monthly overload, V520c the rejections one.)
+--
+-- '(none)' IS A REAL ANSWER, NOT "ALL". 210,051 of KSA's 212,567 loads carry no
+-- reason, so folding blank into "any" would hide the largest group in the data.
+-- The picker offers it under its own label and the filter matches it explicitly.
+--
+-- get_production_reasons READS THE REASONS THAT OCCUR rather than offering a
+-- hardcoded list, so the picker cannot drift from what is stored. 18 choices in
+-- KSA today, biggest cause first, which is the useful order.
+--
+-- THE REJECTIONS FILTER MATCHES THE RAW reason COLUMN ONLY. That function's own
+-- `reason` label falls back to remarks when the reason is blank, which is right
+-- for a report but would make the filter match text the picker never offered.
+-- The picker is fed from the reason column, so the filter must read the same one.
+--
+-- VERIFIED AFTER APPLY (KSA):
+--   unfiltered monthly loads 212,567 = production_logs count 212,567
+--   'Low Slump' monthly loads 296     = table count for that reason 296
+--   July rejections unfiltered 203 loads / 2,211 m3 not approved
+--   July rejections 'Low Slump' 47 loads / 513 m3
+--   18 reason choices; exactly 2 functions remain (no overloads)
+--
+-- Grants follow the V500 order: grant authenticated + service_role, revoke
+-- PUBLIC, then revoke anon by name.
+--
+-- Client: getProductionReasons / NO_REASON in src/lib/api/costPerM3.js;
+-- getProductionMonthly, getProductionRejections and listRejectedProduction all
+-- take an optional `reason`. listRejectedProduction matches '(none)' with
+-- `or(reason.is.null,reason.eq.)` because a blank is stored either way.
+
+-- Full bodies were applied via the v520_production_reason_filter,
+-- v520b_drop_production_monthly_overload and v520c_rejections_reason_filter
+-- migrations. The predicate added to the two aggregates is:
+--
+--   AND (p_reason IS NULL
+--        OR coalesce(nullif(btrim(reason), ''), '(none)') = p_reason)
+--
+-- and the new function is:
+--
+--   create or replace function public.get_production_reasons(
+--     p_country text default null, p_from date default null, p_to date default null
+--   ) returns jsonb language sql stable set search_path to 'public' as $$
+--     SELECT coalesce(jsonb_agg(jsonb_build_object(
+--              'reason', reason, 'loads', loads,
+--              'rejected_loads', rejected_loads, 'm3', m3
+--            ) ORDER BY loads DESC), '[]'::jsonb)
+--       FROM (
+--         SELECT coalesce(nullif(btrim(reason), ''), '(none)') AS reason,
+--                count(*) AS loads,
+--                count(*) FILTER (WHERE rejected) AS rejected_loads,
+--                round(sum(coalesce(m3, 0))::numeric, 1) AS m3
+--           FROM public.production_logs
+--          WHERE (p_country IS NULL OR country = p_country)
+--            AND (p_from IS NULL OR period_date >= p_from)
+--            AND (p_to   IS NULL OR period_date <= p_to)
+--          GROUP BY 1
+--       ) t;
+--   $$;

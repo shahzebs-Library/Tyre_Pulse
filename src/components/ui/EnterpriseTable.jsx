@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
   flexRender,
   getCoreRowModel,
@@ -17,6 +18,7 @@ import {
 import { cn } from '../../lib/cn'
 import Skeleton from './Skeleton'
 import ExportMenu from './ExportMenu'
+import useAnchoredPopover from './useAnchoredPopover'
 
 /**
  * EnterpriseTable - reusable data table built on @tanstack/react-table v8.
@@ -563,11 +565,15 @@ function ColumnFilter({ column }) {
 function ColumnVisibilityMenu({ table }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
+  const popRef = useRef(null)
+  // Portalled: the table often lives inside `.card`, which clips absolutes.
+  const { triggerRef, coords } = useAnchoredPopover(open, { width: 220, height: 300, align: 'right' })
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false)
+      const inside = menuRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      if (!inside) setOpen(false)
     }
     function onKeyDown(e) {
       if (e.key === 'Escape') setOpen(false)
@@ -586,6 +592,7 @@ function ColumnVisibilityMenu({ table }) {
   return (
     <div className="relative" ref={menuRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(o => !o)}
         className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5"
@@ -595,8 +602,12 @@ function ColumnVisibilityMenu({ table }) {
       >
         <Columns size={13} /> Columns
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-30 min-w-44 max-h-72 overflow-y-auto rounded-xl border border-[var(--border-dim)] bg-surface-2 shadow-float p-1.5">
+      {open && coords && createPortal(
+        <div
+          ref={popRef}
+          className="tp-popover min-w-44 p-1.5"
+          style={{ top: coords.top, left: coords.left, maxHeight: coords.maxHeight }}
+        >
           {hideableColumns.map(col => {
             const header = col.columnDef.meta?.exportHeader
               ?? (typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id)
@@ -615,7 +626,8 @@ function ColumnVisibilityMenu({ table }) {
               </label>
             )
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

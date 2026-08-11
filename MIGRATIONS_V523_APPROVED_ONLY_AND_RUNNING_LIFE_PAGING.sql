@@ -1,0 +1,55 @@
+-- V523 - two figures that were overstated, and a screen that could not load
+-- STATUS: APPLIED LIVE 2026-08-11
+--
+-- 1. PRODUCTION WAS COUNTING LOADS NOBODY APPROVED.
+--    get_cost_per_m3 summed coalesce(approved_m3, m3): where a load carried no
+--    approved figure it fell back to the SUPPLIED quantity, counting it as
+--    though it had been signed for.
+--
+--    Measured, KSA 2026:
+--      approved only            680,890.8 m3
+--      approved-or-supplied     741,935.8 m3   <- what was being used
+--      the gap                   61,045.0 m3 across 5,699 loads
+--
+--    Every one of those 5,699 loads has approved_m3 NULL - they are the July
+--    batch that arrived with real site names and NO dn_number, the same rows
+--    already flagged as a possible duplicate upload. So the denominator was
+--    inflated by loads that are both unapproved AND suspect, which pushed cost
+--    per m3 DOWN. KSA 2026 cost per m3 12.12 -> 13.20. Nothing about the cost
+--    changed; the denominator stopped including concrete nobody signed for.
+--
+--    Approved/Signed Qty IS the counted quantity - that is what the batching
+--    export means and what every other surface uses. A row without one has no
+--    approved quantity, and substituting the supplied figure is a fabrication.
+--    The prod CTE now also computes unapproved_m3 and unapproved_loads so the
+--    gap can be stated rather than left silent.
+--
+-- 2. RUNNING AND REMAINING COULD NOT LOAD AT ALL.
+--    The screen showed "Could not load the running-life data. Network error"
+--    while the server was answering correctly in 814 ms. The payload was the
+--    problem: 3,595 rows / 2.2 MB of JSON in ONE response, which the browser
+--    was dropping outright.
+--
+--    get_tyre_running_life(p_country, p_limit, p_offset) now pages. About
+--    614 kB per 1,000 rows, and it returns `total` so the client knows when to
+--    stop. THE ORDER MOVED INSIDE THE SLICED SUBQUERY - ordering only in the
+--    jsonb_agg would have made page 2 an arbitrary set of rows rather than the
+--    next ones. Verified: total 3,595, pages of 1,000 / 1,000 / 1,000 / 595,
+--    first row of page 1 and page 2 differ.
+--
+--    THE OLD 1-ARGUMENT SIGNATURE WAS DROPPED. Leaving it beside a defaulted
+--    3-argument version makes every PostgREST call ambiguous (42725) and breaks
+--    BOTH shapes - exactly how get_production_monthly broke earlier today.
+--
+--    Client: src/lib/api/tyreRunningLife.js loops pages of 1,000 up to a
+--    stop of 8,000 rows and concatenates, so callers see the same shape.
+--
+-- Both changes were applied by guarded string surgery on the live definitions
+-- (the anchors are asserted and the migration aborts if they are absent),
+-- because both functions are large and a blind replace is how a subtle
+-- behaviour change ships unnoticed.
+--
+-- STILL OPEN, NOT DECIDED HERE: those 5,699 July loads carry no DN number and
+-- overlap 8,458 numbered-station loads on the same nine days. They may be the
+-- same deliveries recorded twice. They are now excluded from the cost per m3
+-- denominator for want of an approved figure, but they remain in the table.

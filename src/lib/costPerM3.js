@@ -166,6 +166,107 @@ export function summarizeLedger(rows = [], kind = 'sco') {
 }
 
 /**
+ * The same summary shape as summarizeLedger, built from the SERVER's monthly
+ * aggregate instead of from rows.
+ *
+ * Why this exists: the ledger pages were reading up to 20,000 rows into the
+ * browser purely to add them up, against a production table holding hundreds of
+ * thousands. The database already groups these by month - get_production_monthly
+ * and get_costm3_ledger_monthly - so the page can open on a handful of rows
+ * instead of tens of thousands, and every figure is then computed over the WHOLE
+ * window rather than over whatever a bounded read happened to reach.
+ *
+ * `rows` in the returned totals is the true server count when one is supplied,
+ * and null when it is not. It is never inferred from the number of months.
+ *
+ * @param {Array<object>} monthly rows from get_production_monthly / get_costm3_ledger_monthly
+ * @param {string} kind 'sco' | 'sany' | 'production'
+ * @param {{ totalRows?: number|null, currency?: string }} [opts]
+ */
+export function summaryFromMonthly(monthly = [], kind = 'sco', opts = {}) {
+  const list = Array.isArray(monthly) ? monthly : []
+  const isProd = kind === 'production'
+  const totalRows = opts.totalRows == null ? null : Number(opts.totalRows)
+
+  const byMonth = []
+  const bySiteMap = new Map()
+  let value = 0
+  let supplied = 0
+  let approved = 0
+  let rejectedLoads = 0
+  let rejectedM3 = 0
+  let countedValue = 0
+  let detailRows = 0
+  let entries = 0
+
+  for (const m of list) {
+    const month = /^\d{4}-\d{2}$/.test(String(m?.month || '')) ? m.month : 'Unknown'
+    const v = isProd ? (num(m?.approved_m3) ?? 0) : (num(m?.amount) ?? 0)
+    // Production counts LOADS, the money ledgers count entries. Both are the
+    // row count for that month, so the column means the same thing either way.
+    const rows = num(isProd ? m?.loads : m?.entries) ?? 0
+    value += v
+    entries += rows
+    byMonth.push({ month, rows, value: v })
+
+    if (isProd) {
+      supplied += num(m?.supplied_m3) ?? 0
+      approved += num(m?.approved_m3) ?? 0
+      rejectedLoads += num(m?.rejected_loads) ?? 0
+      rejectedM3 += num(m?.rejected_m3) ?? num(m?.not_approved_m3) ?? 0
+    } else {
+      // sany separates the payable summary from the parts detail; only the
+      // summary feeds Cost per M3, so the two must not be added together.
+      detailRows += num(m?.detail_entries) ?? 0
+      countedValue += v
+    }
+
+    // The server groups the money ledgers by region and production by site.
+    // Either way it is "where", so it fills the same column.
+    for (const g of (Array.isArray(m?.regions) ? m.regions : Array.isArray(m?.sites) ? m.sites : [])) {
+      const key = String(g?.region ?? g?.site ?? '').trim() || 'Not stated'
+      const cur = bySiteMap.get(key) || { site: key, rows: 0, value: 0 }
+      cur.rows += num(isProd ? g?.loads : g?.entries) ?? 0
+      cur.value += (isProd ? num(g?.approved_m3) : num(g?.amount)) ?? 0
+      bySiteMap.set(key, cur)
+    }
+  }
+
+  byMonth.sort((a, b) => {
+    if (a.month === 'Unknown') return 1
+    if (b.month === 'Unknown') return -1
+    return a.month < b.month ? 1 : a.month > b.month ? -1 : 0
+  })
+  const bySite = Array.from(bySiteMap.values()).sort((a, b) => (b.value - a.value) || (b.rows - a.rows))
+  const knownMonths = byMonth.filter((m) => m.month !== 'Unknown').map((m) => m.month)
+  const currency = String(opts.currency ?? '').trim()
+
+  const totals = {
+    // The server's own count when we have it, else the loads/entries the
+    // aggregate reports. Never a guess from the number of months.
+    rows: totalRows != null && Number.isFinite(totalRows) ? totalRows : (list.length ? entries : 0),
+    value: list.length ? value : null,
+    sites: bySiteMap.size,
+    months: byMonth.length,
+    firstMonth: knownMonths.length ? knownMonths[knownMonths.length - 1] : null,
+    lastMonth: knownMonths.length ? knownMonths[0] : null,
+    // One country is one currency, so a monthly aggregate can never be mixed.
+    currencies: currency ? [currency] : [],
+    mixedCurrency: false,
+  }
+  if (isProd) {
+    totals.supplied_m3 = list.length ? supplied : null
+    totals.approved_m3 = list.length ? approved : null
+    totals.rejected_loads = rejectedLoads
+    totals.rejected_m3 = rejectedM3
+  } else if (kind === 'sany') {
+    totals.counted_value = list.length ? countedValue : null
+    totals.detail_rows = detailRows
+  }
+  return { totals, byMonth, bySite }
+}
+
+/**
  * Rejected production loads, row-level detail for the rejections report:
  * Date, Site, DN number, Supplied / Approved / Not approved m3, Reason, Remarks.
  * Null-safe; newest first. Never invents a quantity.
@@ -259,7 +360,10 @@ export const IMPORT_TEMPLATES = {
     headers: ['Station', 'Batching Time', 'Truck Number', 'Pump Number', 'DN Number', 'Order Number',
       'Mix Code', 'Mix Description', 'Customer Name', 'Project Name',
       'Supplied Qty', 'Approved/Signed Qty', 'Rejection Type', 'Reason', 'Remarks'],
-    fields: ['site', 'period_date', 'asset_no', 'pump_no', 'dn_number', 'order_number',
+    // The file's Station column is a PLANT NUMBER. It lands in `station`, and
+    // the station-to-site map turns it into a real place on write. Mapping it
+    // onto `site` is what put plant numbers where site names belong.
+    fields: ['station', 'period_date', 'asset_no', 'pump_no', 'dn_number', 'order_number',
       'mix_code', 'mix_description', 'customer_name', 'project_name',
       'm3', 'approved_m3', 'rejected', 'reason', 'remarks'],
   },
@@ -271,7 +375,11 @@ const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 const HEADER_SYNONYMS = {
   country: ['country'],
   region: ['region', 'area'],
-  site: ['site', 'location', 'plant', 'station', 'store code', 'store'],
+  site: ['site', 'location', 'store code', 'store'],
+  // A batching plant number is NOT a site. It lands in its own column and the
+  // station-to-site map turns it into a place; mapping it straight onto `site`
+  // is what put plant numbers where site names belong.
+  station: ['station', 'plant', 'plant no', 'station no', 'batching plant'],
   asset_no: ['asset', 'asset no', 'asset_no', 'equipment', 'truck number', 'truck no', 'truck'],
   pump_no: ['pump number', 'pump no', 'pump'],
   // 'transaction type' is the (mislabelled) DATE column of the SCO issue grid export.

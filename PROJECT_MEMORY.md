@@ -3,7 +3,48 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 7) — THE PRODUCTION FILE WAS UPLOADED TWICE (V513-V516). Next free **V517**.
+## SESSION 2026-08-11 (part 8) — ZERO-COST LINES PRICED, AUGUST CLEARED, TM47 PADDED (V517/V518). Next free **V519**.
+Owner: "Where it has code matching take it from other item codes match zero cost add there unless it's warranty
+if this assest code 047 is old job card add itnto this 047 cab u delete all auguest 26 one i will uplaod a new one".
+- **V517 PRICES A LINE THE ERP SENT WITH NO AMOUNT — 1,068 lines, KSA SAR 31,972.98 / Egypt EGP 12 / UAE AED 600.**
+  Median unit cost of the SAME item code in the SAME country x that line's own quantity. A MEDIAN, not the nearest
+  row, so one mistyped price cannot become the answer for a whole code. The lines are nuts, bolts, washers and
+  engine oil - small consumables whose priced siblings sit in a tight band (e.g. MS BOLT 8*25 lo 0.12 hi 0.21).
+- **WRITING `line_cost` WOULD HAVE BEEN SILENTLY UNDONE, AND THIS IS THE LOAD-BEARING BIT.**
+  `classify_parts_consumption` is BEFORE INSERT **OR UPDATE** and RE-DERIVES `line_cost` from the raw ERP text
+  columns on every write, so a direct write reverts to 0 the next time anything touches the row; and writing
+  `value_amount` would rewrite what the ERP actually sent. NEW COLUMN **`parts_consumption.filled_cost`** is the
+  LAST rung of the amount ladder, after every real ERP amount - raw columns stay exactly as delivered and an
+  estimate is always distinguishable from a figure someone paid. `unit_cost` had to lose its "only when null"
+  guard for filled rows (a zero-cost line already carries unit_cost 0, so it would never have refreshed).
+- **A ROW THIS PROCESS PRICED IS NEVER EVIDENCE FOR ANOTHER** (`filled_cost is null` in the evidence CTE) - the
+  V401c lesson: otherwise one estimate seeds the next and the numbers drift away from anything anyone paid.
+- **THE WARRANTY TEST WAS WRONG AND THE DATA CAUGHT IT.** Two live KSA lines read
+  **"TIRE -WARRENTY -315/80 R 22.5"** - the ERP's own misspelling, which a plain `warrant` match misses. They
+  stayed at zero only because no other line shares their item code, i.e. LUCK, not the rule. V517c widened
+  `parts_cost_is_warranty` to warrant|warrent|warent|waranty|gaurantee|guarantee|free of charge|free issue|
+  foc|no charge|zero charge|complimentary, verified 0 already-filled rows are warranty. Same class as the KSA
+  'cooliant' spelling: match the word AS WRITTEN.
+- **14 KSA lines are left honestly at zero** - every one has NO priced sibling anywhere (GEAR OIL 140-GL-4,
+  ANCHOR BOLT 12*150, MOTOR SIDE SEALING GROUP...), so there is nothing to copy from. Not a failure, a gap.
+- Undo is per batch: `parts_cost_fill_undo('<batch>')` (applied batch `a97352f4-fd21-4d9e-b02d-d60c2987f0a2`);
+  clearing `filled_cost` lets the trigger return the line to 0 by itself. Round trip verified rolled back.
+  **GOTCHA: `percentile_cont` returns double precision, so the median MUST be cast to numeric or `round(v,2)`
+  raises 42883** (cost one retry, fixed in V517b).
+- **V518 AUGUST 2026 KSA EXPENSE LINES DELETED for a clean re-upload: 1,034 lines / SAR 206,810.76** (tyre
+  104,817.12 / spare 80,863.33 / oil 21,130.31). KSA ledger **40,981,402.97 -> 40,774,592.21**, exactly the
+  amount removed. Rows kept in `_bak.expense_aug2026_deleted`; restore = plain re-insert (the trigger re-derives
+  the same buckets). **SCOPE DELIBERATELY NARROW - KSA EXPENSE LINES ONLY.** August also holds 1,317 KSA job
+  cards, 320 tyre records, 8,452 production rows and **945 UAE expense lines (AED 224,252.57)**; those came from
+  DIFFERENT files, so deleting them would lose data the promised re-upload does not replace. **None of the 1,034
+  carried an `import_uid`, so a re-upload WITHOUT the `#` column mapped will duplicate again** (standing rule).
+- **V518 TM47 -> TM047.** The KSA fleet numbers on three digits (1,019 of 1,030); the only other two-digit codes
+  are the **REC and WTP classes, which are their own numbering, not padding errors**. TM47 was the single odd
+  one: Inactive, at JED, ONE 2023 job card (GCKR/JC/0082/0323 "TWO TYRES NEED TO BE CHANGED", KSP-T3), no tyres,
+  no expense lines, and **no TM047 existed** - so there was nothing to merge, only a code to pad. Snapshot
+  `_bak.asset_tm47_rename`. **NO auto-pad trigger was added** - it would corrupt REC01/WTP01.
+
+## SESSION 2026-08-11 (part 7) — THE PRODUCTION FILE WAS UPLOADED TWICE (V513-V516). Superseded: next free **V519**.
 - **V516 — `production_logs` WAS RE-UPLOADED ON 2026-08-06 AND THIS OVERTURNS A STANDING RULE IN THIS FILE.**
   84,787 rows / **903,014.1 m3** removed. KSA production **3,169,096.5 -> 2,266,082.4 m3** (approved
   2,193,569.9). **PRODUCTION IS THE DENOMINATOR OF COST PER M3, so that metric was UNDERSTATED by ~28% and

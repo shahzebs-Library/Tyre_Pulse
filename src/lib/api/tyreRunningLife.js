@@ -4,16 +4,23 @@
  * Degrades to { ok: false } so the section renders an honest error state.
  */
 import { supabase } from './_client'
+import { toUserMessage } from '../safeError'
 
 export async function getTyreRunningLife({ country } = {}) {
+  // Every failure used to collapse to a bare { ok: false }, so the page rendered
+  // an empty table whether the read was denied, the network dropped, or there
+  // genuinely are no tyres. "We could not look" and "there is nothing" are
+  // opposite statements; the reason is carried so the page can say which.
   try {
     const { data, error } = await supabase.rpc('get_tyre_running_life', {
       p_country: country && country !== 'All' ? country : null,
     })
-    if (error) return { ok: false }
-    return data && data.ok ? data : { ok: false }
-  } catch {
-    return { ok: false }
+    if (error) return { ok: false, reason: toUserMessage(error) }
+    if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }
+    if (data.ok === false) return { ok: false, reason: data.reason || 'The running-life service could not build this view.' }
+    return data
+  } catch (e) {
+    return { ok: false, reason: toUserMessage(e) }
   }
 }
 

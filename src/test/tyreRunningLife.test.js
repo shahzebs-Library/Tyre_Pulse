@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   shapeRow, shapeRunningLife, summarize, bandFor, filterRows, fmtNum,
+  coverage, coverageNote,
 } from '../lib/tyreRunningLife'
 
 const row = (over = {}) => ({
@@ -159,5 +160,44 @@ describe('dueLabel', () => {
     expect(dueLabel(shapeRow(row({ remaining_km: 3000, life_used_pct: 95 })))).toBe('Due')
     expect(dueLabel(shapeRow(row({ remaining_km: 30000, life_used_pct: 50 })))).toBe('Not due')
     expect(dueLabel(shapeRow(row({ km_run: null, remaining_km: null, life_used_pct: null })))).toBe('Unknown')
+  })
+})
+
+describe('coverage - why a Km run cell is blank', () => {
+  // Shape mirrors the live KSA fleet: of 3,505 active tyres only 2,059 can show
+  // a km run, and NONE of them is missing its fitment km - the gap is entirely
+  // that the vehicle's current odometer is unknown, plus plant on hour meters.
+  const row = (over = {}) => ({ kmRun: 1000, unit: 'km', currentKm: 5000, kmAtFitment: 4000, ...over })
+
+  it('separates the three real reasons a km run is missing', () => {
+    const c = coverage([
+      row(),                                                   // measurable
+      row({ kmRun: null, currentKm: null }),                   // no odometer on the vehicle
+      row({ kmRun: null, currentKm: null }),
+      row({ kmRun: null, unit: 'engine_hours' }),              // plant, correctly on hours
+      row({ kmRun: null, kmAtFitment: null }),                 // no fitment km
+    ])
+    expect(c.noCurrentKm).toBe(2)
+    expect(c.onHours).toBe(1)
+    expect(c.noFitmentKm).toBe(1)
+  })
+
+  it('says nothing when every tyre on screen is measurable', () => {
+    const s = summarize([row(), row()])
+    expect(coverageNote(s)).toBe('')
+  })
+
+  it('names the count and points at the fix', () => {
+    const s = summarize([row(), row({ kmRun: null, currentKm: null })])
+    const note = coverageNote(s)
+    expect(note).toContain('1 of 2')
+    expect(note).toMatch(/no current odometer reading/i)
+    // it must tell the reader what to DO, not just that data is missing
+    expect(note).toMatch(/log a meter reading/i)
+  })
+
+  it('returns an empty note for an empty view rather than dividing by nothing', () => {
+    expect(coverageNote(summarize([]))).toBe('')
+    expect(coverageNote(null)).toBe('')
   })
 })

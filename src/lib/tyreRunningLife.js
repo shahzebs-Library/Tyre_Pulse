@@ -71,7 +71,56 @@ export function summarize(rows = []) {
   const dueSoon = rows.filter((r) => bandFor(r) === 'due-soon').length
   const pcts = rows.map((r) => (r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct)).filter((v) => v != null)
   const avgUsedPct = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null
-  return { total, measurableKm, measurableHours, overdue, dueSoon, avgUsedPct }
+  return { total, measurableKm, measurableHours, overdue, dueSoon, avgUsedPct, ...coverage(rows) }
+}
+
+/**
+ * WHY a row shows a blank "Km run", counted rather than left for the reader to
+ * guess from empty cells.
+ *
+ * Measured on the live KSA fleet: of 3,505 active tyres only 2,059 can show a km
+ * run. NONE of them is missing its fitment km - the gap is entirely on the other
+ * side: 1,260 sit on a vehicle whose CURRENT odometer is unknown, because nobody
+ * has logged a meter reading for it, and 304 are plant measured on the hour
+ * meter (correctly no km at all).
+ *
+ * A blank cell reads as a broken report. The same blank, counted and explained,
+ * reads as a meter-reading backlog - which is the true and actionable statement,
+ * and points at the person who can fix it.
+ */
+export function coverage(rows = []) {
+  const list = Array.isArray(rows) ? rows : []
+  let noCurrentKm = 0
+  let onHours = 0
+  let noFitmentKm = 0
+  for (const r of list) {
+    if (!r || r.kmRun != null) continue
+    if (r.unit === 'engine_hours') { onHours += 1; continue }
+    if (r.currentKm == null) { noCurrentKm += 1; continue }
+    if (r.kmAtFitment == null) { noFitmentKm += 1 }
+  }
+  return { noCurrentKm, onHours, noFitmentKm }
+}
+
+/**
+ * One plain-English sentence for the coverage gap, or '' when every tyre on
+ * screen can be measured (saying "3,505 of 3,505" on a complete view is noise).
+ */
+export function coverageNote(summary) {
+  if (!summary || !summary.total) return ''
+  const parts = []
+  if (summary.noCurrentKm > 0) {
+    parts.push(`${summary.noCurrentKm.toLocaleString()} are on a vehicle with no current odometer reading, so their km run cannot be worked out - log a meter reading for those assets and they fill in automatically`)
+  }
+  if (summary.onHours > 0) {
+    parts.push(`${summary.onHours.toLocaleString()} are plant measured on the hour meter, so they correctly show hours instead of km`)
+  }
+  if (summary.noFitmentKm > 0) {
+    parts.push(`${summary.noFitmentKm.toLocaleString()} have no fitment km recorded`)
+  }
+  if (!parts.length) return ''
+  const blank = summary.total - summary.measurableKm
+  return `${blank.toLocaleString()} of ${summary.total.toLocaleString()} tyres show a blank Km run: ${parts.join('; ')}.`
 }
 
 /**

@@ -74,7 +74,10 @@ export function reconcileSanyLines(lines = [], invoice = null) {
   const net = num(invoice?.net_amount)
   const deductions = deductionTotal(invoice)
 
-  let status = 'match'
+  // Every branch assigns. Do NOT seed this with 'match': a later branch that
+  // forgot to set it would then claim the invoice reconciles, which is the one
+  // thing this function exists to never say by accident.
+  let status
   let difference = null
   if (!list.length) status = 'no_lines'
   else if (gross == null) status = 'no_gross'

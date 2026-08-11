@@ -52,7 +52,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "claude/accident-builder-report-ui-2bkwb5": false
+      "claude/accident-builder-report-ui-2bkwb5": false,
+      "claude/ksa-asset-mobile-visibility-xlnp7m": false
     }
   }
 }

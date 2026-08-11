@@ -69,7 +69,12 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [truncated, setTruncated] = useState(false)
-  const [period, setPeriod] = useState({ mode: 'all' })
+  // Opens on the CURRENT YEAR rather than all of history. All-time read up to
+  // 50,000 tyre rows on every visit; the year is a fraction of that and still
+  // gives the monthly trend a full set of points to draw. The month would not -
+  // a one-month trend chart is a single dot, which is why the default is the
+  // year and not the month.
+  const [period, setPeriod] = useState(() => ({ mode: 'year', year: new Date().getFullYear() }))
 
   // Period -> server-side date bounds. These drive BOTH the exact KPI RPC and
   // the bounded row read below, so neither one pulls the whole table.

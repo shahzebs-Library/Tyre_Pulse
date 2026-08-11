@@ -14,6 +14,14 @@ had shipped. **RULE: when the working branch is renamed, add the new name to `gi
 SAME change. Vercel takes literal branch names here - there is no wildcard.** Second habit that caused it:
 merging each change as its own PR. Owner instruction 2026-08-11: **batch the work and merge once.** Every
 merge to main costs a production build, so one merge of ten changes costs one build, not ten.
+**RESOLVED + VERIFIED 2026-08-11 17:xx:** with the current branch suppressed, merging #312 produced
+`dpl_4w4gDPo61hVrCGuFR8nRLfn9fiSW` - state READY, **target production**, ref `main`, sha `8511cc3` - so every
+merge from #308 onward is now live. **THE CAP IS A ROLLING 24-HOUR WINDOW, NOT A CALENDAR DAY**: builds age
+out continuously, so a refused production build recovers on its own once earlier deployments fall outside the
+window. Do NOT tell the owner to wait for "midnight" or to redeploy by hand - re-check `list_deployments` and
+look for `target: "production"` first. **HOW TO CHECK WHETHER WORK IS ACTUALLY LIVE: a green CI run and a
+merged PR prove NOTHING about the deployed site.** Read the project's deployments and confirm the newest
+`target: "production"` carries the sha you expect; `target: null` is a branch preview.
 
 ## SESSION 2026-08-11 (part 9) — INSPECTION EVIDENCE, ZERO-ROW LEDGERS, STATIONS, REPORT COST, DIALOGS (V519-V523). Next free **V524**. PR #308 merged.
 - **THE INSPECTION VIEWER SHOWED THE ANSWERS AND NOTHING ELSE.** Owner: "it must sheo thr svg and picture".

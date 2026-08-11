@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">Tyre Pulse</string>
+    <string name="home">Home</string>
+    <string name="assets">Assets</string>
+    <string name="inspect">Inspect</string>
+    <string name="alerts">Alerts</string>
+    <string name="more">More</string>
+    <string name="inspections_due">Inspections Due</string>
+    <string name="critical_tyres">Critical Tyres</string>
+    <string name="breakdowns">Breakdowns</string>
+    <string name="open_jobs">Open Jobs</string>
+    <string name="todays_schedule">Today\'s Schedule</string>
+    <string name="view_all">View All</string>
+    <string name="pressure">Pressure</string>
+    <string name="tread">Tread</string>
+    <string name="condition">Condition</string>
+    <string name="photos">Photos</string>
+    <string name="submit">Submit</string>
+    <string name="back">Back</string>
+    <string name="next">Next</string>
+</resources>

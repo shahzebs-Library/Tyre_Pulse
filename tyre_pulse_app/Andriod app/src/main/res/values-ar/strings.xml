@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">تاير بولس</string>
+    <string name="home">الرئيسية</string>
+    <string name="assets">الأصول</string>
+    <string name="inspect">فحص</string>
+    <string name="alerts">تنبيهات</string>
+    <string name="more">المزيد</string>
+    <string name="inspections_due">الفحوصات المستحقة</string>
+    <string name="critical_tyres">إطارات حرجة</string>
+    <string name="breakdowns">الأعطال</string>
+    <string name="open_jobs">وظائف مفتوحة</string>
+    <string name="todays_schedule">جدول اليوم</string>
+    <string name="view_all">عرض الكل</string>
+    <string name="pressure">الضغط</string>
+    <string name="tread">عمق النقشة</string>
+    <string name="condition">الحالة</string>
+    <string name="photos">الصور</string>
+    <string name="submit">إرسال</string>
+    <string name="back">رجوع</string>
+    <string name="next">التالي</string>
+</resources>

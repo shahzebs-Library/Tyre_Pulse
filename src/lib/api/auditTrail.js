@@ -33,7 +33,7 @@ export const AUDIT_SOURCES = [
 /** Explicit least-privilege column lists (no SELECT *). */
 export const DATA_AUDIT_COLS =
   'id,user_id,user_email,user_role,action,table_name,record_id,' +
-  'old_values,new_values,ip_address,site,country,org_id,created_at'
+  'old_values,new_values,ip_address,site,country,org_id,created_at,actor_type,actor_detail'
 export const ACCESS_AUDIT_COLS =
   'id,actor,actor_email,action,target_user,entity,before,after,at'
 export const CONSOLE_AUDIT_COLS =
@@ -81,13 +81,38 @@ function detailText(value) {
  *            target:string, detail:string, source:string, old:(object|null),
  *            new:(object|null), role:(string|null) }}
  */
+/**
+ * Who (or what) performed a change.
+ *
+ * 485,231 of 499,217 audit rows have no user_id, because imports, cron jobs and
+ * other service-role paths run with auth.uid() NULL. Rendering those as a blank
+ * made an automated import indistinguishable from an untraceable human edit -
+ * opposite facts for anyone investigating an incident. V499 records actor_type,
+ * so each case can now say what it is:
+ *   user    -> the person's email
+ *   service -> named as a machine, with the connection role / import label
+ *   unknown -> stated plainly, so a genuinely unattributable write STANDS OUT
+ *              instead of being buried among 440k routine import rows
+ *   legacy  -> written before V499; honestly not recoverable, never guessed
+ */
+export function auditActor(r = {}) {
+  const type = r.actor_type || (r.user_id ? 'user' : null)
+  if (type === 'user' || (!type && r.user_id)) return r.user_email || r.user_id || 'user'
+  if (type === 'service') return r.actor_detail ? `System (${r.actor_detail})` : 'System'
+  if (type === 'unknown') return r.actor_detail ? `Unknown (${r.actor_detail})` : 'Unknown'
+  // No actor_type at all: this row predates attribution. Say so rather than
+  // implying either a person or a machine.
+  return r.user_email || 'Not recorded (before audit attribution)'
+}
+
 export function normalizeRow(source, raw) {
   const r = raw || {}
   if (source === 'audit_log_v2') {
     return {
       id: r.id,
       when: r.created_at || null,
-      actor: r.user_email || r.user_id || '',
+      actor: auditActor(r),
+      actorType: r.actor_type || (r.user_id ? 'user' : 'legacy'),
       action: r.action || '',
       target: joinTarget(r.table_name, r.record_id),
       detail: joinTarget(

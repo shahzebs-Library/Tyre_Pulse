@@ -3,6 +3,46 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-10 (part 3) — BUYER REMARKS FIXED IN A LOOP (V498/V499). Next free **V500**.
+Owner: "u saw buyer remarks go ahead fix it ... make a loop until its successful". Continued straight on from
+the audit below. All applied live + verified; branch `claude/ksa-asset-mobile-visibility-xlnp7m`.
+- **V498 A PLAIN ADMIN COULD CROSS EVERY COUNTRY.** 50 `*_country_isolation` policies on 50 tables bypassed
+  the country wall via `app_is_org_admin()` = `is_super_admin() OR app_role()='admin'`. Country scoping is a
+  DATA-VISIBILITY boundary so its only legitimate bypass is the platform owner -> swapped to
+  `is_super_admin()`. **Ordinary administration keeps `app_is_org_admin()` - the 4 policies OUTSIDE the
+  country-isolation set were deliberately untouched.** BLAST RADIUS: 36 profiles, 2 super admins, **0 plain
+  Admins**, so nobody's visibility changed today; this is the only moment it can be closed without removing
+  access from a real person. **4 of the 50 are FOR ALL and carry the expression in WITH CHECK too - both
+  halves are regenerated together and the migration ABORTS if any policy still carries the bypass** (V396's
+  lesson; half a boundary is worse than none). Originals in `_rls_policy_backup_v498` (50 rows).
+- **V499 THE AUDIT TRAIL COULD NOT NAME AN ACTOR FOR 97% OF ROWS - and the real defect was not the missing
+  human.** 485,231 of 499,217 rows have `user_id` NULL; the bulk is ONE table (work_orders 440,257 of
+  441,632) written by ERP imports/cron where `auth.uid()` is NULL. Many of those legitimately have no person -
+  the fault was that "an automated import changed this" and "an unknown person changed this" were stored
+  IDENTICALLY as a blank, so a genuinely suspicious write was buried among 440k routine ones. Trigger now
+  records `actor_type` = user | service | unknown (+ `actor_detail` = connection role + optional
+  `app.actor_label`), and fills `user_email` with that label because a blank there reads as a missing person.
+  **NO BACKFILL, DELIBERATELY**: stamping 485k rows rewrites a 546 MB table AND would assert a provenance
+  nobody measured - NULL `actor_type` means "written before attribution existed" and `auditActor()` renders
+  exactly that. **To name an import: `select set_config('app.actor_label','ERP import',true)` before its
+  writes.** Trigger keeps its exception-swallowing tail on purpose (auditing must never block the business
+  write). STILL OPEN: the audit trigger covers 16 of 351 tables and is already 71% of the insert cost on
+  work_orders - widening it trades write throughput for coverage and needs the owner's call.
+- **EMPTY MODULES NO LONGER READ AS MEASUREMENTS.** 14 modules are complete interfaces over 0-row tables, each
+  rendering KPI tiles of 0 that a reader takes as "we have no warranty claims" rather than "nothing was
+  entered" - the 5th reason the buyer gave for not purchasing. NEW `src/components/ui/NotInUseNotice.jsx`
+  states it in one line above the zeros, renders NOTHING once a single row exists (so it cannot go stale) and
+  renders nothing on an UNKNOWN count ("we could not look" and "there is nothing" are opposite claims). Wired
+  into SupplierManagement / GoodsReceipt / WarrantyTracker / RetreadManagement / RetreadClaims / TyrePool.
+  **Deliberately NOT a gate** - the page still works so the first record can be entered; hiding a module
+  outright already belongs to Module Control (/console/module-control) and is NOT duplicated.
+- **SUPER-ADMIN EMAIL ORACLE - EXPLAINED TO THE OWNER, NOT PATCHED.** `get_email_by_identifier('shahzeb')`
+  returns the super-admin's real address to an unauthenticated caller. It CANNOT be reduced to a boolean
+  because `signIn` needs the address to call `signInWithPassword`. Real fix = move sign-in into an edge
+  function that takes identifier+password and returns a session, so the address never reaches the browser.
+  That is an authentication change and was NOT made unattended on a live system. Interim mitigation available
+  without code: rename the super-admin username so it is not guessable, and turn on 2FA for it.
+
 ## SESSION 2026-08-10 (part 2) — ENTERPRISE BUYER AUDIT + 4 BLOCKERS CLOSED (V494-V497). Migrations V494-V497 applied live; next free **V498**.
 Owner asked for a full independent enterprise-buyer due-diligence simulation, then "make things in loop until
 complete". Six read-only audit tracks ran against the LIVE db + source; **every finding that changed a

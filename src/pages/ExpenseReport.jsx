@@ -867,7 +867,17 @@ export default function ExpenseReport() {
       const { rows: raw, truncated } = await listExpenseRows({
         country: scopedCountry, from: from || undefined, to: to || undefined,
       })
-      if (!raw.length) { setError('No expense rows in this period.'); return }
+      if (!raw.length) {
+        // Name the scope. "No expense rows in this period" was the message the
+        // owner saw while 108,384 KSA lines sat in the table (the cause was a
+        // service bug, now fixed and pinned by listExpenseRows.test.js) - a
+        // message that cannot say WHAT it searched is impossible to disprove.
+        setError(
+          `No expense rows found for ${scopedCountry || 'any country'}` +
+          `${from || to ? ` between ${from || 'the earliest record'} and ${to || 'today'}` : ''}.`,
+        )
+        return
+      }
       const data = raw.map((r) => ({
         event_date: r.event_date || '',
         work_order_no: r.work_order_no || '',
@@ -897,6 +907,16 @@ export default function ExpenseReport() {
           },
         },
       )
+      if (truncated) {
+        // A silently capped export is a wrong number the owner cannot see.
+        // KSA alone holds 108,384 lines, so a full-history download DOES hit
+        // the 100,000 cap - saying so on screen is the difference between a
+        // partial export and a wrong one.
+        setError(
+          `Exported the first ${data.length.toLocaleString()} rows - this period holds more. ` +
+          'Narrow the date range to download the rest.',
+        )
+      }
     } catch (e) {
       setError(toUserMessage(e, 'Export failed. Please try again.'))
     } finally {

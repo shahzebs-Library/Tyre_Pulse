@@ -10,6 +10,8 @@ import TyrePriceSection from '../components/reconciliation/TyrePriceSection'
 import JobcardDateSection from '../components/reconciliation/JobcardDateSection'
 import DupKeyTyresSection from '../components/reconciliation/DupKeyTyresSection'
 import SerialMultiAssetSection from '../components/reconciliation/SerialMultiAssetSection'
+import FreetextTyreSection from '../components/reconciliation/FreetextTyreSection'
+import TyreLifeCapSection from '../components/reconciliation/TyreLifeCapSection'
 import DataQualityScorecard from '../components/reconciliation/DataQualityScorecard'
 import AssetMasterSection from '../components/reconciliation/AssetMasterSection'
 import DataTrustSection from '../components/reconciliation/DataTrustSection'
@@ -616,6 +618,12 @@ export default function DataReconciliation() {
 
       {/* ── Integrity: serial on multiple assets (moved tyre or data error) ────── */}
       <SerialMultiAssetSection />
+
+      {/* ── Integrity: tyre changes recorded only in the job card sentence ────── */}
+      <FreetextTyreSection />
+
+      {/* ── Integrity: lives above the owner's ceiling for that class ─────────── */}
+      <TyreLifeCapSection />
       </div>
       {/* ═══ End Integrity group ═════════════════════════════════════════════ */}
 

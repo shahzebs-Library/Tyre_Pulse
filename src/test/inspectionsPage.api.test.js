@@ -47,20 +47,26 @@ beforeEach(() => {
 })
 
 describe('inspections page service - listInspectionsForPage', () => {
-  it('selects wide PAGE_COLS, orders scheduled_date desc, ranges, and scopes', async () => {
+  it('selects the list columns, orders scheduled_date desc, ranges, and scopes', async () => {
     await inspectionsApi.listInspectionsForPage({ from: 0, to: 999, country: 'Oman', createdBy: 'u1' })
     const c = h.state.last._calls
     expect(h.state.last._table).toBe('inspections')
-    // wide column set (superset fields the page renders)
+    // wide column set (the fields the register actually renders or computes on)
     const cols = c.select[0]
     expect(cols).toContain('tyre_conditions')
     expect(cols).toContain('linked_action_id')
     expect(cols).toContain('approval_status')
     expect(cols).toContain('vehicle_type')
     expect(cols).toContain('odometer_km')
-    expect(cols).toContain('approver_signature')
     expect(cols).toContain('locked_at')
     expect(cols).not.toContain('organisation_id')
+    // The signature columns are DELIBERATELY absent. Measured on live data they
+    // are 644 kB across 249 rows - 54% of this read - and the register renders
+    // neither; the record viewer, the PDF and the approval modal each fetch the
+    // one row they need through getInspectionForPage instead. Re-adding them
+    // here would silently restore that cost.
+    expect(cols).not.toContain('inspector_signature')
+    expect(cols).not.toContain('approver_signature')
     // order + paging + scoping mirror the page's fetchAllPages callback
     expect(c.order).toContainEqual(['scheduled_date', { ascending: false }])
     expect(c.range).toEqual([0, 999])
@@ -87,6 +93,16 @@ describe('inspections page service - getInspectionForPage', () => {
     expect(h.state.last._table).toBe('inspections')
     expect(h.state.last._calls.eq).toContainEqual(['id', 'i1'])
     expect(row).toEqual({ id: 'i1', tyre_conditions: [] })
+  })
+
+  // The other half of the list invariant above: the columns the list drops have
+  // to arrive SOMEWHERE, or the record viewer and the PDF lose the signatures.
+  it('still selects the signature columns the list omits', async () => {
+    h.state.result = { data: { id: 'i1' }, error: null }
+    await inspectionsApi.getInspectionForPage('i1')
+    const cols = h.state.last._calls.select[0]
+    expect(cols).toContain('inspector_signature')
+    expect(cols).toContain('approver_signature')
   })
 
   it('throws a ServiceError on a Supabase error', async () => {

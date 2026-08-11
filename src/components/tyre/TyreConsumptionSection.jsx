@@ -15,6 +15,7 @@
  * An unmeasurable rate renders "Not measured" - never a fabricated 0.0/day.
  */
 import { useEffect, useMemo, useState } from 'react'
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import {
   Layers, RefreshCw, TrendingUp, TrendingDown, Minus, CalendarDays,
@@ -29,6 +30,11 @@ import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 import { colorAt, withAlpha } from '../../lib/reportColors'
 import DateField from '../ui/DateField'
+
+// Registered here rather than relying on the host page, so this section keeps
+// working if it is ever mounted somewhere else. Chart.js registration is
+// idempotent, so doing it twice is harmless.
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
 /** Preset windows. Each resolves against the clock at click time, not at import. */
 const PRESETS = [
@@ -50,7 +56,7 @@ function isoToday() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-function Tile({ label, value, sub, tone = 'default' }) {
+function Tile({ label, value, sub, tone = 'default', icon: Icon }) {
   const valueColor = tone === 'muted' ? 'var(--text-secondary)' : 'var(--text-primary)'
   return (
     <div
@@ -58,7 +64,10 @@ function Tile({ label, value, sub, tone = 'default' }) {
       style={{ background: 'var(--surface-2)', border: '1px solid var(--border-subtle)' }}
     >
       <div className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-dim)' }}>{label}</div>
-      <div className="text-2xl font-semibold mt-1" style={{ color: valueColor }}>{value}</div>
+      <div className="text-2xl font-semibold mt-1 flex items-center gap-1.5" style={{ color: valueColor }}>
+        {Icon ? <Icon size={18} style={{ color: 'var(--text-dim)' }} /> : null}
+        {value}
+      </div>
       {sub ? <div className="text-[11px] mt-1" style={{ color: 'var(--text-secondary)' }}>{sub}</div> : null}
     </div>
   )
@@ -306,9 +315,12 @@ export default function TyreConsumptionSection() {
             />
             <Tile
               label="Month on month"
+              icon={d.trend.changePct == null ? undefined : TrendIcon}
               value={d.trend.changePct == null ? 'Not measured' : `${d.trend.changePct > 0 ? '+' : ''}${d.trend.changePct}%`}
               tone={d.trend.changePct == null ? 'muted' : 'default'}
-              sub={d.trend.direction === 'unknown' ? 'Needs two complete months' : d.trend.direction}
+              // Only complete months are compared, so a part-finished month can
+              // never be reported as a collapse in consumption.
+              sub={d.trend.direction === 'unknown' ? 'Needs two complete months' : d.trend.note}
             />
           </div>
 

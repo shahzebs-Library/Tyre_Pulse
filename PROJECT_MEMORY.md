@@ -3,7 +3,68 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 6) — YEAR DEFAULT FIXES THE BLANK SCREENS + MASTER TYRE LOAD + TRUE SITE COST (V511-V512b). Next free **V513**.
+## SESSION 2026-08-11 (part 7) — THE PRODUCTION FILE WAS UPLOADED TWICE (V513-V516). Next free **V517**.
+- **V516 — `production_logs` WAS RE-UPLOADED ON 2026-08-06 AND THIS OVERTURNS A STANDING RULE IN THIS FILE.**
+  84,787 rows / **903,014.1 m3** removed. KSA production **3,169,096.5 -> 2,266,082.4 m3** (approved
+  2,193,569.9). **PRODUCTION IS THE DENOMINATOR OF COST PER M3, so that metric was UNDERSTATED by ~28% and
+  correcting it makes cost/m3 RISE ~40% — that is the correction, not a regression.** Expect the owner to see
+  cost/m3 jump; it is now right.
+- **WHY THE OLD RULE WAS NOT WRONG, and this distinction is the whole lesson.** The V362-era finding "production_logs
+  TRIED AND REJECTED as a dedupe target" tested **site+date+m3+truck** — where TM514 to Diriyah-G2 ten times in a
+  day really is ten deliveries. **THAT STILL HOLDS. It simply never considered `dn_number`.** The delivery note is
+  a DOCUMENT ID and the proof is decisive: **WITHIN EVERY UPLOAD RUN, rows = distinct dn_numbers EXACTLY (zero
+  repeats). A DN never repeats inside a file; it only repeats ACROSS runs.**
+  Runs on 2026-08-06: A 08:32 19,368 / B 08:39 27,837 / C 08:42 63,999 / **D 08:47 78,461** / E 08:59 5,559 /
+  **F 09:07 78,461** / G 13:32 15,078. **D and F match on row count, DN count, first DN, last DN and m3
+  (835,520.1 each) — the same file 20 minutes apart.** E∩G = 5,559. A/B/C overlap nothing (good files).
+  **RULE NOW: production dedupe key is `dn_number` + full content, keep EARLIEST. Do NOT dedupe production on
+  site/date/m3/truck.** DN `39-61441` deliberately EXCLUDED (core fields match, free text differs — not "exact").
+  315 null-DN rows untouched. Rollback `_bak.production_dup_v516`.
+- **THE OWNER'S "110k and 64k" ARE THESE PRODUCTION FILES, not the recent job-card upload** — 63,999 ≈ 64k and
+  A+B+C = 111,204 ≈ 110k. Nothing of that size arrived in the last 48h.
+- **V513 tyre re-import duplicates: 87 rows removed.** A second load re-inserted tyres already recorded and it
+  hid because **the copy writes `job_card` WITH TRAILING WHITESPACE** — every comparison keyed on job_card saw
+  two different values. Same class as the tab-padded serials. **BTRIM ON COMPARE, ALWAYS.** The copy was strictly
+  poorer (no price). Delete rule was provably lossless: all of removal_date/status/total_km/km_at_fitment/
+  km_at_removal/brand identical, job card identical once trimmed, exactly ONE row priced. All remaining padded
+  job_cards trimmed. **58 groups LEFT ALONE — the two copies DISAGREE ON MILEAGE** (TM657 LHCO 54,086 vs 39,672);
+  deleting either discards a real measurement and silently picks a tyre life. Needs the owner.
+- **JOB CARDS HAVE NO DUPLICATES — checked, not assumed.** 88,773 rows / 88,773 distinct `work_order_no` (globally
+  unique). 528 groups share asset+date+description under DIFFERENT numbers but **333 carry expense lines on BOTH
+  numbers** — both cards are real and hold their own money. Two cards for one asset in one day is normal.
+- **`work_order_line_items`: 47,693 repeated-key rows and ZERO are removable** — every one has a distinct
+  `source_row`. A naive "delete identical rows" there destroys 47,693 real records. DO NOT TOUCH.
+- parts_consumption exact dupes: KSA 0, Egypt 0 (129 look repeated but have distinct source_row), **UAE 2
+  removable (AED 598.75)**. **Keep `issue_number` AND `site` in the dedupe key** — dropping them surfaces ~90
+  false UAE pairs that differ by issue number and site spelling.
+- **THE 2026-08-11 90,154-ROW UPLOAD IS 96.5% A RE-UPLOAD AND CHANGED NOTHING.** It re-exports the 2026-07-28 file
+  with ONE new column filled (`Asset Description`, 0/192,198 before -> 90,154/90,154 now). Only 3,195 rows carry
+  new content. **`ksa_country_upload_template_staging` HAS ZERO TRIGGERS — an upload there moves no report.**
+  **INERT AND WORTH ACTING ON: 129 NEW AUGUST JOB CARDS** (GCKR/JC/1005/0826 onward, 9-10 Aug, 280 staging rows)
+  exist ONLY in staging. 28 tyre fitments unloadable — serial destroyed by Excel (`1.25121E+11`) or a tyre SIZE in
+  the serial column; needs a re-export with that column formatted as TEXT.
+  **MEASUREMENT TRAP HIT AGAIN: a raw byte comparison reports 0 cross-batch duplicates — a PHANTOM**, because the
+  old batch tab-pads 39,035 `srno` values and the new one pads none. Normalise whitespace before comparing.
+- **V514 PLATES: owner ruled "plates are not a problem ... dont flag it".** All 17 remaining differences applied
+  from the sheet, 0 conflicts left, plate reporting RETIRED. Only `registration_no` moved.
+- **ASSET CODE AUDIT (what the owner actually cares about): CLEAN.** 1,030 KSA assets — 0 duplicates, 0 padded,
+  0 lower-case, 0 inner spaces, 0 blank. 11 off-pattern of which 10 are legitimate naming (REC01-08 reclaimers,
+  WTP01/02 water treatment). **TM47 is the lone oddity** (every other mixer is 3 digits) — 1 job card, no tyres,
+  no expense lines, absent from the sheet and from the register as TM047. NOT renamed: inventing TM047 would
+  create an asset nobody recorded.
+- **AUGUST TYRE "22k EXTRA" COULD NOT BE REPRODUCED** and the owner still needs to supply their expected figure.
+  KSA Aug reconciles at **SAR 104,817.12** by SIX measures: our classification, the ERP's own tyre column
+  (difference 0.00), event_date, txn_date, five non-overlapping daily loads, and zero mixed lines. All 120 tyre
+  lines are real tyres with sizes at confidence 1.00. **The master sheet says 113,050 — HIGHER, not 22k lower.**
+  Expense export now carries **separate Tyre/Spare/Oil value columns** so the split can be summed directly.
+  NOTE: all 1,034 Aug lines have `import_uid` NULL — the `#` column was not mapped, so re-import protection was
+  off. STANDING RULE UNCHANGED: map `#` or a re-upload duplicates.
+- **PROCESS: do NOT `git add -A` while subagents are editing** — it sweeps their half-finished files into a
+  commit (happened twice this session; a V513 label collision followed and was renamed to V515). Stage by path.
+- Migration V-labels: V513 tyre dupes, V514 plates, **V515 tyre consumption (renamed from a duplicate V513 label;
+  applied as v513_tyre_consumption + v513b in the DB)**, V516 production dupes. Next free **V517**.
+
+## SESSION 2026-08-11 (part 6) — YEAR DEFAULT FIXES THE BLANK SCREENS + MASTER TYRE LOAD + TRUE SITE COST (V511-V512b).
 - **V512 `get_site_operating_cost(country,from,to)` - PER-SITE COST WAS ANSWERING THE WRONG QUESTION, and the
   owner's own "ST2 means its spare parts store" is what made the right one possible.** The -ST names are STORES,
   so `parts_consumption.site` is where stock was ISSUED FROM, not where the machine worked. Measured KSA YTD:

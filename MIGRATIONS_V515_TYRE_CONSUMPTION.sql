@@ -1,4 +1,11 @@
--- V513 - TYRE CONSUMPTION (how many tyres are fitted, and the daily rate)
+-- NUMBERING NOTE: this file was written as V513 while V513 was being used at the
+-- same time for the tyre re-import duplicate removal. Both applied cleanly - the
+-- database keys migrations on a timestamp, not on the V-label - so the clash was
+-- only ever in the repo file names. Renamed to V515 so the labels stay unique.
+-- The applied names in supabase_migrations remain v513_tyre_consumption and
+-- v513b_tyre_consumption_index_usable_join. Next free label is V516.
+--
+-- V515 - TYRE CONSUMPTION (how many tyres are fitted, and the daily rate)
 -- STATUS: APPLIED LIVE on project jhssdmeruxtrlqnwfksc.
 --
 -- WHY THIS EXISTS
@@ -80,11 +87,19 @@ begin
       coalesce(nullif(btrim(f.site), ''), nullif(btrim(t.site), ''))                 as site,
       coalesce(nullif(btrim(f.vehicle_type), ''), nullif(btrim(t.vehicle_type), '')) as vehicle_type
     from public.tyre_records t
+    -- The PROBE side is normalised, the STORED side is compared raw, so the
+    -- (organisation_id, country, asset_no) index is usable. That is only sound
+    -- because V490 normalised asset codes to upper/no-whitespace on both tables
+    -- and enforces it with triggers - verified 0 off-canonical rows in both
+    -- vehicle_fleet (1,617) and tyre_records (11,241) before making this change.
+    -- Wrapping the stored column in upper(btrim()) instead costs a fleet scan per
+    -- tyre row: measured 454 ms / 23,925 buffers against 24 ms / 4,900 for a
+    -- 90-day KSA window.
     left join lateral (
       select vf.site, vf.vehicle_type
       from public.vehicle_fleet vf
       where vf.organisation_id = t.organisation_id
-        and upper(btrim(vf.asset_no)) = upper(btrim(coalesce(t.asset_no, '')))
+        and vf.asset_no = upper(btrim(coalesce(t.asset_no, '')))
         and (vf.country is null or vf.country = t.country)
       order by (vf.country = t.country) desc nulls last
       limit 1

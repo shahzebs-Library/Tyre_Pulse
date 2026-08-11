@@ -3,7 +3,72 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 8) — ZERO-COST LINES PRICED, AUGUST CLEARED, TM47 PADDED (V517/V518). Next free **V519**.
+## SESSION 2026-08-11 (part 9) — INSPECTION EVIDENCE, ZERO-ROW LEDGERS, STATIONS, REPORT COST, DIALOGS (V519-V523). Next free **V524**. PR #308 merged.
+- **THE INSPECTION VIEWER SHOWED THE ANSWERS AND NOTHING ELSE.** Owner: "it must sheo thr svg and picture".
+  `InspectionAnswers` now renders the WHOLE record - summary, meta, the tyre-map SVG with each wheel's reading,
+  the meter readings, findings/notes, the photographs and the signatures - and the PDF reads the SAME component,
+  so the copy someone downloads and the record on screen cannot disagree. Mounting the media separately per
+  surface is exactly how the evidence went missing in the first place.
+- **THE LEDGER PAGES READ EVERY ROW BEFORE PAINTING ANYTHING.** `/production-m3`, `/sco-costs`, `/sany-invoices`
+  now open on a summary and fetch ZERO rows; `loadRows` only runs when asked. Rejected-production detail stays,
+  because that is the part worth looking at. `summaryFromMonthly(monthly, kind, opts)` builds the tiles from the
+  already-aggregated monthly RPC instead of the row list.
+- **V519/V520 PRODUCTION FILTERS.** `get_production_monthly` gained a `sites` breakdown; `p_reason` added to
+  `get_production_monthly` + `get_production_rejections`, new `get_production_reasons(country,from,to)`, and the
+  filter is offered on EVERY production surface, not one. Predicate is
+  `coalesce(nullif(btrim(reason),''),'(none)') = p_reason` so "no reason given" is a selectable value, not a hole.
+  **42725 AMBIGUITY BIT TWICE** - a defaulted 4-arg beside the old 3-arg breaks BOTH for PostgREST; the old
+  signatures must be DROPPED (V520b/V520c). Same guard applied when paging `get_tyre_running_life`.
+- **ONE TABLE STYLE:** `src/components/costm3/CostM3Table.jsx` is now the single table for every Cost per M3
+  panel (six hand-rolled variants deleted). Extend it; do not write another.
+- **V521 A BATCHING STATION IS A PLANT, AND IT MAPS TO A REAL SITE.** Owner: "Plant production site will be
+  station ... it will Also goes to corrext place in parts". `production_logs.station` + `production_station_map`
+  + `resolve_production_station()` trigger + `get_production_stations` / `apply_production_station_map`, with a
+  `StationMapPanel` whose site list comes from the SITE REGISTER so production and parts finally share one
+  vocabulary. **HEADER_SYNONYMS CHANGED: `site` LOST `plant`/`station`; a new `station` synonym owns them**, and
+  the production template's first field is `station`, not `site` - a station number was being written into the
+  site column and inventing sites nobody has.
+- **V522 THE SHARED REPORT WAS COSTING THE FLEET FROM THE WRONG TABLES - and that is ALSO why it "was not
+  updating".** It never read `parts_consumption`, so the August clear-out, the re-classification and the
+  zero-cost fill could not move a single figure on it. It summed `cost_per_tyre` + work-order columns, which
+  reported **ZERO maintenance cost for UAE and Egypt** (their job cards carry no cost columns) and less than half
+  of Egypt's tyre spend, then ADDED SAR+AED+EGP into one 10,236,882 that is not a quantity of anything. Cost now
+  comes from the expense grid, per country in its own currency, **with SCO and SANY included** (the board was
+  short SAR 1,207,478 + 4,333,145 for KSA - nearly as much again as it counted). Single scalars are returned ONLY
+  when one currency is in scope; otherwise NULL + `mixed_currency`. Extracted to `_report_cost_block(org,...)`
+  and spliced into `get_report_snapshot` under guards that abort unless the exact boundaries are found.
+  **Security: it takes an org id, so it is revoked from public, anon AND authenticated (the V378 lesson).**
+  KSA verified 11,388,700 SAR = 5,848,077 internal + 1,207,478 SCO + 4,333,145 SANY.
+- **ENGINE HOURS WERE JUNK AND THE RATE WAS CONFIDENT ABOUT IT.** One KSA asset carries 441,935 engine hours -
+  fifty years of continuous running - and the naive sum gave 5,844,023 h and a cost per hour of **1.00**. An asset
+  cannot accumulate more than 24 h per day, so a span above that ceiling is a bad reading: those assets are
+  DROPPED and `hours_assets_dropped` reports how many (108), so a repaired figure is never mistaken for a
+  complete one. KSA 918,203 h, cost/hour **1.00 -> 12.40**.
+- **V523 PRODUCTION WAS COUNTING LOADS NOBODY APPROVED.** `get_cost_per_m3` summed `coalesce(approved_m3, m3)`,
+  so a load with no approved figure fell back to the SUPPLIED quantity and counted as signed for. KSA 2026:
+  approved 680,890.8 vs approved-or-supplied 741,935.8 m3 = **61,045 m3 across 5,699 loads**, every one with
+  approved_m3 NULL and every one from the July batch that arrived with NO dn_number (the suspected duplicate
+  upload). **Cost per m3 12.12 -> 13.20** - the cost did not change, the denominator stopped including concrete
+  nobody signed for. **RULE: Approved/Signed Qty IS the counted quantity; substituting supplied m3 is a
+  fabrication.**
+- **V523 RUNNING AND REMAINING COULD NOT LOAD AT ALL** ("Network error") while the server answered in 814 ms -
+  2.2 MB of JSON in ONE response was being dropped by the browser. `get_tyre_running_life(country, limit, offset)`
+  now pages (~614 kB per 1,000) and returns `total`. **THE ORDER MOVED INSIDE THE SLICED SUBQUERY** - ordering
+  only in the `jsonb_agg` makes page 2 an arbitrary set. Client loops pages of 1,000 to a stop of 8,000.
+- **DIALOGS NOW FIT THE SCREEN (owner: "it stucks inside scren small it should be bigger outaide").** Audited
+  **287 overlays: 172 with no height cap, 141 using `.card` as the panel, 75 of those with NO scroll at all** -
+  which is why a filter panel was trapped in a small box while the screen around it sat empty. NEW shared
+  `src/components/ui/Modal.jsx` + `useDialogBehavior` + `useAnchoredPopover`: sizes from the VIEWPORT (sm/md/lg/
+  xl/full, each widening at large breakpoints), body is the only thing that scrolls, header and footer stay
+  reachable, and it PORTALS to `document.body` so `.card`'s `overflow:hidden` can never clip it. A `:where()` CSS
+  net catches the overlays not yet converted. Applied across the app AND the console. **RULE: new dialogs use
+  `Modal`; never hand-roll a `fixed inset-0` panel with a fixed `max-w-*` and no height cap.**
+- **STILL THE OWNER'S CALL:** SANY is booked at **gross SAR 4,333,145, not net ~3,189,000** (SAR 1.14M of cost
+  per m3) - verified NOT double counted (4 distinct documents, 2 quarters); the **5,699 DN-less July loads** that
+  overlap 8,458 numbered-station loads on the same nine days are excluded from the denominator but still in the
+  table; and **92% of KSA production still has no region set** - the new station panel is where that is fixed.
+
+## SESSION 2026-08-11 (part 8) — ZERO-COST LINES PRICED, AUGUST CLEARED, TM47 PADDED (V517/V518). Superseded: next free **V524**.
 Owner: "Where it has code matching take it from other item codes match zero cost add there unless it's warranty
 if this assest code 047 is old job card add itnto this 047 cab u delete all auguest 26 one i will uplaod a new one".
 - **V517 PRICES A LINE THE ERP SENT WITH NO AMOUNT — 1,068 lines, KSA SAR 31,972.98 / Egypt EGP 12 / UAE AED 600.**

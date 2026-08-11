@@ -22,6 +22,7 @@ import {
 import { currencyFor } from '../../lib/api/tyrePriceBackfill'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import CostM3Table, { MEASURE_COLUMNS } from './CostM3Table'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
 
@@ -262,6 +263,39 @@ export default function LedgerPage({
     exportToExcel(flat, keys, headers, `TyrePulse_${kind}_${country}`, title)
   }
 
+  // The headline figures, as table rows. Same order the tiles were in, so the
+  // page still reads top-down the way it did.
+  const summaryMeasures = !summary ? [] : [
+    { key: 'rows', label: 'Rows', value: rowsLabel },
+    { key: 'value', label: isProd ? 'Approved M3' : 'Total value', value: fmtSummaryVal(summary.totals.value), strong: true },
+    { key: 'sites', label: 'Sites', value: summary.totals.sites.toLocaleString() },
+    {
+      key: 'period',
+      label: 'Period covered',
+      value: summary.totals.firstMonth
+        ? (summary.totals.firstMonth === summary.totals.lastMonth
+          ? summary.totals.firstMonth
+          : `${summary.totals.firstMonth} to ${summary.totals.lastMonth}`)
+        : 'N/A',
+    },
+    ...(isProd ? [
+      { key: 'supplied', label: 'Supplied M3', value: fmtSummaryVal(summary.totals.supplied_m3) },
+      { key: 'rejected', label: 'Rejected loads', value: summary.totals.rejected_loads.toLocaleString() },
+    ] : []),
+    ...(kind === 'sany' ? [
+      { key: 'counted', label: 'Counted for Cost/M3 (non-detail)', value: fmtSummaryVal(summary.totals.counted_value) },
+      { key: 'detail', label: 'Detail lines', value: summary.totals.detail_rows.toLocaleString() },
+    ] : []),
+  ]
+
+  // By month and by site answer the same question about a different grouping,
+  // so they take the same three columns.
+  const groupColumns = (nameHeader, valueHeader) => ([
+    { key: 'name', header: nameHeader, align: 'left' },
+    { key: 'rows', header: 'Rows', align: 'right', render: (r) => r.rows.toLocaleString() },
+    { key: 'value', header: valueHeader, align: 'right', render: (r) => <span className="font-medium">{fmtSummaryVal(r.value)}</span> },
+  ])
+
   function fmtCell(col, row) {
     if (col.render) return col.render(row)
     const raw = row[col.key]
@@ -366,7 +400,7 @@ export default function LedgerPage({
         </div>
       )}
 
-      {/* Summary first: tiles + by-month + by-site over the filtered rows. */}
+      {/* Summary first: headline figures + by-month + by-site, all as tables. */}
       {hasSummary && (
         <div className="mb-4 rounded-xl border border-[var(--border-subtle)] p-4">
           <h3 className="mb-3 text-sm font-semibold">Summary - {country}{hidePeriod ? '' : `, ${periodLabel(bounds)}`}</h3>
@@ -378,22 +412,14 @@ export default function LedgerPage({
             </p>
           ) : (
             <>
-              <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                <SummaryTile label="Rows" value={rowsLabel} />
-                <SummaryTile label={isProd ? 'Approved M3' : 'Total value'} value={fmtSummaryVal(summary.totals.value)} strong />
-                <SummaryTile label="Sites" value={summary.totals.sites.toLocaleString()} />
-                <SummaryTile
-                  label="Period covered"
-                  value={summary.totals.firstMonth
-                    ? (summary.totals.firstMonth === summary.totals.lastMonth
-                      ? summary.totals.firstMonth
-                      : `${summary.totals.firstMonth} to ${summary.totals.lastMonth}`)
-                    : 'N/A'}
+              <div className="mb-4">
+                <CostM3Table
+                  dense
+                  columns={MEASURE_COLUMNS}
+                  rows={summaryMeasures}
+                  rowKey="key"
+                  empty="No figures for this period."
                 />
-                {isProd && <SummaryTile label="Supplied M3" value={fmtSummaryVal(summary.totals.supplied_m3)} />}
-                {isProd && <SummaryTile label="Rejected loads" value={summary.totals.rejected_loads.toLocaleString()} />}
-                {kind === 'sany' && <SummaryTile label="Counted for Cost/M3 (non-detail)" value={fmtSummaryVal(summary.totals.counted_value)} />}
-                {kind === 'sany' && <SummaryTile label="Detail lines" value={summary.totals.detail_rows.toLocaleString()} />}
               </div>
               {/* Say exactly what the summary rests on. This used to fire on a
                   row-count guess and describe the list as "bounded"; it now
@@ -413,19 +439,21 @@ export default function LedgerPage({
                 </p>
               )}
               <div className="grid md:grid-cols-2 gap-4">
-                <SummaryTable
+                <CostM3Table
+                  dense
                   title="By month"
-                  nameHeader="Month"
-                  valueHeader={isProd ? 'Approved M3' : 'Value'}
+                  columns={groupColumns('Month', isProd ? 'Approved M3' : 'Value')}
                   rows={summary.byMonth.map((m) => ({ name: m.month, rows: m.rows, value: m.value }))}
-                  fmtVal={fmtSummaryVal}
+                  rowKey="name"
+                  empty="None"
                 />
-                <SummaryTable
+                <CostM3Table
+                  dense
                   title="By site"
-                  nameHeader="Site"
-                  valueHeader={isProd ? 'Approved M3' : 'Value'}
+                  columns={groupColumns('Site', isProd ? 'Approved M3' : 'Value')}
                   rows={summary.bySite.slice(0, 10).map((s) => ({ name: s.site, rows: s.rows, value: s.value }))}
-                  fmtVal={fmtSummaryVal}
+                  rowKey="name"
+                  empty="None"
                   footnote={summary.bySite.length > 10 ? `and ${summary.bySite.length - 10} more sites - see all rows below` : ''}
                 />
               </div>
@@ -459,73 +487,34 @@ export default function LedgerPage({
 
       {/* Table */}
       {rowsVisible && (
-      <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
-        <table className="w-full text-sm border-collapse">
-          <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
-            <tr>
-              {columns.map((c) => (
-                <th key={c.key} className={`px-3 py-2 font-semibold whitespace-nowrap ${c.align === 'right' ? 'text-right' : 'text-left'}`} style={{ color: 'var(--text-secondary)' }}>{c.header}</th>
-              ))}
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={columns.length + 1} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>Loading...</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={columns.length + 1} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No rows for {country} in this period. Add one or import a file.</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--border-subtle)]">
-                {columns.map((c) => (
-                  <td key={c.key} className={`px-3 py-2 whitespace-nowrap ${c.align === 'right' ? 'text-right tabular-nums' : 'text-left'}`}>{fmtCell(c, r)}</td>
-                ))}
-                <td className="px-3 py-2 text-right">
-                  <button type="button" onClick={() => remove(r.id)} title="Delete" className="opacity-60 hover:opacity-100"><Trash2 size={14} /></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <CostM3Table
+          columns={[
+            ...columns.map((c) => ({
+              key: c.key,
+              header: c.header,
+              align: c.align,
+              cellClass: 'whitespace-nowrap',
+              render: (r) => fmtCell(c, r),
+            })),
+            {
+              key: '__actions',
+              header: '',
+              align: 'right',
+              width: '1%',
+              render: (r) => (
+                <button type="button" onClick={() => remove(r.id)} title="Delete" className="opacity-60 hover:opacity-100">
+                  <Trash2 size={14} />
+                </button>
+              ),
+            },
+          ]}
+          rows={rows}
+          // "Still fetching" is not "there is nothing here" - the lazy row read
+          // must not render the add-or-import prompt while it is in flight.
+          loading={loading || rowsLoading}
+          empty={`No rows for ${country} in this period. Add one or import a file.`}
+        />
       )}
-    </div>
-  )
-}
-
-function SummaryTile({ label, value, strong }) {
-  return (
-    <div className="rounded-lg border border-[var(--border-subtle)] p-3">
-      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</div>
-      <div className={`mt-1 tabular-nums ${strong ? 'text-lg font-bold' : 'text-base font-semibold'}`}>{value}</div>
-    </div>
-  )
-}
-
-function SummaryTable({ title, nameHeader, valueHeader, rows = [], fmtVal, footnote }) {
-  return (
-    <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-      <div className="px-3 py-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{title}</div>
-      <table className="w-full text-sm border-collapse">
-        <thead style={{ background: 'var(--surface-raised, var(--bg-elevated))' }}>
-          <tr>
-            <th className="px-3 py-1.5 text-left font-semibold" style={{ color: 'var(--text-secondary)' }}>{nameHeader}</th>
-            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>Rows</th>
-            <th className="px-3 py-1.5 text-right font-semibold" style={{ color: 'var(--text-secondary)' }}>{valueHeader}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr><td colSpan={3} className="px-3 py-3 text-center" style={{ color: 'var(--text-secondary)' }}>None</td></tr>
-          ) : rows.map((r, i) => (
-            <tr key={r.name || i} className="border-t border-[var(--border-subtle)]">
-              <td className="px-3 py-1.5">{r.name}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{r.rows.toLocaleString()}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtVal(r.value)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {footnote ? <p className="px-3 py-2 text-[11px]" style={{ color: 'var(--text-secondary)' }}>{footnote}</p> : null}
     </div>
   )
 }

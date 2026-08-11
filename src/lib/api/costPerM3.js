@@ -274,6 +274,69 @@ export async function listRejectedProduction({ country, from, to, reason, limit 
 }
 
 /**
+ * The batching stations that produced anything in a country, biggest first,
+ * with where each currently resolves to and whether it is mapped yet.
+ * A station is a PLANT, not a place - 25 KSA station codes sit in the site
+ * column, so per-site production reads as numbers nobody can place and cannot
+ * be compared with parts spend, which uses real site names.
+ * Degrades to [].
+ */
+export async function getProductionStations({ country } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_production_stations', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/** Map a station code to a real site. Elevated only, enforced by RLS. */
+export async function setProductionStation({ country, station, site, note }) {
+  const { data, error } = await supabase
+    .from('production_station_map')
+    .upsert(
+      { country: country && country !== 'All' ? country : null, station, site, note: note || null },
+      { onConflict: 'organisation_id,country,station' },
+    )
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function removeProductionStation(id) {
+  const { error } = await supabase.from('production_station_map').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function listProductionStationMap({ country } = {}) {
+  try {
+    let q = supabase.from('production_station_map').select('*').order('station')
+    if (country && country !== 'All') q = q.eq('country', country)
+    const { data, error } = await q
+    if (error) return []
+    return Array.isArray(data) ? data : []
+  } catch { return [] }
+}
+
+/**
+ * Re-resolve rows already stored through the map. The trigger only fires on
+ * write, so without this a new mapping would apply to future uploads only and
+ * every row already loaded would keep showing a plant number.
+ * Dry run by default; returns { ok, dry_run, rows }.
+ */
+export async function applyProductionStationMap({ country, dryRun = true } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('apply_production_station_map', {
+      p_country: country && country !== 'All' ? country : null,
+      p_dry_run: dryRun,
+    })
+    if (error) return { ok: false, rows: 0 }
+    return data ?? { ok: false, rows: 0 }
+  } catch { return { ok: false, rows: 0 } }
+}
+
+/**
  * The value the picker uses for a load with NO reason recorded. It is a real
  * answer - 210,051 KSA loads carry no reason - and folding it into "all" would
  * hide the largest group in the data.

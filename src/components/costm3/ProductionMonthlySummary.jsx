@@ -15,6 +15,7 @@ import { useSettings } from '../../contexts/SettingsContext'
 import { getProductionMonthly } from '../../lib/api/costPerM3'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import CostM3Table, { MEASURE_COLUMNS } from './CostM3Table'
 
 const int = (v) => (v == null ? 'N/A' : Math.round(Number(v)).toLocaleString())
 
@@ -58,6 +59,28 @@ function ReasonsCell({ reasons }) {
     </div>
   )
 }
+
+const MONTH_COLUMNS = [
+  { key: 'month', header: 'Month', align: 'left', cellClass: 'whitespace-nowrap font-semibold', render: (m) => monthLabel(m.month) },
+  { key: 'loads', header: 'Loads', align: 'right', render: (m) => int(m.loads) },
+  { key: 'supplied_m3', header: 'Supplied', align: 'right', render: (m) => int(m.supplied_m3) },
+  { key: 'approved_m3', header: 'Approved', align: 'right', render: (m) => <span className="font-semibold">{int(m.approved_m3)}</span> },
+  { key: 'not_approved_m3', header: 'Not approved', align: 'right', render: (m) => int(m.not_approved_m3) },
+  {
+    key: 'rejected_loads',
+    header: 'Rejected',
+    align: 'right',
+    cellClass: 'whitespace-nowrap',
+    render: (m) => <>{int(m.rejected_loads)} <span className="text-[var(--text-muted)] text-xs">loads</span></>,
+  },
+  {
+    key: 'reasons',
+    header: 'Rejection reasons and remarks',
+    align: 'left',
+    cellClass: 'min-w-[260px] max-w-[520px]',
+    render: (m) => <ReasonsCell reasons={m.reasons} />,
+  },
+]
 
 export default function ProductionMonthlySummary() {
   const { activeCountry } = useSettings()
@@ -138,51 +161,28 @@ export default function ProductionMonthlySummary() {
         <p className="p-4 text-sm text-[var(--text-muted)] text-center">No production recorded yet for this scope.</p>
       ) : (
         <>
-          {/* Headline strip over the whole loaded span */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            {[
-              ['Loads', int(totals.loads)],
-              ['Supplied M3', int(totals.supplied)],
-              ['Approved M3', int(totals.approved)],
-              ['Exception loads', int(totals.exceptions)],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">{value}</p>
-              </div>
-            ))}
+          {/* Headline figures over the whole loaded span */}
+          <div className="mb-4">
+            <CostM3Table
+              dense
+              columns={MEASURE_COLUMNS}
+              rows={[
+                { key: 'loads', label: 'Loads', value: int(totals.loads) },
+                { key: 'supplied', label: 'Supplied M3', value: int(totals.supplied) },
+                { key: 'approved', label: 'Approved M3', value: int(totals.approved), strong: true },
+                { key: 'exceptions', label: 'Exception loads', value: int(totals.exceptions) },
+              ]}
+              rowKey="key"
+            />
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-dim)]">
-                  <th className="py-2 pr-3">Month</th>
-                  <th className="py-2 pr-3 text-right">Loads</th>
-                  <th className="py-2 pr-3 text-right">Supplied</th>
-                  <th className="py-2 pr-3 text-right">Approved</th>
-                  <th className="py-2 pr-3 text-right">Not approved</th>
-                  <th className="py-2 pr-3 text-right">Rejected</th>
-                  <th className="py-2">Rejection reasons and remarks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {months.map((m) => (
-                  <tr key={m.month} className="border-b border-[var(--border-dim)] align-top">
-                    <td className="py-2.5 pr-3 font-semibold text-[var(--text-primary)] whitespace-nowrap">{monthLabel(m.month)}</td>
-                    <td className="py-2.5 pr-3 text-right text-[var(--text-secondary)]">{int(m.loads)}</td>
-                    <td className="py-2.5 pr-3 text-right text-[var(--text-secondary)]">{int(m.supplied_m3)}</td>
-                    <td className="py-2.5 pr-3 text-right font-semibold text-green-400">{int(m.approved_m3)}</td>
-                    <td className="py-2.5 pr-3 text-right text-amber-400">{int(m.not_approved_m3)}</td>
-                    <td className="py-2.5 pr-3 text-right text-red-400 whitespace-nowrap">
-                      {int(m.rejected_loads)} <span className="text-[var(--text-muted)] text-xs">loads</span>
-                    </td>
-                    <td className="py-2.5 min-w-[260px] max-w-[520px]"><ReasonsCell reasons={m.reasons} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <CostM3Table
+            alignTop
+            columns={MONTH_COLUMNS}
+            rows={months}
+            rowKey="month"
+            empty="No production recorded yet for this scope."
+          />
         </>
       )}
     </div>

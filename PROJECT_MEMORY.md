@@ -3,6 +3,38 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-11 — REMAINING BUYER POINTS (V501) + GUARD REFRESH + PRICE BASIS. Next free **V502**. PR #302.
+- **V501 THE KPI-TARGET WRITE GATES WERE INERT.** `kpi_targets` had 4 policies expressing a clear intent
+  (select=authenticated, insert/update=Manager|Admin, delete=Admin) PLUS `kpi_targets_authenticated` granting
+  **FOR ALL to any authenticated user with no check**. Same-command policies are OR'd, so that fifth policy did
+  not add a case, it ANNULLED the other three - every write gate someone wrote was dead code. PROVEN as a real
+  approved Reporter: an UPDATE wrote all 7 rows. Dropped the blanket policy; reads unchanged.
+  **MEASUREMENT TRAP: under RLS a blocked UPDATE affects ZERO rows SILENTLY, it does not raise - counting the
+  table afterwards counts what is READABLE, not what was written, and looks like a pass. Count rows actually
+  written: `with u as (update ... returning 1) select count(*) from u`.** My first check made exactly that
+  mistake. Verified after: Reporter 0 rows written (still reads 7), Manager 7 rows written.
+- **THE "140 UNSCOPED COUNTRY TABLES" FINDING, MEASURED PROPERLY: it is 128, and only 20 hold ANY rows.** Of
+  those 20, all but kpi_targets are either org-walled, super-admin only (dup_resolve_archive 9,812 deleted
+  expense rows, reclassify_log), or **deny-all snapshots - RLS enabled with ZERO policies returns nothing**,
+  which is why `_bucket_snapshot_20260727` (216,792 rows, a copy of the financial ledger, no org wall) is NOT
+  reachable. kpi_targets was the only genuine hole. Do not re-raise the other 127 without re-measuring.
+- **ROW-CAP GUARD WAS 52x OUT OF DATE AND HALF-BLIND.** `src/test/rowCapGuard.test.js` recorded
+  production_logs at 5,699 and EXEMPTED it as "cheap to read whole" - it is **297,354 rows, the 2nd largest
+  table**, so an unbounded read passed CI the whole time. Counts refreshed live; production_logs promoted to
+  MASSIVE_TABLES; brain_cache (28,284) + material_master (22,162) added (both over the cap, missing entirely).
+  SCAN_DIRS was only `src/pages` + `src/lib/api` -> added `src/components`, `src/console`, `src/lib`. PROVEN by
+  planting a bare select in src/components and watching it fail. **RULE: the counts in that file are not
+  documentation - they decide what gets policed. Refresh them.**
+  CLAIM THAT DID NOT SURVIVE: "WidgetRenderer + GlobalSearch read heavy tables unguarded" is FALSE -
+  WidgetRenderer pages with a max + exact server count + truncation flag; GlobalSearch limits every read to 6.
+- **COST PER KM NOW STATES ITS BASIS.** Of 11,132 tyres 6,832 are priced, but **2,989 of those were machine
+  -filled by the backfill engine from a comparable tyre**, so only 3,843 (34.5%) rest on a price anyone paid,
+  and 4,300 have no price at all. `getTyrePriceBasis` (3 head-only counts; `tyre_price_backfill_log` already
+  records which tyres the machine priced and carries its own country - no new RPC) + pure `priceBasisNote`,
+  surfaced on `/cpk-intelligence`. Returns NULLs not zeros when a count fails.
+- **PROCESS: `tyre-pulse-eezl` (marketing/) Vercel failing on a PR is NEVER a gate** - confirm with
+  `git diff --name-only origin/main...HEAD | grep ^marketing/` (0 = cannot be yours).
+
 ## SESSION 2026-08-10 (part 3) — BUYER REMARKS FIXED IN A LOOP (V498-V500). Next free **V501**.
 Owner: "u saw buyer remarks go ahead fix it ... make a loop until its successful". Continued straight on from
 the audit below. All applied live + verified; branch `claude/ksa-asset-mobile-visibility-xlnp7m`.

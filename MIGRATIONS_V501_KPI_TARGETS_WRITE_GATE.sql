@@ -1,0 +1,59 @@
+-- MIGRATIONS_V501_KPI_TARGETS_WRITE_GATE.sql
+-- STATUS: APPLIED LIVE 2026-08-11, verified by impersonation before and after.
+--
+-- WHY
+-- kpi_targets carried four policies expressing a clear, deliberate intent:
+--   kpi_targets_select  SELECT  authenticated
+--   kpi_targets_insert  INSERT  WITH CHECK role in (Manager, Admin)
+--   kpi_targets_update  UPDATE  USING      role in (Manager, Admin)
+--   kpi_targets_delete  DELETE  USING      role = Admin
+-- and a fifth, kpi_targets_authenticated, granting FOR ALL to any authenticated
+-- user with no check at all.
+--
+-- RLS policies for the same command are OR'd together, so that fifth PERMISSIVE
+-- policy did not add a case - it ANNULLED the other three. Every write gate
+-- somebody deliberately wrote was dead code, and the table read as governed
+-- while being wide open.
+--
+-- PROVEN BEFORE CHANGING ANYTHING, impersonating a real approved Reporter:
+-- an UPDATE across kpi_targets wrote all 7 rows. A Reporter or a Driver could
+-- rewrite the company's KPI targets - the numbers every executive dashboard is
+-- judged against - and nothing flagged it.
+--
+-- A NOTE ON MEASURING THIS: under RLS a blocked UPDATE affects ZERO rows
+-- silently, it does not raise. Counting the table afterwards therefore proves
+-- nothing (it counts what is readable, not what was written). The test has to
+-- count rows ACTUALLY written, via `with u as (update ... returning 1) select
+-- count(*) from u`. My first check made exactly that mistake and looked like a
+-- pass.
+--
+-- FIX: drop the blanket policy so the narrow ones take effect. Reads are
+-- unchanged - kpi_targets_select still gives every authenticated user access,
+-- which is right: staff should see the targets they are measured against.
+--
+-- VERIFIED AFTER APPLYING (rows actually written):
+--   Reporter -> 0 rows   (blocked, and can still READ all 7)
+--   Manager  -> 7 rows   (allowed, as kpi_targets_update always intended)
+--
+-- BLAST RADIUS: 7 rows. Writes move from "anyone signed in" to Manager/Admin
+-- for insert and update, Admin for delete - which is what the existing policies
+-- already said the rule was.
+--
+-- STILL OPEN, recorded not fixed: kpi_targets has NO organisation_id column at
+-- all, so it cannot be org-scoped without a schema change and a backfill. With
+-- one live tenant there is nothing to leak today, but a second tenant would
+-- share one set of KPI targets with the first.
+--
+-- WIDER CONTEXT (measured 2026-08-11): the audit's "140 country-bearing tables
+-- carry no country policy" is really 128, and only 20 of those hold ANY rows.
+-- Of those 20, all but this one are either org-walled, super-admin only, or
+-- deny-all snapshots - RLS enabled with ZERO policies returns nothing, which is
+-- why the 216,792-row _bucket_snapshot_20260727 (a copy of the financial
+-- ledger) is not reachable. kpi_targets was the only genuine hole in the set.
+--
+-- ROLLBACK (restores the wide-open behaviour - do not, unless a real caller is
+-- found that needs it):
+--   create policy kpi_targets_authenticated on public.kpi_targets
+--     for all to public using ((select auth.role()) = 'authenticated');
+
+drop policy if exists kpi_targets_authenticated on public.kpi_targets;

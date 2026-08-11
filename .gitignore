@@ -13,3 +13,7 @@ build_out.txt
 
 # Personal Claude Code permission overrides (do not commit)
 .claude/settings.local.json
+
+# temporary insurance extraction scripts
+_agA_*.mjs
+pdftxt.mjs

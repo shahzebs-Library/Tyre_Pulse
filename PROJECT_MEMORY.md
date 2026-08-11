@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-10 (part 3) — BUYER REMARKS FIXED IN A LOOP (V498/V499). Next free **V500**.
+## SESSION 2026-08-10 (part 3) — BUYER REMARKS FIXED IN A LOOP (V498-V500). Next free **V501**.
 Owner: "u saw buyer remarks go ahead fix it ... make a loop until its successful". Continued straight on from
 the audit below. All applied live + verified; branch `claude/ksa-asset-mobile-visibility-xlnp7m`.
 - **V498 A PLAIN ADMIN COULD CROSS EVERY COUNTRY.** 50 `*_country_isolation` policies on 50 tables bypassed
@@ -36,6 +36,23 @@ the audit below. All applied live + verified; branch `claude/ksa-asset-mobile-vi
   into SupplierManagement / GoodsReceipt / WarrantyTracker / RetreadManagement / RetreadClaims / TyrePool.
   **Deliberately NOT a gate** - the page still works so the first record can be entered; hiding a module
   outright already belongs to Module Control (/console/module-control) and is NOT duplicated.
+- **V500 ANON COULD EXECUTE 126 SECURITY DEFINER FUNCTIONS -> now 10.** A definer fn runs as its OWNER and
+  BYPASSES RLS, so this is the ONE surface where RLS is not the backstop. Nothing leaked (app_current_org() is
+  NULL for anon so org-scoped fns refuse) but that is a coincidence of how each fn is written, not a boundary.
+  **THE TRAP, hit on the first attempt: `REVOKE ... FROM anon` is a NO-OP against a PUBLIC grant** - the first
+  run left 100 still anon-executable and the migration's own guard ABORTED and rolled everything back rather
+  than reporting success. **But revoking PUBLIC alone ALSO strips `authenticated`** (most of these have no
+  explicit authenticated grant and reach the fn THROUGH public) - that would have broken half the app for
+  every signed-in user. ORDER IS LOAD-BEARING: (1) grant execute to authenticated + service_role, (2) revoke
+  from PUBLIC, (3) revoke from anon. **The 10-fn allowlist was enumerated from the CALL SITES (Login,
+  ReportShare, WorkshopTv, AccidentPortalView, mobile login/register + their services), never from a name
+  regex - `get_report_tyre_maintenance` is a public-board RPC a name sweep WOULD have missed and a live board
+  would have broken on.** Allowlist: get_email_by_identifier / get_public_config / login_attempt_status /
+  record_login_failure / reset_login_attempts / get_report_snapshot / get_report_tyre_maintenance /
+  get_workshop_snapshot / get_accident_portal_snapshot / get_display_snapshot. Trigger fns need no EXECUTE
+  grant so none broke. VERIFIED as anon (login lookup ok, report token ok:false, get_fleet_cpk permission
+  denied) AND as a signed-in KSA Manager (get_fleet_cpk still works). 116 signatures in
+  `_anon_execute_revoked_v500` for rollback.
 - **SUPER-ADMIN EMAIL ORACLE - EXPLAINED TO THE OWNER, NOT PATCHED.** `get_email_by_identifier('shahzeb')`
   returns the super-admin's real address to an unauthenticated caller. It CANNOT be reduced to a boolean
   because `signIn` needs the address to call `signInWithPassword`. Real fix = move sign-in into an edge

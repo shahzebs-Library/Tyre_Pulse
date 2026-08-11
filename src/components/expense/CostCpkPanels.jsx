@@ -13,6 +13,20 @@ import {
 import {
   comparisonRows, cpkView, movers, evidenceBreakdown, PERIODS,
 } from '../../lib/costCpk'
+import { periodName } from '../../lib/defaultPeriod'
+
+/**
+ * Name the window rather than calling it "this period".
+ *
+ * A column headed "This period" tells a reader nothing they can check, and a
+ * report forwarded a week later is then unreadable - nobody can tell which
+ * months it covers. Every column now carries its own name: "2026 to date",
+ * "August 2026", "2025".
+ */
+function windowName(w, fallback) {
+  if (!w?.from && !w?.to) return fallback
+  return periodName(w.from, w.to) || fallback
+}
 
 const pctText = (v) => (v == null ? 'N/A' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%`)
 
@@ -66,8 +80,8 @@ export function PeriodBar({ value, onChange, windows }) {
       </div>
       {windows?.current ? (
         <span className="text-[11px] text-[var(--text-dim)]">
-          {windows.current.from} to {windows.current.to}
-          {windows.previous ? ` , compared with ${windows.previous.from} to ${windows.previous.to}` : ''}
+          {windowName(windows.current, 'Selected period')}
+          {windows.previous ? ` , compared with ${windowName(windows.previous, 'the period before')}` : ''}
         </span>
       ) : null}
     </div>
@@ -81,10 +95,15 @@ export function PeriodBar({ value, onChange, windows }) {
  */
 export function ComparisonStrip({ snap, money }) {
   const { rows, previousIsLastYear, blended } = useMemo(() => comparisonRows(snap), [snap])
+  // Real names, so the table still reads correctly once it has been exported or
+  // forwarded and the picker is no longer on screen.
+  const curName = windowName(snap?.windows?.current, 'Selected period')
+  const prevName = windowName(snap?.windows?.previous, 'Period before')
+  const lastYearName = windowName(snap?.windows?.last_year, 'Same period last year')
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-        <ArrowRight size={15} /> This period against last
+        <ArrowRight size={15} /> {curName} against {prevName}
       </h2>
       {blended ? (
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
@@ -100,12 +119,12 @@ export function ComparisonStrip({ snap, money }) {
             <thead>
               <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
                 <th className="py-2 pr-3 font-semibold">Spend</th>
-                <th className="py-2 px-3 font-semibold text-right">This period</th>
-                <th className="py-2 px-3 font-semibold text-right">Previous</th>
+                <th className="py-2 px-3 font-semibold text-right">{curName}</th>
+                <th className="py-2 px-3 font-semibold text-right">{prevName}</th>
                 <th className="py-2 px-3 font-semibold text-right">Change</th>
                 {previousIsLastYear ? null : (
                   <>
-                    <th className="py-2 px-3 font-semibold text-right">Same period last year</th>
+                    <th className="py-2 px-3 font-semibold text-right">{lastYearName}</th>
                     <th className="py-2 pl-3 font-semibold text-right">Change</th>
                   </>
                 )}
@@ -131,8 +150,8 @@ export function ComparisonStrip({ snap, money }) {
           </table>
           {previousIsLastYear ? (
             <p className="text-[11px] text-[var(--text-dim)] mt-2">
-              Over a twelve month range the previous period and the same period last year are the
-              same dates, so they are shown once. Choose a shorter period to compare both.
+              Over a twelve month range {prevName} and the same period last year are the same
+              dates, so they are shown once. Choose a shorter period to compare both.
             </p>
           ) : null}
         </div>

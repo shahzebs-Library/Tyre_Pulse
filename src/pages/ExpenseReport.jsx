@@ -48,7 +48,7 @@ import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { monthBounds } from '../lib/defaultPeriod'
+import { defaultWindow, periodName, previousPeriodName } from '../lib/defaultPeriod'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
 
@@ -430,15 +430,15 @@ export default function ExpenseReport() {
   // expense lines to show a page of them was most of the wait. The bounds are set
   // synchronously so the very first query is already the fast one; the async
   // probe below only corrects them if this month turns out to be empty.
-  const [from, setFrom] = useState(() => monthBounds(new Date()).from)
-  const [to, setTo] = useState(() => monthBounds(new Date()).to)
+  const [from, setFrom] = useState(() => defaultWindow(new Date()).from)
+  const [to, setTo] = useState(() => defaultWindow(new Date()).to)
   const [defaultPeriod, setDefaultPeriod] = useState(null)
   const [byCountry, setByCountry] = useState([])
   const isAll = !activeCountry || activeCountry === 'All'
 
   // Period comparison + cost per km. The period picker drives BOTH this and the
   // date inputs below, so the whole page always describes one window.
-  const [period, setPeriod] = useState('this_month')
+  const [period, setPeriod] = useState('ytd')
   const [overview, setOverview] = useState(null)
   const [moverDim, setMoverDim] = useState('by_asset')
   // The variance decomposition: what the change is made of, and a plain-language

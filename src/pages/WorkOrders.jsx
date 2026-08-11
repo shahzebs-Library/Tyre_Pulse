@@ -34,7 +34,7 @@ import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '
 import { toUserMessage } from '../lib/safeError'
 import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
 import { loadAutoTable } from '../lib/pdfEngine'
-import { monthBounds } from '../lib/defaultPeriod'
+import { defaultWindow } from '../lib/defaultPeriod'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
 
@@ -159,12 +159,13 @@ export default function WorkOrders() {
   const [statusFilter, setStatus]   = useState('All')
   const [priorityFilter, setPriority] = useState('All')
   const [typeFilter, setType]       = useState('All')
-  // The page opens on the CURRENT MONTH and fetches only that month. It used to
-  // pull all 88,773 job cards over ~89 paged requests and then filter by date in
-  // the browser, so every visit paid for the whole table to show a few weeks of
-  // it. Clearing both dates still fetches everything, deliberately.
-  const [dateFrom, setDateFrom]     = useState(() => monthBounds(new Date()).from)
-  const [dateTo, setDateTo]         = useState(() => monthBounds(new Date()).to)
+  // The page opens on the CURRENT YEAR and fetches only that. It used to pull all
+  // 88,773 job cards over ~89 paged requests and then filter by date in the
+  // browser, so every visit paid for the whole table. The year is the default
+  // rather than the month because three feeds have no rows in the current month
+  // at all and opened blank. Clearing both dates still fetches everything.
+  const [dateFrom, setDateFrom]     = useState(() => defaultWindow(new Date()).from)
+  const [dateTo, setDateTo]         = useState(() => defaultWindow(new Date()).to)
   const [defaultPeriod, setDefaultPeriod] = useState(null)
   const [sortField, setSortField]   = useState('opened_at')
   const [sortDir, setSortDir]       = useState('desc')

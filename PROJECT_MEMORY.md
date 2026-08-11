@@ -3,6 +3,57 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-11 (part 4) — OWNER RULINGS APPLIED: SITES, HISTORY, SERIAL-ONLY, PLATES (V506-V509). Next free **V510**.
+The owner answered the three questions from part 3. All applied live + verified.
+- **"ST2 MEANS ITS SPARE PARTS STORE LOCATION" - THIS CLOSES A STANDING OPEN QUESTION AND EXPLAINS A SPLIT
+  NOBODY COULD ACCOUNT FOR.** `DIRIYAH-ST2` survived the fleet-wide -ST retirement because it ends ST2 not ST
+  and "may be a real Station 2" (recorded open since 2026-08-06). It is NOT a station: **the -ST names are SPARE
+  PARTS STORES.** That single fact explains why 922 expense lines sit on DIRIYAH-ST2 and 4,412 on DIRIYAH while
+  every asset and job card sits on DIRIYAH-G1/G2 - parts are ISSUED from the store, the machine works at the gate.
+  **STANDING RULE NOW: an expense row's `site` is the ISSUING STORE, not where the machine worked. Per-site
+  OPERATING cost must be read through the ASSET (expense -> job card -> asset -> site), never off
+  parts_consumption.site.** Reading it the other way is why per-gate cost never worked.
+- **V506/V506b SITE ALIASES so the master list cannot become a 3rd spelling** (owner: "take sites [from] this
+  master list so it wont be like 3 types same thing"): DIRIYAH-1->DIRIYAH-G1, DIRIYAH-2->DIRIYAH-G2,
+  QIDDIYAH-LP->QIDDIYA-LOWER PLATEAU, QIDDIYAH-UP + QIDDIYA-UP->QIDDIYA-UPPER PLATEAU, DIRIYAH-ST2->DIRIYAH,
+  RUMAH PLANT/-YARD/CRUSHER/REPAIR REQUIRED + RIMAH - PLANT->RUMAH, MALHAM CAMP/YARD->MALHAM, LAHAQ->LAHEQ.
+  **TWO CORRECTIONS CAME FROM CHECKING WHICH SPELLING HOLDS THE DATA BEFORE PICKING A CANONICAL** - `G O A` was
+  about to become an empty duplicate of the existing **GULF OF AQABA** (4 assets), and **LAHEQ ISLAND** is the
+  same island as **LAHEQ** (477 expense lines). 6 genuinely new sites registered (ESA/OSUS/H- OFFICE/HARAM
+  BURJ/ELSHAFA/KARAN) with an EXPLICIT organisation_id (the app_current_org() default is NULL outside a session
+  and a null-org site is invisible to everyone).
+- **V507 SITES APPLIED: 142 assets moved, 0 landed on an unregistered site, 0 DIRIYAH-1/QIDDIYAH-* spellings
+  created.** **THE ONE GUARD - never replace a specific site with its own less-specific parent.** The sheet
+  writes plain `KSP` for 27 assets while the register distinguishes terminals (KSP-T1 = 54 assets + 7,177 expense
+  lines, KSP-TP = 50 + 1,319, bare KSP = 2). Writing KSP over KSP-T1 would discard the terminal the cost is
+  booked against, unrecoverably. A move BETWEEN terminals still applies; only the collapse to the bare parent is
+  skipped (`not (current like resolved||'-%' or current like resolved||'_%')`).
+- **V508 THE 412 BECOME HISTORY, NOT DELETIONS** (owner: "those are history when they were in uae, we will keep
+  that cost here but the current fleet will be treated as an active one"). KSA now **615 active / 415 historical**
+  (3 of the sheet's own assets are IDLE). **NOT ONE job card, tyre record or expense line was touched - 1,388
+  tyre records and 14,469 job cards remain attached and still total into historical cost.** Only
+  `vehicle_fleet.status` changed. **STATUS IS 'Inactive', NOT 'Transferred'/'Retired', deliberately**: the owner
+  said "some MAYBE sold or MAYBE transferred" - they do not know which and nor do we, so 'Inactive' states the
+  only known fact (not in the current KSA fleet) while 'Transferred' would assert a movement nobody recorded.
+  Reason written to `asset_remarks` so the screen says why. CHECK allows Active|Inactive|Retired|Transferred.
+- **FREE-TEXT TYRES: SERIAL YES, POSITION NO** (owner: "Dont use that position from description but worth adding
+  serial nos ... serial noses is correct"). The extracted position is now kept ONLY as evidence inside
+  `source_text`; it is off the table, off the Excel export and out of the header copy. **It still earns its place
+  INSIDE the extractor** - the position token is what anchors the serial regex and stops it dragging in part
+  numbers and job references. Finding a serial by its neighbour is sound; publishing that neighbour as fact is
+  not. `position_text` stays on the row for provenance.
+- **V509 PLATE CONFLICTS 22 -> 17. FIVE WERE NOT CONFLICTS AT ALL** - strip the spaces and the two strings are
+  the same plate (BH018 `2041  XXB`, PL077 `6957 H X A`, SL019 `1843ZAA`, TM655 `8448 G X A`, TM736
+  `1981  JTA`). Normalised to the sheet's spacing under an EXACT guard - the update fires only when the two
+  values are identical once every space is removed, so it can never settle a real difference by accident.
+- **THE REMAINING 17 ARE THE OWNER'S CALL and each is a claim the data cannot settle:** **MP114/MP119 hold
+  each other's plates** (4205/4206 SXA) and so do **TM400/TM402** (7326/7332 HRA) - a transposition, but
+  guessing the side swaps two real vehicles' identities; **nine mixers read AXA on file vs JXA in the sheet**
+  (TM579/585/588/591/594/595/597/602/604) plus TM412 HRA vs NRA, which looks like one bulk entry error;
+  MP049 (4691 KRB vs 3786 AXA) and MT001 (8271 VTA vs 8231 BKB) are entirely different plates; SL017 is
+  `KAA 4746` vs `4746 KAA`, the same characters reversed - probably a flipped entry but a judgement, not a
+  whitespace fix. Rollback `_bak.vehicle_fleet_plate_v509`. Next free **V510**.
+
 ## SESSION 2026-08-11 (part 3) — THE KSA ASSET REGISTER APPLIED (V504/V505). Next free **V506**.
 Owner sent `Asset_Report082026_UPDATED.xlsx` sheet "ALL IN ONE ASSETS" (618 KSA assets) as "the final updated"
 list, to be reflected in the KSA asset list.

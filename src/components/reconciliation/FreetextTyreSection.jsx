@@ -11,20 +11,22 @@ import { formatDate } from '../../lib/formatters'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 
 /**
- * Tyre changes the engine read out of a job card sentence, for review.
+ * Tyre serials the engine read out of a job card sentence, for review.
  *
  * Some job cards record a tyre change ONLY in the work-done box, with no
  * structured tyre row behind it. The engine reads those sentences and files what
  * it found here. Nothing on this screen is a tyre record: a row is a proposal
- * until a person confirms it, because the sentences contradict each other often
- * enough that a machine cannot settle them - one says "LEFT SIDE" while the
- * position code reads right, another names two positions and two serials in a
- * single line. A wrong tyre record is worse than a missing one, so the machine
- * proposes and a person decides.
+ * until a person confirms it.
  *
- * The most important column is what the sentence says HAPPENED: "REPLACED TYRE
- * OLD ONE LHF2-YMY32586" names the tyre that came OFF, and accepting that as a
- * fitment would put a removed tyre back on the vehicle.
+ * THE SERIAL IS WHAT THIS OFFERS - NOT THE POSITION. Owner's ruling, and the
+ * sentences bear it out: one reads "4TH AXLE LEFT SIDE RHBB1" (left in words,
+ * right in code), another names two positions and two serials on one line where
+ * the pairing is word order rather than grammar. So the wheel is not shown as
+ * though it were known; the serial, the machine and the job card are.
+ *
+ * The other column that matters is what the sentence says HAPPENED: "REPLACED
+ * TYRE OLD ONE LHF2-YMY32586" names the tyre that came OFF, and accepting that as
+ * a fitment would put a removed tyre back on the vehicle.
  */
 export default function FreetextTyreSection({ activeCountry } = {}) {
   const [rows, setRows] = useState([])
@@ -114,9 +116,12 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
   const download = () => {
     exportToExcel(
       filtered,
-      ['job_card_date', 'asset_no', 'position_text', 'serial_no', 'brand_text',
+      // Position is deliberately not exported as a field: the sentences contradict
+      // themselves on the wheel. It stays inside the original sentence, which is
+      // the only place it can be read with its own context.
+      ['job_card_date', 'asset_no', 'serial_no', 'brand_text',
        'event_kind', 'confidence', 'serial_is_new', 'job_card', 'source_text'],
-      ['Job card date', 'Asset', 'Position (as written)', 'Serial', 'Brand',
+      ['Job card date', 'Asset', 'Serial', 'Brand',
        'What happened', 'Confidence', 'Serial is new', 'Job card', 'Original sentence'],
       reportFileName('Tyre changes read from job cards'),
     )
@@ -133,7 +138,8 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
             </h3>
             <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
               Where a tyre was changed but nobody filled the tyre columns, the engine reads
-              the mechanic&apos;s sentence. Nothing here is a tyre record yet.
+              the serial out of the mechanic&apos;s sentence. The wheel position is not shown:
+              the sentences disagree with themselves about it. Nothing here is a tyre record yet.
             </p>
           </div>
         </div>
@@ -230,7 +236,6 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
               <tr style={{ color: 'var(--text-secondary)' }}>
                 <th className="text-left py-2 pr-3">Date</th>
                 <th className="text-left py-2 pr-3">Asset</th>
-                <th className="text-left py-2 pr-3">Position</th>
                 <th className="text-left py-2 pr-3">Serial</th>
                 <th className="text-left py-2 pr-3">What the sentence says</th>
                 <th className="text-left py-2 pr-3">Original sentence</th>
@@ -245,9 +250,6 @@ export default function FreetextTyreSection({ activeCountry } = {}) {
                   </td>
                   <td className="py-2 pr-3 font-medium" style={{ color: 'var(--text-primary)' }}>
                     {r.asset_no}
-                  </td>
-                  <td className="py-2 pr-3" style={{ color: 'var(--text-primary)' }}>
-                    {r.position_text}
                   </td>
                   <td className="py-2 pr-3" style={{ color: 'var(--text-primary)' }}>
                     {r.serial_no}

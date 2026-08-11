@@ -48,6 +48,9 @@ import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { monthBounds } from '../lib/defaultPeriod'
+import { defaultPeriodFor } from '../lib/api/latestActivity'
+import PeriodNotice from '../components/ui/PeriodNotice'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -423,14 +426,19 @@ export default function ExpenseReport() {
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  // The page opens on the CURRENT MONTH, not on all of history. Reading 208,375
+  // expense lines to show a page of them was most of the wait. The bounds are set
+  // synchronously so the very first query is already the fast one; the async
+  // probe below only corrects them if this month turns out to be empty.
+  const [from, setFrom] = useState(() => monthBounds(new Date()).from)
+  const [to, setTo] = useState(() => monthBounds(new Date()).to)
+  const [defaultPeriod, setDefaultPeriod] = useState(null)
   const [byCountry, setByCountry] = useState([])
   const isAll = !activeCountry || activeCountry === 'All'
 
   // Period comparison + cost per km. The period picker drives BOTH this and the
   // date inputs below, so the whole page always describes one window.
-  const [period, setPeriod] = useState('last_12')
+  const [period, setPeriod] = useState('this_month')
   const [overview, setOverview] = useState(null)
   const [moverDim, setMoverDim] = useState('by_asset')
   // The variance decomposition: what the change is made of, and a plain-language
@@ -564,6 +572,20 @@ export default function ExpenseReport() {
   const cpkFleetTiles = useMemo(() => fleetTiles(fleetCpk.fleet), [fleetCpk])
   const cpkByType = useMemo(() => sortByTypeWorstFirst(fleetCpk.byType), [fleetCpk])
   const cpkHasData = cpkFleetTiles.length > 0 || cpkByType.length > 0
+
+  // If this month has no expense rows yet, fall back to the most recent month
+  // that does - and say so. An empty current month reads as lost data otherwise.
+  // Runs once per country; a feed we cannot read is left on the current month.
+  useEffect(() => {
+    let cancelled = false
+    const scoped = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
+    defaultPeriodFor('parts_consumption', { country: scoped }).then((p) => {
+      if (cancelled || !p) return
+      setDefaultPeriod(p)
+      if (p.fellBack) { setFrom(p.from); setTo(p.to); setPeriod('') }
+    })
+    return () => { cancelled = true }
+  }, [activeCountry])
 
   /** One period control drives the whole page, so every panel describes one window. */
   const applyPeriod = useCallback((key) => {
@@ -946,6 +968,9 @@ export default function ExpenseReport() {
   return (
     <div className="space-y-5">
       <PageHeader title="Expense Report" subtitle="Maintenance and parts expense: tyres, spare parts and oil" icon={Wallet} />
+
+      {/* Says which month is on screen whenever it is not the current one. */}
+      <PeriodNotice period={defaultPeriod} onShowAll={() => { setFrom(''); setTo(''); setPeriod('') }} />
 
       {/* One period control for the whole page. Every panel below describes the
           same window, so nothing on screen is comparing different spans. */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   BarChart3, ClipboardList, Inbox, CalendarClock, ShieldCheck, CheckCircle2,
   AlertTriangle, RefreshCw, Search, ListChecks, TrendingUp, Layers,
@@ -139,6 +139,7 @@ function fmtPct(v) {
 
 export default function ChecklistInsights() {
   const { activeCountry } = useSettings()
+  const navigate = useNavigate()
 
   const [templates, setTemplates] = useState([])
   const [submissions, setSubmissions] = useState([])
@@ -565,7 +566,12 @@ export default function ChecklistInsights() {
               </thead>
               <tbody>
                 {byTemplate.map((row) => (
-                  <tr key={String(row.id)} className="border-b border-[var(--border-dim)] last:border-0">
+                  <tr
+                    key={String(row.id)}
+                    className="border-b border-[var(--border-dim)] last:border-0 cursor-pointer hover:bg-[var(--surface-2)]"
+                    onClick={() => navigate(`/checklists?template=${encodeURIComponent(row.id)}`)}
+                    title="Open this template's submissions"
+                  >
                     <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{row.name}</td>
                     <td className="px-4 py-2.5 text-right text-[var(--text-primary)]">{row.count.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-[var(--text-muted)]">{row.last ? fmtDate(row.last) : '-'}</td>

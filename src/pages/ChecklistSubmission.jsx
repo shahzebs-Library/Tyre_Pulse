@@ -6,7 +6,8 @@ import {
   Truck, MapPin, User,
 } from 'lucide-react'
 import { getSubmission } from '../lib/api/checklists'
-import { isLayoutField, isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
+import { isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
+import { submissionRows, displayValue as sharedDisplayValue } from '../lib/checklistView'
 
 const REFERENCE_ICON = { asset: Truck, site: MapPin, user: User }
 import { exportChecklistSubmissionPdf } from '../lib/exportUtils'
@@ -39,15 +40,12 @@ function isMissingRelation(err) {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache') || m.includes('could not find the table')
 }
 
-// A submission stores answers keyed by field id, but does not embed the template.
-// We reconstruct a readable list from whatever the submission carries: answers,
-// photos, and (when available) any embedded field metadata. Answers are the
-// source of truth for what was captured.
+// Which points are shown, and what each answer reads as, is decided once in
+// checklistView.js - this page, the quick viewer and the approval drawer all
+// render the same rows. Only the presentation below is this page's own.
+// The shared reader returns null for "nothing recorded"; this page prints "-".
 function displayValue(value) {
-  if (value == null || value === '') return '-'
-  if (Array.isArray(value)) return value.length ? value.join(', ') : '-'
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  return String(value)
+  return sharedDisplayValue(value) ?? '-'
 }
 
 export default function ChecklistSubmission() {
@@ -79,44 +77,9 @@ export default function ChecklistSubmission() {
 
   useEffect(() => { load() }, [load])
 
-  const answers = useMemo(() => (sub?.answers && typeof sub.answers === 'object' ? sub.answers : {}), [sub])
-  const photosByField = useMemo(() => (sub?.photos && typeof sub.photos === 'object' ? sub.photos : {}), [sub])
-
-  // Build an ordered, labelled row list. Prefer embedded template fields if the
-  // submission carries them (defensive), else derive from answer/photo keys.
-  const rows = useMemo(() => {
-    const embedded = Array.isArray(sub?.template_fields) ? sub.template_fields
-      : Array.isArray(sub?.fields) ? sub.fields : null
-    if (embedded && embedded.length) {
-      const hasContent = (f) => {
-        const v = answers?.[f.id]
-        if (Array.isArray(photosByField?.[f.id]) && photosByField[f.id].length) return true
-        if (Array.isArray(v)) return v.length > 0
-        if (typeof v === 'boolean') return true
-        return v != null && String(v).trim() !== ''
-      }
-      return embedded
-        // Show only points that were actually answered (or carry photos) — this
-        // drops the long tail of inapplicable "-" rows without ever hiding a
-        // captured answer.
-        .filter((f) => f && !isLayoutField(f.type) && hasContent(f))
-        .map((f) => ({
-          id: f.id,
-          type: f.type,
-          label: f.label || f.id,
-          value: answers?.[f.id],
-          photos: Array.isArray(photosByField?.[f.id]) ? photosByField[f.id] : [],
-        }))
-    }
-    const keys = new Set([...Object.keys(answers || {}), ...Object.keys(photosByField || {})])
-    return Array.from(keys).map((k) => ({
-      id: k,
-      type: null,
-      label: k,
-      value: answers?.[k],
-      photos: Array.isArray(photosByField?.[k]) ? photosByField[k] : [],
-    }))
-  }, [sub, answers, photosByField])
+  // The row list itself comes from the shared reader, so what this page shows and
+  // what an approver sees in the queue cannot drift apart.
+  const rows = useMemo(() => submissionRows(sub), [sub])
 
   // Raw template fields (with section dividers) the page carries, if any — these
   // preserve grouping in the exported PDF; the export derives rows otherwise.

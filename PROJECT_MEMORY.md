@@ -3,7 +3,62 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 4) — OWNER RULINGS APPLIED: SITES, HISTORY, SERIAL-ONLY, PLATES (V506-V509). Next free **V510**.
+## SESSION 2026-08-11 (part 5) — READ A CHECKLIST WITHOUT DOWNLOADING IT + CURRENT-MONTH DEFAULT (V510). Next free **V511**.
+Owner: "make the chekc which don't is clickable and show checklist directly ... without each time downloading each
+file" AND "all reault data should be shown as an curent month applied everywhere make index and all corrext".
+- **READING A CHECKLIST COST A PAGE LOAD OR A PDF DOWNLOAD - AND AN APPROVER COULD NOT SEE ONE AT ALL.** The
+  Approvals drawer showed template name / asset / score and NOTHING the inspector recorded, so a sign-off was
+  in practice made on a number; to read the answers you left the queue or downloaded the file. Fixed with ONE
+  shared `ChecklistAnswers.jsx` over pure `src/lib/checklistView.js` (`submissionRows` / `displayValue` /
+  `submissionSummary`), rendered by THREE surfaces: the full page, a new `ChecklistViewerDrawer` (rows on
+  `/checklists` now open in place), and the Approvals drawer above the decision buttons.
+- **THE POINT OF EXTRACTING IT: `ChecklistSubmission.jsx` HELD ITS OWN COPY and I had left it there.** Two
+  copies of "which points do we show" drift invisibly - the page and the approver would quietly disagree about
+  what was recorded. The page now imports the shared reader; only its richer presentation (rating stars,
+  reference icons, boolean colour) stays local.
+- **MY OWN checklistView INVENTED A SECOND LAYOUT-TYPE LIST** (`section|heading|divider|spacer|info|note`) while
+  `fieldTypes.isLayoutField` already existed and **`section` is the ONLY layout type the builder can produce**.
+  Now delegates. RULE: never re-declare a field-type fact - the registry in `src/lib/checklist/fieldTypes.js` owns it.
+- **BOOLEAN FALSE AND ZERO ARE CONTENT, NOT BLANKS** (pinned by test): "Brakes OK: No" is a reported FAULT and
+  dropping it turns a finding into a blank line; `0` is a reading. `displayValue` keeps both; only a genuinely
+  absent answer reads "Not recorded".
+- `SUBMISSION_COLS` omitted the V212 approval columns, so every submission read as final - added
+  `approval_status, approver_name, approved_at, review_note, locked`.
+- Insights "By template" rows were inert -> now open `/checklists?template=<id>` (Checklists honours the param,
+  names the template, offers Show all). That count was the only place those submissions were referenced.
+- **CURRENT-MONTH DEFAULT - AND THE TRAP THAT MAKES A BLANKET VERSION WRONG.** Measured live: parts_consumption
+  1,979 rows this month, work_orders 3,167, production_logs 14,778, inspections 159 - but **work_order_line_items
+  0, tyre_records 0 (last 30 Jul), accidents 0 (last 28 Jul)**. Those arrive in uploads, not daily, so a blanket
+  current-month default shows an EMPTY page on three of seven feeds and reads as lost data.
+  `src/lib/defaultPeriod.js` therefore resolves: current month when it has data, else **the most recent month
+  that does, and the screen SAYS which month it is showing** (`PeriodNotice`, renders NOTHING when the current
+  month is genuinely what is shown - a banner every day is a banner nobody reads).
+  **`work_orders.opened_at` runs to Dec 2026, so a future-dated row must NOT drag the default into a month that
+  has not happened** - explicitly handled + tested. Unknown (feed unreadable) opens on the current month and
+  says nothing: "we could not look" is not "there is nothing".
+  `getLatestActivity` = ONE row read per feed (`FEED_DATE_COLUMN` maps each feed to its BUSINESS date, never
+  insert time). Bounds are set SYNCHRONOUSLY from the clock so the FIRST query is already the fast one; the
+  async probe only corrects an empty month. `toIsoDay` is local-time - `toISOString()` rolls the day back at +03:00.
+- **THE BIGGEST SINGLE WIN: `/work-orders` fetched ALL 88,773 job cards (~89 paged requests) and then filtered
+  by date IN THE BROWSER.** `listWorkOrdersPage` now takes `openedFrom`/`openedTo` and bounds it SERVER-side;
+  the page opens on the current month. Clearing both dates still fetches everything, deliberately (Board
+  Overview's executive KPIs still pass nothing and get the full set - do NOT make the bound mandatory).
+  `/expense-report` likewise defaults to this month over 208,375 rows (period key `this_month` already existed).
+- **V510 - ONE index was genuinely missing and the rest were already there.** Measured BEFORE adding anything:
+  parts_consumption / production_logs (V456), tyre_records and work_orders all already carry
+  `(organisation_id, country, <date>)`. **`work_order_line_items` (184,025 rows) carried NO date index at all**,
+  so even a single-row "newest record" probe was a parallel seq scan: **8,227 buffers / 46.5 ms -> 4 buffers /
+  2.6 ms** under the predicate the app actually sends. inspections (244 rows) / accidents (38) /
+  checklist_submissions / wash_records deliberately NOT indexed - the write cost exceeds any read saving.
+  NOTE: the probe only uses the index WITH an org+country predicate; an unfiltered probe still seq scans, which
+  is correct.
+- Tests: `defaultPeriod` (13), `checklistView` (15).
+- **STILL TO CONVERT (honest list):** the current-month default is applied to `/work-orders` and
+  `/expense-report`; Analytics / CostCenter / KpiCommandCenter / TyreRecords / Inspections still open on their
+  old windows. The mechanism is shared - each is a 3-line wiring (synchronous `monthBounds` initial state +
+  `defaultPeriodFor` fallback effect + `<PeriodNotice/>`).
+
+## SESSION 2026-08-11 (part 4) — OWNER RULINGS APPLIED: SITES, HISTORY, SERIAL-ONLY, PLATES (V506-V509). Next free **V510** (now taken; V511 free).
 The owner answered the three questions from part 3. All applied live + verified.
 - **"ST2 MEANS ITS SPARE PARTS STORE LOCATION" - THIS CLOSES A STANDING OPEN QUESTION AND EXPLAINS A SPLIT
   NOBODY COULD ACCOUNT FOR.** `DIRIYAH-ST2` survived the fleet-wide -ST retirement because it ends ST2 not ST

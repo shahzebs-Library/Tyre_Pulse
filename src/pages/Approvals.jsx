@@ -17,6 +17,7 @@ import PageHeader from '../components/ui/PageHeader'
 import ApprovalStatusBadge from '../components/workflow/ApprovalStatusBadge'
 import ApprovalAction from '../components/workflow/ApprovalAction'
 import ApprovalTrail from '../components/workflow/ApprovalTrail'
+import ChecklistAnswers from '../components/checklist/ChecklistAnswers'
 import { stepRequirements } from '../lib/workflow/stepRequirements'
 
 // ─── Source taxonomy ────────────────────────────────────────────────────────────
@@ -561,6 +562,19 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
           </div>
         )}
       </section>
+
+      {/* What is actually being approved. A reviewer used to see the template
+          name and a score and nothing else - to read the answers they had to
+          leave the queue or download the PDF, so in practice the sign-off was
+          made on a number. The answers now sit above the decision buttons. */}
+      {(item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap) && (
+        <section>
+          <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
+            What was recorded
+          </h3>
+          <ChecklistAnswers submissionId={item.id} showSummary={false} />
+        </section>
+      )}
 
       {canAct ? (
         <section>

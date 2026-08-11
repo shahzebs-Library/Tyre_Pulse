@@ -54,15 +54,20 @@ export async function updateWorkOrder(id, patch) {
  * Fetch ONE page of work orders for the Work Orders page, newest opened_at
  * first, country-scoped with a strict match ("All" = no filter). Returns the
  * raw Supabase `{ data, error }` so it drops straight into `fetchAllPages`.
- * @param {{country?:string, from:number, to:number}} opts
+ * @param {{country?:string, from:number, to:number, openedFrom?:string, openedTo?:string}} opts
  */
-export function listWorkOrdersPage({ country, from, to } = {}) {
+export function listWorkOrdersPage({ country, from, to, openedFrom, openedTo } = {}) {
   let q = supabase
     .from('work_orders')
     .select(PAGE_COLS)
     .order('opened_at', { ascending: false })
     .range(from, to)
   if (country && country !== 'All') q = q.eq('country', country)
+  // Bound the window SERVER-side. The page filtered by date client-side, which
+  // meant every visit still fetched all 88,773 rows to then show one month of
+  // them. The (organisation_id, country, opened_at) index answers this directly.
+  if (openedFrom) q = q.gte('opened_at', openedFrom)
+  if (openedTo) q = q.lte('opened_at', `${openedTo}T23:59:59.999Z`)
   return q
 }
 
@@ -76,12 +81,15 @@ export function listWorkOrdersPage({ country, from, to } = {}) {
  * and sorts it client-side, and Board Overview derives executive KPIs from it -
  * so the truncation showed management understated counts and costs with no
  * indication anything was missing.
- * @param {{country?:string, max?:number}} [opts]
+ * Pass openedFrom/openedTo to bound the window server-side - the page opens on
+ * the current month, so it fetches a month instead of the whole table. Omit them
+ * for the full set (Board Overview's executive KPIs still want everything).
+ * @param {{country?:string, max?:number, openedFrom?:string, openedTo?:string}} [opts]
  * @returns {Promise<any[]>}
  */
-export async function listWorkOrdersForPage({ country, max = 200000 } = {}) {
+export async function listWorkOrdersForPage({ country, max = 200000, openedFrom, openedTo } = {}) {
   const { data, error } = await fetchAllPages(
-    (from, to) => listWorkOrdersPage({ country, from, to }),
+    (from, to) => listWorkOrdersPage({ country, from, to, openedFrom, openedTo }),
     { max },
   )
   if (error) throw new ServiceError(error.message, error.code, error)

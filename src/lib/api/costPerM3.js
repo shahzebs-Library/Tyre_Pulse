@@ -9,7 +9,7 @@
  * Every read degrades to an empty-but-shaped value on a missing relation / RPC
  * error so a not-yet-migrated org shows an honest empty state, never a throw.
  */
-import { supabase, fetchAllPages } from './_client'
+import { supabase, fetchAllPages, isMissingRelation } from './_client'
 
 /**
  * Insert many rows fast and reliably: batches of CHUNK, a small concurrency pool,
@@ -215,6 +215,33 @@ export async function updateSanyInvoice(id, patch) {
 export async function deleteSanyInvoice(id) {
   const { error } = await supabase.from('sany_invoices').delete().eq('id', id)
   if (error) throw error
+}
+
+const SANY_LINE_COLS = 'id, invoice_id, line_no, machinery, model, charge_standard, contract_year, activation_date, service_period, units, usage_detail, amount_usd, created_at'
+
+/**
+ * The machines behind ONE SANY invoice, in the order the document lists them.
+ *
+ * A SANY proforma is a table of machines; the ledger row is only its total.
+ * Degrades to [] on a MISSING RELATION (a not-yet-migrated org), like every
+ * other read in this file. Any other failure is thrown, deliberately: "no
+ * machine detail has been loaded" and "we could not read it" are opposite
+ * statements, and swallowing the second would let a read that failed render
+ * as an invoice with no machines.
+ */
+export async function listSanyInvoiceLines(invoiceId) {
+  if (!invoiceId) return []
+  const { data, error } = await supabase
+    .from('sany_invoice_lines')
+    .select(SANY_LINE_COLS)
+    .eq('invoice_id', invoiceId)
+    .order('line_no')
+    .order('id')
+  if (error) {
+    if (isMissingRelation(error)) return []
+    throw error
+  }
+  return Array.isArray(data) ? data : []
 }
 
 // ---- Production (approved M3) ----------------------------------------------

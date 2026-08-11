@@ -1,0 +1,42 @@
+-- V512 / V512b - what each site actually costs to run. APPLIED LIVE 2026-08-11.
+--
+-- THE OWNER'S OWN FINDING MADE THIS POSSIBLE: "ST2 means its spare parts store
+-- location". The -ST names are STORES, not stations. So an expense line's `site`
+-- is where the parts were ISSUED FROM, not where the machine was working, and
+-- per-site cost read off parts_consumption.site is wrong - wrong by a lot on
+-- exactly the sites that matter (KSA, year to date):
+--
+--   DIRIYAH   SAR 729,121 issued from the store  vs   2,335 of work done there
+--   QIDDIYA       303,997                              24,360
+--   DHAHBAN       221,899                              nothing at all
+--
+-- The gap is not error: the machines live at DIRIYAH-G1/G2 and QIDDIYA-UPPER/
+-- LOWER PLATEAU and draw parts from the one store that serves them. Read through
+-- the asset, DIRIYAH-G1 alone is SAR 488,874 across 70 assets - a gate-level
+-- figure that could not be produced before.
+--
+-- ATTRIBUTION: expense line -> job card (work_order_no) -> asset -> the site that
+-- asset is registered at. Measured coverage 99.4% (18,345 of 18,459 lines), and
+-- the function PUBLISHES that coverage. A per-site total that silently drops
+-- 1 line in 200 is a figure nobody can reconcile.
+--
+-- Both readings are returned. by_store is not noise - it is the right number for
+-- "which store is issuing stock". They answer different questions.
+--
+-- The fleet join is a LATERAL ... LIMIT 1 preferring the row's own country,
+-- because vehicle_fleet is unique per (org, country, asset_no) and the same
+-- asset code exists in more than one country - a plain join duplicates the line.
+--
+-- V512b: the first version built a temp table and a STABLE function may not
+-- CREATE TABLE AS (already recorded from V485, hit again). `with ... as
+-- materialized` gives the same single-pass behaviour.
+--
+-- SECURITY: SECURITY DEFINER, org from app_current_org(), country checked with
+-- app_can_see_country, executable by authenticated + service_role only, revoked
+-- from PUBLIC and then from anon BY NAME (the V500 ordering - revoking PUBLIC
+-- alone does not clear an explicit anon grant). Verified anon = false.
+--
+-- Rollback: drop function public.get_site_operating_cost(text, date, date);
+--
+-- The applied body is in the Supabase migration history under
+-- v512_site_operating_cost and v512b_site_operating_cost_cte.

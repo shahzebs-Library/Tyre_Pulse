@@ -39,6 +39,38 @@ export function fmtCostPerM3(value, currency = '') {
 }
 
 /**
+ * Below this, a per-M3 rate is arithmetic rather than a measurement: one job
+ * card's cost swings it by hundreds. A mixer plant clears this in a day or two.
+ */
+export const MIN_M3_FOR_RATE = 1000
+
+/**
+ * Is this row's cost-per-M3 worth reading as a rate?
+ *
+ * A region can hold real cost while almost none of its production has been
+ * assigned to it yet - most sites currently carry no region at all. Dividing a
+ * full month of cost by a few hundred stray cubic metres produced a headline of
+ * SAR 901 per M3 against a fleet figure of 12, which reads as a catastrophe and
+ * is entirely an artifact of the missing denominator. Saying so is the fix;
+ * printing the number is not.
+ */
+export function costPerM3Reliable(productionM3, minM3 = MIN_M3_FOR_RATE) {
+  const n = num(productionM3)
+  if (n == null) return false
+  return n >= minM3
+}
+
+/**
+ * The rate, or a plain-English reason it cannot be read as one. Never returns a
+ * number the reader would have to know to distrust.
+ */
+export function fmtCostPerM3Guarded(value, productionM3, currency = '', minM3 = MIN_M3_FOR_RATE) {
+  if (num(value) == null) return 'N/A'
+  if (!costPerM3Reliable(productionM3, minM3)) return 'Too little production to measure'
+  return fmtCostPerM3(value, currency)
+}
+
+/**
  * Summarize ledger rows (already filtered by country + period by the caller)
  * into a professional summary-first shape: totals + byMonth + bySite.
  * kind: 'sco' | 'sany' | 'production'. Production sums approved m3 (falls back

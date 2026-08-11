@@ -3,7 +3,192 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-11 (part 5) — READ A CHECKLIST WITHOUT DOWNLOADING IT + CURRENT-MONTH DEFAULT (V510). Next free **V511**.
+## SESSION 2026-08-11 (part 8) — ZERO-COST LINES PRICED, AUGUST CLEARED, TM47 PADDED (V517/V518). Next free **V519**.
+Owner: "Where it has code matching take it from other item codes match zero cost add there unless it's warranty
+if this assest code 047 is old job card add itnto this 047 cab u delete all auguest 26 one i will uplaod a new one".
+- **V517 PRICES A LINE THE ERP SENT WITH NO AMOUNT — 1,068 lines, KSA SAR 31,972.98 / Egypt EGP 12 / UAE AED 600.**
+  Median unit cost of the SAME item code in the SAME country x that line's own quantity. A MEDIAN, not the nearest
+  row, so one mistyped price cannot become the answer for a whole code. The lines are nuts, bolts, washers and
+  engine oil - small consumables whose priced siblings sit in a tight band (e.g. MS BOLT 8*25 lo 0.12 hi 0.21).
+- **WRITING `line_cost` WOULD HAVE BEEN SILENTLY UNDONE, AND THIS IS THE LOAD-BEARING BIT.**
+  `classify_parts_consumption` is BEFORE INSERT **OR UPDATE** and RE-DERIVES `line_cost` from the raw ERP text
+  columns on every write, so a direct write reverts to 0 the next time anything touches the row; and writing
+  `value_amount` would rewrite what the ERP actually sent. NEW COLUMN **`parts_consumption.filled_cost`** is the
+  LAST rung of the amount ladder, after every real ERP amount - raw columns stay exactly as delivered and an
+  estimate is always distinguishable from a figure someone paid. `unit_cost` had to lose its "only when null"
+  guard for filled rows (a zero-cost line already carries unit_cost 0, so it would never have refreshed).
+- **A ROW THIS PROCESS PRICED IS NEVER EVIDENCE FOR ANOTHER** (`filled_cost is null` in the evidence CTE) - the
+  V401c lesson: otherwise one estimate seeds the next and the numbers drift away from anything anyone paid.
+- **THE WARRANTY TEST WAS WRONG AND THE DATA CAUGHT IT.** Two live KSA lines read
+  **"TIRE -WARRENTY -315/80 R 22.5"** - the ERP's own misspelling, which a plain `warrant` match misses. They
+  stayed at zero only because no other line shares their item code, i.e. LUCK, not the rule. V517c widened
+  `parts_cost_is_warranty` to warrant|warrent|warent|waranty|gaurantee|guarantee|free of charge|free issue|
+  foc|no charge|zero charge|complimentary, verified 0 already-filled rows are warranty. Same class as the KSA
+  'cooliant' spelling: match the word AS WRITTEN.
+- **14 KSA lines are left honestly at zero** - every one has NO priced sibling anywhere (GEAR OIL 140-GL-4,
+  ANCHOR BOLT 12*150, MOTOR SIDE SEALING GROUP...), so there is nothing to copy from. Not a failure, a gap.
+- Undo is per batch: `parts_cost_fill_undo('<batch>')` (applied batch `a97352f4-fd21-4d9e-b02d-d60c2987f0a2`);
+  clearing `filled_cost` lets the trigger return the line to 0 by itself. Round trip verified rolled back.
+  **GOTCHA: `percentile_cont` returns double precision, so the median MUST be cast to numeric or `round(v,2)`
+  raises 42883** (cost one retry, fixed in V517b).
+- **V518 AUGUST 2026 KSA EXPENSE LINES DELETED for a clean re-upload: 1,034 lines / SAR 206,810.76** (tyre
+  104,817.12 / spare 80,863.33 / oil 21,130.31). KSA ledger **40,981,402.97 -> 40,774,592.21**, exactly the
+  amount removed. Rows kept in `_bak.expense_aug2026_deleted`; restore = plain re-insert (the trigger re-derives
+  the same buckets). **SCOPE DELIBERATELY NARROW - KSA EXPENSE LINES ONLY.** August also holds 1,317 KSA job
+  cards, 320 tyre records, 8,452 production rows and **945 UAE expense lines (AED 224,252.57)**; those came from
+  DIFFERENT files, so deleting them would lose data the promised re-upload does not replace. **None of the 1,034
+  carried an `import_uid`, so a re-upload WITHOUT the `#` column mapped will duplicate again** (standing rule).
+- **V518 TM47 -> TM047.** The KSA fleet numbers on three digits (1,019 of 1,030); the only other two-digit codes
+  are the **REC and WTP classes, which are their own numbering, not padding errors**. TM47 was the single odd
+  one: Inactive, at JED, ONE 2023 job card (GCKR/JC/0082/0323 "TWO TYRES NEED TO BE CHANGED", KSP-T3), no tyres,
+  no expense lines, and **no TM047 existed** - so there was nothing to merge, only a code to pad. Snapshot
+  `_bak.asset_tm47_rename`. **NO auto-pad trigger was added** - it would corrupt REC01/WTP01.
+- **THE EXPENSE DOWNLOAD NOW CARRIES A `Cost basis` COLUMN** ("From ERP" / "Estimated from item code"), fed by
+  `filled_cost` on the row. An estimate that looks identical to a paid figure is worse than a blank, because
+  nobody knows to question it. `listExpenseRows` selects `filled_cost` for exactly this.
+- **COST PER M3 WITHHOLDS A RATE IT CANNOT MEASURE (code only, no migration).** Western region holds SAR
+  472,229 against **524 m3** - not a cost problem, a DENOMINATOR problem: **92% of KSA production sits under
+  "(no region set)"** across 24 sites, so almost none has been tagged. Divided out that is **SAR 901/m3 beside
+  a fleet figure of 12.06**, which reads as a catastrophe and is pure artifact. NEW pure
+  `costPerM3Reliable(m3, min=MIN_M3_FOR_RATE 1000)` + `fmtCostPerM3Guarded` in `src/lib/costPerM3.js`: the
+  table AND the Excel export print "Too little production to measure", and such regions are **left out of the
+  by-region chart entirely** (one bar that tall flattens every real one into the axis). Tests
+  `costPerM3Guard.test.js` (5). **`N/A` and "too little" are kept DISTINCT** - no rate at all and a thin
+  denominator are different statements. OWNER ACTION: tag each site Central/Western in Site Management.
+
+## SESSION 2026-08-11 (part 7) — THE PRODUCTION FILE WAS UPLOADED TWICE (V513-V516). Superseded: next free **V519**.
+- **V516 — `production_logs` WAS RE-UPLOADED ON 2026-08-06 AND THIS OVERTURNS A STANDING RULE IN THIS FILE.**
+  84,787 rows / **903,014.1 m3** removed. KSA production **3,169,096.5 -> 2,266,082.4 m3** (approved
+  2,193,569.9). **PRODUCTION IS THE DENOMINATOR OF COST PER M3, so that metric was UNDERSTATED by ~28% and
+  correcting it makes cost/m3 RISE ~40% — that is the correction, not a regression.** Expect the owner to see
+  cost/m3 jump; it is now right.
+- **WHY THE OLD RULE WAS NOT WRONG, and this distinction is the whole lesson.** The V362-era finding "production_logs
+  TRIED AND REJECTED as a dedupe target" tested **site+date+m3+truck** — where TM514 to Diriyah-G2 ten times in a
+  day really is ten deliveries. **THAT STILL HOLDS. It simply never considered `dn_number`.** The delivery note is
+  a DOCUMENT ID and the proof is decisive: **WITHIN EVERY UPLOAD RUN, rows = distinct dn_numbers EXACTLY (zero
+  repeats). A DN never repeats inside a file; it only repeats ACROSS runs.**
+  Runs on 2026-08-06: A 08:32 19,368 / B 08:39 27,837 / C 08:42 63,999 / **D 08:47 78,461** / E 08:59 5,559 /
+  **F 09:07 78,461** / G 13:32 15,078. **D and F match on row count, DN count, first DN, last DN and m3
+  (835,520.1 each) — the same file 20 minutes apart.** E∩G = 5,559. A/B/C overlap nothing (good files).
+  **RULE NOW: production dedupe key is `dn_number` + full content, keep EARLIEST. Do NOT dedupe production on
+  site/date/m3/truck.** DN `39-61441` deliberately EXCLUDED (core fields match, free text differs — not "exact").
+  315 null-DN rows untouched. Rollback `_bak.production_dup_v516`.
+- **THE OWNER'S "110k and 64k" ARE THESE PRODUCTION FILES, not the recent job-card upload** — 63,999 ≈ 64k and
+  A+B+C = 111,204 ≈ 110k. Nothing of that size arrived in the last 48h.
+- **V513 tyre re-import duplicates: 87 rows removed.** A second load re-inserted tyres already recorded and it
+  hid because **the copy writes `job_card` WITH TRAILING WHITESPACE** — every comparison keyed on job_card saw
+  two different values. Same class as the tab-padded serials. **BTRIM ON COMPARE, ALWAYS.** The copy was strictly
+  poorer (no price). Delete rule was provably lossless: all of removal_date/status/total_km/km_at_fitment/
+  km_at_removal/brand identical, job card identical once trimmed, exactly ONE row priced. All remaining padded
+  job_cards trimmed. **58 groups LEFT ALONE — the two copies DISAGREE ON MILEAGE** (TM657 LHCO 54,086 vs 39,672);
+  deleting either discards a real measurement and silently picks a tyre life. Needs the owner.
+- **JOB CARDS HAVE NO DUPLICATES — checked, not assumed.** 88,773 rows / 88,773 distinct `work_order_no` (globally
+  unique). 528 groups share asset+date+description under DIFFERENT numbers but **333 carry expense lines on BOTH
+  numbers** — both cards are real and hold their own money. Two cards for one asset in one day is normal.
+- **`work_order_line_items`: 47,693 repeated-key rows and ZERO are removable** — every one has a distinct
+  `source_row`. A naive "delete identical rows" there destroys 47,693 real records. DO NOT TOUCH.
+- parts_consumption exact dupes: KSA 0, Egypt 0 (129 look repeated but have distinct source_row), **UAE 2
+  removable (AED 598.75)**. **Keep `issue_number` AND `site` in the dedupe key** — dropping them surfaces ~90
+  false UAE pairs that differ by issue number and site spelling.
+- **THE 2026-08-11 90,154-ROW UPLOAD IS 96.5% A RE-UPLOAD AND CHANGED NOTHING.** It re-exports the 2026-07-28 file
+  with ONE new column filled (`Asset Description`, 0/192,198 before -> 90,154/90,154 now). Only 3,195 rows carry
+  new content. **`ksa_country_upload_template_staging` HAS ZERO TRIGGERS — an upload there moves no report.**
+  **INERT AND WORTH ACTING ON: 129 NEW AUGUST JOB CARDS** (GCKR/JC/1005/0826 onward, 9-10 Aug, 280 staging rows)
+  exist ONLY in staging. 28 tyre fitments unloadable — serial destroyed by Excel (`1.25121E+11`) or a tyre SIZE in
+  the serial column; needs a re-export with that column formatted as TEXT.
+  **MEASUREMENT TRAP HIT AGAIN: a raw byte comparison reports 0 cross-batch duplicates — a PHANTOM**, because the
+  old batch tab-pads 39,035 `srno` values and the new one pads none. Normalise whitespace before comparing.
+- **V514 PLATES: owner ruled "plates are not a problem ... dont flag it".** All 17 remaining differences applied
+  from the sheet, 0 conflicts left, plate reporting RETIRED. Only `registration_no` moved.
+- **ASSET CODE AUDIT (what the owner actually cares about): CLEAN.** 1,030 KSA assets — 0 duplicates, 0 padded,
+  0 lower-case, 0 inner spaces, 0 blank. 11 off-pattern of which 10 are legitimate naming (REC01-08 reclaimers,
+  WTP01/02 water treatment). **TM47 is the lone oddity** (every other mixer is 3 digits) — 1 job card, no tyres,
+  no expense lines, absent from the sheet and from the register as TM047. NOT renamed: inventing TM047 would
+  create an asset nobody recorded.
+- **AUGUST TYRE "22k EXTRA" COULD NOT BE REPRODUCED** and the owner still needs to supply their expected figure.
+  KSA Aug reconciles at **SAR 104,817.12** by SIX measures: our classification, the ERP's own tyre column
+  (difference 0.00), event_date, txn_date, five non-overlapping daily loads, and zero mixed lines. All 120 tyre
+  lines are real tyres with sizes at confidence 1.00. **The master sheet says 113,050 — HIGHER, not 22k lower.**
+  Expense export now carries **separate Tyre/Spare/Oil value columns** so the split can be summed directly.
+  NOTE: all 1,034 Aug lines have `import_uid` NULL — the `#` column was not mapped, so re-import protection was
+  off. STANDING RULE UNCHANGED: map `#` or a re-upload duplicates.
+- **PROCESS: do NOT `git add -A` while subagents are editing** — it sweeps their half-finished files into a
+  commit (happened twice this session; a V513 label collision followed and was renamed to V515). Stage by path.
+- Migration V-labels: V513 tyre dupes, V514 plates, **V515 tyre consumption (renamed from a duplicate V513 label;
+  applied as v513_tyre_consumption + v513b in the DB)**, V516 production dupes. Next free **V517**.
+
+## SESSION 2026-08-11 (part 6) — YEAR DEFAULT FIXES THE BLANK SCREENS + MASTER TYRE LOAD + TRUE SITE COST (V511-V512b).
+- **V512 `get_site_operating_cost(country,from,to)` - PER-SITE COST WAS ANSWERING THE WRONG QUESTION, and the
+  owner's own "ST2 means its spare parts store" is what made the right one possible.** The -ST names are STORES,
+  so `parts_consumption.site` is where stock was ISSUED FROM, not where the machine worked. Measured KSA YTD:
+  **DIRIYAH store issued SAR 729,121 while only 2,335 of work happened at a site called DIRIYAH**; QIDDIYA
+  303,997 vs 24,360; DHAHBAN 221,899 vs nothing. Not error - the machines are at DIRIYAH-G1/G2 and
+  QIDDIYA-UPPER/LOWER PLATEAU and draw from the one store that serves them. **Attribution is expense line ->
+  job card -> asset -> the asset's registered site; coverage 99.4% (18,345/18,459) and the function PUBLISHES
+  it** (a per-site total silently dropping 1 line in 200 cannot be reconciled). Read this way **DIRIYAH-G1 alone
+  is SAR 488,874 across 70 assets** - a gate-level figure the system could not produce before. `by_store` is
+  returned too and is NOT noise: "which store issues stock" is a real, different question.
+  **THE FLEET JOIN MUST BE `left join lateral ... limit 1` PREFERRING THE ROW'S OWN COUNTRY** - vehicle_fleet is
+  unique per (org, country, asset_no) and the same code exists in more than one country, so a plain join
+  DUPLICATES the expense line (the V356 lesson).
+  **V512b: a STABLE function may NOT `create table as`** (already recorded from V485, hit again) - rewritten with
+  `with ... as materialized` for the same single-pass behaviour. Security: DEFINER + app_current_org +
+  app_can_see_country, granted authenticated/service_role, revoked from PUBLIC **then from anon BY NAME** (V500
+  ordering); verified anon=false. Client `src/lib/api/siteOperatingCost.js` (+ pure `storeVsOperating`, null
+  worked-total means "serves other sites", never 0) + `SiteOperatingCostPanel` mounted on the EXISTING
+  `/expense-report` bysite section - no new page.
+- **STANDING RULE (now enforced by a real surface): per-site OPERATING cost is read THROUGH THE ASSET. Never
+  group cost by `parts_consumption.site` and call it a site total.**
+
+## SESSION 2026-08-11 (part 6a) — YEAR DEFAULT + MASTER TYRE LOAD (V511/V511b).
+Owner: "dahsbaords and many areas are showing blank can u fixed it now ... thsoe one month makke it 3 months year
+keep it current year i jaut want speed and accuracy ... in the expesne dont say this prriod previous instead write
+name of month or year what applicable" plus "why these kob cards line are not been extracted from it. Tyre records
+as wll from this one master file".
+- **THE BLANK SCREENS WERE THE CURRENT-MONTH DEFAULT AND PART 5 MADE IT WORSE.** `/dashboard` had defaulted to
+  "This Month" long before this week; part 5 then applied a month default in more places. Measured: tyre_records,
+  accidents and work_order_line_items have **ZERO rows in the current month**, so the tyre + accident panels
+  rendered empty while the data sat there. **DEFAULT IS NOW THE CURRENT YEAR** (`defaultWindow`), which has data
+  in EVERY feed (tyre 3,653 / accidents 38 / inspections 244 / WO lines all 184,025) and still reads 4-5x less
+  than all history (expenses 43,755 of 208,375, job cards 21,338 of 88,773). Applied to Dashboard, WorkOrders,
+  ExpenseReport. **`MIN_MONTHS = 3` FLOOR IS LOAD-BEARING** - without it "this year" on 2 January is two days and
+  every screen goes blank again on New Year's Day.
+- **RULE (supersedes part 5's month rule): the opening window is YEAR-TO-DATE, floored at 3 months, falling back
+  to the most recent YEAR with data.** Do NOT re-introduce a month default on any screen that reads an
+  upload-driven feed.
+- **NO SCREEN SAYS "this period" / "previous" ANY MORE.** `periodName(from,to)` names the window - "2026 to date",
+  "August 2026", "2025" - and `previousPeriodName` names the comparison. Wired through PeriodBar + ComparisonStrip
+  (heading AND column headers). REASON: an exported or forwarded report headed "This period" is unreadable a week
+  later; nobody can tell which months it covers.
+- **"WHY ARE JOB-CARD LINES NOT EXTRACTED FROM THE MASTER FILE" - THEY CANNOT BE, AND THIS IS THE HONEST ANSWER.**
+  `ksa_country_upload_template_staging` (now **282,352 rows / 60,993 job cards**) has NO item-level columns at all:
+  it carries per-card TOTALS (Spare Value / Oil Value / Tyre Value / Net Material Value) and no item code,
+  description, qty or unit cost. Line detail lives only in the expense grid, which is already loaded (184,025
+  work_order_line_items). Do NOT build a line-item extractor against this file - the rows are not in it.
+- **V511 TYRE FITMENTS: 196 LOADED, and the reason they were missing is a DATE PARSER GAP, not the file.**
+  `erp_parse_date` cannot read a TWO-DIGIT year and the master file writes `fix_date` as `29-06-26`, so all 223
+  candidates parsed NULL and were skipped. They were the NEWEST tyre changes (Aug 2025 - Aug 2026).
+  **NEW `master_parse_date()`** tries erp_parse_date FIRST (4-digit years byte-identical) then DD-MM-YY / DD/MM/YY
+  as a FALLBACK - ordering is load-bearing given V388 (a 2-digit year read as year 0026 on 33,626 job cards).
+  27 rows held back: serial destroyed by Excel into `1.25121E+11` - a mangled serial is a tyre that can never be
+  matched to the real one. Snapshots `_bak.tyre_master_load_v511_inserted` / `_superseded`.
+- **V511b - MY OWN THREE-VALUED-LOGIC BUG, SAME CLASS AS V370a.** V511 tested `n.fd > cur.issue_date` to decide if
+  a new fitment supersedes the tyre on that wheel. **The tyres already on those wheels have `issue_date` NULL**,
+  so the comparison is NULL (not false) and BOTH branches fell through to 'Active' - **67 wheels ended up with two
+  active tyres**. Fixed by ranking one active per wheel, latest fitment date wins, undated loses to dated; scope
+  limited to wheels V511 touched so unrelated history is not rewritten. **VERIFIED AFTER: double-active 0** (was
+  134 mid-flight), reversed 0, future-dated 0, KSA tyre_records 8,282. **RULE: coalesce any nullable value before
+  comparing it in a branch that decides a status.**
+- **OWNER RULINGS RECORDED:** KSP **T1 and T2 (KSP-T1 / KSP-TP) are SEPARATE locations** - the V507 parent-collapse
+  guard was right and must stay; an idle/inactive asset should still show at its own terminal. Wheel POSITION is
+  known from the job card and other facts, so it is not needed from free text - **the serial is the product**.
+  Asset code is the identity that matters; an asset not in the sheet was previously here and is HISTORICAL.
+- **STILL OPEN:** the 17 real plate conflicts (owner said "plates are fine" but did not pick a side per asset);
+  Analytics / CostCenter / KpiCommandCenter still on their own windows (they are TREND screens - a one-month
+  default makes a 12-month chart a single point, so they were deliberately left; the year default is safe for them
+  and is the next wiring).
+
+## SESSION 2026-08-11 (part 5) — READ A CHECKLIST WITHOUT DOWNLOADING IT + MONTH DEFAULT, SUPERSEDED BY PART 6 (V510). Next free **V511** (now taken; V512 free).
 Owner: "make the chekc which don't is clickable and show checklist directly ... without each time downloading each
 file" AND "all reault data should be shown as an curent month applied everywhere make index and all corrext".
 - **READING A CHECKLIST COST A PAGE LOAD OR A PDF DOWNLOAD - AND AN APPROVER COULD NOT SEE ONE AT ALL.** The

@@ -1,0 +1,46 @@
+-- V513 - remove the tyre rows a re-import added twice. APPLIED LIVE 2026-08-11.
+--
+-- WHAT HAPPENED
+-- A second load re-inserted tyres that were already recorded. It went unnoticed
+-- because the re-inserted copy writes the job card with TRAILING WHITESPACE
+-- ('GCKR/JC/2987/0726                       '), so every comparison keyed on
+-- job_card saw two different values. Same defect class as the tab-padded serials
+-- already recorded in this file: BTRIM ON COMPARE, ALWAYS.
+--
+-- The copy is strictly poorer than the original - identical asset, wheel, serial,
+-- fitment and removal dates, status and mileage, but carrying NO price.
+--
+-- WHAT WAS DELETED: 87 rows. The rule is deliberately narrow enough to be
+-- PROVABLY LOSSLESS. A group is removed only when, keyed on
+-- (country, asset, wheel position, serial, fitment date):
+--   * removal_date, status, total_km, km_at_fitment, km_at_removal and brand are
+--     IDENTICAL across the group,
+--   * the job card is identical ONCE TRIMMED,
+--   * exactly ONE row carries a price and every other row carries none.
+-- The deleted row holds no fact the kept row does not.
+--
+-- Also trimmed every remaining padded job_card so the next comparison cannot be
+-- defeated the same way.
+--
+-- WHAT WAS DELIBERATELY LEFT: 58 groups that look like the same re-import but
+-- whose two rows DISAGREE ON MILEAGE - TM657 LHCO reads 54,086 km on one and
+-- 39,672 on the other. One is wrong and the data cannot say which; total_km from
+-- this source has been unreliable before (the master sheet's own total_km reaches
+-- 1,081,000 km on a mixer). Deleting either discards a real measurement and
+-- silently picks a tyre life. Reported for a person to settle.
+--
+-- JOB CARDS: NOTHING TO REMOVE, and this was checked rather than assumed.
+-- 88,773 work orders carry 88,773 distinct numbers - the number is globally
+-- unique, so a duplicate card cannot exist. 528 groups share asset, date,
+-- description and site under DIFFERENT numbers, but 333 of those carry expense
+-- lines on BOTH numbers: both cards are real and hold their own money. Deleting
+-- either would delete real cost. The ERP raising two cards for one asset on one
+-- day is normal.
+--
+-- VERIFIED AFTER: 87 deleted, 0 padded job cards remain, 0 double-active wheels,
+-- KSA tyre_records 8,195.
+--
+-- ROLLBACK: insert into public.tyre_records select * from _bak.tyre_dup_v513;
+--
+-- The applied body is in the Supabase migration history under
+-- v513_tyre_reimport_duplicates.

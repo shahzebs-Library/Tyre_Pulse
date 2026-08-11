@@ -6,22 +6,59 @@
 import { supabase } from './_client'
 import { toUserMessage } from '../safeError'
 
-export async function getTyreRunningLife({ country } = {}) {
+/**
+ * In-flight and recent results, keyed by country.
+ *
+ * This RPC is expensive: measured live, get_tyre_running_life('KSA') takes
+ * 832 ms of server time and returns 3,612 rows / 2.2 MB. The Inspections page
+ * asks for it on mount to build its tyre-due flags, and then asked for the WHOLE
+ * payload again on every single row PDF export just to filter it to one asset.
+ *
+ * Deduping the in-flight promise is always correct - it is the same request,
+ * already on its way. The short result cache is opt-in per caller, because a
+ * screen with its own refresh control must be able to insist on a fresh read.
+ */
+const _cache = new Map()
+
+/**
+ * @param {{country?:string, maxAgeMs?:number}} [opts] `maxAgeMs` lets a caller
+ *   reuse a recent payload. Omitting it is the default AND the way to insist on
+ *   a fresh read, so a screen with its own refresh control needs nothing extra.
+ */
+export async function getTyreRunningLife({ country, maxAgeMs = 0 } = {}) {
+  const key = country && country !== 'All' ? country : '__all__'
+  const hit = _cache.get(key)
+  if (hit) {
+    // A request already on the wire is shared regardless of maxAgeMs: waiting
+    // for it is strictly better than starting a second identical 832 ms read.
+    if (hit.promise) return hit.promise
+    if (maxAgeMs > 0 && Date.now() - hit.at < maxAgeMs) return hit.value
+  }
+
   // Every failure used to collapse to a bare { ok: false }, so the page rendered
   // an empty table whether the read was denied, the network dropped, or there
   // genuinely are no tyres. "We could not look" and "there is nothing" are
   // opposite statements; the reason is carried so the page can say which.
-  try {
-    const { data, error } = await supabase.rpc('get_tyre_running_life', {
-      p_country: country && country !== 'All' ? country : null,
-    })
-    if (error) return { ok: false, reason: toUserMessage(error) }
-    if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }
-    if (data.ok === false) return { ok: false, reason: data.reason || 'The running-life service could not build this view.' }
-    return data
-  } catch (e) {
-    return { ok: false, reason: toUserMessage(e) }
-  }
+  const promise = (async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_tyre_running_life', {
+        p_country: country && country !== 'All' ? country : null,
+      })
+      if (error) return { ok: false, reason: toUserMessage(error) }
+      if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }
+      if (data.ok === false) return { ok: false, reason: data.reason || 'The running-life service could not build this view.' }
+      return data
+    } catch (e) {
+      return { ok: false, reason: toUserMessage(e) }
+    }
+  })()
+
+  _cache.set(key, { promise })
+  const value = await promise
+  // A failure is never cached - the next attempt must be allowed to succeed.
+  if (value && value.ok !== false) _cache.set(key, { value, at: Date.now() })
+  else _cache.delete(key)
+  return value
 }
 
 const TARGET_COLS = 'id, country, size, vehicle_type, target_km, target_hours, note, updated_at'

@@ -160,7 +160,10 @@ export async function listExpenseRows({ country, from, to, max = 100000 } = {}) 
   const build = (fromIdx, toIdx) => {
     let q = supabase
       .from('parts_consumption')
-      .select('event_date, work_order_no, item_code, item_description, qty, unit_cost, line_cost, tyre_cost, oil_cost, site, store_code, currency, country')
+      // filled_cost marks a line the ERP sent with no amount, priced from what
+      // the same item code cost elsewhere. It travels with the row so a reader
+      // can always tell an estimate from a figure someone paid.
+      .select('event_date, work_order_no, item_code, item_description, qty, unit_cost, line_cost, tyre_cost, spare_cost, oil_cost, site, store_code, currency, country, filled_cost')
       .order('event_date', { ascending: true })
       .order('id', { ascending: true })
       .range(fromIdx, toIdx)

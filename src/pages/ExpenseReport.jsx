@@ -48,7 +48,8 @@ import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
-import { monthBounds } from '../lib/defaultPeriod'
+import { defaultWindow } from '../lib/defaultPeriod'
+import SiteOperatingCostPanel from '../components/expense/SiteOperatingCostPanel'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
 import PeriodNotice from '../components/ui/PeriodNotice'
 
@@ -430,15 +431,15 @@ export default function ExpenseReport() {
   // expense lines to show a page of them was most of the wait. The bounds are set
   // synchronously so the very first query is already the fast one; the async
   // probe below only corrects them if this month turns out to be empty.
-  const [from, setFrom] = useState(() => monthBounds(new Date()).from)
-  const [to, setTo] = useState(() => monthBounds(new Date()).to)
+  const [from, setFrom] = useState(() => defaultWindow(new Date()).from)
+  const [to, setTo] = useState(() => defaultWindow(new Date()).to)
   const [defaultPeriod, setDefaultPeriod] = useState(null)
   const [byCountry, setByCountry] = useState([])
   const isAll = !activeCountry || activeCountry === 'All'
 
   // Period comparison + cost per km. The period picker drives BOTH this and the
   // date inputs below, so the whole page always describes one window.
-  const [period, setPeriod] = useState('this_month')
+  const [period, setPeriod] = useState('ytd')
   const [overview, setOverview] = useState(null)
   const [moverDim, setMoverDim] = useState('by_asset')
   // The variance decomposition: what the change is made of, and a plain-language
@@ -909,15 +910,34 @@ export default function ExpenseReport() {
         unit_cost: r.unit_cost,
         line_cost: r.line_cost,
         category: Number(r.tyre_cost) > 0 ? 'Tyre' : Number(r.oil_cost) > 0 ? 'Oil' : 'Spare',
+        // The three buckets are exported as their OWN columns, not just a label.
+        // A label plus one Value column cannot be summed safely: the label says
+        // which bucket the line leans to, while Value is the WHOLE line, so
+        // summing Value where the label reads Tyre is only right while no line
+        // is split. Today none are, but the sums must not depend on that holding.
+        // With the split columns present the reader can add up exactly what the
+        // system means by tyre spend and see where any difference sits.
+        tyre_value: Number(r.tyre_cost) || 0,
+        spare_value: Number(r.spare_cost) || 0,
+        oil_value: Number(r.oil_cost) || 0,
         site: r.site || '',
         store_code: r.store_code || '',
         currency: r.currency || '',
         country: r.country || '',
+        // The ERP left this line with no amount and it was priced from what the
+        // same item code cost elsewhere. Saying so in the sheet is the whole
+        // point: an estimate that looks identical to a paid figure is worse
+        // than a blank, because nobody knows to question it.
+        cost_basis: r.filled_cost != null ? 'Estimated from item code' : 'From ERP',
       }))
       await exportToExcel(
         data,
-        ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost', 'category', 'site', 'store_code', 'currency', 'country'],
-        ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value', 'Category', 'Site', 'Store', 'Currency', 'Country'],
+        ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost',
+          'category', 'tyre_value', 'spare_value', 'oil_value', 'site', 'store_code', 'currency', 'country',
+          'cost_basis'],
+        ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value',
+          'Category', 'Tyre value', 'Spare value', 'Oil value', 'Site', 'Store', 'Currency', 'Country',
+          'Cost basis'],
         reportFileName(company, 'Expense Rows', reportDateLabel()),
         'Expense rows',
         {
@@ -1135,6 +1155,12 @@ export default function ExpenseReport() {
                 {sections.assets && <ChartCard title="Top assets by spend" refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
               </div>
             </section>
+          )}
+
+          {/* What each site COSTS TO RUN - cost read through the asset, because an
+              expense line's own site is the store the parts came from. */}
+          {sections.bysite && (
+            <SiteOperatingCostPanel country={activeCountry} from={from} to={to} money={money} />
           )}
 
           {/* By site (store_code -> site map). One table per country on the All view. */}

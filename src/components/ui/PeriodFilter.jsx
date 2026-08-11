@@ -33,8 +33,16 @@ export default function PeriodFilter({ records = [], dateField = 'issue_date', v
       if (!min || iso < min) min = iso
       if (!max || iso > max) max = iso
     }
+    // The selected year and the current year are ALWAYS offered, even when the
+    // loaded rows do not contain them. The list is derived from rows that were
+    // themselves fetched for the selected period, so without this a screen that
+    // opens on 2026 offers only 2026 - and worse, if the selected year had no
+    // matching option the select would silently display a different label from
+    // the period actually in force.
+    ys.add(new Date().getFullYear())
+    if (v.mode === 'year' && Number.isFinite(Number(v.year))) ys.add(Number(v.year))
     return { years: [...ys].sort((a, b) => b - a), minDate: min, maxDate: max }
-  }, [records, dateField])
+  }, [records, dateField, v.mode, v.year])
 
   function selectPreset(e) {
     const val = e.target.value

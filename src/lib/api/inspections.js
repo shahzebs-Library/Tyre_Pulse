@@ -19,6 +19,31 @@ const PAGE_COLS =
   'id,title,inspection_type,site,asset_no,tyre_serial,region,status,findings,severity,inspection_date,scheduled_date,completed_date,inspector,notes,country,created_by,created_at,attendees,vehicle_type,tyre_conditions,odometer_km,hour_meter,photo_data,inspector_signature,linked_action_id,approval_status,approver_email,approver_signature,approved_at,approved_by,pressure_reading,locked,locked_at,custom_data'
 
 /**
+ * Columns for the register LIST.
+ *
+ * PAGE_COLS minus the two signature columns. Measured on live data: the 249
+ * inspections carry 418 kB of `inspector_signature` and 221 kB of
+ * `approver_signature` - 644 kB, 54% of the list payload - and the register
+ * renders neither. They were downloaded on every page load so that a row the
+ * user might click could already have them.
+ *
+ * The surfaces that genuinely need a signature (the record viewer, the PDF, the
+ * approval modal) each read ONE row through getInspectionForPage, which still
+ * uses PAGE_COLS. Paying for one row when somebody asks beats paying for 249 on
+ * the chance that they will.
+ *
+ * `tyre_conditions` deliberately STAYS: the overview slides, the per-site
+ * summary and the row damage counts are all computed from it, so the list
+ * genuinely needs it. `photo_data` stays because the row shows a camera
+ * indicator; it is empty on every row today, but it is a base64 column and is
+ * the next thing to move off this list if photos start landing in it.
+ */
+const LIST_COLS = PAGE_COLS
+  .split(',')
+  .filter((c) => c !== 'inspector_signature' && c !== 'approver_signature')
+  .join(',')
+
+/**
  * List inspections, newest first. Country-scoped (null-safe) and optionally
  * filtered by status / severity / site / inspection type.
  * @param {{country?:string, status?:string, severity?:string, site?:string, type?:string, limit?:number}} [opts]
@@ -76,7 +101,7 @@ export async function updateInspection(id, patch) {
 export function listInspectionsForPage({ from, to, country, createdBy } = {}) {
   let q = supabase
     .from('inspections')
-    .select(PAGE_COLS)
+    .select(LIST_COLS)
     .order('scheduled_date', { ascending: false })
     .range(from, to)
   if (country && country !== 'All') q = q.eq('country', country)

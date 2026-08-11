@@ -202,7 +202,7 @@ export default function Dashboard() {
   // row ceiling, so the client-computed charts render a partial slice. KPIs are
   // unaffected (they come from the server summary RPC). Surfaced as a note.
   const [capped, setCapped]           = useState(false)
-  const [dateShortcut, setDateShortcut] = useState('This Month')
+  const [dateShortcut, setDateShortcut] = useState('This Year')
   const [showCustom, setShowCustom]   = useState(false)
   const [granularity, setGranularity] = useState('monthly')
   const [recentRecords, setRecentRecords] = useState([])
@@ -243,7 +243,12 @@ export default function Dashboard() {
     setDateShortcut(label); setShowCustom(label === 'Custom')
   }
 
-  useEffect(() => { applyShortcut('This Month') }, [])
+  // Opens on THIS YEAR, not this month. Tyre records, accidents and job-card
+  // lines all have zero rows in the current month - they arrive in uploads, not
+  // daily - so a month default rendered the tyre and accident panels blank while
+  // the data was sitting right there. The year has data in every feed and still
+  // reads a fraction of the history.
+  useEffect(() => { applyShortcut('This Year') }, [])
 
   // Load the tyre vs maintenance cost split (last 12 months, country scoped).
   useEffect(() => {

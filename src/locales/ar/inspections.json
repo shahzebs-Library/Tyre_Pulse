@@ -131,7 +131,8 @@
     "del": "حذف",
     "titleHasPhoto": "توجد صورة",
     "titleActionRaised": "تم إنشاء إجراء",
-    "titleExportPdf": "تصدير PDF مفصل مع مخطط الإطارات"
+    "titleExportPdf": "تصدير PDF مفصل مع مخطط الإطارات",
+    "titleOpenRecord": "افتح هذا السجل واطلع على ما تم فحصه"
   },
   "modal": {
     "editRecord": "تعديل السجل",

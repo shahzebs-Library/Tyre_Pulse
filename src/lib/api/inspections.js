@@ -101,7 +101,7 @@ export async function updateInspection(id, patch) {
 export function listInspectionsForPage({ from, to, country, createdBy } = {}) {
   let q = supabase
     .from('inspections')
-    .select(PAGE_COLS)
+    .select(LIST_COLS)
     .order('scheduled_date', { ascending: false })
     .range(from, to)
   if (country && country !== 'All') q = q.eq('country', country)

@@ -32,8 +32,14 @@
  * that reads as a fleet standing still.
  */
 
-/** Coverage at or above this is treated as near-complete recording. */
-export const GOOD_COVERAGE_PCT = 80
+/**
+ * Coverage at or above this is treated as near-complete recording.
+ * Calibrated against the live data rather than picked round: KSA sits at 95.6%
+ * coverage where the two bases differ by 4% (genuinely reassuring), while UAE
+ * sits at 82.4% where they still differ by 21%. A gate of 80 would have called
+ * that 21% gap "almost certainly real quiet days", so the gate is 85.
+ */
+export const GOOD_COVERAGE_PCT = 85
 /** Below this, the calendar rate is very likely an understatement. */
 export const WEAK_COVERAGE_PCT = 50
 

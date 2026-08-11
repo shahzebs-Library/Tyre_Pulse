@@ -31,6 +31,17 @@ import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
 import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction } from '../lib/inspectionTyreFlags'
 import { raiseActionsForInspection } from '../lib/api/correctiveActions'
 import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
+import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
+
+/**
+ * How long a running-life payload may be reused.
+ *
+ * get_tyre_running_life costs 832 ms of server time and 2.2 MB for KSA. The
+ * page needs it once for its tyre-due flags; every row PDF exported in the next
+ * couple of minutes can honestly reuse that same reading rather than paying for
+ * it again. Short enough that a genuine tyre change shows up on the next visit.
+ */
+const RUNNING_LIFE_TTL_MS = 120000
 
 // Report logo: tenant branding wins; otherwise fall back to the org-wide
 // company logo set in Console -> Report Colors (system_config.company_logo).
@@ -606,6 +617,31 @@ export default function Inspections() {
   // Row PDF export: render the live diagram offscreen, then capture its SVG.
   const [pdfRow, setPdfRow] = useState(null)
   const pdfDiagramRef = useRef(null)
+  // Read a record in place. Holds an id, not a row: the drawer loads the full
+  // record (signatures included, which the register list no longer carries).
+  const [viewId, setViewId] = useState(null)
+  const [pdfBusyId, setPdfBusyId] = useState(null)
+
+  /**
+   * Export one inspection's report.
+   *
+   * Takes the id, not the list row, because the register list deliberately
+   * omits the signature columns and this report prints both signatures. Fetching
+   * the one row here is what keeps them off the list read.
+   */
+  const exportRowPdf = useCallback(async (rowOrId) => {
+    const id = typeof rowOrId === 'string' ? rowOrId : rowOrId?.id
+    if (!id || pdfBusyId) return
+    setPdfBusyId(id)
+    try {
+      const full = await inspectionsApi.getInspectionForPage(id)
+      setPdfRow(full || (typeof rowOrId === 'object' ? rowOrId : null))
+    } catch {
+      // Fall back to the list row: a report without the signature block beats
+      // a button that silently does nothing.
+      setPdfRow(typeof rowOrId === 'object' ? rowOrId : null)
+    }
+  }, [pdfBusyId])
 
   useEffect(() => {
     if (!pdfRow) return
@@ -627,10 +663,12 @@ export default function Inspections() {
           catch { return null }
         }))).filter(Boolean)
 
-        // Expected life for this asset's fitted tyres (best-effort).
+        // Expected life for this asset's fitted tyres (best-effort). Shares the
+        // payload the page already loaded for its flag map rather than pulling
+        // another 2.2 MB to filter it down to one asset.
         let lifeRows = []
         try {
-          const payload = await getTyreRunningLife({ country: pdfRow.country })
+          const payload = await getTyreRunningLife({ country: pdfRow.country, maxAgeMs: RUNNING_LIFE_TTL_MS })
           lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === pdfRow.asset_no)
         } catch { lifeRows = [] }
 
@@ -640,7 +678,7 @@ export default function Inspections() {
         const svgEl = pdfDiagramRef.current?.querySelector('svg[data-tyre-map]') || null
         const diagramBg = (await getDiagramBg().catch(() => '')) || '#000000'
         await exportInspectionDetailPdf(pdfRow, { branding: await brandingForPdf(branding), company, photos, lifeRows, svgEl, diagramBg })
-      } finally { if (!cancelled) setPdfRow(null) }
+      } finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
   }, [pdfRow])
@@ -677,15 +715,24 @@ export default function Inspections() {
   const [masterAssets, setMasterAssets] = useState([])
 
   // Country-scoped, and PAGED inside the service: the unpaged read stopped at
-  // PostgREST's 1000-row cap while the fleet holds 1,523, so 523 assets were
-  // simply absent from this picker with nothing to say so.
+  // PostgREST's 1000-row cap while the fleet holds 1,617, so the tail of the
+  // fleet was simply absent from this picker with nothing to say so.
+  //
+  // Fetched ONLY for the checklist tab, which is the only thing that uses it
+  // (the asset datalist and the site select). It used to run on every mount of
+  // the page, so opening the register pulled the whole fleet - 1,617 rows over
+  // two paged round trips - to populate a picker that was not on screen.
+  const fleetLoaded = useRef(null)
   useEffect(() => {
+    if (activeTab !== 'checklist') return
+    if (fleetLoaded.current === activeCountry) return
+    fleetLoaded.current = activeCountry
     inspectionsApi.listInspectionVehicles({ country: activeCountry }).then(data => {
       if (!data) return
       setMasterSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
       setMasterAssets(data.filter(r => r.asset_no).sort((a, b) => a.asset_no.localeCompare(b.asset_no)))
     }).catch(() => { /* silent - master data best-effort */ })
-  }, [activeCountry])
+  }, [activeCountry, activeTab])
 
   // Geolocation auto-site detection (best-effort) - declared after masterSites
   // so its dependency array is not evaluated before that state exists.
@@ -749,7 +796,7 @@ export default function Inspections() {
   useEffect(() => {
     if (authLoading) return
     let cancelled = false
-    getTyreRunningLife({ country: activeCountry }).then((payload) => {
+    getTyreRunningLife({ country: activeCountry, maxAgeMs: RUNNING_LIFE_TTL_MS }).then((payload) => {
       if (cancelled) return
       const shaped = shapeRunningLife(payload)
       setFlagMap(shaped.ok ? buildAssetFlagMap(shaped.rows) : null)
@@ -2351,6 +2398,18 @@ export default function Inspections() {
           onClose={() => setSummaryOpen(false)}
         />
       )}
+      {/* Read one inspection in place: the recorded readings, meters, photos
+          and signatures, without a page load or a downloaded file. */}
+      <InspectionViewerDrawer
+        inspectionId={viewId}
+        onClose={() => setViewId(null)}
+        onEdit={(row) => {
+          setViewId(null)
+          setForm({ ...row, tyre_conditions: row.tyre_conditions ?? {} })
+        }}
+        onDownload={(row) => exportRowPdf(row)}
+        downloading={Boolean(pdfBusyId)}
+      />
       <div className="flex flex-wrap gap-2">
         {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],
           ['Overdue', t('inspections.filters.status.overdue'), 'bg-red-900/30 text-red-400 border-red-700/50'],
@@ -2460,10 +2519,21 @@ export default function Inspections() {
                       height: `${virtualRow.size}px`,
                       ...inspGridStyle,
                     }}
-                    className={`border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}
+                    className={`border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    title={t('inspections.row.titleOpenRecord')}
+                    // Open the record in place. The row is the natural target -
+                    // reading what was recorded should not cost a page load or
+                    // a downloaded file. Clicks on the checkbox and the action
+                    // buttons stop propagation, so those still do their own job.
+                    onClick={() => setViewId(r.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setViewId(r.id) }
+                    }}
                   >
                     {isAdmin && (
-                      <div className="px-3">
+                      <div className="px-3" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
                           className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                       </div>
@@ -2526,8 +2596,13 @@ export default function Inspections() {
                     <div className="px-3 text-[var(--text-secondary)] text-xs truncate">{r.inspector || r.attendees || '-'}</div>
 
                     {/* Actions */}
-                    <div className="px-3">
+                    <div className="px-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 flex-wrap">
+                        <button onClick={() => setViewId(r.id)}
+                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors"
+                          title={t('inspections.row.titleOpenRecord')}>
+                          <Eye size={11} className="inline" />
+                        </button>
                         {r.status !== 'Done' && r.status !== 'Cancelled' && (
                           <button onClick={() => markDone(r.id)}
                             className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors whitespace-nowrap">
@@ -2549,8 +2624,8 @@ export default function Inspections() {
                           className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors">
                           {t('inspections.row.edit')}
                         </button>
-                        <button onClick={() => setPdfRow(r)}
-                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors"
+                        <button onClick={() => exportRowPdf(r)} disabled={pdfBusyId === r.id}
+                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors disabled:opacity-50"
                           title={t('inspections.row.titleExportPdf')}>
                           <FileText size={11} className="inline" />
                         </button>

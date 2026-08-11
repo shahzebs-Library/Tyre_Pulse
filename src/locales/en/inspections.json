@@ -131,7 +131,8 @@
     "del": "Del",
     "titleHasPhoto": "Has photo",
     "titleActionRaised": "Action raised",
-    "titleExportPdf": "Export detailed PDF with tyre diagram"
+    "titleExportPdf": "Export detailed PDF with tyre diagram",
+    "titleOpenRecord": "Open this record and see what was inspected"
   },
   "modal": {
     "editRecord": "Edit Record",

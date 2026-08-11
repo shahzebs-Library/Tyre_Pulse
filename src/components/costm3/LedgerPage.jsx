@@ -14,9 +14,12 @@ import { Plus, Upload, Trash2, RefreshCcw, X, FileSpreadsheet, ChevronDown, Chev
 import PageHeader from '../ui/PageHeader'
 import { useSettings, COUNTRIES } from '../../contexts/SettingsContext'
 import { CPK_PERIODS, DEFAULT_PERIOD, periodBounds, periodLabel } from '../../lib/cpkModule'
-import { IMPORT_TEMPLATES, mapImportRows, summarizeLedger } from '../../lib/costPerM3'
+import { IMPORT_TEMPLATES, mapImportRows, summaryFromMonthly } from '../../lib/costPerM3'
 import { parseWorkbook } from '../../lib/import/parseWorkbook'
-import { logIntakeToHistory, countCostM3Rows } from '../../lib/api/costPerM3'
+import {
+  logIntakeToHistory, countCostM3Rows, getProductionMonthly, getLedgerMonthly,
+} from '../../lib/api/costPerM3'
+import { currencyFor } from '../../lib/api/tyrePriceBackfill'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -52,46 +55,86 @@ export default function LedgerPage({
   // Summary-first (owner preference): the raw row table is collapsed by default
   // behind "Show all rows"; the summary above answers the everyday questions.
   const [showRows, setShowRows] = useState(false)
+  const [rowsLoading, setRowsLoading] = useState(false)
+  // The server's monthly aggregate. null until it lands, so "no data" and
+  // "not asked yet" stay different statements.
+  const [monthly, setMonthly] = useState(null)
   // The true number of rows in the current window, or null when unknown. Only
   // ever used to be HONEST about a bounded read - never to fake a total.
   const [totalRows, setTotalRows] = useState(null)
   const fileRef = useRef(null)
 
   const tpl = IMPORT_TEMPLATES[kind]
+  // One country, one currency. The monthly aggregate carries amounts but not a
+  // currency code, and the page is always scoped to a single country.
+  const currency = currencyFor(country)
+
+  // Summary-first applies to the three period ledgers; the sites register keeps
+  // its plain always-visible table (no amounts, tiny dataset).
+  const hasSummary = kind === 'sco' || kind === 'sany' || kind === 'production'
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true); setError('')
     setTotalRows(null)
+    setMonthly(null)
+    setRows([])
+    setShowRows(false)
+
+    if (hasSummary) {
+      // NOT ONE ROW IS READ TO OPEN THIS PAGE. It used to pull up to 20,000
+      // rows into the browser purely to add them up, over a production table
+      // holding hundreds of thousands - slow, and the sums only ever covered
+      // as far as the bounded read reached. The database already groups these
+      // by month, so the page asks for the summary and nothing else.
+      const monthlyFor = kind === 'production'
+        ? getProductionMonthly({ country, from: bounds.from, to: bounds.to })
+        : getLedgerMonthly(kind, { country, from: bounds.from, to: bounds.to })
+      monthlyFor
+        .then((res) => { if (!cancelled) setMonthly(Array.isArray(res) ? res : []) })
+        .catch((e) => { if (!cancelled) { setMonthly([]); setError(toUserMessage(e)) } })
+        .finally(() => { if (!cancelled) setLoading(false) })
+
+      // The true number of rows behind the summary. Shown so "Show all rows"
+      // can say what it is about to fetch, never used to fake a total.
+      countCostM3Rows({ country, from: bounds.from, to: bounds.to })
+        .then((c) => { if (!cancelled) setTotalRows(c?.[kind] ?? null) })
+        .catch(() => { if (!cancelled) setTotalRows(null) })
+      return () => { cancelled = true }
+    }
+
     service.list({ country, from: bounds.from, to: bounds.to })
       .then((res) => { if (!cancelled) setRows(Array.isArray(res) ? res : []) })
       .catch((e) => { if (!cancelled) { setRows([]); setError(toUserMessage(e)) } })
       .finally(() => { if (!cancelled) setLoading(false) })
-
-    // The TRUE row count for this window, straight from the server. Every list
-    // here is bounded, and a summary computed from a truncated read used to
-    // present itself as the total - production_logs holds 297,354 rows against
-    // a 1,000-row read. Counting separately is the only way the page can know,
-    // and it degrades to null (say nothing) rather than guessing.
-    if (kind === 'sco' || kind === 'sany' || kind === 'production') {
-      countCostM3Rows({ country, from: bounds.from, to: bounds.to })
-        .then((c) => { if (!cancelled) setTotalRows(c?.[kind] ?? null) })
-        .catch(() => { if (!cancelled) setTotalRows(null) })
-    }
     return () => { cancelled = true }
-  }, [country, bounds.from, bounds.to, service, kind])
+  }, [country, bounds.from, bounds.to, service, kind, hasSummary])
 
   useEffect(() => load(), [load])
 
-  const total = useMemo(
-    () => rows.reduce((s, r) => s + (num(r[amountKey]) || 0), 0),
-    [rows, amountKey],
+  // Rows arrive only when somebody actually asks to see them.
+  const loadRows = useCallback(() => {
+    setShowRows(true)
+    if (rows.length || rowsLoading) return
+    setRowsLoading(true)
+    service.list({ country, from: bounds.from, to: bounds.to })
+      .then((res) => setRows(Array.isArray(res) ? res : []))
+      .catch((e) => setError(toUserMessage(e)))
+      .finally(() => setRowsLoading(false))
+  }, [country, bounds.from, bounds.to, service, rows.length, rowsLoading])
+
+  const summary = useMemo(
+    () => (hasSummary && monthly ? summaryFromMonthly(monthly, kind, { totalRows, currency }) : null),
+    [hasSummary, monthly, kind, totalRows, currency],
   )
 
-  // Summary-first applies to the three period ledgers; the sites register keeps
-  // its plain always-visible table (no amounts, tiny dataset).
-  const hasSummary = kind === 'sco' || kind === 'sany' || kind === 'production'
-  const summary = useMemo(() => (hasSummary ? summarizeLedger(rows, kind) : null), [hasSummary, rows, kind])
+  // The window total. From the summary when there is one, so it covers the
+  // whole period rather than only the rows that happen to be loaded.
+  const total = useMemo(() => {
+    if (hasSummary) return summary?.totals?.value ?? 0
+    return rows.reduce((s, r) => s + (num(r[amountKey]) || 0), 0)
+  }, [hasSummary, summary, rows, amountKey])
+
   const isProd = kind === 'production'
   const oneCurrency = summary && !summary.totals.mixedCurrency ? (summary.totals.currencies[0] || '') : ''
   const fmtSummaryVal = (v) => {
@@ -103,9 +146,9 @@ export default function LedgerPage({
   // A bounded read that did not reach the end of the window. `truncated` is the
   // only thing that may weaken a stated figure, and it is derived from the
   // SERVER count, not from whether we happened to hit the page size.
-  const truncated = totalRows != null && totalRows > rows.length
-  const rowsLabel = truncated
-    ? `${rows.length.toLocaleString()} of ${totalRows.toLocaleString()}`
+  const truncated = showRows && rows.length > 0 && totalRows != null && totalRows > rows.length
+  const rowsLabel = totalRows != null
+    ? totalRows.toLocaleString()
     : rows.length.toLocaleString()
   const rowsVisible = !hasSummary || showRows
 
@@ -391,18 +434,26 @@ export default function LedgerPage({
         </div>
       )}
 
-      {/* All-rows toggle: raw detail stays available, collapsed by default. */}
+      {/* The raw rows are never fetched to open this page. They are fetched
+          here, on the press, because that is the only moment anyone wants them.
+          The button says how many are coming so a large window is a choice. */}
       {hasSummary && !loading && (
-        <div className="mb-3">
+        <div className="mb-3 flex items-center gap-3 flex-wrap">
           <button
             type="button"
-            onClick={() => setShowRows((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm"
+            onClick={() => (showRows ? setShowRows(false) : loadRows())}
+            disabled={rowsLoading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-sm disabled:opacity-60"
             style={{ color: 'var(--text-secondary)' }}
           >
             {showRows ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {showRows ? 'Hide rows' : `Show rows (${rowsLabel})`}
+            {rowsLoading ? 'Loading rows...' : showRows ? 'Hide rows' : `Show rows (${rowsLabel})`}
           </button>
+          {!showRows && (
+            <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
+              The summary above is the whole period. Rows load only when you open them.
+            </span>
+          )}
         </div>
       )}
 

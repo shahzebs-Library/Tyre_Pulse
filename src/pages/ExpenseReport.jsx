@@ -924,13 +924,20 @@ export default function ExpenseReport() {
         store_code: r.store_code || '',
         currency: r.currency || '',
         country: r.country || '',
+        // The ERP left this line with no amount and it was priced from what the
+        // same item code cost elsewhere. Saying so in the sheet is the whole
+        // point: an estimate that looks identical to a paid figure is worse
+        // than a blank, because nobody knows to question it.
+        cost_basis: r.filled_cost != null ? 'Estimated from item code' : 'From ERP',
       }))
       await exportToExcel(
         data,
         ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost',
-          'category', 'tyre_value', 'spare_value', 'oil_value', 'site', 'store_code', 'currency', 'country'],
+          'category', 'tyre_value', 'spare_value', 'oil_value', 'site', 'store_code', 'currency', 'country',
+          'cost_basis'],
         ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value',
-          'Category', 'Tyre value', 'Spare value', 'Oil value', 'Site', 'Store', 'Currency', 'Country'],
+          'Category', 'Tyre value', 'Spare value', 'Oil value', 'Site', 'Store', 'Currency', 'Country',
+          'Cost basis'],
         reportFileName(company, 'Expense Rows', reportDateLabel()),
         'Expense rows',
         {

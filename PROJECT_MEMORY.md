@@ -43,6 +43,18 @@ if this assest code 047 is old job card add itnto this 047 cab u delete all augu
   one: Inactive, at JED, ONE 2023 job card (GCKR/JC/0082/0323 "TWO TYRES NEED TO BE CHANGED", KSP-T3), no tyres,
   no expense lines, and **no TM047 existed** - so there was nothing to merge, only a code to pad. Snapshot
   `_bak.asset_tm47_rename`. **NO auto-pad trigger was added** - it would corrupt REC01/WTP01.
+- **THE EXPENSE DOWNLOAD NOW CARRIES A `Cost basis` COLUMN** ("From ERP" / "Estimated from item code"), fed by
+  `filled_cost` on the row. An estimate that looks identical to a paid figure is worse than a blank, because
+  nobody knows to question it. `listExpenseRows` selects `filled_cost` for exactly this.
+- **COST PER M3 WITHHOLDS A RATE IT CANNOT MEASURE (code only, no migration).** Western region holds SAR
+  472,229 against **524 m3** - not a cost problem, a DENOMINATOR problem: **92% of KSA production sits under
+  "(no region set)"** across 24 sites, so almost none has been tagged. Divided out that is **SAR 901/m3 beside
+  a fleet figure of 12.06**, which reads as a catastrophe and is pure artifact. NEW pure
+  `costPerM3Reliable(m3, min=MIN_M3_FOR_RATE 1000)` + `fmtCostPerM3Guarded` in `src/lib/costPerM3.js`: the
+  table AND the Excel export print "Too little production to measure", and such regions are **left out of the
+  by-region chart entirely** (one bar that tall flattens every real one into the axis). Tests
+  `costPerM3Guard.test.js` (5). **`N/A` and "too little" are kept DISTINCT** - no rate at all and a thin
+  denominator are different statements. OWNER ACTION: tag each site Central/Western in Site Management.
 
 ## SESSION 2026-08-11 (part 7) — THE PRODUCTION FILE WAS UPLOADED TWICE (V513-V516). Superseded: next free **V519**.
 - **V516 — `production_logs` WAS RE-UPLOADED ON 2026-08-06 AND THIS OVERTURNS A STANDING RULE IN THIS FILE.**

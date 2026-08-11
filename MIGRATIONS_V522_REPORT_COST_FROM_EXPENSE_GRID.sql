@@ -1,0 +1,82 @@
+-- V522 - the shared report was costing the fleet from the wrong tables
+-- STATUS: APPLIED LIVE 2026-08-11 (as V522 / V522b / V522c)
+--
+-- THIS IS ALSO WHY "THE SHARED REPORT IS NOT UPDATING". The board never read
+-- parts_consumption, so every correction made to the expense ledger - the
+-- August clear-out, the re-classification, the zero-cost fill - could not
+-- change a single figure on it. It was not stale; it was reading elsewhere.
+--
+-- WHAT IT WAS DOING
+--   tyre cost        = sum(tyre_records.cost_per_tyre * qty)
+--   maintenance cost = sum(work_orders labour + parts + lubricant + outside)
+--
+-- Both are wrong, and the standing rule in this file says so:
+-- THE EXPENSE GRID IS THE COST SOURCE. Measured over the board's own window
+-- (2025-09-01 to 2026-08-11):
+--
+--   expense grid   KSA SAR 5,848,077 | UAE AED 5,959,508 | Egypt EGP 31,906,595
+--   cost_per_tyre  KSA     4,730,109 | UAE     384,417   | Egypt      2,311,349
+--   work_orders    KSA     2,998,177 | UAE           0   | Egypt              0
+--
+-- UAE and Egypt reported ZERO maintenance cost, because their job cards carry
+-- no cost columns, and Egypt's tyre cost read less than half of what was spent.
+-- The board then ADDED SAR + AED + EGP into one 'total_cost' of 10,236,882,
+-- which is not a quantity of anything.
+--
+-- THE COST BLOCK IS NOW ITS OWN FUNCTION, _report_cost_block(), spliced into
+-- get_report_snapshot in place of ~3,800 characters of inline SQL. One place
+-- defines what the shared board means by cost. The splice was done with guards
+-- that abort unless the exact block boundaries are found - a blind replace on a
+-- 19k-character function is how a subtle behaviour change ships unnoticed.
+--
+-- FOUR CORRECTIONS
+--   1. Cost comes from parts_consumption, per country, in its own currency.
+--      by_country[] is always returned. The single scalars (total_cost,
+--      tyre_cost, cost_per_km, cost_per_m3, cost_per_hour, tyre_cpk) are
+--      returned ONLY when exactly one currency is in scope; otherwise NULL and
+--      mixed_currency says why. A board covering three countries has no single
+--      cost, and printing one is how the old figure came about.
+--   2. SCO AND SANY ARE INCLUDED. Cost per M3 in the app is
+--      (Internal + SCO + SANY) / approved m3. The board counted only the
+--      internal grid and so was short by SAR 1,207,478 of SCO and SAR 4,333,145
+--      of SANY for KSA - nearly as much again as it did count. Two surfaces
+--      answering the same question differently is the complaint being fixed.
+--   3. m3 sums approved_m3 (falling back to m3). It was summing SUPPLIED m3, so
+--      the rate was diluted by concrete that was sent back.
+--   4. ENGINE HOURS ARE SANITY-CHECKED. One KSA asset carries 441,935 engine
+--      hours - fifty years of continuous running - and the naive sum across 333
+--      assets gave 5,844,023 hours and a confident cost_per_hour of 1.00. An
+--      asset cannot accumulate more than 24 hours of running per day, so a span
+--      above that ceiling is a bad reading. Those assets are dropped and
+--      `hours_assets_dropped` reports how many, so a repaired figure is never
+--      mistaken for a complete one. KSA: 5,844,023 -> 918,203 hours, 108
+--      assets dropped, cost per hour 1.00 -> 12.40.
+--   Plus: cost_per_m3 is withheld under 1,000 m3, the same floor the Cost per
+--   M3 screen uses, with m3_too_thin saying so.
+--
+-- VERIFIED AFTER APPLY, KSA scope:
+--   total_cost 11,388,700 SAR = 5,848,077 internal + 1,207,478 SCO + 4,333,145
+--   SANY, and the internal figure reconciles exactly to parts_consumption.
+--   All-countries scope: every scalar NULL, mixed_currency true, by_country
+--   carrying three real rows in SAR, AED and EGP.
+--
+-- SECURITY: _report_cost_block takes an org id, so it is executable by NOBODY
+-- but the definer chain - revoked from public, anon AND authenticated (the V378
+-- lesson: a DEFINER helper that accepts an org id must never be callable by
+-- authenticated). get_report_snapshot is SECURITY DEFINER and calls it as owner.
+--
+-- CLIENT: src/pages/ReportShare.jsx renders by_country as a table when more
+-- than one currency is in scope, and states the basis, the withheld m3 rate and
+-- the dropped engine-hour assets underneath.
+--
+-- NOTE ON THE OTHER HALF OF "not updating": the share row itself carries
+-- refresh_seconds = 1200, so a board left open re-fetches every 20 minutes.
+-- Returning to the tab forces an immediate refresh. That is a per-share setting
+-- the owner can change in Report Sharing; it was not altered here.
+
+-- Applied bodies are in the v522_report_cost_from_expense_grid,
+-- v522b_cost_block_odometer_column (the column is odometer_km, not odometer)
+-- and v522c_cost_block_full_definition migrations, plus the guarded splice that
+-- replaced the inline 'cost' object in get_report_snapshot with:
+--
+--   'cost', public._report_cost_block(v_org, v_site, v_country, v_cfrom, v_cto, v_months),

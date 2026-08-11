@@ -1,0 +1,32 @@
+-- V514 - take the plate from the owner's asset sheet, and stop flagging plates.
+-- APPLIED LIVE 2026-08-11. 17 plates changed, 0 conflicts remain.
+--
+-- OWNER'S RULING: "plates are not a problem u can avoid it and add those if
+-- necessary dont flag it - assest code must be". The sheet is the authority on
+-- plates. The 17 remaining differences are applied rather than raised, and no
+-- further plate report is produced.
+--
+-- These 17 are the ones spacing could not settle - V509 already normalised five
+-- that differed only by spaces. They include apparent transpositions (MP114 and
+-- MP119 carrying each other's plates, TM400 and TM402 likewise) and nine mixers
+-- reading AXA on file against JXA in the sheet. The owner has said the sheet
+-- wins, so it wins; the alternative was guessing per asset, which is not ours.
+--
+-- ONLY the plate moves. Asset code is untouched - it is the identity every other
+-- table joins on, and the owner has been explicit that it is what must be right.
+--
+-- ASSET CODE AUDIT run at the same time, KSA register, 1,030 assets:
+--   duplicates 0, padded 0, lower-case 0, inner spaces 0, blank 0.
+--   11 codes sit outside the AA###/AAA### pattern and 10 are legitimate naming -
+--   REC01..REC08 (reclaimers) and WTP01/WTP02 (water treatment plants).
+--   TM47 is the single oddity: every other mixer is three digits. It carries one
+--   job card, no tyres, no expense lines, and appears in neither the sheet nor
+--   the register as TM047. It is NOT renamed - inventing TM047 would create an
+--   asset nobody recorded. Reported instead.
+--
+-- ROLLBACK:
+--   update vehicle_fleet f set registration_no = b.registration_no
+--     from _bak.vehicle_fleet_plate_v514 b where b.id = f.id;
+--
+-- The applied body is in the Supabase migration history under
+-- v514_apply_sheet_plates.

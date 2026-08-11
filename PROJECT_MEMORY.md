@@ -23,7 +23,80 @@ look for `target: "production"` first. **HOW TO CHECK WHETHER WORK IS ACTUALLY L
 merged PR prove NOTHING about the deployed site.** Read the project's deployments and confirm the newest
 `target: "production"` carries the sha you expect; `target: null` is a branch preview.
 
-## SESSION 2026-08-11 (part 9) — INSPECTION EVIDENCE, ZERO-ROW LEDGERS, STATIONS, REPORT COST, DIALOGS (V519-V523). Next free **V524**. PR #308 merged.
+## SESSION 2026-08-11 (part 10) — PRODUCTION SITE FROM THE REGISTER + SANY READ FROM THE INVOICE (V524-V525). Next free **V526**. PRs #310-#313 merged, production live at `a7a200a`.
+
+### OPEN ITEMS AT SESSION END - the owner parked these deliberately, do NOT re-litigate them
+**Waiting on the OWNER (cannot be done from here):**
+1. **Map the plant numbers to sites** (39, 40, 81, 87, 82, 83, 96, 97, 29, 70, 23, 24, 28, 57, 56, 69 ... 25 codes)
+   in the station panel. The plant CANNOT be derived - stations 39/40/81/23 serve the same projects and
+   customers because a plant supplies whatever is near it. This is what gives the bulk of KSA production its
+   region; today ~92% has none.
+2. **The Apr-Jul 2026 SANY GENERATOR proforma PDF has never been supplied.** That row is still gross x 3.75 =
+   SAR 213,750 and is very likely OVERSTATED: its Jan-Apr twin carried a spare-parts discount AND printed its
+   own SAR total, both of which we had been ignoring. Do not "fix" it by inference - ask for the document.
+3. **Re-upload the August 2026 KSA expenses** (V518 deleted 1,034 lines / SAR 206,810.76 at their request).
+   **MAP THE `#` COLUMN** or the re-upload duplicates - none of the deleted rows carried an import_uid.
+
+**Offered and NOT started (owner said keep pending):**
+4. 14 KSA expense lines honestly left at zero - every one has NO priced sibling anywhere to copy from.
+5. 58 tyre groups where the two copies DISAGREE ON MILEAGE (e.g. TM657 LHCO 54,086 vs 39,672). Deleting either
+   discards a real measurement and silently picks a tyre life. Needs the owner to say which is right.
+
+### V525 - A SANY INVOICE IS A TABLE OF MACHINES, AND THE COST WAS WRONG TWICE
+Owner: "sany coat is shwoing more ... i want to make those correct to extraxt table from pdf and add not just
+number that u must do it". Both Jan-Apr PDFs were read with pdfjs and reconciled BY HAND before anything changed.
+- **NEW `sany_invoice_lines`** (invoice_id FK cascade, line_no, machinery, model, charge_standard, contract_year,
+  activation_date, service_period, units, usage_detail, amount_usd; org-restrictive RLS + active read + elevated
+  write). Loaded: **SANY Automobile 27 lines = USD 512,864.19 over 324 machines** and **Sany International
+  (generators) 4 lines = USD 51,000 over 34**. The 27 lines sum to the cent AND the per-class unit counts match
+  the invoice's own header (Mixer 232 / Concrete pump 56 / Trailer 10 / Line 2 / Batching 10 / Loader 14 = 324) -
+  two independent checks, which is what made the extraction trustworthy rather than plausible.
+- **ERROR 1, the generator invoice was OVERSTATED.** It carries a **spare-parts discount of USD 245.38** we never
+  applied, and it PRINTS ITS OWN RIYAL TOTAL - "Total Amount (SAR) 190,329.82" - which we were overriding with
+  gross x 3.75 = 191,250. **RULE: when a SANY document states a SAR figure, that figure IS the amount; do not
+  re-derive it from USD.** 15% VAT (28,549.47) is EXCLUDED as recoverable, deliberately.
+- **ERROR 2, we were counting GROSS.** The four deductions are a penalty, **items Green Concrete had already
+  purchased**, labour/food/accommodation **GC provided**, and machines never serviced. Two of those are costs
+  ALREADY IN THE EXPENSE GRID, so gross billed the fleet twice. **NET is what GC pays and NET is the cost.**
+- **KSA SANY 4,333,144.54 -> 3,188,312.96 SAR** (Jan-Apr Automobile 1,351,933.20 + generators 190,329.82;
+  Apr-Jul Automobile 1,432,299.94 + generators 213,750 UNVERIFIED per open item 2). Snapshot
+  `_bak.sany_amount_v525`. This SETTLES the long-standing gross-vs-net question - do not re-open it as "the
+  owner's call"; the evidence decided it.
+- Parser: `parseSanyProformaPdf` gained `lines` / `lines_total_usd` / `lines_reconcile` (+ pure
+  `parseSanyProformaLineItems`, `extractPdfItems`, `pdfItemsToLines`). **ROW-BY-ROW PARSING ON y CANNOT WORK
+  HERE** - the table uses merged cells whose text is vertically CENTRED across the merge, so it straddles row
+  boundaries. The anchor is the `$N,NNN.NN` amount in the rightmost column, with charge-column vertical gaps
+  cutting the blocks. **A bare `/vat/` matched "Exca(vat)or"** and silently truncated the generator table to 2 of
+  4 lines while every total still looked right - now `\bvat\b`. `lines_reconcile` is exactly what caught it.
+- UI: `SanyInvoiceLinesModal` + pure `sanyInvoiceLines.js`. **The two documents disagree on the deduction amount
+  key** (`amount_usd` vs `amount`) - read both or the gross-to-net walk understates. An invoice with no lines says
+  its PDF was never supplied; a FAILED read says so rather than rendering as "no machines" - opposite statements.
+
+### V524 - PRODUCTION SITE NAMES COULD NOT MATCH THE REGISTER, AND THE FIRST FIX WAS A SILENT NO-OP
+Owner: "it should use those sites which we put in site managemnt and make the region by there why u needs another
+column". **There is NO second region column and there never was** - production_logs and production_station_map
+hold no region; `get_cost_per_m3` reads `sites.region` joined on `upper(btrim(name))`. The only extra column is
+`station`, which keeps the plant NUMBER so `site` can hold the real name; without it a later map correction
+cannot be re-applied.
+- The real fault: **`trg_normalize_site` was attached to 24 tables but NOT production_logs**, so 'Diriyah-G1' /
+  'Dhaban' / 'Metro' never matched the all-upper register. Attaching it changed NOTHING because
+  **TRIGGERS FIRE IN NAME ORDER** and `trg_resolve_production_station` sorts AFTER `trg_normalize_site`, ending
+  with `NEW.site := coalesce(v_site, NEW.station)` - it overwrote the normalised name with the raw station text
+  on every row. The backfill touched 4,173 rows and left them identical: a migration that reports success and
+  does nothing. **V524b renames it `trg_zz_normalize_site` so the normaliser runs LAST.** Same lesson as the
+  `aa_` prefix on the expense country guard, mirrored.
+- 4,173 rows corrected, all nine renames landing on a registered site (Dhaban->DHAHBAN, Metro->RIY-MET,
+  Laheq Island->LAHEQ via site_aliases). **KSA approved m3 UNCHANGED at 2,193,569.9** - spelling moved, not
+  quantity. Snapshot `_bak.production_site_v524` (restore with the trigger disabled or it normalises straight
+  back). Regions set: LAHEQ -> WESTERN, RIY-MET -> CENTRAL.
+- `StationMapPanel` now picks the site from a STRICT DROPDOWN of the register (a free-text box could invent a
+  39th site nothing else knows about) and shows the region read back from Site Management; a site with no region
+  says "Set in Site Management" rather than offering a second place to record the same fact.
+- `/cost-per-m3` Cost sources panel gained a **View table** link per source (Internal/Tyre -> /expense-report,
+  SCO -> /sco-costs, SANY -> /sany-invoices, Production -> /production-m3), because the ledgers were reachable
+  only if you already knew the page existed.
+
+## SESSION 2026-08-11 (part 9) — INSPECTION EVIDENCE, ZERO-ROW LEDGERS, STATIONS, REPORT COST, DIALOGS (V519-V523). Superseded: next free **V526**. PR #308 merged.
 - **THE INSPECTION VIEWER SHOWED THE ANSWERS AND NOTHING ELSE.** Owner: "it must sheo thr svg and picture".
   `InspectionAnswers` now renders the WHOLE record - summary, meta, the tyre-map SVG with each wheel's reading,
   the meter readings, findings/notes, the photographs and the signatures - and the PDF reads the SAME component,

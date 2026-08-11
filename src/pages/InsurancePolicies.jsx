@@ -15,6 +15,7 @@ import {
   Shield, FileText, FileSpreadsheet, AlertOctagon, Clock, Info,
   Plus, Pencil, Trash2, X, RefreshCw, Search, Calculator, Save, Upload,
   Mail, ClipboardList, Copy, Download, Check as CheckIcon, FileSearch, Sparkles,
+  Coins, ShieldOff, TrendingDown, Building2, ScrollText,
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
@@ -34,6 +35,13 @@ import {
 } from '../lib/insuranceCorrespondence'
 import { analyzeInsurerEmail, outcomeMeta } from '../lib/insuranceEmailAnalysis'
 import { exportToExcel, exportToPdf, exportDocumentPdf, reportFileName } from '../lib/exportUtils'
+import { loadInsurancePortfolio } from '../lib/api/insurancePortfolio'
+import { listSites } from '../lib/api/sites'
+import PortfolioSection from '../components/insurance/PortfolioSection'
+import CoverageGapsSection from '../components/insurance/CoverageGapsSection'
+import ClaimRegisterSection from '../components/insurance/ClaimRegisterSection'
+import LossExperienceSection from '../components/insurance/LossExperienceSection'
+import PropertyRisksSection from '../components/insurance/PropertyRisksSection'
 
 // ── small presentational helpers ─────────────────────────────────────────────
 function money(v, ccy) {
@@ -62,6 +70,22 @@ function SeverityBadge({ severity }) {
 // ── condition CRUD categories ─────────────────────────────────────────────────
 const CATEGORY_KEYS = Object.keys(CONDITION_CATEGORY_LABELS)
 const POLICY_TYPE_KEYS = Object.keys(POLICY_TYPE_LABELS)
+
+/**
+ * Top-level views. The knowledge base (policies, conditions, claim tools) is
+ * unchanged and stays the default; the rest read the customer's real insurance
+ * document set through the portfolio service. Deliberately tabs on THIS page,
+ * not new routes: /insurance-claims (our manual ledger) and /claims-summary
+ * (accident-embedded claim analytics) already exist and stay distinct.
+ */
+const VIEWS = [
+  { key: 'policies', label: 'Policies & claim tools', icon: ScrollText },
+  { key: 'portfolio', label: 'Portfolio', icon: Coins },
+  { key: 'gaps', label: 'Coverage gaps', icon: ShieldOff },
+  { key: 'claims', label: 'Claims register', icon: ClipboardList },
+  { key: 'loss', label: 'Loss experience', icon: TrendingDown },
+  { key: 'property', label: 'Property risks', icon: Building2 },
+]
 
 // Detail-column tool tabs so every claim tool is one click away (not a long scroll).
 const DETAIL_TABS = [
@@ -97,6 +121,55 @@ export default function InsurancePolicies() {
   const [detailTab, setDetailTab] = useState('overview')
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+
+  // ── the customer's real insurance document set ────────────────────────────
+  // Loaded lazily: opening the page for the claim tools must not pull the whole
+  // schedule, claim register and fleet register with it.
+  const [view, setView] = useState('policies')
+  const [portfolio, setPortfolio] = useState(null)
+  const [portfolioLoading, setPortfolioLoading] = useState(false)
+  const [portfolioError, setPortfolioError] = useState('')
+  const [siteNames, setSiteNames] = useState([])
+  const portfolioRequested = useRef(false)
+
+  const loadPortfolio = useCallback(async () => {
+    portfolioRequested.current = true
+    setPortfolioLoading(true)
+    setPortfolioError('')
+    const { data, error: err } = await loadInsurancePortfolio({ country: activeCountry })
+    setPortfolioError(err || '')
+    setPortfolio(data || null)
+    setPortfolioLoading(false)
+    // The site register only labels a property location as known or unknown; a
+    // failure here must never block the schedule, so it degrades to no check.
+    const { data: sites } = await listSites({ country: activeCountry })
+    setSiteNames(Array.isArray(sites) ? sites.map((s) => s.name).filter(Boolean) : [])
+  }, [activeCountry])
+
+  // Load on the first visit to any document-set view, and again if the country
+  // changes while one of them is open.
+  useEffect(() => {
+    if (view === 'policies') return
+    if (portfolioRequested.current && portfolio) return
+    loadPortfolio()
+  }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    portfolioRequested.current = false
+    setPortfolio(null)
+    if (view !== 'policies') loadPortfolio()
+  }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sources = portfolio?.sources || {}
+  const partialNote = useMemo(() => {
+    const bad = Object.keys(portfolio?.sourceErrors || {})
+    if (!bad.length) return ''
+    const LABEL = {
+      schedule: 'the asset schedule', property: 'the property schedule', claims: 'the claim register',
+      lossRuns: 'the loss runs', fleet: 'the fleet register', accidents: 'the accident register',
+    }
+    return `This view is incomplete: ${bad.map((k) => LABEL[k] || k).join(', ')} could not be read. Figures below cover only what loaded.`
+  }, [portfolio])
 
   // scenario checker state
   const [ctx, setCtx] = useState(DEFAULT_CTX)
@@ -425,8 +498,8 @@ export default function InsurancePolicies() {
         title="Insurance Policies"
         subtitle="Admin knowledge base: policies, conditions and cited claim decisions"
         icon={Shield}
-        onRefresh={() => loadPolicies(true)}
-        refreshing={loading}
+        onRefresh={() => { loadPolicies(true); if (view !== 'policies') loadPortfolio() }}
+        refreshing={loading || portfolioLoading}
         actions={
           <div className="flex items-center gap-2">
             <input ref={pdfRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={onImportPdf} />
@@ -459,6 +532,79 @@ export default function InsurancePolicies() {
         </div>
       )}
 
+      {/* top-level views */}
+      <div className="flex flex-wrap gap-1.5 rounded-xl border border-[var(--border-dim)] bg-[var(--surface-1)] p-1.5">
+        {VIEWS.map((v) => (
+          <button
+            key={v.key}
+            type="button"
+            onClick={() => setView(v.key)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${view === v.key ? 'bg-emerald-600 text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-2)]'}`}
+          >
+            <v.icon size={14} /> {v.label}
+          </button>
+        ))}
+      </div>
+
+      {view !== 'policies' && partialNote && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">{partialNote}</p>
+      )}
+
+      {view === 'portfolio' && (
+        <PortfolioSection
+          portfolio={portfolio}
+          schedule={sources.schedule || []}
+          policies={policies}
+          loading={portfolioLoading}
+          error={portfolioError}
+          onRetry={loadPortfolio}
+          country={activeCountry}
+        />
+      )}
+      {view === 'gaps' && (
+        <CoverageGapsSection
+          coverage={portfolio?.coverage}
+          loading={portfolioLoading}
+          error={portfolioError}
+          onRetry={loadPortfolio}
+          country={activeCountry}
+        />
+      )}
+      {view === 'claims' && (
+        <ClaimRegisterSection
+          claims={sources.claims || []}
+          stats={portfolio?.claims}
+          gap={portfolio?.gap}
+          repeat={portfolio?.repeat}
+          loading={portfolioLoading}
+          error={portfolioError}
+          onRetry={loadPortfolio}
+          country={activeCountry}
+        />
+      )}
+      {view === 'loss' && (
+        <LossExperienceSection
+          loss={portfolio?.loss}
+          lossRuns={sources.lossRuns || []}
+          loading={portfolioLoading}
+          error={portfolioError}
+          onRetry={loadPortfolio}
+          country={activeCountry}
+        />
+      )}
+      {view === 'property' && (
+        <PropertyRisksSection
+          risks={sources.property || []}
+          property={portfolio?.property}
+          siteNames={siteNames}
+          loading={portfolioLoading}
+          error={portfolioError}
+          onRetry={loadPortfolio}
+          country={activeCountry}
+        />
+      )}
+
+      {view === 'policies' && (<>
       {/* search */}
       <div className="relative max-w-md">
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -893,6 +1039,7 @@ export default function InsurancePolicies() {
           </div>
         </div>
       )}
+      </>)}
 
       {policyModal && (
         <PolicyModal

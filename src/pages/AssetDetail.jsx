@@ -35,6 +35,7 @@ import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import TyreBay from '../components/TyreBay'
+import AssetInsurancePanel from '../components/insurance/AssetInsurancePanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { Illustration } from '../components/illustrations'
 import { vehicleArt } from '../lib/brand/vehicleArt'
@@ -284,7 +285,7 @@ export default function AssetDetail() {
   const { assetNo } = useParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { activeCurrency } = useSettings()
+  const { activeCurrency, activeCountry } = useSettings()
   const { t } = useLanguage()
   const isAdmin = profile?.role === 'Admin'
 
@@ -896,6 +897,12 @@ export default function AssetDetail() {
                     <span className="text-[var(--text-muted)] uppercase tracking-widest mr-2">Notes</span>{asset.notes}
                   </p>
                 )}
+              </div>
+
+              {/* Insurance: this asset's own cover and its claim history on the
+                  insurer's register. Additive, no new route and no nav entry. */}
+              <div className="lg:col-span-2">
+                <AssetInsurancePanel asset={asset} country={activeCountry} />
               </div>
 
               {/* Custom fields */}

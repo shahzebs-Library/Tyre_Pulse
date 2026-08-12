@@ -96,6 +96,33 @@ merged PR prove NOTHING about the deployed site.** Read the project's deployment
 5. 58 tyre groups where the two copies DISAGREE ON MILEAGE (e.g. TM657 LHCO 54,086 vs 39,672). Deleting either
    discards a real measurement and silently picks a tyre life. Needs the owner to say which is right.
 
+### RUNNING & REMAINING STILL ERRORS ON A STALE BUNDLE - `p_limit` DEFAULTS TO NULL AND NULL MEANS ALL ROWS
+Owner reported the "Network error" again AFTER V523. The server is fine - verified live: 3,595 KSA rows over
+four pages of 1,000, **all 3,595 distinct**, so the paging fix is correct and page 2 is not an arbitrary set.
+**The failure is a CACHED OLD BUNDLE.** `get_tyre_running_life(text,integer,integer)` has
+`p_limit integer DEFAULT NULL`, and **omitting it returns every row** - verified, a 1-arg call returns all
+3,595 = the same 2.2 MB response the browser drops. So any client that does not page still reproduces the
+original bug exactly. The app is a prompt-mode PWA with `skipWaiting:false`, so a tab left open keeps its old
+build until the user accepts the update or every tab is closed; the auto-apply only fires when the tab is
+HIDDEN.
+**DELIBERATELY NOT "FIXED" BY CAPPING THE DEFAULT.** Setting `p_limit DEFAULT 1000` would make the stale
+bundle render 1,000 of 3,595 rows with no error and wrong totals - silent truncation, which this codebase
+holds to be worse than an honest failure (the V501/rowCap rule). The honest fix is getting the client onto the
+paged build. **If it is ever capped, the response must carry `truncated` AND every reader must show it.**
+**RULE: a paging parameter whose NULL means "everything" is not a bound. Any new paged RPC should make the
+unbounded read impossible to ask for by accident.**
+
+### OWNER REQUEST, NOT STARTED - ALERT RULES SHOULD FEED THE ANOMALY FEED
+"make an alert if in a system we set alert and anything change in advance should be triggert in anaomolies."
+Read as: a rule configured in Alert Rules must RAISE AN ANOMALY as soon as the measure moves toward breaching
+it, not only once it has breached. The pieces already exist and MUST be reused, not rebuilt:
+`alert_thresholds` + `/console/alert-rules` (the no-code rule builder, evaluated hourly by the existing cron),
+the anomaly engine behind `/ops-intelligence`, `trust_alerts` + `scan_data_trust` (V475), and
+`notify_elevated_users` for delivery. Design sketch: evaluate each active threshold on a schedule, compare the
+CURRENT value against the rule AND against its own recent trend, and emit an anomaly at two levels - `approaching`
+(trend will cross the threshold within the lead time) and `breached`. Dedupe per rule the way `upload_gap_notices`
+does, or it becomes a daily nag nobody reads. **Do NOT invent a second alert table or a second anomaly feed.**
+
 ### V525 - A SANY INVOICE IS A TABLE OF MACHINES, AND THE COST WAS WRONG TWICE
 Owner: "sany coat is shwoing more ... i want to make those correct to extraxt table from pdf and add not just
 number that u must do it". Both Jan-Apr PDFs were read with pdfjs and reconciled BY HAND before anything changed.

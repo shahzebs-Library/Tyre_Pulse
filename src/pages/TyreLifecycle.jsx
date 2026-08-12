@@ -21,6 +21,7 @@ import EmailPdfButton from '../components/EmailPdfButton'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 import TyreRunningLife from '../components/tyre/TyreRunningLife'
 import TyreConsumptionSection from '../components/tyre/TyreConsumptionSection'
+import TyreChangeTracking from '../components/tyre/TyreChangeTracking'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -803,6 +804,11 @@ export default function TyreLifecycle() {
       <TyreConsumptionSection />
 
       <TyreRunningLife />
+
+      {/* Flagged tyres tracked through to replacement. Lives here, beside
+          Running & Remaining, because the flags come from that same life
+          judgement - a separate page would split one story across two routes. */}
+      <TyreChangeTracking />
     </div>
   )
 }

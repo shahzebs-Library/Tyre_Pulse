@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -29,6 +29,12 @@ import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
 import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction } from '../lib/inspectionTyreFlags'
+import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
+import { loadTyreChangeTracking } from '../lib/api/tyreChangeTracking'
+// The shared dialog shell. Imported under an alias because this file still
+// carries an older local `Modal` used by four other dialogs; converting those is
+// separate work, and a new dialog must not hand-roll its own overlay.
+import SharedModal from '../components/ui/Modal'
 import { raiseActionsForInspection } from '../lib/api/correctiveActions'
 import { getCompanyLogo, getDiagramBg } from '../lib/api/brandLogo'
 import InspectionViewerDrawer from '../components/inspection/InspectionViewerDrawer'
@@ -70,7 +76,7 @@ const SEV_CONFIG = {
 
 // --- Tyre-change flag UI (additive) -----------------------------------------
 // Muted slide-style overview card: big numbers, subtle borders, app tokens.
-function OverviewSlide({ title, items }) {
+function OverviewSlide({ title, items, footer = null }) {
   return (
     <div className="card flex-1 min-w-[260px]">
       <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{title}</p>
@@ -84,18 +90,45 @@ function OverviewSlide({ title, items }) {
           </div>
         ))}
       </div>
+      {footer && <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">{footer}</div>}
     </div>
   )
 }
 
-// Shareable per-site inspection summary: date range + site filter, a compact
-// table (vehicles done + findings per site), PDF and Excel export. All numbers
-// come from the pure siteSummary helper - no parallel maths.
+// Shareable per-site summary: the inspections done AND the tyre-change flags
+// they raised, tracked through to replacement. Date range + site filter, PDF and
+// Excel export. Every number comes from a pure helper (siteSummary /
+// trackingBySite) - no parallel maths on this screen.
+//
+// The tyre-change half loads on OPEN, not with the page: it is a second read
+// (fitment history for the flagged assets) and the register must stay fast for
+// the people who never share a summary.
 function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country, company, branding, onClose }) {
   const [from, setFrom] = useState(defaultFrom || '')
   const [to, setTo] = useState(defaultTo || '')
   const [site, setSite] = useState('')
   const [busy, setBusy] = useState(false)
+  const [track, setTrack] = useState({ loading: true, ok: true, reason: '', rows: [] })
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const payload = await loadTyreChangeTracking({ country })
+      if (!alive) return
+      if (!payload.ok) {
+        setTrack({ loading: false, ok: false, reason: payload.reason || '', rows: [] })
+        return
+      }
+      const built = trackTyreChanges({
+        dueRows: payload.dueRows,
+        inspections: payload.inspections,
+        actions: payload.actions,
+        tyreRecords: payload.tyreRecords,
+      })
+      setTrack({ loading: false, ok: true, reason: '', rows: built.rows })
+    })()
+    return () => { alive = false }
+  }, [country])
 
   const sites = useMemo(
     () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
@@ -105,9 +138,19 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
     () => siteSummary(rows, flagMap, { from, to, site }),
     [rows, flagMap, from, to, site],
   )
+  // Flags are a live state ("is this tyre still due"), not an event inside the
+  // date range, so only the site filter applies to them - and the note under
+  // the table says so rather than letting a reader assume the dates bound both.
+  const tracking = useMemo(
+    () => trackingBySite(site ? track.rows.filter((r) => (r.site || 'No site') === site) : track.rows),
+    [track.rows, site],
+  )
   const rangeLabel = `${from || 'Start'} to ${to || 'Today'}${site ? ` | Site: ${site}` : ''}${country && country !== 'All' ? ` | ${country}` : ''}`
   const COLS = ['site', 'inspections', 'vehicles', 'good', 'wear', 'damage', 'tyresDue']
   const HEADS = ['Site', 'Inspections', 'Vehicles', 'Good', 'Wear', 'Damage', 'Tyres due']
+  const TCOLS = ['site', 'flagged', 'system', 'user', 'onVehicle', 'replaced', 'removed', 'unknown']
+  const THEADS = ['Site', 'Flagged', 'By system', 'By user', 'Still fitted', 'Replaced', 'Removed only', 'Could not tell']
+  const hasTracking = track.ok && tracking.rows.length > 0
 
   async function exportPdf() {
     setBusy(true)
@@ -116,7 +159,7 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
       const autoTable = await loadAutoTable()
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(await brandingForPdf(branding))
-      pdfHeader(doc, 'Inspection Summary by Site', rangeLabel, company, brand)
+      pdfHeader(doc, 'Inspection and Tyre Change Summary', rangeLabel, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 30,
@@ -132,8 +175,39 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
           }
         },
       })
+      // The tyre-change half of the report. When it could not be read the PDF
+      // SAYS so - a missing table would read as "no tyre was flagged".
+      const afterY = (doc.lastAutoTable?.finalY || 30) + 8
+      if (hasTracking) {
+        autoTable(doc, {
+          ...pdfTableTheme(brand.accent),
+          startY: afterY,
+          margin: { left: 14, right: 14 },
+          head: [THEADS],
+          body: [
+            ...tracking.rows.map((r) => TCOLS.map((k) => String(r[k]))),
+            TCOLS.map((k) => String(tracking.totals[k])),
+          ],
+          didParseCell(data) {
+            if (data.section === 'body' && data.row.index === tracking.rows.length) {
+              data.cell.styles.fontStyle = 'bold'
+            }
+          },
+        })
+      } else {
+        // Plain text under the first table rather than the shared empty-state
+        // panel, which draws at its own fixed position and would land on top of
+        // the inspection table.
+        doc.setFontSize(9)
+        doc.text(
+          track.ok
+            ? 'Tyre change flags: none. No tyre is past its expected life, close to it, or recorded as damaged.'
+            : 'Tyre change flags could not be read when this report was built, so no tyre change is shown here.',
+          14, afterY,
+        )
+      }
       pdfFooter(doc, 1, 1, company, brand)
-      doc.save(`TyrePulse Inspection Summary ${from || 'all'} to ${to || 'today'}.pdf`)
+      doc.save(`TyrePulse Inspection and Tyre Change Summary ${from || 'all'} to ${to || 'today'}.pdf`)
     } finally { setBusy(false) }
   }
 
@@ -144,16 +218,18 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
         [...summary.rows, summary.totals], COLS, HEADS,
         `TyrePulse Inspection Summary ${from || 'all'} to ${to || 'today'}`,
       )
+      if (hasTracking) {
+        await exportToExcel(
+          [...tracking.rows, tracking.totals], TCOLS, THEADS,
+          `TyrePulse Tyre Change Flags ${site || 'all sites'}`,
+          'Tyre change flags',
+        )
+      }
     } finally { setBusy(false) }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose}>
-      <div className="card w-full max-w-2xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Inspection summary by site</h3>
-          <button type="button" onClick={onClose}><X size={16} style={{ color: 'var(--text-dim)' }} /></button>
-        </div>
+    <SharedModal open onClose={onClose} title="Inspection and tyre change summary" size="xl">
         <div className="flex flex-wrap items-end gap-3 mb-3">
           <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>From
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
@@ -210,8 +286,62 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
         <p className="text-[11px] mt-3" style={{ color: 'var(--text-dim)' }}>
           Tyres due counts flagged tyres (past life or due soon) on the vehicles inspected in this range.
         </p>
-      </div>
-    </div>
+
+        {/* Tyre change flags, per site, tracked to replacement. */}
+        <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
+          <h4 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+            Tyre change flags by site
+          </h4>
+          <p className="text-[11px] mb-2" style={{ color: 'var(--text-secondary)' }}>
+            Every flagged tyre and what happened to it. Raised by the system means past its expected
+            life or due soon; raised by a user means damage or a puncture recorded on an inspection.
+          </p>
+          {track.loading ? (
+            <p className="text-xs py-4" style={{ color: 'var(--text-secondary)' }}>Loading tyre change flags...</p>
+          ) : !track.ok ? (
+            /* "We could not look" is never printed as a row of zeros. */
+            <p className="text-xs py-4" style={{ color: 'var(--text-secondary)' }}>
+              Tyre change flags could not be read, so they are not in this summary.
+              {track.reason ? ` ${track.reason}` : ''}
+            </p>
+          ) : !tracking.rows.length ? (
+            <p className="text-xs py-4" style={{ color: 'var(--text-secondary)' }}>
+              No tyre is currently flagged for change{site ? ` at ${site}` : ''}.
+            </p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
+                  {THEADS.map((h, i) => <th key={h} className={`py-1.5 pr-2 ${i > 0 ? 'text-right' : ''}`}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {tracking.rows.map((r) => (
+                  <tr key={r.site} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
+                    {TCOLS.map((k, i) => (
+                      <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}
+                        style={k === 'onVehicle' && r.onVehicle > 0 ? { color: '#b91c1c', fontWeight: 600 } : undefined}>
+                        {r[k]}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                <tr style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                  {TCOLS.map((k, i) => <td key={k} className={`py-1.5 pr-2 tabular-nums ${i > 0 ? 'text-right' : ''}`}>{tracking.totals[k]}</td>)}
+                </tr>
+              </tbody>
+            </table>
+          )}
+          <p className="text-[11px] mt-3" style={{ color: 'var(--text-dim)' }}>
+            Replaced is worked out from the tyre consumption you upload: a different tyre fitted on the
+            same vehicle at the same wheel after the flag. "Removed only" means the tyre came off and
+            nothing has been fitted back. "Could not tell" means the position or the fitment record is
+            missing, which is not the same as saying the tyre is still fitted. These figures follow the
+            site filter but not the dates, because a flag is a state today rather than an event in the
+            date range.
+          </p>
+        </div>
+    </SharedModal>
   )
 }
 
@@ -2435,6 +2565,16 @@ export default function Inspections() {
               <p className="mt-2 text-xs text-[var(--text-dim)]">
                 Damaged found in these inspections: {overview.damagedFound}
               </p>
+              {dueAssetCount > 0 && (
+                <Link
+                  to={trackingLink()}
+                  className="mt-2 inline-flex items-center gap-1 text-xs underline"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  See those vehicles and whether the tyres were replaced
+                  <ExternalLink size={12} />
+                </Link>
+              )}
             </div>
           ) : (
             <OverviewSlide
@@ -2445,6 +2585,19 @@ export default function Inspections() {
                 ['Tyres due soon', overview.tyresDueSoon, true],
                 ['Damaged found', overview.damagedFound, true],
               ]}
+              /* A count you cannot act on is just a number. This opens the
+                 tracked list: which tyre, on which vehicle, and whether the
+                 change actually happened. */
+              footer={(
+                <Link
+                  to={trackingLink()}
+                  className="inline-flex items-center gap-1 text-xs underline"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  See the flagged tyres and whether they were replaced
+                  <ExternalLink size={12} />
+                </Link>
+              )}
             />
           )}
           <button
@@ -2634,13 +2787,19 @@ export default function Inspections() {
                     <div className="px-3 font-mono text-xs text-[var(--text-secondary)] overflow-hidden">
                       <span className="truncate block">{r.asset_no || '-'}</span>
                       {r.asset_no && flagMap?.[r.asset_no]?.count > 0 && (
-                        <span
-                          className="inline-block mt-0.5 px-1.5 py-px rounded-full text-[10px] font-sans font-medium whitespace-nowrap"
+                        /* The flag now GOES somewhere: the same gesture as
+                           clicking an inspection to open that inspection, but
+                           straight to this vehicle's flagged tyres. The row
+                           click opens the inspection, so this must not bubble. */
+                        <Link
+                          to={trackingLink({ asset: r.asset_no })}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-block mt-0.5 px-1.5 py-px rounded-full text-[10px] font-sans font-medium whitespace-nowrap underline"
                           style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.3)' }}
-                          title="Tyres at or near end of life on this vehicle"
+                          title={`See which tyres are due on ${r.asset_no} and whether they have been replaced`}
                         >
                           Tyres due ({flagMap[r.asset_no].count})
-                        </span>
+                        </Link>
                       )}
                     </div>
 

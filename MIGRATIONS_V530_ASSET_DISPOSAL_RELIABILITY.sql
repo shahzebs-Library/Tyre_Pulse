@@ -1,0 +1,81 @@
+-- V530 / V530b  ASSET DISPOSAL RELIABILITY + FLEET BASELINE   (APPLIED LIVE 2026-08-12)
+--
+-- The reliability case for scrapping a machine: breakdown hours, breakdowns,
+-- MTBF, failure rate, availability, idle days and spend by year, per asset. The
+-- owner already thinks in these terms - their own scrap workbook carries CPK,
+-- Breakdowns, MTBF and Failure-per-Asset columns.
+--
+-- TWO FACTS IN THIS DATA WOULD MAKE EVERY FIGURE A FICTION IF IGNORED.
+--
+-- 1. 21 job cards of 1,782 each run longer than 90 days and hold 51.7% of all
+--    251,450 breakdown hours. The longest is 18,575 hours - over TWO YEARS on
+--    one card. Those are machines PARKED in a yard, not breakdowns; the ERP
+--    keeps counting while the card stays open. So the total is reported BOTH
+--    ways, as recorded and excluding the parked cards, with the count and hours
+--    of what was excluded published beside it. The threshold is a named constant
+--    and is stated on every surface.
+--
+-- 2. 1,040 of these cards carry an opened_at in year 0022 to 0026 - the dropped
+--    century the owner asked to LEAVE ALONE pending their own re-upload (do NOT
+--    re-apply the reverted V388 repair). Only 967 have a sane opened_at and 75
+--    more a sane completed_at, so a business date exists for 51.4%. Everything
+--    measured against time - MTBF, failures per year, idle days, availability -
+--    rests on that half, and date_coverage_pct travels with every asset.
+--    created_at cannot stand in: every one of these rows landed in Jul-Aug 2026.
+--
+-- MTBF IS THE MEAN CALENDAR GAP BETWEEN DATED FAILURES, not the textbook
+-- operating time over failures. This fleet has no trustworthy operating time:
+-- engine hours are sparse and the odometers reset. The basis travels with the
+-- number, and one failure yields NULL - a machine that failed once has no
+-- interval between failures.
+--
+-- A FAILURE IS A CARD CARRYING BREAKDOWN HOURS ABOVE ZERO, not a card typed
+-- 'Emergency'. The ERP files most real breakdowns as 'Repair', so counting only
+-- Emergency finds 167 failures where there are 1,777.
+--
+-- WHAT IT FOUND (KSA): 34 machines with history, 2,026 job cards, 1,777
+-- failures, 121,458 real breakdown hours plus 129,993 parked, SAR 2,260,917
+-- spent. Planned work is 4.1% of every job card on the list. MP049 fails every
+-- 12.5 days (277 failures, 22 a year, 76% available). MP042 is 66% available and
+-- untouched for 644 days. GN074 costs SAR 54.66 per breakdown hour. PL063 and
+-- PL065 have never had a single planned service.
+--
+-- V530b THE FLEET BASELINE, and it is the point of the whole exercise.
+-- Without something to lean on, "1,777 failures" is a number. The comparison
+-- says TWO THINGS AT ONCE and either alone misleads:
+--
+--   THE LIST IS JUSTIFIED - SAR 68,513 per machine against a fleet average of
+--   SAR 37,218, and 3,572 breakdown hours per machine against 1,190. About 1.8x
+--   the cost and 3x the downtime of an average machine.
+--
+--   AND IT BARELY DENTS THE BILL - SAR 2.26M of SAR 36M, roughly 6%, while the
+--   969 machines staying in service average 27 failures a year at 79.8%
+--   availability on 1.6% PLANNED MAINTENANCE. Approving the write-off does not
+--   touch that. A CEO shown only the first half takes this paper as a fix for a
+--   problem it does not reach.
+--
+-- ONE CONFOUND IS STATED RATHER THAN CORRECTED. Machines on the list average
+-- FEWER failures per year than the rest of the fleet (13.92 against 27.06),
+-- which reads backwards until you notice many of them are parked and a machine
+-- standing still cannot fail. Breakdown hours per asset is the measure idleness
+-- does not flatter, and it runs 3x against the list. Both are returned,
+-- idle_confound says so, and neither is adjusted: a correction nobody can check
+-- is worse than a stated confound.
+--
+-- The 1.6% fleet-wide planned-maintenance share is the finding that outlives
+-- this paper. It is not an observation about these 37 machines; it is why the
+-- next 37 will end up on a list like it.
+--
+-- DELIBERATELY NOT COMPUTED, because the data does not support it:
+--   no scrap value, resale price or "saving if disposed" - a test asserts the
+--   recommendation payload never claims one;
+--   no downtime COST - hours lost times a rate needs a day rate nobody records;
+--   no failure forecast or remaining life - projecting from a half-dated series
+--   is fitting a curve to a known gap.
+--
+-- ROLLBACK:
+--   drop function public.get_asset_disposal_reliability(text);
+--   drop function public.get_asset_disposal_fleet_baseline(text);
+--
+-- Applied bodies are in supabase_migrations.schema_migrations under
+-- v530_asset_disposal_reliability and v530b_reliability_fleet_baseline.

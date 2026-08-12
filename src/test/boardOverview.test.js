@@ -92,3 +92,27 @@ describe('boardOverview engine', () => {
     expect(buildBoardRecommendations(null)).toEqual([])
   })
 })
+
+// Regression: the board reported "Work orders overdue: 0" to management on every
+// load, because it looked for due_date / target_date - neither of which is a
+// column on work_orders. The real due date is target_completion (V381).
+describe('overdue work orders', () => {
+  const now = new Date('2026-08-12T00:00:00Z')
+  const build = (workOrders) =>
+    buildBoardKpis({ tyres: [], inspections: [], actions: [], fleetSize: 1, accidents: [], workOrders, stock: [], now })
+
+  it('counts a job whose target_completion has passed and is not closed', () => {
+    expect(build([{ status: 'In Progress', target_completion: '2026-08-01' }]).workOrdersOverdue).toBe(1)
+  })
+
+  it('does not count one that is closed, or one still in the future', () => {
+    expect(build([
+      { status: 'Completed', target_completion: '2026-08-01' },
+      { status: 'In Progress', target_completion: '2026-09-01' },
+    ]).workOrdersOverdue).toBe(0)
+  })
+
+  it('a job with no due date is not overdue - absent is not late', () => {
+    expect(build([{ status: 'In Progress' }]).workOrdersOverdue).toBe(0)
+  })
+})

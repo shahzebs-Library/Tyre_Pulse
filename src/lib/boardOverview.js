@@ -62,7 +62,13 @@ export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fle
   const openAccidents = accidents.filter((a) => !isClosed(a)).length
   const openWo = workOrders.filter((w) => !/complete|closed|done/i.test(String(w.status || ''))).length
   const overdueWo = workOrders.filter((w) => {
-    const due = String(w.due_date || w.target_date || '')
+    // `target_completion` is the due date work_orders actually carries (V381).
+    // It was missing here, and `due_date`/`target_date` are not columns on that
+    // table at all - so this read undefined on every row and the board reported
+    // "Work orders overdue: 0" to management whatever the real backlog was. The
+    // other two names are kept because this engine is also fed rows from other
+    // shapes in tests, and an absent field is simply skipped.
+    const due = String(w.target_completion || w.due_date || w.target_date || '')
     return due && due.slice(0, 10) < now.toISOString().slice(0, 10) && !/complete|closed|done/i.test(String(w.status || ''))
   }).length
   const lowStock = stock.filter((s) => isNum(s.quantity) && isNum(s.reorder_level) && n(s.quantity) <= n(s.reorder_level)).length

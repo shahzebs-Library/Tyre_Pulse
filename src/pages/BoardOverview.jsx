@@ -175,7 +175,14 @@ export default function BoardOverview() {
         fetchAllPages((from, to) => listKpiCorrectiveActions({ country: activeCountry, from, to }), { max: ROW_CAP }),
         fetchAllPages((from, to) => listKpiFleet({ country: activeCountry, from, to }), { max: FLEET_CAP }),
         listAllAccidentsForPage({ country: activeCountry }),
-        listWorkOrdersForPage({ country: activeCountry }).catch(() => []),
+        // `lean` drops custom_data / notes / parts_used from the select. The
+        // board reads the whole table on purpose - its KPIs are all-time - but
+        // it only ever counts statuses and dates, so shipping the raw ERP jsonb
+        // for every job card was the expensive half of that and bought nothing.
+        // The window stays unbounded deliberately; narrowing it would change
+        // what the executive KPIs mean, which is the owner's call, not a
+        // performance fix.
+        listWorkOrdersForPage({ country: activeCountry, lean: true }).catch(() => []),
         listStockRecords({ country: activeCountry }).catch(() => []),
       ])
       const tyres = tyresRes.data ?? []

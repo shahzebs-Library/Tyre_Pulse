@@ -16,6 +16,31 @@ const PAGE_COLS =
   `${COLS},parts_used,notes,lubricant_cost,tyre_cost,outside_repair_cost,standard_hours,breakdown_hours,odometer,custom_data`
 
 /**
+ * The set an AGGREGATE consumer needs: enough to count by status, judge overdue
+ * and bucket by date, and nothing else.
+ *
+ * This exists because Board Overview reads the WHOLE table - deliberately, its
+ * executive KPIs are all-time - and was reading it through PAGE_COLS. That
+ * shipped `custom_data` for every row, which is where the V381 job-card intake
+ * parks the entire raw ERP line as jsonb, plus `notes` and `parts_used`. Tens of
+ * thousands of rows of free text and jsonb crossed the wire so the page could
+ * derive a handful of counts. The board engine touches exactly `status` and the
+ * two dates it filters on.
+ *
+ * Kept deliberately wider than those three: the cost and identity columns are
+ * cheap scalars and a KPI added later will reach for them. It is the unbounded
+ * text and jsonb that had to go, not every column.
+ *
+ * `due_date` and `target_date` are NOT listed, and must not be added without
+ * checking first: neither column exists on work_orders - the only due-date
+ * column here is `target_completion` (V381). Selecting a column PostgREST
+ * cannot find fails the whole request, so a lean column list is one of the few
+ * places where a plausible-looking addition takes the page down.
+ */
+const AGGREGATE_COLS =
+  'id,asset_no,status,priority,work_type,site,country,opened_at,started_at,completed_at,target_completion,labour_cost,parts_cost,total_cost,created_at'
+
+/**
  * List work orders, newest first. Country-scoped (null-safe) and optionally
  * filtered by status / priority / site.
  * @param {{country?:string, status?:string, priority?:string, site?:string, limit?:number}} [opts]
@@ -56,10 +81,10 @@ export async function updateWorkOrder(id, patch) {
  * raw Supabase `{ data, error }` so it drops straight into `fetchAllPages`.
  * @param {{country?:string, from:number, to:number, openedFrom?:string, openedTo?:string}} opts
  */
-export function listWorkOrdersPage({ country, from, to, openedFrom, openedTo } = {}) {
+export function listWorkOrdersPage({ country, from, to, openedFrom, openedTo, lean = false } = {}) {
   let q = supabase
     .from('work_orders')
-    .select(PAGE_COLS)
+    .select(lean ? AGGREGATE_COLS : PAGE_COLS)
     .order('opened_at', { ascending: false })
     .range(from, to)
   if (country && country !== 'All') q = q.eq('country', country)
@@ -87,9 +112,9 @@ export function listWorkOrdersPage({ country, from, to, openedFrom, openedTo } =
  * @param {{country?:string, max?:number, openedFrom?:string, openedTo?:string}} [opts]
  * @returns {Promise<any[]>}
  */
-export async function listWorkOrdersForPage({ country, max = 200000, openedFrom, openedTo } = {}) {
+export async function listWorkOrdersForPage({ country, max = 200000, openedFrom, openedTo, lean = false } = {}) {
   const { data, error } = await fetchAllPages(
-    (from, to) => listWorkOrdersPage({ country, from, to, openedFrom, openedTo }),
+    (from, to) => listWorkOrdersPage({ country, from, to, openedFrom, openedTo, lean }),
     { max },
   )
   if (error) throw new ServiceError(error.message, error.code, error)

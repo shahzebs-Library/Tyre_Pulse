@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   normalizeTyreConditions, inspectionStats, tyreReadingRows,
   pressureFlagAvailable, pressureDeviation, readingText,
-  inspectionMeta, inspectionSummary, isComplete,
+  inspectionMeta, inspectionSummary, isComplete, positionLabelMap,
+  inspectionDiagramModel,
 } from '../lib/inspectionView'
 
 describe('normalizeTyreConditions', () => {
@@ -94,6 +95,63 @@ describe('tyreReadingRows', () => {
   it('falls back to the risk label when no condition word was written', () => {
     const { rows } = tyreReadingRows({ tyre_conditions: { FL: { pressure: 100 } } })
     expect(rows[0].condition).toBe('No Data')
+  })
+})
+
+describe('positionLabelMap', () => {
+  // The real stored shape: keyed by the diagram's slot id, no label of its own.
+  const TRI_MIXER = {
+    vehicle_type: 'TR-MIXER',
+    tyre_conditions: {
+      F1L: { condition: 'Good', pressure_psi: '120' },
+      F2R: { condition: 'Puncture' },
+      R1Lo: { condition: 'Good' },
+      R2Ri: { condition: 'Good' },
+    },
+  }
+
+  it('names a stored slot id the way the diagram does', () => {
+    // On a tri-mixer the first rear axle is the centre drive axle, which is why
+    // R1Lo reads LHCO and not LHRO. The web form stores exactly this pairing.
+    expect(positionLabelMap(TRI_MIXER)).toEqual({
+      F1L: 'LHF1', F2R: 'RHF2', R1Lo: 'LHCO', R2Ri: 'RHRI',
+    })
+  })
+
+  it('leaves a position that is already canonical alone', () => {
+    expect(positionLabelMap({ vehicle_type: 'TR-MIXER', tyre_conditions: { LHF1: { condition: 'Good' } } }))
+      .toEqual({ LHF1: 'LHF1' })
+  })
+
+  it('prefers the label the record carries over any conversion', () => {
+    const out = positionLabelMap({
+      vehicle_type: 'TR-MIXER',
+      tyre_conditions: [{ position: 'R1Lo', label: 'Left centre outer', condition: 'Good' }],
+    })
+    expect(out).toEqual({ R1Lo: 'Left centre outer' })
+  })
+
+  it('keeps the stored key when the vehicle has no known wheel layout', () => {
+    // No layout means no conversion. A guessed label would point somebody at the
+    // wrong tyre, which is worse than an unfamiliar one.
+    expect(positionLabelMap({ vehicle_type: '', tyre_conditions: { F1L: { condition: 'Good' } } }))
+      .toEqual({ F1L: 'F1L' })
+  })
+
+  it('falls back to the asset code for the layout when the type was not recorded', () => {
+    expect(positionLabelMap({ asset_no: 'TM412', tyre_conditions: { R1Lo: { condition: 'Good' } } }))
+      .toEqual({ R1Lo: 'LHCO' })
+  })
+
+  it('agrees with the diagram model, position for position', () => {
+    const labels = positionLabelMap(TRI_MIXER)
+    const model = inspectionDiagramModel(TRI_MIXER)
+    for (const r of model.readings) expect(labels[r.slot]).toBe(r.code)
+  })
+
+  it('says nothing about an inspection with no readings', () => {
+    expect(positionLabelMap(null)).toEqual({})
+    expect(positionLabelMap({ vehicle_type: 'TR-MIXER', tyre_conditions: null })).toEqual({})
   })
 })
 

@@ -274,6 +274,54 @@ function wheelSubLabel(pressure, tread) {
 }
 
 /**
+ * What each recorded position should be CALLED on screen, keyed by the position
+ * as it is stored.
+ *
+ * Two vocabularies exist in the data and both are correct in their own place:
+ * the app stores the diagram's internal slot id ('F1L', 'R1Lo') as the key, and
+ * displays the canonical GCC code ('LHF1', 'LHCO'). The diagram and the position
+ * summary lines already relabel through `legacyPositionCode`, so anything that
+ * prints the raw key beside them - a photo caption, for one - names the same
+ * wheel differently on the same screen, and the reader has to pair them up by
+ * hand on a safety record.
+ *
+ * This is NOT a new mapping. It is the existing one the diagram uses, reused:
+ * stored key -> slot (canonicalToSlotId) -> canonical code (legacyPositionCode).
+ * The web form proves the pairing by storing both itself, e.g.
+ * { position: 'R1Lo', label: 'LHCO' } on a tri-mixer.
+ *
+ * Order of preference, most trustworthy first:
+ *   1. the label the inspector's own record carries
+ *   2. the layout conversion, when this vehicle has a known wheel layout
+ *   3. the stored key, unchanged
+ * Step 3 is the honest floor: for a vehicle type with no defined layout there is
+ * no conversion, and an invented label would point somebody at the wrong tyre.
+ *
+ * @param {object|null} row inspection row (tyre_conditions in any stored shape)
+ * @returns {Object<string,string>} stored position -> display label
+ */
+export function positionLabelMap(row) {
+  const normTc = normalizeTyreConditions(row)
+  const positions = Object.keys(normTc)
+  if (!positions.length) return {}
+
+  const typeHint = String(row?.vehicle_type || '').trim() || String(row?.asset_no || '').trim()
+  // Same gate as the diagram: `resolveLayoutKey` answers "Pickup" for anything it
+  // does not recognise, so relabelling on that fallback would state a layout
+  // nobody recorded.
+  const layoutKey = vehicleTypeIsKnown(typeHint) ? resolveLayoutKey(typeHint) : null
+
+  const out = {}
+  for (const position of positions) {
+    const recorded = normTc[position]?.label
+    if (recorded) { out[position] = String(recorded); continue }
+    const slot = layoutKey ? canonicalToSlotId(typeHint, position) : null
+    out[position] = slot ? slotCode(layoutKey, slot) : position
+  }
+  return out
+}
+
+/**
  * Turn one inspection row into the wheel map.
  *
  * @param {object} row  the inspection (tyre_conditions in any stored shape)

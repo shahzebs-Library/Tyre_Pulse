@@ -43,6 +43,24 @@ describe('collectPhotoRefs', () => {
     expect(out[0].ref).toBe(REF)
   })
 
+  it('captions a photo with the same wheel name the diagram shows', () => {
+    // The stored key is the diagram slot id; the map and the summary lines say
+    // LHCO. A caption reading R1Lo beside them is the same wheel named twice.
+    const out = collectPhotoRefs({
+      vehicle_type: 'TR-MIXER',
+      tyre_conditions: {
+        F2R: { condition: 'Puncture', photo_url: REF },
+        R1Lo: { condition: 'Good', photo_url: REF },
+      },
+    })
+    expect(out.map((p) => p.label)).toEqual(['RHF2', 'LHCO'])
+  })
+
+  it('keeps the stored key when the vehicle has no known layout to convert with', () => {
+    const out = collectPhotoRefs({ tyre_conditions: { F2R: { photo_url: REF } } })
+    expect(out[0].label).toBe('F2R')
+  })
+
   it('prefers the recorded label over the raw position key', () => {
     const out = collectPhotoRefs({
       tyre_conditions: [{ position: 'p1', label: 'Left front', photo_uri: REF }],

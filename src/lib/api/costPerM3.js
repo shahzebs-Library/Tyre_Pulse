@@ -363,6 +363,119 @@ export async function applyProductionStationMap({ country, dryRun = true } = {})
   } catch { return { ok: false, rows: 0 } }
 }
 
+// ---- Station mapping: propose, accept, and the keywords behind it ----------
+
+/**
+ * Ask the server where each batching plant stands, read from the project names
+ * behind its own loads. Returns the raw payload; shapeProposals in
+ * lib/stationMapping.js turns it into something a screen can render.
+ *
+ * A missing relation degrades to a shaped "we could not look" so an org without
+ * the migration sees an honest notice. Any OTHER failure throws, deliberately:
+ * "no plant needs mapping" and "the proposal could not be read" are opposite
+ * statements, and swallowing the second would render a broken read as a clean
+ * bill of health.
+ */
+export async function proposeStationSites({ country } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('propose_production_station_sites', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error) {
+      if (isMissingRelation(error)) return { ok: false, reason: 'unavailable', stations: [] }
+      throw error
+    }
+    return data ?? { ok: false, reason: 'unavailable', stations: [] }
+  } catch (e) {
+    if (isMissingRelation(e)) return { ok: false, reason: 'unavailable', stations: [] }
+    throw e
+  }
+}
+
+/**
+ * Write the accepted mappings and re-resolve the loads already stored.
+ *
+ * `stations` is exactly what the person accepted - `site` may be null when only
+ * the region cleared the bar. Never swallowed: a write that quietly did nothing
+ * is the worst outcome here, because the screen would report a mapping that does
+ * not exist. A dry run returns `would_move` so the volume can be shown BEFORE
+ * anything is written.
+ */
+export async function applyStationProposals({ country, stations = [], dryRun = true } = {}) {
+  const { data, error } = await supabase.rpc('apply_station_proposals', {
+    p_country: country && country !== 'All' ? country : null,
+    p_stations: stations,
+    p_dry_run: dryRun,
+  })
+  if (error) throw error
+  return data ?? { ok: false, reason: 'unavailable' }
+}
+
+const KEYWORD_COLS = 'id, country, site, region, keyword, weight, source, note, active, created_at'
+
+/**
+ * The words that map a project name to a place. This is what makes the mapping
+ * self-improving: add a keyword, propose again, and a new plant or project is
+ * placed without a developer. Degrades to [] only on a missing relation.
+ */
+export async function listSiteKeywords({ country, limit = 1000 } = {}) {
+  try {
+    let q = supabase.from('site_match_keywords').select(KEYWORD_COLS).order('keyword')
+    if (country && country !== 'All') q = q.eq('country', country)
+    const { data, error } = await q.limit(limit)
+    if (error) {
+      if (isMissingRelation(error)) return []
+      throw error
+    }
+    return Array.isArray(data) ? data : []
+  } catch (e) {
+    if (isMissingRelation(e)) return []
+    throw e
+  }
+}
+
+/**
+ * Add or edit one keyword. Exactly one of site / region is kept - a keyword
+ * either names a plant or names an area, and the database enforces the same
+ * rule, so sending both would be rejected server-side anyway.
+ * organisation_id is NEVER sent; it is defaulted server-side.
+ */
+export async function upsertSiteKeyword(row = {}) {
+  const payload = sanitizeKeyword(row)
+  if (row.id) {
+    const { data, error } = await supabase.from('site_match_keywords')
+      .update(payload).eq('id', row.id).select(KEYWORD_COLS).single()
+    if (error) throw error
+    return data
+  }
+  const { data, error } = await supabase.from('site_match_keywords')
+    .insert([payload]).select(KEYWORD_COLS).single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteSiteKeyword(id) {
+  const { error } = await supabase.from('site_match_keywords').delete().eq('id', id)
+  if (error) throw error
+}
+
+function sanitizeKeyword(r = {}) {
+  const site = txt(r.site)
+  const region = txt(r.region)
+  return {
+    country: txt(r.country),
+    // The site wins when both arrive: it is the more specific claim, and the
+    // check constraint refuses a row carrying both.
+    site: site || null,
+    region: site ? null : region,
+    keyword: txt(r.keyword),
+    weight: numOrNull(r.weight) ?? 1,
+    source: txt(r.source) || 'manual',
+    note: txt(r.note),
+    active: r.active === undefined ? true : r.active !== false,
+  }
+}
+
 /**
  * The value the picker uses for a load with NO reason recorded. It is a real
  * answer - 210,051 KSA loads carry no reason - and folding it into "all" would

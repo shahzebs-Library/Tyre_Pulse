@@ -44,6 +44,7 @@
  */
 import * as engine from './assetDisposal'
 import * as reliabilityEngine from './assetDisposalReliability'
+import * as replacementEngine from './assetReplacement'
 
 // ── ASCII hygiene ────────────────────────────────────────────────────────────
 // Deck output is print/hand-out material. Anything outside plain ASCII is folded
@@ -1372,6 +1373,86 @@ export const RELIABILITY_KPI_ITEMS = {
 export const RELIABILITY_KPI_KEYS = Object.keys(RELIABILITY_KPI_ITEMS)
 const DEFAULT_RELIABILITY_KPIS = ['breakdown_hours', 'parked_hours', 'failures', 'median_mtbf', 'low_availability', 'never_preventive', 'long_idle', 'preventive_share', 'date_coverage']
 
+// ═════════════════════════════════════════════════════════════════════════════
+// REPLACEMENT COST
+// ═════════════════════════════════════════════════════════════════════════════
+// A supplier quotation is the first hard price this fleet has, and it is what
+// turns "this machine has cost us a lot" into "this machine has cost us N% of a
+// new one" - the sentence a committee can vote on.
+//
+// The maths is the pure `assetReplacement` engine. This section owns only how it
+// is PRESENTED, and the two statements that must travel with it:
+//   a) the exposure figure covers the PRICED machines and nothing else. The
+//      unpriced count and the classes they sit in are on the same slide, or a
+//      partial total reads as the cost of replacing the list.
+//   b) a quotation past its validity date is shown WITH its lapsed label. It is
+//      the last price the supplier put in writing, which beats no price at all,
+//      but it is not today's price and the slide must not imply that it is.
+//
+// Nothing here annualises the replacement over an assumed service life, and no
+// depreciation, resale or scrap figure appears anywhere: none of those exists in
+// this data, and the assumed life would be the largest term in all of them.
+const repl = (name) => (replacementEngine && typeof replacementEngine[name] === 'function' ? replacementEngine[name] : null)
+
+/** The status label the engine publishes, so both surfaces say the same word. */
+function benchmarkStatusLabel(status) {
+  const fn = repl('benchmarkStatusMeta')
+  if (!fn) return ''
+  try {
+    const meta = fn(status)
+    return meta && typeof meta.label === 'string' ? ascii(meta.label) : ''
+  } catch { return '' }
+}
+
+/**
+ * Replacement economics for the rows in scope, or NULL when it cannot be
+ * produced (no engine, no benchmarks, or not one machine priced). Null is what
+ * lets the block say so instead of drawing a table of blanks.
+ */
+export function replacementView(rows, benchmarks, { currency = 'SAR', now = new Date() } = {}) {
+  const fn = repl('replacementTotals')
+  if (!fn) return null
+  const list = Array.isArray(rows) ? rows : []
+  const at = now instanceof Date && !Number.isNaN(now.getTime()) ? now.getTime() : Date.now()
+  let totals = null
+  try { totals = fn(list, benchmarks, { now: at }) } catch { return null }
+  if (!totals || !totals.coveredCount) return null
+
+  const headlines = []
+  const exposure = totals.exposure || {}
+  if (exposure.mixedCurrency) {
+    const parts = Object.entries(exposure.byCurrency || {})
+      .map(([cur, amt]) => `${formatMetric(amt, 'money', cur)}`)
+    headlines.push({
+      tone: 'case',
+      text: ascii(`Replacing the ${formatMetric(totals.coveredCount, 'int')} priced machines: ${parts.join(' and ')}. These are different currencies and are never added together.`),
+    })
+  } else {
+    headlines.push({
+      tone: 'case',
+      text: ascii(`Replacing the ${formatMetric(totals.coveredCount, 'int')} machines a quotation covers would cost ${formatMetric(exposure.total, 'money', exposure.currency || currency)} ex-VAT. VAT is recoverable and is not a cost to the business.`),
+    })
+  }
+  // The limit statement is a headline, not a footnote. A partial exposure read
+  // as the whole bill is the single worst misreading this slide can produce.
+  headlines.push({
+    tone: 'limit',
+    text: ascii(totals.unpricedNote
+      || 'Every machine on this list carries a supplier quotation, so the figure above covers all of them.'),
+  })
+
+  const covered = [...totals.covered].sort(
+    (a, b) => (num(b.spendPctOfNew) ?? -1) - (num(a.spendPctOfNew) ?? -1),
+  )
+  const notes = []
+  if (totals.expiredCount) {
+    notes.push(ascii(`${formatMetric(totals.expiredCount, 'int')} of these prices rest on a quotation whose validity has lapsed. That is the last price the supplier put in writing and is still the best evidence available, but it is not today's price: requote before committing to a purchase.`))
+  }
+  notes.push('No service life is assumed anywhere on this slide. The replacement cost is not spread over a life, and no depreciation, resale or scrap value is quoted, because none of those figures exists in this data.')
+
+  return { totals, covered, headlines, notes: notes.map(ascii) }
+}
+
 // ── Block catalog ────────────────────────────────────────────────────────────
 export const DECK_BLOCKS = {
   title: {
@@ -1428,6 +1509,11 @@ export const DECK_BLOCKS = {
     label: 'Emergency vs planned',
     description: 'Emergency, repair and planned services. A planned share this low is a management finding, not an asset finding.',
     defaults: { title: '', scope: 'fleet', viz: 'doughnut', filter: 'all', limit: 14 },
+  },
+  replacement: {
+    label: 'What a new machine costs',
+    description: 'What has been spent on each machine against the price of a new one, from the supplier quotation on file. Says which machines are not priced rather than pricing them from the nearest thing.',
+    defaults: { title: 'Spend against the cost of a new machine', filter: 'all', limit: 12 },
   },
   fleet_comparison: {
     label: 'Against the rest of the fleet',
@@ -1599,6 +1685,13 @@ function normalizeBlock(b) {
         filter: pickFrom(b.filter, ROW_FILTERS.map((f) => f.key), 'all'),
         limit: clampInt(b.limit, 0, 200, 14),
       }
+    case 'replacement':
+      return {
+        ...base,
+        title: strOr(b.title, 'Spend against the cost of a new machine'),
+        filter: pickFrom(b.filter, ROW_FILTERS.map((f) => f.key), 'all'),
+        limit: clampInt(b.limit, 0, 200, 12),
+      }
     case 'fleet_comparison':
       return { ...base, title: strOr(b.title, 'This list against the rest of the fleet') }
     case 'recommendations': {
@@ -1660,6 +1753,7 @@ export const DECK_PRESETS = {
       makeBlock('reliability_kpis'),
       makeBlock('recommendations'),
       makeBlock('fleet_comparison'),
+      makeBlock('replacement'),
       makeBlock('worst_offenders', { metric: 'breakdown_hours', limit: 8 }),
       makeBlock('spend_trend', { scope: 'fleet', viz: 'bar' }),
       makeBlock('maintenance_mix', { scope: 'fleet', viz: 'doughnut' }),
@@ -1691,11 +1785,12 @@ export const DECK_PRESETS = {
   board: {
     key: 'board',
     label: 'Board summary',
-    description: 'Headline only. Four slides for a board that wants the ask, not the detail.',
+    description: 'Headline only, for a board that wants the ask and not the detail: the counts, what the list shows, and what a new machine costs.',
     build: () => [
       makeBlock('title', { title: 'Asset Disposal Summary', subtitle: 'Board briefing' }),
       makeBlock('summary_kpis', { items: ['assets', 'to_scrap', 'to_sell', 'lifetime_spend', 'still_active', 'estimated_value'] }),
       makeBlock('findings'),
+      makeBlock('replacement', { limit: 10 }),
       makeBlock('chart', { source: 'by_disposition', metric: 'count', viz: 'doughnut', title: 'Scrap vs sell' }),
     ],
   },
@@ -2210,6 +2305,59 @@ export function resolveBlock(block, ctx = {}) {
         notes: [ascii(mgmt)],
         empty: body.length === 0,
         emptyNote: `No assets match ${filterLabel(b.filter).toLowerCase()}.`,
+      }
+    }
+
+    case 'replacement': {
+      const scoped = filterRows(rows, b.filter)
+      const view = replacementView(scoped, ctx.benchmarks, {
+        currency, now: ctx.now instanceof Date ? ctx.now : new Date(),
+      })
+      // No quotation on file is a STATE, not an error, and it is stated in
+      // words. An empty table here would read as machines that cost nothing to
+      // replace, which is the opposite of the truth.
+      if (!view) {
+        return {
+          kind: 'text', id: b.id, title: fmtText(b.title),
+          body: scoped.length === 0
+            ? `No assets match ${filterLabel(b.filter).toLowerCase()}, so there is nothing to price.`
+            : 'No supplier quotation is on file for any asset class on this list, so no machine here can be measured against the cost of a new one. Nothing is estimated in its place.',
+          empty: true,
+        }
+      }
+      const shown = b.limit > 0 ? view.covered.slice(0, b.limit) : view.covered
+      const columns = [
+        { key: 'asset_no', header: 'Asset', align: 'left', width: 1 },
+        { key: 'asset_type', header: 'Class', align: 'left', width: 1.3 },
+        { key: 'spend', header: 'Maintenance spend', align: 'right', width: 1.3 },
+        { key: 'replacement', header: 'New machine', align: 'right', width: 1.3 },
+        { key: 'pct', header: 'Spend vs new', align: 'right', width: 1 },
+        { key: 'years', header: 'Years of spend per new', align: 'right', width: 1.2 },
+        { key: 'quote', header: 'Quotation', align: 'left', width: 1.3 },
+      ]
+      const body = shown.map((p) => [
+        fmtText(p.assetNo),
+        fmtText(p.assetType),
+        ascii(formatMetric(p.lifetimeSpend, 'money', p.currency || currency)),
+        ascii(formatMetric(p.replacementCost, 'money', p.currency || currency)),
+        ascii(formatMetric(p.spendPctOfNew, 'pct1')),
+        // A machine with no complete year of spend has no ratio, and a blank
+        // says so. Printing 0 would read as a machine that costs nothing to run.
+        p.yearsOfSpendPerNewMachine == null ? '' : ascii(formatMetric(p.yearsOfSpendPerNewMachine, 'dec1')),
+        ascii(benchmarkStatusLabel(p.status)),
+      ])
+      const t = view.totals
+      const caption = ascii(
+        `Showing ${fmtNum(body.length)} of ${fmtNum(t.coveredCount)} priced machines`
+        + (b.filter !== 'all' ? ` | filter: ${filterLabel(b.filter)}` : '')
+        + ` | ${fmtNum(t.uncoveredCount)} machines carry no quotation and are not listed here`
+        + '. Prices are ex-VAT.',
+      )
+      return {
+        kind: 'replacement', id: b.id, title: fmtText(b.title),
+        headlines: view.headlines, columns, rows: body,
+        notes: view.notes, caption,
+        empty: false, emptyNote: '',
       }
     }
 

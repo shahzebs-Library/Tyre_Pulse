@@ -26,7 +26,7 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Recycle, AlertTriangle, Truck, Upload, FileSpreadsheet, FileText, Presentation,
   Filter, X, Loader2, ExternalLink, CircleDot, Save, Wrench, Info, Search,
-  Banknote, RefreshCw, Activity, History,
+  Banknote, RefreshCw, Activity, History, Tag,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
@@ -35,12 +35,14 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
   getDisposalRegister, getDisposalReliability, getDisposalFleetBaseline,
+  listReplacementBenchmarks,
   updateDisposal, setDisposalDecision,
   importDisposalRows, mapDisposalSheetRows,
 } from '../lib/api/assetDisposals'
 import {
   shapeReliability, mergeReliability, reliabilityExportRows,
 } from '../lib/assetDisposalReliability'
+import { shapeBenchmarks } from '../lib/assetReplacement'
 import {
   shapeDisposalRegister, filterDisposals, disposalSummary, assetEconomics,
   spendBaselines, byGroup, ageBands, disposalExportRows, disposalFindings,
@@ -56,6 +58,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Le
 
 const DisposalDeckBuilder = lazy(() => import('../components/disposal/DisposalDeckBuilder'))
 const ReliabilityPanel = lazy(() => import('../components/disposal/ReliabilityPanel'))
+const ReplacementPanel = lazy(() => import('../components/disposal/ReplacementPanel'))
 const AssetHistoryDrawer = lazy(() => import('../components/disposal/AssetHistoryDrawer'))
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
@@ -136,6 +139,9 @@ export default function AssetDisposals() {
   // The list measured against the fleet it is leaving. Its own read, because a
   // missing baseline must cost two recommendation points and never the page.
   const [baseline, setBaseline] = useState(null)
+  // Supplier quotations that price a whole asset class. Kept raw so the editor
+  // can write them back; shaped below for every reader.
+  const [benchmarkRows, setBenchmarkRows] = useState([])
   const [tab, setTab] = useState('register')
   const [history, setHistory] = useState(null)  // machine open in the history drawer
   const [loading, setLoading] = useState(true)
@@ -156,13 +162,15 @@ export default function AssetDisposals() {
     if (isRefresh) setRefreshing(true); else setLoading(true)
     setError('')
     try {
-      // The two reads are independent on purpose: a database without the
-      // reliability RPC must still show the register, and a register that fails
-      // to load must not be reported as a fleet that never breaks down.
-      const [reg, rel, base] = await Promise.allSettled([
+      // The reads are independent on purpose: a database without the
+      // reliability RPC must still show the register, a register that fails
+      // to load must not be reported as a fleet that never breaks down, and a
+      // failed quotation read must cost only the replacement figures.
+      const [reg, rel, base, bench] = await Promise.allSettled([
         getDisposalRegister({ country: activeCountry }),
         getDisposalReliability({ country: activeCountry }),
         getDisposalFleetBaseline({ country: activeCountry }),
+        listReplacementBenchmarks({ country: activeCountry }),
       ])
       if (reg.status === 'fulfilled') {
         setRegister(shapeDisposalRegister(reg.value))
@@ -173,6 +181,9 @@ export default function AssetDisposals() {
       }
       setReliability(shapeReliability(rel.status === 'fulfilled' ? rel.value : null))
       setBaseline(base.status === 'fulfilled' ? base.value : null)
+      // A read that failed leaves NO quotations, so every machine reads as
+      // unpriced with its reason. It never leaves a stale price on screen.
+      setBenchmarkRows(bench.status === 'fulfilled' ? (bench.value?.rows || []) : [])
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e))
@@ -204,6 +215,9 @@ export default function AssetDisposals() {
   const totals = useMemo(() => disposalSummary(filtered), [filtered])
   const findings = useMemo(() => disposalFindings(filtered, totals), [filtered, totals])
   const baselines = useMemo(() => spendBaselines(rows), [rows])
+  // Shaped once: inactive rows dropped, the newest quotation per class winning,
+  // and the older one kept visible as superseded rather than silently gone.
+  const benchmarks = useMemo(() => shapeBenchmarks(benchmarkRows, { now: Date.now() }), [benchmarkRows])
 
   const options = useMemo(() => {
     const uniq = (key) => [...new Set(rows.map((r) => r?.[key]).filter(Boolean))].sort()
@@ -542,6 +556,7 @@ export default function AssetDisposals() {
             {[
               { key: 'register', label: 'Register', icon: Recycle },
               { key: 'reliability', label: 'Reliability and board view', icon: Activity },
+              { key: 'replacement', label: 'Replacement', icon: Tag },
             ].map((t) => (
               <button
                 key={t.key}
@@ -564,6 +579,21 @@ export default function AssetDisposals() {
                   loading={loading}
                   onRetry={() => load(true)}
                   onOpenAsset={(r) => setHistory(r)}
+                />
+              </Suspense>
+            </StudioBoundary>
+          )}
+
+          {tab === 'replacement' && (
+            <StudioBoundary>
+              <Suspense fallback={<div className="card text-[var(--text-muted)]">Loading the replacement view...</div>}>
+                <ReplacementPanel
+                  rows={filtered}
+                  benchmarks={benchmarks}
+                  benchmarksRaw={benchmarkRows}
+                  currency={currency}
+                  canEdit={canWrite}
+                  onSaved={() => load(true)}
                 />
               </Suspense>
             </StudioBoundary>
@@ -750,6 +780,7 @@ export default function AssetDisposals() {
             <DisposalDeckBuilder
               rows={filtered}
               totals={totals}
+              benchmarks={benchmarks}
               country={activeCountry}
               company={company}
               onClose={() => setDeckOpen(false)}

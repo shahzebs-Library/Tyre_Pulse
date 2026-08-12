@@ -21,9 +21,14 @@ import { shapeRunningLife } from '../tyreRunningLife'
 const FITMENT_COLS =
   'id,asset_no,serial_no,position,tyre_position,brand,size,site,country,issue_date,fitment_date,removal_date,km_at_removal,status,category'
 
-/** Inspections carry the tyre conditions the user-raised flags come from. */
+/**
+ * Inspections carry the tyre conditions the user-raised flags come from.
+ * `vehicle_type` rides along because it is what resolves the wheel layout, and
+ * without it a position recorded as 'R2Ri' can neither be NAMED as RHRI nor
+ * matched to the RHRI fitment record.
+ */
 const INSPECTION_COLS =
-  'id,asset_no,site,country,inspection_date,scheduled_date,completed_date,created_at,tyre_conditions'
+  'id,asset_no,vehicle_type,site,country,inspection_date,scheduled_date,completed_date,created_at,tyre_conditions'
 
 const ACTION_COLS =
   'id,title,asset_no,tyre_serial,site,country,status,created_at,source_type,source_id,source_detail'

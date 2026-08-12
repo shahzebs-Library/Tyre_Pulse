@@ -289,6 +289,7 @@ const WarrantyTracker        = lazy(() => import('./pages/WarrantyTracker'))
 const TyreExchange           = lazy(() => import('./pages/TyreExchange'))
 const TyreSpecifications     = lazy(() => import('./pages/TyreSpecifications'))
 const AssetManagement        = lazy(() => import('./pages/AssetManagement'))
+const AssetDisposals         = lazy(() => import('./pages/AssetDisposals'))
 const SiteManagement         = lazy(() => import('./pages/SiteManagement'))
 const InspectionPlanner      = lazy(() => import('./pages/InspectionPlanner'))
 const RetreadManagement      = lazy(() => import('./pages/RetreadManagement'))
@@ -552,6 +553,7 @@ function MainApp() {
                       <Route path="/maintenance-calendar" element={<Safe><RoleRoute allowed={['Admin']}><MaintenanceCalendar /></RoleRoute></Safe>} />
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
                       <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
+                      <Route path="/asset-disposals"       element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_disposals"><AssetDisposals /></RoleRoute></Safe>} />
                       <Route path="/sites"                element={<Safe><ModuleRoute moduleKey="fleet_master"><SiteManagement /></ModuleRoute></Safe>} />
                       <Route path="/inspection-planner"   element={<Safe><InspectionPlanner /></Safe>} />
                       <Route path="/warranty"             element={<Safe><WarrantyTracker /></Safe>} />

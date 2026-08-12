@@ -14,8 +14,11 @@
  * null and reads as "Not recorded", never as 0.
  */
 
-import { resolveLayoutKey, canonicalToSlotId, BUILTIN_LAYOUT_SLOTS } from './tyreBay'
-import { legacyPositionCode, canonicalCode } from './tyrePositions'
+import {
+  resolveLayoutKey, canonicalToSlotId, BUILTIN_LAYOUT_SLOTS,
+  vehicleTypeIsKnown, slotDisplayCode as slotCode, displayPositionCode,
+  inspectionTypeHint,
+} from './tyreBay'
 import { damagedPositions } from './inspectionTyreFlags'
 
 /** Condition word -> risk band. The vocabulary the app writes. */
@@ -171,11 +174,15 @@ export function pressureDeviation(pressure, stats) {
 export function tyreReadingRows(row) {
   const normTc = normalizeTyreConditions(row)
   const stats = inspectionStats(normTc)
+  // The name to PRINT for each wheel. Without it a row keyed by the mobile
+  // capture id would head a column "R2Ri" while every tyre record for the same
+  // wheel says RHRI.
+  const labels = positionLabelMap(row)
   const rows = Object.entries(normTc)
     .filter(([, d]) => d && (d.condition || d.pressure != null || d.tread != null || d.notes))
     .map(([position, d]) => ({
       position,
-      label: d.label || null,
+      label: d.label || labels[position] || null,
       condition: d.condition || RISK_LABEL[d.risk] || null,
       risk: d.risk || 'none',
       pressure: d.pressure,
@@ -242,29 +249,11 @@ export function inspectionSummary(row) {
 // table are two views of the SAME answer - splitting them is how a wheel ends
 // up green while the row beneath it says "Damage".
 
-/** An explicit pickup signal, as opposed to the resolver's fallback. */
-const PICKUP_HINT = /pickup|pick[\s-]?up/i
-
-/**
- * Does this vehicle type actually have a known wheel layout?
- *
- * `resolveLayoutKey` answers "Pickup" for anything it does not recognise, which
- * is a safe default for a picker and a lie on an inspection report: drawing four
- * wheels for a machine nobody classified states a layout we do not know. So a
- * Pickup result only counts when the string genuinely says pickup.
- */
-export function vehicleTypeIsKnown(vt) {
-  const s = String(vt || '').trim()
-  if (!s) return false
-  if (BUILTIN_LAYOUT_SLOTS[s]) return true
-  if (resolveLayoutKey(s) !== 'Pickup') return true
-  return PICKUP_HINT.test(s) || /^PL/i.test(s)
-}
-
-/** The canonical GCC code a slot displays (LHF1, RHR1-O ...). */
-function slotCode(layoutKey, slot) {
-  return canonicalCode(legacyPositionCode(layoutKey, slot)) || slot
-}
+// `vehicleTypeIsKnown` and the slot -> canonical-code conversion now live with
+// the layout tables in tyreBay.js, so every screen that has to NAME a wheel
+// reads one definition. Re-exported here because this module was their original
+// home and the inspection surfaces import them from it.
+export { vehicleTypeIsKnown, inspectionTypeHint }
 
 /** Short reading printed inside the wheel. Never prints a zero it did not read. */
 function wheelSubLabel(pressure, tread) {
@@ -285,10 +274,9 @@ function wheelSubLabel(pressure, tread) {
  * wheel differently on the same screen, and the reader has to pair them up by
  * hand on a safety record.
  *
- * This is NOT a new mapping. It is the existing one the diagram uses, reused:
- * stored key -> slot (canonicalToSlotId) -> canonical code (legacyPositionCode).
- * The web form proves the pairing by storing both itself, e.g.
- * { position: 'R1Lo', label: 'LHCO' } on a tri-mixer.
+ * This is NOT a new mapping. It is `displayPositionCode` - the one conversion
+ * the diagram itself uses. The web form proves the pairing by storing both
+ * itself, e.g. { position: 'R1Lo', label: 'LHCO' } on a tri-mixer.
  *
  * Order of preference, most trustworthy first:
  *   1. the label the inspector's own record carries
@@ -305,21 +293,15 @@ export function positionLabelMap(row) {
   const positions = Object.keys(normTc)
   if (!positions.length) return {}
 
-  const typeHint = String(row?.vehicle_type || '').trim() || String(row?.asset_no || '').trim()
-  // Same gate as the diagram: `resolveLayoutKey` answers "Pickup" for anything it
-  // does not recognise, so relabelling on that fallback would state a layout
-  // nobody recorded.
-  const layoutKey = vehicleTypeIsKnown(typeHint) ? resolveLayoutKey(typeHint) : null
-
+  const typeHint = inspectionTypeHint(row)
   const out = {}
   for (const position of positions) {
     const recorded = normTc[position]?.label
-    if (recorded) { out[position] = String(recorded); continue }
-    const slot = layoutKey ? canonicalToSlotId(typeHint, position) : null
-    out[position] = slot ? slotCode(layoutKey, slot) : position
+    out[position] = recorded ? String(recorded) : displayPositionCode(typeHint, position)
   }
   return out
 }
+
 
 /**
  * Turn one inspection row into the wheel map.
@@ -351,7 +333,7 @@ export function inspectionDiagramModel(row, { isTyreless } = {}) {
   const recordedType = String(row.vehicle_type || '').trim()
   // The asset code carries the class (TM, MP, WL ...) when nobody filled the
   // vehicle type in, and the layout resolver already reads that prefix.
-  const typeHint = recordedType || String(row.asset_no || '').trim()
+  const typeHint = inspectionTypeHint(row)
 
   if (recordedType && typeof isTyreless === 'function' && isTyreless(recordedType)) {
     return { ...blank, vehicleType: recordedType, reason: `${recordedType} has no tyres to inspect.` }

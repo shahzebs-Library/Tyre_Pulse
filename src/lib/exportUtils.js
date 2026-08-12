@@ -15,6 +15,10 @@ import {
 // due with this function, so the report has to use it too or the two would
 // disagree about the same tyre on the same day.
 import { bandFor } from './tyreRunningLife'
+// One conversion names every wheel: a stored capture key (F1L, R2Ri) prints as
+// the canonical code (LHF1, RHRI) the tyre records use, so an export can never
+// disagree with the screen it came from.
+import { displayPositionCode, inspectionTypeHint } from './tyreBay'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -2346,13 +2350,17 @@ function _buildRecommendations(riskCounts, totalT, row) {
   const recs = []
   const tc = row.tyre_conditions || {}
   const critPos = [], warnPos = [], lowPsiPos = []
+  // A recommendation tells somebody which wheel to go to, so it names it the
+  // way the tyre records do rather than by the capture app's internal key.
+  const hint = inspectionTypeHint(row)
+  const named = (pos) => displayPositionCode(hint, pos) || pos
   Object.entries(tc).forEach(([pos, d]) => {
     const risk = typeof d === 'object'
       ? (d?.risk ?? COND_TO_RISK[d?.condition] ?? 'none')
       : (COND_TO_RISK[String(d)] ?? 'none')
-    if (risk === 'critical') critPos.push(pos)
-    if (risk === 'warning')  warnPos.push(pos)
-    if (typeof d === 'object' && d?.pressure && Number(d.pressure) < 80) lowPsiPos.push(pos)
+    if (risk === 'critical') critPos.push(named(pos))
+    if (risk === 'warning')  warnPos.push(named(pos))
+    if (typeof d === 'object' && d?.pressure && Number(d.pressure) < 80) lowPsiPos.push(named(pos))
   })
   if (critPos.length)  recs.push({ urgent: true,  text: `IMMEDIATE: ${critPos.length} tyre(s) in critical condition at ${critPos.join(', ')} - remove vehicle from service until replaced.` })
   if (warnPos.length)  recs.push({ urgent: false, text: `Schedule replacement within 7 days for position(s) ${warnPos.join(', ')} showing abnormal wear or damage.` })

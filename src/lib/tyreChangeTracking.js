@@ -30,6 +30,7 @@
  * Deterministic and I/O free: `now` is injected, so tests pin real dates.
  */
 import { canonicalCode } from './tyrePositions'
+import { displayPositionCode } from './tyreBay'
 import { bandFor } from './tyreRunningLife'
 import { damagedPositions } from './inspectionTyreFlags'
 import { isRemovedOrScrapped } from './tyrePool'
@@ -140,13 +141,37 @@ export function indexFitments(records = []) {
 
 /* ------------------------------------------------------------------ flags */
 
+/**
+ * Every flag names its wheel in the CANONICAL vocabulary, whatever the source
+ * wrote.
+ *
+ * Flags arrive from three places in two vocabularies: the running-life feed and
+ * the fitment records use the ERP codes (LHF1, RHRI), while an inspection - and
+ * therefore any corrective action raised off one - is keyed by the mobile
+ * capture app's slot ids (F1L, R2Ri). Left alone that costs twice:
+ *   - the table prints "R2Ri" beside "RHRI" for the same tyre, and
+ *   - the two never merge and never match a fitment, because `positionKey` is
+ *     type-agnostic and cannot know that R2Ri IS RHRI on a tri-mixer.
+ * Converting here, once, at the point where the vehicle is still known, fixes
+ * both: the row reads the way the business names wheels AND resolves against
+ * the uploaded history. `positionKey` is unchanged and still does the folding
+ * it always did - it just now receives one vocabulary.
+ *
+ * The vehicle type is used when the source carried one, otherwise the asset
+ * code (its class prefix resolves the layout). A position we cannot place keeps
+ * its stored text: `positionStored` always holds it verbatim, so nothing about
+ * what was recorded is lost by displaying it properly.
+ */
 function baseFlag(f) {
+  const asset = txt(f.asset)
+  const storedPosition = txt(f.position)
   return {
     source: f.source,
     kind: f.kind,
     country: txt(f.country),
-    asset: txt(f.asset),
-    position: txt(f.position),
+    asset,
+    position: displayPositionCode(txt(f.vehicleType) || asset, storedPosition),
+    positionStored: storedPosition,
     serial: txt(f.serial),
     site: txt(f.site),
     brand: txt(f.brand),
@@ -178,6 +203,7 @@ export function flagsFromDueRows(rows = []) {
       kind: band === 'overdue' ? 'Past expected life' : 'Due soon',
       country: r.country,
       asset: r.asset,
+      vehicleType: r.vehicleType || r.vehicle_type,
       position: r.position,
       serial: r.serial,
       site: r.site,
@@ -203,6 +229,7 @@ export function flagsFromInspections(inspections = []) {
         kind: txt(d.condition) || 'Damage',
         country: insp.country,
         asset: insp.asset_no,
+        vehicleType: insp.vehicle_type,
         position: d.position,
         serial: '',
         site: insp.site,
@@ -294,7 +321,10 @@ export function mergeFlags(lists = []) {
         prev.detail = f.detail || prev.detail
       }
       if (!prev.serial && f.serial) prev.serial = f.serial
-      if (!prev.position && f.position) prev.position = f.position
+      if (!prev.position && f.position) {
+        prev.position = f.position
+        prev.positionStored = f.positionStored
+      }
       if (!prev.fittedOn && f.fittedOn) prev.fittedOn = f.fittedOn
       if (!prev.site && f.site) prev.site = f.site
       if (!prev.brand && f.brand) prev.brand = f.brand
@@ -479,7 +509,11 @@ export function filterTracking(rows = [], { search = '', state = 'all', source =
     if (state !== 'all' && r.state !== state) return false
     if (source !== 'all' && r.source !== source) return false
     if (!q) return true
-    return [r.asset, r.serial, r.position, r.site, r.brand, r.kind, r.replacement?.serial]
+    // Both spellings of the wheel are searchable. The row now READS as RHRI, but
+    // somebody who saw R2Ri on the phone should still find it - a search that
+    // silently misses a row reads as "there is no such flag".
+    return [r.asset, r.serial, r.position, r.positionStored,
+      r.site, r.brand, r.kind, r.replacement?.serial]
       .some((v) => txt(v).toLowerCase().includes(q))
   })
 }

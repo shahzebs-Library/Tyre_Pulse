@@ -1,0 +1,121 @@
+-- V528 / V529  BATCHING STATION TO SITE AND REGION MAPPING   (APPLIED LIVE 2026-08-12)
+--
+-- THE PROBLEM. 25 numbered batching plants carried 206,868 of KSA's 212,567
+-- production rows and no site, so 92% of production had no region. Cost per m3
+-- is cut BY REGION, so the regional split was meaningless: ALL 2,193,570 m3 sat
+-- in "Unassigned" while ALL SAR 10.1M of internal cost sat in CENTRAL and
+-- WESTERN. The fleet figure was right; every regional figure was an artifact.
+--
+-- TWO ROUTES WERE TESTED AND REJECTED BEFORE THIS ONE:
+--   1. Truck-day overlap against the named July batch. A mixer works out of one
+--      plant on a day, so the overlap looked like a Rosetta stone. It put 15 of
+--      25 stations on DIRIYAH-G2 - the signature of a coincidence, not a
+--      mapping, because the named batch is mostly one site and a mixer moves
+--      between plants. Discarded on the evidence.
+--   2. Site text on the row. There is none; `site` holds the station number.
+--
+-- WHAT DOES CARRY IT is `project_name`. A plant supplies whatever is near it -
+-- the owner's own words - so the projects it pours into name where it stands.
+-- Station 87 poured 103,012 m3 into "P178-Qiddiya Speed Park Buildings"; 57 into
+-- "Laheq Island - Laheq Crossing"; 79 and 80 into "ROSHN Al-Arous ... Jeddah".
+--
+-- V528  site_match_keywords. The mapping lives in a TABLE, not in code: a site's
+--       own name is seeded automatically, aliases are added for the words the
+--       projects actually use (DGDA for Diriyah, QPAC for Qiddiya, TRIPLE BAY
+--       for Amaala), each justified by the text it matches. A new plant or
+--       project is mapped by adding a keyword - no migration, no developer.
+--       Store sites are excluded outright: the -ST names are SPARE PARTS STORES,
+--       already settled by the owner, and a store can never batch concrete.
+--       Losing narrowly is still being on the ballot.
+--
+-- V528c A KEYWORD MAY NAME A REGION INSTEAD OF A PLANT, and this is the pivot.
+--       The first run forced one answer and so overstated the evidence. Stations
+--       81, 82 and 83 pour into "KSIA-Private Aviation Apron" and "VARIOUS
+--       PROJECTS @ RIYADH": certainly central Riyadh, and certainly NOT any one
+--       Riyadh plant, because the company has several there. The Diriyah gates
+--       are the same - 39, 40, 23 and 24 are all Diriyah and all CENTRAL, and
+--       nothing in the text separates G1 from G2. Only the owner knows that.
+--       So site and region are proposed and scored SEPARATELY. A region-only
+--       answer is not a consolation prize; it is most of what the mapping was
+--       for.
+--
+-- V528b/d/e propose_production_station_sites(country). Scores candidates by
+--       CUBIC METRES, not row count - a plant's identity is where its concrete
+--       went, and a hundred kerb pours should not outvote one raft slab.
+--       Specificity rule: DIRIYAH-G2 beats DIRIYAH, so a gate is never
+--       overwritten by its own parent (the V507 lesson), and the parent is kept
+--       as a runner up. Confidence is deliberately conservative and the function
+--       WRITES NOTHING.
+--       A station counts as already named when ITS OWN ROWS carry a registered
+--       site, not when its text matches a site name - reading the rows picks up
+--       every spelling site_aliases has already resolved (Dhaban to DHAHBAN,
+--       Metro to RIY-MET), and needs no second alias list.
+--
+-- V529  production_station_map gains region / confidence / evidence, site
+--       becomes nullable, and get_cost_per_m3 falls back:
+--         region = the site's region, else the station's mapped region,
+--                  else Unassigned
+--       THE SPLICE ANCHOR IS `prod as (` AND THAT MATTERS. Anchoring on
+--       "select coalesce(r.region, 'Unassigned') as region," alone finds TWO
+--       matches - production AND internal parts cost - and the guard aborted
+--       rather than silently rewriting what internal cost means. Verified after:
+--       production spliced once, internal untouched.
+--
+-- V529b apply_station_proposals(country, stations, dry_run). The caller sends
+--       exactly what a person accepted, so a low-confidence site can be dropped
+--       while its certain region is kept. Dry run reports how much production
+--       moves per region before anything is written. Writing a site here does
+--       NOT rewrite history: production_logs.site is still only rewritten by
+--       apply_production_station_map, kept separate because mapping a plant and
+--       rewriting 200,000 delivery rows are different decisions.
+--
+-- APPLIED: 27 stations mapped, every one at high region confidence, 13 also
+-- carrying a high-confidence site. Region coverage of KSA production went from
+-- 8% to 100%.
+--
+-- SITE REGIONS FILLED. Eight KSA sites carried SAR 17.4M of cost and no region.
+-- Six were settled by a SIBLING ALREADY IN THE REGISTER, which is evidence and
+-- not a guess (DIRIYAH-G1/G2 are CENTRAL so DIRIYAH is; JEDDAH is WESTERN so JED
+-- is; MISK CITY is CENTRAL so MISK is; NEOM is WESTERN so NEOSP is), and RIY-SAL
+-- is Riyadh where every other RIY site sits. JIZAN is the ONE INFERENCE: no
+-- sibling, and the vocabulary offers only CENTRAL and WESTERN, so its Red Sea
+-- coast puts it WESTERN. QIDDIYA-UP was left alone - it already aliases to
+-- QIDDIYA-UPPER PLATEAU, so updating it makes the sites normaliser rename it
+-- onto a name that exists and the unique index refuses. The alias is what
+-- resolves it.
+--
+-- AMAALA was registered under Company A. Its only sites row belonged to the
+-- stray org b4a4ba35 - the same org the 9 KSA users were stranded in - so a site
+-- with 52 assets, 3,238 job cards and 92 production loads had no entry in its
+-- own company's register and fell out of every region cut.
+--
+-- RESULT, KSA 2025-01-01 to 2026-12-31:
+--   CENTRAL    1,916,748 m3   SAR 7,182,516   3.75 per m3
+--   WESTERN      276,822 m3   SAR 2,887,876  10.43 per m3
+--   Unassigned         0 m3   SAR 4,400,905   no rate, honestly
+--   Fleet      2,193,570 m3   SAR 6.60 per m3   UNCHANGED
+-- Nothing was invented. Cost found its region. Internal cost with no region fell
+-- from SAR 1,790,971 to SAR 5,114.
+--
+-- STILL UNASSIGNED, AND DELIBERATELY SO: the SAR 4.4M is SCO (1.21M) and SANY
+-- (3.19M), which carry their own region column and arrive blank. SANY is a
+-- per-machine service contract across the whole fleet, so splitting it by region
+-- would be an ALLOCATION CHOICE, not a fact. Both regional rates are therefore
+-- FLOORS, and every surface must say so.
+--
+-- STILL THE OWNER'S CALL: which of stations 39, 40, 23 and 24 is Diriyah gate G1
+-- and which is G2, and the same for the two Qiddiya plateaus. The evidence
+-- places them and cannot separate them.
+--
+-- ROLLBACK:
+--   delete from public.production_station_map where note like 'Confirmed from the station mapping%';
+--   drop function public.apply_station_proposals(text, jsonb, boolean);
+--   drop function public.propose_production_station_sites(text);
+--   drop table public.site_match_keywords;
+--   -- and re-apply the pre-V529 get_cost_per_m3 body (the splice is two tokens:
+--   -- the psm join and psm.region inside the prod coalesce).
+--
+-- Applied bodies are in supabase_migrations.schema_migrations under
+-- v528_site_match_keywords, v528b_propose_station_sites, v528c_region_keywords,
+-- v528d_propose_station_sites_v2, v528e_propose_station_sites_fixes,
+-- v529_station_region_in_cost_per_m3 and v529b_apply_station_proposals.

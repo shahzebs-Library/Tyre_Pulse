@@ -38,6 +38,7 @@ export const NAV_MODULE_KEY = {
   '/alerts': 'alerts',
   '/alert-thresholds': 'alerts',
   '/fleet-master': 'fleet_master',
+  '/asset-disposals': 'asset_disposals',
   '/reports': 'reports',
   '/report-center': 'reports',
   '/gate-pass': 'gate_pass',

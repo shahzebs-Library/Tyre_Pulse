@@ -47,8 +47,36 @@ import {
   loadDeckLayout, saveDeckLayout, listSavedDecks, saveNamedDeck, deleteNamedDeck,
 } from '../../lib/assetDisposalDeck'
 import { renderDisposalDeckPptx, renderDisposalDeckPdf, slideChartConfig, PRIORITY_LABEL } from '../../lib/assetDisposalDeckRender'
+import { BRAND, TONE, PRIORITY_TONE, COVER, PAGE, coverMeta } from '../../lib/brandDeckTheme'
+import { getCompanyLogo } from '../../lib/api/brandLogo'
 import { captureChartOnPaper } from '../../lib/chartCapture'
 import { toUserMessage } from '../../lib/safeError'
+
+/**
+ * Resolve the stored logo to a data URI the renderers can draw. A data URI is
+ * returned as it stands; an http(s) URL is fetched once. Any failure returns ''
+ * so the cover renders without a logo rather than with a broken box.
+ */
+async function logoDataUri(url) {
+  const s = typeof url === 'string' ? url.trim() : ''
+  if (!s) return ''
+  if (/^data:image\//i.test(s)) return s
+  if (!/^https?:\/\//i.test(s)) return ''
+  try {
+    const res = await fetch(s)
+    if (!res.ok) return ''
+    const blob = await res.blob()
+    if (!/^image\//i.test(blob.type)) return ''
+    return await new Promise((resolve) => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : '')
+      fr.onerror = () => resolve('')
+      fr.readAsDataURL(blob)
+    })
+  } catch {
+    return ''
+  }
+}
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, LineElement, PointElement, Filler, Tooltip, Legend)
 
@@ -105,12 +133,20 @@ function CheckList({ all, labelOf, selected, onToggle }) {
 const toggleIn = (arr, k) => (arr.includes(k) ? arr.filter((x) => x !== k) : [...arr, k])
 
 // ── Slide preview (WYSIWYG: this is what the renderers draw) ─────────────────
+// The preview draws what the renderers draw, so it reads the SAME house palette
+// (brandDeckTheme) rather than keeping a second set of hexes that would drift.
 const PAPER = {
-  bg: '#ffffff', ink: '#0f172a', subtle: '#475569', muted: '#94a3b8',
-  border: '#e2e8f0', accent: '#4f46e5', warn: '#b45309', head: '#1e293b', zebra: '#f8fafc',
-  good: '#15803d', watch: '#b45309', bad: '#b91c1c',
+  bg: '#ffffff', ink: `#${BRAND.ink}`, subtle: `#${BRAND.secondary}`, muted: `#${BRAND.muted}`,
+  border: `#${BRAND.border}`, accent: `#${BRAND.green}`, warn: `#${BRAND.amber}`,
+  head: `#${BRAND.navy}`, navy: `#${BRAND.navy}`, zebra: `#${BRAND.surface}`,
+  tintGreen: `#${BRAND.tintGreen}`, tintBlue: `#${BRAND.tintBlue}`, tintAmber: `#${BRAND.tintAmber}`,
+  panelTint: `#${BRAND.panelTint}`, greenDeep: `#${BRAND.greenDeep}`,
+  good: `#${TONE.good}`, watch: `#${TONE.watch}`, bad: `#${TONE.bad}`,
 }
-const PRIORITY_COLOR = { high: PAPER.bad, medium: PAPER.warn, low: PAPER.subtle }
+const PRIORITY_COLOR = {
+  critical: `#${PRIORITY_TONE.critical}`, high: `#${PRIORITY_TONE.high}`,
+  medium: `#${PRIORITY_TONE.medium}`, low: `#${PRIORITY_TONE.low}`, info: `#${PRIORITY_TONE.info}`,
+}
 const isUnmeasured = (v) => String(v) === NOT_MEASURED
 /** Preview tone for one table cell, mirroring cellTone() in the renderers. */
 const previewCellColor = (cell, band) => {
@@ -123,10 +159,25 @@ const previewCellColor = (cell, band) => {
 function SlidePreview({ slide, deck, registerChart }) {
   if (!slide) return null
 
+  const eyebrow = [deck.company, deck.country].filter(Boolean).join('  |  ').toUpperCase()
   const head = (title, sub) => (
-    <div style={{ borderBottom: `2px solid ${PAPER.accent}`, paddingBottom: 6, marginBottom: 10 }}>
-      <div style={{ fontSize: 15, fontWeight: 700, color: PAPER.ink, textTransform: 'uppercase', letterSpacing: 0.3 }}>{title}</div>
-      {sub && <div style={{ fontSize: 10, color: PAPER.subtle, marginTop: 2 }}>{sub}</div>}
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.accent, letterSpacing: 1.2 }}>{eyebrow}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: PAPER.navy, marginTop: 3 }}>{title}</div>
+      {sub && <div style={{ fontSize: 10, color: PAPER.subtle, marginTop: 3 }}>{sub}</div>}
+    </div>
+  )
+  /** The headline callout: the house tinted card, matching both renderers. */
+  const callout = (text, tone, key) => (
+    <div
+      key={key}
+      style={{
+        background: tone === 'limit' ? PAPER.tintAmber : PAPER.tintBlue,
+        border: `1px solid ${PAPER.border}`, padding: '6px 8px', marginBottom: 6,
+        fontSize: 10, color: tone === 'limit' ? PAPER.warn : PAPER.navy, lineHeight: 1.4,
+      }}
+    >
+      {text}
     </div>
   )
   const empty = (text) => (
@@ -135,25 +186,42 @@ function SlidePreview({ slide, deck, registerChart }) {
     </div>
   )
 
+  // The company cover: pale green panel with the headline figure, white stepped
+  // panel carrying the title. Same composition both renderers draw.
   if (slide.kind === 'title') {
+    const pct = (v) => `${(v / PAGE.w) * 100}%`
+    const pctY = (v) => `${(v / PAGE.h) * 100}%`
     return (
-      <div style={{ height: '100%', display: 'flex' }}>
-        <div style={{ width: 8, background: PAPER.accent }} />
-        <div style={{ width: '32%', background: '#f1f4fb' }} />
-        <div style={{ position: 'absolute', left: '5%', top: '22%', right: '5%' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: PAPER.accent, letterSpacing: 2 }}>{String(deck.company || '').toUpperCase()}</div>
-          <div style={{ fontSize: 30, fontWeight: 800, color: PAPER.ink, marginTop: 10, lineHeight: 1.15 }}>{slide.title}</div>
+      <div style={{ height: '100%', position: 'relative', background: '#fff', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, width: pct(COVER.panel.w), background: PAPER.panelTint }} />
+        {COVER.steps.map((st, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute', left: pct(st.x), top: pctY(st.y),
+              width: pct(PAGE.w - st.x), height: pctY(st.h), background: '#fff',
+            }}
+          />
+        ))}
+        <div style={{ position: 'absolute', left: pct(COVER.art.x + 0.3), top: pctY(COVER.art.y + 0.4) }}>
+          <div style={{ fontSize: 54, fontWeight: 800, color: PAPER.greenDeep, lineHeight: 1 }}>{slide.assetCount}</div>
+          <div style={{ fontSize: 11, color: PAPER.greenDeep, marginTop: 6 }}>assets proposed for disposal</div>
+        </div>
+        <div style={{ position: 'absolute', left: pct(COVER.title.x), top: pctY(COVER.title.y), width: pct(COVER.title.w) }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: PAPER.accent, lineHeight: 1.2 }}>{slide.title}</div>
           {(slide.subtitle || deck.country) && (
-            <div style={{ fontSize: 13, color: PAPER.subtle, marginTop: 12 }}>{[slide.subtitle, deck.country].filter(Boolean).join('  |  ')}</div>
+            <div style={{ fontSize: 10, color: PAPER.subtle, marginTop: 8 }}>{[slide.subtitle, deck.country].filter(Boolean).join('  |  ')}</div>
           )}
-          <div style={{ fontSize: 11, color: PAPER.subtle, marginTop: 8 }}>{slide.assetCount} assets proposed for disposal</div>
           {deck.unvaluedCount > 0 && (
-            <div style={{ fontSize: 10, color: PAPER.warn, marginTop: 16, fontStyle: 'italic' }}>
+            <div style={{ fontSize: 8.5, color: PAPER.warn, marginTop: 10, fontStyle: 'italic', lineHeight: 1.35 }}>
               {deck.unvaluedCount >= deck.assetCount
                 ? 'No asset on this list has been valued. No recovery figure can be quoted.'
                 : `${deck.unvaluedCount} of ${deck.assetCount} assets have not been valued.`}
             </div>
           )}
+        </div>
+        <div style={{ position: 'absolute', left: pct(COVER.meta.x), top: pctY(COVER.meta.y), fontSize: 8, color: PAPER.muted }}>
+          {coverMeta({ company: deck.company, country: deck.country })}
         </div>
       </div>
     )
@@ -171,9 +239,9 @@ function SlidePreview({ slide, deck, registerChart }) {
             {items.map((k) => {
               const soft = k.unmeasured || isUnmeasured(k.value)
               return (
-                <div key={k.key} style={{ border: `1px solid ${PAPER.border}`, borderTop: `3px solid ${soft ? PAPER.muted : (k.valuation ? PAPER.warn : PAPER.accent)}`, borderRadius: 4, padding: 8 }}>
-                  <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.muted, letterSpacing: 0.6 }}>{k.label.toUpperCase()}</div>
-                  <div style={{ fontSize: k.valuation || soft ? 15 : 20, fontWeight: 800, color: soft ? PAPER.muted : (k.valuation ? PAPER.warn : PAPER.ink), marginTop: 4 }}>{k.value}</div>
+                <div key={k.key} style={{ border: `1px solid ${PAPER.border}`, background: soft ? PAPER.zebra : (k.valuation ? PAPER.tintAmber : PAPER.tintGreen), padding: 8 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.subtle, letterSpacing: 0.6 }}>{k.label.toUpperCase()}</div>
+                  <div style={{ fontSize: k.valuation || soft ? 15 : 21, fontWeight: 800, fontStyle: soft ? 'italic' : 'normal', color: soft ? PAPER.muted : (k.valuation ? PAPER.warn : PAPER.navy), marginTop: 4 }}>{k.value}</div>
                   {k.note && <div style={{ fontSize: 7.5, color: PAPER.subtle, marginTop: 4, lineHeight: 1.3 }}>{k.note}</div>}
                 </div>
               )
@@ -224,9 +292,7 @@ function SlidePreview({ slide, deck, registerChart }) {
       <div style={{ height: '100%', overflow: 'hidden' }}>
         {head(slide.title, slide.country ? `Country: ${slide.country}` : '')}
         {slide.headlines.map((h, i) => (
-          <div key={i} style={{ borderLeft: `3px solid ${h.tone === 'limit' ? PAPER.warn : PAPER.accent}`, paddingLeft: 8, marginBottom: 7, fontSize: 10, color: PAPER.ink, lineHeight: 1.4 }}>
-            {h.text}
-          </div>
+          callout(h.text, h.tone, i)
         ))}
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 8.5, marginTop: 4 }}>
           <thead>
@@ -251,7 +317,7 @@ function SlidePreview({ slide, deck, registerChart }) {
           </tbody>
         </table>
         {slide.confound && (
-          <div style={{ marginTop: 8, padding: 6, background: '#fff7ed', border: `1px solid ${PAPER.warn}`, borderRadius: 3, fontSize: 8, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
+          <div style={{ marginTop: 8, padding: 6, background: PAPER.tintAmber, border: `1px solid ${PAPER.border}`, fontSize: 8, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
             {slide.confound}
           </div>
         )}
@@ -266,9 +332,7 @@ function SlidePreview({ slide, deck, registerChart }) {
         {slide.empty ? empty(slide.emptyNote) : (
           <>
             {slide.headlines.map((h, i) => (
-              <div key={i} style={{ borderLeft: `3px solid ${h.tone === 'limit' ? PAPER.warn : PAPER.accent}`, paddingLeft: 8, marginBottom: 7, fontSize: 10, color: PAPER.ink, lineHeight: 1.4 }}>
-                {h.text}
-              </div>
+              callout(h.text, h.tone, i)
             ))}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 8, marginTop: 4 }}>
               <thead>
@@ -289,7 +353,7 @@ function SlidePreview({ slide, deck, registerChart }) {
               </tbody>
             </table>
             {Array.isArray(slide.notes) && slide.notes.length > 0 && (
-              <div style={{ marginTop: 8, padding: 6, background: '#fff7ed', border: `1px solid ${PAPER.warn}`, borderRadius: 3, fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
+              <div style={{ marginTop: 8, padding: 6, background: PAPER.tintAmber, border: `1px solid ${PAPER.border}`, fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
                 {slide.notes.join('  ')}
               </div>
             )}
@@ -465,9 +529,20 @@ function SlidePreview({ slide, deck, registerChart }) {
 
   if (slide.kind === 'divider') {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: PAPER.subtle, letterSpacing: 2 }}>{String(slide.label).toUpperCase()}</div>
-        <div style={{ flex: 1, height: 1, background: PAPER.border }} />
+      <div style={{ height: '100%', position: 'relative', background: PAPER.panelTint, overflow: 'hidden' }}>
+        {COVER.steps.map((st, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute', left: `${(st.x / PAGE.w) * 100}%`, top: `${(st.y / PAGE.h) * 100}%`,
+              width: `${((PAGE.w - st.x) / PAGE.w) * 100}%`, height: `${(st.h / PAGE.h) * 100}%`, background: '#fff',
+            }}
+          />
+        ))}
+        <div style={{ position: 'absolute', left: '4%', top: '44%' }}>
+          <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.greenDeep, letterSpacing: 1.2 }}>{eyebrow}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: PAPER.greenDeep, marginTop: 4 }}>{String(slide.label).toUpperCase()}</div>
+        </div>
       </div>
     )
   }
@@ -784,7 +859,24 @@ export default function DisposalDeckBuilder({
   const [showLibrary, setShowLibrary] = useState(false)
   const [saved, setSaved] = useState(() => listSavedDecks())
   const [saveName, setSaveName] = useState('')
+  const [logo, setLogo] = useState('')
   const chartRefs = useRef(new Map())
+
+  // The company logo for the cover. It comes from the ONE place the app stores
+  // it (system_config.company_logo, via api/brandLogo) and is resolved to bytes
+  // here: jsPDF cannot fetch a URL and pptxgenjs would fail mid-write. A logo we
+  // cannot read is simply not drawn - the cover still renders.
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      try {
+        const url = await getCompanyLogo()
+        const data = await logoDataUri(url)
+        if (live) setLogo(data)
+      } catch { if (live) setLogo('') }
+    })()
+    return () => { live = false }
+  }, [])
 
   const currency = useMemo(() => {
     const r = (rows || []).find((x) => x && x.currency)
@@ -859,7 +951,7 @@ export default function DisposalDeckBuilder({
   const download = async (kind) => {
     setError(''); setNotice(''); setBusy(kind)
     try {
-      const args = { deck, company, country, chartImageFor, save: true }
+      const args = { deck, company, country, chartImageFor, logo, save: true }
       const res = kind === 'pptx' ? await renderDisposalDeckPptx(args) : await renderDisposalDeckPdf(args)
       setNotice(`Downloaded ${res.filename}`)
     } catch (e) {

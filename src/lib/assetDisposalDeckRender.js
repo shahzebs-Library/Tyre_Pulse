@@ -52,10 +52,12 @@ async function ensurePptx() {
 const BG = BRAND.surface
 const CARD = BRAND.card
 const BORDER = BRAND.border
-const INK = BRAND.ink
+// INK and the identity green are deliberately absent as aliases: body text on
+// these slides runs in BRAND.secondary and no slide element takes the identity
+// green directly, so an unused alias for either would be a colour sitting there
+// waiting to be reached for by accident.
 const SUBTLE = BRAND.secondary
 const MUTED = BRAND.muted
-const ACCENT = BRAND.green
 const WARN = BRAND.amber
 const HEAD_FILL = BRAND.navy
 

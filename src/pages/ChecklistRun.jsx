@@ -8,7 +8,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
 import {
   CHECKLIST_LANGS, DEFAULT_LANG, normalizeLang, langDir, isRtlLang,
   fieldLabel, fieldOptions, fieldOptionValues, templateName, templateDescription,

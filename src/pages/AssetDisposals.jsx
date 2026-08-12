@@ -781,6 +781,11 @@ export default function AssetDisposals() {
               rows={filtered}
               totals={totals}
               benchmarks={benchmarks}
+              // Without this the "against the rest of the fleet" slide always
+              // resolved to "baseline was not supplied" while the page had it
+              // loaded all along - a slide that silently says nothing reads as
+              // a comparison nobody could make, rather than one nobody wired.
+              fleetBaseline={baseline}
               country={activeCountry}
               company={company}
               onClose={() => setDeckOpen(false)}

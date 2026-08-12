@@ -112,6 +112,26 @@ paged build. **If it is ever capped, the response must carry `truncated` AND eve
 **RULE: a paging parameter whose NULL means "everything" is not a bound. Any new paged RPC should make the
 unbounded read impossible to ask for by accident.**
 
+### OWNER REQUEST, NOT STARTED - VEHICLE WASHING NEEDS DEPTH ON THE WEB, INCLUDING SCHEDULING
+"add a log doenalod able for washing edit and corextion needs little more advancedmwn in washing in web
+sections" then "We should schedule it also for later". Four parts: a DOWNLOADABLE LOG, EDIT, CORRECTION, and
+SCHEDULING a wash for a future date. Reuse what exists - `wash_records` (V270/V271: org+country+site RLS,
+photos jsonb, client_uuid, driver INSERT allowed), `src/pages/VehicleWashing.jsx` (Reporting + Quick Log tabs),
+pure `src/lib/washAnalytics.js`, and the mobile `washing` screen + its `washDueList`/`WASH_INTERVAL_DAYS=7`
+LOCAL reminder. **Do NOT build a second wash table or a second schedule engine** - `pm_programs` already models
+"due every N days/meters" and MaintenanceCalendar already plots due dates; a wash schedule should either extend
+that or be a thin sibling that the same calendar can draw.
+**TWO QUESTIONS ASKED AND NOT YET ANSWERED, and the answers change the design:**
+(a) does "correction" mean EDITING the saved record in place, or recording a correction AGAINST it so the
+original stays visible? A wash that is ever disputed needs the second; the first is cheaper. The repo already
+has the pattern for the honest version - `admin_row_changes` (V364) keeps before+after and is undoable.
+(b) beyond asset / date / site / wash type / photos, what must a wash capture - cost, water used, who washed
+it, duration? Cost is the one that matters most: without it washing can never reach cost per m3 or the
+expense grid, and adding it later means re-entering history.
+NOTE the standing wash rule: `wash_date` is LOCKED to today on mobile (a driver cannot backdate). Any web edit
+or scheduling must not quietly break that - a scheduled future wash is a DIFFERENT record from a completed one
+and must not be counted as work done.
+
 ### OWNER REQUEST, NOT STARTED - ALERT RULES SHOULD FEED THE ANOMALY FEED
 "make an alert if in a system we set alert and anything change in advance should be triggert in anaomolies."
 Read as: a rule configured in Alert Rules must RAISE AN ANOMALY as soon as the measure moves toward breaching

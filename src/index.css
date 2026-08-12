@@ -68,6 +68,20 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   --border-dim:     rgba(255,255,255,0.042);
   --border-subtle:  rgba(255,255,255,0.024);
 
+  /* Unsuffixed aliases. `var(--surface)` was written in 11 places and
+     `var(--border)` in 38, and NEITHER was ever defined - the numbered scale
+     above is the real one. An undefined custom property with no fallback makes
+     the whole declaration invalid, so those panels had NO background and were
+     see-through over whatever sat behind them (the inspection and checklist
+     viewers, read as "transparent with no data"), and those borders fell back
+     to currentColor, painting a text-coloured edge.
+
+     Defined as aliases rather than by editing 38 call sites: it fixes every one
+     at once, in both themes, and the next person who reaches for the obvious
+     name gets a real colour instead of an invisible element. */
+  --surface:        var(--surface-1);
+  --border:         var(--border-dim);
+
   /* Spacing */
   --radius-sm:      8px;
   --radius-card:    16px;
@@ -851,6 +865,11 @@ html.light {
   --surface-raised: #ffffff;
   --border-subtle:  rgba(15,23,42,0.04);
   --shadow-float:   0 12px 32px rgba(16,24,40,0.12), 0 2px 8px rgba(16,24,40,0.06);
+  /* --surface and --border are NOT redeclared here on purpose. They are defined
+     once on :root as var(--surface-1) / var(--border-dim), and a custom property
+     alias is substituted against the element it is used on, so both already
+     resolve to this theme's values. A second copy here would be one more place
+     to forget. */
 
   /* Login token group - the auth card is a light elevated panel in light mode,
      so its text must be dark and its input surfaces light. */

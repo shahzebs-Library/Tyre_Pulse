@@ -7,14 +7,19 @@ import { supabase } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
- * In-flight and recent results, keyed by country.
+ * In-flight and recent results, keyed by country AND by the server-side filter.
  *
  * This RPC is expensive: measured live, get_tyre_running_life('KSA') takes
- * ~814 ms of server time and returns 3,595 rows. It is read in pages of 1,000
- * because the whole set in one response is 2.2 MB, which the browser was
- * dropping outright. The Inspections page
- * asks for it on mount to build its tyre-due flags, and then asked for the WHOLE
- * payload again on every single row PDF export just to filter it to one asset.
+ * ~814 ms of server time and returns 3,595 rows / 2.2 MB, which the browser was
+ * dropping outright - hence the paged read below. Most callers never wanted the
+ * whole set: the Inspections page keeps only the 465 rows that are overdue or
+ * due soon, and its PDF export keeps ONE asset's 12. V526 added `p_due_only`
+ * and `p_asset` so the server sends only those (285 kB and 7.6 kB).
+ *
+ * THE CACHE KEY MUST CARRY THE FILTER. Keyed on country alone, a due-only or
+ * per-asset payload would be handed to a caller that asked for everything, and
+ * the missing rows would look like data that does not exist - silently wrong,
+ * which is worse than slow.
  *
  * Deduping the in-flight promise is always correct - it is the same request,
  * already on its way. The short result cache is opt-in per caller, because a
@@ -23,12 +28,18 @@ import { toUserMessage } from '../safeError'
 const _cache = new Map()
 
 /**
- * @param {{country?:string, maxAgeMs?:number}} [opts] `maxAgeMs` lets a caller
- *   reuse a recent payload. Omitting it is the default AND the way to insist on
- *   a fresh read, so a screen with its own refresh control needs nothing extra.
+ * @param {{country?:string, maxAgeMs?:number, asset?:string, dueOnly?:boolean}} [opts]
+ *   `asset` returns only that asset's tyres; `dueOnly` returns only rows that
+ *   are overdue or due soon (the server mirrors bandFor - see V526). `maxAgeMs`
+ *   lets a caller reuse a recent payload; omitting it is the default AND the way
+ *   to insist on a fresh read, so a screen with its own refresh control needs
+ *   nothing extra.
  */
-export async function getTyreRunningLife({ country, maxAgeMs = 0 } = {}) {
-  const key = country && country !== 'All' ? country : '__all__'
+export async function getTyreRunningLife({ country, maxAgeMs = 0, asset = null, dueOnly = false } = {}) {
+  const p_country = country && country !== 'All' ? country : null
+  const p_asset = asset ? String(asset).trim() || null : null
+  const p_due_only = dueOnly === true
+  const key = `${p_country || '__all__'}|${p_asset || '__any__'}|${p_due_only ? 'due' : 'all'}`
   const hit = _cache.get(key)
   if (hit) {
     // A request already on the wire is shared regardless of maxAgeMs: waiting
@@ -43,7 +54,6 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0 } = {}) {
   // opposite statements; the reason is carried so the page can say which.
   const promise = (async () => {
     try {
-      const p_country = country && country !== 'All' ? country : null
       // Paged. The whole payload is 3,595 rows / 2.2 MB for KSA in ONE response,
       // and the browser was dropping it - the screen showed "Network error"
       // while the server had answered in 814 ms. Each page is about 600 kB.
@@ -55,7 +65,7 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0 } = {}) {
       for (let offset = 0; offset < MAX_ROWS; offset += PAGE) {
         // eslint-disable-next-line no-await-in-loop
         const { data, error } = await supabase.rpc('get_tyre_running_life', {
-          p_country, p_limit: PAGE, p_offset: offset,
+          p_country, p_limit: PAGE, p_offset: offset, p_asset, p_due_only,
         })
         if (error) return { ok: false, reason: toUserMessage(error) }
         if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }

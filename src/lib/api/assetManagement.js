@@ -14,7 +14,7 @@
  * `Promise.allSettled` / `.then`). Country filtering stays client-side in the
  * page (unchanged). Additive only.
  */
-import { supabase, fetchAllPages } from './_client'
+import { supabase, fetchAllPages, applyCountry } from './_client'
 
 // Explicit column list (no SELECT *) — least-privilege + stable shape. `is_active`
 // is surfaced as `active` so the registry/detail keep their existing field name.
@@ -52,52 +52,63 @@ export function listAssetWorkOrders() {
       .order('id').range(from, to))
 }
 
-/** Tyres for a single asset (detail drawer), keyed by asset number. */
-export function listAssetTyres(assetNo) {
-  return supabase
+/**
+ * Tyres for a single asset (detail drawer), keyed by asset number.
+ * `country` scopes the read: the same asset code in two countries is a
+ * DIFFERENT machine (V376), so an unscoped read merges two vehicles' tyre
+ * history. Null-safe (rows with no country stay visible), per applyCountry.
+ */
+export function listAssetTyres(assetNo, country) {
+  return applyCountry(supabase
     .from('tyre_records')
     .select('id,asset_no,serial_number,serial_no,position,tyre_position,brand,size,cost_per_tyre,qty,issue_date,fitment_date,removal_date,km_at_fitment,km_at_removal,total_km,risk_level,tread_depth,pressure_reading,status,site,country')
     .eq('asset_no', assetNo)
-    .order('issue_date', { ascending: false, nullsFirst: false })
+    .order('issue_date', { ascending: false, nullsFirst: false }), country)
 }
 
 /** Recent inspections for one asset (detail Inspections tab). */
-export function listAssetInspections(assetNo) {
-  return supabase
+export function listAssetInspections(assetNo, country) {
+  return applyCountry(supabase
     .from('inspections')
     .select('id,asset_no,inspection_type,title,site,inspector,status,approval_status,severity,findings,notes,odometer_km,hour_meter,pressure_reading,inspection_date,scheduled_date,completed_date,created_at')
     .eq('asset_no', assetNo)
     .order('inspection_date', { ascending: false, nullsFirst: false })
-    .limit(50)
+    .limit(50), country)
 }
 
 /** Recorded accidents/incidents for one asset (detail Incidents tab). */
-export function listAssetAccidents(assetNo) {
-  return supabase
+export function listAssetAccidents(assetNo, country) {
+  return applyCountry(supabase
     .from('accidents')
     .select('id,asset_no,incident_date,incident_time,accident_type,severity,location,description,driver_name,status,claim_status,estimated_damage_cost,repair_cost,created_at')
     .eq('asset_no', assetNo)
     .order('incident_date', { ascending: false, nullsFirst: false })
-    .limit(50)
+    .limit(50), country)
 }
 
 /** Latest odometer reading logged for an asset (no-telematics meter capture). */
-export function latestOdometer(assetNo) {
-  return supabase
-    .from('odometer_logs')
-    .select('asset_no,odometer_km,reading_date,source,site,created_at')
-    .eq('asset_no', assetNo)
+export function latestOdometer(assetNo, country) {
+  return applyCountry(
+    supabase
+      .from('odometer_logs')
+      .select('asset_no,odometer_km,reading_date,source,site,created_at')
+      .eq('asset_no', assetNo),
+    country,
+  )
     .order('reading_date', { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle()
 }
 
 /** Latest engine-hour reading logged for an asset. */
-export function latestEngineHours(assetNo) {
-  return supabase
-    .from('engine_hours_logs')
-    .select('asset_no,engine_hours,reading_date,source,site,created_at')
-    .eq('asset_no', assetNo)
+export function latestEngineHours(assetNo, country) {
+  return applyCountry(
+    supabase
+      .from('engine_hours_logs')
+      .select('asset_no,engine_hours,reading_date,source,site,created_at')
+      .eq('asset_no', assetNo),
+    country,
+  )
     .order('reading_date', { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle()

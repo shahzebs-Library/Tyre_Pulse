@@ -310,6 +310,10 @@ export default function AssetDetail() {
   // expense history or the RPC is unavailable -> the ownership header is skipped
   // while the rest of the cross-country panel still renders.
   const [ownership, setOwnership] = useState(null)
+  // Every fleet row carrying this asset number, and which one is on screen. The
+  // same code in two countries is two DIFFERENT machines (V376), so the page has
+  // to say whose vehicle it is showing instead of picking one in silence.
+  const [matches, setMatches] = useState({ rows: [], countries: [], shown: null, missingInCountry: false, requested: null })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -325,19 +329,42 @@ export default function AssetDetail() {
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [assetRes, tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes, utilRes] = await Promise.allSettled([
-        // vehicle_fleet is the fleet registry (fleet_master is empty). Alias
-        // is_active → active so the page keeps its `active` contract.
-        supabase.from('vehicle_fleet')
-          .select('id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,site,country,region,tyre_size,tyre_brand_preferred,monthly_tyre_budget,current_km,registration_no,registration_date,status,notes,custom_data,image_path,active:is_active')
-          .eq('asset_no', assetNo).maybeSingle(),
-        assetApi.listAssetTyres(assetNo),
+      // The SAME asset code exists in more than one country for 239 codes, and
+      // each is a DIFFERENT machine (V376), so this must never demand one row
+      // (.single()/.maybeSingle() is exactly what errored the page). Resolve the
+      // fleet rows FIRST, pick the one for the country on screen, then read that
+      // machine's history scoped to its own country - merging two vehicles'
+      // tyres, inspections and incidents would be worse than the error.
+      const scopeCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
+      const { data: fleetRows, error: fleetErr } = await supabase.from('vehicle_fleet')
+        .select('id,asset_no,fleet_number,make,model,vehicle_type,year,department,operator_name,site,country,region,tyre_size,tyre_brand_preferred,monthly_tyre_budget,current_km,registration_no,registration_date,status,notes,custom_data,image_path,active:is_active')
+        .eq('asset_no', assetNo)
+        .order('country', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(20)
+      if (fleetErr) throw new Error(fleetErr.message)
+      const allRows = Array.isArray(fleetRows) ? fleetRows : []
+      const scopedRows = scopeCountry ? allRows.filter(r => r.country === scopeCountry) : allRows
+      const fleetRow = scopedRows[0] || null
+      setMatches({
+        rows: allRows,
+        countries: [...new Set(allRows.map(r => r.country).filter(Boolean))],
+        shown: fleetRow?.country ?? null,
+        missingInCountry: allRows.length > 0 && scopedRows.length === 0,
+        requested: scopeCountry,
+      })
+      // Read the history of THIS machine only. Falls back to the country on
+      // screen when the code has no fleet row at all.
+      const dataCountry = fleetRow?.country || scopeCountry || null
+
+      const [tyreRes, woRes, ovRes, inspRes, accRes, odoRes, ehRes, pmRes, pmSvcRes, utilRes] = await Promise.allSettled([
+        assetApi.listAssetTyres(assetNo, dataCountry),
         assetApi.listAssetWorkOrders(),
-        assetApi.reportAssetOverview({ country: 'All' }),
-        assetApi.listAssetInspections(assetNo),
-        assetApi.listAssetAccidents(assetNo),
-        assetApi.latestOdometer(assetNo),
-        assetApi.latestEngineHours(assetNo),
+        assetApi.reportAssetOverview({ country: dataCountry || 'All' }),
+        assetApi.listAssetInspections(assetNo, dataCountry),
+        assetApi.listAssetAccidents(assetNo, dataCountry),
+        assetApi.latestOdometer(assetNo, dataCountry),
+        assetApi.latestEngineHours(assetNo, dataCountry),
         // Preventive Maintenance: plans (client-filtered to this asset) + history.
         // Both degrade to [] when the pm_* tables are not provisioned yet.
         listPmPrograms({}),
@@ -345,9 +372,6 @@ export default function AssetDetail() {
         // Telematics utilization snapshot for this asset ([] / null when absent).
         getAssetUtilization(assetNo),
       ])
-
-      if (assetRes.status === 'rejected') throw new Error(assetRes.reason?.message || String(assetRes.reason))
-      if (assetRes.value?.error) throw new Error(assetRes.value.error.message)
 
       const tyreRows = tyreRes.status === 'fulfilled' ? (tyreRes.value.data ?? []) : []
       const woRows   = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
@@ -363,7 +387,7 @@ export default function AssetDetail() {
 
       // Fall back to a synthesized record from the overview when vehicle_fleet
       // has no row for this asset (asset seen only through tyre/overview data).
-      let record = assetRes.value?.data ?? null
+      let record = fleetRow
       if (!record) {
         if (!tyreRows.length && !ov && !inspRows.length && !accRows.length) { setAsset(null); setLoading(false); return }
         record = {
@@ -390,7 +414,7 @@ export default function AssetDetail() {
     } finally {
       setLoading(false)
     }
-  }, [assetNo, t])
+  }, [assetNo, activeCountry, t])
 
   useEffect(() => { load() }, [load, refreshKey])
 
@@ -587,7 +611,14 @@ export default function AssetDetail() {
           <EmptyState
             icon={Truck}
             title={t('assetmgmt.detail.notFoundTitle', { assetNo })}
-            description={t('assetmgmt.detail.notFoundDesc')}
+            description={
+              // The code DOES exist, just not in the country on screen. Saying
+              // "not found" there would send someone hunting for missing data,
+              // and showing the other country's machine would be a wrong vehicle.
+              matches.missingInCountry
+                ? `${assetNo} is not registered in ${matches.requested}. This asset number exists in ${matches.countries.join(', ')}. Switch country to open that machine - an asset number is only unique within its own country, so these are different vehicles.`
+                : t('assetmgmt.detail.notFoundDesc')
+            }
             action={{ label: t('assetmgmt.detail.backToAssets'), onClick: () => navigate('/assets') }}
           />
         </div>
@@ -611,6 +642,28 @@ export default function AssetDetail() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+
+        {/* Same asset number, more than one country = more than one machine
+            (V376). Name the one on screen: a silent pick reads as the wrong
+            vehicle's history. */}
+        {matches.rows.length > 1 && (
+          <div
+            className="rounded-xl border px-4 py-3 text-sm flex items-start gap-2"
+            style={{ borderColor: 'var(--border-bright)', background: 'var(--surface-2)', color: 'var(--text-secondary)' }}
+          >
+            <Globe className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>
+              Asset number {asset.asset_no} is registered in {matches.countries.length} countries
+              ({matches.countries.join(', ')}). An asset number is only unique within its own
+              country, so these are different machines.{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>
+                Showing the {asset.country || 'unassigned country'} machine
+              </strong>
+              {' '}and only its own tyres, inspections, incidents and meters. Switch country to open
+              the other one.
+            </span>
+          </div>
+        )}
 
         {/* Header */}
         <div className="bg-[var(--surface-1)] rounded-2xl border border-[var(--border-dim)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

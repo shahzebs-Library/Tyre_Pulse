@@ -6,7 +6,7 @@
  * baseline is missing - nothing is fabricated.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Gauge, Search, X, RefreshCw, Target, Trash2, FileDown, FileSpreadsheet } from 'lucide-react'
+import { Gauge, Search, X, RefreshCw, Target, Trash2, FileDown, FileSpreadsheet, Layers } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../lib/api/tyreRunningLife'
 import {
   shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel,
-  summarize, inFittedRange, filterDescription, coverageNote,
+  summarize, inFittedRange, filterDescription, coverageNote, bandNeedsFullSet,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import Modal from '../ui/Modal'
@@ -63,7 +63,26 @@ function StatusBadge({ tone, children }) {
 export default function TyreRunningLife() {
   const { activeCountry, appSettings } = useSettings()
   const { profile, isSuperAdmin } = useAuth()
-  const [state, setState] = useState({ loading: true, ok: true, rows: [], summary: null, reason: '' })
+  /**
+   * THE SCREEN OPENS ON THE TYRES THAT ARE DUE, NOT THE WHOLE FLEET.
+   *
+   * Measured live: KSA is 3,595 active tyres = 2,190 kB, and the browser was
+   * dropping that reply outright - the screen read "Network error" while the
+   * server had already answered. UAE (1,388 / 848 kB) and Egypt (429 / 263 kB)
+   * are small enough to survive, which is exactly why the owner saw it work in
+   * one country and fail in another. The due subset is 465 rows / 285 kB.
+   *
+   * So the default fetch is the due set, and loading everything is a deliberate
+   * click. `state.scope` records which set the rows on screen ACTUALLY are, so
+   * nothing (tiles, note, exports) can describe the due subset as the fleet.
+   */
+  const [scope, setScope] = useState('due')
+  const [state, setState] = useState({
+    loading: true, ok: true, rows: [], summary: null, reason: '', scope: 'due', total: null,
+  })
+  // Set when a band the due subset cannot contain widened the fetch by itself,
+  // so the widening is explained rather than just happening.
+  const [autoWidened, setAutoWidened] = useState(false)
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('all')
   const [unit, setUnit] = useState('all')
@@ -78,16 +97,55 @@ export default function TyreRunningLife() {
   const [pdfError, setPdfError] = useState('')
   const canSetTargets = isSuperAdmin || ['Admin', 'Manager', 'Director'].includes(profile?.role)
 
-  async function load() {
+  async function load(nextScope = scope) {
     setState((s) => ({ ...s, loading: true }))
-    const payload = await getTyreRunningLife({ country: activeCountry })
+    const payload = await getTyreRunningLife({ country: activeCountry, dueOnly: nextScope === 'due' })
     const shaped = shapeRunningLife(payload)
+    const total = Number(payload?.total)
     setState({
       loading: false, ok: shaped.ok, rows: shaped.rows, summary: shaped.summary,
       reason: payload?.reason || '',
+      // The scope of the rows we HOLD, not the scope someone asked for: a failed
+      // widening must not leave the screen claiming it shows the whole fleet.
+      scope: shaped.ok ? nextScope : state.scope,
+      total: Number.isFinite(total) ? total : null,
     })
   }
-  useEffect(() => { load() }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Switching country always returns to the fast due-only view: the country the
+  // owner just picked may be the big one, and it must open, not error.
+  useEffect(() => {
+    setScope('due'); setAutoWidened(false); setBand('all')
+    load('due')
+  }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dueOnlyView = state.scope === 'due'
+  const countryLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'all countries'
+
+  /** Load everything for this country (paged client-side), deliberately. */
+  function loadEverything(auto = false) {
+    setAutoWidened(auto)
+    setScope('all')
+    load('all')
+  }
+
+  /** Back to the fast due-only view (the band goes with it - see changeBand). */
+  function showDueOnly() {
+    setAutoWidened(false)
+    setBand('all')
+    setScope('due')
+    load('due')
+  }
+
+  /**
+   * A band the due subset cannot hold (mid life, healthy, not measurable) needs
+   * the full set. Widening the fetch here is the whole point: leaving it would
+   * render an empty table, and "we did not fetch it" would be indistinguishable
+   * from "there are none".
+   */
+  function changeBand(next) {
+    setBand(next)
+    if (dueOnlyView && bandNeedsFullSet(next)) loadEverything(true)
+  }
 
   const filtered = useMemo(() => {
     const base = filterRows(state.rows, { search, band, unit })
@@ -108,7 +166,7 @@ export default function TyreRunningLife() {
         summary: s,
         country: activeCountry,
         company: appSettings?.company_name || 'Tyre Pulse',
-        filters: filterDescription({ search, band, unit, fromDate, toDate }),
+        filters: filterDescription({ search, band, unit, fromDate, toDate, scope: state.scope }),
       })
     } catch (e) {
       setPdfError(toUserMessage(e))
@@ -155,7 +213,7 @@ export default function TyreRunningLife() {
         {
           title: 'Tyre Running & Remaining Life',
           company: appSettings?.company_name || 'Tyre Pulse',
-          dateRange: filterDescription({ search, band, unit, fromDate, toDate }),
+          dateRange: filterDescription({ search, band, unit, fromDate, toDate, scope: state.scope }),
         },
       )
     } catch (e) {
@@ -273,7 +331,22 @@ export default function TyreRunningLife() {
           >
             <FileSpreadsheet size={13} /> {xlsBusy ? 'Building Excel...' : 'Download Excel report'}
           </button>
-          <button type="button" onClick={load} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (dueOnlyView) loadEverything(false)
+              else showDueOnly()
+            }}
+            disabled={state.loading}
+            className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1 disabled:opacity-40"
+            style={{ color: 'var(--text-primary)' }}
+            title={dueOnlyView
+              ? 'Load every active tyre for this country (a larger read)'
+              : 'Go back to the fast view of tyres that are due'}
+          >
+            <Layers size={13} /> {dueOnlyView ? 'Load all tyres' : 'Show due only'}
+          </button>
+          <button type="button" onClick={() => load()} className="px-2 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
             <RefreshCw size={13} /> Refresh
           </button>
         </div>
@@ -292,14 +365,68 @@ export default function TyreRunningLife() {
           {state.reason && (
             <p className="mt-1 text-xs" style={{ color: 'var(--text-dim)' }}>{state.reason}</p>
           )}
-          <button type="button" onClick={load} className="mt-2 px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs" style={{ color: 'var(--text-primary)' }}>Retry</button>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <button type="button" onClick={() => load()} className="px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs" style={{ color: 'var(--text-primary)' }}>Retry</button>
+            {/* A failed full read is recoverable: the due-only read is a
+                fraction of the size and is what this screen opens on. */}
+            {scope === 'all' && (
+              <button
+                type="button"
+                onClick={showDueOnly}
+                className="px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                Show due tyres only
+              </button>
+            )}
+          </div>
         </div>
       ) : !state.rows.length ? (
-        <p className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-          No active tyres for {activeCountry && activeCountry !== 'All' ? activeCountry : 'any country'}.
-        </p>
+        /* An empty due-only read is a real, good answer - Egypt genuinely has
+           no tyre past or near its expected life. It must never read like a
+           broken table, and it must not be confused with an empty FLEET. */
+        <div className="py-8 text-center">
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            {dueOnlyView
+              ? `No tyre is currently due in ${countryLabel}. Nothing is past its expected life or close to it.`
+              : `No active tyres for ${countryLabel}.`}
+          </p>
+          {dueOnlyView && (
+            <button
+              type="button"
+              onClick={() => loadEverything(false)}
+              className="mt-3 px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Load all tyres for {countryLabel}
+            </button>
+          )}
+        </div>
       ) : (
         <>
+          {/* WHICH SET IS ON SCREEN, said before any number is read. Without
+              this, 465 rows look like the whole fleet. */}
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+            style={{ color: 'var(--text-secondary)', background: 'rgba(148,163,184,0.07)' }}>
+            <span>
+              {dueOnlyView
+                ? `Showing the ${fmtNum(state.rows.length)} tyres that are due in ${countryLabel} (past expected life or due soon). The rest of the fleet is not loaded.`
+                : `Showing all ${fmtNum(state.rows.length)} active tyres in ${countryLabel}.`}
+              {autoWidened && !dueOnlyView ? ' Loaded in full because the state you picked is not in the due list.' : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (dueOnlyView) loadEverything(false)
+                else showDueOnly()
+              }}
+              className="underline"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {dueOnlyView ? 'Load all tyres' : 'Show due only'}
+            </button>
+          </div>
+
           {/* Why cells are blank, counted. An empty "Km run" column reads as a
               broken report; the same blank explained reads as a meter-reading
               backlog, which is the true and actionable statement. */}
@@ -311,7 +438,7 @@ export default function TyreRunningLife() {
           )}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
             {[
-              [hasFilter ? 'Tyres (filtered)' : 'Active tyres', fmtNum(s.total)],
+              [hasFilter ? 'Tyres (filtered)' : dueOnlyView ? 'Tyres due' : 'Active tyres', fmtNum(s.total)],
               ['Measured vs km', fmtNum(s.measurableKm)],
               ['Measured vs hours', fmtNum(s.measurableHours)],
               ['Past expected life', fmtNum(s.overdue)],
@@ -364,7 +491,7 @@ export default function TyreRunningLife() {
                 <button type="button" onClick={() => setSearch('')}><X size={13} style={{ color: 'var(--text-dim)' }} /></button>
               )}
             </div>
-            <select value={band} onChange={(e) => setBand(e.target.value)}
+            <select value={band} onChange={(e) => changeBand(e.target.value)}
               className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
               <option value="all">All states</option>
               <option value="overdue">Past expected life</option>
@@ -482,6 +609,49 @@ function TyreLifeDetailModal({ row, onClose }) {
   )
 }
 
+/** One group of life-target rules inside the targets dialog. */
+function TargetTable({ title, rows, showCountry, onRemove, emptyNote }) {
+  return (
+    <div className="mt-3">
+      <div className="text-[11px] font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>
+        {title} ({rows.length})
+      </div>
+      {!rows.length ? (
+        <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{emptyNote}</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
+              <th className="py-1.5 pr-2">Size</th>
+              <th className="py-1.5 pr-2">Vehicle type</th>
+              {showCountry && <th className="py-1.5 pr-2">Country</th>}
+              <th className="py-1.5 pr-2 text-right">Target km</th>
+              <th className="py-1.5 pr-2 text-right">Target hrs</th>
+              <th className="py-1.5 pr-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.id} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
+                <td className="py-1.5 pr-2">{t.size || 'All sizes'}</td>
+                <td className="py-1.5 pr-2">{t.vehicle_type || 'All types'}</td>
+                {showCountry && <td className="py-1.5 pr-2">{t.country || 'Every country'}</td>}
+                <td className="py-1.5 pr-2 text-right">{t.target_km != null ? fmtNum(t.target_km) : 'N/A'}</td>
+                <td className="py-1.5 pr-2 text-right">{t.target_hours != null ? fmtNum(t.target_hours) : 'N/A'}</td>
+                <td className="py-1.5 pr-2 text-right">
+                  <button type="button" onClick={() => onRemove(t.id)} title="Remove target">
+                    <Trash2 size={13} style={{ color: 'var(--text-dim)' }} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 /**
  * Admin modal: force your own expected-life numbers per tyre size (optionally
  * per vehicle type / country). A manual target OVERRIDES the measured average
@@ -495,11 +665,31 @@ function LifeTargetsModal({ rows, country, onClose }) {
   const [error, setError] = useState('')
   const [changed, setChanged] = useState(false)
 
-  const sizes = useMemo(() => [...new Set(rows.map((r) => r.size).filter(Boolean))].sort(), [rows])
-  const types = useMemo(() => [...new Set(rows.map((r) => r.vehicleType).filter(Boolean))].sort(), [rows])
+  // The suggestions come from the tyres CURRENTLY LOADED, and the screen now
+  // opens on the due subset - so a strict dropdown here would silently hide
+  // every size that is not presently due and make those targets unsettable.
+  // Sizes already carrying a target are folded in for the same reason: an
+  // existing rule proves the size is real even when none of its tyres is due.
+  // Both fields are therefore pick-or-type (datalist), not a closed list.
+  const sizes = useMemo(() => [...new Set([
+    ...rows.map((r) => r.size),
+    ...(targets || []).map((t) => t.size),
+  ].filter(Boolean))].sort(), [rows, targets])
+  const types = useMemo(() => [...new Set([
+    ...rows.map((r) => r.vehicleType),
+    ...(targets || []).map((t) => t.vehicle_type),
+  ].filter(Boolean))].sort(), [rows, targets])
 
-  async function loadTargets() { setTargets(await listTyreLifeTargets()) }
-  useEffect(() => { loadTargets() }, [])
+  // Scoped to the country on screen. Listing every country's rules made UAE
+  // look like it had 12 targets when only one applies there.
+  const scoped = Boolean(country && country !== 'All')
+  async function loadTargets() { setTargets(await listTyreLifeTargets(country)) }
+  useEffect(() => { loadTargets() }, [country]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A country-less rule DOES apply to the selected country, so it is shown in
+  // its own group rather than hidden - dropping it would be its own lie.
+  const forCountry = useMemo(() => (targets || []).filter((t) => t.country), [targets])
+  const everywhere = useMemo(() => (targets || []).filter((t) => !t.country), [targets])
 
   async function save() {
     // Server-agnostic validation: the input's min/max attributes are bypassable
@@ -559,18 +749,20 @@ function LifeTargetsModal({ rows, country, onClose }) {
 
         <div className="grid grid-cols-2 gap-2 mb-2">
           <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Tyre size
-            <select value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })}
-              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-              <option value="">All sizes</option>
-              {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <input list="tp-target-sizes" value={form.size} placeholder="All sizes"
+              onChange={(e) => setForm({ ...form, size: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+            <datalist id="tp-target-sizes">
+              {sizes.map((s) => <option key={s} value={s} />)}
+            </datalist>
           </label>
           <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Vehicle type
-            <select value={form.vehicle_type} onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })}
-              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-              <option value="">All vehicle types</option>
-              {types.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <input list="tp-target-types" value={form.vehicle_type} placeholder="All vehicle types"
+              onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })}
+              className="mt-1 w-full rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
+            <datalist id="tp-target-types">
+              {types.map((t) => <option key={t} value={t} />)}
+            </datalist>
           </label>
           <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Target life (km)
             <input type="number" min="1000" max="400000" value={form.target_km}
@@ -593,44 +785,46 @@ function LifeTargetsModal({ rows, country, onClose }) {
           style={{ background: 'var(--brand)', color: '#fff' }}>
           {busy ? 'Saving...' : 'Save target'}
         </button>
+        <p className="text-[11px] mt-1.5" style={{ color: 'var(--text-dim)' }}>
+          {scoped
+            ? `This target will be saved for ${country} only.`
+            : 'No country is selected, so this target will be saved for every country. Pick a country first to set one country only.'}
+        </p>
 
         <div className="mt-4">
-          <h4 className="text-xs font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Current targets</h4>
+          <h4 className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {scoped ? `Targets that apply to ${country}` : 'Current targets (all countries)'}
+          </h4>
+          <p className="text-[11px] mt-0.5 mb-2" style={{ color: 'var(--text-dim)' }}>
+            {scoped
+              ? `Only the rules that affect ${country} are listed. A target set for another country never applies here, so it is not shown.`
+              : 'Every rule in the fleet, with the country each one applies to.'}
+          </p>
           {targets == null ? (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Loading...</p>
           ) : !targets.length ? (
             <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-              No targets set - every tyre uses its measured fleet average.
+              {scoped
+                ? `No target applies to ${country} - every tyre there uses its measured fleet average.`
+                : 'No targets set - every tyre uses its measured fleet average.'}
             </p>
           ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-secondary)' }}>
-                  <th className="py-1.5 pr-2">Size</th>
-                  <th className="py-1.5 pr-2">Vehicle type</th>
-                  <th className="py-1.5 pr-2">Country</th>
-                  <th className="py-1.5 pr-2 text-right">Target km</th>
-                  <th className="py-1.5 pr-2 text-right">Target hrs</th>
-                  <th className="py-1.5 pr-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {targets.map((t) => (
-                  <tr key={t.id} className="border-b border-[var(--border-subtle)]" style={{ color: 'var(--text-primary)' }}>
-                    <td className="py-1.5 pr-2">{t.size || 'All sizes'}</td>
-                    <td className="py-1.5 pr-2">{t.vehicle_type || 'All types'}</td>
-                    <td className="py-1.5 pr-2">{t.country || 'All'}</td>
-                    <td className="py-1.5 pr-2 text-right">{t.target_km != null ? fmtNum(t.target_km) : 'N/A'}</td>
-                    <td className="py-1.5 pr-2 text-right">{t.target_hours != null ? fmtNum(t.target_hours) : 'N/A'}</td>
-                    <td className="py-1.5 pr-2 text-right">
-                      <button type="button" onClick={() => remove(t.id)} title="Remove target">
-                        <Trash2 size={13} style={{ color: 'var(--text-dim)' }} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              <TargetTable
+                title={scoped ? `Set for ${country}` : 'Set for one country'}
+                rows={forCountry}
+                showCountry={!scoped}
+                onRemove={remove}
+                emptyNote={scoped ? `No target is set for ${country} itself.` : 'No country-specific target.'}
+              />
+              <TargetTable
+                title="Applies to every country"
+                rows={everywhere}
+                showCountry={false}
+                onRemove={remove}
+                emptyNote="No fleet-wide target."
+              />
+            </>
           )}
         </div>
     </Modal>

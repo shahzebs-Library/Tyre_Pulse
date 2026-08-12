@@ -541,8 +541,17 @@ export default function Inspections() {
   const [filterFrom, setFilterFrom]     = useState('')
   const [filterTo, setFilterTo]         = useState('')
   // Tyre-change flags: per-asset overdue/due-soon tyres from the running-life
-  // calc. null = data unavailable (fetch failed) - the UI says so honestly.
+  // calc. null = not loaded (still checking, or the read failed).
   const [flagMap, setFlagMap]           = useState(null)
+  /**
+   * THREE OUTCOMES THAT MUST NEVER LOOK ALIKE: we are still checking, we could
+   * not look, and we looked and no tyre is due. The card used to render one
+   * line ("Tyre life data unavailable") for the first two and could not say the
+   * third at all, so a clean fleet and a broken read were the same screen.
+   */
+  const [flagStatus, setFlagStatus]     = useState('loading') // loading | ok | error
+  const [flagError, setFlagError]       = useState('')
+  const [flagReload, setFlagReload]     = useState(0)
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
@@ -805,13 +814,26 @@ export default function Inspections() {
     // dueOnly: the flag map KEEPS ONLY overdue/due-soon rows, so asking for the
     // whole set and throwing the rest away was a 7.7x over-fetch on every page
     // load (KSA: 465 rows kept of 3,595 pulled, 285 kB instead of 2.2 MB).
+    setFlagStatus('loading'); setFlagError('')
     getTyreRunningLife({ country: activeCountry, maxAgeMs: RUNNING_LIFE_TTL_MS, dueOnly: true }).then((payload) => {
       if (cancelled) return
       const shaped = shapeRunningLife(payload)
-      setFlagMap(shaped.ok ? buildAssetFlagMap(shaped.rows) : null)
-    }).catch(() => { if (!cancelled) setFlagMap(null) })
+      if (!shaped.ok) {
+        setFlagMap(null)
+        setFlagStatus('error')
+        setFlagError(payload?.reason || '')
+        return
+      }
+      // An empty map here is a MEASUREMENT, not a gap: we asked the server for
+      // every due tyre and it returned none.
+      setFlagMap(buildAssetFlagMap(shaped.rows))
+      setFlagStatus('ok')
+    }).catch((e) => {
+      if (cancelled) return
+      setFlagMap(null); setFlagStatus('error'); setFlagError(toUserMessage(e))
+    })
     return () => { cancelled = true }
-  }, [activeCountry, authLoading])
+  }, [activeCountry, authLoading, flagReload])
 
   const sites = useMemo(() => [...new Set(rows.map(r => r.site).filter(Boolean))].sort(), [rows])
 
@@ -851,6 +873,11 @@ export default function Inspections() {
     }
     return r
   }, [tabFiltered, filterStatus, filterSite, filterFrom, filterTo, search])
+
+  // Vehicles with tyres due ACROSS THE COUNTRY (the flag map is not limited to
+  // the inspections on screen). Lets the card tell "nothing is due anywhere"
+  // apart from "nothing is due on the vehicles you are looking at".
+  const dueAssetCount = useMemo(() => (flagMap ? Object.keys(flagMap).length : 0), [flagMap])
 
   // Slide numbers: follow the same date window as the list (from/to only).
   const overview = useMemo(
@@ -1023,7 +1050,9 @@ export default function Inspections() {
   async function loadFleetInfo(assetNo) {
     if (!assetNo.trim()) return
     setClLookingUp(true)
-    const data = await inspectionsApi.findVehicleByAsset(assetNo.trim()).catch(() => null)
+    // Country-scoped: the same asset code in another country is a different
+    // machine (V376), so its type and site must not seed this inspection.
+    const data = await inspectionsApi.findVehicleByAsset(assetNo.trim(), activeCountry).catch(() => null)
     // Use DB vehicle_type if available, otherwise infer from asset number prefix
     const vehicleType = data?.vehicle_type || inferVehicleTypeFromAsset(assetNo)
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
@@ -2371,10 +2400,41 @@ export default function Inspections() {
               ['Pending approval', overview.pendingApproval],
             ]}
           />
-          {flagMap === null ? (
+          {flagStatus === 'loading' ? (
             <div className="card flex-1 min-w-[260px]">
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
-              <p className="text-sm text-[var(--text-secondary)]">Tyre life data unavailable</p>
+              <p className="text-sm text-[var(--text-secondary)]">Checking tyre life...</p>
+            </div>
+          ) : flagStatus === 'error' ? (
+            /* "We could not look" - never dressed up as a count of zero. */
+            <div className="card flex-1 min-w-[260px]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
+              <p className="text-sm text-[var(--text-secondary)]">Could not load tyre life data, so no tyre is flagged here.</p>
+              {flagError && <p className="mt-1 text-xs text-[var(--text-dim)]">{flagError}</p>}
+              <button
+                type="button"
+                onClick={() => setFlagReload((n) => n + 1)}
+                className="mt-2 px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : !overview.vehiclesWithTyresDue ? (
+            /* We looked, and nothing is flagged HERE. The two reasons for that
+               are different facts, so they are said differently: no tyre is due
+               anywhere in this country, versus none is due on the vehicles
+               these inspections cover. */
+            <div className="card flex-1 min-w-[260px]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
+              <p className="text-sm text-[var(--text-secondary)]">
+                {dueAssetCount === 0
+                  ? `No tyre is currently due${activeCountry && activeCountry !== 'All' ? ` in ${activeCountry}` : ''}. Nothing is past its expected life or close to it.`
+                  : `No tyre is due on the vehicles in these inspections. ${dueAssetCount} other ${dueAssetCount === 1 ? 'vehicle has' : 'vehicles have'} tyres due.`}
+              </p>
+              <p className="mt-2 text-xs text-[var(--text-dim)]">
+                Damaged found in these inspections: {overview.damagedFound}
+              </p>
             </div>
           ) : (
             <OverviewSlide

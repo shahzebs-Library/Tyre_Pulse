@@ -21,6 +21,7 @@ import {
   Plus, X, Car, Wrench, Clock, User, ClipboardList, AlertTriangle, RefreshCw, CalendarClock,
 } from 'lucide-react'
 import { getAssetByNo } from '../../lib/api/assets'
+import { useSettings } from '../../contexts/SettingsContext'
 import { listPmPrograms } from '../../lib/api/pmPrograms'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -58,6 +59,7 @@ function daysUntil(iso) {
 }
 
 export default function WorkshopNewJobModal({ technicians = [], busy = false, onClose, onCreate }) {
+  const { activeCountry } = useSettings()
   const [tab, setTab] = useState('manual')       // 'manual' | 'pm'
   const [form, setForm] = useState(EMPTY)
   const [master, setMaster] = useState(null)     // { registration_no, vehicle_type, make, model }
@@ -86,7 +88,9 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
     setLooking(true)
     lookupTimer.current = setTimeout(async () => {
       try {
-        const row = await getAssetByNo(asset)
+        // Country-scoped: the same asset code in another country is a different
+        // machine (V376), so its plate and site must not fill this job card.
+        const row = await getAssetByNo(asset, activeCountry)
         if (!mounted.current) return
         if (row) {
           setMaster({
@@ -106,7 +110,7 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
       }
     }, 400)
     return () => { if (lookupTimer.current) clearTimeout(lookupTimer.current) }
-  }, [form.asset_no])
+  }, [form.asset_no, activeCountry])
 
   // PM-due programs (loaded when the PM tab is first opened).
   const loadPm = useCallback(async () => {

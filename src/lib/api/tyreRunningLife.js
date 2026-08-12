@@ -3,7 +3,7 @@
  * (per active tyre: km/hours run vs current meters + projected remaining km).
  * Degrades to { ok: false } so the section renders an honest error state.
  */
-import { supabase } from './_client'
+import { supabase, applyCountry } from './_client'
 import { toUserMessage } from '../safeError'
 
 /**
@@ -94,11 +94,19 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0, asset = null, 
 
 const TARGET_COLS = 'id, country, size, vehicle_type, target_km, target_hours, note, updated_at'
 
-/** List the org's manual tyre life targets ([] on any failure). */
-export async function listTyreLifeTargets() {
+/**
+ * List the org's manual tyre life targets ([] on any failure).
+ *
+ * `country` returns only the rules that actually apply there: the ones tagged
+ * with that country PLUS the country-less ones (which apply everywhere). This
+ * mirrors the resolution the RPC already does (`country is null or country =
+ * the tyre's country`), so the list can never claim a KSA-only target affects
+ * UAE. Omit `country` (or pass 'All') to get every rule.
+ */
+export async function listTyreLifeTargets(country) {
   try {
-    const { data, error } = await supabase.from('tyre_life_targets')
-      .select(TARGET_COLS).order('size').order('vehicle_type')
+    const q = applyCountry(supabase.from('tyre_life_targets').select(TARGET_COLS), country)
+    const { data, error } = await q.order('size').order('vehicle_type')
     if (error) return []
     return Array.isArray(data) ? data : []
   } catch { return [] }

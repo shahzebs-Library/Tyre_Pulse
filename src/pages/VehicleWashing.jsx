@@ -241,7 +241,9 @@ export default function VehicleWashing() {
     if (!assetNo) { setMaster(null); return }
     const ticket = ++assetLookupRef.current
     try {
-      const asset = await getAssetByNo(assetNo)
+      // Country-scoped: an identical asset code in another country is a
+      // different machine (V376) and must not fill this wash record.
+      const asset = await getAssetByNo(assetNo, activeCountry)
       if (ticket !== assetLookupRef.current) return
       setMaster(asset || null)
       if (asset) {
@@ -252,7 +254,7 @@ export default function VehicleWashing() {
         }))
       }
     } catch { /* lookup is a convenience; never surface an error */ }
-  }, [])
+  }, [activeCountry])
 
   const resetForm = useCallback(() => {
     setForm({ ...EMPTY_FORM, wash_date: todayISO() })

@@ -169,6 +169,22 @@ export function isDueRow(row) {
   return b === 'overdue' || b === 'due-soon'
 }
 
+/**
+ * The bands a due-only fetch can hold. Anything else (mid-life, healthy, not
+ * measurable) simply is not in that payload.
+ *
+ * THIS IS WHY IT MATTERS: if the screen holds only the due subset and someone
+ * picks "Healthy", an empty table would say "there are no healthy tyres" when
+ * the truth is "we never fetched them". Those are opposite statements and must
+ * never look the same, so the caller widens the fetch instead.
+ */
+export const DUE_ONLY_BANDS = ['overdue', 'due-soon']
+
+/** Does this band selection require the full country set to be loaded? */
+export function bandNeedsFullSet(band) {
+  return Boolean(band) && band !== 'all' && !DUE_ONLY_BANDS.includes(band)
+}
+
 export const BAND_META = {
   overdue: { label: 'Past expected life', tone: 'danger' },
   'due-soon': { label: 'Due soon', tone: 'warning' },
@@ -225,9 +241,20 @@ export function inFittedRange(row, from = '', to = '') {
   return true
 }
 
-/** Plain-English description of the active filters, for report headers. */
-export function filterDescription({ search = '', band = 'all', unit = 'all', fromDate = '', toDate = '' } = {}) {
+/**
+ * What a due-only export actually covers. An export headed "All active tyres"
+ * that in fact holds 465 of 3,595 rows is a false statement that outlives the
+ * screen it came from, so the scope is named first in every report header.
+ */
+export const DUE_SCOPE_LABEL = 'Tyres currently due (past expected life or due soon)'
+
+/**
+ * Plain-English description of the active filters, for report headers.
+ * `scope` is 'due' when only the due subset was fetched, 'all' otherwise.
+ */
+export function filterDescription({ search = '', band = 'all', unit = 'all', fromDate = '', toDate = '', scope = 'all' } = {}) {
   const parts = []
+  if (scope === 'due') parts.push(DUE_SCOPE_LABEL)
   const q = String(search || '').trim()
   if (q) parts.push(`search "${q}"`)
   if (band !== 'all') parts.push(`state: ${BAND_META[band] ? BAND_META[band].label : band}`)

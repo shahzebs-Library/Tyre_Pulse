@@ -259,6 +259,49 @@ function SlidePreview({ slide, deck, registerChart }) {
     )
   }
 
+  if (slide.kind === 'replacement') {
+    return (
+      <div style={{ height: '100%', overflow: 'hidden' }}>
+        {head(slide.title)}
+        {slide.empty ? empty(slide.emptyNote) : (
+          <>
+            {slide.headlines.map((h, i) => (
+              <div key={i} style={{ borderLeft: `3px solid ${h.tone === 'limit' ? PAPER.warn : PAPER.accent}`, paddingLeft: 8, marginBottom: 7, fontSize: 10, color: PAPER.ink, lineHeight: 1.4 }}>
+                {h.text}
+              </div>
+            ))}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 8, marginTop: 4 }}>
+              <thead>
+                <tr>{slide.columns.map((c) => (
+                  <th key={c.key} style={{ background: PAPER.head, color: '#fff', padding: '3px 4px', textAlign: c.align === 'right' ? 'right' : 'left', border: `1px solid ${PAPER.border}` }}>{c.header}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {slide.rows.map((r, ri) => (
+                  <tr key={ri} style={{ background: ri % 2 ? PAPER.zebra : PAPER.bg }}>
+                    {r.map((cell, ci) => (
+                      <td key={ci} style={{ padding: '2px 4px', border: `1px solid ${PAPER.border}`, color: previewCellColor(cell), textAlign: slide.columns[ci]?.align === 'right' ? 'right' : 'left' }}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {Array.isArray(slide.notes) && slide.notes.length > 0 && (
+              <div style={{ marginTop: 8, padding: 6, background: '#fff7ed', border: `1px solid ${PAPER.warn}`, borderRadius: 3, fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
+                {slide.notes.join('  ')}
+              </div>
+            )}
+            {slide.caption && (
+              <div style={{ marginTop: 6, fontSize: 8, color: PAPER.muted }}>{slide.caption}</div>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
+
   if (slide.kind === 'findings') {
     return (
       <div style={{ height: '100%' }}>
@@ -626,6 +669,25 @@ function BlockSettings({ block, onPatch }) {
         </>
       )}
 
+      {block.type === 'replacement' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+          <Field label="Machines shown" hint="Ordered by how much of a new machine each one has already absorbed.">
+            <Select
+              value={String(block.limit)}
+              onChange={(v) => set({ limit: Number(v) })}
+              options={[0, 8, 10, 12, 16].map((n) => ({ value: String(n), label: n === 0 ? 'Every priced machine' : `Top ${n}` }))}
+            />
+          </Field>
+          <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            Prices come from the supplier quotations on file, one per asset class, ex-VAT. A class with no quotation is
+            counted and named on the slide rather than priced from the nearest thing, and no service life, depreciation
+            or resale value is assumed anywhere.
+          </p>
+        </>
+      )}
+
       {block.type === 'fleet_comparison' && (
         <>
           <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
@@ -707,6 +769,9 @@ export default function DisposalDeckBuilder({
   // Optional. The page supplies the fleet baseline (this list against the
   // machines staying in service). Every other block renders unchanged without it.
   fleetBaseline = null,
+  // Optional. Supplier quotations that price an asset class. Without them the
+  // replacement slide says no quotation is on file rather than estimating one.
+  benchmarks = null,
   onClose,
 }) {
   const [config, setConfig] = useState(() => loadDeckLayout())
@@ -730,8 +795,8 @@ export default function DisposalDeckBuilder({
   useEffect(() => { saveDeckLayout(config) }, [config])
 
   const deck = useMemo(
-    () => buildDeck(config, { rows, totals, currency, company, country, fleetBaseline }),
-    [config, rows, totals, currency, company, country, fleetBaseline],
+    () => buildDeck(config, { rows, totals, currency, company, country, fleetBaseline, benchmarks }),
+    [config, rows, totals, currency, company, country, fleetBaseline, benchmarks],
   )
 
   // Keep the visible slide in range when blocks change.

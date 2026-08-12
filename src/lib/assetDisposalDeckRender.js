@@ -454,6 +454,50 @@ export async function renderDisposalDeckPptx({
       continue
     }
 
+    // ── What a new machine costs ──
+    if (slide.kind === 'replacement') {
+      const s = newSlide()
+      header(s, slide.title)
+      if (slide.empty) { emptyNote(s, slide.emptyNote); footer(s); out.push(s); continue }
+      let y = 1.1
+      // The exposure line and the line that bounds it, in that order. A board
+      // shown the total without the unpriced count reads it as the whole bill.
+      for (const h of slide.headlines) {
+        s.addShape(rect, { x: MX, y, w: 0.06, h: 0.52, fill: { color: h.tone === 'limit' ? WARN : ACCENT } })
+        s.addText(String(h.text), { x: MX + 0.16, y, w: CONTENT_W - 0.16, h: 0.52, fontSize: 10.5, color: INK, valign: 'top' })
+        y += 0.62
+      }
+      const cols = slide.columns
+      const totalW = cols.reduce((a, c) => a + (c.width || 1), 0) || 1
+      const colW = cols.map((c) => (CONTENT_W * (c.width || 1)) / totalW)
+      const head2 = cols.map((c) => ({
+        text: c.header,
+        options: { bold: true, color: 'FFFFFF', fill: { color: HEAD_FILL }, fontSize: 8.5, align: c.align === 'right' ? 'right' : 'left' },
+      }))
+      const body2 = slide.rows.map((r, ri) => r.map((cell, ci) => ({
+        text: String(cell),
+        options: {
+          fontSize: 8.5, valign: 'middle', align: cols[ci]?.align === 'right' ? 'right' : 'left',
+          color: cellTone(cell).hex, italic: isUnmeasured(cell),
+          fill: { color: ri % 2 ? 'F8FAFC' : CARD },
+        },
+      })))
+      const rowH = 0.29
+      const fit = Math.max(1, Math.floor((6.3 - y) / rowH) - 1)
+      s.addTable([head2, ...body2.slice(0, fit)], {
+        x: MX, y, w: CONTENT_W, colW,
+        border: { type: 'solid', color: BORDER, pt: 0.5 }, rowH, valign: 'middle', autoPage: false,
+      })
+      y += rowH * (Math.min(body2.length, fit) + 1) + 0.12
+      const rnotes = Array.isArray(slide.notes) ? slide.notes.filter(Boolean) : []
+      if (rnotes.length && y < 6.55) {
+        s.addText(rnotes.join('  '), { x: MX, y, w: CONTENT_W, h: Math.min(0.7, 0.2 + 0.19 * rnotes.length), fontSize: 7.5, italic: true, color: WARN, valign: 'top' })
+      }
+      s.addText(String(slide.caption || ''), { x: MX, y: PAGE_H - 0.78, w: CONTENT_W, h: 0.3, fontSize: 8.5, color: MUTED })
+      footer(s); out.push(s)
+      continue
+    }
+
     // ── Findings ──
     if (slide.kind === 'findings') {
       const s = newSlide()
@@ -871,6 +915,47 @@ export async function renderDisposalDeckPdf({
         doc.setFont('helvetica', 'italic'); doc.setFontSize(8); setInk(RGB.warn)
         lines.forEach((ln, i) => doc.text(ln, M + 3, y + i * 3.9))
       }
+      continue
+    }
+
+    if (slide.kind === 'replacement') {
+      let y = heading(slide.title)
+      if (slide.empty) { emptyAt(y, slide.emptyNote); continue }
+      for (const h of slide.headlines) {
+        doc.setFillColor(...(h.tone === 'limit' ? RGB.warn : RGB.accent))
+        const lines = doc.splitTextToSize(String(h.text), CW - 6)
+        doc.rect(M, y - 3.2, 1.2, lines.length * 4.6 + 1.6, 'F')
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); setInk(RGB.ink)
+        lines.forEach((ln, i) => doc.text(ln, M + 4, y + i * 4.6))
+        y += lines.length * 4.6 + 4
+      }
+      autoTable(doc, {
+        startY: y, margin: { left: M, right: M }, theme: 'grid',
+        head: [slide.columns.map((c) => c.header)],
+        body: slide.rows,
+        styles: {
+          font: 'helvetica', fontSize: 8, cellPadding: 1.6, overflow: 'linebreak',
+          textColor: RGB.subtle, lineColor: RGB.border, lineWidth: 0.1,
+        },
+        headStyles: { fillColor: RGB.head, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        alternateRowStyles: { fillColor: RGB.zebra },
+        columnStyles: Object.fromEntries(slide.columns.map((c, i) => [i, { halign: c.align === 'right' ? 'right' : 'left' }])),
+        didParseCell: (d) => {
+          if (d.section !== 'body') return
+          const raw = String(d.cell.raw)
+          const tone = cellTone(raw)
+          d.cell.styles.textColor = tone.rgb
+          if (isUnmeasured(raw)) d.cell.styles.fontStyle = 'italic'
+        },
+      })
+      y = (doc.lastAutoTable?.finalY || y) + 5
+      const rnotes = Array.isArray(slide.notes) ? slide.notes.filter(Boolean) : []
+      if (rnotes.length && y < PH - 18) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); setInk(RGB.warn)
+        doc.splitTextToSize(rnotes.join('  '), CW).slice(0, 3).forEach((ln, i) => doc.text(ln, M, y + i * 3.4))
+      }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); setInk(RGB.muted)
+      doc.text(doc.splitTextToSize(String(slide.caption || ''), CW)[0], M, PH - 12)
       continue
     }
 

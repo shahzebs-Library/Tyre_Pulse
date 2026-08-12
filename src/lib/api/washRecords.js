@@ -17,10 +17,24 @@ export const COLS =
 
 /** Controlled vocabularies (mirror the DB CHECK constraints). */
 export const WASH_TYPES = ['Exterior', 'Interior', 'Full', 'Engine Bay', 'Undercarriage', 'Steam', 'Waterless']
-/** Full DB CHECK vocabulary (legacy rows may carry any of these). */
-export const WASH_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Cancelled']
-/** The two statuses a supervisor picks in the UI. Default = first. */
-export const WASH_STATUS_CHOICES = ['In Progress', 'Completed']
+/**
+ * Full DB CHECK vocabulary (V534c). 'In Progress' IS a member - the mobile app
+ * has always written it, and V534 briefly excluded it, which would have failed
+ * every driver's wash save. A status arriving as 'In Progress' is preserved,
+ * never quietly promoted to 'Completed': the machine is still in the bay, and
+ * rewriting that would report an unfinished wash as work done.
+ *
+ * Only 'Completed' counts as compliance - see NON_WORK_STATUSES in
+ * washAnalytics.js, which mirrors this list. Change both together.
+ */
+export const WASH_STATUSES = ['Completed', 'In Progress', 'Scheduled', 'Missed', 'Cancelled']
+/** The statuses a supervisor picks when logging a wash. Default = first. */
+export const WASH_STATUS_CHOICES = ['Completed', 'Missed', 'Cancelled']
+/** Fields correct_wash_record accepts. Anything else is ignored by the RPC. */
+export const CORRECTABLE_FIELDS = [
+  'asset_no', 'vehicle_type', 'site', 'area', 'wash_date', 'wash_time',
+  'wash_type', 'bay', 'washed_by', 'status', 'odometer_km', 'notes', 'cost',
+]
 
 // Photos live in the PRIVATE `tyre-photos` bucket (module-scoped), matching the
 // mobile driver app so a wash's photos resolve identically on both surfaces. We
@@ -130,7 +144,7 @@ function photoArray(v) {
  */
 function buildPayload(values = {}) {
   const washType = WASH_TYPES.includes(values.wash_type) ? values.wash_type : null
-  const status = WASH_STATUSES.includes(values.status) ? values.status : 'In Progress'
+  const status = WASH_STATUSES.includes(values.status) ? values.status : 'Completed'
   return {
     asset_no: textOrNull(values.asset_no, 120),
     vehicle_type: textOrNull(values.vehicle_type, 120),
@@ -172,6 +186,79 @@ export async function updateWashRecord(id, patch = {}) {
   // country is only sent when explicitly provided.
   if (!('country' in patch)) delete out.country
   return unwrap(await supabase.from('wash_records').update(out).eq('id', id).select(COLS).single())
+}
+
+/**
+ * Schedule a wash for a future date. This is a PLAN, not work done: it is
+ * written with status 'Scheduled', and every count in washAnalytics excludes
+ * that status so a plan can never be reported as a wash performed.
+ */
+export async function scheduleWash(values = {}) {
+  const payload = buildPayload({ ...values, status: 'Scheduled' })
+  if (!payload.asset_no) throw new Error('An asset number is required.')
+  if (!payload.wash_date) throw new Error('A date is required to schedule a wash.')
+  // A scheduled wash has not happened, so it carries no time of day and no
+  // operator - writing either would describe work nobody has done.
+  payload.wash_time = null
+  payload.washed_by = null
+  return unwrap(await supabase.from('wash_records').insert(payload).select(COLS).single())
+}
+
+/**
+ * Correct a wash record through the V534 RPC. The RPC writes one
+ * wash_record_corrections row per genuinely changed field IN THE SAME
+ * transaction as the update, so the original value is never lost: a correction
+ * is recorded AGAINST the record rather than silently overwriting it.
+ *
+ * Returns the RPC envelope verbatim - {ok:true, changed:N} or
+ * {ok:false, reason:'forbidden'|'not_found'|'no_org'} - so the caller can say
+ * what actually happened instead of assuming success.
+ *
+ * @param {string} id
+ * @param {object} patch fields to restate; anything outside the RPC allowlist is ignored
+ * @param {string} reason short justification, stored on every correction row
+ */
+export async function correctWashRecord(id, patch = {}, reason = '') {
+  if (!id) throw new Error('A record id is required.')
+  const clean = {}
+  for (const k of CORRECTABLE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, k)) continue
+    const v = patch[k]
+    clean[k] = v === null || v === undefined ? '' : String(v)
+  }
+  if (!Object.keys(clean).length) return { ok: true, changed: 0 }
+  try {
+    const data = await unwrap(await supabase.rpc('correct_wash_record', {
+      p_id: id,
+      p_patch: clean,
+      p_reason: String(reason || '').trim() || null,
+    }))
+    return data && typeof data === 'object' ? data : { ok: false, reason: 'unavailable' }
+  } catch (err) {
+    if (isMissingRelation(err)) return { ok: false, reason: 'unavailable' }
+    throw err
+  }
+}
+
+/**
+ * The correction history for one wash record, newest first. Degrades to [] when
+ * the table is absent so the edit dialog still opens.
+ */
+export async function listWashCorrections(washId) {
+  if (!washId) return []
+  try {
+    const { data, error } = await supabase
+      .from('wash_record_corrections')
+      .select('id,wash_id,field,old_value,new_value,reason,corrected_by,corrected_at')
+      .eq('wash_id', washId)
+      .order('corrected_at', { ascending: false })
+      .limit(200)
+    if (error) throw error
+    return data || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
 }
 
 /** Delete a wash record by id. */

@@ -150,7 +150,7 @@ fun AlertItem(alert: Notification, onClick: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Just now", // TODO: Real timestamp
+                        text = alert.createdAt.take(16).replace('T', ' '),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )

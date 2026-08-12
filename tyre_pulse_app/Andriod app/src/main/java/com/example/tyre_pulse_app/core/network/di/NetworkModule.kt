@@ -83,10 +83,6 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideTyreReplacementApi(retrofit: Retrofit): TyreReplacementApi = retrofit.create(TyreReplacementApi::class.java)
-
-    @Provides
-    @Singleton
     fun provideTaskApi(retrofit: Retrofit): TaskApi = retrofit.create(TaskApi::class.java)
 
     @Provides
@@ -103,5 +99,15 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideStorageApi(retrofit: Retrofit): StorageApi = retrofit.create(StorageApi::class.java)
+    fun provideStorageApi(okHttpClient: OkHttpClient, json: Json): StorageApi {
+        // Supabase Storage is mounted at the project ROOT (/storage/v1/...),
+        // not under the /rest/v1/ prefix the shared Retrofit instance uses -
+        // reusing that instance would send every upload to the wrong path.
+        return Retrofit.Builder()
+            .baseUrl(NetworkConfig.SUPABASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(StorageApi::class.java)
+    }
 }

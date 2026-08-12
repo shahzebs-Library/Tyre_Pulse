@@ -56,7 +56,7 @@ fun AccidentListRoute(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(uiState.accidents, key = { it.id }) { accident ->
-                        AccidentItem(accident = accident, onClick = { onAccidentClick(accident.id) })
+                        AccidentItem(accident = accident, onClick = { onAccidentClick(accident.id ?: "") })
                     }
                     if (uiState.accidents.isEmpty() && !uiState.isLoading) {
                         item {
@@ -84,17 +84,17 @@ private fun AccidentItem(accident: Accident, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = accident.accidentNumber, style = MaterialTheme.typography.titleMedium)
+                Text(text = accident.accidentNumber ?: "Unassigned", style = MaterialTheme.typography.titleMedium)
                 val statusColor = when (accident.status) {
                     AccidentStatus.CLOSED -> Color(0xFF2E7D32)
-                    AccidentStatus.REJECTED -> MaterialTheme.colorScheme.error
+                    AccidentStatus.REPORTED, AccidentStatus.UNDER_REVIEW -> MaterialTheme.colorScheme.error
                     else -> Color(0xFFEF6C00)
                 }
                 TPStatusChip(label = accident.status.name, statusColor = statusColor)
             }
             Spacer(Modifier.height(8.dp))
             Text(text = "Asset: ${accident.assetNumber}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = accident.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(text = accident.location ?: "Site unknown", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             Spacer(Modifier.height(4.dp))
             Text(text = accident.date, style = MaterialTheme.typography.labelSmall)
         }

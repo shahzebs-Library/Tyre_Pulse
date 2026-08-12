@@ -18,7 +18,12 @@ data class Tyre(
     @SerialName("km_at_fitment") val installationKm: Long? = null,
     @SerialName("km_at_removal") val removalKm: Long? = null,
     @SerialName("organisation_id") val tenantId: String? = null,
-    val site: String? = null
+    val site: String? = null,
+    @SerialName("issue_date") val issueDate: String? = null,
+    @SerialName("removal_date") val removalDate: String? = null,
+    @SerialName("job_card") val jobCard: String? = null,
+    @SerialName("removal_reason") val removalReason: String? = null,
+    @SerialName("total_km") val totalKm: Long? = null
 )
 
 @Serializable

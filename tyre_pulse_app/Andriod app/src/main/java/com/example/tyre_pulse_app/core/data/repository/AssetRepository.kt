@@ -3,6 +3,7 @@ package com.example.tyre_pulse_app.core.data.repository
 import com.example.tyre_pulse_app.core.database.dao.AssetDao
 import com.example.tyre_pulse_app.core.database.model.AssetEntity
 import com.example.tyre_pulse_app.core.model.Asset
+import com.example.tyre_pulse_app.core.network.Pg
 import com.example.tyre_pulse_app.core.network.api.AssetApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -29,7 +30,7 @@ class AssetRepository @Inject constructor(
 
     suspend fun syncSiteAssets(tenantId: String, siteId: String) {
         try {
-            val remoteAssets = assetApi.getAssets(site = siteId)
+            val remoteAssets = assetApi.getAssets(site = Pg.eq(siteId))
             val entities = remoteAssets.map { it.toEntity(tenantId) }
             assetDao.insertAssets(entities)
         } catch (e: Exception) {

@@ -1,50 +1,63 @@
 package com.example.tyre_pulse_app.core.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Maps onto the real `accidents` table. Kotlin property names are kept
+ * stable for existing UI call sites (accident.location, accident.date,
+ * accident.assetNumber...) even where they differ from the DB column name -
+ * only the @SerialName (the wire format) needs to be correct.
+ *
+ * Claim fields live directly on this row (there is no child `claims`
+ * table), and `location` is the site name, not free-text geolocation.
+ */
 @Serializable
 data class Accident(
-    val id: String,
-    val accidentNumber: String,
-    val assetId: String,
-    val assetNumber: String,
-    val driverId: String? = null,
-    val driverName: String? = null,
-    val date: String,
-    val location: String,
-    val status: AccidentStatus,
+    val id: String? = null,
+    @SerialName("reference_no") val accidentNumber: String? = null,
+    @SerialName("asset_no") val assetNumber: String,
+    @SerialName("driver_name") val driverName: String? = null,
+    @SerialName("incident_date") val date: String,
+    @SerialName("site") val location: String? = null,
+    val status: AccidentStatus = AccidentStatus.REPORTED,
     val description: String,
-    val severity: String, // e.g., "Low", "Medium", "High", "Fatal"
-    val photos: List<String> = emptyList(),
-    val insuranceDetails: InsuranceDetails? = null,
-    val claims: List<Claim> = emptyList(),
-    val tenantId: String,
-    val companyId: String,
-    val countryId: String,
-    val siteId: String? = null
+    // DB CHECK allows minor/moderate/severe/fatal (lowercase).
+    val severity: String,
+    @SerialName("accident_type") val accidentType: String? = null,
+    @SerialName("plate_number") val plateNumber: String? = null,
+    @SerialName("vehicle_type") val vehicleType: String? = null,
+    @SerialName("claim_amount") val claimAmount: Double? = null,
+    @SerialName("claim_approved_amount") val claimApprovedAmount: Double? = null,
+    val deductible: Double? = null,
+    @SerialName("recovered_amount") val recoveredAmount: Double? = null,
+    val insurer: String? = null,
+    @SerialName("policy_no") val policyNo: String? = null,
+    @SerialName("claim_status") val claimStatus: String? = null,
+    @SerialName("repair_cost") val repairCost: Double? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("organisation_id") val tenantId: String? = null,
+    val country: String? = null
 )
 
 @Serializable
 enum class AccidentStatus {
-    REPORTED, UNDER_INVESTIGATION, INSURANCE_REVIEW, CLAIM_PENDING, REPAIR_PENDING, CLOSED, REJECTED
+    @SerialName("reported") REPORTED,
+    @SerialName("under_review") UNDER_REVIEW,
+    @SerialName("repair_in_progress") REPAIR_IN_PROGRESS,
+    @SerialName("awaiting_parts") AWAITING_PARTS,
+    @SerialName("awaiting_approval") AWAITING_APPROVAL,
+    @SerialName("insurance_claim") INSURANCE_CLAIM,
+    @SerialName("closed") CLOSED
 }
 
-@Serializable
-data class InsuranceDetails(
-    val companyName: String,
-    val policyNumber: String,
-    val expiryDate: String,
-    val contactPerson: String? = null,
-    val contactPhone: String? = null
-)
-
-@Serializable
-data class Claim(
-    val id: String,
-    val claimNumber: String,
-    val amount: Double,
-    val currency: String,
-    val status: String, // e.g., "PENDING", "APPROVED", "PAID", "REJECTED"
-    val filedDate: String,
-    val settlementDate: String? = null
+/** A claim filed against an accident is a PATCH of these fields onto the accidents row. */
+data class ClaimUpdate(
+    val claimAmount: Double? = null,
+    val claimApprovedAmount: Double? = null,
+    val deductible: Double? = null,
+    val recoveredAmount: Double? = null,
+    val insurer: String? = null,
+    val policyNo: String? = null,
+    val claimStatus: String? = null
 )

@@ -108,7 +108,9 @@ class TyreReplacementViewModel @Inject constructor(
             val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
             
             val request = TyreReplacementRequest(
-                assetId = state.asset?.id ?: "",
+                // tyre_records.asset_no stores the human-readable asset code
+                // (e.g. "TM335"), not the row's internal id.
+                assetId = state.asset?.assetNumber ?: "",
                 position = state.removedTyre?.position ?: "",
                 removedTyreId = tyreId,
                 removalReason = state.selectedReason?.name ?: "",

@@ -170,6 +170,75 @@ export async function getDisposalFleetBaseline({ country } = {}) {
   }
 }
 
+/**
+ * Columns a client may write on a replacement benchmark. organisation_id is
+ * defaulted server-side for the same reason it is excluded above.
+ */
+export const REPLACEMENT_EDITABLE_COLS = [
+  'country', 'asset_type', 'label', 'supplier', 'model', 'spec',
+  'unit_price', 'vat_pct', 'vat_amount', 'total_price', 'currency',
+  'quote_ref', 'quote_date', 'valid_until', 'warranty_note',
+  'source_file', 'source_page', 'notes', 'active',
+]
+
+/**
+ * Supplier quotations that price a whole asset class.
+ *
+ * Read straight from the table rather than through an RPC: it is a small,
+ * org-and-country-walled reference list with no joined evidence to keep live,
+ * so an RPC would add a moving part without adding a fact. Degrades to an
+ * empty list, never a throw - a screen with no benchmarks must still render the
+ * machines it cannot price.
+ */
+export async function listReplacementBenchmarks({ country } = {}) {
+  try {
+    let q = supabase
+      .from('asset_replacement_costs')
+      .select('id, country, asset_type, label, supplier, model, spec, unit_price, vat_pct, vat_amount, total_price, currency, quote_ref, quote_date, valid_until, warranty_note, source_file, source_page, notes, active')
+      .order('asset_type')
+      .order('quote_date', { ascending: false })
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    const { data, error } = await q
+    if (error) return { ok: false, reason: isMissingRelation(error) ? 'not_provisioned' : 'unavailable', rows: [] }
+    return { ok: true, reason: null, rows: data || [] }
+  } catch {
+    return { ok: false, reason: 'unavailable', rows: [] }
+  }
+}
+
+function sanitizeReplacement(row) {
+  const out = {}
+  for (const k of REPLACEMENT_EDITABLE_COLS) {
+    if (row && Object.prototype.hasOwnProperty.call(row, k)) out[k] = row[k]
+  }
+  for (const k of ['unit_price', 'vat_pct', 'vat_amount', 'total_price', 'source_page']) {
+    if (k in out) out[k] = num(out[k])
+  }
+  for (const k of ['quote_date', 'valid_until']) {
+    if (k in out && !out[k]) out[k] = null
+  }
+  if (typeof out.asset_type === 'string') out.asset_type = out.asset_type.trim().toUpperCase()
+  return out
+}
+
+export async function saveReplacementBenchmark(row) {
+  const payload = sanitizeReplacement(row)
+  if (!payload.asset_type || payload.unit_price == null) {
+    throw new Error('A benchmark needs an asset class and an ex-VAT price.')
+  }
+  const { data, error } = row?.id
+    ? await supabase.from('asset_replacement_costs').update(payload).eq('id', row.id).select('id').single()
+    : await supabase.from('asset_replacement_costs').insert([payload]).select('id').single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteReplacementBenchmark(id) {
+  const { error } = await supabase.from('asset_replacement_costs').delete().eq('id', id)
+  if (error) throw error
+  return true
+}
+
 /** Add or refresh one row on the natural key (org + country + asset). */
 export async function upsertDisposal(row) {
   const payload = sanitize(row)

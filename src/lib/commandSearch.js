@@ -31,6 +31,7 @@ export const NAV_COMMANDS = [
   // Operations
   { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck' },
   { id: 'assets',         label: 'Asset Management',     path: '/assets',      icon: 'LayoutGrid' },
+  { id: 'asset-disposals', label: 'Asset Disposal',      path: '/asset-disposals', icon: 'Recycle', roles: ANALYTICS_ROLES, moduleKey: 'asset_disposals' },
   { id: 'actions',        label: 'Corrective Actions',   path: '/actions',     icon: 'ClipboardList' },
   { id: 'rca',            label: 'Root Cause',           path: '/rca',         icon: 'Search' },
   { id: 'daily-ops',      label: 'Daily Ops',            path: '/daily-ops',   icon: 'Calendar',      adminOnly: true },

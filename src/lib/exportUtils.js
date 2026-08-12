@@ -784,6 +784,104 @@ export async function exportToExcel(rows, columns, headers, filename = 'export',
   XLSX.writeFile(wb, `${filename}.xlsx`)
 }
 
+/**
+ * One workbook, many sheets - for a module whose answer is spread across
+ * several tables and where downloading them one at a time loses the connection
+ * between them.
+ *
+ * Extends the single-sheet exporter above rather than replacing it: same
+ * ensureXlsx, same guardExport row cap, same cell sanitising (a leading =, +, -
+ * or @ is neutralised so a spreadsheet cannot execute a stored value).
+ *
+ * @param {Array<{name:string, rows:Array, columns:Array<string>, headers:Array<string>, note?:string}>} sheets
+ *        A sheet with no rows is still written, carrying its own "nothing to
+ *        report" line. Dropping it would make an empty result indistinguishable
+ *        from a section that was never exported.
+ * @param {string} filename
+ * @param {object} [opts] title / company / dateRange / meta / notes[] for the
+ *        Contents sheet, which records what each sheet rests on.
+ */
+export async function exportSheetsToExcel(sheets, filename = 'export', opts = {}) {
+  await ensureXlsx()
+  const list = (Array.isArray(sheets) ? sheets : []).filter((s) => s && s.name)
+  if (!list.length) return false
+  const wb = XLSX.utils.book_new()
+
+  // Excel forbids : \ / ? * [ ] in a sheet name and caps it at 31 characters,
+  // and silently rejects the whole workbook rather than telling you which name
+  // broke it. Duplicates are suffixed for the same reason.
+  const used = new Set()
+  const safeName = (raw) => {
+    let n = String(raw).replace(/[:\\/?*[\]]/g, ' ').trim().slice(0, 31) || 'Sheet'
+    if (used.has(n)) {
+      let i = 2
+      while (used.has(`${n.slice(0, 28)} ${i}`)) i += 1
+      n = `${n.slice(0, 28)} ${i}`
+    }
+    used.add(n)
+    return n
+  }
+
+  // ── Contents: what is in here, and what each sheet rests on ──
+  const aoa = []
+  aoa.push([opts.title || filename])
+  aoa.push(['Generated', nowStr()])
+  if (opts.company) aoa.push(['Organisation', opts.company])
+  if (opts.dateRange) aoa.push(['Date range', opts.dateRange])
+  if (opts.meta) Object.entries(opts.meta).forEach(([k, v]) => aoa.push([k, v]))
+  aoa.push([])
+  aoa.push(['Sheet', 'Rows', 'What it covers'])
+  list.forEach((s) => aoa.push([
+    safeName(s.name),
+    Array.isArray(s.rows) ? s.rows.length : 0,
+    s.note || '',
+  ]))
+  used.clear()
+  if (Array.isArray(opts.notes) && opts.notes.length) {
+    aoa.push([])
+    aoa.push(['What these figures rest on'])
+    opts.notes.filter(Boolean).forEach((n) => aoa.push([String(n)]))
+  }
+  const wsC = XLSX.utils.aoa_to_sheet(_sanitizeAoa(aoa))
+  wsC['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 90 }]
+  XLSX.utils.book_append_sheet(wb, wsC, safeName('Contents'))
+
+  for (const s of list) {
+    const name = safeName(s.name)
+    const rows = guardExport(Array.isArray(s.rows) ? s.rows : [])
+    const columns = Array.isArray(s.columns) && s.columns.length
+      ? s.columns
+      : [...new Set(rows.flatMap((r) => Object.keys(r || {})))]
+    const headers = Array.isArray(s.headers) && s.headers.length === columns.length
+      ? s.headers
+      : columns
+
+    if (!rows.length) {
+      const ws = XLSX.utils.aoa_to_sheet(_sanitizeAoa([
+        [s.name],
+        [s.emptyNote || 'Nothing to report for this selection.'],
+      ]))
+      ws['!cols'] = [{ wch: 90 }]
+      XLSX.utils.book_append_sheet(wb, ws, name)
+      continue
+    }
+
+    const display = rows.map((r) => Object.fromEntries(columns.map((c, i) => [headers[i], r[c] ?? ''])))
+    const safeRows = display.map((r) => _sanitizeRowObject(r, headers))
+    const ws = XLSX.utils.json_to_sheet(safeRows, { header: headers })
+    ws['!cols'] = headers.map((h) => {
+      const maxLen = Math.max(String(h).length, ...display.map((r) => String(r[h] ?? '').length))
+      return { wch: Math.min(maxLen + 2, 44) }
+    })
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: display.length, c: Math.max(0, headers.length - 1) } }) }
+    ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
+    XLSX.utils.book_append_sheet(wb, ws, name)
+  }
+
+  XLSX.writeFile(wb, `${filename}.xlsx`)
+  return true
+}
+
 // ── Data analysis helpers (auto-summarise any tabular dataset) ──────────────────
 function _parseNum(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null

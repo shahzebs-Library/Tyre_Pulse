@@ -149,6 +149,11 @@ export default function ReliabilityPanel({
   currency = '',
   loading = false,
   onRetry,
+  // The page computes these too, for the workbook export. Passing them in keeps
+  // ONE derivation: two independent calls with the same inputs agree today and
+  // drift the first time either side gains an argument.
+  recommendations: recommendationsProp = null,
+  onRecommendations,
   onOpenAsset,
 }) {
   const [sort, setSort] = useState({ key: 'breakdown_hours', dir: 'desc' })
@@ -167,12 +172,12 @@ export default function ReliabilityPanel({
   const shapedBaseline = useMemo(() => shapeFleetBaseline(baseline), [baseline])
 
   const recommendations = useMemo(
-    () => boardRecommendations(rows, fleet, {
+    () => (Array.isArray(recommendationsProp) ? recommendationsProp : boardRecommendations(rows, fleet, {
       now: Date.now(),
       currency: money || 'SAR',
       fleetBaseline: shapedBaseline,
-    }),
-    [rows, fleet, money, shapedBaseline],
+    })),
+    [recommendationsProp, rows, fleet, money, shapedBaseline],
   )
 
   const sorted = useMemo(() => {

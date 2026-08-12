@@ -41,6 +41,7 @@ import {
 } from '../lib/api/assetDisposals'
 import {
   shapeReliability, mergeReliability, reliabilityExportRows,
+  fleetReliability, shapeFleetBaseline, boardRecommendations,
 } from '../lib/assetDisposalReliability'
 import { shapeBenchmarks } from '../lib/assetReplacement'
 import {
@@ -51,7 +52,8 @@ import {
 } from '../lib/assetDisposal'
 import { parseWorkbook } from '../lib/import/parseWorkbook'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { exportToExcel, exportSheetsToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { disposalWorkbookSheets, workbookNotes } from '../lib/assetDisposalWorkbook'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -219,6 +221,7 @@ export default function AssetDisposals() {
   // and the older one kept visible as superseded rather than silently gone.
   const benchmarks = useMemo(() => shapeBenchmarks(benchmarkRows, { now: Date.now() }), [benchmarkRows])
 
+
   const options = useMemo(() => {
     const uniq = (key) => [...new Set(rows.map((r) => r?.[key]).filter(Boolean))].sort()
     return {
@@ -235,6 +238,19 @@ export default function AssetDisposals() {
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
 
   const currency = totals.mixedCurrency ? '' : (totals.currency || '')
+
+  // Computed ONCE here and handed to the reliability panel, so the points on
+  // screen and the points in the workbook are the same objects rather than two
+  // calls that agree today and drift the first time either gains an argument.
+  const shapedBaseline = useMemo(() => shapeFleetBaseline(baseline), [baseline])
+  const boardPoints = useMemo(() => {
+    const fleet = fleetReliability(filtered)
+    return boardRecommendations(filtered, fleet, {
+      now: Date.now(),
+      currency: fleet.mixedCurrency ? 'SAR' : (currency || fleet.currency || 'SAR'),
+      fleetBaseline: shapedBaseline,
+    })
+  }, [filtered, currency, shapedBaseline])
 
   // ── charts (palette follows the super-admin report theme) ──────────────────
   const byType = useMemo(() => byGroup(filtered, 'asset_type'), [filtered])
@@ -314,6 +330,38 @@ export default function AssetDisposals() {
       title: 'Asset Disposal Register', company, currency: currency || 'SAR',
     })
   }
+
+  /**
+   * Everything the module knows, in one workbook.
+   *
+   * The register, the reliability history, the replacement prices, the
+   * quotations behind them, the board points and the fleet comparison are the
+   * SAME figures the screen shows - built from the same export builders, so a
+   * forwarded spreadsheet can never disagree with the page it came from. It
+   * exports what is on screen, filters included, and the Contents sheet records
+   * the basis each figure rests on.
+   */
+  const doExportWorkbook = async () => {
+    const sheets = disposalWorkbookSheets({
+      rows: filtered,
+      totals,
+      reliabilityTotals: reliability?.totals || null,
+      benchmarks,
+      recommendations: boardPoints,
+      baseline,
+      currency: currency || 'SAR',
+      now: Date.now(),
+    })
+    await exportSheetsToExcel(sheets, reportFileName('Asset Disposals full', reportDateLabel()), {
+      title: 'Asset Disposal - complete record',
+      company,
+      meta: {
+        Country: activeCountry || 'All countries',
+        'Machines exported': filtered.length,
+      },
+      notes: workbookNotes({ rows: filtered, benchmarks, baseline, now: Date.now() }),
+    })
+  }
   const doExportPdf = async () => {
     const { columns, rows: objects, head } = exportModel()
     const name = reportFileName('Asset Disposals', reportDateLabel())
@@ -375,8 +423,19 @@ export default function AssetDisposals() {
             <button onClick={() => setDeckOpen(true)} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <Presentation size={14} /> Build deck
             </button>
+            {/* The whole module in one workbook. Kept beside the single-sheet
+                export rather than replacing it: somebody who wants only the
+                register should not have to open a six-sheet file to find it. */}
+            <button
+              onClick={doExportWorkbook}
+              className="btn-secondary text-sm inline-flex items-center gap-1.5"
+              disabled={!filtered.length}
+              title="Register, reliability, replacement prices, quotations, board points and the fleet comparison, in one workbook"
+            >
+              <FileSpreadsheet size={14} /> Download everything
+            </button>
             <button onClick={doExportExcel} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
-              <FileSpreadsheet size={14} /> Excel
+              <FileSpreadsheet size={14} /> Register only
             </button>
             <button onClick={doExportPdf} className="btn-secondary text-sm inline-flex items-center gap-1.5" disabled={!filtered.length}>
               <FileText size={14} /> PDF
@@ -575,6 +634,7 @@ export default function AssetDisposals() {
                   rows={filtered}
                   reliability={reliability}
                   baseline={baseline}
+                  recommendations={boardPoints}
                   currency={currency}
                   loading={loading}
                   onRetry={() => load(true)}

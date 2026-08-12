@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { getInspectionForPage } from '../../lib/api/inspections'
-import {
-  tyreReadingRows, inspectionMeta, inspectionSummary, readingText, isComplete,
-} from '../../lib/inspectionView'
+import { inspectionMeta, inspectionSummary, isComplete } from '../../lib/inspectionView'
 import { toUserMessage } from '../../lib/safeError'
 import InspectionDiagram from './InspectionDiagram'
 import InspectionPhotos from './InspectionPhotos'
-
-const RISK_TONE = {
-  good: '#15803d',
-  warning: '#b45309',
-  critical: '#b91c1c',
-  none: 'var(--text-dim)',
-}
 
 /**
  * What an inspector actually recorded, rendered wherever someone needs to read it.
@@ -31,6 +22,13 @@ const RISK_TONE = {
  * the meters and the signatures. Splitting those across components a caller has
  * to remember to mount is how the evidence goes missing on one surface and not
  * another, which is the defect this component exists to end.
+ *
+ * The readings are shown ON the wheel map: each wheel carries its own PSI and a
+ * summary line names the position, condition and readings underneath. The
+ * separate per-position table that used to repeat all of that was removed at the
+ * owner's request, so nothing is lost - it is the same answer, read off the
+ * picture instead of matched back to it by position code. The PDF report prints
+ * the same way.
  *
  * @param {object}  props
  * @param {object}  [props.inspection]     already-loaded row
@@ -68,7 +66,6 @@ export default function InspectionAnswers({
   }, [needsFetch, inspectionId])
 
   const row = inspection || fetched
-  const { rows, stats } = useMemo(() => tyreReadingRows(row), [row])
   const meta = useMemo(() => inspectionMeta(row), [row])
   const summary = useMemo(() => inspectionSummary(row), [row])
 
@@ -92,8 +89,6 @@ export default function InspectionAnswers({
   }
 
   if (!row) return null
-
-  const showPressureFlag = rows.some((r) => r.pressureFlag)
 
   return (
     <>
@@ -128,83 +123,12 @@ export default function InspectionAnswers({
         </div>
       )}
 
-      {/* The map first. Someone opening an inspection wants to see WHICH wheel,
-          and reading that off a table of position codes is work the picture
-          does for them. It is the same diagram the PDF captures. */}
+      {/* The readings, on the vehicle they were taken from. Someone opening an
+          inspection wants to see WHICH wheel, and reading that off a table of
+          position codes is work the picture does for them. It is the same
+          diagram the PDF captures, and its summary lines carry the condition,
+          pressure and tread for every position that was recorded. */}
       {showMedia && <InspectionDiagram inspection={row} className="mb-5" />}
-
-      <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
-        Tyre readings
-      </h3>
-      {!rows.length ? (
-        <div className="text-sm py-6 text-center" style={{ color: 'var(--text-secondary)' }}>
-          No tyre readings were recorded on this inspection.
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left" style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
-                <th className="py-1.5 pr-2 font-medium">Position</th>
-                <th className="py-1.5 pr-2 font-medium">Condition</th>
-                <th className="py-1.5 pr-2 font-medium text-right">Pressure</th>
-                <th className="py-1.5 pr-2 font-medium text-right">Tread</th>
-                {showPressureFlag && <th className="py-1.5 pr-2 font-medium">Vs median</th>}
-                <th className="py-1.5 font-medium">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.position} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td className="py-2 pr-2 font-mono text-xs" style={{ color: 'var(--text-primary)' }}>
-                    {r.label || r.position}
-                  </td>
-                  <td className="py-2 pr-2">
-                    <span className="inline-flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                          background: RISK_TONE[r.risk] || RISK_TONE.none,
-                        }}
-                      />
-                      {r.condition}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-2 text-right tabular-nums" style={{ color: r.pressure == null ? 'var(--text-dim)' : 'var(--text-primary)' }}>
-                    {readingText(r.pressure, ' PSI')}
-                  </td>
-                  <td className="py-2 pr-2 text-right tabular-nums" style={{ color: r.tread == null ? 'var(--text-dim)' : 'var(--text-primary)' }}>
-                    {readingText(r.tread, ' mm')}
-                  </td>
-                  {showPressureFlag && (
-                    <td className="py-2 pr-2 text-xs">
-                      {!r.pressureFlag ? (
-                        <span style={{ color: 'var(--text-dim)' }}>N/A</span>
-                      ) : r.pressureFlag.check ? (
-                        <span style={{ color: '#b45309', fontWeight: 600 }}>
-                          Check {r.pressureFlag.dev > 0 ? '+' : '-'}{r.pressureFlag.pct}%
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-secondary)' }}>OK</span>
-                      )}
-                    </td>
-                  )}
-                  <td className="py-2 text-xs" style={{ color: r.notes ? 'var(--text-secondary)' : 'var(--text-dim)' }}>
-                    {r.notes || 'None'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {showPressureFlag && (
-            <p className="text-[11px] mt-2" style={{ color: 'var(--text-dim)' }}>
-              Pressure is compared to this vehicle&apos;s own median of {stats.recordedPressures} recorded
-              readings. There is no stored target pressure, so nothing else would be a measurement.
-            </p>
-          )}
-        </div>
-      )}
 
       {row.findings && (
         <div className="mt-5 rounded-lg p-3" style={{ background: 'var(--panel-2)' }}>

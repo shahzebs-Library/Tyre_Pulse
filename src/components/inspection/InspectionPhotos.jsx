@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, Download, ImageOff, Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { normalizeTyreConditions } from '../../lib/inspectionView'
+import { normalizeTyreConditions, positionLabelMap } from '../../lib/inspectionView'
 import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeHref, safeImageSrc } from '../../lib/safeUrl'
 
@@ -72,6 +72,11 @@ export function toRefList(value) {
  * would have no row and its picture would disappear. A photograph is a
  * recording in its own right.
  *
+ * The caption names the wheel the way the diagram and the position summary do,
+ * via `positionLabelMap`. It used to print the stored key, so a photo captioned
+ * F2R sat under a summary line reading "RHF2 Puncture" - the same wheel, twice,
+ * in two vocabularies, leaving the reader to pair them up on a safety record.
+ *
  * @param {object|null} row inspection row
  * @returns {Array<{key:string, ref:string, group:string, label:string, detail:string|null}>}
  */
@@ -80,6 +85,7 @@ export function collectPhotoRefs(row) {
   const out = []
 
   const conditions = normalizeTyreConditions(row)
+  const labels = positionLabelMap(row)
   for (const [position, d] of Object.entries(conditions)) {
     const ref = refOf(d?.photo)
     if (!ref) continue
@@ -87,7 +93,7 @@ export function collectPhotoRefs(row) {
       key: `position:${position}`,
       ref,
       group: GROUP_POSITION,
-      label: d.label || position,
+      label: labels[position] || position,
       detail: d.condition || null,
     })
   }

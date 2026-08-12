@@ -48,3 +48,25 @@
 -- ... see supabase_migrations.schema_migrations entries
 --     'v527_asset_disposals' and 'v527b_asset_disposal_register_rpc'
 --     for the exact applied bodies.
+
+-- V527c METER UNIT CORRECTION (applied live, same day)
+--
+-- The committee column is headed "Odo Meter / Hour Meter" and writes a BARE
+-- NUMBER for a generator. The loader put every bare number into meter_km, so
+-- nine generators ended up with a cost PER KILOMETRE - which is not a thing,
+-- because a generator does not travel. It surfaced the moment the economics
+-- engine printed "SAR 5.38 per km" for GN074.
+--
+-- Corrected against the app's OWN rule rather than a guess: cpk_unit_for_asset_type
+-- already puts plant on engine_hours and road vehicles on km.
+--
+--   update public.asset_disposals
+--      set meter_hours = meter_km, meter_km = null
+--    where asset_type = 'GENERATOR' and meter_km is not null and meter_hours is null;
+--
+-- Scope is GENERATOR ONLY, deliberately. MP042 says '234660 KM' in words, MP049
+-- states both units, pickups genuinely travel, and every other class has an
+-- unreadable meter. Moving those would invent a unit the file never stated.
+--
+-- After: GENERATOR 9 hours / 0 km, PICKUP 16 km, M-PUMP 2 km + 1 hours,
+-- BT-PLANT / BUS / CHILLER / TIPPER TRAILER no readable meter at all.

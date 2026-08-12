@@ -125,9 +125,13 @@ that or be a thin sibling that the same calendar can draw.
 (a) does "correction" mean EDITING the saved record in place, or recording a correction AGAINST it so the
 original stays visible? A wash that is ever disputed needs the second; the first is cheaper. The repo already
 has the pattern for the honest version - `admin_row_changes` (V364) keeps before+after and is undoable.
-(b) beyond asset / date / site / wash type / photos, what must a wash capture - cost, water used, who washed
-it, duration? Cost is the one that matters most: without it washing can never reach cost per m3 or the
-expense grid, and adding it later means re-entering history.
+(b) **ANSWERED 2026-08-12: "Cost will be zero coat" - washing is done in house and carries NO charge.** So the
+record still gets a cost field (a vendor wash may happen later and must be recordable), it DEFAULTS TO ZERO,
+and **zero must be stored and rendered as "no charge" - a deliberate fact - not left blank.** Blank means
+nobody entered it; zero means it cost nothing. Collapsing the two is the usual defect in this codebase.
+**AND: washing must NOT be presented as a cost driver anywhere** - it does not belong in cost per m3 or the
+expense grid while every value is zero, because a zero line in a cost report reads as a measurement failure.
+Report washing on COMPLIANCE (was it washed, when, how often) rather than on money.
 NOTE the standing wash rule: `wash_date` is LOCKED to today on mobile (a driver cannot backdate). Any web edit
 or scheduling must not quietly break that - a scheduled future wash is a DIFFERENT record from a completed one
 and must not be counted as work done.

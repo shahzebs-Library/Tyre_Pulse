@@ -62,3 +62,29 @@ update public.asset_replacement_costs
  where organisation_id = '00000000-0000-0000-0000-000000000001'
    and source_file = 'SANY_quotation_for_pump_47m0724.pdf'
    and asset_no is null;
+
+-- ---------------------------------------------------------------------
+-- 2026-08-12, owner instruction: the same quotation also replaces MP043.
+--
+-- MP043 is a KSA pump (vehicle_fleet, Inactive, RIY-SAL) that the owner says
+-- the SANY 47m also replaces. Recorded as its OWN row rather than by widening
+-- the MP049 row back to the PUMPS class - two named machines is two facts the
+-- owner stated; a class price would silently re-cover MP042, which is exactly
+-- what this migration exists to stop.
+--
+-- NOTE: MP043 is NOT on the disposal list, so it carries a price with no row in
+-- the register. That is correct and visible - the Quotations sheet and table
+-- show it - and the price applies the moment the committee adds the machine.
+-- ---------------------------------------------------------------------
+insert into public.asset_replacement_costs
+ (organisation_id, country, asset_no, asset_type, label, supplier, model, spec,
+  unit_price, vat_pct, vat_amount, total_price, currency,
+  quote_ref, quote_date, valid_until, warranty_note, source_file, source_page, notes)
+select organisation_id, country, 'MP043', asset_type, label, supplier, model, spec,
+       unit_price, vat_pct, vat_amount, total_price, currency,
+       quote_ref, quote_date, valid_until, warranty_note, source_file, source_page,
+       notes || ' Applied to MP043 as well as MP049 on the owner''s instruction: the same quoted model replaces both machines.'
+  from public.asset_replacement_costs
+ where source_file = 'SANY_quotation_for_pump_47m0724.pdf' and asset_no = 'MP049'
+   and not exists (select 1 from public.asset_replacement_costs
+                    where source_file = 'SANY_quotation_for_pump_47m0724.pdf' and asset_no = 'MP043');

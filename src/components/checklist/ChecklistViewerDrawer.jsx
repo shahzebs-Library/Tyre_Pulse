@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { X, ExternalLink, Download, Loader2 } from 'lucide-react'
 import ChecklistAnswers from './ChecklistAnswers'
-import { exportChecklistSubmissionPdf } from '../../lib/exportUtils'
+import { renderChecklistPdf } from '../../lib/checklistPdf'
 import { useTenant } from '../../contexts/TenantContext'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -41,22 +41,20 @@ export default function ChecklistViewerDrawer({ submissionId, onClose, onOpenFul
     return () => window.removeEventListener('keydown', onKey)
   }, [submissionId, onClose])
 
-  const templateFields = useMemo(() => (
-    Array.isArray(sub?.template_fields) ? sub.template_fields
-      : Array.isArray(sub?.fields) ? sub.fields : undefined
-  ), [sub])
-
+  // The one checklist renderer, the same one the page and the list use: a second
+  // exporter here would print a different sheet from the one on screen, which is
+  // how the remarks and the second and third signatures went missing.
   const downloadPdf = useCallback(async () => {
     if (!sub || exporting) return
     setExporting(true)
     try {
-      await exportChecklistSubmissionPdf(sub, { company, branding, fields: templateFields })
+      await renderChecklistPdf({ submission: sub, company, branding })
     } catch (err) {
       setError(toUserMessage(err, 'Could not generate the PDF.'))
     } finally {
       setExporting(false)
     }
-  }, [sub, exporting, company, branding, templateFields])
+  }, [sub, exporting, company, branding])
 
   if (!submissionId) return null
 

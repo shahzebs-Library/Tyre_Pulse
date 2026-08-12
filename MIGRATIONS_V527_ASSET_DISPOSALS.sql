@@ -1,0 +1,50 @@
+-- V527 / V527b  ASSET DISPOSAL REGISTER   (APPLIED LIVE 2026-08-12)
+--
+-- The owner sent SCRAP_ASSET_LIST.xlsx, a disposal-committee paper: 37 KSA
+-- machines proposed to scrap or sell. Nothing in the system held that decision.
+--
+-- WHY A NEW TABLE RATHER THAN fleet_renewal_plans. That table exists, is EMPTY
+-- (0 rows), and answers a different question: "what do we buy to replace this".
+-- A disposal is the other half of the conversation and carries facts a renewal
+-- plan has nowhere to put - condition, scrap versus sell, where the machine
+-- physically sits now, proceeds, and who approved it. The two are linked by
+-- asset code, not merged.
+--
+-- The column is named `site` (not `location`) ON PURPOSE so the existing
+-- normalize_site trigger applies. It earned that immediately: the file writes
+-- 'RUMAH ', 'Red Sea', 'RED SEA' and 'Amala', and the trigger folded them onto
+-- the registered spellings without a disposal ever inventing a new site.
+--
+-- WHAT WAS LOADED, and what it found (measured, not assumed):
+--   37 rows: 27 to scrap, 10 to sell.
+--   34 are in the KSA fleet register. THREE ARE NOT - BP022, BP023, TM192 -
+--   with zero job cards and zero spend. They were never entered in KSA. They
+--   are loaded and flagged, never dropped: a machine missing from the register
+--   is a finding, not a blank row.
+--   24 of the 37 are still status Active in vehicle_fleet, so the live fleet
+--   count is overstated by 24 machines until somebody acts on this paper.
+--   SAR 2,260,917 of maintenance has been spent on them across 2,026 job cards.
+--   37 tyres are STILL FITTED to 10 of them, with real serial numbers.
+--
+-- The meter is stored VERBATIM in meter_text because the file writes 'N/A',
+-- 'Km Not working', '-' and '23019 H  / KM 120140'. meter_km / meter_hours are
+-- filled ONLY where the value is unambiguous (27 km, 1 hours, MP049 has both).
+-- A meter nobody could read stays NULL. Writing 0 would read as a brand new
+-- machine, which is the opposite of the truth on a scrap list.
+--
+-- estimated_value and sale_proceeds are entirely NULL: nobody has valued these
+-- assets. Every surface must print "Not valued", never SAR 0 - an unvalued
+-- fleet and a worthless one are different statements.
+--
+-- ROLLBACK: drop table public.asset_disposals cascade;
+--           drop function public.get_asset_disposal_register(text);
+--
+-- The applied DDL is reproduced below. The 37 data rows were loaded from the
+-- workbook with organisation_id set EXPLICITLY (app_current_org() is NULL
+-- outside a user session and a null-org row is invisible to everyone), and are
+-- re-loadable from the source file at any time - the unique key makes a second
+-- load a no-op rather than a duplicate.
+
+-- ... see supabase_migrations.schema_migrations entries
+--     'v527_asset_disposals' and 'v527b_asset_disposal_register_rpc'
+--     for the exact applied bodies.

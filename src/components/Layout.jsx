@@ -717,7 +717,13 @@ export default function Layout({ children }) {
   const [searching, setSearching]             = useState(false)
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [alertCount, setAlertCount]           = useState(0)
-  const [hoveredItem, setHoveredItem]         = useState(null)
+  // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
+  // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
+  // therefore re-rendered this whole component, which re-ran the permission
+  // filter over ~186 nav items on every frame of the movement. Deleted rather
+  // than memoised: dead state is not worth keeping fast. If a hover effect is
+  // ever wanted, do it in CSS (:hover) or inside the leaf NavLink, so it cannot
+  // re-render the nav tree again.
   // Org-wide sidebar customization (super-admin Navigation Customizer). Loaded
   // once, best-effort; {} → applyNavLayout returns the built-in defaults, so this
   // is a no-op when no layout is configured. Applied BEFORE role/flag filtering
@@ -1049,8 +1055,6 @@ export default function Layout({ children }) {
                           to={to}
                           end={end}
                           title={!sidebarOpen ? navLabel : undefined}
-                          onMouseEnter={() => setHoveredItem(to)}
-                          onMouseLeave={() => setHoveredItem(null)}
                           className={({ isActive }) =>
                             `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group

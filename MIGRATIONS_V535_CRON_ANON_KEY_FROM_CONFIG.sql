@@ -1,9 +1,19 @@
 -- =====================================================================
 -- V535  THE CRON JOBS STOP CARRYING A BAKED-IN KEY
--- STATUS: AUTHORED, **NOT APPLIED**. This session had no database access
---         (the Supabase connector was unauthenticated), so nothing below has
---         been run or verified against the live project. Apply it, then run
---         the VERIFY block at the bottom, before believing any of it.
+-- STATUS: APPLIED LIVE 2026-08-12 (project jhssdmeruxtrlqnwfksc)
+--         v535_cron_anon_key_from_config  - seed + the two cron jobs
+--         v535b_workflow_deliverer_reads_anon_key
+--         v535c_deliver_workflow_notifications_reads_anon_key
+--
+-- VERIFIED AFTER APPLYING: cron_config.anon_key seeded; both cron jobs active,
+-- carrying no literal and reading from cron_config; and a whole-database sweep
+-- finds NO literal key left in any cron job or any function body.
+--
+-- NOTE ON SCOPE, worth keeping. This file was written against the repo and
+-- named THREE call sites. The live sweep found FOUR: public.
+-- deliver_workflow_notifications also carried the key and appears in no
+-- MIGRATIONS_V*.sql file at all. The repo is a lower bound on what exists in
+-- this database - sweep the catalog, do not grep the repo.
 -- =====================================================================
 --
 -- WHAT THIS IS, AND WHAT IT IS NOT
@@ -137,25 +147,20 @@ select cron.schedule(
 );
 
 -- ---------------------------------------------------------------------
--- 3. The notification deliverer.
+-- 3. The two notification deliverer FUNCTIONS - done in V535b / V535c.
 --
--- NOT rewritten here on purpose. `consume_workflow_notifications` is a long
--- plpgsql function whose body this session could not read from the live
--- database, and reproducing 100+ lines from the V119 file risks shipping a
--- stale copy over a version that has since been changed - the exact mistake
--- recorded elsewhere in this repo's history.
+-- Originally left for a hand edit, because reproducing a 100+ line plpgsql body
+-- from the V119 file risks shipping a stale copy over a version changed since.
+-- V535b/V535c avoid that completely: each reads the LIVE definition with
+-- pg_get_functiondef, swaps ONLY the literal via regexp_replace, and re-creates
+-- from that exact text, aborting if the substitution matches nothing. No byte
+-- is transcribed, so nothing can drift.
 --
--- Apply it by hand instead, as a targeted edit of the LIVE definition:
+--   V535b  public.consume_workflow_notifications
+--   V535c  public.deliver_workflow_notifications   <- found only by a live sweep
 --
---   1. select pg_get_functiondef('public.consume_workflow_notifications'::regproc);
---   2. add near the top, beside the existing v_secret lookup:
---        select value into v_anon from public.cron_config where name = 'anon_key';
---      (declare v_anon text;)
---   3. replace   'Bearer eyJ...'   with   'Bearer ' || v_anon
---   4. re-create the function from that edited text.
---
--- The function already reads `workflow_notify_secret` from cron_config in
--- exactly this way, so the line to copy is a few rows above the one to change.
+-- Both end with a whole-database check that no literal key remains in any cron
+-- job or any function body. That check is what found the second function.
 -- ---------------------------------------------------------------------
 
 -- =====================================================================

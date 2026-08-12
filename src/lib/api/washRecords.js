@@ -18,8 +18,14 @@ export const COLS =
 /** Controlled vocabularies (mirror the DB CHECK constraints). */
 export const WASH_TYPES = ['Exterior', 'Interior', 'Full', 'Engine Bay', 'Undercarriage', 'Steam', 'Waterless']
 /**
- * Full DB CHECK vocabulary (V534). 'In Progress' is NOT a member: the check
- * allows exactly these four, so writing anything else fails the insert.
+ * Full DB CHECK vocabulary (V534c). 'In Progress' IS a member - the mobile app
+ * has always written it, and V534 briefly excluded it, which would have failed
+ * every driver's wash save. A status arriving as 'In Progress' is preserved,
+ * never quietly promoted to 'Completed': the machine is still in the bay, and
+ * rewriting that would report an unfinished wash as work done.
+ *
+ * Only 'Completed' counts as compliance - see NON_WORK_STATUSES in
+ * washAnalytics.js, which mirrors this list. Change both together.
  */
 export const WASH_STATUSES = ['Completed', 'In Progress', 'Scheduled', 'Missed', 'Cancelled']
 /** The statuses a supervisor picks when logging a wash. Default = first. */

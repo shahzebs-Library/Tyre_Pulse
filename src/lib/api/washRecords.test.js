@@ -96,13 +96,39 @@ describe('createWashRecord', () => {
     expect(payload).not.toHaveProperty('bogus_field')
   })
 
-  it('coerces an invalid wash_type to null and an invalid status to the In Progress default', async () => {
+  it('coerces an invalid wash_type to null and an invalid status to the Completed default', async () => {
     h.state.tables.wash_records = { data: { id: 'w3' }, error: null }
     await api.createWashRecord({ asset_no: 'A1', wash_type: 'Wax', status: 'Weird' })
     const rec = lastCall('wash_records')
     const [payload] = opArgs(rec, 'insert')[0]
     expect(payload.wash_type).toBeNull()
+    expect(payload.status).toBe('Completed')
+  })
+
+  // 'In Progress' was retired by V534: the CHECK now allows exactly
+  // Completed | Scheduled | Missed | Cancelled, so writing it would fail the
+  // insert. It must fall back to the default, never reach the database.
+  it('preserves In Progress rather than promoting it to Completed', async () => {
+    h.state.tables.wash_records = { data: { id: 'w4' }, error: null }
+    await api.createWashRecord({ asset_no: 'A1', status: 'In Progress' })
+    const [payload] = opArgs(lastCall('wash_records'), 'insert')[0]
+    // Promoting it would report a wash still in the bay as work done.
     expect(payload.status).toBe('In Progress')
+    expect(api.WASH_STATUSES).toContain('In Progress')
+  })
+
+  it('writes a schedule as a plan with no time or operator', async () => {
+    h.state.tables.wash_records = { data: { id: 'w5' }, error: null }
+    await api.scheduleWash({ asset_no: 'A1', wash_date: '2026-09-01', wash_time: '08:00', washed_by: 'Sam' })
+    const [payload] = opArgs(lastCall('wash_records'), 'insert')[0]
+    expect(payload.status).toBe('Scheduled')
+    // A wash that has not happened has no time of day and nobody performed it.
+    expect(payload.wash_time).toBeNull()
+    expect(payload.washed_by).toBeNull()
+  })
+
+  it('refuses to schedule without a date', async () => {
+    await expect(api.scheduleWash({ asset_no: 'A1' })).rejects.toThrow(/date/i)
   })
 
   it('throws when asset_no is missing', async () => {

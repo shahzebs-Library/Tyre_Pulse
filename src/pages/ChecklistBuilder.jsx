@@ -5,7 +5,7 @@ import {
   ChevronUp, ChevronDown, GripVertical, AlertCircle, CheckCircle2, XCircle,
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
-  Truck, MapPin, User, Sparkles, Link2, Lock, FileSpreadsheet,
+  Truck, MapPin, User, Sparkles, Link2, Lock, FileSpreadsheet, Languages,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -14,6 +14,10 @@ import {
   validateTemplate, fieldTypeDef, isReferenceField, referenceSource,
   FIELD_LIBRARY, fieldFromLibrary, isAutoField,
 } from '../lib/checklist/fieldTypes'
+import {
+  TRANSLATABLE_LANGS, langMeta, optionSetNames,
+  missingTranslations, translationCoverage,
+} from '../lib/checklist/checklistI18n'
 import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
 } from '../lib/api/checklists'
@@ -190,6 +194,237 @@ function OptionsEditor({ options, onChange }) {
       >
         <Plus className="w-3.5 h-3.5" /> Add option
       </button>
+    </div>
+  )
+}
+
+// ─── Translation editors ─────────────────────────────────────────────────────
+// The English text is the SOURCE and the stored answer value; these editors
+// only add what a reader sees. See src/lib/checklist/checklistI18n.js.
+
+/** One text box per translatable language, over a { lang: string } map. */
+function TranslationRow({ value, onChange, placeholderFor, rows = 0 }) {
+  const map = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  const set = (code, text) => {
+    const next = { ...map }
+    if (String(text || '').trim()) next[code] = text
+    else delete next[code]     // an empty box means "not translated", not ""
+    onChange(next)
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {TRANSLATABLE_LANGS.map((code) => {
+        const meta = langMeta(code)
+        const common = {
+          value: map[code] || '',
+          onChange: (e) => set(code, e.target.value),
+          placeholder: placeholderFor ? placeholderFor(code) : meta.native,
+          className: INPUT_CLS,
+          dir: meta.dir,
+          lang: code,
+        }
+        return (
+          <div key={code}>
+            <label className="block text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+              {meta.label} <span className="normal-case font-normal" dir={meta.dir}>{meta.native}</span>
+            </label>
+            {rows > 0 ? <textarea rows={rows} {...common} /> : <input type="text" {...common} />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Per-option translations: one column per language, one row per English option,
+ * aligned BY INDEX (that is the alignment checklistI18n resolves against). A
+ * blank cell falls back to the English option at runtime.
+ */
+function OptionTranslationEditor({ options, value, onChange }) {
+  const list = Array.isArray(options) ? options : []
+  const map = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  if (!list.length) return null
+
+  const set = (code, i, text) => {
+    const arr = Array.isArray(map[code]) ? [...map[code]] : []
+    while (arr.length < list.length) arr.push('')
+    arr[i] = text
+    const next = { ...map }
+    if (arr.some((v) => String(v || '').trim())) next[code] = arr.slice(0, list.length)
+    else delete next[code]
+    onChange(next)
+  }
+
+  return (
+    <div>
+      <label className={LABEL_CLS}>Option translations</label>
+      <div className="space-y-2">
+        {list.map((opt, i) => (
+          <div key={i} className="rounded-lg border border-[var(--border-dim)] p-2 space-y-1.5">
+            <p className="text-xs text-[var(--text-primary)] font-medium truncate">{opt || `Option ${i + 1}`}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {TRANSLATABLE_LANGS.map((code) => {
+                const meta = langMeta(code)
+                return (
+                  <input
+                    key={code}
+                    type="text"
+                    value={(Array.isArray(map[code]) ? map[code][i] : '') || ''}
+                    onChange={(e) => set(code, i, e.target.value)}
+                    placeholder={meta.native}
+                    dir={meta.dir}
+                    lang={code}
+                    className={INPUT_CLS}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+        A blank cell shows the English option. The answer is recorded in English either way.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Shared option sets: define an answer legend ONCE and point many lines at it.
+ * Both Green Concrete sheets do exactly this with a six-value 'legend'.
+ */
+function OptionSetsEditor({ sets, onChange }) {
+  const map = sets && typeof sets === 'object' && !Array.isArray(sets) ? sets : {}
+  const names = Object.keys(map)
+  const [newName, setNewName] = useState('')
+
+  const setSet = (name, next) => onChange({ ...map, [name]: next })
+  const removeSet = (name) => {
+    const next = { ...map }
+    delete next[name]
+    onChange(next)
+  }
+  const add = () => {
+    const name = newName.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_')
+    if (!name || map[name]) return
+    onChange({ ...map, [name]: { options: ['OK', 'Not OK'], i18n: {} } })
+    setNewName('')
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h4 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <ListChecks className="w-4 h-4 text-[var(--brand-bright)]" /> Shared answer lists
+        </h4>
+        <p className="text-xs text-[var(--text-muted)] mt-0.5">
+          Define a legend once, then point any choice field at it. Editing the list
+          updates every line that uses it.
+        </p>
+      </div>
+
+      {names.length === 0 && (
+        <p className="text-xs text-[var(--text-muted)] italic">No shared lists yet.</p>
+      )}
+
+      {names.map((name) => {
+        const set = map[name] || {}
+        const opts = Array.isArray(set.options) ? set.options : []
+        return (
+          <div key={name} className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md bg-brand-subtle text-[var(--brand-bright)] text-xs font-mono">{name}</span>
+              <span className="text-[11px] text-[var(--text-muted)]">{opts.length} option(s)</span>
+              <button
+                type="button"
+                onClick={() => removeSet(name)}
+                className="ml-auto p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                title="Remove this list"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+            <OptionsEditor options={opts} onChange={(o) => setSet(name, { ...set, options: o })} />
+            <OptionTranslationEditor
+              options={opts}
+              value={set.i18n}
+              onChange={(i18n) => setSet(name, { ...set, i18n })}
+            />
+          </div>
+        )
+      })}
+
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="New list name, e.g. legend"
+          className={INPUT_CLS}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={!newName.trim()}
+          className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[var(--brand-bright)] hover:opacity-80 disabled:opacity-40"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add list
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Which languages this template is complete in, and what is still missing. */
+function TranslationStatus({ template }) {
+  const coverage = translationCoverage(template)
+  const [openLang, setOpenLang] = useState(null)
+  const missing = openLang ? missingTranslations(template, openLang) : []
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          <Languages className="w-3.5 h-3.5" /> Languages
+        </span>
+        {coverage.map((c) => (
+          <button
+            key={c.lang}
+            type="button"
+            onClick={() => setOpenLang(openLang === c.lang ? null : c.lang)}
+            className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+              c.complete
+                ? 'border-[var(--brand-bright)] text-[var(--brand-bright)] bg-brand-subtle'
+                : 'border-[var(--border-dim)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+            title={c.complete ? 'Complete' : `${c.missing} item(s) not translated`}
+          >
+            {langMeta(c.lang).label}: {c.complete ? 'complete' : `${c.missing} missing`}
+          </button>
+        ))}
+      </div>
+      {openLang && (
+        <div className="rounded-lg border border-[var(--border-dim)] bg-[var(--surface-2)] p-2.5 max-h-48 overflow-y-auto">
+          {missing.length === 0 ? (
+            <p className="text-xs text-[var(--brand-bright)]">
+              Nothing missing in {langMeta(openLang).label}.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {missing.map((m, i) => (
+                <li key={`${m.kind}-${m.id}-${i}`} className="text-xs text-[var(--text-muted)] flex items-start gap-2">
+                  <span className="shrink-0 px-1.5 rounded bg-[var(--surface-1)] text-[10px] uppercase tracking-wide">
+                    {m.kind === 'option_set' ? 'list' : m.kind}
+                  </span>
+                  <span className="min-w-0 truncate text-[var(--text-primary)]">{m.label}</span>
+                  {m.count ? <span className="shrink-0">({m.count})</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -493,7 +728,7 @@ function ScoringEditor({ field, onChange }) {
 
 // ─── Field editor row ─────────────────────────────────────────────────────────
 
-function FieldRow({ field, index, total, expanded, error, allFields, scored, onToggleExpand, onChange, onMove, onRemove, onDuplicate }) {
+function FieldRow({ field, index, total, expanded, error, allFields, scored, template, onToggleExpand, onChange, onMove, onRemove, onDuplicate }) {
   const def = fieldTypeDef(field.type)
   const Icon = TYPE_ICON[field.type] || Type
   const layout = isLayoutField(field.type)
@@ -678,8 +913,55 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
             </div>
           )}
 
+          {/* Label translations. English above stays the source text. */}
+          <div>
+            <label className={LABEL_CLS}>
+              {layout ? 'Section heading' : 'Label'} translations{' '}
+              <span className="text-[var(--text-muted)] font-normal normal-case">(optional)</span>
+            </label>
+            <TranslationRow
+              value={field.labels}
+              onChange={(labels) => set('labels', labels)}
+              placeholderFor={() => field.label || 'Same as English'}
+            />
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">
+              Left blank, the reader sees the English text.
+            </p>
+          </div>
+
           {typeHasOptions(field.type) && (
-            <OptionsEditor options={field.options} onChange={(opts) => set('options', opts)} />
+            <>
+              {/* Point this line at a shared list instead of its own options. */}
+              {optionSetNames(template).length > 0 && (
+                <div>
+                  <label className={LABEL_CLS}>Answer list</label>
+                  <select
+                    value={field.options_ref || ''}
+                    onChange={(e) => set('options_ref', e.target.value || null)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="">This field has its own options</option>
+                    {optionSetNames(template).map((n) => (
+                      <option key={n} value={n}>Shared list: {n}</option>
+                    ))}
+                  </select>
+                  {field.options_ref && (
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                      Taken from the shared list in Template settings. The options below
+                      are kept as a fallback if that list is ever removed.
+                    </p>
+                  )}
+                </div>
+              )}
+              <OptionsEditor options={field.options} onChange={(opts) => set('options', opts)} />
+              {!field.options_ref && (
+                <OptionTranslationEditor
+                  options={field.options}
+                  value={field.options_i18n}
+                  onChange={(m) => set('options_i18n', m)}
+                />
+              )}
+            </>
           )}
 
           {!layout && (
@@ -699,6 +981,16 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, onT
                     onChange={(v) => set('allow_photo', v)}
                     label="Allow photo"
                     hint="Attach a photo to this answer"
+                  />
+                </div>
+              )}
+              {!isMedia && (
+                <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)]">
+                  <Toggle
+                    checked={!!field.allow_note}
+                    onChange={(v) => set('allow_note', v)}
+                    label="Allow remark"
+                    hint="A remarks box beside this line"
                   />
                 </div>
               )}
@@ -1047,7 +1339,14 @@ function blankDraft(country) {
     scored: false,
     pass_threshold: null,
     fields: [],
+    name_i18n: {},
+    description_i18n: {},
+    option_sets: {},
   }
+}
+
+function i18nMap(v) {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {}
 }
 
 function toDraft(row, country) {
@@ -1066,6 +1365,9 @@ function toDraft(row, country) {
         ? null
         : Math.min(100, Math.max(0, Number(row.pass_threshold))),
     fields: Array.isArray(row.fields) ? row.fields.map((f) => ({ ...newField(f.type), ...f })) : [],
+    name_i18n: i18nMap(row.name_i18n),
+    description_i18n: i18nMap(row.description_i18n),
+    option_sets: i18nMap(row.option_sets),
   }
 }
 
@@ -1376,6 +1678,14 @@ export default function ChecklistBuilder() {
       require_approval: !!draft.require_approval,
       scored,
       pass_threshold: scored ? passThreshold : null,
+      // Translations are part of the template. This builder rebuilds every
+      // field from an explicit key list, so anything not named here is DROPPED
+      // on save: leaving the i18n keys out would have silently wiped the
+      // owner's Arabic, Hindi and Urdu the first time someone opened one of
+      // these templates and pressed Save.
+      name_i18n: i18nMap(draft.name_i18n),
+      description_i18n: i18nMap(draft.description_i18n),
+      option_sets: i18nMap(draft.option_sets),
       fields: list.map((f) => {
         const valueField = isValueField(f.type)
         const w = Number(f.weight)
@@ -1392,6 +1702,12 @@ export default function ChecklistBuilder() {
           section: f.section ?? null,
           required: !!f.required,
           allow_photo: !!f.allow_photo,
+          allow_note: !!f.allow_note,
+          // Per-line translations, and the shared answer list this line points
+          // at (its own `options` stay as the fallback).
+          labels: i18nMap(f.labels),
+          options_i18n: typeHasOptions(f.type) ? i18nMap(f.options_i18n) : {},
+          options_ref: typeHasOptions(f.type) && f.options_ref ? String(f.options_ref) : null,
           options: typeHasOptions(f.type) ? (f.options || []).map((o) => String(o).trim()).filter(Boolean) : [],
           min: f.type === 'number' ? (f.min ?? null) : null,
           max: f.type === 'number' ? (f.max ?? null) : null,
@@ -1549,6 +1865,13 @@ export default function ChecklistBuilder() {
                 placeholder="e.g. Daily Pre-Trip Tyre Inspection"
                 className={INPUT_CLS}
               />
+              <div className="mt-2">
+                <TranslationRow
+                  value={draft.name_i18n}
+                  onChange={(v) => set('name_i18n', v)}
+                  placeholderFor={() => draft.name || 'Same as English'}
+                />
+              </div>
             </div>
 
             <div>
@@ -1562,7 +1885,18 @@ export default function ChecklistBuilder() {
                 placeholder="What this checklist covers and when to complete it"
                 className={`${INPUT_CLS} resize-none`}
               />
+              <div className="mt-2">
+                <TranslationRow
+                  value={draft.description_i18n}
+                  onChange={(v) => set('description_i18n', v)}
+                  rows={2}
+                  placeholderFor={() => 'Same as English'}
+                />
+              </div>
             </div>
+
+            {/* Which languages this checklist can actually be read in. */}
+            <TranslationStatus template={draft} />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -1634,6 +1968,11 @@ export default function ChecklistBuilder() {
                   hint="Route through the approval engine"
                 />
               </div>
+            </div>
+
+            {/* Shared answer lists, pointed at by choice fields. */}
+            <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)]">
+              <OptionSetsEditor sets={draft.option_sets} onChange={(v) => set('option_sets', v)} />
             </div>
 
             {/* Scoring */}
@@ -1773,6 +2112,7 @@ export default function ChecklistBuilder() {
                     error={fieldErrors[f.id]}
                     allFields={fields}
                     scored={!!draft.scored}
+                    template={draft}
                     onToggleExpand={toggleExpand}
                     onChange={(next) => changeField(f.id, next)}
                     onMove={moveField}

@@ -2,7 +2,15 @@
  * Checklist field-type registry — the single source of truth shared by the
  * template builder, the runtime form, and read-only rendering. Pure module: no
  * React, no network. Field shape (embedded in checklist_templates.fields):
- *   { id, type, label, help, section?, required, allow_photo, options[], min, max, default }
+ *   { id, type, label, help, section?, required, allow_photo, allow_note,
+ *     options[], min, max, default,
+ *     labels{lang}, options_i18n{lang:[]}, options_ref }
+ *
+ * The translation keys (labels / options_i18n / options_ref) are RESOLVED by
+ * `src/lib/checklist/checklistI18n.js` - this module only carries them so the
+ * builder and the runtime keep the same field shape. `allow_note` mirrors
+ * `allow_photo`: the line gets its own remark box, stored in
+ * checklist_submissions.notes keyed by field id.
  */
 
 // Stable id for a new field (browser crypto with a safe fallback).
@@ -149,7 +157,17 @@ export function newField(type = 'text') {
     help: '',
     required: false,
     allow_photo: false,
+    // A per-line remark box (both paper sheets carry a Remarks column beside
+    // every line - that is where a fitter says WHY something is not OK).
+    allow_note: false,
     options: def.hasOptions ? ['Option 1', 'Option 2'] : [],
+    // Translations of this line, resolved by checklistI18n. `labels` is keyed
+    // by language; `options_i18n` holds one array per language, parallel to
+    // `options`; `options_ref` names a shared list on template.option_sets and
+    // wins over `options`, which stays as the fallback.
+    labels: {},
+    options_i18n: {},
+    options_ref: null,
     min: null,
     max: null,
     default: def.type === 'multiselect' ? [] : '',
@@ -272,49 +290,103 @@ export function blankAnswer(field) {
  * Validate one answer against its field. Returns an error string, or null when
  * valid. Only enforces what the field declares (required, numeric bounds, that a
  * choice is within the option set).
+ *
+ * `opts.label`   - the label to name in the message (the runtime passes the
+ *                  reader's language, so the error reads in the same language
+ *                  as the line it points at).
+ * `opts.options` - the allowed ENGLISH values, when the field takes them from a
+ *                  shared option set (`options_ref`) rather than its own list.
  */
-export function validateAnswer(field, value) {
+export function validateAnswer(field, value, opts = {}) {
   if (!field || isLayoutField(field.type)) return null
+  const name = String(opts.label || field.label || '').trim()
   const empty =
     value == null ||
     value === '' ||
     (Array.isArray(value) && value.length === 0)
 
-  if (field.required && empty) return `${field.label || 'This field'} is required`
+  if (field.required && empty) return `${name || 'This field'} is required`
   if (empty) return null
 
   if (field.type === 'number') {
     const n = Number(value)
-    if (Number.isNaN(n)) return `${field.label || 'Value'} must be a number`
-    if (field.min != null && n < Number(field.min)) return `${field.label || 'Value'} must be ≥ ${field.min}`
-    if (field.max != null && n > Number(field.max)) return `${field.label || 'Value'} must be ≤ ${field.max}`
+    if (Number.isNaN(n)) return `${name || 'Value'} must be a number`
+    if (field.min != null && n < Number(field.min)) return `${name || 'Value'} must be at least ${field.min}`
+    if (field.max != null && n > Number(field.max)) return `${name || 'Value'} must be at most ${field.max}`
   }
-  if (field.type === 'select' && field.options?.length && !field.options.includes(value)) {
-    return `Choose a valid option for ${field.label || 'this field'}`
+  // A field pointing at a shared option set carries the resolved values in
+  // opts.options; falling back to its own `options` keeps every existing
+  // template working. When neither is known the membership check is skipped
+  // rather than rejecting a valid answer.
+  const allowed = Array.isArray(opts.options) && opts.options.length
+    ? opts.options
+    : (Array.isArray(field.options) ? field.options : [])
+  if (field.type === 'select' && allowed.length && !allowed.includes(value)) {
+    return `Choose a valid option for ${name || 'this field'}`
   }
-  if (field.type === 'multiselect' && field.options?.length) {
-    const bad = (Array.isArray(value) ? value : []).filter((v) => !field.options.includes(v))
-    if (bad.length) return `Invalid option(s) for ${field.label || 'this field'}`
+  if (field.type === 'multiselect' && allowed.length) {
+    const bad = (Array.isArray(value) ? value : []).filter((v) => !allowed.includes(v))
+    if (bad.length) return `Invalid option(s) for ${name || 'this field'}`
   }
   if (field.type === 'rating') {
     const n = Number(value)
-    if (Number.isNaN(n) || n < 0 || n > 5) return `${field.label || 'Rating'} must be 0-5`
+    if (Number.isNaN(n) || n < 0 || n > 5) return `${name || 'Rating'} must be 0-5`
   }
   return null
+}
+
+/** The signature-type fields of a template, in template order. */
+export function signatureFields(fields) {
+  return (Array.isArray(fields) ? fields : []).filter((f) => f?.type === 'signature' && f.id)
+}
+
+/**
+ * Required signature fields that have not been signed. A sheet signed off by
+ * three trades (mechanic, auto electrician, inspecting engineer) has three
+ * separate required signatures, so they are validated per field like any other
+ * required answer - a missing one must name WHICH signature is missing.
+ * `signatures` is the { fieldId: dataUrl } map. Hidden fields are exempt.
+ */
+export function validateSignatures(fields, signatures = {}, answers = {}, opts = {}) {
+  const errors = {}
+  const labelOf = typeof opts.labelFor === 'function' ? opts.labelFor : null
+  for (const f of signatureFields(fields)) {
+    if (!f.required) continue
+    if (!isFieldVisible(f, answers)) continue
+    const signed = signatures?.[f.id]
+    if (typeof signed === 'string' && signed) continue
+    const name = String((labelOf && labelOf(f)) || f.label || '').trim()
+    errors[f.id] = `${name || 'Signature'} is required`
+  }
+  return errors
 }
 
 /**
  * Validate a whole template's answers. Returns { valid, errors:{fieldId:msg} }.
  * `fields` = template.fields, `answers` = { fieldId: value }.
+ *
+ * `opts.signatures` - the { fieldId: dataUrl } map. When provided, required
+ *   signature FIELDS are validated too. Omitted (the historic two-argument
+ *   call) they are skipped exactly as before.
+ * `opts.labelFor(field)` / `opts.optionsFor(field)` - hooks the runtime uses to
+ *   supply the translated label and the resolved option values.
  */
-export function validateSubmission(fields, answers) {
+export function validateSubmission(fields, answers, opts = {}) {
   const errors = {}
+  const labelOf = typeof opts.labelFor === 'function' ? opts.labelFor : null
+  const optionsOf = typeof opts.optionsFor === 'function' ? opts.optionsFor : null
   for (const f of Array.isArray(fields) ? fields : []) {
     if (isLayoutField(f.type) || f.type === 'photo' || f.type === 'signature') continue
     // A hidden (conditionally excluded) field is not required/validated.
     if (!isFieldVisible(f, answers)) continue
-    const err = validateAnswer(f, answers?.[f.id])
+    const err = validateAnswer(f, answers?.[f.id], {
+      label: labelOf ? labelOf(f) : undefined,
+      options: optionsOf ? optionsOf(f) : undefined,
+    })
     if (err) errors[f.id] = err
+  }
+  if (opts.signatures) {
+    Object.assign(errors, validateSignatures(fields, opts.signatures, answers, opts))
   }
   return { valid: Object.keys(errors).length === 0, errors }
 }
@@ -342,6 +414,7 @@ export function validateTemplate(template) {
 export default {
   FIELD_TYPES, fieldTypeDef, typeHasOptions, isLayoutField, isValueField,
   newField, newFieldId, blankAnswer, validateAnswer, validateSubmission, validateTemplate,
+  signatureFields, validateSignatures,
   evalCondition, isFieldVisible, computeScore,
   REFERENCE_TYPES, isReferenceField, referenceSource, FIELD_LIBRARY, fieldFromLibrary,
   AUTO_VALUES, isAutoField, resolveAutoValue,

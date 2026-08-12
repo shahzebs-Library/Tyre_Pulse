@@ -7,14 +7,25 @@
  */
 import { supabase, unwrap, applyCountry } from './_client'
 
+// name_i18n / description_i18n / option_sets carry the template's translations:
+// the checklist is read on the floor by mechanics who read Arabic, Hindi or
+// Urdu, and option_sets holds the shared answer legend a whole sheet points at.
 const TEMPLATE_COLS =
-  'id,organisation_id,country,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,created_by,created_at,updated_at'
+  'id,organisation_id,country,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,created_by,created_at,updated_at,'
+  + 'name_i18n,description_i18n,option_sets'
 // Approval columns (V212) are part of the row a reader needs: a checklist that
 // was rejected, or is still waiting for a signature, reads very differently from
 // one that was accepted, and leaving them out made every submission look final.
 const SUBMISSION_COLS =
   'id,template_id,template_name,template_version,country,site,asset_no,title,status,answers,photos,signature_data,printed_name,score_pct,score_passed,submitted_by,submitted_at,created_at,updated_at,'
-  + 'approval_status,approver_name,approved_at,review_note,locked'
+  + 'approval_status,approver_name,approved_at,review_note,locked,'
+  // `signatures` holds EVERY captured signature keyed by field id (a workshop
+  // sheet is signed by three trades); `signature_data` stays the primary
+  // sign-off so everything already reading it is unchanged. `notes` is the
+  // per-line remark. Both sit beside `answers` rather than inside it, because
+  // `answers` is rendered as a table in the viewer, the PDF and Excel, where a
+  // base64 image prints as a wall of characters.
+  + 'signatures,notes'
 
 const PHOTO_BUCKET = 'tyre-photos' // shared media bucket (private — served via signed URLs)
 const SIGNED_URL_TTL_SECONDS = 60 * 60
@@ -91,6 +102,9 @@ export async function createTemplate(values) {
     scored: !!values.scored,
     pass_threshold: values.pass_threshold ?? null,
     fields: Array.isArray(values.fields) ? values.fields : [],
+    name_i18n: values.name_i18n ?? {},
+    description_i18n: values.description_i18n ?? {},
+    option_sets: values.option_sets ?? {},
   }
   return unwrap(await supabase.from('checklist_templates').insert(payload).select(TEMPLATE_COLS).single())
 }
@@ -125,6 +139,11 @@ export async function duplicateTemplate(id) {
     scored: src.scored,
     pass_threshold: src.pass_threshold,
     fields: src.fields || [],
+    // Carry the translations across: a copy that silently loses its Arabic,
+    // Hindi and Urdu is not a copy of the checklist anyone approved.
+    name_i18n: src.name_i18n || {},
+    description_i18n: src.description_i18n || {},
+    option_sets: src.option_sets || {},
   })
 }
 
@@ -149,8 +168,17 @@ export async function getSubmission(id) {
   // answer keys. Best-effort: a submission still renders if the template is gone.
   if (row && row.template_id) {
     try {
-      const tpl = unwrap(await supabase.from('checklist_templates').select('fields').eq('id', row.template_id).maybeSingle())
+      const tpl = unwrap(await supabase.from('checklist_templates')
+        .select('fields,option_sets,name_i18n,description_i18n').eq('id', row.template_id).maybeSingle())
       if (tpl && Array.isArray(tpl.fields)) row.template_fields = tpl.fields
+      // The shared option sets + template translations travel with the fields so
+      // a reader can render the stored (English) answers in the reader's own
+      // language without a second fetch.
+      if (tpl) row.template_i18n = {
+        option_sets: tpl.option_sets || {},
+        name_i18n: tpl.name_i18n || {},
+        description_i18n: tpl.description_i18n || {},
+      }
     } catch { /* template lookup is non-fatal */ }
   }
   // Sign photo URLs so the private bucket renders in the page + PDF.
@@ -173,6 +201,10 @@ export async function createSubmission(values) {
     status: values.status ?? 'submitted',
     answers: values.answers ?? {},
     photos: values.photos ?? {},
+    // Every captured signature, keyed by field id, exactly as `photos` is.
+    signatures: values.signatures ?? {},
+    // One remark per line, keyed by field id: the paper Remarks column.
+    notes: values.notes ?? {},
     signature_data: values.signature_data ?? null,
     printed_name: values.printed_name ?? null,
     score_pct: values.score_pct ?? null,

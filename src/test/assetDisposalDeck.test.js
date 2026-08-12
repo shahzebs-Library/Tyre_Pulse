@@ -30,6 +30,7 @@ import {
   localFleetReliability, fleetReliabilityFor, reliabilityBasisNotes, reliabilityBasisLines,
   spendYearsOf, spendIn, latestFullYear, worstBy, sortReliabilityRows,
   fleetComparison, localRecommendations, recommendationsFor, hasReliability, readField,
+  noteWhenMeasured,
 } from '../lib/assetDisposalDeck'
 import {
   renderDisposalDeckPptx, renderDisposalDeckPdf,
@@ -1250,5 +1251,29 @@ describe('catalog integrity', () => {
       expect(DECK_BLOCKS[k].description.length).toBeGreaterThan(20)
       expect(/[^\x20-\x7E]/.test(DECK_BLOCKS[k].description)).toBe(false)
     }
+  })
+})
+
+describe('a caption never drops "Not measured" into the middle of a sentence', () => {
+  it('builds the sentence only when every figure in it was measured', () => {
+    expect(noteWhenMeasured(5, () => 'On 5 cards.', 'Fallback.')).toBe('On 5 cards.')
+    expect(noteWhenMeasured(null, () => 'On 5 cards.', 'Fallback.')).toBe('Fallback.')
+    expect(noteWhenMeasured([5, null], () => 'both', 'Fallback.')).toBe('Fallback.')
+    expect(noteWhenMeasured([5, 7], () => 'both', 'Fallback.')).toBe('both')
+  })
+
+  it('the parked-hours caption degrades to prose rather than broken prose', () => {
+    const note = RELIABILITY_KPI_ITEMS.parked_hours.note({ parked_cards: null })
+    expect(note).not.toMatch(/Not measured/)
+    expect(note).toMatch(/never counted as repair time/i)
+  })
+
+  it('the planned-share caption needs BOTH its figures', () => {
+    const note = RELIABILITY_KPI_ITEMS.preventive_share.note({ preventive_cards: 3, job_cards: null })
+    expect(note).not.toMatch(/Not measured/)
+  })
+
+  it('keeps the real sentence when the figures are there', () => {
+    expect(RELIABILITY_KPI_ITEMS.parked_hours.note({ parked_cards: 21 })).toMatch(/On 21 cards/)
   })
 })

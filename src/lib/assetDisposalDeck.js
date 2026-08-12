@@ -840,9 +840,15 @@ export function reliabilityBasisNotes(rows, { hours = true, dated = true, fleet 
   }
   if (dated) {
     if (f.date_coverage_pct != null) {
+      // The count of dated cards is only added when it was measured. Written
+      // unguarded it produced "(Not measured cards)" in the middle of the
+      // sentence, which reads as a bug rather than as a missing figure.
+      const total = num(f.job_cards) != null ? `the ${formatMetric(f.job_cards, 'int')} ` : ''
+      const datedCount = num(f.dated_cards) != null
+        ? ` (${formatMetric(f.dated_cards, 'int')} cards)`
+        : ''
       out.push(
-        `${formatMetric(f.date_coverage_pct, 'pct1')} of the ${formatMetric(f.job_cards, 'int')} job cards carry a usable date `
-        + '(' + formatMetric(f.dated_cards, 'int') + ' cards). '
+        `${formatMetric(f.date_coverage_pct, 'pct1')} of ${total}job cards carry a usable date${datedCount}. `
         + 'MTBF, failures per year, idle days and availability rest on that half and on nothing else.',
       )
     } else {
@@ -1307,6 +1313,25 @@ export function fleetComparison(baseline, currency = 'SAR') {
  * strip, the table and the recommendations cannot disagree. A tile with no
  * measurement prints "Not measured" and says why in its note.
  */
+/**
+ * A sentence that only exists when the figure in it does.
+ *
+ * `formatMetric` correctly returns "Not measured" for a null, but dropping that
+ * string into the middle of a sentence produces prose that is broken rather
+ * than honest - "On Not measured cards left open while the machine stood still".
+ * A reader takes that as a bug, and rightly. So a caption built from a figure
+ * is only built when every figure it needs was measured; otherwise it states
+ * what the line means and says nothing about a quantity nobody has.
+ *
+ * @param {Array} values  the figures the sentence interpolates
+ * @param {Function} build called only when all of them are present
+ * @param {string} fallback the sentence to use when one is missing
+ */
+export function noteWhenMeasured(values, build, fallback) {
+  const list = Array.isArray(values) ? values : [values]
+  return list.every((v) => num(v) != null) ? build() : fallback
+}
+
 export const RELIABILITY_KPI_ITEMS = {
   breakdown_hours: {
     label: 'Breakdown hours',
@@ -1316,7 +1341,11 @@ export const RELIABILITY_KPI_ITEMS = {
   parked_hours: {
     label: 'Parked hours (not downtime)',
     get: (f) => formatMetric(f.parked_hours, 'int'),
-    note: (f) => `On ${formatMetric(f.parked_cards, 'int')} cards left open while the machine stood still. Never counted as repair time.`,
+    note: (f) => noteWhenMeasured(
+      f.parked_cards,
+      () => `On ${formatMetric(f.parked_cards, 'int')} cards left open while the machine stood still. Never counted as repair time.`,
+      'Hours on job cards left open while the machine stood still. Never counted as repair time.',
+    ),
   },
   failures: {
     label: 'Failures on record',
@@ -1326,7 +1355,11 @@ export const RELIABILITY_KPI_ITEMS = {
   job_cards: {
     label: 'Job cards',
     get: (f) => formatMetric(f.job_cards, 'int'),
-    note: (f) => `${formatMetric(f.dated_cards, 'int')} of them carry a usable date.`,
+    note: (f) => noteWhenMeasured(
+      f.dated_cards,
+      () => `${formatMetric(f.dated_cards, 'int')} of them carry a usable date.`,
+      'How many carry a usable date could not be measured.',
+    ),
   },
   median_mtbf: {
     label: 'Median MTBF',
@@ -1336,12 +1369,20 @@ export const RELIABILITY_KPI_ITEMS = {
   low_availability: {
     label: `Under ${AVAILABILITY_FLOOR}% available`,
     get: (f) => (f.low_availability == null ? NOT_MEASURED : formatMetric(f.low_availability, 'int')),
-    note: (f) => `Of ${formatMetric(f.availability_measured, 'int')} machines where availability could be measured.`,
+    note: (f) => noteWhenMeasured(
+      f.availability_measured,
+      () => `Of ${formatMetric(f.availability_measured, 'int')} machines where availability could be measured.`,
+      'Counted only where availability could be measured.',
+    ),
   },
   never_preventive: {
     label: 'Never planned serviced',
     get: (f) => (f.never_preventive == null ? NOT_MEASURED : formatMetric(f.never_preventive, 'int')),
-    note: (f) => `Of ${formatMetric(f.assets_with_history, 'int')} machines that carry any history. Not one planned service on record.`,
+    note: (f) => noteWhenMeasured(
+      f.assets_with_history,
+      () => `Of ${formatMetric(f.assets_with_history, 'int')} machines that carry any history. Not one planned service on record.`,
+      'Counted only across machines that carry any job card history.',
+    ),
   },
   long_idle: {
     label: `Idle over ${LONG_IDLE_DAYS} days`,
@@ -1351,7 +1392,11 @@ export const RELIABILITY_KPI_ITEMS = {
   preventive_share: {
     label: 'Planned maintenance share',
     get: (f) => formatMetric(f.preventive_share_pct, 'pct1'),
-    note: (f) => `${formatMetric(f.preventive_cards, 'int')} planned services out of ${formatMetric(f.job_cards, 'int')} job cards. A management finding, not an asset one.`,
+    note: (f) => noteWhenMeasured(
+      [f.preventive_cards, f.job_cards],
+      () => `${formatMetric(f.preventive_cards, 'int')} planned services out of ${formatMetric(f.job_cards, 'int')} job cards. A management finding, not an asset one.`,
+      'Planned services as a share of all job cards. A management finding, not an asset one.',
+    ),
   },
   date_coverage: {
     label: 'Job card date coverage',

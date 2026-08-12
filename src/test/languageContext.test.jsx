@@ -65,6 +65,36 @@ describe('LanguageContext', () => {
     expect(screen.getByTestId('save').textContent).toBe('Save')
   })
 
+  // Only a small core of namespaces (nav, shell, common, auth, roles, ui, pwa,
+  // onboarding, dashboard) ships in the startup bundle. Page-specific ones are
+  // fetched on demand, so the contract is: a key in a REAL namespace never
+  // renders as a raw dotted path, and the real string arrives on re-render.
+  it('resolves a lazily-loaded namespace once its chunk lands', async () => {
+    function LazyProbe() {
+      const { t } = useLanguage()
+      return <span data-testid="lazy">{t('suppliers.title')}</span>
+    }
+    render(<LanguageProvider><LazyProbe /></LanguageProvider>)
+    await waitFor(() => {
+      expect(screen.getByTestId('lazy').textContent).toBe('Supplier Management')
+    })
+  })
+
+  it('never renders a raw key path for a real namespace that is still loading', () => {
+    function LazyProbe() {
+      const { t } = useLanguage()
+      return <span data-testid="lazy">{t('execreport.header.title')}</span>
+    }
+    render(<LanguageProvider><LazyProbe /></LanguageProvider>)
+    // First paint may precede the chunk, but it must read as a label, not a path.
+    expect(screen.getByTestId('lazy').textContent).not.toContain('.')
+  })
+
+  it('still returns the key for an unknown namespace, so typos stay visible', () => {
+    render(<LanguageProvider><Probe /></LanguageProvider>)
+    expect(screen.getByTestId('missing').textContent).toBe('nope.not.here')
+  })
+
   it('falls back to English strings when used outside a provider', () => {
     render(<Probe />)
     expect(screen.getByTestId('save').textContent).toBe('Save')

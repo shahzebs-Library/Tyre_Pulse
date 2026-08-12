@@ -47,3 +47,10 @@ build_out.txt
 # temporary insurance extraction scripts
 _agA_*.mjs
 pdftxt.mjs
+
+# Scratch files written by parallel agents while they work. These are
+# throwaway harnesses, not tests - one was caught here mid-edit and failing,
+# and `git add -A` would have committed it. Named with a __tmp_ prefix by
+# convention so they can never be swept into a commit; a harness worth keeping
+# gets a real name first.
+**/__tmp_*

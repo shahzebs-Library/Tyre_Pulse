@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
@@ -18,6 +17,10 @@ import {
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -457,7 +460,8 @@ export default function DriverManagement() {
   }
 
   // ── Export handlers ────────────────────────────────────────────────────────
-  function handleExportExcel() {
+  async function handleExportExcel() {
+    const { exportToExcel } = await loadExportUtils()
     exportToExcel(
       visibleDrivers.map(d => ({
         rank: d.rank,
@@ -477,7 +481,8 @@ export default function DriverManagement() {
     )
   }
 
-  function handleExportPdf() {
+  async function handleExportPdf() {
+    const { exportToPdf } = await loadExportUtils()
     exportToPdf(
       visibleDrivers.map(d => ({
         rank: d.rank,

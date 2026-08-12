@@ -204,12 +204,15 @@ export async function loadSystemConfig({ force = false } = {}) {
       // Leave _full as it was: a failed read must not mark the cache
       // authoritative, or per-key readers would answer "no row" from nothing.
       return _cache
-    } finally {
-      // Only clear our own registration: a forced refresh may have replaced it.
-      if (_inflight === run) _inflight = null
     }
   })()
   _inflight = run
+  // Cleared from OUTSIDE the async body on purpose. Doing it in a `finally`
+  // inside referenced `run` before its own initializer had assigned it, so a
+  // client that threw SYNCHRONOUSLY (the whole body runs before the assignment)
+  // hit the temporal dead zone and made this function throw - which it promises
+  // never to do. The check keeps a forced refresh from clearing a newer entry.
+  run.finally(() => { if (_inflight === run) _inflight = null })
   return run
 }
 

@@ -59,16 +59,35 @@ function onIdle(fn) {
   }
 }
 
-// Sentry and PostHog are ~223 kB raw of SDK plus real main-thread setup work
-// (PostHog registers document-wide autocapture listeners, touches
-// localStorage+cookie and opens a network request; Sentry installs browser
-// tracing and session replay, patching fetch/XHR/history). None of that is
-// needed to paint the first screen, so it now runs after render instead of
-// blocking it. Both loaders are env-gated no-ops when their key is unset.
+// Sentry + PostHog init is real main-thread work: PostHog registers
+// document-wide autocapture listeners, touches localStorage+cookie and opens a
+// network request; Sentry installs browser tracing and session replay, patching
+// fetch/XHR/history. None of it is needed to paint the first screen, so it runs
+// after render instead of before it. Both are env-gated no-ops without a key.
+//
+// This defers the WORK. Deferring the BYTES took a second change, in the two
+// modules themselves: they used to `import * as Sentry from '@sentry/react'`
+// and `import posthog from 'posthog-js'` at module scope, and because
+// AuthContext and both error boundaries import THEM statically, 205.7 kB raw /
+// 68.0 kB gz of SDK sat in an eagerly modulepreloaded chunk no matter what this
+// file did. A dynamic import here cannot undo a static one over there. Both are
+// now loaded on demand inside initMonitoring / initAnalytics.
+//
+// monitoring.js queues errors, breadcrumbs and user context raised while its
+// SDK is still in flight and replays them on arrival, so making it lazy did not
+// open a window where a boot error is reported nowhere. analytics.js
+// deliberately does NOT queue - a lost analytics event is a rounding error, a
+// lost error is not.
 function startTelemetry() {
   import('./lib/monitoring')
-    .then(({ initMonitoring, captureError }) => {
-      const active = initMonitoring()
+    .then(({ initMonitoring, captureError }) =>
+      // AWAITED: initMonitoring now returns a promise, because the SDK itself is
+      // fetched on demand and it cannot report success for something that has
+      // not downloaded yet. The listeners below are removed only AFTER it
+      // settles - detaching them while the SDK was still in flight would leave a
+      // window covered by neither the buffer nor Sentry.
+      initMonitoring().then((active) => ({ active, captureError })))
+    .then(({ active, captureError }) => {
       // Sentry is live from here on and its own global handlers now cover us,
       // so stop buffering - otherwise every uncaught error is reported twice.
       window.removeEventListener('error', onWindowError)

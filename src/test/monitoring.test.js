@@ -15,8 +15,12 @@ import {
 // must stay inert and every helper must be a safe no-op that never throws.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('monitoring without a DSN', () => {
-  it('initMonitoring returns false and stays inactive', () => {
-    expect(initMonitoring()).toBe(false)
+  // initMonitoring returns a PROMISE now: the Sentry SDK is fetched on demand,
+  // so it cannot report success synchronously for something not yet downloaded.
+  // The no-DSN case still settles without touching the network, which is what
+  // keeps an unconfigured app paying nothing at all.
+  it('initMonitoring resolves false and stays inactive', async () => {
+    await expect(initMonitoring()).resolves.toBe(false)
     expect(isMonitoringActive()).toBe(false)
   })
 
@@ -41,9 +45,9 @@ describe('monitoring without a DSN', () => {
     expect(() => clearMonitoringUser()).not.toThrow()
   })
 
-  it('repeated init calls are idempotent no-ops', () => {
-    expect(initMonitoring()).toBe(false)
-    expect(initMonitoring()).toBe(false)
+  it('repeated init calls are idempotent no-ops', async () => {
+    await expect(initMonitoring()).resolves.toBe(false)
+    await expect(initMonitoring()).resolves.toBe(false)
     expect(isMonitoringActive()).toBe(false)
   })
 })

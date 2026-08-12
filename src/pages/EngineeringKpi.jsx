@@ -6,6 +6,7 @@ import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { COST_MODES, pickCost } from '../lib/costSources'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   computeAllKpis,
   computeCpkByBrand,
@@ -30,10 +31,6 @@ import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
-
-// exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
-// never trigger, so it loads on first click instead of with the route chunk.
-const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -496,12 +493,12 @@ export default function EngineeringKpi() {
   }, [kpis])
 
   // ── Export handlers ─────────────────────────────────────────────────────────
-  async function handleExcelExport() {
+  function handleExcelExport() {
     if (!kpis) return
 
     // Sheet 1: KPI Summary
     const kpiRows = buildKpiSummaryRows(kpis, activeCurrency)
-    ;(await loadExportUtils()).exportToExcel(
+    exportToExcel(
       kpiRows,
       ['kpi', 'value', 'status', 'description'],
       ['KPI', 'Value', 'Status', 'Description'],
@@ -510,10 +507,10 @@ export default function EngineeringKpi() {
     )
   }
 
-  async function handlePdfExport() {
+  function handlePdfExport() {
     if (!kpis) return
     const rows = buildKpiSummaryRows(kpis, activeCurrency)
-    ;(await loadExportUtils()).exportToPdf(
+    exportToPdf(
       rows,
       [
         { key: 'kpi',         header: 'KPI' },

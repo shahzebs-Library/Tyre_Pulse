@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
@@ -33,10 +34,6 @@ import {
   ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
-
-// exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
-// never trigger, so it loads on first click instead of with the route chunk.
-const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -570,7 +567,7 @@ export default function CostCenter() {
   async function handleExcelExport() {
     setExporting(true)
     try {
-      ;(await loadExportUtils()).exportToExcel(
+      exportToExcel(
         bySite.map(s => ({
           site:      s.site,
           count:     s.count,
@@ -589,7 +586,7 @@ export default function CostCenter() {
   async function handlePdfExport(opts = {}) {
     setExporting(true)
     try {
-      return await (await loadExportUtils()).exportToPdf(
+      return await exportToPdf(
         bySite.map(s => ({
           site:      s.site,
           count:     s.count,

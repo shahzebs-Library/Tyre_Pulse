@@ -8,16 +8,13 @@ import SectionTabs, { REPORTS_TABS } from '../components/ui/SectionTabs'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import EmailReportModal from '../components/EmailReportModal'
 import { formatDate } from '../lib/formatters'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
 import { toUserMessage } from '../lib/safeError'
-
-// exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
-// never trigger, so it loads on first click instead of with the route chunk.
-const loadExportUtils = () => import('../lib/exportUtils')
 
 const REPORT_TYPES = [
   { id: 'Vehicle History',       key: 'vehicleHistory',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
@@ -392,19 +389,19 @@ export default function Reports() {
   }, [reportType, dateFrom, dateTo, filterSite, filterCountry, filterAsset, filterBrand,
       filterRiskLevels, filterInspType, activeCountry, selectedCols, dateShortcut])
 
-  async function handleExcel() {
+  function handleExcel() {
     const activeCols = (REPORT_COLUMNS[reportType] ?? []).filter(c => selectedCols.includes(c))
     const headers = activeCols.map(c => COLUMN_LABELS[c] ?? c)
-    ;(await loadExportUtils()).exportToExcel(
+    exportToExcel(
       allRows, activeCols, headers,
       `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}`
     )
   }
 
-  async function handlePdf() {
+  function handlePdf() {
     const activeCols = (REPORT_COLUMNS[reportType] ?? []).filter(c => selectedCols.includes(c))
     const columns = activeCols.map(c => ({ key: c, header: COLUMN_LABELS[c] ?? c }))
-    ;(await loadExportUtils()).exportToPdf(
+    exportToPdf(
       allRows,
       columns,
       `TyrePulse · ${reportType}`,

@@ -15,8 +15,11 @@ import {
 } from '../lib/alertEngine'
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { cn } from '../lib/cn'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 // ── Style maps ─────────────────────────────────────────────────────────────────
 const TYPE_ICON_CONFIG = {
@@ -126,7 +129,8 @@ export default function Alerts() {
   }, [active])
 
   // ── Exports ───────────────────────────────────────────────────────────────────
-  function doExcelExport() {
+  async function doExcelExport() {
+    const { exportToExcel } = await loadExportUtils()
     exportToExcel(
       visible.map(a => ({ severity: SEV_STYLE[a.severity]?.label ?? a.severity, type: ALERT_TYPE_LABELS[a.type] ?? a.type, title: a.title, message: a.message })),
       ['severity','type','title','message'],
@@ -135,7 +139,8 @@ export default function Alerts() {
     )
   }
 
-  function doPdfExport() {
+  async function doPdfExport() {
+    const { exportToPdf } = await loadExportUtils()
     exportToPdf(
       visible.map(a => ({ severity: SEV_STYLE[a.severity]?.label ?? a.severity, type: ALERT_TYPE_LABELS[a.type] ?? a.type, title: a.title, message: a.message })),
       [

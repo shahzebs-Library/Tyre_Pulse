@@ -4,6 +4,15 @@
  * never re-derived here). No I/O; everything injectable and null-tolerant.
  */
 import { bandFor } from './tyreRunningLife'
+import { displayPositionCode, inspectionTypeHint } from './tyreBay'
+
+/**
+ * What a defect says when the inspection recorded no position at all. Kept as a
+ * constant because it is written into the corrective-action KEY, so it must
+ * never drift: an action already in the database was raised under this exact
+ * text and is matched back by it.
+ */
+export const UNKNOWN_POSITION = 'unknown position'
 
 /**
  * Group shaped running-life rows by asset.
@@ -174,57 +183,77 @@ export function siteSummary(inspections = [], flagMap = {}, { from = '', to = ''
  * as corrective_actions.source_detail, so it must stay stable for a given
  * defect: position first, because a position is what a fitter is sent to.
  *
- * @returns {Array<{key,kind,position,condition,serial,title,priority,description}>}
+ * THE KEY KEEPS THE STORED POSITION; only the SENTENCE is relabelled. The key
+ * is already in the database on every action raised so far and is parsed back
+ * out by tyreChangeTracking.parseActionKey - rewriting it would orphan every
+ * open action and let the same defect be raised a second time. `positionLabel`
+ * carries the canonical name (RHRI for a stored R2Ri) so what the fitter reads
+ * matches the tyre records and the diagram.
+ *
+ * @returns {Array<{key,kind,position,positionLabel,condition,serial,title,priority,description}>}
  */
 export function defectsForAction(inspection, flagMap = {}) {
   if (!inspection) return []
   const asset = inspection.asset_no || ''
+  const typeHint = inspectionTypeHint(inspection)
   const out = []
   const seen = new Set()
   const push = (d) => { if (!seen.has(d.key)) { seen.add(d.key); out.push(d) } }
+  // A position we cannot place keeps its own text, so no sentence ever names a
+  // wheel we are not sure of.
+  const label = (pos) => (pos === UNKNOWN_POSITION ? pos : displayPositionCode(typeHint, pos) || pos)
 
   for (const d of damagedPositions(inspection)) {
-    const pos = d.position || 'unknown position'
+    const pos = d.position || UNKNOWN_POSITION
+    const shown = label(pos)
     push({
       key: `damage:${pos}`,
       kind: 'damage',
       position: pos,
+      positionLabel: shown,
       condition: d.condition,
       serial: '',
-      title: `Tyre ${d.condition} at ${pos} on ${asset || 'asset'}`,
+      title: `Tyre ${d.condition} at ${shown} on ${asset || 'asset'}`,
       // A puncture or damaged casing is a road-safety item, not housekeeping.
       priority: 'High',
-      description: `Inspection recorded "${d.condition}" at position ${pos}. Inspect and replace or repair the tyre before the vehicle returns to service.`,
+      description: `Inspection recorded "${d.condition}" at position ${shown}. Inspect and replace or repair the tyre before the vehicle returns to service.`,
     })
   }
 
   const entry = asset ? flagMap[asset] : null
   if (entry) {
+    // These come from the running-life feed, which already speaks the canonical
+    // vocabulary, so relabelling them is a round trip that leaves them alone -
+    // it is applied anyway so every defect on the list is named one way.
     for (const row of entry.overdue || []) {
-      const pos = row.position || 'unknown position'
+      const pos = row.position || UNKNOWN_POSITION
+      const shown = label(pos)
       push({
         key: `overdue:${pos}:${row.serial || ''}`,
         kind: 'overdue',
         position: pos,
+        positionLabel: shown,
         condition: 'Past expected life',
         serial: row.serial || '',
-        title: `Tyre past expected life at ${pos} on ${asset}`,
+        title: `Tyre past expected life at ${shown} on ${asset}`,
         priority: 'High',
-        description: `The tyre at position ${pos}${row.serial ? ` (serial ${row.serial})` : ''} has passed its expected life. Schedule replacement.`,
+        description: `The tyre at position ${shown}${row.serial ? ` (serial ${row.serial})` : ''} has passed its expected life. Schedule replacement.`,
       })
     }
     for (const row of entry.dueSoon || []) {
-      const pos = row.position || 'unknown position'
+      const pos = row.position || UNKNOWN_POSITION
+      const shown = label(pos)
       push({
         key: `duesoon:${pos}:${row.serial || ''}`,
         kind: 'due_soon',
         position: pos,
+        positionLabel: shown,
         condition: 'Due soon',
         serial: row.serial || '',
-        title: `Tyre due for change at ${pos} on ${asset}`,
+        title: `Tyre due for change at ${shown} on ${asset}`,
         // Due soon is planning work, not a stop-the-vehicle item.
         priority: 'Medium',
-        description: `The tyre at position ${pos}${row.serial ? ` (serial ${row.serial})` : ''} is approaching its expected life. Plan a replacement.`,
+        description: `The tyre at position ${shown}${row.serial ? ` (serial ${row.serial})` : ''} is approaching its expected life. Plan a replacement.`,
       })
     }
   }

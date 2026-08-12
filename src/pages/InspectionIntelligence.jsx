@@ -7,6 +7,10 @@ import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import {
+  inspectorActivity, activityTotals, coverageRows, filterCoverage, coverageTotals,
+  COVERAGE_STALE_DAYS,
+} from '../lib/inspectorActivity'
+import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend,
 } from 'chart.js'
@@ -26,6 +30,7 @@ ChartJS.register(
 const fmt = n => (typeof n === 'number' ? n.toFixed(1) : '-')
 const pct = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) : '0.0')
 const MONTHS_BACK = 12
+const COVERAGE_PAGE = 50
 
 function lastNMonths(n) {
   const months = []
@@ -202,6 +207,13 @@ export default function InspectionIntelligence() {
   const [alertRaised, setAlertRaised]   = useState({})
   const [expandedDQ, setExpandedDQ]     = useState(null)
   const [search, setSearch]             = useState('')
+
+  // Coverage table has its own filters: it answers "has this vehicle been
+  // inspected", which is a different question from the page's date window.
+  const [covSite, setCovSite]           = useState('')
+  const [covStatus, setCovStatus]       = useState('not_done')
+  const [covSearch, setCovSearch]       = useState('')
+  const [covLimit, setCovLimit]         = useState(COVERAGE_PAGE)
 
   // ── data load ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -380,6 +392,28 @@ export default function InspectionIntelligence() {
 
     return result.sort((a, b) => b.daysNum - a.daysNum)
   }, [fleet, inspections])
+
+  // ── tyre man activity + fleet coverage ───────────────────────────────────────
+  // Activity follows the page filters (it is "what did they do in this window").
+  // Coverage reads EVERY inspection - a vehicle last seen 200 days ago must show
+  // that date, not read as never inspected because the window is 90 days.
+  const activity      = useMemo(() => inspectorActivity(filtered), [filtered])
+  const activitySum   = useMemo(() => activityTotals(activity), [activity])
+  const coverageAll   = useMemo(() => coverageRows(fleet, inspections), [fleet, inspections])
+  const coverage      = useMemo(
+    () => filterCoverage(coverageAll, { site: covSite, status: covStatus, search: covSearch }),
+    [coverageAll, covSite, covStatus, covSearch],
+  )
+  const coverageSum   = useMemo(() => coverageTotals(coverageAll), [coverageAll])
+
+  // Reset paging whenever the filters change, or "Show more" would be pointing
+  // at rows the user can no longer see.
+  useEffect(() => { setCovLimit(COVERAGE_PAGE) }, [covSite, covStatus, covSearch])
+
+  const coverageSites = useMemo(() => {
+    const s = new Set(coverageAll.map(r => r.site).filter(Boolean))
+    return [...s].sort()
+  }, [coverageAll])
 
   // ── duplicate detections ──────────────────────────────────────────────────────
   const duplicates = useMemo(() => {
@@ -826,6 +860,89 @@ export default function InspectionIntelligence() {
         </div>
       </div>
 
+      {/* ── Section 1b: Tyre man activity ── */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users size={16} className="text-blue-400" />
+            <p className="font-semibold text-gray-200">Tyre man activity</p>
+            <span className="text-xs text-[var(--panel-ink-4)]">
+              {datePreset}d window{siteFilter ? ` - ${siteFilter}` : ''}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--panel-ink-2)]">
+              {activitySum.inspectors} inspecting
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--panel-ink-2)]">
+              {activitySum.inspections} inspections
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-green-900/25 border border-green-700/40 text-green-400">
+              {activitySum.completed} completed
+            </span>
+            {activitySum.open > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-yellow-900/25 border border-yellow-700/40 text-yellow-400">
+                {activitySum.open} still open
+              </span>
+            )}
+            <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--panel-ink-3)]">
+              {activitySum.activeThisWeek} active this week
+            </span>
+          </div>
+        </div>
+
+        {activity.length === 0 ? (
+          <div className="py-10 text-center text-sm text-[var(--panel-ink-3)]">
+            No inspection in this window carries an inspector name, so there is nothing to attribute.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="table-header">Tyre man</th>
+                  <th className="table-header text-right">Inspections</th>
+                  <th className="table-header text-right">Completed</th>
+                  <th className="table-header text-right">Open</th>
+                  <th className="table-header text-right">Vehicles</th>
+                  <th className="table-header text-right">No findings</th>
+                  <th className="table-header">Sites</th>
+                  <th className="table-header">Last active</th>
+                  <th className="table-header w-40">Completion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activity.map(a => (
+                  <tr key={a.inspector} className="border-t border-white/5">
+                    <td className="table-cell font-medium text-gray-200">{a.inspector}</td>
+                    <td className="table-cell text-right font-semibold">{a.total}</td>
+                    <td className="table-cell text-right text-green-400">{a.completed}</td>
+                    <td className="table-cell text-right text-[var(--panel-ink-2)]">{a.open || '-'}</td>
+                    <td className="table-cell text-right text-[var(--panel-ink-2)]">{a.vehicles}</td>
+                    <td className={`table-cell text-right ${a.total - a.withFindings > 0 ? 'text-red-400 font-semibold' : 'text-[var(--panel-ink-4)]'}`}>
+                      {a.total - a.withFindings}
+                    </td>
+                    <td className="table-cell text-[var(--panel-ink-3)] text-xs">
+                      {a.sites.length ? a.sites.join(', ') : '-'}
+                    </td>
+                    <td className="table-cell text-[var(--panel-ink-3)] text-xs">
+                      {a.lastActive
+                        ? `${a.lastActive}${a.daysSinceActive != null ? ` (${a.daysSinceActive}d)` : ''}`
+                        : 'Not recorded'}
+                    </td>
+                    <td className="table-cell">
+                      {a.completionPct == null
+                        ? <span className="text-xs text-[var(--panel-ink-4)]">N/A</span>
+                        : <QualityBar score={a.completionPct / 100} />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* ── Section 2: Charts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Compliance by Site */}
@@ -861,71 +978,7 @@ export default function InspectionIntelligence() {
         </div>
       </div>
 
-      {/* ── Section 3: Missing Inspections Table ── */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={16} className="text-orange-400" />
-            <p className="font-semibold text-gray-200">Missing Inspections</p>
-          </div>
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${missingInspections.length === 0 ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-red-900/30 text-red-400 border-red-700/50'}`}>
-            {missingInspections.length} vehicles
-          </span>
-        </div>
-
-        {missingInspections.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-green-400">
-            <CheckCircle size={18} />
-            <span className="text-sm font-medium">All vehicles have recent inspections</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-header">Asset No</th>
-                  <th className="table-header">Site</th>
-                  <th className="table-header">Last Inspection</th>
-                  <th className="table-header">Days Since</th>
-                  <th className="table-header">Status</th>
-                  <th className="table-header text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {missingInspections.map(v => (
-                  <tr
-                    key={v.asset_no}
-                    className={`border-t border-white/5 ${v.severity === 'critical' ? 'bg-red-900/10' : v.severity === 'high' ? 'bg-orange-900/10' : 'bg-yellow-900/5'}`}
-                  >
-                    <td className="table-cell font-mono text-xs">{v.asset_no}</td>
-                    <td className="table-cell text-[var(--panel-ink-2)]">{v.site}</td>
-                    <td className="table-cell text-[var(--panel-ink-3)]">{v.lastInspectionDate || '-'}</td>
-                    <td className="table-cell font-semibold">{v.daysSince === '-' ? '-' : `${v.daysSince}d`}</td>
-                    <td className="table-cell"><SeverityBadge sev={v.severity} /></td>
-                    <td className="table-cell text-right">
-                      {alertRaised[v.asset_no] ? (
-                        <span className="text-xs text-green-400 flex items-center justify-end gap-1">
-                          <CheckCircle size={12} /> Alert raised
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleRaiseAlert(v)}
-                          disabled={raisingAlert === v.asset_no}
-                          className="btn-primary text-xs px-3 py-1 disabled:opacity-50"
-                        >
-                          {raisingAlert === v.asset_no ? 'Raising...' : 'Raise Alert'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 4: Duplicate Detection ── */}
+      {/* ── Section 3: Duplicate Detection ── */}
       <div className="card overflow-hidden">
         <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -983,71 +1036,7 @@ export default function InspectionIntelligence() {
         )}
       </div>
 
-      {/* ── Section 5: Inspector Quality Scoreboard ── */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
-          <Users size={16} className="text-indigo-400" />
-          <p className="font-semibold text-gray-200">Inspector Quality Scoreboard</p>
-        </div>
-
-        {inspectorScores.length === 0 ? (
-          <div className="px-5 py-10 text-center text-[var(--panel-ink-4)] text-sm">
-            Inspector data will appear once the <code className="text-[var(--panel-ink-3)] bg-gray-800 px-1 rounded">inspector</code> field is captured in inspections
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="table-header">Inspector</th>
-                  <th className="table-header text-center">Total</th>
-                  <th className="table-header">Quality Score</th>
-                  <th className="table-header text-center">Missing Findings</th>
-                  <th className="table-header text-center">Incomplete</th>
-                  <th className="table-header text-center">Badge</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inspectorScores.map((ins, i) => {
-                  const scorePct = ins.qualityScore * 100
-                  const badge = scorePct >= 90
-                    ? { label: 'Top Performer', style: 'bg-green-900/30 text-green-400 border-green-700/50' }
-                    : scorePct < 70
-                    ? { label: 'Needs Improvement', style: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50' }
-                    : { label: 'Average', style: 'bg-gray-800 text-[var(--panel-ink-3)] border-gray-700' }
-
-                  return (
-                    <tr key={i} className="border-t border-white/5 hover:bg-white/[0.02]">
-                      <td className="table-cell font-medium text-gray-200">{ins.inspector}</td>
-                      <td className="table-cell text-center text-[var(--panel-ink-2)]">{ins.totalInspections}</td>
-                      <td className="table-cell min-w-[140px]">
-                        <QualityBar score={ins.qualityScore} />
-                      </td>
-                      <td className="table-cell text-center">
-                        <span className={`${ins.missingFindings > 0 ? 'text-red-400 font-semibold' : 'text-[var(--panel-ink-4)]'}`}>
-                          {ins.missingFindings}
-                        </span>
-                      </td>
-                      <td className="table-cell text-center">
-                        <span className={`${ins.incompleteCount > 0 ? 'text-orange-400 font-semibold' : 'text-[var(--panel-ink-4)]'}`}>
-                          {ins.incompleteCount}
-                        </span>
-                      </td>
-                      <td className="table-cell text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${badge.style}`}>
-                          {badge.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 6: Data Quality Issues ── */}
+      {/* ── Section 4: Data Quality Issues ── */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-4">
           <ShieldCheck size={16} className="text-indigo-400" />
@@ -1139,7 +1128,7 @@ export default function InspectionIntelligence() {
         </div>
       </div>
 
-      {/* ── Section 6b: Inconsistent Inspections ── */}
+      {/* ── Section 4b: Inconsistent Inspections ── */}
       {inconsistentInspections.length > 0 && (
         <div className="card overflow-hidden">
           <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
@@ -1169,7 +1158,7 @@ export default function InspectionIntelligence() {
         </div>
       )}
 
-      {/* ── Section 7: Recommendations ── */}
+      {/* ── Section 5: Recommendations ── */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-4">
           <AlertCircle size={16} className="text-yellow-400" />
@@ -1188,6 +1177,129 @@ export default function InspectionIntelligence() {
               <RecommendationCard key={i} priority={r.priority} message={r.message} />
             ))}
           </div>
+        )}
+      </div>
+
+      {/* ── Section 6: Inspection coverage by vehicle (every asset, done or not) ── */}
+      <div className="card overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck size={16} className="text-orange-400" />
+            <p className="font-semibold text-gray-200">Inspection coverage by vehicle</p>
+            <span className="text-xs text-[var(--panel-ink-4)]">
+              {coverageSum.done} of {coverageSum.vehicles} inspected in the last {COVERAGE_STALE_DAYS} days
+              {coverageSum.never > 0 ? `, ${coverageSum.never} never inspected` : ''}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={covSite}
+              onChange={e => setCovSite(e.target.value)}
+              className="input-field text-xs py-1.5"
+            >
+              <option value="">All locations</option>
+              {coverageSites.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <div className="flex rounded-lg overflow-hidden border border-white/10">
+              {[
+                { key: 'not_done', label: 'Not done' },
+                { key: 'done', label: 'Completed' },
+                { key: 'all', label: 'All' },
+              ].map(o => (
+                <button
+                  key={o.key}
+                  onClick={() => setCovStatus(o.key)}
+                  className={`px-3 py-1.5 text-xs font-medium ${covStatus === o.key ? 'bg-white/10 text-gray-100' : 'text-[var(--panel-ink-3)] hover:bg-white/5'}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--panel-ink-4)]" />
+              <input
+                value={covSearch}
+                onChange={e => setCovSearch(e.target.value)}
+                placeholder="Asset, site, tyre man"
+                className="input-field text-xs py-1.5 pl-7 w-48"
+              />
+            </div>
+          </div>
+        </div>
+
+        {coverage.length === 0 ? (
+          <div className="py-10 text-center text-sm text-[var(--panel-ink-3)]">
+            {coverageAll.length === 0
+              ? 'No vehicle is registered for this country, so coverage cannot be measured.'
+              : 'No vehicle matches these filters.'}
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th className="table-header">Asset No</th>
+                    <th className="table-header">Location</th>
+                    <th className="table-header">Last inspection</th>
+                    <th className="table-header">By</th>
+                    <th className="table-header">Days since</th>
+                    <th className="table-header">Status</th>
+                    <th className="table-header text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coverage.slice(0, covLimit).map(v => (
+                    <tr
+                      key={v.asset_no}
+                      className={`border-t border-white/5 ${v.done ? '' : v.severity === 'critical' || v.severity === 'never' ? 'bg-red-900/10' : v.severity === 'high' ? 'bg-orange-900/10' : 'bg-yellow-900/5'}`}
+                    >
+                      <td className="table-cell font-mono text-xs">{v.asset_no}</td>
+                      <td className="table-cell text-[var(--panel-ink-2)]">{v.site}</td>
+                      <td className="table-cell text-[var(--panel-ink-3)]">{v.lastInspectionDate || 'Never'}</td>
+                      <td className="table-cell text-[var(--panel-ink-3)] text-xs">{v.inspector || '-'}</td>
+                      <td className="table-cell font-semibold">{v.daysSince == null ? '-' : `${v.daysSince}d`}</td>
+                      <td className="table-cell">
+                        {v.done
+                          ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/30 text-green-400 border border-green-700/50">Completed</span>
+                          : v.severity === 'never'
+                            ? <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-900/30 text-red-400 border border-red-700/50">Never inspected</span>
+                            : <SeverityBadge sev={v.severity} />}
+                      </td>
+                      <td className="table-cell text-right">
+                        {v.done ? (
+                          <span className="text-xs text-[var(--panel-ink-4)]">-</span>
+                        ) : alertRaised[v.asset_no] ? (
+                          <span className="text-xs text-green-400 flex items-center justify-end gap-1">
+                            <CheckCircle size={12} /> Alert raised
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleRaiseAlert(v)}
+                            disabled={raisingAlert === v.asset_no}
+                            className="btn-primary text-xs px-3 py-1 disabled:opacity-50"
+                          >
+                            {raisingAlert === v.asset_no ? 'Raising...' : 'Raise Alert'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-3 border-t border-white/5 flex items-center justify-between text-xs text-[var(--panel-ink-3)]">
+              <span>Showing {Math.min(covLimit, coverage.length)} of {coverage.length} vehicles</span>
+              {coverage.length > covLimit && (
+                <button
+                  onClick={() => setCovLimit(n => n + COVERAGE_PAGE)}
+                  className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-[var(--panel-ink-2)]"
+                >
+                  Show {Math.min(COVERAGE_PAGE, coverage.length - covLimit)} more
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
 

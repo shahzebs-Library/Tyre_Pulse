@@ -165,7 +165,79 @@ export const BUILTIN_LAYOUT_SLOTS = {
 export function layoutPositionsFor(vehicleTypeKey) {
   const layoutKey = resolveLayoutKey(vehicleTypeKey)
   const slots = BUILTIN_LAYOUT_SLOTS[layoutKey] || []
-  return slots.map((slot) => ({ slot, code: canonicalCode(legacyPositionCode(layoutKey, slot)) || slot }))
+  return slots.map((slot) => ({ slot, code: slotDisplayCode(layoutKey, slot) }))
+}
+
+const PICKUP_HINT = /pickup|pick[\s-]?up/i
+
+/**
+ * Is this string a vehicle type whose wheel layout we actually know?
+ *
+ * `resolveLayoutKey` answers "Pickup" for anything it does not recognise, which
+ * is a safe default for a picker and a lie on an inspection report: drawing four
+ * wheels for a machine nobody classified states a layout we do not know. So a
+ * Pickup result only counts when the string genuinely says pickup, or carries
+ * the PL asset-class prefix.
+ */
+export function vehicleTypeIsKnown(vt) {
+  const s = String(vt || '').trim()
+  if (!s) return false
+  if (BUILTIN_LAYOUT_SLOTS[s]) return true
+  if (resolveLayoutKey(s) !== 'Pickup') return true
+  return PICKUP_HINT.test(s) || /^PL/i.test(s)
+}
+
+/** The canonical GCC code a layout slot displays (LHF1, LHCO, RHR1-O ...). */
+export function slotDisplayCode(layoutKey, slot) {
+  return canonicalCode(legacyPositionCode(layoutKey, slot)) || slot
+}
+
+/**
+ * The string that resolves an inspection's wheel layout: the recorded vehicle
+ * type, else the asset code, whose class prefix (TM, MP, WL ...) the resolver
+ * reads. One definition, so the map, the photo captions, the corrective action
+ * and the tyre-change tracking all resolve the same vehicle the same way.
+ */
+export function inspectionTypeHint(row) {
+  return String(row?.vehicle_type || '').trim() || String(row?.asset_no || '').trim()
+}
+
+/**
+ * THE display name of one wheel: what a stored position should be CALLED on
+ * screen, in a table, in an export, or inside a corrective-action sentence.
+ *
+ * Two vocabularies live in the data and both are right where they are written.
+ * `tyre_records.tyre_position` holds the ERP/canonical code the business uses
+ * (LHF1, RHRI, LHCO); `inspections.tyre_conditions` is keyed by the mobile
+ * capture app's internal slot id (F1L, R2Ri, R1Lo). Eight live inspections
+ * store both against the same wheel, which is what proves the pairing rather
+ * than guessing it. Printing the stored key next to the canonical one makes the
+ * same tyre appear twice under two names on one safety record.
+ *
+ * This is NOT a second mapping. It is the diagram's own conversion reused:
+ * stored key -> layout slot (canonicalToSlotId) -> canonical code
+ * (legacyPositionCode). A canonical code that is already canonical round-trips
+ * through it unchanged.
+ *
+ * The stored value is NEVER rewritten - only what we show. The mobile app still
+ * writes and reads F1L keys, and offline records in flight still carry them.
+ *
+ * @param {string} vehicleTypeHint  the vehicle type, or the asset code (its
+ *   class prefix - TM, MP, WL - resolves the layout when nobody filled the type)
+ * @param {string} position  the position exactly as stored
+ * @returns {string} canonical code when it can be converted, otherwise the
+ *   stored text unchanged. A wheel we cannot place keeps its own name: an
+ *   invented one sends a fitter to the wrong tyre, which is worse than an
+ *   unfamiliar one.
+ */
+export function displayPositionCode(vehicleTypeHint, position) {
+  const stored = position == null ? '' : String(position).trim()
+  if (!stored) return ''
+  const hint = String(vehicleTypeHint || '').trim()
+  if (!vehicleTypeIsKnown(hint)) return stored
+  const slot = canonicalToSlotId(hint, stored)
+  if (!slot) return stored
+  return slotDisplayCode(resolveLayoutKey(hint), slot)
 }
 
 /**

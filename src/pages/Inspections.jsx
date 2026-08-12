@@ -29,6 +29,8 @@ import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
 import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction } from '../lib/inspectionTyreFlags'
+import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
+import { positionLabelMap } from '../lib/inspectionView'
 import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
 import { loadTyreChangeTracking } from '../lib/api/tyreChangeTracking'
 // The shared dialog shell. Imported under an alias because this file still
@@ -406,7 +408,11 @@ function TyreDueBanner({ entry, damaged = [], inspection = null }) {
       )}
       {damaged.length > 0 && (
         <p className="text-xs mt-1 text-[var(--text-secondary)]">
-          Damage found: {damaged.map((d) => d.position || 'N/A').join(', ')}
+          {/* Named the way the tyre records name it, so this line and the
+              diagram above it do not call one wheel two things. */}
+          Damage found: {damaged
+            .map((d) => displayPositionCode(inspectionTypeHint(inspection), d.position) || 'N/A')
+            .join(', ')}
         </p>
       )}
 
@@ -791,10 +797,13 @@ export default function Inspections() {
         // (mobile) + the row-level photo, resolved to signed URLs. Best-effort -
         // an unresolvable photo is skipped, never a blocked report.
         const photoRefs = []
-        const vtForPos = pdfRow.vehicle_type || inferVehicleTypeFromAsset(pdfRow.asset_no) || ''
+        // The SAME labels the on-screen photo grid prints (positionLabelMap),
+        // so the downloaded copy and the record on screen cannot name one wheel
+        // two different ways.
+        const pdfPosLabels = positionLabelMap(pdfRow)
         for (const [pos, d] of Object.entries(pdfRow.tyre_conditions || {})) {
           const ref = d && typeof d === 'object' ? (d.photo_url || d.photo_uri) : null
-          if (ref) photoRefs.push({ label: legacyPositionCode(vtForPos, pos) || pos, ref })
+          if (ref) photoRefs.push({ label: pdfPosLabels[pos] || pos, ref })
         }
         if (pdfRow.photo_data) photoRefs.push({ label: 'Inspection photo', ref: pdfRow.photo_data })
         const photos = (await Promise.all(photoRefs.map(async (p) => {

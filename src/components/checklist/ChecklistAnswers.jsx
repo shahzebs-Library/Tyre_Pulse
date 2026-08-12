@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Image as ImageIcon } from 'lucide-react'
 import { getSubmission } from '../../lib/api/checklists'
-import { submissionRows, submissionSummary, prettyStatus } from '../../lib/checklistView'
+import {
+  submissionRows, submissionSummary, prettyStatus, submissionSignatures,
+  templateFromSubmission,
+} from '../../lib/checklistView'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -24,7 +27,7 @@ import { toUserMessage } from '../../lib/safeError'
  * @param {Function}[props.onLoaded]       called with the loaded row
  */
 export default function ChecklistAnswers({
-  submission, submissionId, showSummary = true, onLoaded,
+  submission, submissionId, showSummary = true, onLoaded, lang = 'en',
 }) {
   const [fetched, setFetched] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -52,8 +55,16 @@ export default function ChecklistAnswers({
   }, [needsFetch, submissionId])
 
   const sub = submission || fetched
-  const rows = useMemo(() => (sub ? submissionRows(sub) : []), [sub])
+  const template = useMemo(() => (sub ? templateFromSubmission(sub) : null), [sub])
+  const rows = useMemo(() => (sub ? submissionRows(sub, { template, lang }) : []), [sub, template, lang])
   const summary = useMemo(() => submissionSummary(sub), [sub])
+  // Every signature on the record, not only the primary one: the workshop sheet
+  // is signed by three trades, and printing one of them reads as an approval the
+  // other two never gave.
+  const signatures = useMemo(
+    () => (sub ? submissionSignatures(sub, { template, lang }) : []),
+    [sub, template, lang],
+  )
 
   if (loading) {
     return (
@@ -116,6 +127,13 @@ export default function ChecklistAnswers({
                     into a blank. Only a genuinely absent answer reads as not
                     recorded. */}
                 {r.text ?? <span style={{ color: 'var(--text-dim)' }}>Not recorded</span>}
+                {/* The paper form has a Remarks column beside every line, and it
+                    is usually where the actual finding is written. */}
+                {r.note && (
+                  <div className="text-xs mt-1 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                    {r.note}
+                  </div>
+                )}
                 {r.photos.length > 0 && (
                   <div className="flex flex-wrap gap-2 justify-end mt-2">
                     {r.photos.map((p, i) => {
@@ -158,17 +176,36 @@ export default function ChecklistAnswers({
         </div>
       )}
 
-      {sub.signature_data && (
+      {signatures.length > 0 && (
         <div className="mt-6 pt-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-          <div className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-            Signed by {sub.printed_name || 'the inspector'}
+          <div className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>Signatures</div>
+          <div className="flex flex-wrap gap-4">
+            {signatures.map((s) => (
+              <div key={s.id} className="min-w-[150px]">
+                {s.data ? (
+                  <img
+                    src={safeImageSrc(s.data) || undefined}
+                    alt={s.label}
+                    className="max-h-20 rounded"
+                    style={{ background: '#fff', padding: 6 }}
+                  />
+                ) : (
+                  // A signature line that was never signed is shown as unsigned
+                  // rather than dropped: a missing sign-off is the finding.
+                  <div
+                    className="h-20 rounded flex items-center justify-center text-xs"
+                    style={{ border: '1px dashed var(--border-subtle)', color: 'var(--text-dim)' }}
+                  >
+                    Not signed
+                  </div>
+                )}
+                <div className="text-xs mt-1.5" style={{ color: 'var(--text-secondary)' }}>{s.label}</div>
+                <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                  {s.printedName || <span style={{ color: 'var(--text-dim)' }}>Name not recorded</span>}
+                </div>
+              </div>
+            ))}
           </div>
-          <img
-            src={safeImageSrc(sub.signature_data) || undefined}
-            alt="Signature"
-            className="max-h-24 rounded"
-            style={{ background: '#fff', padding: 6 }}
-          />
         </div>
       )}
     </>

@@ -3,15 +3,20 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardList, Plus, Search, Filter, FileText, PenLine, ShieldCheck,
   Play, Pencil, RefreshCw, AlertTriangle, ChevronRight, ListChecks,
-  Layers, Inbox,
+  Layers, Inbox, CalendarDays, Download, Loader2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
-import { listTemplates, listSubmissions } from '../lib/api/checklists'
+import { listTemplates, listSubmissions, getSubmission } from '../lib/api/checklists'
 import { isValueField } from '../lib/checklist/fieldTypes'
+import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
+import { gridFields } from '../lib/checklistMonthly'
+import { renderChecklistPdf } from '../lib/checklistPdf'
 import { toUserMessage } from '../lib/safeError'
+import { useTenant } from '../contexts/TenantContext'
 import ChecklistViewerDrawer from '../components/checklist/ChecklistViewerDrawer'
+import MonthlyGridPanel from '../components/checklist/MonthlyGridPanel'
 
 const ELEVATED = ['admin', 'manager', 'director']
 
@@ -47,6 +52,9 @@ function fmtDate(v) {
 const TABS = [
   { key: 'templates', label: 'Templates', icon: Layers },
   { key: 'submissions', label: 'Recent Submissions', icon: Inbox },
+  // A daily check is filled one day at a time but READ one month at a time -
+  // that is the sheet the workshop pins on the wall.
+  { key: 'month', label: 'Month grid', icon: CalendarDays },
 ]
 
 export default function Checklists() {
@@ -71,6 +79,14 @@ export default function Checklists() {
   const [category, setCategory] = useState('all')
   // The submission open in the quick viewer, if any.
   const [viewId, setViewId] = useState(null)
+  // The language of the printed sheet, chosen at download time - the floor copy
+  // is not always read in the language of whoever pressed the button.
+  const [pdfLang, setPdfLang] = useState('en')
+  const [pdfBusyId, setPdfBusyId] = useState(null)
+  const [pdfNote, setPdfNote] = useState('')
+  const [monthTemplateId, setMonthTemplateId] = useState('')
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
 
   const load = useCallback(async () => {
     setLoading(true); setError(''); setMissing(false)
@@ -124,6 +140,41 @@ export default function Checklists() {
     return templates.find((t) => String(t.id) === templateParam)?.name || null
   }, [templates, templateParam])
 
+  // Only a template with daily tick-box lines has a month grid to draw.
+  const monthTemplates = useMemo(
+    () => templates.filter((t) => gridFields(t?.fields).length > 0),
+    [templates],
+  )
+  useEffect(() => {
+    if (!monthTemplateId && monthTemplates.length) setMonthTemplateId(String(monthTemplates[0].id))
+  }, [monthTemplates, monthTemplateId])
+  const monthTemplate = useMemo(
+    () => monthTemplates.find((t) => String(t.id) === monthTemplateId) || null,
+    [monthTemplates, monthTemplateId],
+  )
+
+  const downloadPdf = useCallback(async (row) => {
+    if (!row?.id || pdfBusyId) return
+    setPdfBusyId(row.id); setPdfNote('')
+    try {
+      // The list row is a summary; the printed sheet needs the answers, the
+      // remarks, the photographs and the signatures, so the record is loaded in
+      // full before anything is drawn.
+      const full = await getSubmission(row.id)
+      if (!full) { setPdfNote('That checklist could not be opened.'); return }
+      const res = await renderChecklistPdf({ submission: full, lang: pdfLang, company, branding })
+      if (pdfLang !== 'en' && res.fellBack) {
+        setPdfNote('That language could not be printed, so the English wording was used.')
+      } else if (pdfLang !== 'en' && !res.translated) {
+        setPdfNote('This checklist carries no translation for that language, so English was used.')
+      }
+    } catch (err) {
+      setPdfNote(toUserMessage(err, 'Could not generate the PDF.'))
+    } finally {
+      setPdfBusyId(null)
+    }
+  }, [pdfBusyId, pdfLang, company, branding])
+
   const headerActions = isElevated ? (
     <button onClick={() => navigate('/checklist-builder')} className="btn-primary text-sm inline-flex items-center gap-2">
       <Plus size={15} /> New template
@@ -145,7 +196,9 @@ export default function Checklists() {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--border-dim)]">
         {TABS.map(({ key, label, icon: Icon }) => {
-          const count = key === 'templates' ? templates.length : submissions.length
+          const count = key === 'templates' ? templates.length
+            : key === 'submissions' ? submissions.length
+              : monthTemplates.length
           return (
             <button
               key={key}
@@ -162,6 +215,7 @@ export default function Checklists() {
       </div>
 
       {/* Search + filters */}
+      {tab !== 'month' && (
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -172,6 +226,18 @@ export default function Checklists() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        {tab === 'submissions' && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)]">PDF language</span>
+            <select
+              className="input py-2"
+              value={pdfLang}
+              onChange={(e) => { setPdfLang(e.target.value); setPdfNote('') }}
+            >
+              {CHECKLIST_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+            </select>
+          </div>
+        )}
         {tab === 'templates' && categories.length > 0 && (
           <div className="flex items-center gap-2">
             <Filter size={15} className="text-[var(--text-muted)]" />
@@ -182,6 +248,11 @@ export default function Checklists() {
           </div>
         )}
       </div>
+      )}
+
+      {pdfNote && tab === 'submissions' && (
+        <p className="text-xs text-amber-400">{pdfNote}</p>
+      )}
 
       {/* Migration hint */}
       {missing && (
@@ -376,13 +447,57 @@ export default function Checklists() {
                     <td className="table-cell whitespace-nowrap text-[var(--text-muted)]">
                       {fmtDate(s.submitted_at || s.created_at)}
                     </td>
-                    <td className="table-cell text-right">
+                    <td className="table-cell text-right whitespace-nowrap">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); downloadPdf(s) }}
+                        disabled={pdfBusyId === s.id}
+                        className="btn-secondary text-xs inline-flex items-center gap-1.5 mr-2 disabled:opacity-60"
+                        title="Download this checklist as a PDF"
+                      >
+                        {pdfBusyId === s.id ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        PDF
+                      </button>
                       <ChevronRight size={16} className="text-[var(--text-muted)] inline" />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )
+      )}
+
+      {/* Month grid */}
+      {!loading && !missing && !error && tab === 'month' && (
+        monthTemplates.length === 0 ? (
+          <div className="card text-center py-16 space-y-3">
+            <CalendarDays size={34} className="mx-auto text-[var(--text-muted)]" />
+            <p className="text-[var(--text-primary)] font-semibold">No daily checklist to plot</p>
+            <p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">
+              A month grid is drawn for a checklist whose lines are daily tick boxes. None of the
+              published templates has those lines yet.
+            </p>
+          </div>
+        ) : (
+          <div className="card space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-[11px] text-[var(--text-muted)] mb-1">Checklist</label>
+                <select
+                  className="input py-2"
+                  value={monthTemplateId}
+                  onChange={(e) => setMonthTemplateId(e.target.value)}
+                >
+                  {monthTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <MonthlyGridPanel
+              template={monthTemplate}
+              country={activeCountry}
+              branding={branding}
+              company={company}
+            />
           </div>
         )
       )}

@@ -25,6 +25,11 @@ import {
   chartData, chartDigest, makeBlock, normalizeDeckConfig, resolveBlock, buildDeck,
   presetConfig, saveNamedDeck, listSavedDecks, deleteNamedDeck,
   loadDeckLayout, saveDeckLayout,
+  NOT_MEASURED, formatMetric, RELIABILITY_COLUMNS, RELIABILITY_KPI_ITEMS,
+  RANKABLE_METRICS, RECOMMENDATION_PRIORITIES, AVAILABILITY_FLOOR, LONG_IDLE_DAYS,
+  localFleetReliability, fleetReliabilityFor, reliabilityBasisNotes, reliabilityBasisLines,
+  spendYearsOf, spendIn, latestFullYear, worstBy, sortReliabilityRows,
+  fleetComparison, localRecommendations, recommendationsFor, hasReliability, readField,
 } from '../lib/assetDisposalDeck'
 import {
   renderDisposalDeckPptx, renderDisposalDeckPdf,
@@ -96,6 +101,72 @@ const TOTALS = {
 }
 
 const CTX = { rows: ROWS, totals: TOTALS, currency: 'SAR', company: 'Green Concrete', country: 'KSA' }
+
+// ── Reliability fixtures ─────────────────────────────────────────────────────
+// Modelled on the live shape: a heavy machine whose recorded hours are mostly
+// PARKED time, a healthy one, one that was never planned serviced, and one that
+// carries no maintenance history at all so every figure must read Not measured.
+const REL = {
+  TM101: {
+    job_cards: 120, dated_cards: 62, date_coverage_pct: 51.7,
+    breakdown_hours: 3572, breakdown_hours_recorded: 12000,
+    parked_cards: 2, parked_hours: 8428, longest_card_hours: 6200,
+    failures: 88, dated_failures: 45,
+    emergency_cards: 70, repair_cards: 46, preventive_cards: 4, preventive_share_pct: 3.3,
+    first_seen: '2012-01-01', last_seen: '2025-06-01', observed_days: 4900, idle_days: 420,
+    mtbf_days: 55.6, failures_per_year: 6.6, availability_pct: 76.4,
+    cost_per_breakdown_hour: 134.38, cost_per_failure: 5454.55,
+    spend_by_year: { 2019: 9592, 2023: 120000, 2024: 180000, 2025: 90000 },
+  },
+  BP022: {
+    job_cards: 30, dated_cards: 30, date_coverage_pct: 100,
+    breakdown_hours: 220, breakdown_hours_recorded: 220,
+    parked_cards: 0, parked_hours: 0, longest_card_hours: 40,
+    failures: 12, dated_failures: 12,
+    emergency_cards: 6, repair_cards: 20, preventive_cards: 4, preventive_share_pct: 13.3,
+    first_seen: '2017-02-01', last_seen: '2026-01-01', observed_days: 3200, idle_days: 20,
+    mtbf_days: 266.7, failures_per_year: 1.4, availability_pct: 96.2,
+    cost_per_breakdown_hour: 277.27, cost_per_failure: 5083.33,
+    spend_by_year: { 2024: 20000, 2025: 31000, 2026: 10000 },
+  },
+  PU044: {
+    job_cards: 55, dated_cards: 40, date_coverage_pct: 72.7,
+    breakdown_hours: 900, breakdown_hours_recorded: 900,
+    parked_cards: 0, parked_hours: 0, longest_card_hours: 120,
+    failures: 40, dated_failures: 30,
+    emergency_cards: 25, repair_cards: 30, preventive_cards: 0, preventive_share_pct: 0,
+    first_seen: '2015-01-01', last_seen: '2025-09-01', observed_days: 3900, idle_days: 400,
+    mtbf_days: 97.5, failures_per_year: 3.7, availability_pct: 88.1,
+    cost_per_breakdown_hour: 100, cost_per_failure: 2250,
+    spend_by_year: { 2023: 30000, 2024: 40000, 2025: 20000 },
+  },
+}
+// TM192 deliberately gets NOTHING: no history at all is a real case on this list.
+const REL_ROWS = ROWS.map((r) => (REL[r.asset_no] ? { ...r, ...REL[r.asset_no] } : { ...r, job_cards: null }))
+const NO_HISTORY = REL_ROWS.find((r) => r.asset_no === 'TM192')
+
+/** The live shape of get_asset_disposal_fleet_baseline. */
+const BASELINE = {
+  ok: true, country: 'KSA', idle_confound: true,
+  note: 'Machines on the list are frequently parked.',
+  on_list: {
+    assets: 34, cards: 2026, failures: 1777, breakdown_hours: 121458,
+    breakdown_hours_per_asset: 3572, preventive_share_pct: 4.1,
+    avg_failures_per_year: 3.4, avg_availability_pct: 85.9,
+    spend: 2260917, spend_per_asset: 68513,
+  },
+  rest_of_fleet: {
+    assets: 969, cards: 60123, failures: 54046, breakdown_hours: 1153110,
+    breakdown_hours_per_asset: 1190, preventive_share_pct: 1.6,
+    avg_failures_per_year: 27.0, avg_availability_pct: 79.8,
+    spend: 36064242, spend_per_asset: 37218,
+  },
+}
+
+const NOW = new Date('2026-08-12T00:00:00Z')
+const RCTX = { ...CTX, rows: REL_ROWS, fleetBaseline: BASELINE, now: NOW }
+const EMPTY_CTX = { rows: [], totals: null, currency: 'SAR', company: 'Green Concrete', country: 'KSA', now: NOW }
+const flatSlides = (res) => (res.kind === 'multi' ? res.slides : [res])
 
 beforeEach(() => {
   try { localStorage.clear() } catch { /* no storage in this environment */ }
@@ -601,6 +672,558 @@ describe('the renderers produce real files against the REAL libraries', () => {
     const res = await renderDisposalDeckPdf({ config: presetConfig('board'), ctx: CTX, save: false })
     expect(res.pages).toBeGreaterThan(0)
   }, 60000)
+
+  it('renders the CEO briefing to real PowerPoint bytes', async () => {
+    const deck = buildDeck(presetConfig('ceo_briefing'), RCTX)
+    const res = await renderDisposalDeckPptx({ deck, company: 'Green Concrete', country: 'KSA', save: false })
+    expect(res.slides.length).toBe(deck.slides.length)
+    const buf = await res.pptx.write({ outputType: 'nodebuffer' })
+    expect(buf.length).toBeGreaterThan(5000)
+  }, 60000)
+
+  it('renders the reliability case to real PDF bytes, tables through the REAL autoTable', async () => {
+    const deck = buildDeck(presetConfig('reliability_case'), RCTX)
+    const res = await renderDisposalDeckPdf({ deck, company: 'Green Concrete', country: 'KSA', save: false })
+    expect(res.pages).toBe(deck.slides.length)
+    expect(res.doc.lastAutoTable).toBeTruthy()
+    expect(res.doc.lastAutoTable.finalY).toBeGreaterThan(0)
+    expect(res.doc.output('arraybuffer').byteLength).toBeGreaterThan(5000)
+  }, 60000)
+
+  it('renders the comparison and recommendation slides through both real engines', async () => {
+    const deck = buildDeck(normalizeDeckConfig({
+      blocks: [makeBlock('fleet_comparison'), makeBlock('recommendations'), makeBlock('reliability_kpis')],
+    }), RCTX)
+    const pptx = await renderDisposalDeckPptx({ deck, save: false })
+    expect((await pptx.pptx.write({ outputType: 'nodebuffer' })).length).toBeGreaterThan(5000)
+    const pdf = await renderDisposalDeckPdf({ deck, save: false })
+    expect(pdf.doc.output('arraybuffer').byteLength).toBeGreaterThan(3000)
+  }, 60000)
+
+  it('still writes a usable file when nothing on the list has any history', async () => {
+    const bare = { ...RCTX, rows: [NO_HISTORY], fleetBaseline: null }
+    const deck = buildDeck(presetConfig('reliability_case'), bare)
+    const pptx = await renderDisposalDeckPptx({ deck, save: false })
+    expect(pptx.slides.length).toBeGreaterThan(0)
+    const pdf = await renderDisposalDeckPdf({ deck, save: false })
+    expect(pdf.pages).toBeGreaterThan(0)
+  }, 60000)
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RELIABILITY
+// ═════════════════════════════════════════════════════════════════════════════
+describe('a figure nobody could measure prints Not measured, never zero', () => {
+  it('formats every measured shape and refuses to invent one', () => {
+    expect(formatMetric(null)).toBe(NOT_MEASURED)
+    expect(formatMetric(undefined, 'dec1')).toBe(NOT_MEASURED)
+    expect(formatMetric('', 'pct1')).toBe(NOT_MEASURED)
+    expect(formatMetric(null, 'money', 'SAR')).toBe(NOT_MEASURED)
+    expect(formatMetric(null, 'date')).toBe(NOT_MEASURED)
+    // A real recorded zero is still a reading and must survive as one.
+    expect(formatMetric(0)).toBe('0')
+    expect(formatMetric(0, 'pct1')).toBe('0.0%')
+    expect(formatMetric(12.55, 'dec1')).toBe('12.6')
+    expect(formatMetric(3572, 'int')).toBe('3,572')
+    expect(formatMetric(2260917, 'money', 'SAR')).toBe('SAR 2,260,917')
+    expect(formatMetric(134.375, 'money2', 'SAR')).toBe('SAR 134.38')
+    expect(formatMetric(3.02, 'ratio')).toBe('3.0x')
+    expect(formatMetric('2025-06-01', 'date')).toBe('2025-06-01')
+    expect(formatMetric('not a date', 'date')).toBe(NOT_MEASURED)
+  })
+
+  it('Not measured, N/A and Not valued stay three different statements', () => {
+    // "no history to measure", "nobody filled the field in" and "nobody valued
+    // it" are different problems with different fixes.
+    expect(NOT_MEASURED).not.toBe('N/A')
+    expect(NOT_MEASURED).not.toBe(NOT_VALUED)
+    expect(fmtText('')).toBe('N/A')
+  })
+
+  it('reads a figure whether the page flattens it or nests it under reliability', () => {
+    expect(readField({ breakdown_hours: 12 }, 'breakdown_hours')).toBe(12)
+    expect(readField({ reliability: { breakdown_hours: 34 } }, 'breakdown_hours')).toBe(34)
+    expect(hasReliability(NO_HISTORY)).toBe(false)
+    expect(hasReliability(REL_ROWS.find((r) => r.asset_no === 'TM101'))).toBe(true)
+  })
+})
+
+describe('the fleet reliability reading', () => {
+  it('sums the rows and never averages a percentage of percentages', () => {
+    const f = localFleetReliability(REL_ROWS)
+    expect(f.job_cards).toBe(205)
+    expect(f.dated_cards).toBe(132)
+    // 132/205, not the mean of 51.7, 100 and 72.7.
+    expect(f.date_coverage_pct).toBeCloseTo((132 / 205) * 100, 3)
+    expect(f.breakdown_hours).toBe(4692)
+    expect(f.parked_hours).toBe(8428)
+    expect(f.failures).toBe(140)
+  })
+
+  it('counts only the machines that carry the measurement', () => {
+    const f = fleetReliabilityFor(REL_ROWS)
+    expect(f.availability_measured).toBe(3)
+    expect(f.assets_with_history).toBe(3)
+    // PU044 alone has zero planned services; TM192 has no cards so it cannot be
+    // said to have never been serviced.
+    expect(f.never_preventive).toBe(1)
+    expect(f.long_idle).toBe(2)
+  })
+
+  it('returns null rather than zero when nothing can be measured', () => {
+    const f = fleetReliabilityFor([NO_HISTORY])
+    expect(f.breakdown_hours).toBeNull()
+    expect(f.median_mtbf_days).toBeNull()
+    expect(f.low_availability).toBeNull()
+    expect(f.never_preventive).toBeNull()
+    expect(f.long_idle).toBeNull()
+  })
+})
+
+describe('the two caveats travel with every reliability slide', () => {
+  it('states the parked exclusion with its own hours, derived not hard coded', () => {
+    const notes = reliabilityBasisNotes(REL_ROWS).join(' ')
+    expect(notes).toMatch(/parked/i)
+    expect(notes).toContain('8,428')     // the parked hours, stated as their own fact
+    expect(notes).toContain('4,692')     // breakdown hours WITHOUT them
+    expect(notes).toMatch(/not repair time|never added in/i)
+  })
+
+  it('states what the dated half of the job cards supports', () => {
+    const notes = reliabilityBasisNotes(REL_ROWS).join(' ')
+    expect(notes).toMatch(/MTBF/)
+    expect(notes).toMatch(/failures per year/i)
+    expect(notes).toMatch(/idle days/i)
+    expect(notes).toMatch(/availability/i)
+    expect(notes).toMatch(/\d+\.\d%/)
+  })
+
+  it('softens by itself when the data no longer supports the claim', () => {
+    const clean = REL_ROWS.map((r) => ({ ...r, parked_hours: 0, parked_cards: 0, dated_cards: r.job_cards }))
+    const notes = reliabilityBasisNotes(clean).join(' ')
+    expect(notes).toMatch(/No parked job cards were separated/i)
+    expect(notes).toContain('100.0%')
+  })
+
+  it('the basis slide also states that nothing has been valued', () => {
+    const lines = reliabilityBasisLines(REL_ROWS, 'SAR').join(' ')
+    expect(lines).toMatch(/no recovery, resale or saving figure/i)
+    expect(lines).toMatch(/nothing is projected/i)
+  })
+})
+
+describe('reliability headline strip', () => {
+  const slide = () => resolveBlock(makeBlock('reliability_kpis'), RCTX)
+
+  it('states breakdown hours with the parked hours as their own tile', () => {
+    const by = Object.fromEntries(slide().items.map((i) => [i.key, i]))
+    expect(by.breakdown_hours.value).toBe('4,692')
+    expect(by.breakdown_hours.note).toMatch(/8,428 parked hours/)
+    expect(by.parked_hours.value).toBe('8,428')
+    expect(by.parked_hours.note).toMatch(/never counted as repair time/i)
+  })
+
+  it('carries both caveats on the slide itself', () => {
+    const s = slide()
+    expect(s.notes.join(' ')).toMatch(/parked/i)
+    expect(s.notes.join(' ')).toMatch(/usable date/i)
+  })
+
+  it('prints Not measured, flagged as such, when there is no history', () => {
+    const s = resolveBlock(makeBlock('reliability_kpis'), { ...RCTX, rows: [NO_HISTORY] })
+    expect(s.empty).toBe(true)
+    const by = Object.fromEntries(s.items.map((i) => [i.key, i]))
+    expect(by.median_mtbf.value).toBe(NOT_MEASURED)
+    expect(by.median_mtbf.unmeasured).toBe(true)
+    expect(by.low_availability.value).toBe(NOT_MEASURED)
+  })
+
+  it('every catalog tile resolves to a string for a fleet with nothing in it', () => {
+    for (const k of Object.keys(RELIABILITY_KPI_ITEMS)) {
+      const s = resolveBlock(makeBlock('reliability_kpis', { items: [k] }), EMPTY_CTX)
+      expect(typeof s.items[0].value).toBe('string')
+      expect(typeof s.items[0].note).toBe('string')
+    }
+  })
+})
+
+describe('reliability by machine', () => {
+  it('prints every measure and sinks the machine with no history to the bottom', () => {
+    const res = resolveBlock(makeBlock('reliability_table', { rowsPerSlide: 20 }), RCTX)
+    const s = flatSlides(res)[0]
+    const codes = s.rows.map((r) => r[0])
+    expect(codes[0]).toBe('TM101')            // worst breakdown hours first
+    expect(codes[codes.length - 1]).toBe('TM192') // unmeasured last, never as a zero
+    const tm192 = s.rows.find((r) => r[0] === 'TM192')
+    expect(tm192).toContain(NOT_MEASURED)
+    expect(tm192).not.toContain('0')
+  })
+
+  it('carries both caveats and a caption naming what is shown', () => {
+    const s = flatSlides(resolveBlock(makeBlock('reliability_table', { rowsPerSlide: 20 }), RCTX))[0]
+    expect(s.notes.join(' ')).toMatch(/parked/i)
+    expect(s.notes.join(' ')).toMatch(/usable date/i)
+    expect(s.caption).toContain('Showing 4 of 4 machines')
+  })
+
+  it('bands cells against their peers and leaves an unmeasured cell unbanded', () => {
+    const s = flatSlides(resolveBlock(makeBlock('reliability_table', { rowsPerSlide: 20, columns: ['asset_no', 'availability_pct'] }), RCTX))[0]
+    expect(s.cellBands).toHaveLength(s.rows.length)
+    const idx = s.rows.findIndex((r) => r[0] === 'TM192')
+    expect(s.cellBands[idx][1]).toBe('')
+    // The three measured machines are banded against each other.
+    const banded = s.cellBands.filter((r) => r[1] !== '')
+    expect(banded.length).toBeGreaterThan(0)
+    for (const r of banded) expect(['good', 'watch', 'bad']).toContain(r[1])
+  })
+
+  it('paginates like the register table does', () => {
+    const res = resolveBlock(makeBlock('reliability_table', { rowsPerSlide: 4 }), { ...RCTX, rows: [...REL_ROWS, ...REL_ROWS] })
+    expect(res.kind).toBe('multi')
+    expect(res.slides).toHaveLength(2)
+    expect(res.slides[0].title).toContain('1 of 2')
+  })
+
+  it('sorts a text column alphabetically and a metric worst first', () => {
+    expect(sortReliabilityRows(REL_ROWS, 'asset_no').map((r) => r.asset_no)).toEqual(['BP022', 'PU044', 'TM101', 'TM192'])
+    expect(sortReliabilityRows(REL_ROWS, 'availability_pct').map((r) => r.asset_no)[0]).toBe('TM101')
+  })
+})
+
+describe('worst offenders', () => {
+  it('ranks on the chosen measure and shows what the figure rests on', () => {
+    const s = resolveBlock(makeBlock('worst_offenders', { metric: 'breakdown_hours', limit: 5 }), RCTX)
+    expect(s.kind).toBe('table')
+    expect(s.rows[0][1]).toBe('TM101')
+    expect(s.rows[0][3]).toBe('3,572')
+    expect(s.rows[0][4]).toMatch(/88 failures/)
+    expect(s.rows[0][4]).toMatch(/parked hrs excluded/)
+  })
+
+  it('knows which end of the scale is the bad one', () => {
+    const s = resolveBlock(makeBlock('worst_offenders', { metric: 'availability_pct', limit: 5 }), RCTX)
+    expect(s.rows[0][1]).toBe('TM101')   // 76.4%, the lowest
+    expect(s.caption).toMatch(/^Lowest/)
+  })
+
+  it('leaves an unmeasured machine out rather than ranking it as zero', () => {
+    const s = resolveBlock(makeBlock('worst_offenders', { metric: 'failures_per_year', limit: 10 }), RCTX)
+    expect(s.rows.map((r) => r[1])).not.toContain('TM192')
+    expect(s.caption).toContain('Measured on 3 of 4 machines')
+    expect(s.caption).toMatch(/left out rather than ranked as zero/i)
+  })
+
+  it('says so instead of ranking nothing when the measure is absent', () => {
+    const s = resolveBlock(makeBlock('worst_offenders', { metric: 'mtbf_days' }), { ...RCTX, rows: [NO_HISTORY] })
+    expect(s.empty).toBe(true)
+    expect(s.emptyNote).toMatch(/not measured on any machine/i)
+  })
+
+  it('only offers measures where one end of the scale is a verdict', () => {
+    expect(RANKABLE_METRICS).toContain('breakdown_hours')
+    expect(RANKABLE_METRICS).toContain('availability_pct')
+    expect(RANKABLE_METRICS).not.toContain('first_seen')
+    expect(RANKABLE_METRICS).not.toContain('asset_no')
+    for (const k of RANKABLE_METRICS) {
+      expect(worstBy(REL_ROWS, k, { limit: 3 }).length).toBeLessThanOrEqual(3)
+    }
+  })
+})
+
+describe('spend by year', () => {
+  it('reads every year present and never counts the year in progress as full', () => {
+    expect(spendYearsOf(REL_ROWS)).toEqual([2019, 2023, 2024, 2025, 2026])
+    expect(latestFullYear(REL_ROWS, NOW)).toBe(2025)
+    expect(spendIn(REL_ROWS.find((r) => r.asset_no === 'TM101'), 2025)).toBe(90000)
+    expect(spendIn(NO_HISTORY, 2025)).toBeNull()
+  })
+
+  it('the fleet chart names the machines still absorbing money in the latest full year', () => {
+    const s = resolveBlock(makeBlock('spend_trend', { scope: 'fleet', years: 0 }), RCTX)
+    expect(s.kind).toBe('chart')
+    expect(s.labels).toEqual(['2019', '2023', '2024', '2025', '2026'])
+    expect(s.values[s.labels.indexOf('2025')]).toBe(141000)
+    expect(s.note).toMatch(/3 of these machines were still absorbing money in 2025/)
+    expect(s.note).toContain('SAR 141,000')
+    expect(s.digest).toContain('Latest full year')
+  })
+
+  it('the per machine table orders by the latest full year and leaves a missing year blank', () => {
+    const s = resolveBlock(makeBlock('spend_trend', { scope: 'per_asset', years: 0 }), RCTX)
+    expect(s.kind).toBe('table')
+    expect(s.rows[0][0]).toBe('TM101')          // SAR 90,000 in 2025, the most
+    const bp = s.rows.find((r) => r[0] === 'BP022')
+    const yearCols = s.columns.map((c) => c.key)
+    // BP022 has no 2019 entry: that prints blank, NOT "SAR 0", because nothing
+    // was booked rather than nothing being spent.
+    expect(bp[yearCols.indexOf('y2019')]).toBe('')
+    expect(s.caption).toMatch(/A blank year means nothing was booked, not a zero cost year/)
+  })
+
+  it('says so when no year by year spend exists at all', () => {
+    const s = resolveBlock(makeBlock('spend_trend', { scope: 'fleet' }), { ...RCTX, rows: [NO_HISTORY] })
+    expect(s.empty).toBe(true)
+    expect(s.note).toMatch(/No completed year of spend/i)
+  })
+})
+
+describe('emergency versus planned', () => {
+  it('reads as a management finding and carries the rest of the fleet beside it', () => {
+    const s = resolveBlock(makeBlock('maintenance_mix', { scope: 'fleet' }), RCTX)
+    expect(s.kind).toBe('chart')
+    expect(s.labels).toEqual(['Emergency', 'Repair', 'Planned service'])
+    expect(s.values).toEqual([101, 96, 8])
+    expect(s.note).toMatch(/1\.6%/)                        // the fleet's own share
+    expect(s.note).toMatch(/management decision, not a disposal one/i)
+  })
+
+  it('drops the fleet comparison from the note when no baseline was supplied', () => {
+    const s = resolveBlock(makeBlock('maintenance_mix', { scope: 'fleet' }), { ...RCTX, fleetBaseline: null })
+    expect(s.note).not.toMatch(/1\.6%/)
+    expect(s.note).toMatch(/management decision/i)
+  })
+
+  it('flags the machine that was never planned serviced', () => {
+    const s = resolveBlock(makeBlock('maintenance_mix', { scope: 'per_asset' }), RCTX)
+    const pu = s.rows.find((r) => r[0] === 'PU044')
+    expect(pu[pu.length - 1]).toBe('NEVER PLANNED SERVICED')
+    const tm192 = s.rows.find((r) => r[0] === 'TM192')
+    expect(tm192).toContain(NOT_MEASURED)
+    expect(tm192[tm192.length - 1]).toBe('')  // no history is not "never serviced"
+  })
+})
+
+describe('this list against the rest of the fleet', () => {
+  const slide = () => resolveBlock(makeBlock('fleet_comparison'), RCTX)
+
+  it('says the write off is justified AND that it barely dents the bill', () => {
+    const s = slide()
+    expect(s.kind).toBe('comparison')
+    const texts = s.headlines.map((h) => h.text)
+    expect(texts[0]).toMatch(/justified/i)
+    expect(texts[0]).toContain('SAR 68,513')
+    expect(texts[0]).toContain('SAR 37,218')
+    expect(texts[0]).toMatch(/3,572 breakdown hours per machine/)
+    const limit = texts.find((t) => /barely dents the bill/i.test(t))
+    expect(limit).toBeTruthy()
+    expect(limit).toContain('SAR 2,260,917')
+    expect(limit).toMatch(/969 machines stay in service/)
+    expect(limit).toMatch(/79\.8% availability/)
+    expect(limit).toMatch(/1\.6% planned maintenance/)
+    // About 6% of the bill: the share is computed, not asserted as a constant.
+    const share = Number(/about ([\d.]+)%/.exec(limit)[1])
+    expect(share).toBeGreaterThan(4)
+    expect(share).toBeLessThan(8)
+  })
+
+  it('names the measure to trust and flags the one idleness flatters', () => {
+    const by = Object.fromEntries(slide().metrics.map((m) => [m.key, m]))
+    expect(by.breakdown_hours_per_asset.trust).toBe(true)
+    expect(by.breakdown_hours_per_asset.ratio).toBe('3.0x')
+    expect(by.avg_failures_per_year.confounded).toBe(true)
+    expect(by.spend_per_asset.ratio).toBe('1.8x')
+  })
+
+  it('states the confound and does not correct either figure', () => {
+    const s = slide()
+    expect(s.confound).toMatch(/park/i)
+    expect(s.confound).toMatch(/cannot fail/i)
+    expect(s.confound).toMatch(/breakdown hours per asset|breakdown hours per machine/i)
+    expect(s.confound).toMatch(/(not|neither)[^.]{0,40}adjust/i)
+    // Both figures are published exactly as supplied.
+    const by = Object.fromEntries(s.metrics.map((m) => [m.key, m]))
+    expect(by.avg_failures_per_year.onList).toBe('3.4')
+    expect(by.avg_failures_per_year.rest).toBe('27.0')
+  })
+
+  it('says it could not be produced rather than guessing when no baseline arrives', () => {
+    const s = resolveBlock(makeBlock('fleet_comparison'), { ...RCTX, fleetBaseline: null })
+    expect(s.kind).toBe('text')
+    expect(s.empty).toBe(true)
+    expect(s.body).toMatch(/could not be produced/i)
+    expect(s.body).toMatch(/not derivable from the disposal list alone/i)
+    expect(fleetComparison(null)).toBeNull()
+    expect(fleetComparison({ ok: false, reason: 'unavailable' })).toBeNull()
+  })
+})
+
+describe('recommendations', () => {
+  it('groups by priority and carries the figures each one rests on', () => {
+    const res = resolveBlock(makeBlock('recommendations'), RCTX)
+    const s = flatSlides(res)[0]
+    expect(s.kind).toBe('recommendations')
+    expect(s.count).toBeGreaterThan(0)
+    for (const g of s.groups) {
+      expect(RECOMMENDATION_PRIORITIES).toContain(g.priority)
+      expect(g.label.length).toBeGreaterThan(0)
+      for (const it of g.items) {
+        expect(it.title.length).toBeGreaterThan(10)
+        expect(Array.isArray(it.assets)).toBe(true)
+        expect(`${it.detail} ${it.evidence.join(' ')}`.trim().length).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('paginates rather than pushing a recommendation off the bottom of a slide', () => {
+    const res = resolveBlock(makeBlock('recommendations', { perSlide: 1 }), RCTX)
+    const slides = flatSlides(res)
+    expect(slides.length).toBeGreaterThan(1)
+    expect(slides[0].title).toContain('1 of')
+    const shown = slides.reduce((a, s) => a + s.groups.reduce((b, g) => b + g.items.length, 0), 0)
+    expect(shown).toBe(slides[0].count)
+  })
+
+  it('never quantifies a saving, a scrap value or a resale price', () => {
+    const res = resolveBlock(makeBlock('recommendations'), RCTX)
+    const text = flatSlides(res)
+      .flatMap((s) => s.groups.flatMap((g) => g.items.flatMap((i) => [i.title, i.detail, ...i.evidence])))
+      .join(' ')
+    expect(text).not.toMatch(/scrap value|resale (price|value)|salvage|would (save|recover)|savings? of/i)
+    expect(text).not.toMatch(/if disposed/i)
+  })
+
+  it('the local reading names its own evidence and stays on the same ladder', () => {
+    const local = localRecommendations(REL_ROWS, TOTALS, { currency: 'SAR', now: NOW })
+    expect(local.length).toBeGreaterThan(3)
+    for (const r of local) {
+      expect(RECOMMENDATION_PRIORITIES).toContain(r.priority)
+      expect(r.detail.length).toBeGreaterThan(20)
+    }
+    const all = local.map((r) => `${r.title} ${r.detail}`).join(' ')
+    expect(all).toMatch(/still absorbed money in 2025/)
+    expect(all).toMatch(/never serviced to a schedule/)
+    expect(all).toMatch(/no fleet register record/)
+  })
+
+  it('returns nothing at all for an empty list rather than a made up point', () => {
+    expect(localRecommendations([], null)).toEqual([])
+    expect(recommendationsFor([], null)).toEqual([])
+    const s = resolveBlock(makeBlock('recommendations'), EMPTY_CTX)
+    expect(s.empty).toBe(true)
+    expect(s.groups).toEqual([])
+  })
+})
+
+describe('the basis slide', () => {
+  it('explains both caveats and the valuation gap in plain English', () => {
+    const s = resolveBlock(makeBlock('basis'), RCTX)
+    expect(s.kind).toBe('findings')
+    const text = s.bullets.join(' ')
+    expect(text).toMatch(/parked/i)
+    expect(text).toMatch(/usable date/i)
+    expect(text).toMatch(/has been valued|no recovery/i)
+    expect(text).toMatch(/3 of 4 machines/)   // TM192 carries no history at all
+  })
+
+  it('says there is nothing to explain when the list is empty', () => {
+    const s = resolveBlock(makeBlock('basis'), EMPTY_CTX)
+    expect(s.empty).toBe(true)
+  })
+})
+
+describe('the per machine dossier carries its reliability record', () => {
+  it('shows the measures and the caveats they rest on', () => {
+    const res = resolveBlock(makeBlock('asset_detail', { filter: 'scrap' }), RCTX)
+    const s = res.slides.find((x) => x.assetNo === 'TM101')
+    const by = Object.fromEntries(s.reliability.map((f) => [f.label, f.value]))
+    expect(by['Breakdown hrs']).toBe('3,572')
+    expect(by['MTBF days']).toBe('55.6')
+    expect(by.Available).toBe('76.4%')
+    expect(s.reliabilityNotes.join(' ')).toMatch(/exclude 8,428 hours on 2 parked job cards/)
+    expect(s.reliabilityNotes.join(' ')).toMatch(/51\.7% of this machine's job cards/)
+  })
+
+  it('says a machine with no history cannot be measured, and shows no strip', () => {
+    const res = resolveBlock(makeBlock('asset_detail', { filter: 'scrap' }), RCTX)
+    const s = res.slides.find((x) => x.assetNo === 'TM192')
+    expect(s.reliability).toEqual([])
+    expect(s.reliabilityNote).toMatch(/no maintenance history/i)
+  })
+
+  it('can be turned off without breaking the slide', () => {
+    const res = resolveBlock(makeBlock('asset_detail', { filter: 'scrap', showReliability: false }), RCTX)
+    const s = res.slides.find((x) => x.assetNo === 'TM101')
+    expect(s.reliability).toEqual([])
+    expect(s.facts.length).toBeGreaterThan(0)
+  })
+})
+
+describe('the reliability presets', () => {
+  it('ships the CEO briefing and the reliability case', () => {
+    expect(DECK_PRESET_KEYS).toEqual(expect.arrayContaining(['ceo_briefing', 'reliability_case']))
+  })
+
+  it('the CEO briefing carries the ask, the case and the basis', () => {
+    const types = presetConfig('ceo_briefing').blocks.map((b) => b.type)
+    expect(types).toEqual(expect.arrayContaining([
+      'reliability_kpis', 'recommendations', 'fleet_comparison',
+      'worst_offenders', 'spend_trend', 'maintenance_mix', 'basis',
+    ]))
+    const deck = buildDeck(presetConfig('ceo_briefing'), RCTX)
+    expect(deck.slides.some((s) => s.kind === 'comparison')).toBe(true)
+    expect(deck.slides.some((s) => s.kind === 'recommendations')).toBe(true)
+    // A committee shown only the case, never the limit, takes the write off as
+    // a fix for a problem it does not reach.
+    const cmp = deck.slides.find((s) => s.kind === 'comparison')
+    expect(cmp.headlines.some((h) => /justified/i.test(h.text))).toBe(true)
+    expect(cmp.headlines.some((h) => /barely dents/i.test(h.text))).toBe(true)
+  })
+
+  it('the reliability case builds the full argument machine by machine', () => {
+    const deck = buildDeck(presetConfig('reliability_case'), RCTX)
+    expect(deck.slides.length).toBeGreaterThan(8)
+    expect(deck.slides.filter((s) => s.kind === 'table').length).toBeGreaterThan(2)
+  })
+
+  it('every preset, old and new, still builds against a list with no reliability at all', () => {
+    for (const key of DECK_PRESET_KEYS) {
+      const deck = buildDeck(presetConfig(key), CTX)  // no reliability, no baseline
+      expect(deck.slides.length).toBeGreaterThan(0)
+      for (const s of deck.slides) expect(typeof s.kind).toBe('string')
+    }
+  })
+
+  it('every new preset is plain ASCII end to end', () => {
+    for (const key of ['ceo_briefing', 'reliability_case']) {
+      const deck = buildDeck(presetConfig(key), RCTX)
+      const walk = (v) => {
+        if (typeof v === 'string') expect(/[^\x20-\x7E\n]/.test(v)).toBe(false)
+        else if (Array.isArray(v)) v.forEach(walk)
+        else if (v && typeof v === 'object') Object.values(v).forEach(walk)
+      }
+      walk(deck)
+    }
+  })
+
+  it('no reliability slide anywhere quotes a value nobody produced', () => {
+    const deck = buildDeck(presetConfig('reliability_case'), RCTX)
+    const text = JSON.stringify(deck)
+    expect(text).not.toMatch(/scrap value|salvage value|resale price|written down value/i)
+    // Every valuation slot still refuses to print a number.
+    const dossier = buildDeck(presetConfig('dossier'), RCTX)
+    for (const s of dossier.slides.filter((x) => x.kind === 'asset')) {
+      const by = Object.fromEntries(s.facts.map((f) => [f.label, f.value]))
+      expect(by['Estimated value']).toBe(NOT_VALUED)
+      expect(by['Sale proceeds']).toBe(NOT_VALUED)
+    }
+  })
+})
+
+describe('an empty fleet says so on every new slide', () => {
+  it('marks each reliability block empty with a reason and never a zero', () => {
+    for (const type of ['reliability_kpis', 'reliability_table', 'worst_offenders', 'spend_trend', 'maintenance_mix', 'recommendations', 'basis']) {
+      for (const s of flatSlides(resolveBlock(makeBlock(type), EMPTY_CTX))) {
+        expect(s.empty).toBe(true)
+        expect(String(s.emptyNote || s.body || '').length).toBeGreaterThan(10)
+      }
+    }
+  })
+
+  it('the comparison slide is the one that still renders, because it is not about the list', () => {
+    const s = resolveBlock(makeBlock('fleet_comparison'), { ...EMPTY_CTX, fleetBaseline: BASELINE })
+    expect(s.kind).toBe('comparison')
+    expect(s.metrics.length).toBeGreaterThan(0)
+  })
 })
 
 // ── Catalog integrity ────────────────────────────────────────────────────────

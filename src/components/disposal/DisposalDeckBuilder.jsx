@@ -40,10 +40,13 @@ import {
   KPI_ITEMS, KPI_KEYS, CHART_SOURCES, CHART_SOURCE_KEYS, CHART_METRICS,
   CHART_METRIC_KEYS, CHART_VIZ, CHART_VIZ_KEYS, TABLE_COLUMNS, TABLE_COLUMN_KEYS,
   TYRE_COLUMNS, TYRE_COLUMN_KEYS, ROW_FILTERS, SORTS,
+  RELIABILITY_KPI_ITEMS, RELIABILITY_KPI_KEYS, RELIABILITY_COLUMNS,
+  RELIABILITY_COLUMN_KEYS, RANKABLE_METRICS, RECOMMENDATION_PRIORITIES,
+  NOT_MEASURED,
   makeBlock, normalizeDeckConfig, buildDeck, presetConfig,
   loadDeckLayout, saveDeckLayout, listSavedDecks, saveNamedDeck, deleteNamedDeck,
 } from '../../lib/assetDisposalDeck'
-import { renderDisposalDeckPptx, renderDisposalDeckPdf, slideChartConfig } from '../../lib/assetDisposalDeckRender'
+import { renderDisposalDeckPptx, renderDisposalDeckPdf, slideChartConfig, PRIORITY_LABEL } from '../../lib/assetDisposalDeckRender'
 import { captureChartOnPaper } from '../../lib/chartCapture'
 import { toUserMessage } from '../../lib/safeError'
 
@@ -105,6 +108,16 @@ const toggleIn = (arr, k) => (arr.includes(k) ? arr.filter((x) => x !== k) : [..
 const PAPER = {
   bg: '#ffffff', ink: '#0f172a', subtle: '#475569', muted: '#94a3b8',
   border: '#e2e8f0', accent: '#4f46e5', warn: '#b45309', head: '#1e293b', zebra: '#f8fafc',
+  good: '#15803d', watch: '#b45309', bad: '#b91c1c',
+}
+const PRIORITY_COLOR = { high: PAPER.bad, medium: PAPER.warn, low: PAPER.subtle }
+const isUnmeasured = (v) => String(v) === NOT_MEASURED
+/** Preview tone for one table cell, mirroring cellTone() in the renderers. */
+const previewCellColor = (cell, band) => {
+  if (cell === 'NOT IN REGISTER') return PAPER.warn
+  if (isUnmeasured(cell)) return PAPER.muted
+  if (band && PAPER[band]) return PAPER[band]
+  return PAPER.subtle
 }
 
 function SlidePreview({ slide, deck, registerChart }) {
@@ -149,19 +162,141 @@ function SlidePreview({ slide, deck, registerChart }) {
   if (slide.kind === 'kpis') {
     const items = slide.items.slice(0, 9)
     const perRow = items.length <= 4 ? Math.max(1, items.length) : 3
+    const notes = Array.isArray(slide.notes) ? slide.notes.filter(Boolean) : []
     return (
-      <div style={{ height: '100%' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {head(slide.title)}
         {slide.empty || !items.length ? empty(slide.emptyNote) : (
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${perRow}, 1fr)`, gap: 8 }}>
-            {items.map((k) => (
-              <div key={k.key} style={{ border: `1px solid ${PAPER.border}`, borderTop: `3px solid ${k.valuation ? PAPER.warn : PAPER.accent}`, borderRadius: 4, padding: 8 }}>
-                <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.muted, letterSpacing: 0.6 }}>{k.label.toUpperCase()}</div>
-                <div style={{ fontSize: k.valuation ? 15 : 20, fontWeight: 800, color: k.valuation ? PAPER.warn : PAPER.ink, marginTop: 4 }}>{k.value}</div>
-                {k.note && <div style={{ fontSize: 7.5, color: PAPER.subtle, marginTop: 4, lineHeight: 1.3 }}>{k.note}</div>}
+            {items.map((k) => {
+              const soft = k.unmeasured || isUnmeasured(k.value)
+              return (
+                <div key={k.key} style={{ border: `1px solid ${PAPER.border}`, borderTop: `3px solid ${soft ? PAPER.muted : (k.valuation ? PAPER.warn : PAPER.accent)}`, borderRadius: 4, padding: 8 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.muted, letterSpacing: 0.6 }}>{k.label.toUpperCase()}</div>
+                  <div style={{ fontSize: k.valuation || soft ? 15 : 20, fontWeight: 800, color: soft ? PAPER.muted : (k.valuation ? PAPER.warn : PAPER.ink), marginTop: 4 }}>{k.value}</div>
+                  {k.note && <div style={{ fontSize: 7.5, color: PAPER.subtle, marginTop: 4, lineHeight: 1.3 }}>{k.note}</div>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {notes.length > 0 && (
+          <div style={{ marginTop: 'auto', paddingTop: 6, fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.35 }}>
+            {notes.join('  ')}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (slide.kind === 'recommendations') {
+    return (
+      <div style={{ height: '100%', overflow: 'hidden' }}>
+        {head(slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'} in all, each one carrying the figures it rests on`)}
+        {slide.empty ? empty(slide.emptyNote) : slide.groups.map((g) => (
+          <div key={g.priority} style={{ marginBottom: 8 }}>
+            <span style={{ display: 'inline-block', background: PRIORITY_COLOR[g.priority] || PAPER.subtle, color: '#fff', fontSize: 7, fontWeight: 700, letterSpacing: 0.8, padding: '2px 6px', borderRadius: 3 }}>
+              {g.label || PRIORITY_LABEL[g.priority] || String(g.priority).toUpperCase()}
+            </span>
+            {g.items.map((it, i) => (
+              <div key={i} style={{ marginTop: 5 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: PAPER.ink, lineHeight: 1.3 }}>{it.title}</div>
+                {it.detail && (
+                  <div style={{ fontSize: 8.5, color: PAPER.subtle, marginTop: 2, marginLeft: 8, lineHeight: 1.35 }}>{it.detail}</div>
+                )}
+                {slide.showEvidence && Array.isArray(it.evidence) && it.evidence.length > 0 && (
+                  <ul style={{ margin: '2px 0 0 20px', padding: 0 }}>
+                    {it.evidence.map((e, j) => (
+                      <li key={j} style={{ fontSize: 7.5, color: PAPER.muted, lineHeight: 1.35 }}>{e}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (slide.kind === 'comparison') {
+    return (
+      <div style={{ height: '100%', overflow: 'hidden' }}>
+        {head(slide.title, slide.country ? `Country: ${slide.country}` : '')}
+        {slide.headlines.map((h, i) => (
+          <div key={i} style={{ borderLeft: `3px solid ${h.tone === 'limit' ? PAPER.warn : PAPER.accent}`, paddingLeft: 8, marginBottom: 7, fontSize: 10, color: PAPER.ink, lineHeight: 1.4 }}>
+            {h.text}
+          </div>
+        ))}
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 8.5, marginTop: 4 }}>
+          <thead>
+            <tr>{['Measure', slide.onLabel, slide.restLabel, 'Ratio'].map((h, i) => (
+              <th key={h} style={{ background: PAPER.head, color: '#fff', padding: '3px 4px', textAlign: i ? 'right' : 'left', border: `1px solid ${PAPER.border}` }}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>
+            {slide.metrics.map((m) => {
+              const color = m.confounded ? PAPER.muted : (m.trust ? PAPER.ink : PAPER.subtle)
+              return (
+                <tr key={m.key}>
+                  <td style={{ padding: '2px 4px', border: `1px solid ${PAPER.border}`, color, fontWeight: m.trust ? 700 : 400 }}>
+                    {m.label}{m.trust ? ' (read this one)' : (m.confounded ? ' (confounded)' : '')}
+                  </td>
+                  <td style={{ padding: '2px 4px', border: `1px solid ${PAPER.border}`, color, textAlign: 'right', fontWeight: m.trust ? 700 : 400 }}>{m.onList}</td>
+                  <td style={{ padding: '2px 4px', border: `1px solid ${PAPER.border}`, color, textAlign: 'right' }}>{m.rest}</td>
+                  <td style={{ padding: '2px 4px', border: `1px solid ${PAPER.border}`, color: m.trust ? PAPER.warn : PAPER.subtle, textAlign: 'right', fontWeight: m.trust ? 700 : 400 }}>{m.ratio}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {slide.confound && (
+          <div style={{ marginTop: 8, padding: 6, background: '#fff7ed', border: `1px solid ${PAPER.warn}`, borderRadius: 3, fontSize: 8, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
+            {slide.confound}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (slide.kind === 'replacement') {
+    return (
+      <div style={{ height: '100%', overflow: 'hidden' }}>
+        {head(slide.title)}
+        {slide.empty ? empty(slide.emptyNote) : (
+          <>
+            {slide.headlines.map((h, i) => (
+              <div key={i} style={{ borderLeft: `3px solid ${h.tone === 'limit' ? PAPER.warn : PAPER.accent}`, paddingLeft: 8, marginBottom: 7, fontSize: 10, color: PAPER.ink, lineHeight: 1.4 }}>
+                {h.text}
+              </div>
+            ))}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 8, marginTop: 4 }}>
+              <thead>
+                <tr>{slide.columns.map((c) => (
+                  <th key={c.key} style={{ background: PAPER.head, color: '#fff', padding: '3px 4px', textAlign: c.align === 'right' ? 'right' : 'left', border: `1px solid ${PAPER.border}` }}>{c.header}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {slide.rows.map((r, ri) => (
+                  <tr key={ri} style={{ background: ri % 2 ? PAPER.zebra : PAPER.bg }}>
+                    {r.map((cell, ci) => (
+                      <td key={ci} style={{ padding: '2px 4px', border: `1px solid ${PAPER.border}`, color: previewCellColor(cell), textAlign: slide.columns[ci]?.align === 'right' ? 'right' : 'left' }}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {Array.isArray(slide.notes) && slide.notes.length > 0 && (
+              <div style={{ marginTop: 8, padding: 6, background: '#fff7ed', border: `1px solid ${PAPER.warn}`, borderRadius: 3, fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', lineHeight: 1.4 }}>
+                {slide.notes.join('  ')}
+              </div>
+            )}
+            {slide.caption && (
+              <div style={{ marginTop: 6, fontSize: 8, color: PAPER.muted }}>{slide.caption}</div>
+            )}
+          </>
         )}
       </div>
     )
@@ -221,21 +356,30 @@ function SlidePreview({ slide, deck, registerChart }) {
               <tbody>
                 {slide.rows.map((r, ri) => (
                   <tr key={ri} style={{ background: ri % 2 ? PAPER.zebra : '#fff' }}>
-                    {r.map((cell, ci) => (
-                      <td key={ci} style={{
-                        padding: '2px 4px', border: `1px solid ${PAPER.border}`,
-                        textAlign: slide.columns[ci]?.align === 'right' ? 'right' : 'left',
-                        color: cell === 'NOT IN REGISTER' ? PAPER.warn : PAPER.subtle,
-                        fontWeight: cell === 'NOT IN REGISTER' ? 700 : 400,
-                      }}>{cell}</td>
-                    ))}
+                    {r.map((cell, ci) => {
+                      const band = slide.cellBands?.[ri]?.[ci]
+                      return (
+                        <td key={ci} style={{
+                          padding: '2px 4px', border: `1px solid ${PAPER.border}`,
+                          textAlign: slide.columns[ci]?.align === 'right' ? 'right' : 'left',
+                          color: previewCellColor(cell, band),
+                          fontWeight: cell === 'NOT IN REGISTER' || band === 'bad' ? 700 : 400,
+                          fontStyle: isUnmeasured(cell) ? 'italic' : 'normal',
+                        }}>{cell}</td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <div style={{ fontSize: 8, color: PAPER.muted, marginTop: 6 }}>{slide.caption}</div>
+        {Array.isArray(slide.notes) && slide.notes.filter(Boolean).length > 0 && (
+          <div style={{ fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', marginTop: 5, lineHeight: 1.35 }}>
+            {slide.notes.filter(Boolean).join('  ')}
+          </div>
+        )}
+        <div style={{ fontSize: 8, color: PAPER.muted, marginTop: 5 }}>{slide.caption}</div>
       </div>
     )
   }
@@ -261,6 +405,27 @@ function SlidePreview({ slide, deck, registerChart }) {
             </div>
           ))}
         </div>
+        {Array.isArray(slide.reliability) && slide.reliability.length > 0 ? (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.muted, letterSpacing: 0.6 }}>RELIABILITY RECORD</div>
+            <div style={{ fontSize: 9, color: PAPER.ink, marginTop: 3, lineHeight: 1.5 }}>
+              {slide.reliability.map((f, i) => (
+                <span key={f.label}>
+                  <span style={{ color: PAPER.muted }}>{f.label}: </span>
+                  <span style={{ fontWeight: isUnmeasured(f.value) ? 400 : 700, color: isUnmeasured(f.value) ? PAPER.muted : PAPER.ink, fontStyle: isUnmeasured(f.value) ? 'italic' : 'normal' }}>{f.value}</span>
+                  {i < slide.reliability.length - 1 && <span style={{ color: PAPER.border }}>{'   |   '}</span>}
+                </span>
+              ))}
+            </div>
+            {Array.isArray(slide.reliabilityNotes) && slide.reliabilityNotes.filter(Boolean).length > 0 && (
+              <div style={{ fontSize: 7.5, color: PAPER.warn, fontStyle: 'italic', marginTop: 3, lineHeight: 1.35 }}>
+                {slide.reliabilityNotes.filter(Boolean).join('  ')}
+              </div>
+            )}
+          </div>
+        ) : slide.reliabilityNote ? (
+          <div style={{ marginTop: 8, fontSize: 9, fontStyle: 'italic', color: PAPER.muted }}>{slide.reliabilityNote}</div>
+        ) : null}
         {slide.remarks.length > 0 && (
           <div style={{ marginTop: 8 }}>
             <div style={{ fontSize: 8, fontWeight: 700, color: PAPER.muted, letterSpacing: 0.6 }}>COMMITTEE REMARKS</div>
@@ -417,6 +582,149 @@ function BlockSettings({ block, onPatch }) {
             <input type="checkbox" checked={block.showTyres !== false} onChange={(e) => set({ showTyres: e.target.checked })} />
             Show the tyres still fitted
           </label>
+          <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            <input type="checkbox" checked={block.showReliability !== false} onChange={(e) => set({ showReliability: e.target.checked })} />
+            Show its reliability record
+          </label>
+        </>
+      )}
+
+      {block.type === 'reliability_kpis' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+          <Field label="Numbers to show" hint="Up to 9. Anything the history cannot support prints Not measured.">
+            <CheckList
+              all={RELIABILITY_KPI_KEYS} labelOf={(k) => RELIABILITY_KPI_ITEMS[k].label}
+              selected={block.items}
+              onToggle={(k) => set({ items: toggleIn(block.items, k).slice(0, 9) })}
+            />
+          </Field>
+        </>
+      )}
+
+      {block.type === 'reliability_table' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+          <Field label="Worst first by" hint="Machines with no figure sink to the bottom rather than sorting as zero.">
+            <Select value={block.sort} onChange={(v) => set({ sort: v })} options={RELIABILITY_COLUMN_KEYS.map((k) => ({ value: k, label: RELIABILITY_COLUMNS[k].header }))} />
+          </Field>
+          <Field label="Density"><Select value={block.density} onChange={(v) => set({ density: v })} options={[{ value: 'normal', label: 'Normal' }, { value: 'compact', label: 'Compact' }]} /></Field>
+          <Field label="Rows per slide">
+            <Select value={String(block.rowsPerSlide)} onChange={(v) => set({ rowsPerSlide: Number(v) })} options={[8, 10, 12, 14, 16, 18, 20].map((n) => ({ value: String(n), label: `${n} rows` }))} />
+          </Field>
+          <Field label="Limit" hint="0 shows every matching machine.">
+            <Select value={String(block.limit)} onChange={(v) => set({ limit: Number(v) })} options={[0, 5, 10, 20, 50].map((n) => ({ value: String(n), label: n === 0 ? 'No limit' : `Top ${n}` }))} />
+          </Field>
+          <Field label="Columns">
+            <CheckList all={RELIABILITY_COLUMN_KEYS} labelOf={(k) => RELIABILITY_COLUMNS[k].header} selected={block.columns} onToggle={(k) => set({ columns: toggleIn(block.columns, k) })} />
+          </Field>
+        </>
+      )}
+
+      {block.type === 'worst_offenders' && (
+        <>
+          <Field label="Title" hint="Leave blank to name the measure automatically.">
+            <TextInput value={block.title} onChange={(v) => set({ title: v })} />
+          </Field>
+          <Field label="Measure" hint="Only measures where one end of the scale is a verdict can be ranked.">
+            <Select value={block.metric} onChange={(v) => set({ metric: v })} options={RANKABLE_METRICS.map((k) => ({ value: k, label: RELIABILITY_COLUMNS[k].header }))} />
+          </Field>
+          <Field label="How many"><Select value={String(block.limit)} onChange={(v) => set({ limit: Number(v) })} options={[5, 8, 10, 12, 15, 20].map((n) => ({ value: String(n), label: `Worst ${n}` }))} /></Field>
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+        </>
+      )}
+
+      {block.type === 'spend_trend' && (
+        <>
+          <Field label="Title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Show" hint="Per machine puts the latest full year in its own column.">
+            <Select value={block.scope} onChange={(v) => set({ scope: v })} options={[{ value: 'fleet', label: 'The whole list, year by year' }, { value: 'per_asset', label: 'Machine by machine' }]} />
+          </Field>
+          <Field label="Years shown"><Select value={String(block.years)} onChange={(v) => set({ years: Number(v) })} options={[0, 4, 6, 8, 10].map((n) => ({ value: String(n), label: n === 0 ? 'Every year on record' : `Last ${n} years` }))} /></Field>
+          {block.scope === 'fleet' && (
+            <Field label="Chart type"><Select value={block.viz} onChange={(v) => set({ viz: v })} options={[{ value: 'bar', label: 'Column' }, { value: 'line', label: 'Line' }]} /></Field>
+          )}
+          {block.scope === 'per_asset' && (
+            <Field label="Machines shown"><Select value={String(block.limit)} onChange={(v) => set({ limit: Number(v) })} options={[0, 10, 12, 14, 20].map((n) => ({ value: String(n), label: n === 0 ? 'Every machine' : `Top ${n}` }))} /></Field>
+          )}
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+        </>
+      )}
+
+      {block.type === 'maintenance_mix' && (
+        <>
+          <Field label="Title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Show">
+            <Select value={block.scope} onChange={(v) => set({ scope: v })} options={[{ value: 'fleet', label: 'The whole list' }, { value: 'per_asset', label: 'Machine by machine' }]} />
+          </Field>
+          {block.scope === 'fleet' && (
+            <Field label="Chart type"><Select value={block.viz} onChange={(v) => set({ viz: v })} options={[{ value: 'doughnut', label: 'Doughnut' }, { value: 'bar', label: 'Column' }, { value: 'bar_h', label: 'Bar' }]} /></Field>
+          )}
+          {block.scope === 'per_asset' && (
+            <Field label="Machines shown"><Select value={String(block.limit)} onChange={(v) => set({ limit: Number(v) })} options={[0, 10, 14, 20].map((n) => ({ value: String(n), label: n === 0 ? 'Every machine' : `Lowest ${n}` }))} /></Field>
+          )}
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+        </>
+      )}
+
+      {block.type === 'replacement' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Assets included"><Select value={block.filter} onChange={(v) => set({ filter: v })} options={filterOpts} /></Field>
+          <Field label="Machines shown" hint="Ordered by how much of a new machine each one has already absorbed.">
+            <Select
+              value={String(block.limit)}
+              onChange={(v) => set({ limit: Number(v) })}
+              options={[0, 8, 10, 12, 16].map((n) => ({ value: String(n), label: n === 0 ? 'Every priced machine' : `Top ${n}` }))}
+            />
+          </Field>
+          <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            Prices come from the supplier quotations on file, one per asset class, ex-VAT. A class with no quotation is
+            counted and named on the slide rather than priced from the nearest thing, and no service life, depreciation
+            or resale value is assumed anywhere.
+          </p>
+        </>
+      )}
+
+      {block.type === 'fleet_comparison' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            Compares this list against the machines staying in service. It needs the fleet baseline from the page; without it the slide says so rather than guessing.
+          </p>
+        </>
+      )}
+
+      {block.type === 'recommendations' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <Field label="Priorities to show">
+            <CheckList
+              all={RECOMMENDATION_PRIORITIES}
+              labelOf={(k) => PRIORITY_LABEL[k] || k}
+              selected={block.priorities}
+              onToggle={(k) => set({ priorities: toggleIn(block.priorities, k) })}
+            />
+          </Field>
+          <Field label="Limit"><Select value={String(block.limit)} onChange={(v) => set({ limit: Number(v) })} options={[0, 4, 6, 8, 12].map((n) => ({ value: String(n), label: n === 0 ? 'All of them' : `First ${n}` }))} /></Field>
+          <Field label="Per slide" hint="A recommendation squeezed off the bottom of a slide is one nobody reads.">
+            <Select value={String(block.perSlide)} onChange={(v) => set({ perSlide: Number(v) })} options={[2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} per slide` }))} />
+          </Field>
+          <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            <input type="checkbox" checked={block.showEvidence !== false} onChange={(e) => set({ showEvidence: e.target.checked })} />
+            Show the figures each one rests on
+          </label>
+        </>
+      )}
+
+      {block.type === 'basis' && (
+        <>
+          <Field label="Slide title"><TextInput value={block.title} onChange={(v) => set({ title: v })} /></Field>
+          <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+            States the parked job card exclusion and the job card date coverage, both read from this list. Every reliability slide rests on them.
+          </p>
         </>
       )}
 
@@ -457,7 +765,14 @@ function BlockSettings({ block, onPatch }) {
 
 // ── The builder ──────────────────────────────────────────────────────────────
 export default function DisposalDeckBuilder({
-  rows = [], totals = null, country = '', company = 'TyrePulse', onClose,
+  rows = [], totals = null, country = '', company = 'TyrePulse',
+  // Optional. The page supplies the fleet baseline (this list against the
+  // machines staying in service). Every other block renders unchanged without it.
+  fleetBaseline = null,
+  // Optional. Supplier quotations that price an asset class. Without them the
+  // replacement slide says no quotation is on file rather than estimating one.
+  benchmarks = null,
+  onClose,
 }) {
   const [config, setConfig] = useState(() => loadDeckLayout())
   const [selectedId, setSelectedId] = useState(null)
@@ -480,8 +795,8 @@ export default function DisposalDeckBuilder({
   useEffect(() => { saveDeckLayout(config) }, [config])
 
   const deck = useMemo(
-    () => buildDeck(config, { rows, totals, currency, company, country }),
-    [config, rows, totals, currency, company, country],
+    () => buildDeck(config, { rows, totals, currency, company, country, fleetBaseline, benchmarks }),
+    [config, rows, totals, currency, company, country, fleetBaseline, benchmarks],
   )
 
   // Keep the visible slide in range when blocks change.

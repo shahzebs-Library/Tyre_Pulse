@@ -2,12 +2,18 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, Loader2, AlertTriangle, AlertOctagon,
-  Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge, Lock,
+  Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge, Lock, Languages,
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
-import { blankAnswer, validateSubmission, isLayoutField, isFieldVisible, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue } from '../lib/checklist/fieldTypes'
+import { blankAnswer, validateSubmission, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
+import {
+  CHECKLIST_LANGS, DEFAULT_LANG, normalizeLang, langDir, isRtlLang,
+  fieldLabel, fieldOptions, fieldOptionValues, templateName, templateDescription,
+  hasTranslations, translatedLangs,
+} from '../lib/checklist/checklistI18n'
 import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 import ReferencePicker from '../components/checklist/ReferencePicker'
@@ -26,6 +32,7 @@ export default function ChecklistRun() {
   const assignmentId = searchParams.get('assignment') || null
   const { activeCountry } = useSettings()
   const { profile } = useAuth()
+  const { language: appLanguage } = useLanguage()
   const back = useCallback(() => navigate('/checklists'), [navigate])
 
   const [template, setTemplate] = useState(null)
@@ -35,14 +42,32 @@ export default function ChecklistRun() {
   const [header, setHeader] = useState({ title: '', asset_no: '', site: '' })
   const [answers, setAnswers] = useState({})
   const [photos, setPhotos] = useState({})       // { fieldId: [urls] }
-  const [signature, setSignature] = useState(null) // { fieldId?, dataUrl }
+  // Every signature FIELD keeps its own capture, keyed by field id, exactly as
+  // photos are. A workshop sheet is signed off by three trades (mechanic, auto
+  // electrician, inspecting engineer); a single slot here silently overwrote
+  // the previous signature and submitted only the last one.
+  const [signatures, setSignatures] = useState({})   // { fieldId: dataUrl }
+  // The template-level sign-off (template.require_signature), which is not tied
+  // to any field and is stored in submissions.signature_data.
+  const [primarySignature, setPrimarySignature] = useState(null)
+  const [notes, setNotes] = useState({})         // { fieldId: remark }
   const [errors, setErrors] = useState({})
   const [uploading, setUploading] = useState({})   // { fieldId: bool }
   const [showSignPad, setShowSignPad] = useState(false)
   const [signTargetField, setSignTargetField] = useState(null) // fieldId for a signature-type field, else null
+  // The language the checklist CONTENT is read in. Separate from the app UI
+  // language: the sheet is filled on the floor by mechanics who read Arabic,
+  // Hindi or Urdu. `null` until the template loads and we know what it offers.
+  const [lang, setLang] = useState(null)
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+
+  // Depend on the VALUES the load uses, never on the `profile` object itself: a
+  // caller that rebuilds that object each render would otherwise reload the
+  // template on every render, and the reload resets the form.
+  const inspectorName = profile?.full_name || profile?.username || ''
+  const employeeId = profile?.employee_id || profile?.id || ''
 
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')
@@ -53,7 +78,7 @@ export default function ChecklistRun() {
       // Seed answers with blank values so controlled inputs stay controlled.
       // Auto-fill + lock fields are prefilled from live context (inspector/today).
       const today = new Date().toISOString().slice(0, 10)
-      const userName = profile?.full_name || profile?.username || ''
+      const userName = inspectorName
       const seeded = {}
       for (const f of Array.isArray(tpl.fields) ? tpl.fields : []) {
         if (f?.id && !isLayoutField(f.type) && f.type !== 'photo' && f.type !== 'signature') {
@@ -61,24 +86,44 @@ export default function ChecklistRun() {
         }
       }
       setAnswers(seeded)
+      // Open in the reader's own language when this template actually carries
+      // it; otherwise English. Offering a language the template has no words in
+      // would show an English sheet under an Arabic heading.
+      const wanted = normalizeLang(appLanguage)
+      setLang(wanted !== DEFAULT_LANG && translatedLangs(tpl).includes(wanted) ? wanted : DEFAULT_LANG)
     } catch (err) {
       setLoadError(isMissingRelation(err) ? 'missing' : toUserMessage(err, 'Could not load the checklist.'))
     } finally {
       setLoading(false)
     }
-  }, [templateId, profile])
+  }, [templateId, inspectorName, appLanguage])
 
   useEffect(() => { load() }, [load])
 
   const fields = useMemo(() => (Array.isArray(template?.fields) ? template.fields : []), [template])
+  const readLang = normalizeLang(lang)
+  const rtl = isRtlLang(readLang)
+  // Only offer a language switch when the template has real words in another
+  // language; a picker whose every option renders English is a lie.
+  const offeredLangs = useMemo(() => {
+    if (!template || !hasTranslations(template)) return []
+    const have = new Set([DEFAULT_LANG, ...translatedLangs(template)])
+    return CHECKLIST_LANGS.filter((l) => have.has(l.code))
+  }, [template])
+
+  // Translated label / options for a field, in the reader's language. The
+  // OPTION VALUE stays English wherever it is stored or compared.
+  const labelFor = useCallback((f) => fieldLabel(f, readLang), [readLang])
+  const optionsFor = useCallback((f) => fieldOptionValues(f, template), [template])
 
   const setAnswer = useCallback((id, value) => {
     setAnswers((prev) => ({ ...prev, [id]: value }))
     setErrors((prev) => (prev[id] ? { ...prev, [id]: undefined } : prev))
   }, [])
 
-  const inspectorName = profile?.full_name || profile?.username || ''
-  const employeeId = profile?.employee_id || profile?.id || ''
+  const setNote = useCallback((id, text) => {
+    setNotes((prev) => ({ ...prev, [id]: text }))
+  }, [])
 
   // ── Photo capture (works for photo-type fields and any allow_photo field) ──
   async function handlePhotoPick(fieldId, fileList) {
@@ -111,15 +156,26 @@ export default function ChecklistRun() {
     setShowSignPad(true)
   }
 
+  // Each capture lands in its OWN slot: a signature field writes to its field
+  // id, the template-level pad writes to primarySignature. Signing one can no
+  // longer wipe another.
   function handleSignatureSave(dataUrl) {
-    setSignature({ fieldId: signTargetField, dataUrl })
+    if (signTargetField) {
+      const id = signTargetField
+      setSignatures((prev) => ({ ...prev, [id]: dataUrl }))
+      setErrors((prev) => (prev[id] ? { ...prev, [id]: undefined } : prev))
+    } else {
+      setPrimarySignature(dataUrl)
+    }
     setShowSignPad(false)
     setSignTargetField(null)
   }
 
   async function handleSubmit() {
     setSubmitError('')
-    const { valid, errors: fieldErrors } = validateSubmission(fields, answers)
+    const { valid, errors: fieldErrors } = validateSubmission(fields, answers, {
+      signatures, labelFor, optionsFor,
+    })
     if (!valid) {
       setErrors(fieldErrors)
       setSubmitError('Please correct the highlighted fields before submitting.')
@@ -131,13 +187,37 @@ export default function ChecklistRun() {
       }
       return
     }
-    if (template?.require_signature && !signature?.dataUrl) {
+    // The first signature captured on a signature FIELD, in template order.
+    // It backs signature_data when the template has no separate sign-off pad,
+    // which is what the single-slot version used to write there.
+    const firstFieldSignature =
+      signatureFields(fields).map((f) => signatures[f.id]).find((s) => typeof s === 'string' && s) || null
+    const primary = primarySignature || firstFieldSignature
+
+    // require_signature is satisfied by the template-level pad OR by any
+    // signature field having been signed (the historic behaviour): a sheet that
+    // already carries three trade signatures should not demand a fourth.
+    if (template?.require_signature && !primary) {
       setSubmitError('A signature is required to submit this checklist.')
       return
     }
 
     setSubmitting(true)
     try {
+      // Keep only real remarks, and only on lines that asked for one and are
+      // still visible. A blank box is not an observation.
+      const noteMap = {}
+      for (const f of visibleFields(fields, answers)) {
+        if (!f?.allow_note) continue
+        const text = String(notes[f.id] ?? '').trim()
+        if (text) noteMap[f.id] = text
+      }
+      // Only signatures that belong to a field this template still has.
+      const signatureMap = {}
+      for (const f of signatureFields(fields)) {
+        if (typeof signatures[f.id] === 'string' && signatures[f.id]) signatureMap[f.id] = signatures[f.id]
+      }
+
       const payload = {
         template_id: template.id,
         template_name: template.name,
@@ -149,8 +229,13 @@ export default function ChecklistRun() {
         status: 'submitted',
         answers,
         photos,
-        signature_data: signature?.dataUrl ?? null,
-        printed_name: signature?.dataUrl ? (inspectorName || null) : null,
+        notes: noteMap,
+        // Every captured signature, keyed by field id. signature_data keeps its
+        // meaning as the single primary sign-off so every existing reader,
+        // export and PDF is unchanged.
+        signatures: signatureMap,
+        signature_data: primary,
+        printed_name: primary ? (inspectorName || null) : null,
       }
       if (template.scored) {
         const score = computeScore(fields, answers, template.pass_threshold)
@@ -234,7 +319,7 @@ export default function ChecklistRun() {
   const liveScore = template.scored ? computeScore(fields, answers, template.pass_threshold) : null
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24" dir={langDir(readLang)} lang={readLang}>
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
         <button onClick={back} className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors">
@@ -251,8 +336,10 @@ export default function ChecklistRun() {
             <ClipboardCheck size={18} className="text-brand-bright" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-[var(--text-primary)] truncate">{template.name || 'Checklist'}</h1>
-            {template.description && <p className="text-sm text-[var(--text-muted)] mt-0.5">{template.description}</p>}
+            <h1 className="text-xl font-bold text-[var(--text-primary)] truncate">{templateName(template, readLang) || 'Checklist'}</h1>
+            {templateDescription(template, readLang) && (
+              <p className="text-sm text-[var(--text-muted)] mt-0.5">{templateDescription(template, readLang)}</p>
+            )}
             <p className="text-xs text-[var(--text-muted)] mt-1">
               {(template.category || 'General')} · v{template.version ?? 1}
               {activeCountry && activeCountry !== 'All' ? ` · ${activeCountry}` : ''}
@@ -274,6 +361,35 @@ export default function ChecklistRun() {
             </div>
           )}
         </div>
+
+        {/* Reading language. Only the languages this template really carries
+            are offered; the stored answer stays the English option either way. */}
+        {offeredLangs.length > 1 && (
+          <div className="mt-4 pt-4 border-t border-[var(--border-dim)] flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+              <Languages size={14} /> Language
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {offeredLangs.map((l) => (
+                <button
+                  key={l.code} type="button" onClick={() => setLang(l.code)}
+                  lang={l.code} dir={l.dir}
+                  aria-pressed={readLang === l.code}
+                  className={`px-3 py-1 rounded-lg text-sm border transition-colors ${
+                    readLang === l.code
+                      ? 'bg-green-600 border-green-600 text-white'
+                      : 'bg-[var(--surface-1)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:border-green-600/50'
+                  }`}
+                >
+                  {l.native}
+                </button>
+              ))}
+            </div>
+            <span className="text-[11px] text-[var(--text-muted)]">
+              Answers are recorded in English whichever language you fill in.
+            </span>
+          </div>
+        )}
 
         {/* Optional header block */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 pt-4 border-t border-[var(--border-dim)]">
@@ -318,8 +434,13 @@ export default function ChecklistRun() {
             uploading={!!uploading[field.id]}
             onPickPhoto={(files) => handlePhotoPick(field.id, files)}
             onRemovePhoto={(url) => removePhoto(field.id, url)}
-            signature={signature?.fieldId === field.id ? signature : null}
+            signature={signatures[field.id] || null}
             onOpenSignature={() => openSignaturePad(field.id)}
+            note={notes[field.id] ?? ''}
+            onNoteChange={(v) => setNote(field.id, v)}
+            label={labelFor(field)}
+            options={fieldOptions(field, template, readLang)}
+            rtl={rtl}
           />
         ))}
       </div>
@@ -331,9 +452,9 @@ export default function ChecklistRun() {
             <PenLine size={16} className="text-brand-bright" />
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Signature <span className="text-red-400">*</span></h3>
           </div>
-          {signature?.dataUrl && signature.fieldId == null ? (
+          {primarySignature ? (
             <div className="space-y-2">
-              <img src={signature.dataUrl} alt="Signature" className="h-24 rounded-lg border border-[var(--border-dim)] bg-white" />
+              <img src={primarySignature} alt="Signature" className="h-24 rounded-lg border border-[var(--border-dim)] bg-white" />
               <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                 <CheckCircle2 size={13} className="text-green-400" /> Captured{inspectorName ? ` · ${inspectorName}` : ''}
                 <button onClick={() => openSignaturePad(null)} className="underline hover:text-[var(--text-primary)]">Redo</button>
@@ -360,7 +481,12 @@ export default function ChecklistRun() {
 
       {showSignPad && (
         <SignaturePad
-          label="Checklist Signature"
+          // Name the signature being given: on a sheet signed by three trades,
+          // an unlabelled pad cannot tell the mechanic from the electrician.
+          label={
+            (signTargetField && labelFor(fields.find((f) => f.id === signTargetField))) ||
+            'Checklist Signature'
+          }
           inspectorName={inspectorName}
           employeeId={employeeId}
           onSave={handleSignatureSave}
@@ -380,15 +506,23 @@ function BackLink({ onClick }) {
 }
 
 // ── Field renderer ─────────────────────────────────────────────────────────────
-function FieldRenderer({ field, value, error, onChange, country, photos, uploading, onPickPhoto, onRemovePhoto, signature, onOpenSignature }) {
+function FieldRenderer({
+  field, value, error, onChange, country, photos, uploading, onPickPhoto, onRemovePhoto,
+  signature, onOpenSignature, note, onNoteChange, label, options, rtl,
+}) {
   const fileRef = useRef(null)
   const type = field?.type
+  // `label` and `options` arrive already resolved into the reading language.
+  // An option's `value` is the ENGLISH token that gets stored; only its `label`
+  // is translated, so an answer means the same thing in every language.
+  const text = label || field?.label || ''
+  const choices = Array.isArray(options) ? options : []
 
   if (type === 'section') {
     return (
       <div className="pt-2 first:pt-0">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-bold uppercase tracking-wide text-[var(--text-primary)]">{field.label || 'Section'}</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wide text-[var(--text-primary)]">{text || 'Section'}</h3>
           <div className="flex-1 h-px bg-[var(--border-dim)]" />
         </div>
         {field.help && <p className="text-xs text-[var(--text-muted)] mt-1">{field.help}</p>}
@@ -398,7 +532,7 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
 
   const labelEl = (
     <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
-      {field.label || 'Field'}
+      {text || 'Field'}
       {field.required && <span className="text-red-400"> *</span>}
     </label>
   )
@@ -455,29 +589,29 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
 
       {!auto && type === 'select' && (
         <select className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
-          <option value="">— Select —</option>
-          {(field.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+          <option value="">Select</option>
+          {choices.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       )}
 
       {!auto && type === 'multiselect' && (
         <div className="flex flex-wrap gap-2">
-          {(field.options || []).map((o) => {
+          {choices.map((o) => {
             const arr = Array.isArray(value) ? value : []
-            const checked = arr.includes(o)
+            const checked = arr.includes(o.value)
             return (
               <button
-                key={o} type="button"
-                onClick={() => onChange(checked ? arr.filter((x) => x !== o) : [...arr, o])}
+                key={o.value} type="button"
+                onClick={() => onChange(checked ? arr.filter((x) => x !== o.value) : [...arr, o.value])}
                 className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
                   checked ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:border-green-600/50'
                 }`}
               >
-                {o}
+                {o.label}
               </button>
             )
           })}
-          {(field.options || []).length === 0 && <p className="text-xs text-[var(--text-muted)]">No options configured.</p>}
+          {choices.length === 0 && <p className="text-xs text-[var(--text-muted)]">No options configured.</p>}
         </div>
       )}
 
@@ -520,16 +654,36 @@ function FieldRenderer({ field, value, error, onChange, country, photos, uploadi
       {type === 'signature' && (
         <div className="space-y-2">
           {labelEl}
-          {signature?.dataUrl ? (
+          {signature ? (
             <div className="space-y-2">
-              <img src={signature.dataUrl} alt="Signature" className="h-24 rounded-lg border border-[var(--border-dim)] bg-white" />
-              <button onClick={onOpenSignature} className="text-xs underline text-[var(--text-muted)] hover:text-[var(--text-primary)]">Redo signature</button>
+              <img src={signature} alt={text || 'Signature'} className="h-24 rounded-lg border border-[var(--border-dim)] bg-white" />
+              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                <CheckCircle2 size={13} className="text-green-400" /> Signed
+                <button onClick={onOpenSignature} className="underline hover:text-[var(--text-primary)]">Redo signature</button>
+              </div>
             </div>
           ) : (
             <button onClick={onOpenSignature} className="btn-secondary text-sm inline-flex items-center gap-2 w-fit">
               <PenLine size={15} /> Add signature
             </button>
           )}
+        </div>
+      )}
+
+      {/* Per-line remark. Both paper sheets carry a Remarks column beside every
+          line: it is where a fitter says WHY a line is not OK, and without it
+          "Not OK" is a result with no cause. Optional by design. */}
+      {field.allow_note && (
+        <div className="mt-2">
+          <textarea
+            className="input text-sm"
+            rows={2}
+            dir={rtl ? 'rtl' : 'ltr'}
+            value={note ?? ''}
+            onChange={(e) => onNoteChange(e.target.value)}
+            placeholder="Remarks (optional)"
+            aria-label={`Remarks for ${text || 'this line'}`}
+          />
         </div>
       )}
 

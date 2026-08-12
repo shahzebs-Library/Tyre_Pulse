@@ -78,9 +78,12 @@ describe('submissionRows', () => {
 
   it('falls back to the answer keys when no template travelled with the row', () => {
     const rows = submissionRows({ answers: { field_9: 'Yes' } })
-    expect(rows).toEqual([
-      { id: 'field_9', type: null, label: 'field_9', value: 'Yes', text: 'Yes', photos: [] },
-    ])
+    expect(rows).toHaveLength(1)
+    // The label is the field id, which is ugly but true - better than inventing
+    // a friendly name for a field nobody can look up.
+    expect(rows[0]).toMatchObject({
+      id: 'field_9', type: null, label: 'field_9', value: 'Yes', text: 'Yes', photos: [], note: null,
+    })
   })
 
   it('survives a submission with nothing on it', () => {

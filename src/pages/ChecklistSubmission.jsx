@@ -7,10 +7,14 @@ import {
 } from 'lucide-react'
 import { getSubmission } from '../lib/api/checklists'
 import { isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
-import { submissionRows, displayValue as sharedDisplayValue } from '../lib/checklistView'
+import {
+  submissionRows, displayValue as sharedDisplayValue, submissionSignatures,
+  templateFromSubmission,
+} from '../lib/checklistView'
+import { renderChecklistPdf } from '../lib/checklistPdf'
+import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
 
 const REFERENCE_ICON = { asset: Truck, site: MapPin, user: User }
-import { exportChecklistSubmissionPdf } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
@@ -58,6 +62,10 @@ export default function ChecklistSubmission() {
   const [loadError, setLoadError] = useState('')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+  // The printed sheet is read on the floor, so the language of the printout is
+  // chosen at download time rather than following the reader's UI setting.
+  const [pdfLang, setPdfLang] = useState('en')
+  const [exportNote, setExportNote] = useState('')
 
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || 'TyrePulse'
@@ -81,24 +89,35 @@ export default function ChecklistSubmission() {
   // what an approver sees in the queue cannot drift apart.
   const rows = useMemo(() => submissionRows(sub), [sub])
 
-  // Raw template fields (with section dividers) the page carries, if any — these
-  // preserve grouping in the exported PDF; the export derives rows otherwise.
-  const templateFields = useMemo(() => (
-    Array.isArray(sub?.template_fields) ? sub.template_fields
-      : Array.isArray(sub?.fields) ? sub.fields : undefined
-  ), [sub])
+  // The template travels with the submission (fields, shared option sets and
+  // the translated names), so nothing here needs a second fetch.
+  const template = useMemo(() => (sub ? templateFromSubmission(sub) : null), [sub])
+  const signatures = useMemo(
+    () => (sub ? submissionSignatures(sub, { template }) : []),
+    [sub, template],
+  )
 
   const downloadPdf = useCallback(async () => {
     if (!sub || exporting) return
-    setExporting(true); setExportError('')
+    setExporting(true); setExportError(''); setExportNote('')
     try {
-      await exportChecklistSubmissionPdf(sub, { company, branding, fields: templateFields })
+      const res = await renderChecklistPdf({
+        submission: sub, template, lang: pdfLang, company, branding,
+      })
+      // Say what came out. A sheet that quietly printed in English because the
+      // engine cannot draw the script is not a sheet anyone should discover on
+      // the workshop floor.
+      if (pdfLang !== 'en' && res.fellBack) {
+        setExportNote('That language could not be printed, so the English wording was used.')
+      } else if (pdfLang !== 'en' && !res.translated) {
+        setExportNote('This checklist carries no translation for that language, so English was used.')
+      }
     } catch (err) {
       setExportError(toUserMessage(err, 'Could not generate the PDF.'))
     } finally {
       setExporting(false)
     }
-  }, [sub, exporting, company, branding, templateFields])
+  }, [sub, exporting, company, branding, template, pdfLang])
 
   // ── Loading / error / not-found ──
   if (loading) {
@@ -166,6 +185,15 @@ export default function ChecklistSubmission() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {exportError && <span className="text-xs text-red-400">{exportError}</span>}
+          {!exportError && exportNote && <span className="text-xs text-amber-400 max-w-[24rem]">{exportNote}</span>}
+          <select
+            className="input py-1.5 text-xs"
+            value={pdfLang}
+            onChange={(e) => { setPdfLang(e.target.value); setExportNote('') }}
+            title="Language of the printed sheet"
+          >
+            {CHECKLIST_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+          </select>
           <button
             onClick={downloadPdf}
             disabled={exporting}
@@ -263,6 +291,14 @@ export default function ChecklistSubmission() {
                       <p className="text-sm text-[var(--text-primary)] mt-0.5 whitespace-pre-wrap break-words">{displayValue(r.value)}</p>
                     )}
 
+                    {/* The Remarks column of the paper form: usually where the
+                        finding itself is written. */}
+                    {r.note && (
+                      <p className="text-xs mt-1 whitespace-pre-wrap break-words text-[var(--text-muted)]">
+                        {r.note}
+                      </p>
+                    )}
+
                     {r.photos.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {r.photos.map((url, i) => (
@@ -278,15 +314,37 @@ export default function ChecklistSubmission() {
             )}
           </div>
 
-          {/* Signature */}
-          {sub.signature_data && (
-            <div className="card space-y-2">
+          {/* Signatures - every one of them. A workshop sheet is signed by the
+              mechanic, the auto electrician and the engineer who certifies the
+              machine fit for operation; showing one reads as an approval the
+              other two never gave. */}
+          {signatures.length > 0 && (
+            <div className="card space-y-3">
               <div className="flex items-center gap-2">
                 <PenLine size={16} className="text-brand-bright" />
-                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Signature</h2>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Signatures</h2>
               </div>
-              <img src={sub.signature_data} alt="Signature" className="h-28 rounded-lg border border-[var(--border-dim)] bg-white" />
-              {sub.printed_name && <p className="text-xs text-[var(--text-muted)]">Signed by {sub.printed_name}</p>}
+              <div className="flex flex-wrap gap-4">
+                {signatures.map((s) => (
+                  <div key={s.id} className="min-w-[160px]">
+                    {s.data ? (
+                      <img
+                        src={safeImageSrc(s.data) || undefined}
+                        alt={s.label}
+                        className="h-24 rounded-lg border border-[var(--border-dim)] bg-white"
+                      />
+                    ) : (
+                      <div className="h-24 rounded-lg border border-dashed border-[var(--border-dim)] flex items-center justify-center text-xs text-[var(--text-dim)]">
+                        Not signed
+                      </div>
+                    )}
+                    <p className="text-xs text-[var(--text-muted)] mt-1.5">{s.label}</p>
+                    <p className="text-sm text-[var(--text-primary)]">
+                      {s.printedName || <span className="text-[var(--text-dim)]">Name not recorded</span>}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

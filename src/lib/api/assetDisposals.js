@@ -99,6 +99,146 @@ export async function getDisposalRegister({ country } = {}) {
   }
 }
 
+/** An empty envelope with the same shape a successful reliability read returns. */
+function emptyReliability(country, reason) {
+  return { ok: false, reason: reason || 'unavailable', country: country || null, assets: [], totals: null }
+}
+
+/**
+ * Breakdown history, MTBF, failure rate, idle days and spend per machine.
+ *
+ * Read from `get_asset_disposal_reliability`, which aggregates the job card
+ * ledger rather than storing a copy of it, for the same reason the register is
+ * read live: a frozen reliability figure is wrong the day after the next
+ * breakdown.
+ *
+ * Two facts travel WITH the numbers and must survive to the screen:
+ * `parked_hours` (long cards that record a machine standing still, excluded
+ * from breakdown_hours) and `date_coverage_pct` (the share of job cards
+ * carrying a usable business date, which is what MTBF, idle days and
+ * availability actually rest on). Neither is folded into the headline.
+ *
+ * Degrades to a shaped empty envelope so a database without the RPC shows an
+ * honest "not measured" rather than a thrown page or, worse, zeros.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.country] one country, or 'All' / omitted for the caller's scope
+ * @returns {Promise<{ok:boolean, country:?string, assets:Array, totals:?object, reason?:string}>}
+ */
+export async function getDisposalReliability({ country } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('get_asset_disposal_reliability', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error) return emptyReliability(country, isMissingRelation(error) ? 'not_provisioned' : 'unavailable')
+    if (!data || data.ok === false) return emptyReliability(country, data?.reason || 'unavailable')
+    return {
+      ok: true,
+      country: data.country ?? (country || null),
+      assets: Array.isArray(data.assets) ? data.assets : [],
+      totals: data.totals || null,
+    }
+  } catch {
+    return emptyReliability(country, 'unavailable')
+  }
+}
+
+/**
+ * The disposal list measured against the fleet it is being taken out of.
+ *
+ * Without it the reliability figures have nothing to lean on, and the two points
+ * a CEO most needs cannot be made: that these machines cost 1.8 times the fleet
+ * average and so the list is justified, AND that they are about 6% of the
+ * maintenance bill, so approving it does not touch the problem. Reporting either
+ * one alone misleads, which is why the comparison belongs in the product rather
+ * than in somebody's covering note.
+ *
+ * Degrades to ok:false rather than throwing. A missing baseline costs two
+ * recommendation points; it must never cost the page.
+ */
+export async function getDisposalFleetBaseline({ country } = {}) {
+  const empty = (reason) => ({ ok: false, reason, country: country || null, on_list: null, rest_of_fleet: null })
+  try {
+    const { data, error } = await supabase.rpc('get_asset_disposal_fleet_baseline', {
+      p_country: country && country !== 'All' ? country : null,
+    })
+    if (error) return empty(isMissingRelation(error) ? 'not_provisioned' : 'unavailable')
+    if (!data || data.ok === false) return empty(data?.reason || 'unavailable')
+    return data
+  } catch {
+    return empty('unavailable')
+  }
+}
+
+/**
+ * Columns a client may write on a replacement benchmark. organisation_id is
+ * defaulted server-side for the same reason it is excluded above.
+ */
+export const REPLACEMENT_EDITABLE_COLS = [
+  'country', 'asset_type', 'label', 'supplier', 'model', 'spec',
+  'unit_price', 'vat_pct', 'vat_amount', 'total_price', 'currency',
+  'quote_ref', 'quote_date', 'valid_until', 'warranty_note',
+  'source_file', 'source_page', 'notes', 'active',
+]
+
+/**
+ * Supplier quotations that price a whole asset class.
+ *
+ * Read straight from the table rather than through an RPC: it is a small,
+ * org-and-country-walled reference list with no joined evidence to keep live,
+ * so an RPC would add a moving part without adding a fact. Degrades to an
+ * empty list, never a throw - a screen with no benchmarks must still render the
+ * machines it cannot price.
+ */
+export async function listReplacementBenchmarks({ country } = {}) {
+  try {
+    let q = supabase
+      .from('asset_replacement_costs')
+      .select('id, country, asset_type, label, supplier, model, spec, unit_price, vat_pct, vat_amount, total_price, currency, quote_ref, quote_date, valid_until, warranty_note, source_file, source_page, notes, active')
+      .order('asset_type')
+      .order('quote_date', { ascending: false })
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    const { data, error } = await q
+    if (error) return { ok: false, reason: isMissingRelation(error) ? 'not_provisioned' : 'unavailable', rows: [] }
+    return { ok: true, reason: null, rows: data || [] }
+  } catch {
+    return { ok: false, reason: 'unavailable', rows: [] }
+  }
+}
+
+function sanitizeReplacement(row) {
+  const out = {}
+  for (const k of REPLACEMENT_EDITABLE_COLS) {
+    if (row && Object.prototype.hasOwnProperty.call(row, k)) out[k] = row[k]
+  }
+  for (const k of ['unit_price', 'vat_pct', 'vat_amount', 'total_price', 'source_page']) {
+    if (k in out) out[k] = num(out[k])
+  }
+  for (const k of ['quote_date', 'valid_until']) {
+    if (k in out && !out[k]) out[k] = null
+  }
+  if (typeof out.asset_type === 'string') out.asset_type = out.asset_type.trim().toUpperCase()
+  return out
+}
+
+export async function saveReplacementBenchmark(row) {
+  const payload = sanitizeReplacement(row)
+  if (!payload.asset_type || payload.unit_price == null) {
+    throw new Error('A benchmark needs an asset class and an ex-VAT price.')
+  }
+  const { data, error } = row?.id
+    ? await supabase.from('asset_replacement_costs').update(payload).eq('id', row.id).select('id').single()
+    : await supabase.from('asset_replacement_costs').insert([payload]).select('id').single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteReplacementBenchmark(id) {
+  const { error } = await supabase.from('asset_replacement_costs').delete().eq('id', id)
+  if (error) throw error
+  return true
+}
+
 /** Add or refresh one row on the natural key (org + country + asset). */
 export async function upsertDisposal(row) {
   const payload = sanitize(row)

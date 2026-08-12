@@ -175,14 +175,15 @@ export async function getDisposalFleetBaseline({ country } = {}) {
  * defaulted server-side for the same reason it is excluded above.
  */
 export const REPLACEMENT_EDITABLE_COLS = [
-  'country', 'asset_type', 'label', 'supplier', 'model', 'spec',
+  'country', 'asset_no', 'asset_type', 'label', 'supplier', 'model', 'spec',
   'unit_price', 'vat_pct', 'vat_amount', 'total_price', 'currency',
   'quote_ref', 'quote_date', 'valid_until', 'warranty_note',
   'source_file', 'source_page', 'notes', 'active',
 ]
 
 /**
- * Supplier quotations that price a whole asset class.
+ * Supplier quotations. A row names either ONE machine (`asset_no`) or a whole
+ * asset class (`asset_no` null), and the machine price outranks the class one.
  *
  * Read straight from the table rather than through an RPC: it is a small,
  * org-and-country-walled reference list with no joined evidence to keep live,
@@ -194,7 +195,7 @@ export async function listReplacementBenchmarks({ country } = {}) {
   try {
     let q = supabase
       .from('asset_replacement_costs')
-      .select('id, country, asset_type, label, supplier, model, spec, unit_price, vat_pct, vat_amount, total_price, currency, quote_ref, quote_date, valid_until, warranty_note, source_file, source_page, notes, active')
+      .select('id, country, asset_no, asset_type, label, supplier, model, spec, unit_price, vat_pct, vat_amount, total_price, currency, quote_ref, quote_date, valid_until, warranty_note, source_file, source_page, notes, active')
       .order('asset_type')
       .order('quote_date', { ascending: false })
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
@@ -218,6 +219,12 @@ function sanitizeReplacement(row) {
     if (k in out && !out[k]) out[k] = null
   }
   if (typeof out.asset_type === 'string') out.asset_type = out.asset_type.trim().toUpperCase()
+  // Blank means "prices the whole class". An empty string would index as a
+  // machine called "" and quietly match nothing.
+  if ('asset_no' in out) {
+    const a = typeof out.asset_no === 'string' ? out.asset_no.trim().toUpperCase() : out.asset_no
+    out.asset_no = a || null
+  }
   return out
 }
 

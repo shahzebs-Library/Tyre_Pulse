@@ -13,10 +13,17 @@
  * FOUR RULES, and every one of them exists because breaking it would produce a
  * number that looks authoritative and is not:
  *
- *  1. A BENCHMARK APPLIES TO ITS OWN ASSET CLASS AND NOTHING ELSE. The match is
- *     an exact class match. A pump quotation does not price a generator, and it
- *     does not price a pump of a different type just because the word "pump"
- *     appears. A class with no quotation has NO replacement cost - it is listed
+ *  1. A BENCHMARK APPLIES ONLY WHERE IT WAS OBTAINED. A quotation may name ONE
+ *     machine or a whole class, and the two are different claims:
+ *       - `assetNo` set -> it prices THAT machine and no other.
+ *       - `assetNo` null -> it prices any machine of that `assetType`.
+ *     The machine price wins over the class price. It is NEVER widened to the
+ *     class, because a quotation obtained for one machine is not evidence about
+ *     another - the SANY 47m pump quotation was obtained for MP049, and putting
+ *     it on MP042, a Putzmeister of different spec, invented a price nobody
+ *     quoted. The class match itself is exact: a pump quotation does not price a
+ *     generator, and it does not price a SPIDER PUMP because the word "pump"
+ *     appears. Anything with no quotation has NO replacement cost - it is listed
  *     as uncovered so the gap is visible, never filled by the nearest thing.
  *
  *  2. THE COST BASIS IS EX-VAT. The 15% VAT is recoverable, so it is not a cost
@@ -117,6 +124,8 @@ export function shapeBenchmarks(rows, { now = Date.now() } = {}) {
       if (validUntil) status = validUntil.getTime() >= now ? 'current' : 'expired'
       return {
         id: r.id ?? null,
+        // Set = this quotation prices ONE named machine. Null = the class.
+        assetNo: key(r.asset_no) || null,
         assetType: key(r.asset_type),
         assetTypeLabel: txt(r.asset_type),
         label: txt(r.label) || txt(r.model) || 'Replacement benchmark',
@@ -142,36 +151,63 @@ export function shapeBenchmarks(rows, { now = Date.now() } = {}) {
     })
     .filter((b) => b.assetType && b.cost != null && b.cost > 0)
 
+  // Machine-specific and class-wide quotations are indexed separately so one can
+  // never be mistaken for the other. Within each index the NEWEST quotation
+  // wins and the older one is returned in `superseded`, so the choice is visible
+  // rather than silent.
   const byType = new Map()
+  const byAsset = new Map()
   const superseded = []
-  for (const b of shaped) {
-    const held = byType.get(b.assetType)
-    if (!held) {
-      byType.set(b.assetType, b)
-      continue
-    }
+  const claim = (map, mapKey, b) => {
+    const held = map.get(mapKey)
+    if (!held) { map.set(mapKey, b); return }
     const heldAt = asDay(held.quoteDate)?.getTime() ?? -Infinity
     const newAt = asDay(b.quoteDate)?.getTime() ?? -Infinity
-    if (newAt > heldAt) {
-      byType.set(b.assetType, b)
-      superseded.push(held)
-    } else {
-      superseded.push(b)
-    }
+    if (newAt > heldAt) { map.set(mapKey, b); superseded.push(held) } else { superseded.push(b) }
+  }
+  for (const b of shaped) {
+    if (b.assetNo) claim(byAsset, b.assetNo, b)
+    else claim(byType, b.assetType, b)
   }
 
-  return { list: [...byType.values()], byType, superseded }
+  return {
+    list: [...byAsset.values(), ...byType.values()],
+    byType,
+    byAsset,
+    superseded,
+  }
 }
 
-/** Exact class match only. Rule 1 - never the nearest thing. */
-export function benchmarkFor(assetType, benchmarks) {
-  const k = key(assetType)
-  if (!k) return null
-  const map = benchmarks?.byType instanceof Map ? benchmarks.byType : null
-  if (map) return map.get(k) || null
+/**
+ * The quotation that prices this machine, if there is one.
+ *
+ * Rule 1: a quotation naming this machine wins; otherwise a quotation for its
+ * class applies; otherwise there is no price. A machine-specific quotation is
+ * never widened to its class, and the class match is exact - never the nearest
+ * thing.
+ *
+ * Accepts (assetType, benchmarks) or (row, benchmarks) so a caller with a whole
+ * register row does not have to pull the two fields apart.
+ */
+export function benchmarkFor(assetTypeOrRow, benchmarks, opts = {}) {
+  const row = assetTypeOrRow && typeof assetTypeOrRow === 'object' ? assetTypeOrRow : null
+  const type = key(row ? (row.asset_type ?? row.assetType) : assetTypeOrRow)
+  const asset = key(opts.assetNo ?? (row ? (row.asset_no ?? row.assetNo) : ''))
+
+  const assetMap = benchmarks?.byAsset instanceof Map ? benchmarks.byAsset : null
+  const typeMap = benchmarks?.byType instanceof Map ? benchmarks.byType : null
+  if (assetMap || typeMap) {
+    if (asset && assetMap?.has(asset)) return assetMap.get(asset)
+    return (type && typeMap?.get(type)) || null
+  }
+
   const list = Array.isArray(benchmarks) ? benchmarks : benchmarks?.list
   if (!Array.isArray(list)) return null
-  return list.find((b) => key(b.assetType) === k) || null
+  if (asset) {
+    const mine = list.find((b) => key(b.assetNo ?? b.asset_no) === asset)
+    if (mine) return mine
+  }
+  return list.find((b) => !key(b.assetNo ?? b.asset_no) && key(b.assetType ?? b.asset_type) === type) || null
 }
 
 /** Lifetime maintenance spend as the reliability history holds it. */
@@ -211,7 +247,7 @@ export function lastCompleteYearSpend(row, { now = Date.now() } = {}) {
 export function replacementEconomics(row, benchmarks, { now = Date.now() } = {}) {
   const assetNo = txt(row?.asset_no || row?.assetNo)
   const assetType = txt(row?.asset_type || row?.assetType)
-  const bm = benchmarkFor(assetType, benchmarks)
+  const bm = benchmarkFor(assetType, benchmarks, { assetNo })
   const spend = lifetimeSpend(row)
   const lastYear = lastCompleteYearSpend(row, { now })
 
@@ -220,8 +256,11 @@ export function replacementEconomics(row, benchmarks, { now = Date.now() } = {})
       assetNo,
       assetType,
       covered: false,
+      // Naming what is missing matters: "no quotation for a PUMPS" tells the
+      // reader to go and ask for one. Saying nothing reads as a machine with no
+      // replacement, which is a different claim.
       reason: assetType
-        ? `No supplier quotation on file for ${assetType}.`
+        ? `No supplier quotation on file for ${assetType}${assetNo ? ` or for ${assetNo}` : ''}.`
         : 'This machine carries no asset class, so no quotation can be matched to it.',
       benchmark: null,
       replacementCost: null,
@@ -257,6 +296,13 @@ export function replacementEconomics(row, benchmarks, { now = Date.now() } = {})
     // "At last year's repair bill, N years of repairs buys a new machine."
     yearsOfSpendPerNewMachine: yearsOfSpend,
     status: bm.status,
+    // Whether this price was quoted for THIS machine or for its class. A reader
+    // deciding on one machine should know which, and a class price carried onto
+    // a specific decision is a weaker claim than a quotation with its name on it.
+    basis: bm.assetNo ? 'asset' : 'class',
+    basisNote: bm.assetNo
+      ? `Quoted for ${bm.assetNo}.`
+      : `Quoted for the ${assetType || 'asset'} class, not for ${assetNo || 'this machine'} specifically.`,
   }
 }
 
@@ -414,7 +460,9 @@ export function replacementExportRows(rows, benchmarks, { now = Date.now() } = {
     last_complete_year: p.lastCompleteYear?.year ?? '',
     last_year_spend: p.lastCompleteYear?.spend ?? '',
     years_of_spend_per_new_machine: p.yearsOfSpendPerNewMachine ?? '',
+    priced_for: p.basis === 'asset' ? 'This machine' : p.basis === 'class' ? 'Asset class' : '',
     quotation: p.benchmark?.label ?? '',
+    model: p.benchmark?.model ?? '',
     supplier: p.benchmark?.supplier ?? '',
     quotation_date: p.benchmark?.quoteDate ?? '',
     quotation_valid_until: p.benchmark?.validUntil ?? '',

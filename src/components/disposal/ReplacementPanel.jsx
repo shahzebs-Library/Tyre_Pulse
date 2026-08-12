@@ -184,6 +184,13 @@ export default function ReplacementPanel({
     [rows],
   )
 
+  // Machines currently on the list, offered when a quotation names one. Typed
+  // input is still accepted so a machine not on this list can be priced.
+  const assetOptions = useMemo(
+    () => [...new Set(rows.map((r) => String(r?.asset_no || '').trim().toUpperCase()).filter(Boolean))].sort(),
+    [rows],
+  )
+
   const exposure = exposureText(totals.exposure)
 
   const doExport = useCallback(async () => {
@@ -423,7 +430,7 @@ export default function ReplacementPanel({
               <thead className="bg-[var(--input-bg)] text-[var(--text-muted)]">
                 <tr>
                   {[
-                    'Class', 'Quotation', 'Supplier', 'Ex-VAT', 'VAT', 'Total', 'Quoted', 'Valid until',
+                    'Priced for', 'Quotation', 'Supplier', 'Ex-VAT', 'VAT', 'Total', 'Quoted', 'Valid until',
                     'Status', 'Source document', canEdit ? '' : null,
                   ].filter((h) => h !== null).map((h, i) => (
                     <th key={h || `act-${i}`} className="text-left font-medium px-3 py-2 whitespace-nowrap">{h}</th>
@@ -442,7 +449,14 @@ export default function ReplacementPanel({
                   const inactive = q?.active === false
                   return (
                     <tr key={q.id} className="border-t border-[var(--input-border)]">
-                      <td className="px-3 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">{q.asset_type || NOT_PRICED}</td>
+                      {/* Which machine this price belongs to. A quotation naming
+                          one machine is a narrower claim than a class price and
+                          the table has to say which it is looking at. */}
+                      <td className="px-3 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">
+                        {q.asset_no
+                          ? <>{q.asset_no}<span className="block text-xs font-normal text-[var(--text-muted)]">{q.asset_type} - this machine only</span></>
+                          : <>{q.asset_type || NOT_PRICED}<span className="block text-xs font-normal text-[var(--text-muted)]">Whole class</span></>}
+                      </td>
                       <td className="px-3 py-2 text-[var(--text-secondary)]">
                         {q.label || q.model || NOT_PRICED}
                         {q.spec && <span className="block text-xs text-[var(--text-muted)]">{q.spec}</span>}
@@ -494,6 +508,7 @@ export default function ReplacementPanel({
           row={editing}
           busy={busy}
           classOptions={classOptions}
+          assetOptions={assetOptions}
           defaultCurrency={currency || 'SAR'}
           onClose={() => setEditing(null)}
           onSave={save}
@@ -509,13 +524,13 @@ export default function ReplacementPanel({
  * ------------------------------------------------------------------ */
 
 const EMPTY_FORM = {
-  asset_type: '', label: '', supplier: '', model: '', spec: '',
+  asset_no: '', asset_type: '', label: '', supplier: '', model: '', spec: '',
   unit_price: '', vat_pct: '', vat_amount: '', total_price: '', currency: 'SAR',
   quote_ref: '', quote_date: '', valid_until: '', warranty_note: '',
   source_file: '', notes: '', active: true,
 }
 
-function BenchmarkEditor({ row, busy, classOptions, defaultCurrency, onClose, onSave, onDelete }) {
+function BenchmarkEditor({ row, busy, classOptions, assetOptions = [], defaultCurrency, onClose, onSave, onDelete }) {
   const [form, setForm] = useState(() => ({
     ...EMPTY_FORM,
     currency: defaultCurrency || 'SAR',
@@ -537,6 +552,9 @@ function BenchmarkEditor({ row, busy, classOptions, defaultCurrency, onClose, on
     const blankToNull = (v) => (v === '' || v == null ? null : v)
     onSave({
       ...(row?.id ? { id: row.id } : {}),
+      // Blank means the quotation prices the whole class. An empty string would
+      // index as a machine called "" and match nothing.
+      asset_no: String(form.asset_no || '').trim().toUpperCase() || null,
       asset_type: String(form.asset_type).trim().toUpperCase(),
       label: blankToNull(form.label),
       supplier: blankToNull(form.supplier),
@@ -562,8 +580,8 @@ function BenchmarkEditor({ row, busy, classOptions, defaultCurrency, onClose, on
       open
       onClose={onClose}
       size="lg"
-      title={row?.id ? `Edit the quotation for ${row.asset_type || 'an asset class'}` : 'Add a supplier quotation'}
-      subtitle="One price per asset class. The ex-VAT price is the cost basis for every ratio in this module; VAT is recoverable and is carried only because the document prints it."
+      title={row?.id ? `Edit the quotation for ${row.asset_no || row.asset_type || 'an asset class'}` : 'Add a supplier quotation'}
+      subtitle="A quotation prices either one named machine or a whole asset class, and the machine price wins. The ex-VAT price is the cost basis for every ratio in this module; VAT is recoverable and is carried only because the document prints it."
       footer={(
         <div className="flex flex-wrap justify-end gap-2">
           {row?.id && (
@@ -607,6 +625,25 @@ function BenchmarkEditor({ row, busy, classOptions, defaultCurrency, onClose, on
           </datalist>
           <span className="block text-[11px] text-[var(--text-muted)]">
             A class with no machine on the list can still be priced. The price applies to this class and to no other.
+          </span>
+        </label>
+        <label className="text-xs text-[var(--text-muted)] space-y-1">
+          <span>For one machine only (optional)</span>
+          <input
+            list="replacement-asset-codes"
+            value={form.asset_no}
+            onChange={(e) => set('asset_no', e.target.value)}
+            className={inputCls}
+            placeholder="Leave blank to price the whole class"
+          />
+          <datalist id="replacement-asset-codes">
+            {assetOptions.map((a) => <option key={a} value={a} />)}
+          </datalist>
+          <span className="block text-[11px] text-[var(--text-muted)]">
+            Name a machine when the quotation was obtained for that machine. It
+            then prices that machine only and never the rest of its class, and
+            it outranks any class price. Leave blank when the supplier priced
+            the class.
           </span>
         </label>
         <label className="text-xs text-[var(--text-muted)] space-y-1">

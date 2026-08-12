@@ -90,6 +90,38 @@ describe('benchmarkFor', () => {
     expect(benchmarkFor('STATIONARY PUMP', b)).toBeNull()
     expect(benchmarkFor('GENERATOR', b)).toBeNull()
   })
+
+  // The real defect the owner caught: the SANY quotation was obtained for MP049
+  // and priced MP042, a Putzmeister of different spec, as well.
+  it('a quotation naming one machine does NOT price another of the same class', () => {
+    const b = shapeBenchmarks([{ ...sanyQuote, asset_no: 'MP049' }], { now: NOW })
+    expect(benchmarkFor('PUMPS', b, { assetNo: 'MP049' })?.cost).toBe(1120000)
+    expect(benchmarkFor('PUMPS', b, { assetNo: 'MP042' })).toBeNull()
+    expect(benchmarkFor('PUMPS', b)).toBeNull()
+  })
+
+  it('a machine quotation outranks a class quotation for that machine only', () => {
+    const classWide = { ...sanyQuote, id: 'cls', asset_no: null, unit_price: 900000 }
+    const mine = { ...sanyQuote, id: 'mine', asset_no: 'MP049', unit_price: 1120000 }
+    const b = shapeBenchmarks([classWide, mine], { now: NOW })
+    expect(benchmarkFor('PUMPS', b, { assetNo: 'MP049' })?.cost).toBe(1120000)
+    expect(benchmarkFor('PUMPS', b, { assetNo: 'MP042' })?.cost).toBe(900000)
+  })
+
+  it('accepts a whole register row as well as a bare class', () => {
+    const b = shapeBenchmarks([{ ...sanyQuote, asset_no: 'MP049' }], { now: NOW })
+    expect(benchmarkFor({ asset_no: 'MP049', asset_type: 'PUMPS' }, b)?.cost).toBe(1120000)
+    expect(benchmarkFor({ asset_no: 'MP042', asset_type: 'PUMPS' }, b)).toBeNull()
+  })
+
+  it('keeps the newest quotation per machine independently of the class list', () => {
+    const older = { ...sanyQuote, id: 'a', asset_no: 'MP049', unit_price: 1, quote_date: '2025-01-01' }
+    const newer = { ...sanyQuote, id: 'b', asset_no: 'MP049', unit_price: 2, quote_date: '2026-07-24' }
+    const cls = { ...sanyQuote, id: 'c', asset_no: null, unit_price: 3 }
+    const b = shapeBenchmarks([older, newer, cls], { now: NOW })
+    expect(benchmarkFor('PUMPS', b, { assetNo: 'MP049' })?.cost).toBe(2)
+    expect(b.superseded.map((s) => s.id)).toEqual(['a'])
+  })
 })
 
 describe('lastCompleteYearSpend', () => {
@@ -123,6 +155,25 @@ describe('replacementEconomics', () => {
     expect(e.covered).toBe(false)
     expect(e.replacementCost).toBeNull()
     expect(e.reason).toContain('GENERATOR')
+  })
+
+  it('says whether the price was quoted for this machine or for its class', () => {
+    const forOne = shapeBenchmarks([{ ...sanyQuote, asset_no: 'MP049' }], { now: NOW })
+    const mine = replacementEconomics(pump(), forOne, { now: NOW })
+    expect(mine.basis).toBe('asset')
+    expect(mine.basisNote).toContain('MP049')
+
+    const cls = replacementEconomics(pump(), benchmarks, { now: NOW })
+    expect(cls.basis).toBe('class')
+    expect(cls.basisNote).toContain('not for MP049 specifically')
+  })
+
+  it('MP042 has no price once the quotation names MP049', () => {
+    const forOne = shapeBenchmarks([{ ...sanyQuote, asset_no: 'MP049' }], { now: NOW })
+    const e = replacementEconomics({ asset_no: 'MP042', asset_type: 'PUMPS' }, forOne, { now: NOW })
+    expect(e.covered).toBe(false)
+    expect(e.replacementCost).toBeNull()
+    expect(e.reason).toContain('MP042')
   })
 
   it('gives no ratio rather than 0% when nothing has been spent', () => {

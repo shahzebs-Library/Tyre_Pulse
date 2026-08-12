@@ -1,36 +1,31 @@
-This is a production-grade field operations Android app.
+# TYRE PULSE NATIVE ANDROID
 
-Use:
-- Kotlin
-- Jetpack Compose
-- Material 3
-- ViewModel
-- StateFlow
-- Repository pattern
-- Room for local persistence
-- WorkManager for background sync
-- Hilt for dependency injection
+This folder contains the new production native Android application: `tyre_pulse_app`
 
-Rules:
+## Repository boundaries
+The existing `mobile` folder elsewhere in the repository is READ ONLY. Never modify anything under `mobile`. You may inspect it for workflows, layouts, and business logic.
 
-1. Never hard-code Back to Home.
-2. Back must follow the real navigation stack.
-3. List screens must restore:
-    - scroll position
-    - search
-    - filters
-    - selected tab
-    - sort
-    - loaded pagination
-4. Opening details and pressing Back must return to the exact previous list position.
-5. Do not call APIs directly from Composables.
-6. Every screen needs:
-    - loading state
-    - success state
-    - empty state
-    - error state
-    - offline state where applicable
-7. Preserve user-entered form data when navigating or when the app goes to background.
-8. Avoid duplicate API actions from double taps.
-9. Features must be modular.
-10. Do not remove existing business fields or functionality unless explicitly instructed.
+## Mandatory project documentation
+Before making changes, read the relevant files under `docs/`:
+- `docs/ENTERPRISE_ANDROID.md`
+- `docs/ARCHITECTURE.md`
+- `docs/NAVIGATION_CONTRACT.md`
+- `docs/UI_UX_CONTRACT.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+- `docs/NEXT_WORK.md`
+
+## Continuation rule
+Never restart completed implementation blindly. 
+1. Read `docs/IMPLEMENTATION_STATUS.md`.
+2. Read `docs/NEXT_WORK.md`.
+3. Inspect current implementation.
+4. Continue missing or broken work only.
+
+## Source-of-truth priority
+1. Existing backend/business logic
+2. Existing web implementation
+3. Existing `mobile` implementation
+4. Current native Android implementation
+
+## Multi-tenant requirement
+Support Tenant -> Company -> Country -> Project/Site isolation. Never assume a single global role or scope.

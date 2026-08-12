@@ -24,5 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "tyre_pulse_app"
 include(":app")
-project(":app").projectDir = File(rootProject.projectDir, "Andriod app")
+project(":app").projectDir = File(rootProject.projectDir, "app")
  

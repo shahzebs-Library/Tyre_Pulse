@@ -663,14 +663,20 @@ export default function Inspections() {
           catch { return null }
         }))).filter(Boolean)
 
-        // Expected life for this asset's fitted tyres (best-effort). Shares the
-        // payload the page already loaded for its flag map rather than pulling
-        // another 2.2 MB to filter it down to one asset.
+        // Expected life for this asset's fitted tyres (best-effort). Asked for
+        // BY ASSET (V526) - this used to pull all 3,595 rows / 2.2 MB on every
+        // single row export just to filter down to that asset's dozen.
+        // With no asset on the record there is nothing to look up, so we do not
+        // ask (an empty asset would read as "no filter" and pull the fleet).
         let lifeRows = []
-        try {
-          const payload = await getTyreRunningLife({ country: pdfRow.country, maxAgeMs: RUNNING_LIFE_TTL_MS })
-          lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === pdfRow.asset_no)
-        } catch { lifeRows = [] }
+        if (pdfRow.asset_no) {
+          try {
+            const payload = await getTyreRunningLife({
+              country: pdfRow.country, maxAgeMs: RUNNING_LIFE_TTL_MS, asset: pdfRow.asset_no,
+            })
+            lifeRows = shapeRunningLife(payload).rows
+          } catch { lifeRows = [] }
+        }
 
         // The ACTUAL app diagram (colored per condition + PSI marked), rendered
         // offscreen below - captured so the report embeds the same SVG the
@@ -796,7 +802,10 @@ export default function Inspections() {
   useEffect(() => {
     if (authLoading) return
     let cancelled = false
-    getTyreRunningLife({ country: activeCountry, maxAgeMs: RUNNING_LIFE_TTL_MS }).then((payload) => {
+    // dueOnly: the flag map KEEPS ONLY overdue/due-soon rows, so asking for the
+    // whole set and throwing the rest away was a 7.7x over-fetch on every page
+    // load (KSA: 465 rows kept of 3,595 pulled, 285 kB instead of 2.2 MB).
+    getTyreRunningLife({ country: activeCountry, maxAgeMs: RUNNING_LIFE_TTL_MS, dueOnly: true }).then((payload) => {
       if (cancelled) return
       const shaped = shapeRunningLife(payload)
       setFlagMap(shaped.ok ? buildAssetFlagMap(shaped.rows) : null)
@@ -1336,8 +1345,10 @@ export default function Inspections() {
     try {
       const assetNo = clAsset || clSaved.asset_no
       if (assetNo) {
-        const payload = await getTyreRunningLife({ country: activeCountry })
-        const lifeRows = shapeRunningLife(payload).rows.filter((r) => r.asset === assetNo).slice(0, 16)
+        // Same per-asset read as the row export (V526): the server sends this
+        // asset's tyres, not the whole country's for us to discard.
+        const payload = await getTyreRunningLife({ country: activeCountry, asset: assetNo })
+        const lifeRows = shapeRunningLife(payload).rows.slice(0, 16)
         if (lifeRows.length) {
           if (finalY + 30 > ph - 20) { doc.addPage(); finalY = 20 }
           doc.setTextColor(8, 12, 28)

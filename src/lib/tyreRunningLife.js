@@ -124,6 +124,19 @@ export function coverageNote(summary) {
 }
 
 /**
+ * The three numbers that decide "due soon".
+ *
+ * V526 MIRRORS THESE IN SQL (get_tyre_running_life p_due_only). A rule written
+ * twice is a rule that drifts, so they live here as named constants, the SQL
+ * carries the same figures with a comment pointing back, and
+ * src/test/tyreRunningLifeBands.test.js fails if these move without the SQL.
+ * CHANGE BOTH TOGETHER.
+ */
+export const DUE_SOON_KM = 10000
+export const DUE_SOON_HOURS = 500
+export const LIFE_USED_DUE_PCT = 90
+
+/**
  * Traffic-light band for a row (drives the row badge). Judged in km when the
  * tyre has a km reading; an hour-metered tyre with only an hours target is
  * judged against that target instead (never 'unknown' just because the asset
@@ -133,17 +146,27 @@ export function bandFor(row) {
   if (!row) return 'unknown'
   let rem = row.remainingKm
   let used = row.lifeUsedPct
-  let soon = rem != null && rem < 10000
+  let soon = rem != null && rem < DUE_SOON_KM
   if (rem == null && row.remainingHours != null) {
     rem = row.remainingHours
     used = row.hoursUsedPct
-    soon = rem < 500
+    soon = rem < DUE_SOON_HOURS
   }
   if (rem == null) return 'unknown'
   if (rem === 0) return 'overdue'
-  if (soon || (used != null && used >= 90)) return 'due-soon'
+  if (soon || (used != null && used >= LIFE_USED_DUE_PCT)) return 'due-soon'
   if (used != null && used >= 60) return 'mid-life'
   return 'healthy'
+}
+
+/**
+ * Is this row one the p_due_only server filter would return? Exactly
+ * overdue + due-soon; an 'unknown' row (nothing remaining to measure) is NOT
+ * due - saying a tyre we cannot measure is due would be a fabrication.
+ */
+export function isDueRow(row) {
+  const b = bandFor(row)
+  return b === 'overdue' || b === 'due-soon'
 }
 
 export const BAND_META = {

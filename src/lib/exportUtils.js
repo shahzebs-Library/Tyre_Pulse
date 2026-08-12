@@ -4,11 +4,17 @@ import { loadAutoTable } from './pdfEngine'
 // One definition of "what the inspector recorded", shared with the on-screen
 // viewer. Keeping a private copy here is exactly how the report and the screen
 // would start disagreeing about a reading somebody signed off.
+// pressureFlagAvailable / pressureDeviation are no longer imported: the only
+// thing that used them was the per-position reading table, which the report no
+// longer prints. They remain in inspectionView for the on-screen record.
 import {
   RISK_LABEL, COND_TO_RISK,
   normalizeTyreConditions, inspectionStats,
-  pressureFlagAvailable, pressureDeviation,
 } from './inspectionView'
+// The band judgement is bandFor and nothing else. The register flags a tyre as
+// due with this function, so the report has to use it too or the two would
+// disagree about the same tyre on the same day.
+import { bandFor } from './tyreRunningLife'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -1358,75 +1364,78 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   y += diagramH + 8
 
-  // ── Tyre readings table (per-position detail) ──────────────────────────────
-  // (The old colored risk chips are superseded by the Inspection summary strip,
-  // which carries the same counts in the muted corporate style.)
-  // Rows render only when a position carries a recorded detail; condition shows
-  // a small muted status dot + plain dark text (no colored cell fills). When 4+
-  // pressures are recorded, each is compared to the median of recorded values
-  // and flagged 'Check' at >15% off - column labelled honestly "vs median".
-  const readingRows = Object.entries(normTc)
-    .filter(([, d]) => d && (d.condition || d.pressure != null || d.tread != null || d.notes))
-  if (readingRows.length) {
+  // ── Tyres due for change ───────────────────────────────────────────────────
+  // Owner ask: drop the full per-position reading list and print only the tyres
+  // that are actually DUE. The whole list made the reader find the problem; this
+  // states it. The readings are not lost - they are on the diagram above (each
+  // wheel carries its own PSI) and on screen in full.
+  //
+  // A tyre is due for one of two independent reasons, and both belong here
+  // because both end in the same action:
+  //   1. its life is spent      - bandFor(lifeRow) is overdue or due-soon
+  //   2. the inspector saw damage - the recorded condition reads damage/puncture
+  // A tyre can be flagged by either alone, so they are merged by position and
+  // the reason is named, never guessed at from the other.
+  const dueLifeRows = Array.isArray(opts.lifeRows) ? opts.lifeRows : []
+  const dueByPos = new Map()
+  const posKey = (p) => String(p ?? '').trim().toUpperCase()
+  for (const lr of dueLifeRows) {
+    const band = bandFor(lr)
+    if (band !== 'overdue' && band !== 'due-soon') continue
+    dueByPos.set(posKey(lr.position), {
+      position: lr.position || 'N/A',
+      serial: lr.serial || 'N/A',
+      reason: band === 'overdue' ? 'Past expected life' : 'Approaching end of life',
+      condition: '',
+      lifeUsed: lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : (lr.hoursUsedPct != null ? `${lr.hoursUsedPct}%` : 'N/A'),
+      remainingKm: lr.remainingKm,
+      remainingDays: lr.remainingDays,
+    })
+  }
+  for (const [pos, d] of Object.entries(normTc)) {
+    const cond = d && d.condition ? String(d.condition) : ''
+    if (!/damage|puncture/i.test(cond)) continue
+    const k = posKey(pos)
+    const hit = dueByPos.get(k)
+    // Damage seen on a tyre already flagged on life is added to its reason
+    // rather than replacing it - the two facts are both true and both matter.
+    if (hit) { hit.condition = cond; hit.reason = `${hit.reason}; ${cond}` }
+    else dueByPos.set(k, {
+      position: pos, serial: 'N/A', reason: cond, condition: cond,
+      lifeUsed: 'N/A', remainingKm: null, remainingDays: null,
+    })
+  }
+  const dueRows = Array.from(dueByPos.values())
+
+  if (dueRows.length) {
     if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
-    y = _sectionBar(doc, 'Tyre Readings', y, mx, brand.accent) + 4
-    const flagOn = pressureFlagAvailable(insStats)
-    const numOr = (v, unit) => {
-      const n = Number(v)
-      return Number.isFinite(n) && n > 0 ? `${n}${unit}` : 'N/A'
-    }
-    const devLabel = (v) => {
-      const f = pressureDeviation(v, insStats)
-      if (!f) return 'N/A'
-      return f.check ? `Check ${f.dev > 0 ? '+' : '-'}${f.pct}%` : 'OK'
-    }
-    const head = ['Position', 'Condition', 'Pressure (PSI)', 'Tread (mm)']
-    if (flagOn) head.push('Pressure vs median')
-    head.push('Notes')
-    const readStartPage = doc.internal.getNumberOfPages()
+    y = _sectionBar(doc, `Tyres Due for Change (${dueRows.length})`, y, mx, brand.accent) + 4
+    const nDue = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
+    const dueStartPage = doc.internal.getNumberOfPages()
     autoTable(doc, {
       startY: y,
       margin: { top: 30, left: mx, right: mx, bottom: FOOTER_SPACE },
-      head: [head],
-      body: readingRows.map(([pos, d]) => {
-        const r = [
-          pos,
-          d.condition || RISK_LABEL[d.risk] || 'N/A',
-          numOr(d.pressure, ''),
-          numOr(d.tread, ''),
-        ]
-        if (flagOn) r.push(devLabel(d.pressure))
-        r.push(d.notes ? String(d.notes) : 'N/A')
-        return r
-      }),
+      head: [['Position', 'Serial', 'Why it is due', 'Life used', 'Remaining km', 'Remaining days']],
+      body: dueRows.map((r) => [
+        r.position, r.serial, r.reason, r.lifeUsed, nDue(r.remainingKm), nDue(r.remainingDays),
+      ]),
       styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
       headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: P.cloud },
-      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
-      didParseCell: (data) => {
-        if (data.section !== 'body') return
-        if (data.column.index === 1) {
-          // room for the muted status dot before the condition text
-          data.cell.styles.cellPadding = { left: 5.5, right: 1.6, top: 1.6, bottom: 1.6 }
-        }
-        if (flagOn && data.column.index === 4 && /^Check/.test(String(data.cell.raw))) {
-          data.cell.styles.fontStyle = 'bold'
-          data.cell.styles.textColor = _MUTED_STATUS.critical
-        }
-      },
-      didDrawCell: (data) => {
-        if (data.section !== 'body' || data.column.index !== 1) return
-        const riskKey = readingRows[data.row.index]?.[1]?.risk ?? 'none'
-        doc.setFillColor(...(_MUTED_STATUS[riskKey] || _MUTED_STATUS.none))
-        doc.circle(data.cell.x + 3, data.cell.y + data.cell.height / 2, 1.1, 'F')
-      },
+      columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
       didDrawPage: (data) => {
-        // Continuation pages only - a repaint on page 1 would cover the
-        // Document No printed in the header area.
-        if (data.pageNumber > readStartPage) _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
+        if (data.pageNumber > dueStartPage) _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr)
       },
     })
     y = (doc.lastAutoTable?.finalY || y) + 6
+  } else if (dueLifeRows.length || Object.keys(normTc).length) {
+    // Saying nothing here would read as "this was not checked". An empty table
+    // would read the same. One line states the finding.
+    if (y > ph - 24) { doc.addPage(); _pageHeader(doc, 'Vehicle Tyres Inspection Report', '', brand.logoData ? '' : company, insHdr); y = 30 }
+    y = _sectionBar(doc, 'Tyres Due for Change', y, mx, brand.accent) + 4
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ink)
+    doc.text('No tyre on this vehicle is due for change at this inspection.', mx, y + 1)
+    y += 8
   }
 
   // ── Expected tyre life (owner ask: a PROPER accurate table, not text lines) ──

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { setReportPalette } from '../lib/reportColors'
-import { primeConfigCache, configBool } from '../lib/api/systemConfig'
+import { loadSystemConfig, configBool } from '../lib/api/systemConfig'
 
 export const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
@@ -78,12 +78,14 @@ export function SettingsProvider({ children }) {
   // ...) reads a single source. Also applies the super-admin report colour theme
   // (report_palette) from the same fetch. Best-effort, never blocks the app.
   const [systemConfig, setSystemConfig] = useState({})
-  const refreshSystemConfig = useCallback(async () => {
-    const { data } = await supabase.from('system_config').select('key, value')
-    if (!data) return {}
-    const map = {}
-    for (const { key, value } of data) map[key] = value
-    primeConfigCache(map)
+  const refreshSystemConfig = useCallback(async ({ force = true } = {}) => {
+    // Goes through the shared loader rather than querying the table here, for
+    // two reasons: it reads `value_text` as well as `value` (so the per-key
+    // readers - nav layout, company logo - can answer from this one fetch
+    // instead of each issuing their own on every cold load), and it de-dupes
+    // concurrent reads. Never throws; returns the last-known cache on failure.
+    const map = await loadSystemConfig({ force })
+    if (!map) return {}
     setSystemConfig(map)
     if (map.report_palette) {
       try { setReportPalette(JSON.parse(map.report_palette), { persist: false }) }
@@ -95,7 +97,9 @@ export function SettingsProvider({ children }) {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    refreshSystemConfig().catch(() => { /* keep defaults */ })
+    // Not forced on mount: if another reader already started the same read, join
+    // it. A live config change below IS forced, so an edit is never served stale.
+    refreshSystemConfig({ force: false }).catch(() => { /* keep defaults */ })
     // Live-refresh when a super-admin changes global config (no reload needed).
     const ch = supabase
       .channel('system_config_live')

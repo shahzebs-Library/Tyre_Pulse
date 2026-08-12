@@ -14,6 +14,7 @@
  */
 import { supabase, ServiceError } from './_client'
 import { normalizeNavLayout } from '../navLayout'
+import { configEntry, whenSystemConfigLoaded } from './systemConfig'
 
 /** system_config key holding the org-wide nav overlay. */
 export const NAV_LAYOUT_CONFIG_KEY = 'nav_layout'
@@ -21,6 +22,17 @@ export const NAV_LAYOUT_CONFIG_KEY = 'nav_layout'
 // Session cache: the sidebar loads the layout on every mount; keep it to one
 // network round-trip. Invalidated on save so the editor sees its own write.
 let _cache
+
+/** Single-row read of the nav layout. Returns the raw stored value, or null. */
+async function readNavLayoutRow() {
+  const { data, error } = await supabase
+    .from('system_config')
+    .select('value, value_text')
+    .eq('key', NAV_LAYOUT_CONFIG_KEY)
+    .maybeSingle()
+  if (error) return null
+  return data?.value ?? data?.value_text ?? null
+}
 
 /**
  * Read the persisted nav layout from `system_config.nav_layout`. Cached for the
@@ -33,13 +45,19 @@ export async function getNavLayout({ force = false } = {}) {
   if (_cache && !force) return _cache
   _cache = (async () => {
     try {
-      const { data, error } = await supabase
-        .from('system_config')
-        .select('value, value_text')
-        .eq('key', NAV_LAYOUT_CONFIG_KEY)
-        .maybeSingle()
-      if (error) return {}
-      const raw = data?.value ?? data?.value_text
+      // The whole system_config table is already read once per session by the
+      // settings context. Answering from that shared cache removes a second
+      // round trip from the cold-start path. A cold cache (this ran first, or
+      // there is no session) falls through to the read below - the cache can
+      // only ever say "here is the row", never "there is no row".
+      if (!configEntry(NAV_LAYOUT_CONFIG_KEY)) {
+        const pending = whenSystemConfigLoaded()
+        if (pending) await pending
+      }
+      const cached = configEntry(NAV_LAYOUT_CONFIG_KEY)
+      const raw = cached
+        ? (cached.value ?? cached.value_text)
+        : await readNavLayoutRow()
       if (raw == null || raw === '') return {}
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
       return normalizeNavLayout(parsed)

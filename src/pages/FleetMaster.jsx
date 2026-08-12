@@ -6,7 +6,6 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel } from '../lib/exportUtils'
 import { sanitizeSearchTerm } from '../lib/searchFilter'
 import { canAddResource } from '../lib/api/billing'
 import {
@@ -19,6 +18,10 @@ import { vehicleArt } from '../lib/brand/vehicleArt'
 import { useReportMeta } from '../hooks/useReportMeta'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
+
+// exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
+// never trigger, so it loads on first click instead of with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 const DEFAULT_PAGE_SIZE = 25
 
@@ -343,16 +346,16 @@ export default function FleetMaster() {
     return data ?? []
   }
 
-  function handleExport() {
-    fetchAll().then(rows => {
-      exportToExcel(
-        rows,
-        EXPORT_COLS.map(c => c.key),
-        EXPORT_COLS.map(c => c.header),
-        `TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`,
-        'Fleet Master'
-      )
-    })
+  async function handleExport() {
+    // Fetch rows and the export chunk together so the lazy import costs no extra wait.
+    const [rows, { exportToExcel }] = await Promise.all([fetchAll(), loadExportUtils()])
+    exportToExcel(
+      rows,
+      EXPORT_COLS.map(c => c.key),
+      EXPORT_COLS.map(c => c.header),
+      `TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`,
+      'Fleet Master'
+    )
   }
 
   function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }

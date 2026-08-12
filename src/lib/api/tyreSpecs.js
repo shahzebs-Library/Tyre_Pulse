@@ -31,14 +31,20 @@ export function listSpecs({ country } = {}) {
 /**
  * All tyre_records for compliance analysis, fully paged (200k ceiling), newest
  * first, with STRICT country scoping (`.eq`) matching the page exactly.
- * @param {{country?:string}} [opts]
+ *
+ * `from`/`to` bound `issue_date` server-side and are OPTIONAL - omitted, the read
+ * is unchanged. Compliance is a question about tyres CURRENTLY fitted, so a
+ * caller can pass a window instead of paging the whole history each visit.
+ * @param {{country?:string, from?:string, to?:string}} [opts]
  */
-export function listComplianceTyreRecords({ country } = {}) {
+export function listComplianceTyreRecords({ country, from: fromDate, to: toDate } = {}) {
   return fetchAllPages((from, to) => {
     let q = supabase
       .from('tyre_records')
       .select('id, asset_no, serial_number, position, brand, size, site, country, issue_date, risk_level')
     if (country && country !== 'All') q = q.eq('country', country)
+    if (fromDate) q = q.gte('issue_date', fromDate)
+    if (toDate) q = q.lte('issue_date', toDate)
     return q.order('issue_date', { ascending: false }).range(from, to)
   }, { max: 200000 })
 }

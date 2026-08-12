@@ -57,7 +57,7 @@ import StockBoxIc from './icons/stock-box.icon'
 import BarcodeScanIc from './icons/barcode-scan.icon'
 import OdometerIc from './icons/odometer.icon'
 import { supabase } from '../lib/supabase'
-import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
+import { detectAlertBadgeCount } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useRealtimeSync } from '../hooks/useRealtime'
@@ -782,21 +782,34 @@ export default function Layout({ children }) {
   }, [location.pathname, isMobile])
 
   useEffect(() => {
+    let cancelled = false
     async function fetchAlertCount() {
+      // A hidden tab is a TV left on or a background window; refreshing a badge
+      // nobody can see is pure cost. The visibility listener below catches up the
+      // moment it is looked at again, so nothing goes stale in front of a user.
+      if (typeof document !== 'undefined' && document.hidden) return
       try {
         const country = activeCountry !== 'All' ? activeCountry : null
-        const found   = await detectAlerts(supabase, country)
         const dismissed = (() => {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
         })()
-        const counts = countAlertsBySeverity(found.filter(a => !dismissed.has(a.id)))
-        setAlertCount(counts.critical + counts.high)
+        const count = await detectAlertBadgeCount(supabase, country, dismissed)
+        if (!cancelled) setAlertCount(count)
       } catch { /* ignore */ }
     }
-    fetchAlertCount()
+    // Deferred off the cold-load path. The badge is a background number that no
+    // one reads in the first second, and firing it during mount put its queries
+    // in contention with the queries of the page the user actually opened.
+    const kick = setTimeout(fetchAlertCount, 3000)
     const iv = setInterval(fetchAlertCount, 5 * 60 * 1000)
-    return () => clearInterval(iv)
+    document.addEventListener('visibilitychange', fetchAlertCount)
+    return () => {
+      cancelled = true
+      clearTimeout(kick)
+      clearInterval(iv)
+      document.removeEventListener('visibilitychange', fetchAlertCount)
+    }
   }, [activeCountry])
 
   useEffect(() => {

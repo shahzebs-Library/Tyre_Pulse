@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { detectRiskSpike } from './analyticsEngine'
+import { fetchAllPages } from './fetchAll'
 
 export const ALERT_TYPES = {
   STOCK_CRITICAL:     'STOCK_CRITICAL',
@@ -32,6 +33,41 @@ function alertId(type, key) {
 function withCountry(q, country) {
   return country ? q.eq('country', country) : q
 }
+
+// ─── Read shapes ─────────────────────────────────────────────────────────────
+// Two column sets per source, because the sidebar badge and the /alerts page ask
+// different questions. The badge reduces every alert to ONE integer
+// (critical + high), so it needs only the fields the SEVERITY rules read plus the
+// row id the dismissal filter keys on. The page additionally prints titles, sites
+// and descriptions. Selecting `*` served the page's needs on every load the badge
+// made, which is how a single sidebar number came to pull the whole inspections
+// table across the wire.
+const STOCK_COLS       = 'id,site,description,stock_qty,min_level,critical_level'
+const STOCK_BADGE_COLS = 'id,stock_qty,critical_level'
+const ACTION_COLS       = 'id,title,site,due_date'
+const ACTION_BADGE_COLS = 'id,due_date'
+const INSPECTION_COLS       = 'id,title,site,asset_no,scheduled_date'
+const INSPECTION_BADGE_COLS = 'id,scheduled_date'
+// detectRiskSpike reads exactly these two; `id`/`issue_date` were fetched and
+// never looked at.
+const SPIKE_COLS = 'risk_level,created_at'
+// The inactivity / CPK / data-quality rules run over this sample. `id` is unused
+// (their alert ids are built from the asset number) and `site` only appears in the
+// inactivity MESSAGE, so the badge drops both.
+const TYRE_COLS       = 'asset_no,site,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category'
+const TYRE_BADGE_COLS = 'asset_no,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category'
+
+// A corrective action / inspection only reaches HIGH once it is more than this
+// many days overdue; below it the rule emits MEDIUM, which the badge never counts.
+// So the badge can bound both reads server-side instead of fetching every open
+// row and discarding the recent ones in the browser.
+const OVERDUE_HIGH_DAYS = 7
+
+const DAY_MS = 86400000
+const daysAgoIso = (days) => new Date(Date.now() - days * DAY_MS).toISOString()
+const daysAgoDate = (days) => daysAgoIso(days).split('T')[0]
+
+const rowsOf = (res) => res?.data || []
 
 function detectVehicleInactivity(tyreRecords = [], thresholds = {}) {
   const inactiveDays = thresholds.vehicleInactiveDays || 90
@@ -123,49 +159,91 @@ function detectDataQuality(tyreRecords = [], thresholds = {}) {
 
 /**
  * Main entry point - fetches all needed data and returns alerts array.
+ *
+ * `badgeOnly` serves the sidebar count, which is `critical + high` and nothing
+ * else. In that mode the reads are narrowed to the columns the severity rules
+ * consume and bounded by the date at which each rule can first reach HIGH, and
+ * the budgets read is skipped outright because BUDGET_OVERAGE is emitted at INFO
+ * severity only and therefore can never move the badge. The MEDIUM/INFO alerts a
+ * badge-only run returns are consequently incomplete - use `detectAlertBadgeCount`
+ * rather than reading counts off this result.
+ *
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
  * @param {string|null} country  - 'KSA' | 'UAE' | 'Egypt' | null (all)
+ * @param {{badgeOnly?:boolean}} [opts]
  * @returns {Promise<Alert[]>}
  */
-export async function detectAlerts(supabase, country = null) {
+export async function detectAlerts(supabase, country = null, { badgeOnly = false } = {}) {
   const alerts = []
   const now    = new Date()
 
+  // Overdue cutoffs. Deliberately a SUPERSET of what reaches HIGH (">= 7 days"
+  // rather than "> 7 days"): the exact day count is still computed per row below,
+  // so a boundary row is classified by the same arithmetic as before and only the
+  // rows that cannot possibly qualify are left on the server.
+  const actionCutoff = badgeOnly ? daysAgoIso(OVERDUE_HIGH_DAYS) : null
+  const inspCutoff   = badgeOnly ? daysAgoDate(OVERDUE_HIGH_DAYS) : now.toISOString().split('T')[0]
+
   // ── Fetch data in parallel with optional country filter ───────────────────
   const [stockRes, budgetRes, actionsRes, tyreRes, inspRes, fullTyreRes] = await Promise.all([
-    withCountry(supabase.from('stock_records').select('*').order('site'), country),
-    withCountry(supabase.from('budgets').select('*').eq('year', now.getFullYear()), country),
-    withCountry(supabase.from('corrective_actions').select('*').neq('status', 'Closed'), country),
+    (() => {
+      const q = supabase.from('stock_records').select(badgeOnly ? STOCK_BADGE_COLS : STOCK_COLS)
+      // Ordering is presentation only (the result is re-sorted by severity), so
+      // the badge skips it. It stays on the page path to keep the listed order of
+      // equal-severity stock alerts identical to before.
+      return withCountry(badgeOnly ? q : q.order('site'), country)
+    })(),
+    // Skipped for the badge: every BUDGET_OVERAGE alert is INFO.
+    badgeOnly
+      ? Promise.resolve({ data: [] })
+      : withCountry(supabase.from('budgets').select('*').eq('year', now.getFullYear()), country),
+    (() => {
+      let q = withCountry(
+        supabase
+          .from('corrective_actions')
+          .select(badgeOnly ? ACTION_BADGE_COLS : ACTION_COLS)
+          .neq('status', 'Closed'),
+        country
+      )
+      if (actionCutoff) q = q.lt('due_date', actionCutoff)
+      return q
+    })(),
     withCountry(
       supabase.from('tyre_records')
-        .select('id,issue_date,risk_level,created_at')
+        .select(SPIKE_COLS)
         .order('created_at', { ascending: false })
         .limit(500),
       country
     ),
-    withCountry(
+    // Paged rather than a bare select: `inspections` grows per inspection, and a
+    // silently truncated read here would UNDER-report the badge, which is the one
+    // direction a safety count must never be wrong in.
+    fetchAllPages((from, to) => withCountry(
       supabase.from('inspections')
-        .select('*')
+        .select(badgeOnly ? INSPECTION_BADGE_COLS : INSPECTION_COLS)
         .neq('status', 'Done')
         .neq('status', 'Cancelled')
-        .lte('scheduled_date', now.toISOString().split('T')[0]),
+        .lte('scheduled_date', inspCutoff)
+        .order('scheduled_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
       country
-    ),
+    ), { max: 5000 }),
     withCountry(
       supabase.from('tyre_records')
-        .select('id,asset_no,site,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category')
+        .select(badgeOnly ? TYRE_BADGE_COLS : TYRE_COLS)
         .order('issue_date', { ascending: false })
         .limit(2000),
       country
     ),
   ])
 
-  const stockRecords = stockRes.data    || []
-  const budgets      = budgetRes.data   || []
-  const openActions  = actionsRes.data  || []
-  const recentTyres  = tyreRes.data     || []
-  const overdueInsp  = inspRes.data     || []
-  const fullTyres    = fullTyreRes.data || []
+  const stockRecords = rowsOf(stockRes)
+  const budgets      = rowsOf(budgetRes)
+  const openActions  = rowsOf(actionsRes)
+  const recentTyres  = rowsOf(tyreRes)
+  const overdueInsp  = rowsOf(inspRes)
+  const fullTyres    = rowsOf(fullTyreRes)
 
   // ── 1. Stock Critical ─────────────────────────────────────────────────────
   stockRecords.forEach(s => {
@@ -325,6 +403,26 @@ export async function detectAlerts(supabase, country = null) {
   }
 
   return sorted
+}
+
+/**
+ * The sidebar badge number: how many un-dismissed alerts are critical or high.
+ *
+ * Runs the SAME rules as `detectAlerts` over the same rows, so the number cannot
+ * drift from the /alerts page; it only avoids paying for the columns and rows
+ * that no severity rule reads. Callers pass the dismissed-id set because the
+ * badge must exclude alerts the user has already cleared.
+ *
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string|null} country
+ * @param {Set<string>} [dismissed]
+ * @returns {Promise<number>}
+ */
+export async function detectAlertBadgeCount(supabase, country = null, dismissed = new Set()) {
+  const found = await detectAlerts(supabase, country, { badgeOnly: true })
+  return found.filter(
+    (a) => !dismissed.has(a.id) && (a.severity === SEVERITY.CRITICAL || a.severity === SEVERITY.HIGH),
+  ).length
 }
 
 /**

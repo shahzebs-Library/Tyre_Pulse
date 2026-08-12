@@ -15,7 +15,6 @@ import { useSettings } from '../contexts/SettingsContext'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import {
@@ -40,6 +39,12 @@ import DateField from '../components/ui/DateField'
 import StatTile from '../components/ui/StatTile'
 import Gauge from '../components/ui/Gauge'
 import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
+
+// exportUtils and its report engines are ~41 kB gz that only matter once someone
+// actually asks for a file, so they load on first click rather than riding with
+// the route. runExport() already awaits the task and surfaces failures, so a
+// slow or failed chunk fetch shows the same error state as any failed export.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -689,14 +694,14 @@ export default function Dashboard() {
   }
 
   function handleExcelExport() {
-    return runExport('excel', () => exportToExcel(
+    return runExport('excel', async () => (await loadExportUtils()).exportToExcel(
       tyres.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0, total_cost: recordCost(t) })),
       ['issue_date','asset_no','brand','site','category','risk_level','cost_per_tyre'],
       ['Date','Asset No','Brand','Site','Category','Risk Level',`Cost (${activeCurrency})`],
       `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'Dashboard', { company: reportCompany }))
   }
   function handlePdfExport() {
-    return runExport('pdf', () => exportToPdf(
+    return runExport('pdf', async () => (await loadExportUtils()).exportToPdf(
       tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0 })),
       [{ key:'issue_date',header:'Date',width:24 },{ key:'asset_no',header:'Asset No',width:28 },{ key:'brand',header:'Brand',width:24 },{ key:'site',header:'Site',width:30 },{ key:'category',header:'Category',width:32 },{ key:'risk_level',header:'Risk',width:20 },{ key:'cost_per_tyre',header:`Cost (${activeCurrency})`,width:24 }],
       `TyrePulse Dashboard Report · ${formatDate(new Date(), activeCountry)}`,
@@ -707,6 +712,8 @@ export default function Dashboard() {
     return runExport('pptx', pptxExportTask)
   }
   async function pptxExportTask() {
+    // Start the chunk fetch alongside the queries so it costs no extra wall time.
+    const utils = loadExportUtils()
     const now = new Date()
     // Executive deck is a whole-fleet overview: use all-time data (matching the
     // headline KPIs), not the dashboard's period selector — a default "This Month"
@@ -735,7 +742,7 @@ export default function Dashboard() {
       actions.length > 5 ? { priority:'Medium', text:`Clear the ${actions.length}-item corrective-action backlog.` } : null,
       { priority:'Low', text:'Maintain weekly pressure checks and monthly tread measurements fleet-wide.' },
     ].filter(Boolean)
-    await exportToPptx({
+    await (await utils).exportToPptx({
       totalVehicles: Number(s.distinct_assets) || 0,
       totalTyres: Number(s.total_records) || 0, totalCost, openActions: actions.length, highRisk,
       currency: cur,
@@ -757,6 +764,8 @@ export default function Dashboard() {
     return runExport('daily', dailyReportTask)
   }
   async function dailyReportTask() {
+    // Start the chunk fetch alongside the queries so it costs no extra wall time.
+    const utils = loadExportUtils()
     const now = new Date()
     const today      = now.toISOString().slice(0,10)
     const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
@@ -791,7 +800,7 @@ export default function Dashboard() {
     const totalTyres    = Number(s.total_records) || 0
     const monthCost     = Number(sMonth?.total_cost) || 0
 
-    exportDailyExecutivePdf({
+    ;(await utils).exportDailyExecutivePdf({
       date: formatDate(now, activeCountry, { day: '2-digit', month: 'long', year: 'numeric' }),
       company: reportCompany,
       branding,

@@ -60,13 +60,21 @@ export async function updateKpiTarget(id, patch) {
  * `.eq('country', country)` when a real country is active, no filter for
  * 'All'/empty. Returns the fetchAllPages `{ data, error, truncated }` result
  * the page consumes via `.data`.
- * @param {{country?:string}} [opts]
+ *
+ * `from`/`to` bound `issue_date` SERVER-side and are OPTIONAL: omitted, the read
+ * is the all-time one it has always been, so no caller changes behaviour by
+ * upgrading. They exist because this read carries a 200k ceiling and no date
+ * predicate at all - every tyre record ever, over ~9-11 paged requests, on every
+ * visit - and the scorecard only ever charts a window of it.
+ * @param {{country?:string, from?:string, to?:string}} [opts]
  */
-export async function listKpiTyreRecords({ country } = {}) {
+export async function listKpiTyreRecords({ country, from: fromDate, to: toDate } = {}) {
   const active = country && country !== 'All' ? country : null
   return fetchAllPages((from, to) => {
     let q = supabase.from('tyre_records').select(TYRE_RECORD_COLS).order('issue_date')
     if (active) q = q.eq('country', active)
+    if (fromDate) q = q.gte('issue_date', fromDate)
+    if (toDate) q = q.lte('issue_date', toDate)
     return q.range(from, to)
   }, { max: 200000 })
 }

@@ -26,7 +26,7 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Recycle, AlertTriangle, Truck, Upload, FileSpreadsheet, FileText, Presentation,
   Filter, X, Loader2, ExternalLink, CircleDot, Save, Wrench, Info, Search,
-  Banknote, RefreshCw,
+  Banknote, RefreshCw, Activity, History,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Modal from '../components/ui/Modal'
@@ -34,9 +34,13 @@ import StudioBoundary from '../components/present/StudioBoundary'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  getDisposalRegister, updateDisposal, setDisposalDecision, importDisposalRows,
-  mapDisposalSheetRows,
+  getDisposalRegister, getDisposalReliability, getDisposalFleetBaseline,
+  updateDisposal, setDisposalDecision,
+  importDisposalRows, mapDisposalSheetRows,
 } from '../lib/api/assetDisposals'
+import {
+  shapeReliability, mergeReliability, reliabilityExportRows,
+} from '../lib/assetDisposalReliability'
 import {
   shapeDisposalRegister, filterDisposals, disposalSummary, assetEconomics,
   spendBaselines, byGroup, ageBands, disposalExportRows, disposalFindings,
@@ -51,6 +55,8 @@ import { toUserMessage } from '../lib/safeError'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 const DisposalDeckBuilder = lazy(() => import('../components/disposal/DisposalDeckBuilder'))
+const ReliabilityPanel = lazy(() => import('../components/disposal/ReliabilityPanel'))
+const AssetHistoryDrawer = lazy(() => import('../components/disposal/AssetHistoryDrawer'))
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -126,6 +132,12 @@ export default function AssetDisposals() {
   const company = appSettings?.company_name || 'TyrePulse'
 
   const [register, setRegister] = useState(null)
+  const [reliability, setReliability] = useState(null)
+  // The list measured against the fleet it is leaving. Its own read, because a
+  // missing baseline must cost two recommendation points and never the page.
+  const [baseline, setBaseline] = useState(null)
+  const [tab, setTab] = useState('register')
+  const [history, setHistory] = useState(null)  // machine open in the history drawer
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -144,8 +156,23 @@ export default function AssetDisposals() {
     if (isRefresh) setRefreshing(true); else setLoading(true)
     setError('')
     try {
-      const payload = await getDisposalRegister({ country: activeCountry })
-      setRegister(shapeDisposalRegister(payload))
+      // The two reads are independent on purpose: a database without the
+      // reliability RPC must still show the register, and a register that fails
+      // to load must not be reported as a fleet that never breaks down.
+      const [reg, rel, base] = await Promise.allSettled([
+        getDisposalRegister({ country: activeCountry }),
+        getDisposalReliability({ country: activeCountry }),
+        getDisposalFleetBaseline({ country: activeCountry }),
+      ])
+      if (reg.status === 'fulfilled') {
+        setRegister(shapeDisposalRegister(reg.value))
+        setError('')
+      } else {
+        setRegister(null)
+        setError(toUserMessage(reg.reason))
+      }
+      setReliability(shapeReliability(rel.status === 'fulfilled' ? rel.value : null))
+      setBaseline(base.status === 'fulfilled' ? base.value : null)
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e))
@@ -160,7 +187,17 @@ export default function AssetDisposals() {
 
   // Memoised so the empty-array fallback does not mint a new identity on every
   // render and re-run every derived memo below it.
-  const rows = useMemo(() => register?.rows || [], [register])
+  // Reliability is merged onto the register rows BEFORE filtering, so a filtered
+  // reliability table describes the same machines as the filtered register. If
+  // the engine is unavailable the register rows pass through untouched and the
+  // reliability surface reports that it could not measure anything.
+  const rows = useMemo(() => {
+    const base = register?.rows || []
+    const assets = reliability?.ok ? (reliability.assets || []) : []
+    if (!assets.length) return base
+    const merged = mergeReliability(base, assets)
+    return Array.isArray(merged) ? merged : base
+  }, [register, reliability])
   const filtered = useMemo(() => filterDisposals(rows, filters), [rows, filters])
   // Totals follow the FILTERED rows: a filtered table under register-wide
   // headlines is how a reader ends up quoting a number that is not on screen.
@@ -229,15 +266,42 @@ export default function AssetDisposals() {
   }), [byCondition])
 
   // ── exports ────────────────────────────────────────────────────────────────
+  /**
+   * One export, both halves. The committee columns and the reliability columns
+   * are produced by their own engines over the SAME filtered array in the same
+   * order, so they are zipped by index. A duplicated key keeps the register's
+   * version. When reliability is unavailable the export is the register alone
+   * rather than a sheet of blank reliability columns.
+   */
+  const exportModel = useCallback(() => {
+    const base = disposalExportRows(filtered)
+    if (!reliability?.ok) return base
+    const rel = reliabilityExportRows(filtered)
+    if (!rel || !Array.isArray(rel.columns) || !Array.isArray(rel.rows)) return base
+    const extra = rel.columns
+      .map((k, i) => ({ key: k, head: (rel.head || [])[i] || k }))
+      .filter((c) => !base.columns.includes(c.key))
+    return {
+      columns: [...base.columns, ...extra.map((c) => c.key)],
+      head: [...base.head, ...extra.map((c) => c.head)],
+      rows: base.rows.map((o, i) => {
+        const src = rel.rows[i] || {}
+        const add = {}
+        for (const c of extra) add[c.key] = src[c.key]
+        return { ...o, ...add }
+      }),
+    }
+  }, [filtered, reliability])
+
   const doExportExcel = async () => {
-    const { columns, rows: objects, head } = disposalExportRows(filtered)
+    const { columns, rows: objects, head } = exportModel()
     const name = reportFileName('Asset Disposals', reportDateLabel())
     await exportToExcel(objects, columns, head, name, 'Disposals', {
       title: 'Asset Disposal Register', company, currency: currency || 'SAR',
     })
   }
   const doExportPdf = async () => {
-    const { columns, rows: objects, head } = disposalExportRows(filtered)
+    const { columns, rows: objects, head } = exportModel()
     const name = reportFileName('Asset Disposals', reportDateLabel())
     await exportToPdf(
       objects,
@@ -395,56 +459,7 @@ export default function AssetDisposals() {
             </div>
           )}
 
-          {/* ── Charts ───────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Machines by asset type</h3>
-              <div className="h-64">{byType.length ? <Bar data={barData(byType, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Machines by region</h3>
-              <div className="h-64">{byRegion.length ? <Bar data={barData(byRegion, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Condition</h3>
-              <div className="h-64">
-                {byCondition.length
-                  ? <Doughnut data={conditionData} options={chartOpts({ plugins: { legend: { display: true, position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12 } } } })} />
-                  : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}
-              </div>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
-                Lifetime spend by asset type {currency && <span className="text-[var(--text-muted)]">({currency})</span>}
-              </h3>
-              <div className="h-64">
-                {totals.mixedCurrency
-                  ? <p className="text-sm text-[var(--text-muted)]">This selection carries more than one currency, so spend is not charted as a single total.</p>
-                  : spendByTypeData.hasData
-                    ? <Bar data={spendByTypeData.data} options={chartOpts()} />
-                    : <p className="text-sm text-[var(--text-muted)]">No spend is recorded against these machines.</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* Age bands read as a strip rather than a chart: five buckets do not
-              need axes, and "Year not recorded" has to stay visible. */}
-          <div className="card">
-            <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Age</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              {ages.map((b) => (
-                <div key={b.key} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
-                  <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtNum(b.count)}</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">{b.label}</div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mt-2">
-              Age is worked out from the model year. {fmtNum(totals.agedKnown)} of {fmtNum(totals.assets)} machines carry one.
-            </p>
-          </div>
-
-          {/* ── Filters ──────────────────────────────────────────────────── */}
+          {/* ── Filters (shared by both tabs) ────────────────────────────── */}
           <div className="card space-y-3">
             <div className="flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
@@ -522,20 +537,103 @@ export default function AssetDisposals() {
             )}
           </div>
 
+          {/* ── Tabs ─────────────────────────────────────────────────────── */}
+          <div className="flex items-center gap-2 border-b border-[var(--input-border)]">
+            {[
+              { key: 'register', label: 'Register', icon: Recycle },
+              { key: 'reliability', label: 'Reliability and board view', icon: Activity },
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 -mb-px ${tab === t.key ? 'border-blue-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+              >
+                <t.icon size={14} /> {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'reliability' && (
+            <StudioBoundary>
+              <Suspense fallback={<div className="card text-[var(--text-muted)]">Loading the reliability view...</div>}>
+                <ReliabilityPanel
+                  rows={filtered}
+                  reliability={reliability}
+                  baseline={baseline}
+                  currency={currency}
+                  loading={loading}
+                  onRetry={() => load(true)}
+                  onOpenAsset={(r) => setHistory(r)}
+                />
+              </Suspense>
+            </StudioBoundary>
+          )}
+
+          {tab === 'register' && (
+          <>
+          {/* ── Charts ───────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="card">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Machines by asset type</h3>
+              <div className="h-64">{byType.length ? <Bar data={barData(byType, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</div>
+            </div>
+            <div className="card">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Machines by region</h3>
+              <div className="h-64">{byRegion.length ? <Bar data={barData(byRegion, 'Machines')} options={chartOpts()} /> : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}</div>
+            </div>
+            <div className="card">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Condition</h3>
+              <div className="h-64">
+                {byCondition.length
+                  ? <Doughnut data={conditionData} options={chartOpts({ plugins: { legend: { display: true, position: 'right', labels: { color: 'var(--text-secondary)', boxWidth: 12 } } } })} />
+                  : <p className="text-sm text-[var(--text-muted)]">Nothing to chart for this selection.</p>}
+              </div>
+            </div>
+            <div className="card">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">
+                Lifetime spend by asset type {currency && <span className="text-[var(--text-muted)]">({currency})</span>}
+              </h3>
+              <div className="h-64">
+                {totals.mixedCurrency
+                  ? <p className="text-sm text-[var(--text-muted)]">This selection carries more than one currency, so spend is not charted as a single total.</p>
+                  : spendByTypeData.hasData
+                    ? <Bar data={spendByTypeData.data} options={chartOpts()} />
+                    : <p className="text-sm text-[var(--text-muted)]">No spend is recorded against these machines.</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Age bands read as a strip rather than a chart: five buckets do not
+              need axes, and "Year not recorded" has to stay visible. */}
+          <div className="card">
+            <h3 className="text-sm font-medium text-[var(--text-secondary)] mb-3">Age</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {ages.map((b) => (
+                <div key={b.key} className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
+                  <div className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{fmtNum(b.count)}</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">{b.label}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-2">
+              Age is worked out from the model year. {fmtNum(totals.agedKnown)} of {fmtNum(totals.assets)} machines carry one.
+            </p>
+          </div>
+
           {/* ── Register table ───────────────────────────────────────────── */}
           <div className="card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--input-bg)] text-[var(--text-muted)]">
                   <tr>
-                    {['Asset', 'Type', 'Region / Site', 'Disposition', 'Condition', 'Fleet register', 'Job cards', 'Spend', 'Tyres fitted', 'Status'].map((h) => (
+                    {['Asset', 'Type', 'Region / Site', 'Disposition', 'Condition', 'Fleet register', 'Job cards', 'Spend', 'Tyres fitted', 'Status', 'History'].map((h) => (
                       <th key={h} className="text-left font-medium px-3 py-2 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 && (
-                    <tr><td colSpan={10} className="px-3 py-6 text-center text-[var(--text-muted)]">No machines match these filters.</td></tr>
+                    <tr><td colSpan={11} className="px-3 py-6 text-center text-[var(--text-muted)]">No machines match these filters.</td></tr>
                   )}
                   {filtered.map((r) => {
                     const e = assetEconomics(r, { peerSpendPerYear: baselines[r?.asset_type] })
@@ -562,6 +660,15 @@ export default function AssetDisposals() {
                         <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(e.spend, e.currency)}</td>
                         <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)]">{e.tyresActive || ''}</td>
                         <td className="px-3 py-2"><Badge meta={disposalStatusMeta(r.status)} /></td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={(ev) => { ev.stopPropagation(); setHistory(r) }}
+                            className="text-blue-400 hover:underline inline-flex items-center gap-1 text-xs"
+                          >
+                            <History size={13} /> History
+                          </button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -569,7 +676,23 @@ export default function AssetDisposals() {
               </table>
             </div>
           </div>
+          </>
+          )}
         </>
+      )}
+
+      {/* ── History drawer ─────────────────────────────────────────────── */}
+      {history && (
+        <StudioBoundary>
+          <Suspense fallback={null}>
+            <AssetHistoryDrawer
+              row={history}
+              rows={filtered}
+              currency={currency}
+              onClose={() => setHistory(null)}
+            />
+          </Suspense>
+        </StudioBoundary>
       )}
 
       {/* ── Detail drawer ──────────────────────────────────────────────── */}

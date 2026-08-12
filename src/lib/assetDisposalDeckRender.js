@@ -56,6 +56,36 @@ const RGB = {
   ink: [15, 23, 42], subtle: [71, 85, 105], muted: [148, 163, 184],
   border: [226, 232, 240], head: [30, 41, 59], zebra: [248, 250, 252],
   accent: [79, 70, 229], warn: [180, 83, 9],
+  good: [21, 128, 61], watch: [180, 83, 9], bad: [185, 28, 28],
+}
+
+// Band tones for a reliability cell. A cell with no band renders in the ordinary
+// body ink: an unbanded figure must not read as a judged one.
+const BAND_HEX = { good: '15803D', watch: 'B45309', bad: 'B91C1C' }
+const BAND_RGB = { good: RGB.good, watch: RGB.watch, bad: RGB.bad }
+
+// Priority tones for the recommendation slide. The LABEL comes off the resolved
+// slide (the reliability engine owns that vocabulary); these are the fallbacks
+// for a slide built before the label was carried.
+const PRIORITY_HEX = { critical: 'B91C1C', high: 'B45309', medium: '4F46E5', low: '475569', info: '475569' }
+const PRIORITY_RGB = { critical: RGB.bad, high: RGB.warn, medium: RGB.accent, low: RGB.subtle, info: RGB.subtle }
+export const PRIORITY_LABEL = {
+  critical: 'ACT NOW', high: 'HIGH', medium: 'MEDIUM', low: 'FOR INFORMATION', info: 'FOR INFORMATION',
+}
+const priorityText = (g) => String(g?.label || PRIORITY_LABEL[g?.priority] || g?.priority || '').toUpperCase()
+
+/**
+ * A figure the deck could not measure. Toned as a caveat, never as a low score:
+ * "Not measured" in the same weight as a real reading invites a committee to
+ * read it as one.
+ */
+export const NOT_MEASURED_TEXT = 'Not measured'
+const isUnmeasured = (v) => String(v) === NOT_MEASURED_TEXT
+const cellTone = (text, band) => {
+  if (String(text) === 'NOT IN REGISTER') return { hex: WARN, rgb: RGB.warn, bold: true }
+  if (isUnmeasured(text)) return { hex: MUTED, rgb: RGB.muted, bold: false }
+  if (band && BAND_HEX[band]) return { hex: BAND_HEX[band], rgb: BAND_RGB[band], bold: band === 'bad' }
+  return { hex: SUBTLE, rgb: RGB.subtle, bold: false }
 }
 
 // 16:9 geometry (inches)
@@ -330,11 +360,85 @@ export async function renderDisposalDeckPptx({
         s.addShape(rect, { x, y, w: cardW, h: cardH, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true })
         s.addShape(rect, { x, y, w: cardW, h: 0.08, fill: { color: k.valuation ? WARN : ACCENT } })
         s.addText(String(k.label).toUpperCase(), { x: x + 0.16, y: y + 0.18, w: cardW - 0.32, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
-        s.addText(String(k.value), { x: x + 0.16, y: y + 0.5, w: cardW - 0.32, h: 0.62, fontSize: k.valuation ? 19 : 24, bold: true, color: k.valuation ? WARN : INK })
+        const soft = k.valuation || k.unmeasured || isUnmeasured(k.value)
+        s.addText(String(k.value), {
+          x: x + 0.16, y: y + 0.5, w: cardW - 0.32, h: 0.62,
+          fontSize: soft ? 19 : 24, bold: true,
+          color: k.unmeasured || isUnmeasured(k.value) ? MUTED : (k.valuation ? WARN : INK),
+        })
         if (k.note) s.addText(String(k.note), { x: x + 0.16, y: y + cardH - 0.5, w: cardW - 0.32, h: 0.44, fontSize: 7.5, color: SUBTLE, valign: 'top' })
       })
-      const cav = valuationCaveat(deck)
-      if (cav) s.addText(cav, { x: MX, y: PAGE_H - 0.78, w: CONTENT_W, h: 0.36, fontSize: 8.5, italic: true, color: WARN })
+      // Reliability slides carry their own basis; everything else carries the
+      // standing valuation caveat.
+      const bottom = Array.isArray(slide.notes) && slide.notes.length ? slide.notes.join('  ') : valuationCaveat(deck)
+      if (bottom) s.addText(String(bottom), { x: MX, y: PAGE_H - 0.92, w: CONTENT_W, h: 0.5, fontSize: 8, italic: true, color: WARN, valign: 'top' })
+      footer(s); out.push(s)
+      continue
+    }
+
+    // ── Recommendations, grouped by priority ──
+    if (slide.kind === 'recommendations') {
+      const s = newSlide()
+      header(s, slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'}, each one carrying the figures it rests on`)
+      if (slide.empty) { emptyNote(s, slide.emptyNote); footer(s); out.push(s); continue }
+      let y = 1.15
+      for (const g of slide.groups) {
+        if (y > 6.6) break
+        s.addShape(rect, { x: MX, y, w: 1.55, h: 0.24, fill: { color: PRIORITY_HEX[g.priority] || SUBTLE } })
+        s.addText(PRIORITY_LABEL[g.priority] || String(g.priority).toUpperCase(), {
+          x: MX + 0.05, y, w: 1.5, h: 0.24, fontSize: 7.5, bold: true, color: 'FFFFFF', charSpacing: 1, valign: 'middle',
+        })
+        y += 0.32
+        for (const it of g.items) {
+          if (y > 6.7) break
+          s.addText(String(it.title), { x: MX + 0.1, y, w: CONTENT_W - 0.2, h: 0.28, fontSize: 11, bold: true, color: INK, valign: 'top' })
+          y += 0.28
+          if (slide.showEvidence && it.evidence) {
+            s.addText(String(it.evidence), { x: MX + 0.24, y, w: CONTENT_W - 0.34, h: 0.34, fontSize: 8.5, color: SUBTLE, valign: 'top' })
+            y += 0.34
+          }
+          y += 0.06
+        }
+        y += 0.1
+      }
+      footer(s); out.push(s)
+      continue
+    }
+
+    // ── This list against the rest of the fleet ──
+    if (slide.kind === 'comparison') {
+      const s = newSlide()
+      header(s, slide.title, slide.country ? `Country: ${slide.country}` : '')
+      if (slide.empty) { emptyNote(s, 'The fleet baseline was not supplied, so this comparison could not be produced.'); footer(s); out.push(s); continue }
+      let y = 1.1
+      for (const h of slide.headlines) {
+        s.addShape(rect, { x: MX, y, w: 0.06, h: 0.52, fill: { color: h.tone === 'limit' ? WARN : ACCENT } })
+        s.addText(String(h.text), { x: MX + 0.16, y, w: CONTENT_W - 0.16, h: 0.52, fontSize: 10.5, color: INK, valign: 'top' })
+        y += 0.62
+      }
+      const rowH = 0.3
+      const head2 = ['Measure', slide.onLabel, slide.restLabel, 'Ratio'].map((t, i) => ({
+        text: t, options: { bold: true, color: 'FFFFFF', fill: { color: HEAD_FILL }, fontSize: 9, align: i ? 'right' : 'left' },
+      }))
+      const body2 = slide.metrics.map((m) => {
+        const tag = m.trust ? '  (read this one)' : (m.confounded ? '  (confounded)' : '')
+        const tone = m.confounded ? MUTED : (m.trust ? INK : SUBTLE)
+        return [
+          { text: `${m.label}${tag}`, options: { fontSize: 9, color: tone, bold: !!m.trust } },
+          { text: String(m.onList), options: { fontSize: 9, color: tone, align: 'right', bold: !!m.trust } },
+          { text: String(m.rest), options: { fontSize: 9, color: tone, align: 'right' } },
+          { text: String(m.ratio || ''), options: { fontSize: 9, color: m.trust ? WARN : SUBTLE, align: 'right', bold: !!m.trust } },
+        ]
+      })
+      s.addTable([head2, ...body2], {
+        x: MX, y, w: CONTENT_W, colW: [CONTENT_W * 0.42, CONTENT_W * 0.2, CONTENT_W * 0.2, CONTENT_W * 0.18],
+        border: { type: 'solid', color: BORDER, pt: 0.5 }, rowH, valign: 'middle', autoPage: false,
+      })
+      y += rowH * (body2.length + 1) + 0.16
+      if (slide.confound && y < 6.6) {
+        s.addShape(rect, { x: MX, y, w: CONTENT_W, h: 0.72, fill: { color: 'FFF7ED' }, line: { color: WARN, width: 0.75 } })
+        s.addText(String(slide.confound), { x: MX + 0.14, y: y + 0.06, w: CONTENT_W - 0.28, h: 0.6, fontSize: 8.5, color: WARN, valign: 'top' })
+      }
       footer(s); out.push(s)
       continue
     }
@@ -416,22 +520,32 @@ export async function renderDisposalDeckPptx({
       const compact = slide.density === 'compact'
       const fs = compact ? 8 : 9
       const head = cols.map((c) => ({ text: c.header, options: { bold: true, color: 'FFFFFF', fill: { color: HEAD_FILL }, fontSize: fs, align: 'center', valign: 'middle' } }))
-      const body = slide.rows.map((r, ri) => r.map((cell, ci) => ({
-        text: String(cell),
-        options: {
-          fontSize: fs, valign: 'middle', align: cols[ci]?.align === 'right' ? 'right' : 'left',
-          // A row for a machine that is not in the register is flagged in place,
-          // so it can never be read as an ordinary line.
-          color: String(cell) === 'NOT IN REGISTER' ? WARN : SUBTLE,
-          bold: String(cell) === 'NOT IN REGISTER',
-          fill: { color: ri % 2 ? 'F8FAFC' : CARD },
-        },
-      })))
+      const body = slide.rows.map((r, ri) => r.map((cell, ci) => {
+        // A row for a machine that is not in the register is flagged in place, a
+        // figure that could not be measured is toned back, and a banded
+        // reliability cell takes its band's tone.
+        const tone = cellTone(cell, slide.cellBands?.[ri]?.[ci])
+        return {
+          text: String(cell),
+          options: {
+            fontSize: fs, valign: 'middle', align: cols[ci]?.align === 'right' ? 'right' : 'left',
+            color: tone.hex, bold: tone.bold,
+            italic: isUnmeasured(cell),
+            fill: { color: ri % 2 ? 'F8FAFC' : CARD },
+          },
+        }
+      }))
+      // The caveats a reliability table must never travel without.
+      const notes = Array.isArray(slide.notes) ? slide.notes.filter(Boolean) : []
+      const noteH = notes.length ? Math.min(0.86, 0.2 + 0.19 * notes.length) : 0
       s.addTable([head, ...body], {
         x: MX, y: 1.12, w: CONTENT_W, colW,
         border: { type: 'solid', color: BORDER, pt: 0.5 },
         rowH: compact ? 0.3 : 0.34, valign: 'middle', autoPage: false,
       })
+      if (notes.length) {
+        s.addText(notes.join('  '), { x: MX, y: PAGE_H - 0.82 - noteH, w: CONTENT_W, h: noteH, fontSize: 7.5, italic: true, color: WARN, valign: 'top' })
+      }
       s.addText(String(slide.caption || ''), { x: MX, y: PAGE_H - 0.78, w: CONTENT_W, h: 0.3, fontSize: 8.5, color: MUTED })
       footer(s); out.push(s)
       continue
@@ -462,6 +576,29 @@ export async function renderDisposalDeckPptx({
         })
       })
       let by = y + half * 0.29 + 0.18
+      // The machine's own reliability record, with the caveats it rests on.
+      const relList = Array.isArray(slide.reliability) ? slide.reliability : []
+      if (relList.length && by < 5.9) {
+        s.addText('RELIABILITY RECORD', { x: MX, y: by, w: CONTENT_W, h: 0.26, fontSize: 8.5, bold: true, color: MUTED, charSpacing: 1 })
+        by += 0.26
+        s.addText(
+          relList.map((f, i) => ([
+            { text: `${f.label}: `, options: { fontSize: 9, color: MUTED } },
+            { text: String(f.value), options: { fontSize: 9, bold: !isUnmeasured(f.value), color: isUnmeasured(f.value) ? MUTED : INK, italic: isUnmeasured(f.value) } },
+            ...(i < relList.length - 1 ? [{ text: '   |   ', options: { fontSize: 9, color: BORDER } }] : []),
+          ])).flat(),
+          { x: MX, y: by, w: CONTENT_W, h: 0.44, valign: 'top' },
+        )
+        by += 0.48
+        const rn = Array.isArray(slide.reliabilityNotes) ? slide.reliabilityNotes.filter(Boolean) : []
+        if (rn.length && by < 6.2) {
+          s.addText(rn.join('  '), { x: MX, y: by, w: CONTENT_W, h: 0.34, fontSize: 7.5, italic: true, color: WARN, valign: 'top' })
+          by += 0.36
+        }
+      } else if (slide.reliabilityNote && by < 6.2) {
+        s.addText(String(slide.reliabilityNote), { x: MX, y: by, w: CONTENT_W, h: 0.28, fontSize: 8.5, italic: true, color: MUTED })
+        by += 0.3
+      }
       // Committee remarks, verbatim.
       if (slide.remarks.length) {
         s.addText('COMMITTEE REMARKS', { x: MX, y: by, w: CONTENT_W, h: 0.26, fontSize: 8.5, bold: true, color: MUTED, charSpacing: 1 })
@@ -624,21 +761,92 @@ export async function renderDisposalDeckPdf({
         const cy = y + r * (ch + gap)
         doc.setFillColor(255, 255, 255); doc.setDrawColor(...RGB.border); doc.setLineWidth(0.3)
         doc.roundedRect(x, cy, cw, ch, 1.5, 1.5, 'FD')
-        doc.setFillColor(...(k.valuation ? RGB.warn : RGB.accent)); doc.rect(x, cy, cw, 1.1, 'F')
+        const soft = k.unmeasured || isUnmeasured(k.value)
+        doc.setFillColor(...(soft ? RGB.muted : (k.valuation ? RGB.warn : RGB.accent))); doc.rect(x, cy, cw, 1.1, 'F')
         doc.setFont('helvetica', 'normal'); doc.setFontSize(6.6); setInk(RGB.muted)
         doc.text(doc.splitTextToSize(String(k.label).toUpperCase(), cw - 6)[0], x + 3, cy + 6)
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(k.valuation ? 11 : 14)
-        setInk(k.valuation ? RGB.warn : RGB.ink)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(k.valuation || soft ? 11 : 14)
+        setInk(soft ? RGB.muted : (k.valuation ? RGB.warn : RGB.ink))
         doc.text(doc.splitTextToSize(String(k.value), cw - 6)[0], x + 3, cy + 14)
         if (k.note) {
           doc.setFont('helvetica', 'normal'); doc.setFontSize(6); setInk(RGB.subtle)
           doc.splitTextToSize(String(k.note), cw - 6).slice(0, 2).forEach((ln, li) => doc.text(ln, x + 3, cy + 19 + li * 3))
         }
       })
-      const cav = valuationCaveat(deck)
-      if (cav) {
+      const bottom = Array.isArray(slide.notes) && slide.notes.length ? slide.notes.join('  ') : valuationCaveat(deck)
+      if (bottom) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); setInk(RGB.warn)
+        doc.text(doc.splitTextToSize(String(bottom), CW).slice(0, 3), M, PH - 24)
+      }
+      continue
+    }
+
+    if (slide.kind === 'recommendations') {
+      let y = heading(slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'}, each one carrying the figures it rests on`)
+      if (slide.empty) { emptyAt(y, slide.emptyNote); continue }
+      for (const g of slide.groups) {
+        if (y > PH - 26) break
+        doc.setFillColor(...(PRIORITY_RGB[g.priority] || RGB.subtle))
+        doc.rect(M, y - 3.4, 30, 5, 'F')
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(255, 255, 255)
+        doc.text(PRIORITY_LABEL[g.priority] || String(g.priority).toUpperCase(), M + 1.6, y)
+        y += 6
+        for (const it of g.items) {
+          if (y > PH - 22) break
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); setInk(RGB.ink)
+          const t = doc.splitTextToSize(String(it.title), CW - 4)
+          t.forEach((ln, i) => doc.text(ln, M + 2, y + i * 4.8))
+          y += t.length * 4.8 + 1
+          if (slide.showEvidence && it.evidence) {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8); setInk(RGB.subtle)
+            const e = doc.splitTextToSize(String(it.evidence), CW - 10)
+            e.forEach((ln, i) => doc.text(ln, M + 6, y + i * 3.8))
+            y += e.length * 3.8 + 1.5
+          }
+          y += 1.5
+        }
+        y += 2
+      }
+      continue
+    }
+
+    if (slide.kind === 'comparison') {
+      let y = heading(slide.title, slide.country ? `Country: ${slide.country}` : '')
+      if (slide.empty) { emptyAt(y, 'The fleet baseline was not supplied, so this comparison could not be produced.'); continue }
+      for (const h of slide.headlines) {
+        doc.setFillColor(...(h.tone === 'limit' ? RGB.warn : RGB.accent))
+        const lines = doc.splitTextToSize(String(h.text), CW - 6)
+        doc.rect(M, y - 3.2, 1.2, lines.length * 4.6 + 1.6, 'F')
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); setInk(RGB.ink)
+        lines.forEach((ln, i) => doc.text(ln, M + 4, y + i * 4.6))
+        y += lines.length * 4.6 + 4
+      }
+      autoTable(doc, {
+        startY: y, margin: { left: M, right: M }, theme: 'grid',
+        head: [['Measure', slide.onLabel, slide.restLabel, 'Ratio']],
+        body: slide.metrics.map((m) => [
+          `${m.label}${m.trust ? ' (read this one)' : (m.confounded ? ' (confounded)' : '')}`,
+          m.onList, m.rest, m.ratio || '',
+        ]),
+        styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 1.6, textColor: RGB.subtle, lineColor: RGB.border, lineWidth: 0.1 },
+        headStyles: { fillColor: RGB.head, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+        alternateRowStyles: { fillColor: RGB.zebra },
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+        didParseCell: (d) => {
+          if (d.section !== 'body') return
+          const m = slide.metrics[d.row.index]
+          if (!m) return
+          if (m.trust) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = d.column.index === 3 ? RGB.warn : RGB.ink }
+          if (m.confounded) d.cell.styles.textColor = RGB.muted
+        },
+      })
+      y = (doc.lastAutoTable?.finalY || y) + 6
+      if (slide.confound && y < PH - 20) {
+        const lines = doc.splitTextToSize(String(slide.confound), CW - 8)
+        doc.setFillColor(255, 247, 237); doc.setDrawColor(...RGB.warn); doc.setLineWidth(0.3)
+        doc.rect(M, y - 3, CW, lines.length * 3.9 + 4, 'FD')
         doc.setFont('helvetica', 'italic'); doc.setFontSize(8); setInk(RGB.warn)
-        doc.text(doc.splitTextToSize(cav, CW), M, PH - 20)
+        lines.forEach((ln, i) => doc.text(ln, M + 3, y + i * 3.9))
       }
       continue
     }
@@ -704,14 +912,25 @@ export async function renderDisposalDeckPdf({
         headStyles: { fillColor: RGB.head, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: compact ? 7 : 8 },
         alternateRowStyles: { fillColor: RGB.zebra },
         columnStyles: Object.fromEntries(slide.columns.map((c, i) => [i, { halign: c.align === 'right' ? 'right' : 'left' }])),
-        // A machine with no register record is flagged in the row itself.
+        // A machine with no register record is flagged in the row itself, an
+        // unmeasured figure is toned back so it cannot read as a low score, and a
+        // banded reliability cell takes its band's tone.
         didParseCell: (d) => {
-          if (d.section === 'body' && String(d.cell.raw) === 'NOT IN REGISTER') {
-            d.cell.styles.textColor = RGB.warn
-            d.cell.styles.fontStyle = 'bold'
-          }
+          if (d.section !== 'body') return
+          const raw = String(d.cell.raw)
+          const band = slide.cellBands?.[d.row.index]?.[d.column.index]
+          const tone = cellTone(raw, band)
+          d.cell.styles.textColor = tone.rgb
+          if (tone.bold) d.cell.styles.fontStyle = 'bold'
+          else if (isUnmeasured(raw)) d.cell.styles.fontStyle = 'italic'
         },
       })
+      const tnotes = Array.isArray(slide.notes) ? slide.notes.filter(Boolean) : []
+      if (tnotes.length) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(7); setInk(RGB.warn)
+        const lines = doc.splitTextToSize(tnotes.join('  '), CW).slice(0, 3)
+        lines.forEach((ln, i) => doc.text(ln, M, PH - 17 - (lines.length - 1 - i) * 3.2))
+      }
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8); setInk(RGB.muted)
       doc.text(String(slide.caption || ''), M, PH - 12)
       continue
@@ -738,6 +957,28 @@ export async function renderDisposalDeckPdf({
         doc.text(doc.splitTextToSize(String(f.value), colW * 0.54)[0], x + colW * 0.45, fy)
       })
       y += half * 5.2 + 4
+      const relList = Array.isArray(slide.reliability) ? slide.reliability : []
+      if (relList.length && y < PH - 46) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); setInk(RGB.muted)
+        doc.text('RELIABILITY RECORD', M, y); y += 4.2
+        doc.setFontSize(8)
+        const strip = relList.map((f) => `${f.label}: ${f.value}`).join('   |   ')
+        doc.setFont('helvetica', 'normal'); setInk(RGB.ink)
+        const lines = doc.splitTextToSize(strip, CW).slice(0, 3)
+        lines.forEach((ln, i) => doc.text(ln, M, y + i * 4))
+        y += lines.length * 4 + 2
+        const rn = Array.isArray(slide.reliabilityNotes) ? slide.reliabilityNotes.filter(Boolean) : []
+        if (rn.length && y < PH - 34) {
+          doc.setFont('helvetica', 'italic'); doc.setFontSize(7); setInk(RGB.warn)
+          const nl = doc.splitTextToSize(rn.join('  '), CW).slice(0, 2)
+          nl.forEach((ln, i) => doc.text(ln, M, y + i * 3.4))
+          y += nl.length * 3.4 + 2
+        }
+      } else if (slide.reliabilityNote && y < PH - 38) {
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); setInk(RGB.muted)
+        doc.text(doc.splitTextToSize(String(slide.reliabilityNote), CW)[0], M, y)
+        y += 5
+      }
       if (slide.remarks.length && y < PH - 40) {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); setInk(RGB.muted)
         doc.text('COMMITTEE REMARKS', M, y); y += 4.5

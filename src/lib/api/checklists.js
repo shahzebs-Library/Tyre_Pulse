@@ -154,9 +154,25 @@ export async function deleteTemplate(id) {
 // ── Submissions ─────────────────────────────────────────────────────────────
 
 /** List submissions (newest first), optionally by template/country. */
-export async function listSubmissions({ country, templateId, limit = 200 } = {}) {
+/**
+ * Submissions for a template.
+ *
+ * `assetNo`, `from` and `to` bound the read SERVER-side, and on the monthly
+ * grid that is not an optimisation - it is the difference between a true report
+ * and a false one. Filtering a capped list in the browser means the rows past
+ * the cap never arrive, and a day whose submission did not arrive is drawn as a
+ * day nobody checked: the report inventing the very gap it exists to find. A
+ * month is at most 31 days of submissions, so bounded it cannot reach the cap.
+ */
+export async function listSubmissions({ country, templateId, assetNo, from, to, limit = 200 } = {}) {
   let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS)
   if (templateId) q = q.eq('template_id', templateId)
+  if (assetNo) q = q.eq('asset_no', assetNo)
+  // created_at is a timestamp, so an inclusive end date has to reach the end of
+  // that day - `lte` on the bare date would silently drop everything submitted
+  // after midnight on the last day of the month.
+  if (from) q = q.gte('created_at', `${String(from).slice(0, 10)}T00:00:00.000Z`)
+  if (to) q = q.lte('created_at', `${String(to).slice(0, 10)}T23:59:59.999Z`)
   q = applyCountry(q, country)
   return unwrap(await q.order('created_at', { ascending: false }).limit(limit)) || []
 }

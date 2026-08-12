@@ -41,7 +41,19 @@ export default function MonthlyGridPanel({ template, country, branding, company 
     if (!templateId) { setRows([]); return }
     setLoading(true); setError('')
     try {
-      const list = await listSubmissions({ templateId, country, limit: READ_LIMIT })
+      // Bounded to the month being drawn, SERVER-side. Reading every submission
+      // this template has ever had and filtering in the browser is what made the
+      // cap dangerous: a month is at most 31 days of submissions, so bounded it
+      // cannot reach the cap and an empty column means what it says.
+      const last = new Date(Date.UTC(year, month, 0)).getUTCDate()
+      const mm = String(month).padStart(2, '0')
+      const list = await listSubmissions({
+        templateId,
+        country,
+        from: `${year}-${mm}-01`,
+        to: `${year}-${mm}-${String(last).padStart(2, '0')}`,
+        limit: READ_LIMIT,
+      })
       const got = Array.isArray(list) ? list : []
       setRows(got)
       // A capped read is dangerous HERE specifically: this grid's whole claim is
@@ -55,7 +67,7 @@ export default function MonthlyGridPanel({ template, country, branding, company 
     } finally {
       setLoading(false)
     }
-  }, [templateId, country])
+  }, [templateId, country, year, month])
 
   useEffect(() => { load() }, [load])
 

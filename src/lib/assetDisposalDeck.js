@@ -1435,10 +1435,14 @@ export function replacementView(rows, benchmarks, { currency = 'SAR', now = new 
   }
   // The limit statement is a headline, not a footnote. A partial exposure read
   // as the whole bill is the single worst misreading this slide can produce.
+  // Naming the unpriced CLASSES is what makes the limit actionable: it is the
+  // list of prices to ask the supplier for.
+  const classes = Array.isArray(totals.uncoveredTypes) ? totals.uncoveredTypes.filter(Boolean) : []
   headlines.push({
     tone: 'limit',
     text: ascii(totals.unpricedNote
-      || 'Every machine on this list carries a supplier quotation, so the figure above covers all of them.'),
+      ? `${totals.unpricedNote}${classes.length ? ` Not priced: ${classes.slice(0, 8).join(', ')}${classes.length > 8 ? ` and ${classes.length - 8} more` : ''}.` : ''}`
+      : 'Every machine on this list carries a supplier quotation, so the figure above covers all of them.'),
   })
 
   const covered = [...totals.covered].sort(

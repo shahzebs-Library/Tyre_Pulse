@@ -651,7 +651,9 @@ function metricLabel(key) {
   try {
     const entry = Array.isArray(cat) ? cat.find((m) => m && (m.key === key || m.field === key)) : cat[key]
     const label = entry && (entry.shortLabel || entry.header || entry.label)
-    if (typeof label === 'string' && label.trim() && label.length <= 20) return ascii(label.trim())
+    // Only when it still fits the column. These headers sit in fixed width pptx
+    // table cells; a long one overflows rather than wrapping.
+    if (typeof label === 'string' && label.trim() && label.trim().length <= 14) return ascii(label.trim())
   } catch { /* the deck's own header is the fallback */ }
   return own.header
 }
@@ -675,9 +677,14 @@ export function readField(row, key) {
   return nested && field in nested ? nested[field] : row?.[field]
 }
 
-/** Every reliability field that carries a real measurement on this row. */
+/**
+ * The fields that decide whether a machine has a RELIABILITY record at all.
+ * `job_cards` and `spend` are deliberately excluded: the disposal register
+ * carries both on its own, so counting them would report every machine as
+ * measured while every actual reliability figure came back Not measured.
+ */
 export const RELIABILITY_FIELDS = RELIABILITY_COLUMN_KEYS
-  .filter((k) => !['asset_no', 'asset_type', 'site'].includes(k))
+  .filter((k) => !['asset_no', 'asset_type', 'site', 'job_cards', 'spend'].includes(k))
 export function hasReliability(row) {
   return RELIABILITY_FIELDS.some((k) => num(readField(row, k)) != null)
 }
@@ -697,7 +704,7 @@ const countWhere = (rows, fn) => (rows || []).filter((r) => { try { return fn(r)
  * so the deck and every other reliability surface count the same machines.
  */
 export const AVAILABILITY_FLOOR = num(relConst('BELOW_AVAILABILITY_PCT')) ?? 80
-export const LONG_IDLE_DAYS = num(relConst('IDLE_JOB_CARD_DAYS')) ?? 365
+export const LONG_IDLE_DAYS = num(relConst('IDLE_JOB_CARD_DAYS')) ?? num(engConst('IDLE_JOB_CARD_DAYS')) ?? 365
 
 /**
  * Fleet level reliability, read straight off the rows. Used as the base reading
@@ -891,7 +898,10 @@ export function worstBy(rows, key, { limit = 8 } = {}) {
   if (!col) return []
   const list = (Array.isArray(rows) ? rows : []).filter((r) => num(readField(r, key)) != null)
   const localSort = () => {
-    const dir = col.worstHigh === false ? 1 : -1
+    // worstHigh: the bad end is the TOP of the scale, so worst first is
+    // descending. A metric where low is bad (availability, MTBF) runs the other
+    // way. Getting this backwards silently ranks the healthiest machines.
+    const dir = col.worstHigh === false ? -1 : 1
     return [...list].sort((a, b) => (num(readField(b, key)) - num(readField(a, key))) * dir).slice(0, limit)
   }
   const fn = rel('reliabilityRanking')
@@ -920,7 +930,7 @@ export function sortReliabilityRows(rows, key) {
     return list.sort((a, b) => String(readField(a, sortKey) ?? '').localeCompare(String(readField(b, sortKey) ?? ''))
       || String(a?.asset_no ?? '').localeCompare(String(b?.asset_no ?? '')))
   }
-  const dir = col.worstHigh === false ? 1 : -1
+  const dir = col.worstHigh === false ? -1 : 1
   return list.sort((a, b) => {
     const x = num(readField(a, sortKey))
     const y = num(readField(b, sortKey))
@@ -1427,7 +1437,7 @@ export const DECK_BLOCKS = {
   recommendations: {
     label: 'Recommendations',
     description: 'What the committee is being asked to do, grouped by priority, each line carrying the figures it rests on.',
-    defaults: { title: 'Recommendations', priorities: [...RECOMMENDATION_PRIORITIES], limit: 0, showEvidence: true },
+    defaults: { title: 'Recommendations', priorities: [...RECOMMENDATION_PRIORITIES], limit: 0, perSlide: 3, showEvidence: true },
   },
   basis: {
     label: 'What these figures rest on',
@@ -1598,6 +1608,7 @@ function normalizeBlock(b) {
         title: strOr(b.title, 'Recommendations'),
         priorities: pr.length ? pr : [...RECOMMENDATION_PRIORITIES],
         limit: clampInt(b.limit, 0, 40, 0),
+        perSlide: clampInt(b.perSlide, 1, 8, 3),
         showEvidence: b.showEvidence !== false,
       }
     }
@@ -2224,18 +2235,38 @@ export function resolveBlock(block, ctx = {}) {
       const all = recommendationsFor(rows, totals, { currency, now: ctx.now instanceof Date ? ctx.now : new Date(), fleetBaseline: ctx.fleetBaseline })
       let items = all.filter((r) => b.priorities.includes(r.priority))
       if (b.limit > 0) items = items.slice(0, b.limit)
-      const groups = RECOMMENDATION_PRIORITIES
-        .filter((p) => b.priorities.includes(p))
-        .map((p) => ({ priority: p, label: ascii(priorityLabel(p)).toUpperCase(), items: items.filter((r) => r.priority === p) }))
+      // Ordered by priority, then paginated. A recommendation squeezed off the
+      // bottom of a slide is a recommendation the committee never reads.
+      const order = RECOMMENDATION_PRIORITIES.filter((p) => b.priorities.includes(p))
+      const ordered = order.flatMap((p) => items.filter((r) => r.priority === p))
+      const groupsOf = (list) => order
+        .map((p) => ({ priority: p, label: ascii(priorityLabel(p)).toUpperCase(), items: list.filter((r) => r.priority === p) }))
         .filter((g) => g.items.length)
-      return {
-        kind: 'recommendations', id: b.id, title: fmtText(b.title),
-        groups, showEvidence: b.showEvidence !== false, count: items.length,
-        empty: groups.length === 0,
-        emptyNote: rows.length === 0
-          ? 'No assets are on the disposal list, so there is nothing to recommend.'
-          : 'Nothing in this list supports a recommendation beyond the figures already shown.',
+      if (!ordered.length) {
+        return {
+          kind: 'recommendations', id: b.id, title: fmtText(b.title),
+          groups: [], showEvidence: b.showEvidence !== false, count: 0,
+          page: 1, pages: 1,
+          empty: true,
+          emptyNote: rows.length === 0
+            ? 'No assets are on the disposal list, so there is nothing to recommend.'
+            : 'Nothing in this list supports a recommendation beyond the figures already shown.',
+        }
       }
+      const per = b.perSlide
+      const pages = Math.max(1, Math.ceil(ordered.length / per))
+      const slides = []
+      for (let p = 0; p < pages; p++) {
+        const chunk = ordered.slice(p * per, (p + 1) * per)
+        slides.push({
+          kind: 'recommendations', id: `${b.id}_p${p}`,
+          title: fmtText(b.title) + (pages > 1 ? ` (${p + 1} of ${pages})` : ''),
+          groups: groupsOf(chunk), showEvidence: b.showEvidence !== false,
+          count: ordered.length, page: p + 1, pages,
+          empty: false, emptyNote: '',
+        })
+      }
+      return pages === 1 ? slides[0] : { kind: 'multi', id: b.id, slides }
     }
 
     case 'basis': {

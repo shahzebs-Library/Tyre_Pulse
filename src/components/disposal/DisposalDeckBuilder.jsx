@@ -192,17 +192,24 @@ function SlidePreview({ slide, deck, registerChart }) {
   if (slide.kind === 'recommendations') {
     return (
       <div style={{ height: '100%', overflow: 'hidden' }}>
-        {head(slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'}, each one carrying the figures it rests on`)}
+        {head(slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'} in all, each one carrying the figures it rests on`)}
         {slide.empty ? empty(slide.emptyNote) : slide.groups.map((g) => (
           <div key={g.priority} style={{ marginBottom: 8 }}>
             <span style={{ display: 'inline-block', background: PRIORITY_COLOR[g.priority] || PAPER.subtle, color: '#fff', fontSize: 7, fontWeight: 700, letterSpacing: 0.8, padding: '2px 6px', borderRadius: 3 }}>
-              {PRIORITY_LABEL[g.priority] || g.priority.toUpperCase()}
+              {g.label || PRIORITY_LABEL[g.priority] || String(g.priority).toUpperCase()}
             </span>
             {g.items.map((it, i) => (
               <div key={i} style={{ marginTop: 5 }}>
                 <div style={{ fontSize: 10.5, fontWeight: 700, color: PAPER.ink, lineHeight: 1.3 }}>{it.title}</div>
-                {slide.showEvidence && it.evidence && (
-                  <div style={{ fontSize: 8.5, color: PAPER.subtle, marginTop: 2, marginLeft: 8, lineHeight: 1.35 }}>{it.evidence}</div>
+                {it.detail && (
+                  <div style={{ fontSize: 8.5, color: PAPER.subtle, marginTop: 2, marginLeft: 8, lineHeight: 1.35 }}>{it.detail}</div>
+                )}
+                {slide.showEvidence && Array.isArray(it.evidence) && it.evidence.length > 0 && (
+                  <ul style={{ margin: '2px 0 0 20px', padding: 0 }}>
+                    {it.evidence.map((e, j) => (
+                      <li key={j} style={{ fontSize: 7.5, color: PAPER.muted, lineHeight: 1.35 }}>{e}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             ))}
@@ -640,6 +647,9 @@ function BlockSettings({ block, onPatch }) {
             />
           </Field>
           <Field label="Limit"><Select value={String(block.limit)} onChange={(v) => set({ limit: Number(v) })} options={[0, 4, 6, 8, 12].map((n) => ({ value: String(n), label: n === 0 ? 'All of them' : `First ${n}` }))} /></Field>
+          <Field label="Per slide" hint="A recommendation squeezed off the bottom of a slide is one nobody reads.">
+            <Select value={String(block.perSlide)} onChange={(v) => set({ perSlide: Number(v) })} options={[2, 3, 4, 5].map((n) => ({ value: String(n), label: `${n} per slide` }))} />
+          </Field>
           <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
             <input type="checkbox" checked={block.showEvidence !== false} onChange={(e) => set({ showEvidence: e.target.checked })} />
             Show the figures each one rests on

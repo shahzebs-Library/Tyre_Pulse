@@ -379,27 +379,38 @@ export async function renderDisposalDeckPptx({
     // ── Recommendations, grouped by priority ──
     if (slide.kind === 'recommendations') {
       const s = newSlide()
-      header(s, slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'}, each one carrying the figures it rests on`)
+      header(s, slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'} in all, each one carrying the figures it rests on`)
       if (slide.empty) { emptyNote(s, slide.emptyNote); footer(s); out.push(s); continue }
-      let y = 1.15
+      let y = 1.12
       for (const g of slide.groups) {
-        if (y > 6.6) break
-        s.addShape(rect, { x: MX, y, w: 1.55, h: 0.24, fill: { color: PRIORITY_HEX[g.priority] || SUBTLE } })
-        s.addText(PRIORITY_LABEL[g.priority] || String(g.priority).toUpperCase(), {
-          x: MX + 0.05, y, w: 1.5, h: 0.24, fontSize: 7.5, bold: true, color: 'FFFFFF', charSpacing: 1, valign: 'middle',
+        if (y > 6.5) break
+        const w = Math.max(1.1, 0.09 * priorityText(g).length + 0.3)
+        s.addShape(rect, { x: MX, y, w, h: 0.24, fill: { color: PRIORITY_HEX[g.priority] || SUBTLE } })
+        s.addText(priorityText(g), {
+          x: MX + 0.05, y, w: w - 0.1, h: 0.24, fontSize: 7.5, bold: true, color: 'FFFFFF', charSpacing: 1, valign: 'middle',
         })
-        y += 0.32
+        y += 0.3
         for (const it of g.items) {
-          if (y > 6.7) break
-          s.addText(String(it.title), { x: MX + 0.1, y, w: CONTENT_W - 0.2, h: 0.28, fontSize: 11, bold: true, color: INK, valign: 'top' })
-          y += 0.28
-          if (slide.showEvidence && it.evidence) {
-            s.addText(String(it.evidence), { x: MX + 0.24, y, w: CONTENT_W - 0.34, h: 0.34, fontSize: 8.5, color: SUBTLE, valign: 'top' })
-            y += 0.34
+          if (y > 6.6) break
+          const titleH = String(it.title).length > 92 ? 0.5 : 0.27
+          s.addText(String(it.title), { x: MX + 0.08, y, w: CONTENT_W - 0.16, h: titleH, fontSize: 10.5, bold: true, color: INK, valign: 'top' })
+          y += titleH
+          if (it.detail) {
+            const detH = Math.min(0.78, 0.2 + 0.135 * Math.ceil(String(it.detail).length / 150))
+            s.addText(String(it.detail), { x: MX + 0.2, y, w: CONTENT_W - 0.3, h: detH, fontSize: 8.5, color: SUBTLE, valign: 'top' })
+            y += detH
           }
-          y += 0.06
+          const ev = Array.isArray(it.evidence) ? it.evidence.filter(Boolean) : (it.evidence ? [it.evidence] : [])
+          if (slide.showEvidence && ev.length && y < 6.6) {
+            const evH = Math.min(0.6, 0.16 + 0.14 * ev.length)
+            s.addText(ev.map((t) => ({ text: String(t), options: { bullet: { code: '2022' }, fontSize: 7.5, color: MUTED, paraSpaceAfter: 1 } })), {
+              x: MX + 0.32, y, w: CONTENT_W - 0.42, h: evH, valign: 'top',
+            })
+            y += evH
+          }
+          y += 0.1
         }
-        y += 0.1
+        y += 0.06
       }
       footer(s); out.push(s)
       continue
@@ -782,30 +793,42 @@ export async function renderDisposalDeckPdf({
     }
 
     if (slide.kind === 'recommendations') {
-      let y = heading(slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'}, each one carrying the figures it rests on`)
+      let y = heading(slide.title, `${slide.count} recommendation${slide.count === 1 ? '' : 's'} in all, each one carrying the figures it rests on`)
       if (slide.empty) { emptyAt(y, slide.emptyNote); continue }
       for (const g of slide.groups) {
         if (y > PH - 26) break
+        const label = priorityText(g)
         doc.setFillColor(...(PRIORITY_RGB[g.priority] || RGB.subtle))
-        doc.rect(M, y - 3.4, 30, 5, 'F')
+        doc.rect(M, y - 3.4, Math.max(20, label.length * 1.9 + 4), 5, 'F')
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(255, 255, 255)
-        doc.text(PRIORITY_LABEL[g.priority] || String(g.priority).toUpperCase(), M + 1.6, y)
+        doc.text(label, M + 2, y)
         y += 6
         for (const it of g.items) {
           if (y > PH - 22) break
           doc.setFont('helvetica', 'bold'); doc.setFontSize(10); setInk(RGB.ink)
           const t = doc.splitTextToSize(String(it.title), CW - 4)
-          t.forEach((ln, i) => doc.text(ln, M + 2, y + i * 4.8))
-          y += t.length * 4.8 + 1
-          if (slide.showEvidence && it.evidence) {
+          t.forEach((ln, i) => doc.text(ln, M + 2, y + i * 4.6))
+          y += t.length * 4.6 + 1
+          if (it.detail && y < PH - 20) {
             doc.setFont('helvetica', 'normal'); doc.setFontSize(8); setInk(RGB.subtle)
-            const e = doc.splitTextToSize(String(it.evidence), CW - 10)
-            e.forEach((ln, i) => doc.text(ln, M + 6, y + i * 3.8))
-            y += e.length * 3.8 + 1.5
+            const d = doc.splitTextToSize(String(it.detail), CW - 10)
+            d.forEach((ln, i) => doc.text(ln, M + 6, y + i * 3.6))
+            y += d.length * 3.6 + 1
           }
-          y += 1.5
+          const ev = Array.isArray(it.evidence) ? it.evidence.filter(Boolean) : (it.evidence ? [it.evidence] : [])
+          if (slide.showEvidence && ev.length && y < PH - 18) {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(7); setInk(RGB.muted)
+            for (const e of ev) {
+              const lines = doc.splitTextToSize(`- ${e}`, CW - 14)
+              if (y + lines.length * 3.2 > PH - 14) break
+              lines.forEach((ln, i) => doc.text(ln, M + 10, y + i * 3.2))
+              y += lines.length * 3.2
+            }
+            y += 1
+          }
+          y += 2.5
         }
-        y += 2
+        y += 1.5
       }
       continue
     }

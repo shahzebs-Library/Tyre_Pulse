@@ -580,13 +580,15 @@ export default function Accidents() {
     const t = setTimeout(async () => {
       let asset = fleetAssets.find(a => (a.asset_no || '').toLowerCase() === no.toLowerCase())
       if (!asset) {
-        try { asset = await getAssetByNo(no) } catch { asset = null }
+        // Country-scoped: the same code in another country is a different
+        // machine (V376), so its plate/site must never auto-fill this form.
+        try { asset = await getAssetByNo(no, activeCountry) } catch { asset = null }
       }
       if (asset && (asset.asset_no || '').toLowerCase() === no.toLowerCase()) applyAssetMaster(asset)
       else setAssetInfo(null)
     }, 350)
     return () => clearTimeout(t)
-  }, [form.asset_no, fleetAssets, applyAssetMaster])
+  }, [form.asset_no, fleetAssets, applyAssetMaster, activeCountry])
 
   // Site options = the full registered site list (sites registry, country-scoped)
   // merged with any site already on an accident record. Deriving from records

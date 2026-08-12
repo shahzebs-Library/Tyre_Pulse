@@ -44,14 +44,50 @@ export async function getAsset(id) {
 }
 
 /**
- * Get one asset by asset number (or null). The same asset number can now exist in
- * more than one country (per-country fleet, V348), so an optional `country` scopes
- * the lookup; `limit(1)` keeps it single-row-safe for a super-admin who can see
- * every country. RLS already scopes a country-restricted user to their own row.
+ * Every fleet row that carries this asset number, plus the one row a caller
+ * should show. Identity is (organisation_id, country, asset_no) - the SAME code
+ * in two countries is normally a DIFFERENT machine (V376), and 239 codes are in
+ * that state today, so this NEVER uses `.single()`/`.maybeSingle()`: demanding
+ * one row from a query that legitimately matches several is what breaks the
+ * asset page with "multiple (or no) rows returned".
+ *
+ * `country` (the caller's active country) picks the machine to show. With no
+ * country, or on the All-countries view, the first row in a STABLE order wins
+ * so the same code always resolves to the same machine.
+ *
+ * @returns {{row:object|null, rows:object[], countries:string[], ambiguous:boolean,
+ *            missingInCountry:boolean}}
+ *   `missingInCountry` = the code exists, but not in the requested country.
+ */
+export async function getAssetMatches(assetNo, country) {
+  const key = String(assetNo ?? '').trim()
+  if (!key) return { row: null, rows: [], countries: [], ambiguous: false, missingInCountry: false }
+  const rows =
+    unwrap(
+      await supabase
+        .from('vehicle_fleet')
+        .select(COLS)
+        .eq('asset_no', key)
+        .order('country', { ascending: true })
+        .order('id', { ascending: true })
+        .limit(20),
+    ) || []
+  const scoped = country && country !== 'All' ? rows.filter((r) => r.country === country) : rows
+  return {
+    row: scoped[0] || null,
+    rows,
+    countries: [...new Set(rows.map((r) => r.country).filter(Boolean))],
+    ambiguous: rows.length > 1,
+    missingInCountry: rows.length > 0 && scoped.length === 0,
+  }
+}
+
+/**
+ * Get one asset by asset number (or null), scoped to `country` when given.
+ * Returns null when the code exists only in another country - a machine from a
+ * country the caller did not ask for must never be substituted silently.
  */
 export async function getAssetByNo(assetNo, country) {
-  let q = supabase.from('vehicle_fleet').select(COLS).eq('asset_no', assetNo)
-  if (country && country !== 'All') q = q.eq('country', country)
-  const rows = unwrap(await q.order('country', { ascending: true }).limit(1))
-  return Array.isArray(rows) ? rows[0] || null : rows || null
+  const { row } = await getAssetMatches(assetNo, country)
+  return row
 }

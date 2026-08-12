@@ -130,6 +130,48 @@ describe('filterDescription', () => {
     expect(filterDescription({ toDate: '2026-06-30' })).toBe('fitted up to 2026-06-30')
     expect(filterDescription({ unit: 'hours' })).toBe('hour-measured assets only')
   })
+
+  // An export of 465 of 3,595 rows headed "All active tyres" is a false
+  // statement that outlives the screen it came from.
+  it('names the due-only scope first so an export cannot claim to be the fleet', async () => {
+    const { filterDescription, DUE_SCOPE_LABEL } = await import('../lib/tyreRunningLife')
+    expect(filterDescription({ scope: 'due' })).toBe(DUE_SCOPE_LABEL)
+    expect(filterDescription({ scope: 'due', unit: 'km' }))
+      .toBe(`${DUE_SCOPE_LABEL}, km-measured assets only`)
+    // The default is unchanged, so every existing caller keeps its wording.
+    expect(filterDescription({ scope: 'all' })).toBe('All active tyres')
+  })
+})
+
+describe('bandNeedsFullSet', () => {
+  it('marks exactly the bands a due-only fetch can never contain', async () => {
+    const { bandNeedsFullSet } = await import('../lib/tyreRunningLife')
+    // In the due payload, so no widening: showing them is already possible.
+    expect(bandNeedsFullSet('all')).toBe(false)
+    expect(bandNeedsFullSet('overdue')).toBe(false)
+    expect(bandNeedsFullSet('due-soon')).toBe(false)
+    // Not in the due payload: without widening the table would render empty and
+    // "we did not fetch it" would look identical to "there are none".
+    expect(bandNeedsFullSet('mid-life')).toBe(true)
+    expect(bandNeedsFullSet('healthy')).toBe(true)
+    expect(bandNeedsFullSet('unknown')).toBe(true)
+    expect(bandNeedsFullSet('')).toBe(false)
+    expect(bandNeedsFullSet(undefined)).toBe(false)
+  })
+
+  it('agrees with bandFor: no row the due filter returns needs the full set', async () => {
+    const { bandNeedsFullSet, bandFor, isDueRow } = await import('../lib/tyreRunningLife')
+    const rows = [
+      { remainingKm: 0 },                            // overdue
+      { remainingKm: 5000, lifeUsedPct: 95 },        // due soon
+      { remainingKm: 40000, lifeUsedPct: 70 },       // mid life
+      { remainingKm: 90000, lifeUsedPct: 10 },       // healthy
+      { remainingKm: null },                         // not measurable
+    ]
+    for (const r of rows) {
+      expect(bandNeedsFullSet(bandFor(r))).toBe(!isDueRow(r))
+    }
+  })
 })
 
 describe('actionRows', () => {

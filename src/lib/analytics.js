@@ -12,9 +12,23 @@
 //     (same rule as Sentry setMonitoringUser).
 //   • sanitize_properties strips URL query strings (which can carry tokens).
 // ─────────────────────────────────────────────────────────────────────────────
-import posthog from 'posthog-js'
+// LOADED ON DEMAND, NOT AT MODULE SCOPE. This module is reachable from the
+// eager startup graph, so a top-level import pulled the whole PostHog SDK into
+// first paint for every user - including one who never signs in. Deferring the
+// call in main.jsx did not defer the bytes; only removing this import does.
+//
+// No queue here, unlike monitoring.js. Losing an analytics event during the
+// load window is a rounding error; losing an ERROR is the thing monitoring
+// exists to prevent. The existing not-initialised no-ops are the right
+// behaviour for this module.
+//
+// NOTE: capture_pageview is on, so PostHog records the initial pageview when it
+// initialises. That now happens on idle rather than at boot - the pageview is
+// still captured, just timestamped a moment later.
+let posthog = null
 
 let initialized = false
+let loading = null
 
 /** Remove the query string / fragment from a URL. Never throws. */
 function stripQuery(url) {
@@ -28,10 +42,25 @@ function stripQuery(url) {
  * when analytics is active, false otherwise. Never throws.
  */
 export function initAnalytics() {
-  if (initialized) return true
+  if (initialized) return Promise.resolve(true)
   const key = import.meta.env.VITE_POSTHOG_KEY
-  if (!key) return false
+  if (!key) return Promise.resolve(false)
+  if (loading) return loading
 
+  loading = import('posthog-js')
+    .then((mod) => {
+      posthog = mod.default || mod
+      return initWithSdk(key)
+    })
+    .catch((err) => {
+      console.error('[analytics] PostHog SDK failed to load:', err)
+      return false
+    })
+  return loading
+}
+
+/** Init against an already-loaded SDK. Split out so initAnalytics stays readable. */
+function initWithSdk(key) {
   try {
     posthog.init(key, {
       api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',

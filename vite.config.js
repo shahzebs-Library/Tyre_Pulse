@@ -180,6 +180,25 @@ export default defineConfig({
         // vendor-react → vendor-misc cycles that V8 tolerates but JSC does not.
         manualChunks(id) {
           if (!id.includes('node_modules')) return
+          // The JSX runtime is pinned FIRST and by exact name, because it is the
+          // one module every component in the app imports. Whichever chunk it
+          // lands in becomes a static dependency of the entire app.
+          //
+          // It used to land in vendor-chartjs - measured: that chunk contained
+          // getDatasetMeta AND jsxs - so every page statically imported it and
+          // 213 kB of chart.js was preloaded before first paint, on the login
+          // screen included. The `/react/` test below looks like it should have
+          // caught it and does not reliably, so this does not depend on it.
+          //
+          // If a future change moves it again, the symptom is the same: check
+          // that dist/index.html does not modulepreload a vendor-* chunk for a
+          // library the first screen never uses.
+          if (
+            id.includes('/react/jsx-runtime') ||
+            id.includes('/react/jsx-dev-runtime') ||
+            id.includes('react-jsx-runtime') ||
+            id.includes('react-jsx-dev-runtime')
+          ) return 'vendor-react'
           if (
             id.includes('/react/') ||
             id.includes('/react-dom/') ||
@@ -188,8 +207,25 @@ export default defineConfig({
             id.includes('/object-assign/') ||
             id.includes('/use-sync-external-store/')
           ) return 'vendor-react'
-          // chart.js + react-chartjs-2 wrapper.
-          if (id.includes('/chart.js/') || id.includes('/react-chartjs')) return 'vendor-chartjs'
+          // chart.js is deliberately NOT pinned, for exactly the reason recorded
+          // below for xlsx / jspdf / pptxgenjs - and this one had already bitten.
+          //
+          // MEASURED before removing the pin: the `vendor-chartjs` chunk exported
+          // `C` and `S`, which are jsx and jsxs. React's JSX runtime had been
+          // co-located into it, so all 371 emitted chunks statically imported
+          // vendor-chartjs, index.html modulepreloaded it, and 213 kB of chart.js
+          // was downloaded and parsed before first paint - on the login screen
+          // too, which draws no charts at all.
+          //
+          // Pinning the runtime to vendor-react explicitly did NOT dislodge it;
+          // the chunker keeps co-locating the shared dependency with whatever it
+          // is grouped beside. Not forcing the group is what fixes it: chart.js
+          // is reached by a dynamic import in main.jsx, so Rollup gives it its
+          // own async chunk that loads when a chart is first drawn.
+          //
+          // If a vendor-* chunk ever reappears in index.html's modulepreload list
+          // for a library the login screen never uses, this is the shape to look
+          // for: check what that chunk EXPORTS, not just what it contains.
           // echarts is the heaviest single vendor (~1 MB) and was previously
           // buried inside the main index chunk. Split it out so it is cached
           // independently and only re-downloaded when echarts itself changes.

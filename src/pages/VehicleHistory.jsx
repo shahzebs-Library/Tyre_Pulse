@@ -6,7 +6,6 @@ import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
 import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
-import { exportToPdf } from '../lib/exportUtils'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   Title, Tooltip, Legend,
@@ -18,6 +17,10 @@ import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -708,7 +711,8 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
   const avgKm = kmValues.length ? Math.round(kmValues.reduce((s, v) => s + v, 0) / kmValues.length) : null
 
   // PDF export
-  function handleExportPdf() {
+  async function handleExportPdf() {
+    const { exportToPdf } = await loadExportUtils()
     const cols = [
       { key: 'issue_date',      header: 'Date',             width: 22 },
       { key: 'brand',           header: 'Brand',            width: 24 },

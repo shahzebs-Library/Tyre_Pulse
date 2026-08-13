@@ -26,7 +26,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { CreditCard, LogOut, AlertTriangle, X } from 'lucide-react'
-import { useBilling } from '../hooks/useBilling'
+import { useSubscriptionAccess } from '../hooks/useBilling'
 import { useAuth } from '../contexts/AuthContext'
 
 // Routes that must stay reachable even when the app is fully blocked, so the
@@ -128,7 +128,10 @@ function BlockScreen({ reason, onSignOut }) {
 export default function SubscriptionGate({ children }) {
   const [dismissed, setDismissed] = useState(false)
   const location = useLocation()
-  const { subscriptionAccess } = useBilling()
+  // Overview only. This gate reads nothing but the state policy, and it mounts
+  // on every authenticated page - pulling full billing here also fetched the
+  // plan catalogue and the invoice list on every cold load, for nothing.
+  const subscriptionAccess = useSubscriptionAccess()
   const { profile, isSuperAdmin, signOut } = useAuth()
 
   // FAIL-OPEN: if the policy did not resolve (billing not loaded, unknown

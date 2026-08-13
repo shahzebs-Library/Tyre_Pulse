@@ -50,3 +50,11 @@ jobs:
       - name: Submit latest build to Play internal track
         working-directory: mobile
         run: eas submit --platform android --latest --profile production --non-interactive
+
+      # See release-play.yml: this credential can publish to the store, so it
+      # does not outlive the job. `always()` covers the failed-submit path,
+      # which is exactly when a leftover file would go unnoticed.
+      - name: Remove the service account key
+        if: always()
+        working-directory: mobile
+        run: rm -f google-service-account.json

@@ -18,12 +18,20 @@ import { sanitizeSearchTerm } from '../searchFilter'
 /**
  * All tyre_records for the fleet, fully paged (200k ceiling), oldest issue_date
  * first, strictly country-scoped (`.eq`) when a real country is active.
- * @param {{country?:string}} [opts]
+ *
+ * `from`/`to` bound `issue_date` server-side and are OPTIONAL: with neither
+ * passed this is byte-for-byte the previous all-time read, so no caller changes
+ * today. The select stays `*` deliberately - the page reads fields off these rows
+ * that are not enumerated here, and narrowing it blind would drop columns the
+ * screen displays.
+ * @param {{country?:string, from?:string, to?:string}} [opts]
  */
-export function listFleetTyreRecords({ country } = {}) {
+export function listFleetTyreRecords({ country, from: fromDate, to: toDate } = {}) {
   return fetchAllPages((from, to) => {
     let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: true })
     if (country !== 'All') q = q.eq('country', country)
+    if (fromDate) q = q.gte('issue_date', fromDate)
+    if (toDate) q = q.lte('issue_date', toDate)
     return q.range(from, to)
   }, { max: 200000 })
 }

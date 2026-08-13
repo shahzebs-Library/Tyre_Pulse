@@ -203,8 +203,13 @@ export default function AppLayout() {
       })}
 
       {/* Hidden routes - reachable via router.push but never in the tab bar */}
+      {/* NOTE: `washing` is NOT listed here. It is declared `primary: true` in
+          TAB_BAR, so the loop above already renders it as a bottom tab. A second
+          declaration here used to override that back to href:null, which took the
+          tab off the bar and left the screen reachable only by scrolling the Home
+          hub - the reason no wash was ever logged. Never re-add a Tabs.Screen for
+          a name TAB_BAR already declares; the later declaration silently wins. */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
-      <Tabs.Screen name="washing"         options={{ href: null }} />
       <Tabs.Screen name="workshop"        options={{ href: null }} />
       <Tabs.Screen name="calendar"        options={{ href: null }} />
       <Tabs.Screen name="maintenance"     options={{ href: null }} />

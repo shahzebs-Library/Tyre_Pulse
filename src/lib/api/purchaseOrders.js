@@ -58,12 +58,18 @@ export async function listReplenishmentStock({ country } = {}) {
  * `issue_date >= sinceDate`, NULL-inclusive country scoping, fully paged via
  * fetchAllPages with the same 200k ceiling.
  * Throws ServiceError if any page errors.
- * @param {{country?:string, sinceDate:string}} opts
+ *
+ * NOTE this reader was ALREADY date-bounded server-side: `sinceDate` is a
+ * required lower bound on issue_date, so it never had the all-time shape its
+ * siblings did. `untilDate` is added as the optional upper half, defaulting to
+ * open-ended so the existing call keeps its exact result set.
+ * @param {{country?:string, sinceDate:string, untilDate?:string}} opts
  * @returns {Promise<any[]>} all matching rows
  */
-export async function listReplenishmentTyreRecords({ country, sinceDate } = {}) {
+export async function listReplenishmentTyreRecords({ country, sinceDate, untilDate } = {}) {
   const res = await fetchAllPages((from, to) => {
     let q = supabase.from('tyre_records').select(TYRE_COLS).gte('issue_date', sinceDate)
+    if (untilDate) q = q.lte('issue_date', untilDate)
     if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
     return q.range(from, to)
   }, { max: 200000 })

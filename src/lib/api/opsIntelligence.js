@@ -16,8 +16,28 @@ const TYRE_COLS =
   'tread_depth,pressure_reading,cost_per_tyre,total_km,km_at_fitment,km_at_removal,' +
   'fitment_date,issue_date,removal_date,reason_for_removal,removal_reason,status'
 
-const WO_COLS =
-  'id,work_order_no,asset_no,site,status,priority,created_at,scheduled_date,due_date,completed_date,country'
+/**
+ * Exactly what `buildExceptions` reads off a work order: it keeps the open,
+ * high/critical ones and prints the number, asset, site and opened date.
+ *
+ * `scheduled_date`, `due_date` and `completed_date` were listed here and NONE OF
+ * THEM IS A COLUMN ON work_orders (the real date columns are opened_at,
+ * started_at, completed_at, target_completion - see the same warning on
+ * AGGREGATE_COLS in api/workOrders.js). PostgREST fails the whole request on an
+ * unknown column with "column ... does not exist", which `isMissingTable` then
+ * reads as an unprovisioned table and swallows into [] - so this read has been
+ * returning nothing at all, silently, rather than erroring.
+ */
+const WO_COLS = 'id,work_order_no,asset_no,site,status,priority,created_at,country'
+
+// Ceiling and default window for the work_orders read. work_orders is the
+// largest operational table (~88,773 rows) and this read was unbounded, so it
+// paged the whole table - about 89 requests, each re-sorting the matched set -
+// to surface a handful of open high-priority jobs. Twelve months is deliberately
+// generous: an exception feed is about work that is open NOW, and an open job
+// older than a year is a data-quality problem rather than an operational one.
+export const OPS_WO_MAX = 20000
+export const OPS_WO_WINDOW_DAYS = 365
 
 // Least-privilege reads for the Pulse layer (added additively).
 const INSPECTION_COLS = 'id,asset_no,tyre_serial,inspection_date,scheduled_date,completed_date,country'
@@ -43,25 +63,43 @@ export async function listTyresForOps({ country } = {}) {
 }
 
 /**
- * Open/in-progress work orders in scope. Guarded: if the `work_orders` table is
- * absent (42P01 / "does not exist"), resolves to [] so the page still renders
- * tyre-derived exceptions.
+ * Work orders in scope, bounded BOTH ways: a server-side `created_at` window
+ * (answered directly by the (organisation_id, country, created_at desc) index,
+ * the same shape `listWorkOrdersPage` uses for opened_at) and a `max` row
+ * ceiling. Guarded: if the `work_orders` table is absent (42P01 / "does not
+ * exist"), resolves to [] so the page still renders tyre-derived exceptions.
+ *
+ * Returns the scope alongside the rows so a caller can SAY the view is bounded.
+ * A cap the reader cannot see is the same silent-truncation bug one level up.
+ *
+ * @param {{country?:string, sinceDate?:string, max?:number}} [opts]
+ * @returns {Promise<{rows:any[], truncated:boolean, sinceDate:string|null, max:number}>}
  */
-export async function listWorkOrdersForOps({ country } = {}) {
-  const { data, error } = await fetchAllPages((from, to) => {
-    const q = supabase
+export async function listWorkOrdersForOpsScoped({
+  country,
+  sinceDate = new Date(Date.now() - OPS_WO_WINDOW_DAYS * 86400000).toISOString(),
+  max = OPS_WO_MAX,
+} = {}) {
+  const { data, error, truncated } = await fetchAllPages((from, to) => {
+    let q = supabase
       .from('work_orders')
       .select(WO_COLS)
       .order('created_at', { ascending: false, nullsFirst: false })
       .order('id', { ascending: true })
       .range(from, to)
+    if (sinceDate) q = q.gte('created_at', sinceDate)
     return applyCountry(q, country)
-  })
+  }, { max })
   if (error) {
-    if (isMissingTable(error)) return []
+    if (isMissingTable(error)) return { rows: [], truncated: false, sinceDate, max }
     throw new ServiceError(error.message, error.code, error)
   }
-  return data || []
+  return { rows: data || [], truncated: !!truncated, sinceDate, max }
+}
+
+/** Rows-only wrapper, for callers that do not surface the scope. */
+export async function listWorkOrdersForOps(opts = {}) {
+  return (await listWorkOrdersForOpsScoped(opts)).rows
 }
 
 /**
@@ -127,15 +165,28 @@ export async function countActiveVehicles({ country } = {}) {
  * the raw rows; the page feeds them to `buildExceptions` / `buildFleetPulse` /
  * `buildAnomalyFeed` / `buildFinancials` with a live clock. Absent optional
  * sources degrade to empty ([]/null), never to an error.
- * @returns {Promise<{ tyres, workOrders, inspections, budgets, activeVehicles }>}
+ * `scope` reports the bounds the work-order read actually applied, so the page
+ * can state the window rather than presenting a bounded view as the whole fleet.
+ * @returns {Promise<{ tyres, workOrders, inspections, budgets, activeVehicles, scope }>}
  */
 export async function loadOpsData({ country } = {}) {
-  const [tyres, workOrders, inspections, budgets, activeVehicles] = await Promise.all([
+  const [tyres, wo, inspections, budgets, activeVehicles] = await Promise.all([
     listTyresForOps({ country }),
-    listWorkOrdersForOps({ country }),
+    listWorkOrdersForOpsScoped({ country }),
     listInspectionsForOps({ country }),
     listBudgetsForOps({ country }),
     countActiveVehicles({ country }),
   ])
-  return { tyres, workOrders, inspections, budgets, activeVehicles }
+  return {
+    tyres,
+    workOrders: wo.rows,
+    inspections,
+    budgets,
+    activeVehicles,
+    scope: {
+      workOrdersSince: wo.sinceDate,
+      workOrdersTruncated: wo.truncated,
+      workOrdersMax: wo.max,
+    },
+  }
 }

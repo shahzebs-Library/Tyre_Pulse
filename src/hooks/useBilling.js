@@ -69,6 +69,28 @@ export function useBilling() {
 }
 
 /**
+ * Subscription-STATE policy only, for the app-wide gate.
+ *
+ * SubscriptionGate mounts on every authenticated page but reads nothing except
+ * this policy, and it used to pull the whole of useBilling() to get it - which
+ * fired the plan catalogue and the invoice list on every cold load as well.
+ * Those two belong to the Billing page. Shares OVERVIEW_KEY with useBilling, so
+ * opening /billing costs no extra fetch.
+ *
+ * FAIL-OPEN: while the query is loading (or if it errors) `overview` is null and
+ * subscriptionAccess(null) resolves to permissive full access, so the gate can
+ * never hard-block on a missing or unknown subscription.
+ */
+export function useSubscriptionAccess() {
+  const { data: overview } = useQuery({
+    queryKey: OVERVIEW_KEY,
+    queryFn: billing.getOverview,
+    staleTime: 60_000,
+  })
+  return subscriptionAccess(overview ?? null)
+}
+
+/**
  * Lightweight entitlement hook for enforcement points (e.g. an "Add Vehicle"
  * button). Returns `{ canAdd, isAtLimit, planAllows, loading }`. Shares the
  * overview cache with useBilling, so it costs one background fetch at most.

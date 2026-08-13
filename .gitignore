@@ -1,8 +1,38 @@
 node_modules/
 dist/
-.env
-.env.local
-.env*.local
+
+# Environment files. `.env*` catches every variant (.env.production,
+# .env.staging, .env.development) - the previous list covered only .env,
+# .env.local and .env*.local, so a file named .env.production would have been
+# committed. The negations keep the checked-in EXAMPLES, which carry only
+# placeholder values and are the documentation of what must be set.
+.env*
+!.env.example
+!.env.local.example
+!.env*.example
+
+# Signing material and service-account credentials. None of these are in the
+# repo today; they are listed so that dropping one in never silently commits it.
+# A leaked upload keystore cannot be rotated - Google will not reissue it - so
+# this is the one class of file where a mistake is unrecoverable.
+#
+# DELIBERATELY NOT LISTED: mobile/google-services.json. It is committed on
+# purpose and the EAS Android build reads it from the repo, so ignoring it would
+# break the build the first time someone re-cloned. It is also not secret: a
+# Firebase Android API key identifies the project rather than authorising
+# anything, it ships inside every APK, and Google documents it as public. The
+# real controls there are Firebase Security Rules, App Check and SHA-1
+# restriction - none of which live in this file.
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+**/service-account*.json
+**/*-service-account.json
+
 .DS_Store
 .claude/
 .playwright-mcp/
@@ -17,3 +47,10 @@ build_out.txt
 # temporary insurance extraction scripts
 _agA_*.mjs
 pdftxt.mjs
+
+# Scratch files written by parallel agents while they work. These are
+# throwaway harnesses, not tests - one was caught here mid-edit and failing,
+# and `git add -A` would have committed it. Named with a __tmp_ prefix by
+# convention so they can never be swept into a commit; a harness worth keeping
+# gets a real name first.
+**/__tmp_*

@@ -9,7 +9,6 @@ import { recordCost } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -33,6 +32,10 @@ import {
   RadialLinearScale, ArcElement, Title, Tooltip, Legend, Filler, RadarController,
 } from 'chart.js'
 import { Bar, Radar, Doughnut } from 'react-chartjs-2'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -645,7 +648,8 @@ export default function SupplierManagement() {
   }
 
   // Export
-  function handleExcelExport() {
+  async function handleExcelExport() {
+    const { exportToExcel } = await loadExportUtils()
     const rows = allMetrics.map(m => ({
       brand: m.brand,
       rating: m.rating,
@@ -664,7 +668,8 @@ export default function SupplierManagement() {
       'supplier_management', 'Suppliers')
   }
 
-  function handlePdfExport() {
+  async function handlePdfExport() {
+    const { exportToPdf } = await loadExportUtils()
     const rows = allMetrics.map(m => ({
       brand: m.brand,
       rating: m.rating,

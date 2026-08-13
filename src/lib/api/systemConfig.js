@@ -57,7 +57,21 @@ export const CONFIG_DEFAULTS = Object.freeze({
 
 // ── raw value cache (key -> raw string from the table) ────────────────────────
 let _cache = {}
+// Parallel map of the `value_text` column. system_config carries BOTH `value`
+// and `value_text`; every current writer fills both, but legacy rows may carry
+// only one, which is why the server-side RPCs coalesce them. Keeping the text
+// column here lets per-key readers (nav layout, company logo) answer from this
+// cache instead of issuing their own round trip on every cold load.
+let _textCache = {}
 let _loadedAt = 0
+// True once the WHOLE table has been read. getPublicConfig() merges only the
+// pre-auth subset, so it must NOT set this: a per-key reader that trusted a
+// partial cache would conclude "no row" for a key that was simply never
+// fetched, and (because those readers cache for the session) stay wrong.
+let _full = false
+// In-flight full read, so concurrent callers share one request instead of
+// racing three separate ones on a cold load.
+let _inflight = null
 
 /**
  * Normalise a stored config value into a JS primitive.
@@ -102,11 +116,18 @@ function coerceStr(v, dflt) {
   return String(p)
 }
 
-/** Seed the cache from an already-fetched {key: rawValue} map (e.g. SettingsContext). */
-export function primeConfigCache(map) {
+/**
+ * Seed the cache from an already-fetched {key: rawValue} map (e.g. SettingsContext).
+ * `textMap` optionally carries the matching `value_text` column. Priming marks the
+ * cache authoritative for per-key readers, so only ever call it with a FULL read
+ * of the table.
+ */
+export function primeConfigCache(map, textMap) {
   if (map && typeof map === 'object') {
     _cache = { ...map }
+    _textCache = (textMap && typeof textMap === 'object') ? { ...textMap } : {}
     _loadedAt = Date.now()
+    _full = true
   }
   return _cache
 }
@@ -115,6 +136,27 @@ export function primeConfigCache(map) {
 export function getConfigCache() { return _cache }
 /** Epoch ms the cache was last primed, or 0. */
 export function configLoadedAt() { return _loadedAt }
+
+/** True once a FULL read of system_config has been cached (not the public subset). */
+export function isSystemConfigLoaded() { return _full }
+
+/**
+ * The in-flight full read, or null when none is running. A per-key reader can
+ * await this to piggyback on the load the app is already doing instead of
+ * issuing a duplicate request; a null return means "nobody is loading it, do
+ * your own read".
+ */
+export function whenSystemConfigLoaded() { return _inflight }
+
+/**
+ * Both stored columns for one key, straight from the cache. Returns null when
+ * the cache is not authoritative yet, which the caller MUST treat as "unknown"
+ * (fall back to its own query) rather than "no such row".
+ */
+export function configEntry(key) {
+  if (!_full) return null
+  return { value: _cache[key] ?? null, value_text: _textCache[key] ?? null }
+}
 
 // ── synchronous typed getters (read the primed cache) ─────────────────────────
 export function configBool(key, dflt) {
@@ -133,16 +175,45 @@ export function configStr(key, dflt) {
  * {key: value} map. Never throws — returns the last-known cache on failure so a
  * transient error can't disable enforcement (fail-safe to defaults).
  */
-export async function loadSystemConfig() {
-  try {
-    const { data, error } = await supabase.from('system_config').select('key, value')
-    if (error) throw error
-    const map = {}
-    for (const row of data || []) map[row.key] = row.value
-    return primeConfigCache(map)
-  } catch {
-    return _cache
-  }
+export async function loadSystemConfig({ force = false } = {}) {
+  if (!force && _full) return _cache
+  // Share one request between concurrent callers. Three separate readers used
+  // to hit this table on every cold load (the settings context, the nav layout
+  // and the company logo); de-duping here is what makes it one.
+  if (_inflight && !force) return _inflight
+  const run = (async () => {
+    try {
+      // `value_text` is a real column (the report-snapshot RPCs coalesce it),
+      // but a column that does not exist fails the WHOLE PostgREST request, and
+      // this read primes every global switch in the app - maintenance mode, the
+      // export guard, the session timeout. So a rejected select falls back to
+      // the columns that have always existed rather than losing all of them.
+      let { data, error } = await supabase.from('system_config').select('key, value, value_text')
+      if (error) {
+        ({ data, error } = await supabase.from('system_config').select('key, value'))
+      }
+      if (error) throw error
+      const map = {}
+      const textMap = {}
+      for (const row of data || []) {
+        map[row.key] = row.value
+        if (row.value_text !== undefined) textMap[row.key] = row.value_text
+      }
+      return primeConfigCache(map, textMap)
+    } catch {
+      // Leave _full as it was: a failed read must not mark the cache
+      // authoritative, or per-key readers would answer "no row" from nothing.
+      return _cache
+    }
+  })()
+  _inflight = run
+  // Cleared from OUTSIDE the async body on purpose. Doing it in a `finally`
+  // inside referenced `run` before its own initializer had assigned it, so a
+  // client that threw SYNCHRONOUSLY (the whole body runs before the assignment)
+  // hit the temporal dead zone and made this function throw - which it promises
+  // never to do. The check keeps a forced refresh from clearing a newer entry.
+  run.finally(() => { if (_inflight === run) _inflight = null })
+  return run
 }
 
 /**

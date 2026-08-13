@@ -105,7 +105,9 @@ const ALLOWED = [
   //     will fail otherwise). ---
   { file: 'src/lib/api/assetManagement.js', why: 'listAssetWorkOrders - full work_orders read feeding asset registry cost/health columns' },
   { file: 'src/lib/api/costSummary.js', why: 'work_orders maintenance-cost read; server RPC get_maint_tyre_split is the primary path, this is the country+site-scoped fallback' },
-  { file: 'src/lib/api/opsIntelligence.js', why: 'listWorkOrdersForOps - country-scoped complete work_orders read for ops exceptions' },
+  // (opsIntelligence.js removed: listWorkOrdersForOps now carries a { max }
+  //  ceiling AND a server-side created_at window, so it is no longer flagged.
+  //  Per this file's own rule, a fixed read must lose its exemption.)
   { file: 'src/lib/api/technicianScorecard.js', why: 'listWorkOrdersForScorecard - country-scoped complete work_orders read' },
   // --- KNOWN UNBOUNDED, not yet fixed (a real read, not a bounded one). The
   //     vehicle_fleet enrichment read on this page is a bare .select() with no

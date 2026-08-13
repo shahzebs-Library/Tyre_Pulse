@@ -68,3 +68,14 @@ jobs:
         if: env.SUBMIT == '0'
         working-directory: mobile
         run: eas build --platform android --profile production --non-interactive
+
+      # The Play service-account JSON is a real secret - it can publish releases
+      # to the store. It is written to the workspace because EAS submit reads it
+      # from a path, so remove it as soon as the build is done. `always()` is the
+      # point: without it a failed build leaves the credential on disk. That is
+      # harmless on an ephemeral GitHub runner and is not harmless on a
+      # self-hosted one, and a workflow should not depend on which it got.
+      - name: Remove the service account key
+        if: always()
+        working-directory: mobile
+        run: rm -f google-service-account.json

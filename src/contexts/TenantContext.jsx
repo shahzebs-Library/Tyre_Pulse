@@ -63,8 +63,19 @@ export function TenantProvider({ children }) {
       return
     }
     setLoading(true); setError(null)
+    // Two independent reads, issued together. They were awaited one after the
+    // other, so a cold load paid both latencies back to back even though
+    // neither depends on the other. allSettled (not all) keeps them degrading
+    // independently: branding failing must still leave addresses loaded, and
+    // vice versa - exactly the per-call handling the sequential version had.
+    const [brandingRes, addressesRes] = await Promise.allSettled([
+      getOrgBranding(null), // caller's own org
+      listCountryAddresses(),
+    ])
+
     try {
-      const raw = await getOrgBranding(null) // caller's own org
+      if (brandingRes.status === 'rejected') throw brandingRes.reason
+      const raw = brandingRes.value
       const merged = withBrandingDefaults(raw)
       setOrgId(raw?.org_id ?? null)
       setOrgName(raw?.name ?? null)
@@ -81,10 +92,12 @@ export function TenantProvider({ children }) {
     } finally {
       setLoading(false)
     }
+
     // Country addresses are best-effort and independent of branding success.
-    try {
-      setCountryAddresses(await listCountryAddresses())
-    } catch (err) {
+    if (addressesRes.status === 'fulfilled') {
+      setCountryAddresses(addressesRes.value)
+    } else {
+      const err = addressesRes.reason
       console.warn('[TenantContext] country addresses load failed:', err?.message || err)
       setCountryAddresses([])
     }

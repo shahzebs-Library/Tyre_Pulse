@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   detectAlerts,
+  detectAlertBadgeCount,
   countAlertsBySeverity,
   ALERT_TYPES,
   SEVERITY,
@@ -34,6 +35,12 @@ function makeSupabaseMock({
       eq:  vi.fn().mockReturnThis(),
       neq: vi.fn().mockReturnThis(),
       lte: vi.fn().mockReturnThis(),
+      // Added when the engine gained a server-side overdue cutoff (`lt`) and a
+      // paged inspections read (`range`). A chain method the mock does not carry
+      // throws, and the throw is swallowed by the caller - the read then looks
+      // empty rather than failing, so the mock must track the real query chain.
+      lt:  vi.fn().mockReturnThis(),
+      range: vi.fn().mockReturnThis(),
       // Resolve as Promise with { data, error }
       then: (resolve) => resolve({ data: resolveData, error: null }),
     }
@@ -970,5 +977,97 @@ describe('detectAlerts - DATA_QUALITY', () => {
     const dqAlert = alerts.find(a => a.type === ALERT_TYPES.DATA_QUALITY && a.title.includes('Missing Cost'))
     expect(dqAlert).toBeDefined()
     expect(dqAlert.message).toContain('10')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectAlertBadgeCount - the sidebar number
+//
+// The badge takes a CHEAPER path than the /alerts page: it skips the budgets
+// read, bounds the two overdue reads server-side, and asks for fewer columns.
+// The only thing that makes that acceptable is that the resulting number is
+// identical. So this mock PROJECTS each row down to the columns the query
+// actually selected - a badge-mode column set that omitted a field some severity
+// rule reads would then silently change the count, and these tests would fail.
+// ─────────────────────────────────────────────────────────────────────────────
+function makeProjectingMock(tables) {
+  const project = (rows, cols) => {
+    if (!cols || cols === '*') return rows
+    const keys = cols.split(',').map((c) => c.trim())
+    return rows.map((r) => Object.fromEntries(keys.filter((k) => k in r).map((k) => [k, r[k]])))
+  }
+  const makeChain = (rows) => {
+    let cols = '*'
+    const chain = {
+      select: vi.fn((c) => { cols = c; return chain }),
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+      range: vi.fn(() => chain),
+      eq: vi.fn(() => chain),
+      neq: vi.fn(() => chain),
+      lt: vi.fn(() => chain),
+      lte: vi.fn(() => chain),
+      gte: vi.fn(() => chain),
+      then: (resolve) => resolve({ data: project(rows, cols), error: null }),
+    }
+    return chain
+  }
+  return { from: vi.fn((t) => makeChain(tables[t] || [])) }
+}
+
+const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString()
+
+// One row per critical/high rule the badge can count, plus medium/info rows that
+// it must NOT count.
+const BADGE_FIXTURE = {
+  stock_records: [
+    { id: 's1', site: 'JED', description: 'Tyre', stock_qty: 0, min_level: 5, critical_level: 3 }, // critical
+    { id: 's2', site: 'RIY', description: 'Tyre', stock_qty: 2, min_level: 5, critical_level: 3 }, // high
+    { id: 's3', site: 'NHC', description: 'Tyre', stock_qty: 4, min_level: 5, critical_level: 3 }, // medium
+  ],
+  budgets: [
+    { id: 'b1', site: 'JED', monthly_budget: 10, year: new Date().getFullYear(), month: new Date().getMonth() + 1 },
+  ],
+  corrective_actions: [
+    { id: 'a1', title: 'Fix', site: 'JED', due_date: daysAgo(30) }, // critical
+    { id: 'a2', title: 'Fix', site: 'RIY', due_date: daysAgo(10) }, // high
+    { id: 'a3', title: 'Fix', site: 'NHC', due_date: daysAgo(2) },  // medium
+  ],
+  inspections: [
+    { id: 'i1', title: 'Check', site: 'JED', asset_no: 'TM1', scheduled_date: daysAgo(30).slice(0, 10) }, // high
+    { id: 'i2', title: 'Check', site: 'RIY', asset_no: 'TM2', scheduled_date: daysAgo(2).slice(0, 10) },  // medium
+  ],
+  tyre_records: [
+    // Inactive for well over 180 days => high.
+    { asset_no: 'TM9', site: 'JED', issue_date: daysAgo(400).slice(0, 10), created_at: daysAgo(400),
+      risk_level: 'Low', cost_per_tyre: 1000, km_at_fitment: 0, km_at_removal: 50000, category: 'New' },
+  ],
+}
+
+describe('detectAlertBadgeCount', () => {
+  it('matches the critical+high count the /alerts page computes', async () => {
+    const page = await detectAlerts(makeProjectingMock(BADGE_FIXTURE), null)
+    const expected = page.filter((a) => a.severity === 'critical' || a.severity === 'high').length
+    const badge = await detectAlertBadgeCount(makeProjectingMock(BADGE_FIXTURE), null)
+    expect(expected).toBeGreaterThan(0)
+    expect(badge).toBe(expected)
+  })
+
+  it('excludes dismissed alerts', async () => {
+    const all = await detectAlertBadgeCount(makeProjectingMock(BADGE_FIXTURE), null)
+    const some = await detectAlertBadgeCount(
+      makeProjectingMock(BADGE_FIXTURE), null, new Set(['STOCK_CRITICAL::s1']),
+    )
+    expect(some).toBe(all - 1)
+  })
+
+  it('does not read budgets - every budget alert is INFO and cannot move the badge', async () => {
+    const supabase = makeProjectingMock(BADGE_FIXTURE)
+    await detectAlertBadgeCount(supabase, null)
+    expect(supabase.from.mock.calls.flat()).not.toContain('budgets')
+  })
+
+  it('is zero when nothing is wrong', async () => {
+    expect(await detectAlertBadgeCount(makeProjectingMock({}), null)).toBe(0)
   })
 })

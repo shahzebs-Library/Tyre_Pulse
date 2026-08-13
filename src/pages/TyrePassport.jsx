@@ -34,7 +34,10 @@ import { getPassportBundle, searchSerials } from '../lib/api/tyrePassport'
 import { buildPassport } from '../lib/tyrePassport'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
-import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Legend, Filler)
 
@@ -257,6 +260,7 @@ export default function TyrePassport() {
 
   const exportPdf = useCallback(async () => {
     if (!passport) return
+    const { exportToPdf, reportFileName } = await loadExportUtils()
     const rows = passport.journey.map((s) => ({
       asset_no: s.asset_no || NA,
       position: s.position || NA,
@@ -280,6 +284,7 @@ export default function TyrePassport() {
 
   const exportExcel = useCallback(async () => {
     if (!passport) return
+    const { exportToExcel, reportFileName } = await loadExportUtils()
     const rows = passport.journey.map((s) => ({
       asset_no: s.asset_no || '',
       position: s.position || '',

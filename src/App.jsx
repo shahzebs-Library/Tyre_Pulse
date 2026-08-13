@@ -91,7 +91,27 @@ const ConsoleSystem        = lazyConsolePage('ConsoleSystem', 'System')
 
 // ── Lazy page imports ─────────────────────────────────────────────────────
 const Login                  = lazy(() => import('./pages/Login'))
-const Dashboard              = lazy(() => import('./pages/Dashboard'))
+const loadDashboard          = () => import('./pages/Dashboard')
+const Dashboard              = lazy(loadDashboard)
+
+// Warm the Dashboard chunk during the auth round trip.
+//
+// ProtectedRoute renders a spinner while `loading`, which only clears once
+// AuthContext has finished fetching the profile. The Dashboard chunk is the
+// heaviest first screen in the app and its download did not START until after
+// that request came back, so the two costs were paid one after the other
+// instead of together. Kicked off at module scope (the same pattern main.jsx
+// uses for chart.js) so the bytes are in flight while the profile is fetched;
+// React.lazy then resolves against the module registry rather than re-fetching.
+//
+// Gated on the path so it is genuinely free for anyone who is not heading to
+// the dashboard: a deep link, /login, /console, or a public /report token
+// evaluates this module and downloads nothing extra. Failure is swallowed -
+// this is a prefetch, and React.lazy still does its own import when the route
+// actually renders.
+if (typeof window !== 'undefined' && (window.location?.pathname ?? '/') === '/') {
+  loadDashboard().catch(() => { /* prefetch only; lazy() retries on render */ })
+}
 const TyreRecords            = lazy(() => import('./pages/TyreRecords'))
 const StockManagement        = lazy(() => import('./pages/StockManagement'))
 const Budgets                = lazy(() => import('./pages/Budgets'))

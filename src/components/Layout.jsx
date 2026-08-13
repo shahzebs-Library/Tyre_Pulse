@@ -57,7 +57,7 @@ import StockBoxIc from './icons/stock-box.icon'
 import BarcodeScanIc from './icons/barcode-scan.icon'
 import OdometerIc from './icons/odometer.icon'
 import { supabase } from '../lib/supabase'
-import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
+import { detectAlertBadgeCount } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useRealtimeSync } from '../hooks/useRealtime'
@@ -717,7 +717,13 @@ export default function Layout({ children }) {
   const [searching, setSearching]             = useState(false)
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [alertCount, setAlertCount]           = useState(0)
-  const [hoveredItem, setHoveredItem]         = useState(null)
+  // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
+  // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
+  // therefore re-rendered this whole component, which re-ran the permission
+  // filter over ~186 nav items on every frame of the movement. Deleted rather
+  // than memoised: dead state is not worth keeping fast. If a hover effect is
+  // ever wanted, do it in CSS (:hover) or inside the leaf NavLink, so it cannot
+  // re-render the nav tree again.
   // Org-wide sidebar customization (super-admin Navigation Customizer). Loaded
   // once, best-effort; {} → applyNavLayout returns the built-in defaults, so this
   // is a no-op when no layout is configured. Applied BEFORE role/flag filtering
@@ -776,21 +782,34 @@ export default function Layout({ children }) {
   }, [location.pathname, isMobile])
 
   useEffect(() => {
+    let cancelled = false
     async function fetchAlertCount() {
+      // A hidden tab is a TV left on or a background window; refreshing a badge
+      // nobody can see is pure cost. The visibility listener below catches up the
+      // moment it is looked at again, so nothing goes stale in front of a user.
+      if (typeof document !== 'undefined' && document.hidden) return
       try {
         const country = activeCountry !== 'All' ? activeCountry : null
-        const found   = await detectAlerts(supabase, country)
         const dismissed = (() => {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
         })()
-        const counts = countAlertsBySeverity(found.filter(a => !dismissed.has(a.id)))
-        setAlertCount(counts.critical + counts.high)
+        const count = await detectAlertBadgeCount(supabase, country, dismissed)
+        if (!cancelled) setAlertCount(count)
       } catch { /* ignore */ }
     }
-    fetchAlertCount()
+    // Deferred off the cold-load path. The badge is a background number that no
+    // one reads in the first second, and firing it during mount put its queries
+    // in contention with the queries of the page the user actually opened.
+    const kick = setTimeout(fetchAlertCount, 3000)
     const iv = setInterval(fetchAlertCount, 5 * 60 * 1000)
-    return () => clearInterval(iv)
+    document.addEventListener('visibilitychange', fetchAlertCount)
+    return () => {
+      cancelled = true
+      clearTimeout(kick)
+      clearInterval(iv)
+      document.removeEventListener('visibilitychange', fetchAlertCount)
+    }
   }, [activeCountry])
 
   useEffect(() => {
@@ -1049,8 +1068,6 @@ export default function Layout({ children }) {
                           to={to}
                           end={end}
                           title={!sidebarOpen ? navLabel : undefined}
-                          onMouseEnter={() => setHoveredItem(to)}
-                          onMouseLeave={() => setHoveredItem(null)}
                           className={({ isActive }) =>
                             `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group

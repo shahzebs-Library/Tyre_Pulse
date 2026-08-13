@@ -9,11 +9,14 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { SkeletonTable } from '../components/ui/Skeleton'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STATUS_META = {
@@ -443,7 +446,8 @@ export default function CorrectiveActions() {
   }
 
   // ── Export ────────────────────────────────────────────────────────────────────
-  function doExcelExport() {
+  async function doExcelExport() {
+    const { exportToExcel } = await loadExportUtils()
     exportToExcel(
       filtered,
       ['title', 'priority', 'status', 'site', 'assigned_to', 'asset_no', 'tyre_serial', 'root_cause', 'due_date', 'created_at'],
@@ -452,7 +456,8 @@ export default function CorrectiveActions() {
     )
   }
 
-  function doPdfExport() {
+  async function doPdfExport() {
+    const { exportToPdf } = await loadExportUtils()
     exportToPdf(
       filtered,
       [

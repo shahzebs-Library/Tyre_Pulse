@@ -21,10 +21,13 @@ import * as assetApi from '../lib/api/assetManagement'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -492,6 +495,7 @@ export default function AssetManagement() {
 
   // ── Export ────────────────────────────────────────────────────────────────────
   async function handleExcelExport() {
+    const { exportToExcel } = await loadExportUtils()
     const rows = filteredAssets.map(a => ({
       asset_no: a.asset_no,
       fleet_number: a.fleet_number ?? '',
@@ -524,6 +528,7 @@ export default function AssetManagement() {
   }
 
   async function handlePdfExport() {
+    const { exportToPdf } = await loadExportUtils()
     try {
       await exportToPdf(
         filteredAssets.map(a => ({

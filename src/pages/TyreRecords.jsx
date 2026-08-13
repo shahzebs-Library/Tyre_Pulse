@@ -10,7 +10,6 @@ import { scrapTyreBySerial, getScrapPermissions } from '../lib/api/tyreExchange'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { useInvalidate } from '../hooks/useSupabaseQuery'
@@ -26,6 +25,10 @@ import PageHeader from '../components/ui/PageHeader'
 import FilterBar from '../components/ui/FilterBar'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
+
+// exportUtils pulls the PDF/Excel report engines (~41 kB gz) that most sessions
+// never trigger, so it loads on first click instead of with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 const PAGE_SIZE = 25
 
@@ -379,13 +382,13 @@ export default function TyreRecords() {
         actions={
           <div className="flex gap-2">
             <button
-              onClick={async () => exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')}
+              onClick={async () => (await loadExportUtils()).exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')}
               className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
             >
               <FileSpreadsheet size={14} className="text-green-400" /> {t('records.actions.excel')}
             </button>
             <button
-              onClick={async () => exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)}
+              onClick={async () => (await loadExportUtils()).exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)}
               className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
             >
               <FileText size={14} className="text-red-400" /> {t('records.actions.pdf')}

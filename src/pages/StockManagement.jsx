@@ -8,7 +8,6 @@ import Skeleton from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
-import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -17,6 +16,10 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { loadAutoTable } from '../lib/pdfEngine'
+
+// exportUtils pulls the PDF/Excel report engines that most sessions never
+// trigger, so it loads on first click instead of riding with the route chunk.
+const loadExportUtils = () => import('../lib/exportUtils')
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -342,6 +345,7 @@ export default function StockManagement() {
 
   // Reorder request PDF
   async function generateReorderPdf(rec) {
+    const { pdfFooter, pdfHeader, pdfTableTheme, resolvePdfBrand } = await loadExportUtils()
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -372,7 +376,8 @@ export default function StockManagement() {
     doc.save(`reorder-${rec.site.replace(/\s+/g, '-')}-${Date.now()}.pdf`)
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const { exportToExcel } = await loadExportUtils()
     const rows = records.map(r => ({
       Site:              r.site,
       Description:       r.description || '',
@@ -386,7 +391,8 @@ export default function StockManagement() {
     exportToExcel(rows, Object.keys(rows[0] || {}), Object.keys(rows[0] || {}), 'stock-records', 'Stock')
   }
 
-  function exportPdf() {
+  async function exportPdf() {
+    const { exportToPdf } = await loadExportUtils()
     const rows = records.map(r => [
       r.site, r.description || '-', r.stock_qty, r.min_level, r.critical_level, deriveStatus(r),
     ])

@@ -1,0 +1,35 @@
+-- =====================================================================
+-- V537  INDEX THE ORDER /ops-intelligence ACTUALLY SORTS BY
+-- STATUS: APPLIED LIVE 2026-08-12 (project jhssdmeruxtrlqnwfksc)
+--         migration name: v537_work_orders_created_at_index
+-- =====================================================================
+--
+-- listWorkOrdersForOps (src/lib/api/opsIntelligence.js) reads work_orders
+-- ORDER BY created_at DESC, unbounded, paging with OFFSET.
+--
+-- CHECKED AGAINST pg_indexes BEFORE CREATING: work_orders carries indexes on
+-- asset_no, country, opened_at DESC, priority, site, status, work_type and the
+-- composites (organisation_id, country), (organisation_id, status),
+-- (organisation_id, country, opened_at DESC) - and NOTHING on created_at. This
+-- mattered: the repo holds only 1 of the 6 indexes that exist on
+-- work_order_line_items, so indexes here are demonstrably created live without
+-- repo files and their absence cannot be inferred from the repo alone.
+--
+-- Without it that read sorts the whole matched set, and because a sort cannot
+-- be resumed at an offset, each of ~60 pages re-sorts it.
+--
+-- Leading with (organisation_id, country) matches the RESTRICTIVE org policy
+-- and the country predicate the service sends, so one index answers the filter
+-- and the ordering together.
+--
+-- HONEST LIMIT: applyCountry emits `country = $1 OR country IS NULL`, and an OR
+-- is answered by a BitmapOr, which does not preserve index order. So this helps
+-- most where the caller sends a strict country match, and the real fix is
+-- client-side - bound that read by date, as WorkOrders.jsx already does. An
+-- index cannot repair an unbounded read; it only makes it cheaper.
+--
+-- ROLLBACK: drop index if exists public.work_orders_org_country_created_idx;
+-- =====================================================================
+
+create index if not exists work_orders_org_country_created_idx
+  on public.work_orders (organisation_id, country, created_at desc);

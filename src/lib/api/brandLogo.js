@@ -15,6 +15,7 @@
  * or a failed write so the page can report it.
  */
 import { supabase, ServiceError } from './_client'
+import { configEntry, whenSystemConfigLoaded } from './systemConfig'
 
 /** system_config key that both this service and get_report_snapshot read. */
 export const LOGO_CONFIG_KEY = 'company_logo'
@@ -93,6 +94,19 @@ export function isValidLogoUrl(url) {
  */
 export async function getCompanyLogo() {
   try {
+    // Answer from the session-wide system_config cache when it is already
+    // authoritative - the settings context reads the whole table on sign-in, so
+    // a separate single-row request here was a duplicate on every cold load.
+    // A cold cache falls through to the read below; it never reports absence.
+    if (!configEntry(LOGO_CONFIG_KEY)) {
+      const pending = whenSystemConfigLoaded()
+      if (pending) await pending
+    }
+    const cached = configEntry(LOGO_CONFIG_KEY)
+    if (cached) {
+      const url = cached.value_text ?? cached.value ?? ''
+      return typeof url === 'string' ? url : ''
+    }
     const { data, error } = await supabase
       .from('system_config')
       .select('value_text, value')

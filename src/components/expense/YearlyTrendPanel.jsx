@@ -41,6 +41,20 @@ function CountryBlock({ entry, compact, grain }) {
   const fc1 = t.forecast[0]
   const yoyPct = prev && prev.total ? ((last.total - prev.total) / prev.total) * 100 : null
 
+  // Silent when there is nothing to describe - a caption saying "1 period" on a
+  // single bar is noise, not information.
+  const spanLabel = (() => {
+    if (!histLabels.length) return ''
+    const hist = histLabels.length === 1
+      ? histLabels[0]
+      : `${histLabels[0]} to ${histLabels[histLabels.length - 1]}`
+    if (!fcLabels.length) return `Showing ${hist}`
+    const fc = fcLabels.length === 1
+      ? fcLabels[0]
+      : `${fcLabels[0]} to ${fcLabels[fcLabels.length - 1]}`
+    return `Showing ${hist}, projecting ${fc}`
+  })()
+
   const data = {
     labels,
     datasets: [
@@ -78,6 +92,11 @@ function CountryBlock({ entry, compact, grain }) {
           )}
         </div>
       </div>
+      {/* The span in words. On a compact embed the axis ticks are too small to
+          read, and even at full size "which period am I looking at" should not
+          require squinting at the first and last bar. Built from the panel's own
+          labels, so the caption cannot describe a different range to the chart. */}
+      {spanLabel && <div className="text-xs" style={{color:'var(--text-muted)'}}>{spanLabel}</div>}
       <div className={compact ? 'h-40' : 'h-56'}><Bar data={data} options={opts} /></div>
       {!compact && t.insights[0] && <div className="text-xs" style={{color:'var(--text-muted)'}}>{t.insights[0].text}</div>}
     </div>

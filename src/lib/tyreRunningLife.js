@@ -7,6 +7,19 @@
  * callers render N/A, never a fabricated number.
  */
 
+/**
+ * Is this row measured on the hour meter?
+ *
+ * The server says `engine_hours`; shapeRow folds that to `hours` for display.
+ * Both spellings therefore reach this module depending on the caller, and a
+ * test against only one of them silently answers "no" for every plant machine -
+ * which is exactly what made the coverage note miscount plant as a missing
+ * odometer reading.
+ */
+export function isHoursUnit(unit) {
+  return unit === 'hours' || unit === 'engine_hours'
+}
+
 const num = (v) => {
   if (v === '' || v == null) return null
   const n = Number(v)
@@ -69,7 +82,10 @@ export function summarize(rows = []) {
   // Tiles and row badges share ONE judgement (bandFor) so they can never disagree.
   const overdue = rows.filter((r) => bandFor(r) === 'overdue').length
   const dueSoon = rows.filter((r) => bandFor(r) === 'due-soon').length
-  const pcts = rows.map((r) => (r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct)).filter((v) => v != null)
+  // Averaged over the meter each machine is actually managed by, the same way
+  // the State badge judges it - averaging a pump's distance into a fleet
+  // "life used" figure mixes two different things and flatters neither.
+  const pcts = rows.map((r) => measureFor(r).used).filter((v) => v != null)
   const avgUsedPct = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null
   return { total, measurableKm, measurableHours, overdue, dueSoon, avgUsedPct, ...coverage(rows) }
 }
@@ -95,7 +111,7 @@ export function coverage(rows = []) {
   let noFitmentKm = 0
   for (const r of list) {
     if (!r || r.kmRun != null) continue
-    if (r.unit === 'engine_hours') { onHours += 1; continue }
+    if (isHoursUnit(r.unit)) { onHours += 1; continue }
     if (r.currentKm == null) { noCurrentKm += 1; continue }
     if (r.kmAtFitment == null) { noFitmentKm += 1 }
   }
@@ -142,21 +158,74 @@ export const LIFE_USED_DUE_PCT = 90
  * judged against that target instead (never 'unknown' just because the asset
  * runs on the hour meter).
  */
+/**
+ * WHICH METER GOVERNS THIS TYRE - and why the row already knows.
+ *
+ * A concrete pump, a wheel loader and a skid loader are worked in ENGINE HOURS;
+ * a mixer, a bus and a pickup are worked in KM. The server states which on every
+ * row (`unit`), because it is the machine's own type that decides, and the
+ * owner's life targets are set the same way - the pump target is 5,000 hours,
+ * the mixer target 80,000 km.
+ *
+ * THE DEFECT THIS FIXES: this used to read the km side first and fall back to
+ * hours only when km was absent. Pumps DO accumulate km - they drive to site -
+ * so a pump nearly always had a km figure, and 482 of the 815 hours-measured
+ * tyres in KSA were being judged against a distance nobody manages them by. On
+ * 56 of them the two dimensions disagreed about whether the tyre was near the
+ * end of its life, so the screen was calling tyres healthy that were not, and
+ * due that were not.
+ *
+ * The fallback is KEPT but inverted to serve the row: when a machine's own meter
+ * has never been read, the other dimension is better than nothing - and
+ * `onFallback` says so, so the screen can admit it rather than quietly present a
+ * distance figure as if it were the managed one.
+ *
+ * @returns {{remaining:number|null, used:number|null, soon:boolean,
+ *            dimension:'km'|'hours'|null, onFallback:boolean}}
+ */
+export function measureFor(row) {
+  if (!row) return { remaining: null, used: null, soon: false, dimension: null, onFallback: false }
+  const km = {
+    remaining: row.remainingKm, used: row.lifeUsedPct,
+    soon: row.remainingKm != null && row.remainingKm < DUE_SOON_KM, dimension: 'km',
+  }
+  const hours = {
+    remaining: row.remainingHours, used: row.hoursUsedPct,
+    soon: row.remainingHours != null && row.remainingHours < DUE_SOON_HOURS, dimension: 'hours',
+  }
+  // shapeRow folds 'engine_hours' to 'hours'; accept BOTH tokens so this is
+  // correct whether it is handed a shaped row or a raw RPC row. Testing only
+  // one spelling is how the coverage counter below silently read zero.
+  const onHours = isHoursUnit(row.unit)
+  const own = onHours ? hours : km
+  const other = onHours ? km : hours
+  if (own.remaining != null) return { ...own, onFallback: false }
+  if (other.remaining != null) return { ...other, onFallback: true }
+  return { remaining: null, used: null, soon: false, dimension: null, onFallback: false }
+}
+
 export function bandFor(row) {
   if (!row) return 'unknown'
-  let rem = row.remainingKm
-  let used = row.lifeUsedPct
-  let soon = rem != null && rem < DUE_SOON_KM
-  if (rem == null && row.remainingHours != null) {
-    rem = row.remainingHours
-    used = row.hoursUsedPct
-    soon = rem < DUE_SOON_HOURS
-  }
-  if (rem == null) return 'unknown'
-  if (rem === 0) return 'overdue'
+  const { remaining, used, soon } = measureFor(row)
+  if (remaining == null) return 'unknown'
+  if (remaining === 0) return 'overdue'
   if (soon || (used != null && used >= LIFE_USED_DUE_PCT)) return 'due-soon'
   if (used != null && used >= 60) return 'mid-life'
   return 'healthy'
+}
+
+/**
+ * One line saying what the State was judged on. Silent in the ordinary case -
+ * a note on every row is a note nobody reads - and speaks up exactly when the
+ * figure came from the meter this machine is NOT managed by.
+ */
+export function measureNote(row) {
+  const m = measureFor(row)
+  if (!m.dimension) return ''
+  if (!m.onFallback) return ''
+  return isHoursUnit(row?.unit)
+    ? 'Judged on distance: no hour-meter reading has been recorded for this machine.'
+    : 'Judged on engine hours: no odometer reading has been recorded for this machine.'
 }
 
 /**
@@ -194,10 +263,16 @@ export const BAND_META = {
 }
 
 /** Search + band + unit filter over shaped rows. */
-export function filterRows(rows = [], { search = '', band = 'all', unit = 'all' } = {}) {
+export function filterRows(rows = [], { search = '', band = 'all', unit = 'all', vehicleType = 'all' } = {}) {
   const q = String(search || '').trim().toLowerCase()
   return rows.filter((r) => {
     if (unit !== 'all' && r.unit !== unit) return false
+    // Asset type is the first cut anybody makes here: a mixer tyre and a loader
+    // tyre have different sizes, different lives and different targets, so a
+    // table mixing them cannot be read. Matched case-insensitively because the
+    // register and the owner's sheet do not always agree on capitalisation.
+    if (vehicleType !== 'all'
+      && String(r.vehicleType || '').toLowerCase() !== String(vehicleType).toLowerCase()) return false
     if (band !== 'all' && bandFor(r) !== band) return false
     if (!q) return true
     return r.serial.toLowerCase().includes(q)
@@ -207,6 +282,15 @@ export function filterRows(rows = [], { search = '', band = 'all', unit = 'all' 
       || r.size.toLowerCase().includes(q)
       || r.vehicleType.toLowerCase().includes(q)
   })
+}
+
+/**
+ * Asset types actually present in the loaded rows, for the picker. Derived from
+ * the data rather than a hardcoded list, so a type the fleet gains appears by
+ * itself and one it no longer runs stops being offered.
+ */
+export function vehicleTypesIn(rows = []) {
+  return [...new Set((rows || []).map((r) => r?.vehicleType).filter(Boolean))].sort()
 }
 
 export const fmtNum = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
@@ -252,13 +336,14 @@ export const DUE_SCOPE_LABEL = 'Tyres currently due (past expected life or due s
  * Plain-English description of the active filters, for report headers.
  * `scope` is 'due' when only the due subset was fetched, 'all' otherwise.
  */
-export function filterDescription({ search = '', band = 'all', unit = 'all', fromDate = '', toDate = '', scope = 'all' } = {}) {
+export function filterDescription({ search = '', band = 'all', unit = 'all', vehicleType = 'all', fromDate = '', toDate = '', scope = 'all' } = {}) {
   const parts = []
   if (scope === 'due') parts.push(DUE_SCOPE_LABEL)
   const q = String(search || '').trim()
   if (q) parts.push(`search "${q}"`)
   if (band !== 'all') parts.push(`state: ${BAND_META[band] ? BAND_META[band].label : band}`)
   if (unit !== 'all') parts.push(unit === 'km' ? 'km-measured assets only' : 'hour-measured assets only')
+  if (vehicleType !== 'all') parts.push(`asset type: ${vehicleType}`)
   if (fromDate && toDate) parts.push(`fitted ${fromDate} to ${toDate}`)
   else if (fromDate) parts.push(`fitted from ${fromDate}`)
   else if (toDate) parts.push(`fitted up to ${toDate}`)
@@ -271,8 +356,10 @@ export function filterDescription({ search = '', band = 'all', unit = 'all', fro
  */
 export function actionRows(rows = []) {
   const rank = { overdue: 0, 'due-soon': 1 }
+  // Ranked on the meter the machine is managed by, so the list a manager works
+  // down is ordered by the same number the State badge shows.
   const usedOf = (r) => {
-    const p = r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct
+    const p = measureFor(r).used
     return p != null ? p : -1
   }
   return rows

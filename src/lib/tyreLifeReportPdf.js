@@ -9,7 +9,7 @@
  */
 import { loadPdf } from './pdfEngine'
 import {
-  bandFor, BAND_META, basisLabel, fmtNum, lifeDisplay, actionRows,
+  bandFor, BAND_META, basisLabel, fmtNum, lifeDisplay, actionRows, measureFor,
 } from './tyreRunningLife'
 
 // Muted corporate palette (RGB triplets).
@@ -30,7 +30,9 @@ const DOT = {
 }
 
 const usedPctText = (r) => {
-  const p = r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct
+  // Judged on the meter the machine is managed by - the printed copy and the
+  // screen must never disagree about how much life a tyre has left.
+  const p = measureFor(r).used
   return p == null ? 'N/A' : `${Math.round(p)}%`
 }
 

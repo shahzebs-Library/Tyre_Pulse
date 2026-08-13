@@ -14,6 +14,7 @@ import {
 } from '../../lib/api/tyreRunningLife'
 import {
   shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel,
+  vehicleTypesIn, measureNote, measureFor,
   summarize, inFittedRange, filterDescription, coverageNote, bandNeedsFullSet,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
@@ -86,6 +87,10 @@ export default function TyreRunningLife() {
   const [search, setSearch] = useState('')
   const [band, setBand] = useState('all')
   const [unit, setUnit] = useState('all')
+  // Asset type is the first cut anybody makes on this table: a mixer tyre and a
+  // loader tyre have different sizes, lives and targets, so a table that mixes
+  // them cannot be read.
+  const [vehicleType, setVehicleType] = useState('all')
   // Fitment-date range (row.fittedOn). Feeds the SAME filtered set the tiles,
   // life-history strip, table and exports all read, so they stay consistent.
   const [fromDate, setFromDate] = useState('')
@@ -148,13 +153,16 @@ export default function TyreRunningLife() {
   }
 
   const filtered = useMemo(() => {
-    const base = filterRows(state.rows, { search, band, unit })
+    const base = filterRows(state.rows, { search, band, unit, vehicleType })
     if (!fromDate && !toDate) return base
     return base.filter((r) => inFittedRange(r, fromDate, toDate))
-  }, [state.rows, search, band, unit, fromDate, toDate])
+  }, [state.rows, search, band, unit, vehicleType, fromDate, toDate])
   // Tiles + life-history strip follow the on-screen filters, same as the table.
   const s = useMemo(() => summarize(filtered), [filtered])
-  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all' || Boolean(fromDate || toDate)
+  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all' || vehicleType !== 'all' || Boolean(fromDate || toDate)
+  // Offered from the loaded rows, so the list can never name a type the fleet
+  // does not run or omit one it has just gained.
+  const typeOptions = useMemo(() => vehicleTypesIn(state.rows), [state.rows])
 
   // Branded PDF report of the FILTERED rows - always matches the screen.
   async function downloadPdfReport() {
@@ -166,7 +174,7 @@ export default function TyreRunningLife() {
         summary: s,
         country: activeCountry,
         company: appSettings?.company_name || 'Tyre Pulse',
-        filters: filterDescription({ search, band, unit, fromDate, toDate, scope: state.scope }),
+        filters: filterDescription({ search, band, unit, vehicleType, fromDate, toDate, scope: state.scope }),
       })
     } catch (e) {
       setPdfError(toUserMessage(e))
@@ -213,7 +221,7 @@ export default function TyreRunningLife() {
         {
           title: 'Tyre Running & Remaining Life',
           company: appSettings?.company_name || 'Tyre Pulse',
-          dateRange: filterDescription({ search, band, unit, fromDate, toDate, scope: state.scope }),
+          dateRange: filterDescription({ search, band, unit, vehicleType, fromDate, toDate, scope: state.scope }),
         },
       )
     } catch (e) {
@@ -268,10 +276,12 @@ export default function TyreRunningLife() {
         )
       } },
     { id: 'state', header: 'State', accessorFn: (r) => BAND_META[bandFor(r)].label, size: 140,
-      meta: { exportValue: (r) => { const p = r.lifeUsedPct != null ? r.lifeUsedPct : r.hoursUsedPct; return `${BAND_META[bandFor(r)].label}${p != null ? ` ${p}%` : ''}` } },
+      meta: { exportValue: (r) => { const p = measureFor(r).used; return `${BAND_META[bandFor(r)].label}${p != null ? ` ${p}%` : ''}` } },
       cell: ({ row }) => {
         const meta = BAND_META[bandFor(row.original)]
-        const p = row.original.lifeUsedPct != null ? row.original.lifeUsedPct : row.original.hoursUsedPct
+        // The percentage must come from the meter the state was judged on,
+        // or the badge and the number beside it contradict each other.
+        const p = measureFor(row.original).used
         return (
           <StatusBadge tone={meta.tone}>
             {meta.label}{p != null ? ` ${p}%` : ''}
@@ -500,6 +510,11 @@ export default function TyreRunningLife() {
               <option value="healthy">Healthy</option>
               <option value="unknown">Not measurable</option>
             </select>
+            <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}
+              className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
+              <option value="all">All asset types</option>
+              {typeOptions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
             <select value={unit} onChange={(e) => setUnit(e.target.value)}
               className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
               <option value="all">Km and hours assets</option>
@@ -551,7 +566,10 @@ export default function TyreRunningLife() {
 /** Read-only "full life story" modal for one tyre - plain labeled grid, honest N/A. */
 function TyreLifeDetailModal({ row, onClose }) {
   const meta = BAND_META[bandFor(row)]
-  const usedPct = row.lifeUsedPct != null ? row.lifeUsedPct : row.hoursUsedPct
+  // The percentage shown beside the state must be the one the state was judged
+  // on, or the badge and the number under it disagree.
+  const usedPct = measureFor(row).used
+  const judgedNote = measureNote(row)
   const fields = [
     ['Serial', row.serial || 'N/A'],
     ['Asset', row.asset || 'N/A'],
@@ -561,6 +579,7 @@ function TyreLifeDetailModal({ row, onClose }) {
     ['Size', row.size || 'N/A'],
     ['Brand', row.brand || 'N/A'],
     ['Measured in', row.unit === 'hours' ? 'Engine hours' : 'Kilometres'],
+    ...(judgedNote ? [['State judged on', judgedNote]] : []),
     ['Fitted on', row.fittedOn ? String(row.fittedOn).slice(0, 10) : 'N/A'],
     ['Days on vehicle', fmtNum(row.daysOn)],
     ['Km at fitment', fmtNum(row.kmAtFitment)],

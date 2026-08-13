@@ -27,7 +27,7 @@ import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
-import { shapeRunningLife, lifeDisplay } from '../lib/tyreRunningLife'
+import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
 import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap } from '../lib/inspectionView'
@@ -1542,7 +1542,7 @@ export default function Inspections() {
               both(lr.expectedLifeKm, lr.expectedLifeHours),
               both(lr.remainingKm, lr.remainingHours),
               n(lr.remainingDays),
-              (lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : (lr.hoursUsedPct != null ? `${lr.hoursUsedPct}%` : 'N/A')),
+              (measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A'),
             ]),
           })
           finalY = (doc.lastAutoTable?.finalY ?? finalY) + 8

@@ -44,6 +44,40 @@ const RISK_COLOR = {
   Medium:   { bg: 'bg-yellow-900/50', text: 'text-yellow-300', hex: '#ca8a04' },
   Low:      { bg: 'bg-green-900/50',  text: 'text-green-300',  hex: '#16a34a' },
 }
+/**
+ * Operational state as the owner records it on the monthly asset sheet.
+ *
+ * This is NOT the register's Active/Inactive. A machine can be Active - part of
+ * the current fleet - and broken down today, or Active and already earmarked
+ * for scrap. Showing only one of the two hides whichever question you are
+ * actually asking.
+ *
+ * An asset with no operational status renders a quiet dash rather than being
+ * assumed to be running: never recorded and running are different claims.
+ */
+const OPS_STATUS = {
+  running:       { label: 'Running',        bg: 'bg-green-900/40',  text: 'text-green-300' },
+  breakdown:     { label: 'Breakdown',      bg: 'bg-red-900/40',    text: 'text-red-300' },
+  idle:          { label: 'Idle / standby', bg: 'bg-yellow-900/40', text: 'text-yellow-300' },
+  planned_scrap: { label: 'Planned scrap',  bg: 'bg-orange-900/40', text: 'text-orange-300' },
+  reallocation:  { label: 'Reallocating',   bg: 'bg-blue-900/40',   text: 'text-blue-300' },
+  yard:          { label: 'In yard',        bg: 'bg-slate-800/60',  text: 'text-slate-300' },
+  other:         { label: 'Other',          bg: 'bg-slate-800/60',  text: 'text-slate-300' },
+}
+
+function OpsStatusBadge({ value, note }) {
+  if (!value) return <span className="text-[var(--text-muted)]">-</span>
+  const meta = OPS_STATUS[value] || OPS_STATUS.other
+  return (
+    <span
+      title={note || meta.label}
+      className={`inline-block px-2 py-0.5 rounded text-xs whitespace-nowrap ${meta.bg} ${meta.text}`}
+    >
+      {meta.label}
+    </span>
+  )
+}
+
 const SCORE_COLOR = (s) => {
   if (s >= 80) return 'bg-green-500'
   if (s >= 60) return 'bg-yellow-500'
@@ -297,6 +331,10 @@ export default function AssetManagement() {
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterRisk, setFilterRisk] = useState('')
+  // Operational state from the owner's monthly asset sheet. Kept SEPARATE from
+  // the register's Active/Inactive: a machine can be on the current fleet and
+  // broken down today, and merging the two would hide exactly that.
+  const [filterOps, setFilterOps] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
   // ── sort state ───────────────────────────────────────────────────────────────
@@ -413,6 +451,7 @@ export default function AssetManagement() {
     if (filterType) list = list.filter(a => a.vehicle_type === filterType)
     if (filterStatus === 'active') list = list.filter(a => a.active)
     if (filterStatus === 'inactive') list = list.filter(a => !a.active)
+    if (filterOps) list = list.filter(a => (a.ops_status ?? '') === filterOps)
     if (filterRisk) list = list.filter(a => a._worstRisk === filterRisk)
 
     list.sort((a, b) => {
@@ -428,7 +467,7 @@ export default function AssetManagement() {
       return 0
     })
     return list
-  }, [enrichedAssets, search, filterSite, filterCountry, filterType, filterStatus, filterRisk, sortCol, sortDir])
+  }, [enrichedAssets, search, filterSite, filterCountry, filterType, filterStatus, filterRisk, filterOps, sortCol, sortDir])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -446,6 +485,7 @@ export default function AssetManagement() {
   const siteOptions = useMemo(() => [...new Set(assets.map(a => a.site).filter(Boolean))].sort(), [assets])
   const countryOptions = useMemo(() => [...new Set(assets.map(a => a.country).filter(Boolean))].sort(), [assets])
   const typeOptions = useMemo(() => [...new Set(assets.map(a => a.vehicle_type).filter(Boolean))].sort(), [assets])
+  const opsOptions = useMemo(() => [...new Set(assets.map(a => a.ops_status).filter(Boolean))].sort(), [assets])
 
   // ── Chart data ────────────────────────────────────────────────────────────────
   const typeChartData = useMemo(() => {
@@ -657,6 +697,7 @@ export default function AssetManagement() {
                           { label: 'Site', value: filterSite, onChange: setFilterSite, opts: siteOptions },
                           { label: 'Country', value: filterCountry, onChange: setFilterCountry, opts: countryOptions },
                           { label: 'Vehicle Type', value: filterType, onChange: setFilterType, opts: typeOptions },
+                          { label: 'Operational status', value: filterOps, onChange: setFilterOps, opts: opsOptions },
                         ].map(f => (
                           <div key={f.label}>
                             <label className="text-xs text-[var(--text-muted)] mb-1 block">{f.label}</label>
@@ -726,6 +767,7 @@ export default function AssetManagement() {
                           {[
                             { col: 'asset_no', label: 'Asset No' },
                             { col: 'vehicle_type', label: 'Type' },
+                            { col: 'ops_status', label: 'Operational' },
                             { col: 'make', label: 'Make / Model' },
                             { col: 'year', label: 'Year' },
                             { col: 'site', label: 'Site' },
@@ -754,6 +796,7 @@ export default function AssetManagement() {
                               className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
                               <td className="px-4 py-3 font-mono font-semibold text-blue-300">{a.asset_no}</td>
                               <td className="px-4 py-3 text-[var(--text-secondary)]">{a.vehicle_type ?? '-'}</td>
+                              <td className="px-4 py-3"><OpsStatusBadge value={a.ops_status} note={a.ops_status_note} /></td>
                               <td className="px-4 py-3 text-[var(--text-secondary)] max-w-[140px] truncate">
                                 {[a.make, a.model].filter(Boolean).join(' ') || '-'}
                               </td>

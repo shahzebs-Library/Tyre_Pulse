@@ -109,6 +109,7 @@ const NAV_GROUPS = [
       { to: '/fleet-master',        label: 'Fleet Master',       icon: TruckIc },
       { to: '/assets',              label: 'Asset Management',   icon: LayoutGrid },
       { to: '/asset-disposals',     label: 'Asset Disposal',     icon: Recycle, roles: ANALYTICS_ROLES },
+      { to: '/asset-breakdowns',    label: 'Breakdown Register', icon: Wrench, roles: ANALYTICS_ROLES },
       { to: '/sites',               label: 'Site Management',    icon: MapPin },
       { to: '/actions',             label: 'Corrective Actions', icon: ClipboardList },
       { to: '/rca',                 label: 'Root Cause',         icon: Search },

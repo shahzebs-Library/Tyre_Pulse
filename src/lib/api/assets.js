@@ -5,7 +5,13 @@
 import { supabase, unwrap, applyCountry, ServiceError } from './_client'
 
 const COLS =
-  'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,site,country,status,is_active,current_km,tyre_size,created_at'
+  // ops_status is the OPERATIONAL state from the owner's monthly asset sheet
+  // (running / breakdown / idle / planned scrap / being reallocated). It is a
+  // different fact from `status`, which says whether the asset is on the
+  // current fleet at all - a machine can be Active in the register and broken
+  // down today, and collapsing the two would hide exactly that case.
+  'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,site,country,status,is_active,'
+  + 'current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at'
 
 /**
  * List fleet assets, newest first. Country-scoped (null-safe) and optionally

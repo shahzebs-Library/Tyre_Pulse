@@ -28,9 +28,9 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
-import { positionLabelMap } from '../lib/inspectionView'
+import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
 import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
 import { loadTyreChangeTracking } from '../lib/api/tyreChangeTracking'
 // The shared dialog shell. Imported under an alias because this file still
@@ -384,6 +384,15 @@ function TyreDueBanner({ entry, damaged = [], inspection = null }) {
     }
   }
 
+  // The fault list covers everything an inspector can record, and wear is most
+  // of it. Calling a worn tyre "damage" would misreport what was found, so the
+  // two are counted apart and the line says which.
+  const severe = damaged.filter((d) => isSevereCondition(d.condition))
+  const wornOnly = damaged.filter((d) => !isSevereCondition(d.condition))
+  const faultLine = severe.length > 0 && wornOnly.length > 0
+    ? 'Damage and worn tyres found on this vehicle'
+    : (severe.length > 0 ? 'Damage found on this vehicle' : 'Worn tyres found on this vehicle')
+
   if (due.length === 0 && damaged.length === 0) return null
   return (
     <div className="rounded-xl border px-4 py-3 mb-4"
@@ -393,7 +402,7 @@ function TyreDueBanner({ entry, damaged = [], inspection = null }) {
         <span className="text-sm font-semibold" style={{ color: '#ef4444' }}>
           {due.length > 0
             ? `${due.length} tyre${due.length === 1 ? '' : 's'} on this vehicle ${due.length === 1 ? 'is' : 'are'} at or near end of life - due for change`
-            : 'Damage found on this vehicle'}
+            : faultLine}
         </span>
       </div>
       {due.length > 0 && (
@@ -410,8 +419,8 @@ function TyreDueBanner({ entry, damaged = [], inspection = null }) {
         <p className="text-xs mt-1 text-[var(--text-secondary)]">
           {/* Named the way the tyre records name it, so this line and the
               diagram above it do not call one wheel two things. */}
-          Damage found: {damaged
-            .map((d) => displayPositionCode(inspectionTypeHint(inspection), d.position) || 'N/A')
+          {damaged
+            .map((d) => `${displayPositionCode(inspectionTypeHint(inspection), d.position) || 'N/A'} (${d.condition})`)
             .join(', ')}
         </p>
       )}
@@ -1329,7 +1338,11 @@ export default function Inspections() {
     const recTreads = []
     let lowTread = null
     tyreData.forEach((r) => {
-      const c = ['Good', 'Wear', 'Damage'].includes(r.condition) ? r.condition : 'No data'
+      // Banded through riskForCondition, not by exact word: the field app
+      // writes Worn / Flat / Damaged, and an exact-match bucket filed every one
+      // of them as "No data" on a report someone signs.
+      const band = riskForCondition(r.condition)
+      const c = band === 'good' ? 'Good' : band === 'warning' ? 'Wear' : band === 'critical' ? 'Damage' : 'No data'
       condCounts[c] += 1
       const p = Number(r.pressure)
       if (Number.isFinite(p) && p > 0) recPressures.push(p)

@@ -34,7 +34,50 @@ export function buildAssetFlagMap(lifeRows = []) {
   return map
 }
 
-const DAMAGE_RE = /damage|puncture/i
+/**
+ * WHAT COUNTS AS A FAULT AN INSPECTOR RECORDED.
+ *
+ * This used to be /damage|puncture/ and that quietly threw away most of what
+ * inspectors actually report. The recorded vocabulary is exactly six words, and
+ * these are every one of them, counted live:
+ *
+ *   Good     3,279   correctly not a fault
+ *   Worn       326   <- never flagged
+ *   Flat        60   <- never flagged
+ *   Damaged     21       flagged
+ *   Puncture     8       flagged
+ *   Wear         4   <- never flagged (the web form's word for the same thing)
+ *
+ * So 390 of the 419 faults on record - 93% - never reached the system. A worn
+ * tyre never entered the tracking table, no corrective action was ever raised
+ * for it, and because the flag never existed its REPLACEMENT could never be
+ * matched either: the fitter changed the tyre, the monthly consumption file
+ * recorded the new one, and the report still showed nothing.
+ *
+ * Note the two vocabularies. The web form writes Good/Wear/Damage/Puncture; the
+ * field app writes Good/Worn/Flat/Damaged/Puncture. Matching on stems rather
+ * than on either word list is what keeps both surfaces working, and is why
+ * "damage" also catches "Damaged".
+ *
+ * Worn and flat are exactly the conditions a tyre gets replaced FOR, so leaving
+ * them out made the tracking blind to its own main case.
+ *
+ * Kept deliberately tight: it must never match "Good", which is 88% of every
+ * condition ever recorded and the one word that means nothing is wrong.
+ */
+const FAULT_RE = /damage|puncture|worn|wear|flat|burst|blast|\bcut\b|bulge|separat/i
+
+/**
+ * The subset that stops a vehicle rather than schedules work. A flat, a cut
+ * casing or a blowout is a road-safety item; a worn tyre is planned
+ * replacement. Both are tracked, and they are not the same urgency - raising
+ * everything as High would make High mean nothing.
+ *
+ * `flat` is in here deliberately: 60 of the recorded faults are flats, and a
+ * flat tyre is the one condition on the list where the vehicle cannot be driven
+ * at all.
+ */
+const SEVERE_RE = /damage|puncture|flat|burst|blast|\bcut\b|bulge|separat/i
 
 function conditionOf(value) {
   if (value == null) return ''
@@ -62,15 +105,33 @@ export function damagedPositions(inspection) {
     for (const entry of tc) {
       if (!entry || typeof entry !== 'object') continue
       const cond = conditionOf(entry)
-      if (DAMAGE_RE.test(cond)) out.push({ position: entry.position || '', condition: cond })
+      if (FAULT_RE.test(cond)) out.push({ position: entry.position || '', condition: cond })
     }
     return out
   }
   for (const [pos, val] of Object.entries(tc)) {
     const cond = conditionOf(val)
-    if (DAMAGE_RE.test(cond)) out.push({ position: pos, condition: cond })
+    if (FAULT_RE.test(cond)) out.push({ position: pos, condition: cond })
   }
   return out
+}
+
+/** True for a fault that should stop the vehicle rather than be scheduled. */
+export function isSevereCondition(condition) {
+  return SEVERE_RE.test(condition == null ? '' : String(condition))
+}
+
+/**
+ * The stop-the-vehicle subset of damagedPositions.
+ *
+ * The tyre map burns a wheel RED off this, not off the full fault list: wear is
+ * a fault and is tracked, but the app's own risk ladder puts it at warning, and
+ * painting 326 worn tyres the same red as a blowout would make red mean
+ * nothing. Both lists come from one place so the map and the flag can never
+ * disagree about what was recorded - only about how urgent it is.
+ */
+export function severePositions(inspection) {
+  return damagedPositions(inspection).filter((d) => isSevereCondition(d.condition))
 }
 
 function windowDate(r) {
@@ -110,8 +171,12 @@ export function conditionCounts(inspection) {
   for (const v of values) {
     const cond = conditionOf(v)
     if (!cond) continue
-    if (DAMAGE_RE.test(cond)) out.damage += 1
-    else if (WEAR_RE.test(cond)) out.wear += 1
+    // Wear is tested FIRST so a worn tyre is counted as wear rather than as
+    // damage - this breakdown exists to keep the two apart. Everything else the
+    // fault test recognises (flat, burst, cut) is damage; before this a burst
+    // tyre fell into "other", which is a category nobody looks at.
+    if (WEAR_RE.test(cond)) out.wear += 1
+    else if (FAULT_RE.test(cond)) out.damage += 1
     else if (GOOD_RE.test(cond)) out.good += 1
     else out.other += 1
   }
@@ -214,9 +279,12 @@ export function defectsForAction(inspection, flagMap = {}) {
       condition: d.condition,
       serial: '',
       title: `Tyre ${d.condition} at ${shown} on ${asset || 'asset'}`,
-      // A puncture or damaged casing is a road-safety item, not housekeeping.
-      priority: 'High',
-      description: `Inspection recorded "${d.condition}" at position ${shown}. Inspect and replace or repair the tyre before the vehicle returns to service.`,
+      // A cut casing or a blowout stops the vehicle; a worn tyre is planned
+      // replacement. Raising both as High would make High mean nothing.
+      priority: SEVERE_RE.test(d.condition) ? 'High' : 'Medium',
+      description: SEVERE_RE.test(d.condition)
+        ? `Inspection recorded "${d.condition}" at position ${shown}. Inspect and replace or repair the tyre before the vehicle returns to service.`
+        : `Inspection recorded "${d.condition}" at position ${shown}. Plan a replacement for this tyre.`,
     })
   }
 

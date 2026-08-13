@@ -8,7 +8,7 @@ import { loadAutoTable } from './pdfEngine'
 // thing that used them was the per-position reading table, which the report no
 // longer prints. They remain in inspectionView for the on-screen record.
 import {
-  RISK_LABEL, COND_TO_RISK,
+  RISK_LABEL, riskForCondition,
   normalizeTyreConditions, inspectionStats,
 } from './inspectionView'
 // The band judgement is bandFor and nothing else. The register flags a tyre as
@@ -502,7 +502,7 @@ const RISK_RGB = {
   critical: [...P.crimson],
   none:     [...P.iron],
 }
-// RISK_LABEL / COND_TO_RISK now come from ./inspectionView (imported above) so
+// RISK_LABEL / riskForCondition now come from ./inspectionView (imported above) so
 // the report and the on-screen viewer read a condition the same way.
 
 // ── Tyre Diagram Layouts ───────────────────────────────────────────────────────
@@ -636,9 +636,12 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
   // Tyres
   tyres.forEach(t => {
     const cond = tc[t.id]
+    // riskForCondition, not a bare COND_TO_RISK lookup: that map only knows the
+    // web form's words, so a field-app "Worn" or "Flat" drew a grey "No Data"
+    // wheel on the printed report while the inspector had reported a fault.
     const risk = (typeof cond === 'object')
-      ? (cond?.risk ?? (cond?.condition ? (COND_TO_RISK[cond.condition] ?? 'none') : 'none'))
-      : (COND_TO_RISK[cond] ?? 'none')
+      ? (cond?.risk ?? riskForCondition(cond?.condition))
+      : riskForCondition(cond)
     const [r, g, b] = RISK_RGB[risk] ?? RISK_RGB.none
     const tx = originX + t.x * scale
     const ty = originY + t.y * scale
@@ -2453,9 +2456,12 @@ function _buildRecommendations(riskCounts, totalT, row) {
   const hint = inspectionTypeHint(row)
   const named = (pos) => displayPositionCode(hint, pos) || pos
   Object.entries(tc).forEach(([pos, d]) => {
+    // Same reason as the diagram: an exact-match lookup banded every "Worn"
+    // and "Flat" as no-data, so the report made no recommendation at all for
+    // the two conditions the fleet records most often.
     const risk = typeof d === 'object'
-      ? (d?.risk ?? COND_TO_RISK[d?.condition] ?? 'none')
-      : (COND_TO_RISK[String(d)] ?? 'none')
+      ? (d?.risk ?? riskForCondition(d?.condition))
+      : riskForCondition(d)
     if (risk === 'critical') critPos.push(named(pos))
     if (risk === 'warning')  warnPos.push(named(pos))
     if (typeof d === 'object' && d?.pressure && Number(d.pressure) < 80) lowPsiPos.push(named(pos))

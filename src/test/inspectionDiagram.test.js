@@ -57,21 +57,44 @@ describe('inspectionDiagramModel - recorded vs unrecorded', () => {
 
 describe('inspectionDiagramModel - condition to band', () => {
   const cases = [
+    // the web form's words
     ['Good', 'good'],
     ['Wear', 'warning'],
     ['Damage', 'critical'],
     ['Puncture', 'critical'],
+    // and the FIELD APP's, which are different words for the same things. Every
+    // one of these used to fall through to 'none' and draw a grey "No Data"
+    // wheel - 386 readings on the live fleet - so the map said nobody had
+    // looked at a tyre an inspector had reported as worn or flat.
+    ['Worn', 'warning'],
+    ['Flat', 'critical'],
+    ['Damaged', 'critical'],
   ]
   it.each(cases)('%s maps to %s', (condition, risk) => {
     const m = inspectionDiagramModel(trimixer({ LHF1: { condition } }), { isTyreless })
     expect(m.tyreData.F1L.risk).toBe(risk)
   })
 
-  it('agrees with damagedPositions on a word the exact map misses', () => {
-    // "Damaged" is not a key in COND_TO_RISK, but damagedPositions flags it and
-    // the register shows a defect for it. The wheel must burn red too.
+  it('leaves a word nobody has defined as no-data rather than guessing a band', () => {
+    const m = inspectionDiagramModel(trimixer({ LHF1: { condition: 'Chalky' } }), { isTyreless })
+    expect(m.tyreData.F1L.risk).toBe('none')
+  })
+
+  it('agrees with the flag detection on a word the exact map misses', () => {
+    // "Damaged" is not a key in COND_TO_RISK, but the fault detection catches it
+    // and the register shows a defect for it. The wheel must burn red too.
     const m = inspectionDiagramModel(trimixer({ LHF1: { condition: 'Damaged sidewall' } }), { isTyreless })
     expect(m.tyreData.F1L.risk).toBe('critical')
+  })
+
+  it('does not paint a worn tyre the same red as a blowout', () => {
+    // Wear IS a fault and IS tracked and actioned - but if every fault burns
+    // red then red stops meaning "do not drive this vehicle", which is the one
+    // job the colour has on a wallboard.
+    const worn = inspectionDiagramModel(trimixer({ LHF1: { condition: 'Worn' } }), { isTyreless })
+    const burst = inspectionDiagramModel(trimixer({ LHF1: { condition: 'Flat' } }), { isTyreless })
+    expect(worn.tyreData.F1L.risk).toBe('warning')
+    expect(burst.tyreData.F1L.risk).toBe('critical')
   })
 })
 

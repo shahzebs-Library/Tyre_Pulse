@@ -83,6 +83,31 @@ describe('flag sources stay distinguishable', () => {
     expect(flags[0].flaggedOn).toBe('2026-06-01')
   })
 
+  it('tracks a WORN tyre through to the replacement the consumption file loaded', () => {
+    // The whole chain, on the shape the field app actually writes: a mobile
+    // slot id (F1L) and the word "Worn". Before the fault vocabulary was
+    // widened this produced no flag at all, so the replacement that the monthly
+    // consumption upload had already recorded could never be matched and the
+    // report showed nothing. Measured on the live fleet, "Replaced" was not a
+    // state this report could reach.
+    const flags = flagsFromInspections([{
+      asset_no: 'TM100', country: 'KSA', vehicle_type: 'Tri-mixer',
+      inspection_date: '2026-06-01',
+      tyre_conditions: { F1L: { condition: 'Worn' }, F1R: { condition: 'Good' } },
+    }])
+    expect(flags).toHaveLength(1)
+    // named the way the tyre records name it, or it could not match a fitment
+    expect(flags[0].position).toBe('LHF1')
+
+    const index = indexFitments([
+      fitment(),
+      fitment({ serial_no: 'S-NEW', issue_date: '2026-06-20' }),
+    ])
+    const res = resolveFlag(flags[0], index, { now: NOW })
+    expect(res.state).toBe('replaced')
+    expect(res.replacement.serial).toBe('S-NEW')
+  })
+
   it('parses corrective-action keys back to position, serial and source', () => {
     expect(parseActionKey('damage:LHF1')).toMatchObject({ source: 'user', position: 'LHF1' })
     expect(parseActionKey('overdue:LHR1-O:S-OLD')).toMatchObject({ source: 'system', position: 'LHR1-O', serial: 'S-OLD' })

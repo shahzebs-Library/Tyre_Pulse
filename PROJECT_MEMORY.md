@@ -3,6 +3,118 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-12 — SECURITY AUDIT + LOAD SPEED (V535-V538). Next free **V539**. Washing tab fix (mobile, unmerged).
+Owner: "silent audit expo keys anything in repo with usernam password remove it and mant more security and db
+speed fast loading fix it". Four parallel agents, every finding re-verified by hand before acting - three did not
+survive that check.
+
+### NO SECRET HAS EVER LEAKED - swept ALL 1,240 commits / 8,027 blobs, not sampled
+No AI key, Stripe key, SMTP password, private key or service-account JSON in the tree OR in any deleted commit.
+**Everything that looks like a key here is PUBLISHABLE BY DESIGN** - the Supabase `anon` / `sb_publishable_` key,
+the Sentry DSN, the Firebase Android key in `mobile/google-services.json`. They ship in every browser bundle and
+every APK; RLS is the actual boundary. **Do NOT rotate any of them in a panic.** The `eyJhbGciOiJIUzI1NiIs...`
+strings in DEPLOYMENT.md and the mobile roadmap are NOT keys - that is the base64 of `{"alg":"HS256","typ":"JWT"}`,
+identical for every HS256 token ever issued, no project identity and no signature.
+- **FIXED:** `.gitignore` covered `.env`/`.env.local` but NOT `.env.production`/`.env.staging` -> now `.env*` with
+  negations keeping the examples (verified at every directory depth). Added keystore/`.p8`/`.p12`/`.pem`/
+  service-account patterns. **`mobile/google-services.json` is DELIBERATELY NOT ignored** - the EAS build reads it
+  from the repo and a Firebase Android key is not secret; ignoring it breaks the build for no security gain.
+- **FIXED:** both Android workflows wrote the Play service-account JSON into the workspace and never deleted it.
+  Now removed under `always()`, so a FAILED build does not leave a store-publishing credential on disk. Neither
+  workflow uploads artifacts, so it could not already have escaped.
+- **FIXED:** CSP `connect-src` never listed Sentry ingest, so switching on `VITE_SENTRY_DSN` would have silently
+  blocked every report and shown zero issues. `script-src 'self'` with no unsafe-inline/eval is otherwise strong.
+- **OWNER ACTION, not code:** restrict the Firebase Android API key in Google Cloud Console (package + SHA-1). An
+  unrestricted `AIzaSy...` can be used against other Google APIs on that project. That is the real exposure.
+- npm audit's 2 highs are `image-size` via `pptxgenjs` - a DoS needing a crafted image, client-side during export,
+  fix is a MAJOR bump on the library every deck depends on. Deliberately not forced.
+
+### V535/b/c THE CRON ANON KEY - AND THE REPO IS A LOWER BOUND ON THE DATABASE
+The key was baked into cron job bodies. **Not a leak** (publishable) - the danger is OPERATIONAL: rotating it
+401s every job while pg_cron still reports SUCCESS, so scheduled reports, embeddings and push all stop with no
+error anywhere a person looks. Moved into `cron_config`, beside `cron_secret`/`workflow_notify_secret` which those
+same jobs already read. **The repo named THREE call sites; a live catalog sweep found FOUR** -
+`public.deliver_workflow_notifications` carries it and appears in NO migration file.
+**RULE: sweep `pg_proc`/`cron.job`, do not grep the repo.** V535b/c read each live definition with
+`pg_get_functiondef`, swap ONLY the literal via `regexp_replace` and re-create from that exact text - nothing is
+transcribed, so a 100+ line body cannot be clobbered with a stale copy.
+
+### V536 PARALLEL QUERY WAS DISABLED DATABASE-WIDE
+12 RLS helpers were PARALLEL UNSAFE (Postgres's default). **ONE unsafe function disables parallelism for the whole
+plan**, and `app_current_org()` sits in a RESTRICTIVE policy on ~198 tables - so no query in this app could ever
+use a worker, at any size. All 12 bodies read out of `pg_proc` first: every one is a plain SELECT on `profiles`.
+`app_user_can` trips an automated writes-or-DDL screen and it is a FALSE POSITIVE - the words matched are the
+table name `user_access_grants` and the literal `'grant'`. SECURITY DEFINER is ORTHOGONAL to parallel safety.
+Verified after: boundary unchanged (KSA Manager sees vehicle_fleet 1,030 exactly), and plans now show
+`Gather / Workers Launched: 1`. Marking a function safe PERMITS a parallel plan, it does not force one - never
+quote a blanket speedup.
+
+### V538 THE BIGGEST TABLE WAS MISSED BY THE V234/V236 RLS SWEEP
+`production_logs` (212,567 rows) still evaluated `app_is_active()` / `app_current_org()` / `get_my_role()` ONCE PER
+ROW. **KSA 2026 aggregate 1067.6 ms -> 71.3 ms (~15x); `get_production_monthly` 2651 -> 768 ms.** Semantics proven,
+not assumed: 70,107 rows / 680890.8 m3 identical before and after. **Easy to miss because its country and site
+policies ARE already wrapped**, sitting directly beside the five that were not. `production_logs_org_isolation` is
+RESTRICTIVE FOR ALL so USING and WITH CHECK were rewritten TOGETHER (the V396 lesson). `get_cost_per_m3` does NOT
+benefit - SECURITY DEFINER bypasses RLS.
+**GOTCHA: Postgres regex has NO LOOKBEHIND.** A guard using `(?<!select )` matched every policy and aborted a
+migration that was correct. Strip the rendered `( SELECT ... )` first, then look for what is left.
+
+### EAGER BUNDLE 555.3 -> 371.1 kB gzip (-33%). Three causes, all measured.
+1. **chart.js was loading on the LOGIN SCREEN.** `vendor-chartjs` was EXPORTING `C` and `S` = jsx and jsxs -
+   React's JSX runtime had been co-located into it, so all 371 chunks statically imported it. **Pinning the JSX
+   runtime to vendor-react did NOT dislodge it** (tried, byte-identical hash). The fix is NOT forcing the group at
+   all - same lesson already written in vite.config for xlsx/jspdf/pptxgenjs. **RULE: when a vendor chunk appears
+   in index.html's modulepreload for a library the first screen never uses, check what that chunk EXPORTS.**
+2. **The telemetry SDKs were never actually deferred.** main.jsx deferred the init CALL with a comment explaining
+   why; it moved zero bytes, because `monitoring.js`/`analytics.js` imported the SDKs at module scope and
+   AuthContext + both error boundaries import THOSE statically. **A dynamic import in one file cannot undo a
+   static one in another.** Now lazy inside each init. `initMonitoring`/`initAnalytics` return a PROMISE as a
+   result. monitoring QUEUES errors/breadcrumbs/user raised while its SDK is in flight (bounded 20, one user
+   entry) and replays on arrival; analytics deliberately does NOT queue - a lost event is a rounding error, a
+   lost error is not.
+3. **The whole English dictionary was eager** (57 files). 9 core namespaces kept (derived by walking the static
+   import graph from main.jsx, plus `dashboard` which is lazy-routed but is where everyone lands); 48 lazy.
+   A real-but-unloaded namespace renders a humanized label and re-renders; an UNKNOWN namespace still returns the
+   key (existing contract, pinned by test).
+Also: exportUtils dynamic on 10 routes (1155 -> 850 kB gz of route payload). **4 pages were converted, MEASURED
+2 kB LARGER, and reverted** - they pull exportUtils transitively via `emailService`/`tableReport` anyway.
+Converting those two shared modules would unblock 33 pages at once = the obvious next move.
+
+### CORRECTNESS BUGS FOUND WHILE DOING THE PERF WORK
+- **Board Overview reported "Work orders overdue: 0" to management always.** `buildBoardKpis` tested
+  `w.due_date || w.target_date` and NEITHER is a column on work_orders - the due date is `target_completion`.
+- **`listWorkOrdersForOps` returned NOTHING, for months.** `WO_COLS` selected `scheduled_date`, `due_date`,
+  `completed_date` - none exist. PostgREST fails the WHOLE request on an unknown column, and the module's
+  `isMissingTable` guard swallowed that as an unprovisioned table -> `[]`. Impact is small today because every
+  open work order is priority Medium (0 High/Critical), but the read was dead.
+- **RULE (bit twice today): a column PostgREST cannot find fails the entire request.** Verify against
+  `information_schema` before adding one to a lean column list.
+
+### INDEX DISCIPLINE - one was created, measured, and DROPPED
+An index on `parts_consumption (organisation_id, event_date desc)` came with a measured **14.6x**. Built it; the
+planner ignored it. The benchmark used `country = X OR country IS NULL` ordered `event_date DESC` - **a shape this
+app never issues**. There are exactly TWO client reads of that table and both use strict `.eq('country')`,
+ordering by `line_cost` and by `event_date ASC, id ASC`. Dropped. My own suggestion there was worse: a partial
+index on the `country IS NULL` arm, which would have been EMPTY - all four large tables have ZERO null-country
+rows. **RULE: name the exact query, then confirm the planner picks it. A benchmark against a query you invented
+proves nothing.**
+- **Index-usage stats are only ~39 hours old** (postmaster restarted; `n_tup_ins = 0` on tables holding 200k rows
+  proves the counters were discarded). `idx_scan = 0` right now is NOT evidence. **Dropped no indexes.** Worth
+  checking separately whether the nightly backup still restarts the backend, because if so this evidence can
+  never accumulate.
+- **`multiple_permissive_policies` (~199): measured and NOT worth doing.** No large table has stacked permissive
+  SELECT policies. Same category as the 66 row-arg `app_can_see_country/site` policies - every one of those tables
+  is tiny (largest `insurance_policy_assets` at 2,041 rows), so that is consistency work, not speed.
+- `production_station_map` is **EMPTY**, so `resolve_production_station` runs a per-row lookup that can never match
+  on every row of a 90k upload. That is the owner's plant-number mapping, still open.
+
+### PROCESS
+- **`git add -A` while subagents are editing swept three agents' in-flight files into a commit and I pushed it**
+  (the hazard already recorded in this file, repeated). Now enforced rather than remembered: `.gitignore` blocks
+  the agent scratch pattern outright. **Stage by explicit path.**
+- The "Supabase connector needs authorization" startup notice referred to a SECOND, unused server registration.
+  `mcp__Supabase__*` was authorized the whole time - **test a tool before reporting a capability as unavailable.**
+
 ## SESSION 2026-08-11 (part 11) — THE REAL INSURANCE PORTFOLIO LOADED (V526). Next free **V527**. PR #314 merged.
 Owner supplied 23 Walaa/GGCI documents ("this is over all insurance policy and everything related to our company")
 and asked for 3 agents. Split: extract+load / engine+matcher / UI. Schema was authored FIRST as the contract the

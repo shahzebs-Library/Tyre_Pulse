@@ -65,6 +65,26 @@ repair is not a machine leaving the fleet.
   the disposal register automatically, because whether a machine leaves the fleet is the committee's decision.
   Threshold reuses `SEVERITY_BANDS.critical`, never a second invented number.
 
+### INSPECTIONS GAINED A REGION FILTER, AND ITS FILTER ROW NOW COLLAPSES (code only)
+Owner: "add a region filter also to the inspection filters, the same way we hid it - when we need it, it shows".
+- **REGION IS NOT A COLUMN ON AN INSPECTION AND MUST NOT BECOME ONE.** It is recorded once, on the `sites`
+  register, and every other table carries only `site`. NEW pure helpers in `src/lib/api/sites.js` -
+  `siteRegionMap(rows)` / `regionForSite(map, site)` / `regionsIn(map, siteNames)` - are the ONE way to read it.
+  **RULE: to cut any register by region, go site -> sites.region through these helpers; never add a second
+  region column to a business table, it will drift from the register.**
+- **MEASURED BEFORE BUILDING: all 12 sites that carry inspections resolve to a region** (AMAALA/RED SEA/JEDDAH/
+  DHAHBAN WESTERN, NHC/DIRIYAH-G1/G2/QIDDIYA/RIY-MET/RIY-SAL/KSP-TP CENTRAL), and **no site maps to two
+  regions** - AMAALA is listed twice in `sites` but both rows agree. `siteRegionMap` still resolves a duplicate
+  deterministically (first row that NAMES a region wins) so one site can never fall into two regions on two
+  screens.
+- Honest edges, each pinned by test: a site the register does not place returns `''` and is **EXCLUDED** while a
+  region is selected rather than swept into whichever region was picked; `regionsIn` offers only the regions the
+  **rows on screen** belong to (a region that exists in the registry but has nothing on screen would be a choice
+  that returns nothing); and the whole control **does not render** when no site on screen has a region.
+- Filter row now matches the ACCIDENT REGISTER exactly: search + status pills stay out, Region / Site /
+  Inspector / From / To collapse behind one **`Filters (N)`** toggle with a Clear and an "N of M shown" count.
+  Inspector filter added at the same time (the search box only matched it as free text).
+
 ### WHAT WAS DELIBERATELY NOT CHANGED
 - **`positionKey`/`wheelKey` in tyreChangeTracking were rewritten to convert through the axle layout, then
   REVERTED.** `baseFlag` already converts (it is the only place that still knows the vehicle), and the change

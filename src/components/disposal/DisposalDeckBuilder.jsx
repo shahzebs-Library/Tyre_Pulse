@@ -393,6 +393,11 @@ function SlidePreview({ slide, deck, registerChart }) {
               <C
                 data={cfg.data}
                 options={cfg.options}
+                // The value-labels plugin. It has to be passed here as well as
+                // in the offscreen renderer, or the preview shows numbers the
+                // exported slide does not - and the preview IS the export,
+                // since chartImageFor rasterises this canvas.
+                plugins={cfg.plugins}
                 ref={(inst) => registerChart(slide.id, inst)}
               />
             </div>

@@ -30,6 +30,13 @@
  */
 import { buildDeck } from './assetDisposalDeck'
 import { withAlpha } from './reportColors'
+// The value-label plugin and the doughnut legend counter are REUSED from the
+// accident report rather than reimplemented. That one already handles the parts
+// that are easy to get wrong - overlap avoidance from real text metrics, bar-h
+// placement at the end of the bar, stacked totals rather than per-segment
+// numbers, and skipping a fitted trend dataset so a modelled figure is never
+// printed as if it were measured.
+import { makeValueLabelsPlugin, doughnutLegendCounts } from './accidentReport'
 import { PAPER_FONT_PT, PRINT_SCALE } from './chartCapture'
 import { loadPdf } from './pdfEngine'
 import { reportFileName, reportDateLabel } from './exportUtils'
@@ -209,13 +216,30 @@ export function slideChartConfig(slide, { paper = false, fontScale = 1 } = {}) {
     maintainAspectRatio: false,
     animation: false,
     indexAxis: horizontal ? 'y' : 'x',
+    // Room for the value drawn above each bar or point. Without this the top
+    // label is clipped by the canvas edge on the tallest bar - which is the one
+    // a reader most wants the number for.
+    layout: { padding: { top: Math.round(px(PAPER_FONT_PT.valueLabel) * 1.4), right: horizontal ? Math.round(px(PAPER_FONT_PT.valueLabel) * 3) : 0 } },
     plugins: {
       legend: {
         display: viz === 'doughnut',
         position: 'right',
-        labels: { color: ink, font: { size: px(PAPER_FONT_PT.legend) }, boxWidth: Math.round(9 * (fontScale || 1)), padding: Math.round(6 * (fontScale || 1)) },
+        labels: {
+          color: ink,
+          font: { size: px(PAPER_FONT_PT.legend) },
+          boxWidth: Math.round(9 * (fontScale || 1)),
+          padding: Math.round(6 * (fontScale || 1)),
+          // A doughnut gets its numbers in the legend, not on the slices: a
+          // label drawn inside a thin slice is unreadable and overlaps its
+          // neighbours. Same treatment the accident report already uses.
+          ...(viz === 'doughnut' ? { generateLabels: doughnutLegendCounts } : null),
+        },
       },
       tooltip: { enabled: !paper },
+      // Read by the value-labels plugin below. Colour follows the paper/screen
+      // ink so the number is legible on either, and the size follows fontScale
+      // so a 3x print capture does not draw 10px text into a 2700px canvas.
+      valueLabels: { enabled: true, color: ink, size: px(PAPER_FONT_PT.valueLabel) },
     },
   }
   if (viz !== 'doughnut') {
@@ -224,8 +248,19 @@ export function slideChartConfig(slide, { paper = false, fontScale = 1 } = {}) {
       y: { ticks: { color: tick, font: { size: px(PAPER_FONT_PT.tick) } }, grid: { color: horizontal ? 'transparent' : grid }, beginAtZero: true },
     }
   }
-  return { type: CHART_JS_TYPE[viz], data: { labels, datasets: [dataset] }, options }
+  // `plugins` is returned ALONGSIDE the config rather than folded into it,
+  // because chart.js takes instance plugins as a sibling of options - and both
+  // consumers (the live preview and the offscreen renderer) have to pass it on
+  // for the numbers to appear. A doughnut needs none: its values are in the
+  // legend, and the plugin ignores that type anyway.
+  const plugins = viz === 'doughnut' ? [] : [VALUE_LABELS]
+  return { type: CHART_JS_TYPE[viz], data: { labels, datasets: [dataset] }, options, plugins }
 }
+
+// One instance for every deck chart. The per-chart colour and size come from
+// options.plugins.valueLabels above, which the plugin reads first, so a single
+// instance serves both the dark preview and the white paper capture.
+const VALUE_LABELS = makeValueLabelsPlugin(`#${BRAND.ink}`)
 
 const hexify = (c) => (Array.isArray(c) ? `#${hex6(c[0])}` : `#${hex6(c)}`)
 
@@ -270,7 +305,9 @@ export async function renderOffscreenChart(slide, { widthPt = 900, aspect = 0.5,
         c.fillStyle = '#ffffff'; c.fillRect(0, 0, chart.width, chart.height); c.restore()
       },
     }
-    const inst = new Chart(ctx2d, { ...cfg, options: { ...cfg.options, devicePixelRatio: 1 }, plugins: [whiteBg] })
+    // cfg.plugins carries the value-labels plugin; dropping it here would give
+    // the headless render no numbers while the on-screen preview showed them.
+    const inst = new Chart(ctx2d, { ...cfg, options: { ...cfg.options, devicePixelRatio: 1 }, plugins: [whiteBg, ...(cfg.plugins || [])] })
     const img = canvas.toDataURL('image/png')
     inst.destroy()
     return img && img.startsWith('data:image/png') && img.length > 200 ? img : null

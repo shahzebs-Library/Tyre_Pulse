@@ -3,7 +3,13 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-13 (part 3) — THE APP ONLY UNDERSTOOD HALF ITS OWN CONDITION VOCABULARY. No migration; next free **V542**.
+## SESSION 2026-08-13 (part 3) — CLOSED CLEAN. THE APP ONLY UNDERSTOOD HALF ITS OWN CONDITION VOCABULARY.
+No migration this part; next free **V542**. PRs #328 + #329 MERGED to main; branch == origin/main ==
+`6e74e748`, nothing uncommitted or unpushed. Full suite **7,534 tests / 497 files green**, lint 0 errors, web
+build clean, **mobile untouched** (standing owner instruction).
+**BOTH PRODUCTION DEPLOYS VERIFIED READY, not assumed** (the standing rule - a green CI run and a merged PR
+prove nothing about the deployed site): `c0d5e6d` (#328, tyre faults) and `6e74e748` (#329, breakdowns on the
+disposal page + the inspections region filter), each `target: production`, `ref: main`.
 Owner: "the tyres which was marked inside a report now replaced, I used it through monthly consumption but still
 not marked as a replacement". Reproduced, root-caused and fixed; the replacement matching was never the fault.
 
@@ -93,6 +99,36 @@ Owner: "add a region filter also to the inspection filters, the same way we hid 
   value. Position conversion was measured and is NOT the fault: all 12 mixer slots map and the wheel keys agree.
 - The web checklist tab's own exact `p.condition === 'Damage' || 'Puncture'` comparisons are LEFT ALONE - that
   form writes those exact values itself, so an exact test is correct there.
+
+### OPEN - WITH THE OWNER, NOT WITH THE CODE
+- **IP065 has been down 218 days** (evaporator coil, waiting parts from China, 22 job cards, still `status`
+  Active). It now appears in "Down long enough to consider" on `/asset-disposals`. **Nothing put it on the
+  disposal register and nothing should** - that is the committee's decision.
+- **The Downtime column reads "Not recorded" on ALL 37 disposal rows today, and that is CORRECT.** None of the
+  30 broken machines is currently proposed for disposal; the two sets do not overlap at all. It populates the
+  moment they do. Do NOT "fix" this by defaulting the column to 0.
+- **43 of the 258 tyre flags resolve to "could not tell"**, every one for the same honest reason: no fitment row
+  was uploaded for that asset+position. More monthly consumption coverage is the only thing that moves it.
+- The app is a prompt-mode PWA with `skipWaiting:false`, so an open tab keeps its old build until the user
+  accepts the update or closes every tab. **Before diagnosing "the fix did not work", have them reload.**
+
+### PROCESS - WHAT IS WORTH REPEATING FROM THIS PART
+- **THE PROOF THAT SETTLED IT WAS THE REAL DATA THROUGH THE REAL ENGINE, BEFORE AND AFTER.** Pull the live rows
+  into a JSON blob, drop a THROWAWAY test under `src/test/` that imports the actual modules, run it, then
+  `git stash` the fix and run it again to get the BEFORE. That is what turned "the flag detection looks wrong"
+  into "replaced was not a state this report could reach: 0 -> 11". Two mechanics: `npx vitest run` swallows
+  `console.log`, so write results to a file instead; and an MCP SQL result over ~1 MB is saved to a file whose
+  wrapper needs `rfind` for the opening `<untrusted-data-` tag (the preamble contains the same string, so a
+  plain `find` lands in the wrong place).
+- **A BOT REVIEW COMMENT CAN BE RIGHT ABOUT DEAD CODE THAT PREDATES YOU.** CheckCircle2 / ChevronLeft /
+  ChevronRight were already unused on main; the bot flagged them because this branch touched that import line.
+  Checked against `git show origin/main:<file>` before claiming either way, then removed them - eslint here does
+  NOT error on an unused import, so they had survived every lint run.
+- **BATCHING IS THE DEFAULT** (standing owner instruction): the region filter went onto the SAME branch as the
+  disposal work and into the SAME PR #329, so ten changes cost one production build rather than ten.
+- The stop hook reported "1 unpushed commit" AFTER the squash-merge; that is the already-recorded post-squash
+  artifact, cleared by `git checkout -B <branch> origin/main`. Verify with `git rev-parse` on all three refs
+  rather than pushing anything.
 
 ## SESSION 2026-08-13 (part 2) — TYRE LIFE JUDGED ON THE RIGHT METER (V541) + FORECASTS NAME THEIR PERIOD. Next free **V542**.
 

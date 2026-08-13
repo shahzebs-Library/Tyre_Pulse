@@ -3,6 +3,55 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-13 (part 3) — THE APP ONLY UNDERSTOOD HALF ITS OWN CONDITION VOCABULARY. No migration; next free **V542**.
+Owner: "the tyres which was marked inside a report now replaced, I used it through monthly consumption but still
+not marked as a replacement". Reproduced, root-caused and fixed; the replacement matching was never the fault.
+
+### `DAMAGE_RE = /damage|puncture/i` THREW AWAY 93% OF EVERY FAULT AN INSPECTOR EVER RECORDED
+The recorded vocabulary is exactly SIX words, counted live over every inspection:
+**Good 3,279 · Worn 326 · Flat 60 · Damaged 21 · Puncture 8 · Wear 4.** The regex matched only Damaged and
+Puncture, so **390 of 419 faults never became a flag** - no tracking row, no corrective action, and, because a
+flag that never existed cannot be matched to anything, **no replacement either**. That is the owner's bug
+exactly: the fitter changed the tyre, the monthly consumption file loaded the new one, and the report showed
+nothing. Every same-position replacement in the data was flagged **"Worn"**.
+- **PROVEN END TO END on the real 307 inspections + 3,833 fitments, through the real engine, before and after:**
+  BEFORE faults 29 -> flags 29 -> states `{unknown 10, on_vehicle 17, removed_not_replaced 2}` - **"replaced" was
+  not a state this report could reach.** AFTER faults 419 -> flags 258 -> `{on_vehicle 182, unknown 43,
+  removed_not_replaced 22, replaced 11}`, each matched to a real serial and fitment date (TM400 RHCO -> YMA55312
+  fitted 2026-07-30, MP093 LHF2 -> 2436326847, TM374 LHCI (Flat) -> YMA55310 ...). The 43 unknowns are honest:
+  no fitment row was uploaded for that asset+position.
+- **THE CAUSE IS TWO VOCABULARIES, AND IT BITES IN MORE THAN ONE PLACE.** The WEB form writes
+  Good/Wear/Damage/Puncture; the FIELD APP writes Good/**Worn**/**Flat**/**Damaged**/Puncture. Anything keyed on
+  the web's four words is blind to most of what the fleet actually records. **RULE: match tyre conditions by
+  STEM (`FAULT_RE` / `riskForCondition`), never by an exact word list.**
+
+### THE SAME GAP WAS ALSO PAINTING 386 REPORTED FAULTS AS GREY "NO DATA"
+`COND_TO_RISK` is an exact-match map of the web's four words, so `Worn` and `Flat` fell through to `'none'`,
+which the legend prints as **No Data** - the tyre map, the register and the signed PDF all said nobody had
+looked at a wheel an inspector had reported as worn or flat. (`Damaged` escaped only because the diagram
+separately rescued it through `damagedPositions`.) NEW `riskForCondition(condition)` in `inspectionView.js`:
+exact map first (it still owns its words), then stems, then **`'none'` for a word nobody has defined** - an
+unrecognised condition is admitted, never given an invented band. Routed through `normalizeTyreConditions`, both
+`exportUtils` risk lookups (diagram + the recommendations block, which produced NO recommendation at all for the
+two conditions the fleet records most often) and the site-summary PDF's Good/Wear/Damage bucket.
+- **WEAR IS A FAULT BUT IT IS NOT A BLOWOUT.** `severePositions` / `isSevereCondition` (damage|puncture|flat|
+  burst|blast|cut|bulge|separat) is the stop-the-vehicle subset: the diagram burns RED off that, `bandFor`-style
+  wear stays amber, and `defectsForAction` raises **High** for severe and **Medium** for wear with wording to
+  match. Painting 326 worn tyres the same red as a blowout would make red mean nothing on a wallboard - which is
+  exactly what my first pass did, and the existing `inspectionDiagram` tests caught it ("Wear maps to warning").
+  **Those two failures were the tests being right; do not "fix" them by widening the red set.**
+- `conditionCounts` now tests WEAR FIRST then the fault stems, so a worn tyre counts as wear and a burst one
+  counts as damage instead of falling into "other", a bucket nobody reads.
+
+### WHAT WAS DELIBERATELY NOT CHANGED
+- **`positionKey`/`wheelKey` in tyreChangeTracking were rewritten to convert through the axle layout, then
+  REVERTED.** `baseFlag` already converts (it is the only place that still knows the vehicle), and the change
+  would have keyed `indexFitments` on the row's `vehicle_type` while `resolveFlag` keyed on the asset code - two
+  different layouts, so the two sides would stop matching. It also skipped `canonicalCode` on the converted
+  value. Position conversion was measured and is NOT the fault: all 12 mixer slots map and the wheel keys agree.
+- The web checklist tab's own exact `p.condition === 'Damage' || 'Puncture'` comparisons are LEFT ALONE - that
+  form writes those exact values itself, so an exact test is correct there.
+
 ## SESSION 2026-08-13 (part 2) — TYRE LIFE JUDGED ON THE RIGHT METER (V541) + FORECASTS NAME THEIR PERIOD. Next free **V542**.
 
 ### THE RUNNING & REMAINING STATE WAS JUDGED ON A METER NOBODY MANAGES THE MACHINE BY

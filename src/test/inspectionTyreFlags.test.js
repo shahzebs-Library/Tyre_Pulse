@@ -53,8 +53,29 @@ describe('damagedPositions', () => {
     } })
     expect(out).toEqual([
       { position: 'LHF1', condition: 'damage' },
+      // Wear is a fault: it is the condition a tyre is most often replaced FOR.
+      // This assertion used to exclude it, which is what made the tracking
+      // blind to its own main case.
+      { position: 'RHF1', condition: 'Wear' },
       { position: 'RHR1', condition: 'Puncture' },
     ])
+  })
+
+  it('flags every fault an inspector can actually record, and never a good tyre', () => {
+    // Measured on the live KSA inspections: Good 3,187, Worn 326, Flat 60,
+    // Damaged 21, Puncture 8. Only the last two were being flagged, so 93% of
+    // recorded faults never reached the system.
+    const out = damagedPositions({ tyre_conditions: {
+      LHF1: { condition: 'Good' },
+      LHF2: { condition: 'Worn' },
+      RHF1: { condition: 'Flat' },
+      RHF2: { condition: 'Damaged' },
+      LHCI: { condition: 'Puncture' },
+      LHCO: { condition: 'OK' },
+    } })
+    expect(out.map((d) => d.position).sort()).toEqual(['LHCI', 'LHF2', 'RHF1', 'RHF2'])
+    // the one word that means nothing is wrong must never be flagged
+    expect(out.some((d) => /good|ok/i.test(d.condition))).toBe(false)
   })
 
   it('parses a JSON string and returns [] on garbage', () => {

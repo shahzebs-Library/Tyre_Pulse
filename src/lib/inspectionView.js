@@ -19,11 +19,39 @@ import {
   vehicleTypeIsKnown, slotDisplayCode as slotCode, displayPositionCode,
   inspectionTypeHint,
 } from './tyreBay'
-import { damagedPositions } from './inspectionTyreFlags'
+import { severePositions, isSevereCondition } from './inspectionTyreFlags'
 
-/** Condition word -> risk band. The vocabulary the app writes. */
+/** Condition word -> risk band. The vocabulary the WEB form writes. */
 export const COND_TO_RISK = {
   Good: 'good', Wear: 'warning', Damage: 'critical', Puncture: 'critical', None: 'none',
+}
+
+/**
+ * Risk band for a recorded condition, whichever surface recorded it.
+ *
+ * COND_TO_RISK is an EXACT match on the web form's four words, but the field
+ * app writes a different set - Good / Worn / Flat / Damaged / Puncture - and
+ * every word it does not share fell through to 'none', which the legend prints
+ * as "No Data". Counted live: 326 Worn and 60 Flat readings, every one drawn as
+ * a grey wheel nobody had looked at, when in fact an inspector had reported a
+ * fault on it. ('Damaged' escaped only because the diagram separately rescued
+ * it through damagedPositions.)
+ *
+ * So the exact map is tried first - it stays the definition for the words it
+ * owns - and anything else is resolved by stem. An unrecognised word still
+ * returns 'none': inventing a band for a condition nobody has defined would be
+ * worse than admitting we cannot read it.
+ */
+export function riskForCondition(condition) {
+  const s = condition == null ? '' : String(condition).trim()
+  if (!s) return 'none'
+  if (COND_TO_RISK[s]) return COND_TO_RISK[s]
+  // Wear is tested before the fault stems so "worn" is a warning, not a
+  // critical - the same order, and the same reason, as conditionCounts.
+  if (/wear|worn/i.test(s)) return 'warning'
+  if (isSevereCondition(s)) return 'critical'
+  if (/good|\bok\b/i.test(s)) return 'good'
+  return 'none'
 }
 
 /** Risk band -> label. 'none' is "no data", not "no risk". */
@@ -70,7 +98,7 @@ export function normalizeTyreConditions(source) {
     if (data && typeof data === 'object') {
       const condition = firstDefined(data.condition)
       out[pos] = {
-        risk: data.risk ?? (condition ? (COND_TO_RISK[condition] ?? 'none') : 'none'),
+        risk: data.risk ?? riskForCondition(condition),
         // Mobile stores pressure_psi / tread_depth_mm; the web form stores
         // pressure / treadDepth. All of them mean the same reading.
         pressure: reading(firstDefined(data.pressure, data.pressure_psi, data.psi)),
@@ -83,7 +111,7 @@ export function normalizeTyreConditions(source) {
     } else {
       const condition = data == null || data === '' ? null : String(data)
       out[pos] = {
-        risk: condition ? (COND_TO_RISK[condition] ?? 'none') : 'none',
+        risk: riskForCondition(condition),
         pressure: null, tread: null, condition, notes: null, label: null, photo: null,
       }
     }
@@ -353,12 +381,14 @@ export function inspectionDiagramModel(row, { isTyreless } = {}) {
   const normTc = normalizeTyreConditions(row)
   const stats = inspectionStats(normTc)
 
-  // Damage and puncture are judged by damagedPositions - the same function that
-  // raises the register's "tyres due" flag and the corrective action. A word it
-  // catches that the exact-match condition map does not ("Damaged") must still
-  // burn the wheel red, or the map would contradict the flag on a safety item.
+  // The red set is severePositions - the stop-the-vehicle subset of the same
+  // detection that raises the register's flag and the corrective action. A word
+  // it catches that the exact-match condition map does not ("Damaged") must
+  // still burn the wheel red, or the map would contradict the flag on a safety
+  // item. Wear is deliberately NOT here: it is a fault and it is tracked, but
+  // the ladder puts it at warning and riskForCondition already colours it.
   const damagedSlots = new Set()
-  for (const d of damagedPositions(row)) {
+  for (const d of severePositions(row)) {
     const slot = canonicalToSlotId(typeHint, d.position)
     if (slot) damagedSlots.add(slot)
   }

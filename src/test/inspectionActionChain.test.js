@@ -35,6 +35,25 @@ describe('defectsForAction', () => {
     expect(d.every(x => x.priority === 'High')).toBe(true)
   })
 
+  it('separates a stop-the-vehicle fault from planned replacement', () => {
+    // Every fault an inspector can record is now actioned, but they are not all
+    // the same urgency: a flat or a cut casing means the vehicle should not
+    // move, a worn tyre means book the change. Raising all of them as High
+    // would make High mean nothing, which is how a real puncture gets lost in
+    // a list of routine wear.
+    const d = defectsForAction(inspection({ tyre_conditions: {
+      LHF1: { condition: 'Worn' },
+      RHF1: { condition: 'Flat' },
+      LHR1: { condition: 'Damaged' },
+      RHR1: { condition: 'Good' },
+    } }))
+    const by = Object.fromEntries(d.map((x) => [x.position, x.priority]))
+    expect(by).toEqual({ LHF1: 'Medium', RHF1: 'High', LHR1: 'High' })
+    // and the wording follows the urgency, so the two do not contradict
+    expect(d.find((x) => x.position === 'LHF1').description).toMatch(/plan a replacement/i)
+    expect(d.find((x) => x.position === 'RHF1').description).toMatch(/before the vehicle returns to service/i)
+  })
+
   it('uses the SAME damage detection the register flags with', () => {
     const insp = inspection()
     const flagged = damagedPositions(insp).map(p => p.position).sort()

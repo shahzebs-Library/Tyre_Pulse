@@ -15,6 +15,7 @@
  */
 import { Download } from 'lucide-react'
 import { forecastTableRows } from '../../lib/tyreDemandForecast'
+import { windowFromMonths } from '../../lib/forecastPeriod'
 import { reportFileName, exportToExcel } from '../../lib/exportUtils'
 
 const CONF_TONE = {
@@ -35,6 +36,10 @@ export default function TyreForecastSection({ forecast, country, currency = '', 
   const grandNext = rows.reduce((a, r) => a + r.forecastTotal, 0)
   const grandSpend = forecast.totals?.projectedSpend ?? null
   const gaps = rows.filter((r) => r.total > 0 && (r.pricedPct == null || r.pricedPct < 60))
+  // Read off the forecast's own month axis, so the caption and the numbers can
+  // never describe different months. `now` is passed so a data set that has
+  // fallen behind the calendar says so.
+  const win = windowFromMonths(forecast, new Date())
   function exportXlsx() {
     const keys = ['size', 'total', 'avgPerMonth', 'trend', ...fmLabels.map((_, i) => `f${i}`), 'forecastTotal', 'avgUnitCost', 'pricedPct', 'projectedSpend', 'confidence']
     const headers = ['Size', 'Used (12 mo)', 'Avg / month', 'Trend', ...fmLabels, 'Next months total', `Cost/tyre (${currency})`, 'Priced %', `Projected spend (${currency})`, 'Confidence']
@@ -49,15 +54,22 @@ export default function TyreForecastSection({ forecast, country, currency = '', 
       r.forecast.forEach((v, i) => { o[`f${i}`] = v })
       return o
     })
-    exportToExcel(out, keys, headers, `${reportFileName(filePrefix, 'Tyre forecast by size', country || 'All')}.xlsx`)
+    exportToExcel(out, keys, headers,
+      // The window goes in the FILE NAME: a forecast sheet found on a desktop
+      // three months later is unreadable unless it says which months it covers.
+      `${reportFileName(filePrefix, 'Tyre forecast by size', country || 'All', win.ok ? `${win.historyFrom} to ${win.historyTo}` : '')}.xlsx`)
   }
   return (
     <div className="card space-y-3">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Tyre demand forecast by size</h3>
+          {/* The months, named. "The last 12 months" is not the same statement
+              as "Sep 2025 to Aug 2026", and only the second one can be checked
+              against the file you uploaded. */}
+          <p className="text-xs font-medium text-[var(--text-secondary)]">{win.label}</p>
           <p className="text-xs text-[var(--text-tertiary)]">
-            Tyres fitted per size over the last 12 months, projected {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'} ahead
+            Tyres fitted per size, projected {fmLabels.length} month{fmLabels.length === 1 ? '' : 's'} ahead
             ({fmLabels.join(', ') || 'next months'}). Sizes are cleaned so spelling variants (315/80 R 22.5 vs 315/80R22.5) count as one.
             Trend when there is enough history, else a recent average. Whole tyres, floored at zero. Projected spend = forecast x average cost per tyre.
           </p>
@@ -80,6 +92,11 @@ export default function TyreForecastSection({ forecast, country, currency = '', 
           </span>
         )}
       </div>
+      {win.note && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+          {win.note}
+        </div>
+      )}
       {gaps.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
           Cost gap: {gaps.length} size{gaps.length === 1 ? '' : 's'} have little or no unit-price data, so their projected spend is missing or approximate

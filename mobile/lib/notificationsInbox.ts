@@ -103,6 +103,7 @@ export function notificationIcon(n: Pick<AppNotification, 'type' | 'entity_type'
   if (k.includes('parts')) return 'cube-outline'
   if (k.includes('inspection')) return 'clipboard-outline'
   if (k.includes('accident') || k.includes('incident')) return 'warning-outline'
+  if (k.includes('broadcast')) return 'megaphone-outline'
   if (k.includes('alert')) return 'notifications-outline'
   return 'notifications-outline'
 }

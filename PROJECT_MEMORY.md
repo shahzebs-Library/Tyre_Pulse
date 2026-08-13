@@ -3,6 +3,143 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-13 (part 2) — TYRE LIFE JUDGED ON THE RIGHT METER (V541) + FORECASTS NAME THEIR PERIOD. Next free **V542**.
+
+### THE RUNNING & REMAINING STATE WAS JUDGED ON A METER NOBODY MANAGES THE MACHINE BY
+Owner: "assets type is not included in running remaining life, life behaviour also not correct". Both true.
+- **`bandFor` read `remainingKm` FIRST and fell back to hours only when km was absent.** Pumps, wheel loaders and
+  skid loaders are worked in HOURS but they DRIVE TO SITE, so they nearly always carry a distance - which won.
+  Measured live: **815 tyres on hour-measured assets, 482 judged on km, 56 where the two dimensions DISAGREED**
+  about end of life. The row already carried `unit` (the server derives it from vehicle_type); it was ignored.
+- **THEN THE FIRST FIX WAS HALF WRONG and the owner caught it: "pump both should be there, which comes first".**
+  Making hours strictly govern discarded the km target they had ALSO set. `tyre_life_targets` shows PUMPS with
+  **target_km 30,000 AND target_hours 5,000** - both deliberate. **ALL 719 KSA pump tyres carry both targets and
+  on 73 the DISTANCE is further along.** So neither meter may win by default.
+- **THE RULE IS NOW: each budget judged against its OWN limits, worst verdict wins = whichever runs out first.**
+  `measureFor(row)` returns `{remaining,used,soon,dimension,band,onFallback,leadingOther,km,hours,both}`;
+  `bandFor` is a thin wrapper. Tie goes to the machine's own unit so the screen leads with the familiar figure.
+  `budgetsFor(row)` publishes both sides for the detail modal (marked with the one running out first).
+- **`measureNote` speaks on exactly two occasions** - own meter never read (fallback), or the OTHER budget leads -
+  and is silent otherwise. A note on every row is a note nobody reads.
+- **SIX OTHER SURFACES showed the km-first percentage beside a state judged the new way** (table cell + export
+  value, tyreLifeReportPdf, 2x exportUtils, Inspections). All repointed to `measureFor(r).used`, so badge and
+  number can never contradict, and the printed copy matches the screen.
+- **`isHoursUnit()` exists because the token is spelled TWICE**: the server says `engine_hours`, `shapeRow` folds
+  it to `hours`. **A PRE-EXISTING BUG this exposed: `coverage()` tested only `'engine_hours'` on a SHAPED row, so
+  `onHours` could never rise above 0** and every plant tyre was reported as a missing-odometer backlog instead.
+- **Asset type is now a FILTER** (`filterRows({vehicleType})` + `vehicleTypesIn(rows)` derived from the loaded
+  rows), not just a column. Named in `filterDescription` so a saved export says which types it covers.
+
+### V541 - THE SERVER'S DUE-ONLY FILTER HAD THE SAME BUG, so Inspections never saw those tyres
+`get_tyre_running_life`'s `is_due` was `case when rem_km is not null then (km rule) when rem_hours is not null
+then (hours rule) else false end` - same read-one-side-first. The Inspections page fetches `p_due_only`, so a
+tyre spent on hours was **never returned to that page at all**. Now the UNION of the two budgets.
+**MEASURED BEFORE AND AFTER: due 415 -> 431, sixteen newly visible, ZERO lost.** Applied by `regexp_replace` on
+the LIVE `pg_get_functiondef` text with a guard that aborts unless the block is found EXACTLY ONCE (the V535b
+pattern) - an 8.7k-char body is never retyped by hand.
+**MIRROR RULE: `src/test/tyreRunningLifeBands.test.js` now pins BOTH the thresholds AND the SHAPE of the rule,
+and names MIGRATIONS_V541_*.sql. Change both sides together.**
+
+### FORECASTS NEVER SAID WHICH MONTHS THEY COVER
+Owner: "i want to know which period i selected for forecasting". Every forecast here is anchored to the LATEST
+MONTH THAT HAS DATA, not to the clock (`dataAnchor` = max issue_date). That is correct - projecting from a month
+nobody uploaded projects from zero - but it made the horizon control mislead by omission: "Next 3 Months" never
+said WHICH three, so a forecast built on July files looked identical to a current one.
+- NEW pure `src/lib/forecastPeriod.js` (17 tests): `monthName` / `monthsBetween` / `forecastWindow({anchor,
+  historyMonths,ahead,now})` -> `{historyFrom,historyTo,forecastFrom,forecastTo,stale,staleMonths,label,note}` /
+  `staleNote` / `windowFromMonths(fc)` (reads the window off a demand forecast's OWN month axis so caption and
+  numbers cannot describe different months).
+- **`now` DEFAULTS TO THE ANCHOR, deliberately**: a caller that did not say what day it is must read as up to
+  date, never as a fabricated month-behind warning.
+- **`toDate` parses 'YYYY-MM'/'YYYY-MM-DD' LOCALLY** - `new Date('2026-08-01')` is UTC midnight and rolls the
+  month back for a negative offset. Pinned by test.
+- Surfaced: ForecastingEngine (period line under the horizon buttons + amber stale banner), TyreForecastSection
+  (window line + stale note + **the window is in the Excel FILE NAME** - a sheet found months later is
+  unreadable otherwise), YearlyTrendPanel (`spanLabel` from its own labels, matters most on compact embeds).
+
+### PROCESS
+- **NO MOBILE CHANGES in part 2** (owner: "dont do anything with mobile app"); verified `git status -- mobile/`
+  empty before committing.
+- The owner said "merged to main" three times while `main` was still at `5561f94` and **no PR existed** - checked
+  via `mcp__github__list_pull_requests`, not assumed. **PR #326 opened on request.** RULE: verify the merge
+  against GitHub before believing it; a pushed branch is not a merged branch.
+- Full suite **7,505 tests / 496 files** green; web build + lint 0 errors; mobile tsc 0.
+
+### OPEN
+- **98 of 227 KSA transit mixers have NO odometer reading while ALL 227 have engine hours.** Their tyres stay
+  unmeasurable because the TR-MIXER target is km-only. Either log odometer readings or set an hours target for
+  TR-MIXER - **do not invent one**.
+
+## SESSION 2026-08-13 — THE ASSET SHEET'S OTHER TWO TABS (V539/V540). Next free **V541**.
+Owner sent `ASSETS_LIST__UPDATED_1282026.xlsx`: "master list of assets with updates, correct it or match it with
+our asset list, other 2 sheets needs to asset disposal list and also filter option should be there".
+
+### THE SHEET ADDED NOTHING TO THE REGISTER'S IDENTITY AND EVERYTHING TO ITS OPERATIONS - measured first
+Its 618 asset codes are **the SAME 618 the owner sent on 2026-08-11**, all already in `vehicle_fleet`: sheet-only
+assets **0**, plate conflicts **0**, model-year conflicts **0** (V505 had already filled those). What is genuinely
+new: **173 site moves, 75 status changes**, and two columns the register has NEVER carried.
+- **V539** `vehicle_fleet.ops_status` (+ `_note`/`_at`) + **`capacity`** + **`engine_no`**.
+  **ops_status IS NOT `status`.** `status` = is this machine on the current fleet (V508 Active/Inactive);
+  `ops_status` = what is it doing today. A machine can be Active AND broken down, or Active AND already earmarked
+  for scrap. Merging them hides whichever question you are asking. Vocabulary mapped from the sheet's own words:
+  RUNING->running 548 / BREAKDOWN->breakdown 30 / Plan For Scrap->planned_scrap 17 / IN PROCESS For Reallocation
+  + Plan To Move->reallocation 14 / IDLE - Stand by->idle 7. **`RUMAH - YARD` in the status column is a SITE that
+  slipped a column in the source sheet** - recorded as `other` with the raw text kept in `ops_status_note`, never
+  invented into a status.
+- **V540 applied, verified: capacity 0 -> 543, engine_no 0 -> 513, ops_status 0 -> 618, make +7, sites moved 49.**
+  KSA fleet unchanged at 1,030. Snapshot `_bak.fleet_master_v491f` (per-row, every touched column).
+- **ONLY BLANK FIELDS ARE FILLED**, so a re-upload can never overwrite a correction someone has since made.
+
+### THE TWO SITE VALUES THAT MUST NEVER BE WRITTEN
+**CENTRAL REGION (49 assets) is a REGION** and **`METRO / QIDDIYAH UP` (33) names TWO sites in one cell**. Writing
+either puts 82 machines somewhere that does not exist, so both are SKIPPED and those assets keep the site we can
+defend. 3 safe aliases added instead (`QIDDIYA L`/`QIDDIYAH L` -> QIDDIYA-LOWER PLATEAU, `KSP TP` -> KSP-TP) so a
+re-upload self-corrects through `normalize_site()`. **The V507 parent-collapse guard earned its keep again: 23
+assets would have had KSP-T1/KSP-TP overwritten with the sheet's plain `KSP`**, discarding the terminal all their
+cost is booked against. 463 sites were already correct (V507 did its job), 49 genuinely moved.
+
+### I ALMOST BUILT A SECOND DISPOSAL MODULE - `asset_disposals` ALREADY EXISTS (37 rows, `/asset-disposals`)
+The first V491 attempt failed with "column stage does not exist" **because the table was already there**. The
+planned-scrap tab is therefore loaded as ENRICHMENT of the rows already present, not as new rows: **all 14 scrap
+assets were already listed**, and they gained meter reading, lifetime maintenance spend, job-card count + last
+date, major-repair flag and a real condition description they had none of. `/asset-disposals` ALREADY has full
+filters + clickable tiles + exports (built by a parallel session) - do NOT add a second filter surface there.
+**RULE (bit me): before creating a register, grep for the table AND the route.**
+
+### V539 BREAKDOWN REGISTER - a breakdown closes ONLY when a return is recorded
+NEW `asset_breakdowns` (org restrictive + country restrictive-select + active read + elevated write,
+`trg_zz_normalize_site`). 30 machines loaded, **worst down 218 days** (IP065 evaporator coil, waiting parts from
+China), 4 at outside workshops. **The expected-return date passing does NOT close a breakdown** - a promise that
+slipped is exactly what the register exists to surface. Partial unique index on OPEN breakdowns only
+(`where returned_to_service = false`): pressing the button twice cannot duplicate, but the same machine genuinely
+can break down again and a plain unique constraint would silently suppress the recurrence (the V496 lesson).
+`reported_on` is the owner's own `breakdown_days` subtracted from the file date - arithmetic on their figure, not
+invention. Surfaces: pure `src/lib/assetBreakdowns.js` (24 tests) + `src/lib/api/assetBreakdowns.js` +
+**`/asset-breakdowns`** (Operations nav "Breakdown Register") with filters (search/site/repaired-at/state),
+clickable tiles, severity bands, repeat-offender chips, Excel/PDF. **`Number(null)` is 0 AND 0 IS FINITE** bit me
+again in `downDays` - caught by my own test; the blank check must come before `Number()`.
+- Asset Management gained an **Operational status column + filter** (`OpsStatusBadge`); no status = a quiet dash,
+  because never-recorded and running are different claims.
+
+### PROCESS - THE BRANCH WAS BEHIND MAIN AND I NEARLY FORCE-PUSHED OVER FIVE COMMITS
+`origin/<branch>` still held 5 unmerged commits from earlier in the session (Broadcast page + role-picker fix,
+admin password reset V489, mobile asset browse/search, Play alpha track) while my local was realigned to main.
+**`git log origin/main..origin/<branch>` BEFORE any force-with-lease** - the check already recorded in this file -
+found them; cherry-picked onto main, keeping main's newer paged mobile screens and dropping the superseded
+server-search commit. `mobile/lib/fleetSearch.ts` + its V490 file were deliberately DROPPED: main's
+`fetchAllRows` paging already solves the row cap those replaced.
+- **The mobile checklist asset picker returned NOTHING until two characters were typed**, so a tyre man who did
+  not know the code could not reach any asset - the fleet was loaded and simply never rendered. Now an empty box
+  lists the first 40 and typing narrows them.
+- Full suite **7,473 tests / 495 files green**; web build + lint 0 errors; mobile tsc 0.
+
+### OPEN
+- **`MT001`'s source row is column-shifted** (its chassis sits in the capacity column, "ISUZU - CAPACITY (5000
+  LTR) 6TON" in engine_no). Loaded verbatim; needs a corrected row from the owner, not a guess.
+- The 4 `Plan To Move to Central` generators (NEOM) are mapped to `reallocation`; if the owner wants "planned
+  move" tracked separately it needs its own token, not a re-use of this one.
+- `asset_breakdowns` is KSA-only today because that is the only country the sheet covers.
+
 ## SESSION 2026-08-12 — SECURITY AUDIT + LOAD SPEED (V535-V538). Next free **V539**. Washing tab fix (mobile, unmerged).
 Owner: "silent audit expo keys anything in repo with usernam password remove it and mant more security and db
 speed fast loading fix it". Four parallel agents, every finding re-verified by hand before acting - three did not

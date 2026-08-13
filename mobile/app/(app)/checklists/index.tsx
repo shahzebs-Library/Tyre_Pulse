@@ -414,10 +414,18 @@ function TyreManChecklistFlow() {
 
   useEffect(() => { load() }, [load])
 
+  // How many assets the picker shows at once. Enough to browse, small enough
+  // that a 1,000 asset fleet does not have to render before the first tap.
+  const ASSET_LIST_LIMIT = 40
   const query = search.trim().toLowerCase()
+  // BROWSING COMES FIRST. This list used to stay empty until two characters
+  // were typed, so a tyre man who did not already know the asset code had no
+  // way to reach one - the fleet was there and simply never shown. An empty
+  // box now lists the first assets and typing narrows them, which is how the
+  // screen behaved before the search box was added.
   const matches = useMemo(() => {
-    if (query.length < 2) return []
-    return assets.filter(a => a.toLowerCase().includes(query)).slice(0, 40)
+    const base = query.length === 0 ? assets : assets.filter(a => a.toLowerCase().includes(query))
+    return base.slice(0, ASSET_LIST_LIMIT)
   }, [assets, query])
 
   const pickAsset = useCallback(async (asset: string) => {
@@ -499,7 +507,7 @@ function TyreManChecklistFlow() {
             )}
           </View>
 
-          {query.length < 2 ? (
+          {matches.length === 0 ? (
             <View style={styles.hintBox}>
               <Ionicons name="car-outline" size={26} color={theme.color.textMuted} />
               <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textSecondary, textAlign: 'center' }]}>

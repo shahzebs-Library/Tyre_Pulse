@@ -14,7 +14,7 @@ import {
 // The band judgement is bandFor and nothing else. The register flags a tyre as
 // due with this function, so the report has to use it too or the two would
 // disagree about the same tyre on the same day.
-import { bandFor } from './tyreRunningLife'
+import { bandFor, measureFor } from './tyreRunningLife'
 // One conversion names every wheel: a stored capture key (F1L, R2Ri) prints as
 // the canonical code (LHF1, RHRI) the tyre records use, so an export can never
 // disagree with the screen it came from.
@@ -1489,7 +1489,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       serial: lr.serial || 'N/A',
       reason: band === 'overdue' ? 'Past expected life' : 'Approaching end of life',
       condition: '',
-      lifeUsed: lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : (lr.hoursUsedPct != null ? `${lr.hoursUsedPct}%` : 'N/A'),
+      lifeUsed: measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A',
       remainingKm: lr.remainingKm,
       remainingDays: lr.remainingDays,
     })
@@ -1565,7 +1565,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         both(lr.expectedLifeKm, lr.expectedLifeHours),
         both(lr.remainingKm, lr.remainingHours),
         n(lr.remainingDays),
-        (lr.lifeUsedPct != null ? `${lr.lifeUsedPct}%` : (lr.hoursUsedPct != null ? `${lr.hoursUsedPct}%` : 'N/A')),
+        (measureFor(lr).used != null ? `${measureFor(lr).used}%` : 'N/A'),
       ]),
       styles: { fontSize: 7, cellPadding: 1.6, textColor: P.ink, lineColor: P.silver, lineWidth: 0.15 },
       headStyles: { fillColor: brand.accent, textColor: P.white, fontSize: 7, fontStyle: 'bold' },

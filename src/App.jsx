@@ -246,6 +246,7 @@ const AccidentDetail         = lazy(() => import('./components/AccidentDetailMod
 const ClaimsSummary          = lazy(() => import('./pages/ClaimsSummary'))
 const InsurancePolicies      = lazy(() => import('./pages/InsurancePolicies'))
 const AccidentWorkflowSettings = lazy(() => import('./pages/AccidentWorkflowSettings'))
+const Broadcast = lazy(() => import('./pages/Broadcast'))
 const ApprovalMatrix = lazy(() => import('./pages/ApprovalMatrix'))
 const Reports                = lazy(() => import('./pages/Reports'))
 const GatePass               = lazy(() => import('./pages/GatePass'))
@@ -310,6 +311,7 @@ const TyreExchange           = lazy(() => import('./pages/TyreExchange'))
 const TyreSpecifications     = lazy(() => import('./pages/TyreSpecifications'))
 const AssetManagement        = lazy(() => import('./pages/AssetManagement'))
 const AssetDisposals         = lazy(() => import('./pages/AssetDisposals'))
+const AssetBreakdowns        = lazy(() => import('./pages/AssetBreakdowns'))
 const SiteManagement         = lazy(() => import('./pages/SiteManagement'))
 const InspectionPlanner      = lazy(() => import('./pages/InspectionPlanner'))
 const RetreadManagement      = lazy(() => import('./pages/RetreadManagement'))
@@ -550,6 +552,7 @@ function MainApp() {
                       <Route path="/insurance-policies" element={<Safe><RoleRoute allowed={['Admin']}><InsurancePolicies /></RoleRoute></Safe>} />
                       <Route path="/accident-workflow-settings" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentWorkflowSettings /></RoleRoute></Safe>} />
                       <Route path="/approval-matrix" element={<Safe><RoleRoute allowed={['Admin']}><ApprovalMatrix /></RoleRoute></Safe>} />
+                      <Route path="/broadcast" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="broadcast"><Broadcast /></RoleRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />
                       <Route path="/inspections" element={<Safe><ModuleRoute moduleKey="inspections"><Inspections /></ModuleRoute></Safe>} />
 <Route path="/alerts"      element={<Safe><ModuleRoute moduleKey="alerts"><Alerts /></ModuleRoute></Safe>} />
@@ -574,6 +577,7 @@ function MainApp() {
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
                       <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
                       <Route path="/asset-disposals"       element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_disposals"><AssetDisposals /></RoleRoute></Safe>} />
+                      <Route path="/asset-breakdowns"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_breakdowns"><AssetBreakdowns /></RoleRoute></Safe>} />
                       <Route path="/sites"                element={<Safe><ModuleRoute moduleKey="fleet_master"><SiteManagement /></ModuleRoute></Safe>} />
                       <Route path="/inspection-planner"   element={<Safe><InspectionPlanner /></Safe>} />
                       <Route path="/warranty"             element={<Safe><WarrantyTracker /></Safe>} />

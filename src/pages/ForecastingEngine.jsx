@@ -19,6 +19,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import { forecastTyreDemand } from '../lib/tyreDemandForecast'
+import { forecastWindow } from '../lib/forecastPeriod'
 import TyreForecastSection from '../components/tyre/TyreForecastSection'
 
 ChartJS.register(
@@ -478,6 +479,13 @@ export default function ForecastingEngine() {
   const horizonDemandFc = useMemo(() => demandForecast.slice(0, horizon), [demandForecast, horizon])
   const horizonBudgetFc = useMemo(() => budgetForecast.slice(0, horizon), [budgetForecast, horizon])
   const nextLabels = useMemo(() => getNextMonthLabels(horizon, dataAnchor), [horizon, dataAnchor])
+  // WHICH months, not just how many. Every projection here runs forward from the
+  // latest month that HAS DATA, so "Next 3 Months" is three months after the
+  // last upload - which is not the next three months when the files are behind.
+  const window12 = useMemo(
+    () => forecastWindow({ anchor: dataAnchor, historyMonths: 12, ahead: horizon, now: new Date() }),
+    [dataAnchor, horizon],
+  )
 
   const histLabels = useMemo(() =>
     last12Keys.map(k => {
@@ -769,6 +777,22 @@ export default function ForecastingEngine() {
           </button>
         ))}
       </div>
+
+      {/* ── Which period this forecast actually covers ────────────────────── */}
+      {window12.ok && (
+        <div className="space-y-2">
+          <p className="text-sm text-[var(--text-secondary)]">
+            <span className="text-[var(--text-muted)]">Period: </span>
+            <span className="font-medium text-[var(--text-primary)]">{window12.label}</span>
+          </p>
+          {window12.note && (
+            <div className="flex items-start gap-2 bg-amber-950/30 border border-amber-800/50 rounded-xl p-4 text-sm">
+              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <span className="text-amber-300">{window12.note}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Data scope notes ──────────────────────────────────────────────── */}
       {(!activeCountry || activeCountry === 'All') && (

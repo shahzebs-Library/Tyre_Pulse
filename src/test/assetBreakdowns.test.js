@@ -11,6 +11,7 @@ import {
   downDays, daysToReturn, isOverdue, severityOf, filterBreakdowns,
   breakdownSummary, severityBands, byGroup, repeatOffenders,
   breakdownFindings, breakdownExportRows, repairLabel,
+  breakdownsByAsset, mergeBreakdowns, downtimeNote, disposalCandidatesFromBreakdowns,
   EMPTY_BREAKDOWN_FILTERS,
 } from '../lib/assetBreakdowns'
 
@@ -209,5 +210,93 @@ describe('severityBands', () => {
     expect(b.find((x) => x.key === 'critical').count).toBe(1)
     expect(b.find((x) => x.key === 'low').count).toBe(1)
     expect(b.reduce((a, x) => a + x.count, 0)).toBe(2)
+  })
+})
+
+/**
+ * Downtime reaching the disposal committee.
+ *
+ * The committee decides whether a machine is worth keeping, and how long it has
+ * been standing still is one of the strongest arguments either way - but only
+ * if a machine we know nothing about is never presented as a machine that has
+ * never stopped.
+ */
+describe('breakdownsByAsset', () => {
+  it('rolls a machine up and lets the LONGEST open breakdown speak for it', () => {
+    const idx = breakdownsByAsset([
+      row({ asset_no: 'TM422', reported_on: '2026-08-10', details: 'Recent fault' }),
+      row({ asset_no: 'TM422', reported_on: '2026-05-01', details: 'The long one' }),
+      row({ asset_no: 'MP080', reported_on: '2026-07-01', returned_to_service: true, returned_on: '2026-07-11' }),
+    ], NOW)
+    const tm = idx.get('TM422')
+    expect(tm.breakdowns).toBe(2)
+    expect(tm.open).toBe(2)
+    expect(tm.currentDays).toBe(104)          // 1 May to 13 Aug, not the recent one
+    expect(tm.fault).toBe('The long one')
+    // A machine that came back is still on record, but nothing is open on it.
+    expect(idx.get('MP080').open).toBe(0)
+    expect(idx.get('MP080').breakdowns).toBe(1)
+  })
+
+  it('matches the asset code the way every other register does', () => {
+    const idx = breakdownsByAsset([row({ asset_no: ' tm422 ' })], NOW)
+    expect(idx.has('TM422')).toBe(true)
+  })
+})
+
+describe('mergeBreakdowns', () => {
+  it('never turns "we were never told" into "it has never broken down"', () => {
+    const out = mergeBreakdowns(
+      [{ asset_no: 'TM422' }, { asset_no: 'BP014' }],
+      [row({ asset_no: 'TM422', reported_on: '2026-08-01' })],
+      NOW,
+    )
+    expect(out[0].breakdown.currentDays).toBe(12)
+    expect(out[0].down).toBe(12)
+    // The machine with no record is null, NOT zero days down - zero would sort
+    // it as the healthiest machine in the fleet on a page about scrapping.
+    expect(out[1].breakdown).toBeNull()
+    expect(out[1].down).toBeNull()
+  })
+
+  it('leaves the rows untouched when nothing is on record at all', () => {
+    const rows = [{ asset_no: 'TM422' }]
+    expect(mergeBreakdowns(rows, [], NOW)).toBe(rows)
+  })
+})
+
+describe('downtimeNote', () => {
+  it('says how long, and says when a promise has already slipped', () => {
+    expect(downtimeNote({ open: 1, currentDays: 1, overdue: false })).toBe('Down 1 day')
+    expect(downtimeNote({ open: 1, currentDays: 218, overdue: true }))
+      .toBe('Down 218 days, past its promised return')
+  })
+
+  it('is silent rather than inventing a sentence about a machine with no record', () => {
+    expect(downtimeNote(null)).toBe('')
+    expect(downtimeNote({ open: 0, breakdowns: 0 })).toBe('')
+    expect(downtimeNote({ open: 0, breakdowns: 2 })).toBe('Back in service, 2 breakdowns on record')
+  })
+})
+
+describe('disposalCandidatesFromBreakdowns', () => {
+  const long = row({ asset_no: 'IP065', reported_on: '2026-01-07', details: 'Evaporator coil' })
+  const short = row({ asset_no: 'TM666', reported_on: '2026-08-04' })
+  const closed = row({ asset_no: 'MP080', reported_on: '2026-01-01', returned_to_service: true, returned_on: '2026-02-01' })
+
+  it('proposes only machines that are down long AND not already on the list', () => {
+    const out = disposalCandidatesFromBreakdowns([long, short, closed], [], { now: NOW })
+    expect(out.map((c) => c.asset_no)).toEqual(['IP065'])
+    expect(out[0].currentDays).toBe(218)
+  })
+
+  it('never proposes a machine the committee already has', () => {
+    const out = disposalCandidatesFromBreakdowns([long], [{ asset_no: 'ip065' }], { now: NOW })
+    expect(out).toEqual([])
+  })
+
+  it('is empty rather than noisy when nothing qualifies', () => {
+    expect(disposalCandidatesFromBreakdowns([short, closed], [], { now: NOW })).toEqual([])
+    expect(disposalCandidatesFromBreakdowns([], [], { now: NOW })).toEqual([])
   })
 })

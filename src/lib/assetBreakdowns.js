@@ -238,6 +238,119 @@ export function breakdownExportRows(rows = [], now = Date.now()) {
   }
 }
 
+/**
+ * ONE MACHINE'S DOWNTIME, for a screen that is asking a different question.
+ *
+ * The disposal committee is deciding whether a machine is worth keeping. How
+ * long it has been standing still is one of the strongest arguments either way,
+ * and it lives here rather than there - a machine down 218 days waiting for a
+ * part from China is a scrap conversation, and a machine that has never missed
+ * a day is not, however old it looks on paper.
+ *
+ * Keyed by asset code, UPPER and space-stripped, because that is the identity
+ * every other register in this system uses.
+ */
+export function breakdownsByAsset(rows = [], now = Date.now()) {
+  const out = new Map()
+  for (const r of rows || []) {
+    const key = String(r?.asset_no || '').toUpperCase().replace(/\s+/g, '')
+    if (!key) continue
+    const days = downDays(r, now)
+    const open = !r.returned_to_service
+    const cur = out.get(key) || {
+      asset_no: key, breakdowns: 0, open: 0, daysTotal: 0,
+      currentDays: null, overdue: false, fault: '', repairLocation: '', lastReportedOn: '',
+    }
+    cur.breakdowns += 1
+    cur.daysTotal += days || 0
+    if (open) {
+      cur.open += 1
+      // The LONGEST open breakdown speaks for the machine: if two are open, the
+      // one that has been standing longest is the one the decision turns on.
+      if (days != null && (cur.currentDays == null || days > cur.currentDays)) {
+        cur.currentDays = days
+        cur.fault = String(r.details || '').trim()
+        cur.repairLocation = String(r.repair_location || '').trim()
+      }
+      if (isOverdue(r, now)) cur.overdue = true
+    }
+    const on = String(r.reported_on || '').slice(0, 10)
+    if (on && on > cur.lastReportedOn) cur.lastReportedOn = on
+    out.set(key, cur)
+  }
+  return out
+}
+
+/**
+ * Attach each register row's downtime, WITHOUT inventing a figure for a machine
+ * that has none.
+ *
+ * A machine with no breakdown row gets `breakdown: null`, and the screen prints
+ * "Not recorded". Zero days would be a claim - that it has never broken down -
+ * and the breakdown register only started being kept this month, so it is a
+ * claim the data cannot support. `down` is the sort key so an unmeasured
+ * machine sinks rather than sorting as the healthiest in the fleet.
+ */
+export function mergeBreakdowns(registerRows = [], breakdownRows = [], now = Date.now()) {
+  const index = breakdownsByAsset(breakdownRows, now)
+  if (!index.size) return registerRows || []
+  return (registerRows || []).map((r) => {
+    const key = String(r?.asset_no || '').toUpperCase().replace(/\s+/g, '')
+    const hit = key ? index.get(key) : null
+    return hit ? { ...r, breakdown: hit, down: hit.currentDays } : { ...r, breakdown: null, down: null }
+  })
+}
+
+/**
+ * MACHINES THE DISPOSAL COMMITTEE HAS NEVER SEEN.
+ *
+ * Measured when this was built: not one of the machines currently broken down
+ * is on the disposal register, and the worst of them has been standing for 218
+ * days waiting on a part from China. That machine is a scrap conversation
+ * nobody is having, because the two lists were kept in separate rooms.
+ *
+ * So this is the link that carries the value: an open breakdown that has run
+ * past the register's own "down over 30 days" band and whose machine is NOT on
+ * the disposal list. It PROPOSES; it never adds anything. Whether a machine
+ * leaves the fleet is the committee's decision, and a system that quietly filed
+ * a machine as a disposal because it was waiting for a part would be making
+ * that decision for them.
+ *
+ * The threshold reuses SEVERITY_BANDS rather than inventing a second number.
+ */
+export function disposalCandidatesFromBreakdowns(breakdownRows = [], registerRows = [], {
+  minDays = SEVERITY_BANDS.find((b) => b.key === 'critical')?.min ?? 31,
+  now = Date.now(),
+} = {}) {
+  const onList = new Set(
+    (registerRows || [])
+      .map((r) => String(r?.asset_no || '').toUpperCase().replace(/\s+/g, ''))
+      .filter(Boolean),
+  )
+  const out = []
+  for (const [key, entry] of breakdownsByAsset(breakdownRows, now)) {
+    if (onList.has(key)) continue
+    if (!(entry.open > 0)) continue
+    if (entry.currentDays == null || entry.currentDays < minDays) continue
+    out.push(entry)
+  }
+  return out.sort((a, b) => (b.currentDays ?? 0) - (a.currentDays ?? 0))
+}
+
+/** One line a person can read, or '' when there is genuinely nothing to say. */
+export function downtimeNote(entry) {
+  if (!entry) return ''
+  if (entry.open > 0 && entry.currentDays != null) {
+    const overdue = entry.overdue ? ', past its promised return' : ''
+    return `Down ${entry.currentDays} day${entry.currentDays === 1 ? '' : 's'}${overdue}`
+  }
+  if (entry.open > 0) return 'Down now, start date not recorded'
+  if (entry.breakdowns > 0) {
+    return `Back in service, ${entry.breakdowns} breakdown${entry.breakdowns === 1 ? '' : 's'} on record`
+  }
+  return ''
+}
+
 /** The sheet writes In/Out; people read words. */
 export function repairLabel(v) {
   const s = String(v || '').trim().toLowerCase()

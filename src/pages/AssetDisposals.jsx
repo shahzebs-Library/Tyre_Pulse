@@ -44,6 +44,10 @@ import {
   fleetReliability, shapeFleetBaseline, boardRecommendations,
 } from '../lib/assetDisposalReliability'
 import { shapeBenchmarks } from '../lib/assetReplacement'
+import { listAssetBreakdowns } from '../lib/api/assetBreakdowns'
+import {
+  mergeBreakdowns, downtimeNote, repairLabel, disposalCandidatesFromBreakdowns,
+} from '../lib/assetBreakdowns'
 import {
   shapeDisposalRegister, filterDisposals, disposalSummary, assetEconomics,
   spendBaselines, byGroup, ageBands, disposalExportRows, disposalFindings,
@@ -67,7 +71,7 @@ const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
 const EMPTY_FILTERS = {
   search: '', disposition: '', region: '', assetType: '',
-  status: '', condition: '', site: '', inRegister: 'all',
+  status: '', condition: '', site: '', inRegister: 'all', downtime: '',
 }
 
 /** Tone -> the two classes every badge and finding on this page uses. */
@@ -100,6 +104,32 @@ function Badge({ meta, className = '' }) {
       {meta.label}
     </span>
   )
+}
+
+/**
+ * How long this machine has been standing still, from the breakdown register.
+ *
+ * A machine with no breakdown row prints "Not recorded", NEVER "0 days". The
+ * breakdown register only began this month, so an absent row means nobody has
+ * told us - not that the machine has never stopped - and on a page where the
+ * decision is whether to scrap something, the difference between those two is
+ * the whole argument.
+ */
+function DowntimeCell({ entry }) {
+  if (!entry) return <span className="text-[var(--text-muted)] text-xs">Not recorded</span>
+  const note = downtimeNote(entry)
+  if (entry.open > 0) {
+    const long = (entry.currentDays ?? 0) >= 30
+    return (
+      <span className="inline-flex flex-col gap-0.5">
+        <Badge meta={{ label: note, tone: long ? 'danger' : 'warning' }} />
+        {entry.repairLocation && (
+          <span className="text-[10px] text-[var(--text-muted)]">{repairLabel(entry.repairLocation)}</span>
+        )}
+      </span>
+    )
+  }
+  return <span className="text-[var(--text-secondary)] text-xs">{note || 'Back in service'}</span>
 }
 
 /** A headline number. Clickable tiles apply a filter rather than just informing. */
@@ -157,6 +187,7 @@ export default function AssetDisposals() {
   const [editing, setEditing] = useState(null) // row open in the editor
   const [deciding, setDeciding] = useState(null)
   const [upload, setUpload] = useState(null)
+  const [breakdownRows, setBreakdownRows] = useState([])
   const [deckOpen, setDeckOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -168,11 +199,12 @@ export default function AssetDisposals() {
       // reliability RPC must still show the register, a register that fails
       // to load must not be reported as a fleet that never breaks down, and a
       // failed quotation read must cost only the replacement figures.
-      const [reg, rel, base, bench] = await Promise.allSettled([
+      const [reg, rel, base, bench, brk] = await Promise.allSettled([
         getDisposalRegister({ country: activeCountry }),
         getDisposalReliability({ country: activeCountry }),
         getDisposalFleetBaseline({ country: activeCountry }),
         listReplacementBenchmarks({ country: activeCountry }),
+        listAssetBreakdowns({ country: activeCountry }),
       ])
       if (reg.status === 'fulfilled') {
         setRegister(shapeDisposalRegister(reg.value))
@@ -186,6 +218,9 @@ export default function AssetDisposals() {
       // A read that failed leaves NO quotations, so every machine reads as
       // unpriced with its reason. It never leaves a stale price on screen.
       setBenchmarkRows(bench.status === 'fulfilled' ? (bench.value?.rows || []) : [])
+      // A failed breakdown read leaves NO downtime, so every machine reads
+      // "Not recorded" with its reason - never a silent zero days down.
+      setBreakdownRows(brk.status === 'fulfilled' ? (brk.value?.rows || []) : [])
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e))
@@ -204,14 +239,30 @@ export default function AssetDisposals() {
   // reliability table describes the same machines as the filtered register. If
   // the engine is unavailable the register rows pass through untouched and the
   // reliability surface reports that it could not measure anything.
-  const rows = useMemo(() => {
+  const baseRows = useMemo(() => {
     const base = register?.rows || []
     const assets = reliability?.ok ? (reliability.assets || []) : []
     if (!assets.length) return base
     const merged = mergeReliability(base, assets)
     return Array.isArray(merged) ? merged : base
   }, [register, reliability])
+  // Downtime is merged BEFORE filtering, for the same reason reliability is:
+  // a filtered table and a filtered downtime column must describe the same
+  // machines. A machine with no breakdown row keeps breakdown null and reads
+  // "Not recorded" rather than being claimed as never having stopped.
+  const rows = useMemo(
+    () => mergeBreakdowns(baseRows, breakdownRows, Date.now()),
+    [baseRows, breakdownRows],
+  )
   const filtered = useMemo(() => filterDisposals(rows, filters), [rows, filters])
+  // Machines that are down long enough to be worth a committee look but are not
+  // on the register. Derived from the FULL register, not the filtered view: a
+  // machine is either on the list or it is not, and a filter must never make it
+  // look like it is missing.
+  const missingCandidates = useMemo(
+    () => disposalCandidatesFromBreakdowns(breakdownRows, baseRows, { now: Date.now() }),
+    [breakdownRows, baseRows],
+  )
   // Totals follow the FILTERED rows: a filtered table under register-wide
   // headlines is how a reader ends up quoting a number that is not on screen.
   const totals = useMemo(() => disposalSummary(filtered), [filtered])
@@ -606,6 +657,17 @@ export default function AssetDisposals() {
                     <option value="no">Not in the register</option>
                   </select>
                 </label>
+                <label className="text-xs text-[var(--text-muted)] space-y-1">
+                  <span>Downtime</span>
+                  <select value={filters.downtime} onChange={(e) => setFilter('downtime', e.target.value)} className={inputCls}>
+                    <option value="">All</option>
+                    <option value="down">Down right now</option>
+                    <option value="long">Down over 30 days</option>
+                    {/* Its own choice, not folded into "never broken down" - no
+                        record is not the same as no breakdown. */}
+                    <option value="unknown">No breakdown on record</option>
+                  </select>
+                </label>
               </div>
             )}
           </div>
@@ -710,20 +772,69 @@ export default function AssetDisposals() {
             </p>
           </div>
 
+          {/* ── Down long enough to consider ─────────────────────────────
+              The link between the two registers that actually carries value.
+              Renders NOTHING when there is nothing to propose - a panel that is
+              always on screen is a panel nobody reads. It proposes only; adding
+              a machine to the disposal list stays the committee's decision. */}
+          {missingCandidates.length > 0 && (
+            <div className="card p-4 border border-amber-500/30">
+              <div className="flex items-center gap-2 mb-1">
+                <Wrench size={15} className="text-amber-300 shrink-0" />
+                <h3 className="text-sm font-medium text-[var(--text-primary)]">
+                  Down long enough to consider ({missingCandidates.length})
+                </h3>
+                <Link to="/asset-breakdowns" className="ml-auto text-xs text-blue-400 hover:underline inline-flex items-center gap-1">
+                  Breakdown register <ExternalLink size={12} />
+                </Link>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mb-3">
+                These machines have been out of service for over 30 days and are not on the disposal
+                register. That is not a recommendation to scrap them - it is the list the committee has
+                not seen.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[var(--text-muted)]">
+                    <tr>
+                      {['Asset', 'Days down', 'Fault', 'Repaired at'].map((h) => (
+                        <th key={h} className="text-left font-medium px-3 py-1.5 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingCandidates.map((c) => (
+                      <tr key={c.asset_no} className="border-t border-[var(--input-border)]">
+                        <td className="px-3 py-1.5 font-medium whitespace-nowrap">
+                          <Link to={`/assets/${encodeURIComponent(c.asset_no)}`} className="text-blue-400 hover:underline">
+                            {c.asset_no}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-1.5 tabular-nums text-amber-300">{c.currentDays}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-secondary)]">{c.fault || 'Not recorded'}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-muted)] whitespace-nowrap">{repairLabel(c.repairLocation)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* ── Register table ───────────────────────────────────────────── */}
           <div className="card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--input-bg)] text-[var(--text-muted)]">
                   <tr>
-                    {['Asset', 'Type', 'Region / Site', 'Disposition', 'Condition', 'Fleet register', 'Job cards', 'Spend', 'Tyres fitted', 'Status', 'History'].map((h) => (
+                    {['Asset', 'Type', 'Region / Site', 'Disposition', 'Condition', 'Fleet register', 'Downtime', 'Job cards', 'Spend', 'Tyres fitted', 'Status', 'History'].map((h) => (
                       <th key={h} className="text-left font-medium px-3 py-2 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 && (
-                    <tr><td colSpan={11} className="px-3 py-6 text-center text-[var(--text-muted)]">No machines match these filters.</td></tr>
+                    <tr><td colSpan={12} className="px-3 py-6 text-center text-[var(--text-muted)]">No machines match these filters.</td></tr>
                   )}
                   {filtered.map((r) => {
                     const e = assetEconomics(r, { peerSpendPerYear: baselines[r?.asset_type] })
@@ -746,6 +857,7 @@ export default function AssetDisposals() {
                             ? <span className="text-[var(--text-secondary)]">{e.fleetStatus || 'Listed'}</span>
                             : <Badge meta={{ label: 'Not in register', tone: 'warning' }} />}
                         </td>
+                        <td className="px-3 py-2 whitespace-nowrap"><DowntimeCell entry={r.breakdown} /></td>
                         <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)]">{fmtNum(e.jobCards)}</td>
                         <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{fmtMoney(e.spend, e.currency)}</td>
                         <td className="px-3 py-2 tabular-nums text-[var(--text-secondary)]">{e.tyresActive || ''}</td>
@@ -922,6 +1034,32 @@ function DisposalDetail({ row, baselines }) {
           </p>
         )}
       </section>
+
+      {/* Downtime, from the breakdown register. Shown only when there is
+          something on record: a "Not recorded" panel on most of the fleet is
+          noise, and the table column already states the gap per row. */}
+      {row.breakdown && (
+        <section>
+          <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-2">Downtime</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Field label="State">{row.breakdown.open > 0 ? 'Down now' : 'Back in service'}</Field>
+            <Field label="Days down">{row.breakdown.open > 0 ? (row.breakdown.currentDays ?? 'N/A') : 'N/A'}</Field>
+            <Field label="Breakdowns on record">{row.breakdown.breakdowns}</Field>
+            <Field label="Repaired at">{repairLabel(row.breakdown.repairLocation)}</Field>
+          </div>
+          {row.breakdown.open > 0 && row.breakdown.fault && (
+            <p className="mt-3 text-sm text-[var(--text-secondary)] border-l-2 border-amber-500/40 pl-3">{row.breakdown.fault}</p>
+          )}
+          {row.breakdown.overdue && (
+            <p className="mt-2 text-sm text-amber-300">
+              This machine is past the date it was promised back. A promise that slipped is exactly what the breakdown register exists to surface.
+            </p>
+          )}
+          <Link to="/asset-breakdowns" className="mt-2 inline-flex items-center gap-1 text-sm text-blue-400 hover:underline">
+            Open the breakdown register <ExternalLink size={13} />
+          </Link>
+        </section>
+      )}
 
       {/* Cost, with the basis stated so nobody quotes a rate we did not measure. */}
       <section>

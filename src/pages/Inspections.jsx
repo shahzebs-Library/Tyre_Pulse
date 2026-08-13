@@ -10,7 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Trash2, AlertTriangle } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, ExternalLink, Trash2, AlertTriangle, ChevronDown } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -31,6 +31,7 @@ import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLif
 import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
+import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
 import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
 import { loadTyreChangeTracking } from '../lib/api/tyreChangeTracking'
 // The shared dialog shell. Imported under an alias because this file still
@@ -681,6 +682,15 @@ export default function Inspections() {
   const [saveError, setSaveError] = useState(null)
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterSite, setFilterSite]     = useState('all')
+  // Region is not a column on an inspection - it is read from the site
+  // register, so it stays recorded in one place. See siteRegionMap.
+  const [filterRegion, setFilterRegion] = useState('all')
+  const [filterInspector, setFilterInspector] = useState('all')
+  const [siteRows, setSiteRows]         = useState([])
+  // The advanced filters collapse behind one toggle, the same as the accident
+  // register: a row of eight controls above a table is read as clutter, and the
+  // two people use every day (search and status) stay out here.
+  const [showFilters, setShowFilters]   = useState(false)
   // Client-side date range on the register (scheduled_date, falling back to
   // completed_date, then created_at). Empty = existing behavior.
   const [filterFrom, setFilterFrom]     = useState('')
@@ -949,6 +959,18 @@ export default function Inspections() {
     setLoading(false)
   }
 
+  // Best-effort: the register must still open when the site list cannot be
+  // read. With no sites the region control simply does not render, rather than
+  // offering a filter that can never match anything.
+  useEffect(() => {
+    if (authLoading) return
+    let cancelled = false
+    listSites({ country: activeCountry })
+      .then((r) => { if (!cancelled) setSiteRows(Array.isArray(r) ? r : []) })
+      .catch(() => { if (!cancelled) setSiteRows([]) })
+    return () => { cancelled = true }
+  }, [activeCountry, authLoading])
+
   useEffect(() => {
     if (authLoading) return
     load()
@@ -984,6 +1006,14 @@ export default function Inspections() {
   }, [activeCountry, authLoading, flagReload])
 
   const sites = useMemo(() => [...new Set(rows.map(r => r.site).filter(Boolean))].sort(), [rows])
+  const regionMap = useMemo(() => siteRegionMap(siteRows), [siteRows])
+  // Only the regions the sites ON SCREEN actually belong to. Listing every
+  // region in the register would offer choices that return nothing.
+  const regions = useMemo(() => regionsIn(regionMap, sites), [regionMap, sites])
+  const inspectors = useMemo(
+    () => [...new Set(rows.map(r => r.inspector).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [rows],
+  )
 
   const tabFiltered = useMemo(() => {
     if (activeTab === 'inspections') return rows.filter(r => INSPECTION_TYPES.includes(r.inspection_type))
@@ -996,6 +1026,10 @@ export default function Inspections() {
     let r = tabFiltered
     if (filterStatus !== 'all') r = r.filter(x => x.status === filterStatus)
     if (filterSite !== 'all')   r = r.filter(x => x.site === filterSite)
+    // A site the register does not place in a region is EXCLUDED while a region
+    // is selected, rather than quietly falling into whichever region is chosen.
+    if (filterRegion !== 'all') r = r.filter(x => regionForSite(regionMap, x.site) === filterRegion)
+    if (filterInspector !== 'all') r = r.filter(x => x.inspector === filterInspector)
     if (filterFrom || filterTo) {
       // String-safe 'YYYY-MM-DD' prefix comparison (never new Date(string)).
       // A row with no usable date is excluded while a range is active.
@@ -1020,7 +1054,7 @@ export default function Inspections() {
       )
     }
     return r
-  }, [tabFiltered, filterStatus, filterSite, filterFrom, filterTo, search])
+  }, [tabFiltered, filterStatus, filterSite, filterRegion, filterInspector, regionMap, filterFrom, filterTo, search])
 
   // Vehicles with tyres due ACROSS THE COUNTRY (the flag map is not limited to
   // the inspections on screen). Lets the card tell "nothing is due anywhere"
@@ -2673,25 +2707,77 @@ export default function Inspections() {
         ))}
       </div>
 
-      {/* Search + site filter */}
-      <div className="flex flex-wrap gap-3">
-        <input className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
-          value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="input w-44" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
-          <option value="all">{t('inspections.filters.allSites')}</option>
-          {sites.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <DateField className="text-sm w-40" value={filterFrom} onChange={setFilterFrom} placeholder="From date" ariaLabel="From date" />
-        <DateField className="text-sm w-40" value={filterTo} onChange={setFilterTo} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
-        {(filterFrom || filterTo) && (
-          <button
-            onClick={() => { setFilterFrom(''); setFilterTo('') }}
-            className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] underline self-center"
-          >
-            Clear
-          </button>
-        )}
-      </div>
+      {/* Filters - search stays out, everything else collapses behind one
+          toggle. Same shape as the accident register, so a person who has
+          learned one register has learned both. */}
+      {(() => {
+        const advanced = [
+          filterSite !== 'all', filterRegion !== 'all', filterInspector !== 'all',
+          !!filterFrom, !!filterTo,
+        ].filter(Boolean).length
+        const anyActive = advanced > 0 || !!search
+        return (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
+                value={search} onChange={e => setSearch(e.target.value)} />
+              <button
+                onClick={() => setShowFilters(v => !v)}
+                aria-expanded={showFilters}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
+                  showFilters || advanced > 0
+                    ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-[var(--input-border)]'
+                    : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
+                }`}
+                title="Show or hide the advanced filters"
+              >
+                Filters{advanced > 0 ? ` (${advanced})` : ''}
+                <ChevronDown size={13} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              </button>
+              {anyActive && (
+                <button
+                  onClick={() => {
+                    setSearch(''); setFilterSite('all'); setFilterRegion('all')
+                    setFilterInspector('all'); setFilterFrom(''); setFilterTo('')
+                  }}
+                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
+                >
+                  <X size={12} /> Clear
+                </button>
+              )}
+              <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
+                {filtered.length}{filtered.length !== tabFiltered.length ? ` of ${tabFiltered.length}` : ''} shown
+              </span>
+            </div>
+
+            {showFilters && (
+              <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
+                {/* Region renders only when the site register actually places
+                    these sites in one. An empty dropdown is a control that can
+                    only ever return nothing. */}
+                {regions.length > 0 && (
+                  <select className="input text-sm w-40" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
+                    <option value="all">All regions</option>
+                    {regions.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                )}
+                <select className="input text-sm w-44" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                  <option value="all">{t('inspections.filters.allSites')}</option>
+                  {sites.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                {inspectors.length > 0 && (
+                  <select className="input text-sm w-44" value={filterInspector} onChange={e => setFilterInspector(e.target.value)}>
+                    <option value="all">All inspectors</option>
+                    {inspectors.map(i => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                )}
+                <DateField className="text-sm w-40" value={filterFrom} onChange={setFilterFrom} placeholder="From date" ariaLabel="From date" />
+                <DateField className="text-sm w-40" value={filterTo} onChange={setFilterTo} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Bulk selection bar (Admin only) */}
       {isAdmin && selectedIds.size > 0 && (

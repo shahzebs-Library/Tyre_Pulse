@@ -350,6 +350,22 @@ describe('filterDisposals', () => {
     expect(filterDisposals(rows, { inRegister: 'no' })[0].asset_no).toBe('BP022')
   })
 
+  it('filters by downtime, keeping "no record" as its own answer', () => {
+    // The three states are genuinely different: down now, down a long time, and
+    // nobody has told us anything. Folding the third into "not down" would let
+    // a machine we know nothing about pass as healthy.
+    const withDowntime = [
+      { ...row(), breakdown: { open: 1, currentDays: 5 } },
+      { ...notRegistered, breakdown: { open: 1, currentDays: 218 } },
+      { ...withTyres, breakdown: { open: 0, breakdowns: 2 } },
+      hoursOnly,
+    ]
+    expect(filterDisposals(withDowntime, { downtime: 'down' })).toHaveLength(2)
+    expect(filterDisposals(withDowntime, { downtime: 'long' })).toHaveLength(1)
+    expect(filterDisposals(withDowntime, { downtime: 'unknown' })).toHaveLength(1)
+    expect(filterDisposals(withDowntime, { downtime: '' })).toHaveLength(4)
+  })
+
   it('searches asset, brand, type, site and tyre serials', () => {
     expect(filterDisposals(rows, { search: 'bp022' })).toHaveLength(1)
     expect(filterDisposals(rows, { search: 'sany' })).toHaveLength(4)

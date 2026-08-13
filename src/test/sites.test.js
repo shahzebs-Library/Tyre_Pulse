@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   siteKey, groupSitesByCountry, siteOptionsForCountry, emptySite,
   SITE_TYPES, SITE_FIELDS, buildSiteRollup,
+  siteRegionMap, regionForSite, regionsIn,
 } from '../lib/api/sites'
 
 const rows = [
@@ -90,5 +91,63 @@ describe('emptySite', () => {
     expect(s.active).toBe(true)
     for (const f of SITE_FIELDS) expect(f in s).toBe(true)
     expect(SITE_TYPES).toContain(s.site_type)
+  })
+})
+
+/**
+ * Region reaches other registers through the SITE, never through a second
+ * region column on each table - that is what stops the two drifting.
+ */
+describe('siteRegionMap / regionForSite', () => {
+  const registry = [
+    { country: 'KSA', name: 'AMAALA', region: 'WESTERN' },
+    { country: 'KSA', name: 'NHC', region: 'CENTRAL' },
+    { country: 'KSA', name: 'KSP-TP', region: '' },      // registered, no region
+  ]
+
+  it('reads a region through the site, case and space insensitively', () => {
+    const m = siteRegionMap(registry)
+    expect(regionForSite(m, 'AMAALA')).toBe('WESTERN')
+    expect(regionForSite(m, ' nhc ')).toBe('CENTRAL')
+  })
+
+  it('says nothing rather than guessing for a site with no region on record', () => {
+    const m = siteRegionMap(registry)
+    // A blank must never resolve to a region - a filter would then quietly
+    // sweep this site into whichever region the reader picked.
+    expect(regionForSite(m, 'KSP-TP')).toBe('')
+    expect(regionForSite(m, 'SOMEWHERE ELSE')).toBe('')
+    expect(regionForSite(m, '')).toBe('')
+    expect(regionForSite(null, 'AMAALA')).toBe('')
+  })
+
+  it('resolves a duplicated site row deterministically, first named region wins', () => {
+    // AMAALA genuinely appears twice in the live registry. The same site must
+    // not land in two regions on two different screens.
+    const m = siteRegionMap([
+      { name: 'AMAALA', region: '' },
+      { name: 'AMAALA', region: 'WESTERN' },
+      { name: 'AMAALA', region: 'CENTRAL' },
+    ])
+    expect(regionForSite(m, 'AMAALA')).toBe('WESTERN')
+  })
+})
+
+describe('regionsIn', () => {
+  const m = siteRegionMap([
+    { name: 'AMAALA', region: 'WESTERN' },
+    { name: 'NHC', region: 'CENTRAL' },
+    { name: 'FAR AWAY', region: 'NORTHERN' },
+  ])
+
+  it('offers only the regions the sites on screen actually belong to', () => {
+    // NORTHERN exists in the registry but no row on screen sits there, so
+    // offering it would be a choice that returns nothing.
+    expect(regionsIn(m, ['AMAALA', 'NHC', 'NHC'])).toEqual(['CENTRAL', 'WESTERN'])
+  })
+
+  it('is empty when nothing on screen has a region, so the control can hide', () => {
+    expect(regionsIn(m, ['KSP-TP'])).toEqual([])
+    expect(regionsIn(m, [])).toEqual([])
   })
 })

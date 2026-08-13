@@ -416,6 +416,7 @@ export function filterDisposals(rows, {
   condition = '',
   site = '',
   inRegister = 'all',
+  downtime = '',
 } = {}) {
   const q = txt(search).toLowerCase()
   return (Array.isArray(rows) ? rows : []).filter((r) => {
@@ -427,6 +428,12 @@ export function filterDisposals(rows, {
     if (site && txt(r?.site) !== site) return false
     if (inRegister === 'yes' && r?.in_register !== true) return false
     if (inRegister === 'no' && r?.in_register === true) return false
+    // Downtime is merged on from the breakdown register. 'unknown' is its own
+    // choice rather than being folded into "never broken down": a machine we
+    // have no breakdown record for is not a machine that has never stopped.
+    if (downtime === 'down' && !(r?.breakdown?.open > 0)) return false
+    if (downtime === 'long' && !(r?.breakdown?.open > 0 && (r?.breakdown?.currentDays ?? 0) >= 30)) return false
+    if (downtime === 'unknown' && r?.breakdown) return false
     if (q) {
       const serials = (Array.isArray(r?.serials) ? r.serials : []).map((s) => txt(s?.serial)).join(' ')
       const hay = [r?.asset_no, r?.brand, r?.asset_type, r?.site, serials].map(txt).join(' ').toLowerCase()
@@ -595,6 +602,9 @@ const EXPORT_COLUMNS = [
   ['estimated_value', 'Estimated value'],
   ['sale_proceeds', 'Sale proceeds'],
   ['tyres_active', 'Tyres still fitted'],
+  ['downtime', 'Downtime'],
+  ['down_days', 'Days down now'],
+  ['current_fault', 'Current fault'],
   ['serials', 'Fitted tyre serials'],
   ['verdict', 'Verdict'],
   ['remarks', 'Remarks'],
@@ -641,6 +651,14 @@ export function disposalExportRows(rows, { now = Date.now() } = {}) {
       sale_proceeds: e.saleProceeds ?? 'N/A',
       tyres_active: e.tyresActive,
       serials: e.serials.map((s) => txt(s?.serial)).filter(Boolean).join(' | ') || 'None',
+      // From the breakdown register. "Not recorded" rather than 0, because the
+      // register began this month and an absent row is a gap in what we were
+      // told, not a machine that has never stopped.
+      downtime: r?.breakdown
+        ? (r.breakdown.open > 0 ? 'Down now' : 'Back in service')
+        : 'Not recorded',
+      down_days: r?.breakdown?.open > 0 ? (r.breakdown.currentDays ?? 'N/A') : 'N/A',
+      current_fault: (r?.breakdown?.open > 0 ? txt(r.breakdown.fault) : '') || 'N/A',
       verdict: e.verdictLabel,
       remarks: txt(r?.remarks) || '',
     }
@@ -684,6 +702,24 @@ export function disposalFindings(rows, totals = null, { now = Date.now() } = {})
       key: 'not-in-register',
       tone: 'warning',
       text: `${t.notInRegister} machines are not in the fleet register at all (${names.join(', ')}). They have no job cards and no spend here, which means no history was ever recorded rather than that they cost nothing.`,
+    })
+  }
+
+  // Downtime, when the breakdown register has something to say about these
+  // machines. Silent when it does not - the register only started this month,
+  // so most of the fleet legitimately has nothing on record.
+  const down = list.filter((r) => r?.breakdown?.open > 0)
+  if (down.length) {
+    const worst = down.reduce((a, b) => (
+      (b?.breakdown?.currentDays ?? -1) > (a?.breakdown?.currentDays ?? -1) ? b : a
+    ))
+    const d = worst?.breakdown?.currentDays
+    out.push({
+      key: 'down-now',
+      tone: 'warning',
+      text: `${down.length} of these machines ${down.length === 1 ? 'is' : 'are'} down right now`
+        + (d != null ? `, the longest being ${txt(worst.asset_no)} at ${d} days` : '')
+        + '. A machine that is already standing still costs nothing to withdraw.',
     })
   }
 

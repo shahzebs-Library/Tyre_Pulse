@@ -43,6 +43,48 @@ two conditions the fleet records most often) and the site-summary PDF's Good/Wea
 - `conditionCounts` now tests WEAR FIRST then the fault stems, so a worn tyre counts as wear and a burst one
   counts as damage instead of falling into "other", a bucket nobody reads.
 
+### THE BREAKDOWN SHEET NOW REACHES THE DISPOSAL COMMITTEE (code only, no migration)
+Owner asked what had been done with the breakdown tab they sent for the disposal list. Answered honestly: the
+SCRAP tab went INTO `asset_disposals` as enrichment (all 14 were already listed), but the BREAKDOWN tab became
+its OWN register (`/asset-breakdowns`) and **0 of its 30 machines appeared anywhere on `/asset-disposals`**.
+Owner chose "show breakdowns on the disposal page" over moving the rows in - correct, because a machine under
+repair is not a machine leaving the fleet.
+- Pure additions to `assetBreakdowns.js`: `breakdownsByAsset` (per-asset rollup; the LONGEST open breakdown
+  speaks for the machine), `mergeBreakdowns` (attaches `breakdown` + a `down` sort key), `downtimeNote`, and
+  **`disposalCandidatesFromBreakdowns`**. Disposal page gained a Downtime column, a 3-way downtime FILTER, a
+  downtime block in the detail drawer, 3 export columns and a downtime finding.
+- **A MACHINE WITH NO BREAKDOWN ROW READS "Not recorded", NEVER 0 DAYS.** The register began this month, so an
+  absent row means nobody told us - not that the machine has never stopped - and zero would sort it as the
+  healthiest machine in the fleet on the one page that decides what to scrap. `unknown` is its own filter
+  choice for the same reason.
+- **THE VALUE IS THE OTHER DIRECTION, and it only showed up after measuring.** With today's data the Downtime
+  column reads "Not recorded" on all 37 disposal rows, because the two sets do not overlap at all. So the panel
+  that earns its place is **"Down long enough to consider"**: open breakdowns past the register's own
+  over-30-days band whose machine is NOT on the disposal list - live, that is **IP065 down 218 days** (evaporator
+  coil, waiting parts from China, 22 job cards, still marked Active). It PROPOSES only; nothing is ever added to
+  the disposal register automatically, because whether a machine leaves the fleet is the committee's decision.
+  Threshold reuses `SEVERITY_BANDS.critical`, never a second invented number.
+
+### INSPECTIONS GAINED A REGION FILTER, AND ITS FILTER ROW NOW COLLAPSES (code only)
+Owner: "add a region filter also to the inspection filters, the same way we hid it - when we need it, it shows".
+- **REGION IS NOT A COLUMN ON AN INSPECTION AND MUST NOT BECOME ONE.** It is recorded once, on the `sites`
+  register, and every other table carries only `site`. NEW pure helpers in `src/lib/api/sites.js` -
+  `siteRegionMap(rows)` / `regionForSite(map, site)` / `regionsIn(map, siteNames)` - are the ONE way to read it.
+  **RULE: to cut any register by region, go site -> sites.region through these helpers; never add a second
+  region column to a business table, it will drift from the register.**
+- **MEASURED BEFORE BUILDING: all 12 sites that carry inspections resolve to a region** (AMAALA/RED SEA/JEDDAH/
+  DHAHBAN WESTERN, NHC/DIRIYAH-G1/G2/QIDDIYA/RIY-MET/RIY-SAL/KSP-TP CENTRAL), and **no site maps to two
+  regions** - AMAALA is listed twice in `sites` but both rows agree. `siteRegionMap` still resolves a duplicate
+  deterministically (first row that NAMES a region wins) so one site can never fall into two regions on two
+  screens.
+- Honest edges, each pinned by test: a site the register does not place returns `''` and is **EXCLUDED** while a
+  region is selected rather than swept into whichever region was picked; `regionsIn` offers only the regions the
+  **rows on screen** belong to (a region that exists in the registry but has nothing on screen would be a choice
+  that returns nothing); and the whole control **does not render** when no site on screen has a region.
+- Filter row now matches the ACCIDENT REGISTER exactly: search + status pills stay out, Region / Site /
+  Inspector / From / To collapse behind one **`Filters (N)`** toggle with a Clear and an "N of M shown" count.
+  Inspector filter added at the same time (the search box only matched it as free text).
+
 ### WHAT WAS DELIBERATELY NOT CHANGED
 - **`positionKey`/`wheelKey` in tyreChangeTracking were rewritten to convert through the axle layout, then
   REVERTED.** `baseFlag` already converts (it is the only place that still knows the vehicle), and the change

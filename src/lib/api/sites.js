@@ -53,6 +53,51 @@ export function siteOptionsForCountry(rows, country, { activeOnly = true } = {})
   return out.sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * Site name -> region, so a screen that only carries a site can still be cut by
+ * region.
+ *
+ * Region is recorded ONCE, on the site register, and every other table carries
+ * only the site. Reading it through here is what stops a second region column
+ * appearing on each register and drifting from the first.
+ *
+ * A site listed twice is resolved deterministically - the first row that
+ * actually names a region wins - so a duplicate registry row can never make the
+ * same site fall into two regions on two different screens.
+ */
+export function siteRegionMap(rows) {
+  const map = new Map()
+  for (const r of rows || []) {
+    const name = String(r?.name ?? '').trim().toUpperCase()
+    const region = String(r?.region ?? '').trim()
+    if (!name || !region) continue
+    if (!map.has(name)) map.set(name, region)
+  }
+  return map
+}
+
+/** The region a site sits in, or '' when the register does not say. */
+export function regionForSite(map, site) {
+  if (!map || !site) return ''
+  return map.get(String(site).trim().toUpperCase()) || ''
+}
+
+/**
+ * The regions actually present among the sites on screen, sorted.
+ *
+ * Derived from the rows rather than from a fixed Central/Western list, because
+ * a hard-coded pair silently drops a region the moment somebody adds one - and
+ * a filter that cannot select a region hides those rows completely.
+ */
+export function regionsIn(map, siteNames) {
+  const seen = new Set()
+  for (const s of siteNames || []) {
+    const r = regionForSite(map, s)
+    if (r) seen.add(r)
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b))
+}
+
 /** Blank editable site for a country. */
 export function emptySite(country = '') {
   return {

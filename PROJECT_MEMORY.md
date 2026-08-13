@@ -3,6 +3,76 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-13 — THE ASSET SHEET'S OTHER TWO TABS (V539/V540). Next free **V541**.
+Owner sent `ASSETS_LIST__UPDATED_1282026.xlsx`: "master list of assets with updates, correct it or match it with
+our asset list, other 2 sheets needs to asset disposal list and also filter option should be there".
+
+### THE SHEET ADDED NOTHING TO THE REGISTER'S IDENTITY AND EVERYTHING TO ITS OPERATIONS - measured first
+Its 618 asset codes are **the SAME 618 the owner sent on 2026-08-11**, all already in `vehicle_fleet`: sheet-only
+assets **0**, plate conflicts **0**, model-year conflicts **0** (V505 had already filled those). What is genuinely
+new: **173 site moves, 75 status changes**, and two columns the register has NEVER carried.
+- **V539** `vehicle_fleet.ops_status` (+ `_note`/`_at`) + **`capacity`** + **`engine_no`**.
+  **ops_status IS NOT `status`.** `status` = is this machine on the current fleet (V508 Active/Inactive);
+  `ops_status` = what is it doing today. A machine can be Active AND broken down, or Active AND already earmarked
+  for scrap. Merging them hides whichever question you are asking. Vocabulary mapped from the sheet's own words:
+  RUNING->running 548 / BREAKDOWN->breakdown 30 / Plan For Scrap->planned_scrap 17 / IN PROCESS For Reallocation
+  + Plan To Move->reallocation 14 / IDLE - Stand by->idle 7. **`RUMAH - YARD` in the status column is a SITE that
+  slipped a column in the source sheet** - recorded as `other` with the raw text kept in `ops_status_note`, never
+  invented into a status.
+- **V540 applied, verified: capacity 0 -> 543, engine_no 0 -> 513, ops_status 0 -> 618, make +7, sites moved 49.**
+  KSA fleet unchanged at 1,030. Snapshot `_bak.fleet_master_v491f` (per-row, every touched column).
+- **ONLY BLANK FIELDS ARE FILLED**, so a re-upload can never overwrite a correction someone has since made.
+
+### THE TWO SITE VALUES THAT MUST NEVER BE WRITTEN
+**CENTRAL REGION (49 assets) is a REGION** and **`METRO / QIDDIYAH UP` (33) names TWO sites in one cell**. Writing
+either puts 82 machines somewhere that does not exist, so both are SKIPPED and those assets keep the site we can
+defend. 3 safe aliases added instead (`QIDDIYA L`/`QIDDIYAH L` -> QIDDIYA-LOWER PLATEAU, `KSP TP` -> KSP-TP) so a
+re-upload self-corrects through `normalize_site()`. **The V507 parent-collapse guard earned its keep again: 23
+assets would have had KSP-T1/KSP-TP overwritten with the sheet's plain `KSP`**, discarding the terminal all their
+cost is booked against. 463 sites were already correct (V507 did its job), 49 genuinely moved.
+
+### I ALMOST BUILT A SECOND DISPOSAL MODULE - `asset_disposals` ALREADY EXISTS (37 rows, `/asset-disposals`)
+The first V491 attempt failed with "column stage does not exist" **because the table was already there**. The
+planned-scrap tab is therefore loaded as ENRICHMENT of the rows already present, not as new rows: **all 14 scrap
+assets were already listed**, and they gained meter reading, lifetime maintenance spend, job-card count + last
+date, major-repair flag and a real condition description they had none of. `/asset-disposals` ALREADY has full
+filters + clickable tiles + exports (built by a parallel session) - do NOT add a second filter surface there.
+**RULE (bit me): before creating a register, grep for the table AND the route.**
+
+### V539 BREAKDOWN REGISTER - a breakdown closes ONLY when a return is recorded
+NEW `asset_breakdowns` (org restrictive + country restrictive-select + active read + elevated write,
+`trg_zz_normalize_site`). 30 machines loaded, **worst down 218 days** (IP065 evaporator coil, waiting parts from
+China), 4 at outside workshops. **The expected-return date passing does NOT close a breakdown** - a promise that
+slipped is exactly what the register exists to surface. Partial unique index on OPEN breakdowns only
+(`where returned_to_service = false`): pressing the button twice cannot duplicate, but the same machine genuinely
+can break down again and a plain unique constraint would silently suppress the recurrence (the V496 lesson).
+`reported_on` is the owner's own `breakdown_days` subtracted from the file date - arithmetic on their figure, not
+invention. Surfaces: pure `src/lib/assetBreakdowns.js` (24 tests) + `src/lib/api/assetBreakdowns.js` +
+**`/asset-breakdowns`** (Operations nav "Breakdown Register") with filters (search/site/repaired-at/state),
+clickable tiles, severity bands, repeat-offender chips, Excel/PDF. **`Number(null)` is 0 AND 0 IS FINITE** bit me
+again in `downDays` - caught by my own test; the blank check must come before `Number()`.
+- Asset Management gained an **Operational status column + filter** (`OpsStatusBadge`); no status = a quiet dash,
+  because never-recorded and running are different claims.
+
+### PROCESS - THE BRANCH WAS BEHIND MAIN AND I NEARLY FORCE-PUSHED OVER FIVE COMMITS
+`origin/<branch>` still held 5 unmerged commits from earlier in the session (Broadcast page + role-picker fix,
+admin password reset V489, mobile asset browse/search, Play alpha track) while my local was realigned to main.
+**`git log origin/main..origin/<branch>` BEFORE any force-with-lease** - the check already recorded in this file -
+found them; cherry-picked onto main, keeping main's newer paged mobile screens and dropping the superseded
+server-search commit. `mobile/lib/fleetSearch.ts` + its V490 file were deliberately DROPPED: main's
+`fetchAllRows` paging already solves the row cap those replaced.
+- **The mobile checklist asset picker returned NOTHING until two characters were typed**, so a tyre man who did
+  not know the code could not reach any asset - the fleet was loaded and simply never rendered. Now an empty box
+  lists the first 40 and typing narrows them.
+- Full suite **7,473 tests / 495 files green**; web build + lint 0 errors; mobile tsc 0.
+
+### OPEN
+- **`MT001`'s source row is column-shifted** (its chassis sits in the capacity column, "ISUZU - CAPACITY (5000
+  LTR) 6TON" in engine_no). Loaded verbatim; needs a corrected row from the owner, not a guess.
+- The 4 `Plan To Move to Central` generators (NEOM) are mapped to `reallocation`; if the owner wants "planned
+  move" tracked separately it needs its own token, not a re-use of this one.
+- `asset_breakdowns` is KSA-only today because that is the only country the sheet covers.
+
 ## SESSION 2026-08-12 — SECURITY AUDIT + LOAD SPEED (V535-V538). Next free **V539**. Washing tab fix (mobile, unmerged).
 Owner: "silent audit expo keys anything in repo with usernam password remove it and mant more security and db
 speed fast loading fix it". Four parallel agents, every finding re-verified by hand before acting - three did not

@@ -1,5 +1,7 @@
 -- =============================================================================
--- V491 - Operational status on the fleet register + a breakdown register
+-- V539 - Operational status on the fleet register + a breakdown register
+-- (applied live under the names v491_* / v491b_*; the repo label V491 was already
+--  taken by the expense country guard, so the file carries the next free label)
 -- STATUS: APPLIED LIVE on project jhssdmeruxtrlqnwfksc (2026-08-13), verified.
 --
 -- WHY

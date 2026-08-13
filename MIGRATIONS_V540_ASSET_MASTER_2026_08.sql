@@ -1,11 +1,13 @@
 -- =============================================================================
--- V491c-f - The 2026-08-12 KSA asset master applied to the fleet register
+-- V540 - The 2026-08-12 KSA asset master applied to the fleet register
+-- (applied live as v491c/v491d/v491e/v491f; renumbered here because the repo
+--  label V491 was already taken by the expense country guard)
 -- STATUS: APPLIED LIVE on project jhssdmeruxtrlqnwfksc (2026-08-13), verified.
 --
--- V491c  one landing table, not one per upload
--- V491d  key the landing table per FILE so two copies of the sheet can coexist
--- V491e  three site spellings the register already has under another name
--- V491f  apply the sheet: capacity, engine number, operational status, sites
+-- part 1  one landing table, not one per upload
+-- part 2  key the landing table per FILE so two copies of the sheet can coexist
+-- part 3  three site spellings the register already has under another name
+-- part 4  apply the sheet: capacity, engine number, operational status, sites
 --
 -- WHAT THE SHEET ACTUALLY ADDED - measured before anything was written.
 --   Its 618 asset codes are the SAME 618 the owner sent on 2026-08-11, and
@@ -40,8 +42,8 @@
 --     from _bak.fleet_master_v491f b where b.id = f.id;
 -- =============================================================================
 
--- ---------------------------------------------------------------- V491c ----
--- V491b created `ksa_master_2026_08`, which is column-for-column the same thing
+-- --------------------------------------------------------------- part 1 ----
+-- The first attempt created `ksa_master_2026_08`, which is column-for-column the same thing
 -- as the `ksa_asset_master_upload` table V505 already built for the previous
 -- copy of this sheet. Two landing tables for one file means the next
 -- reconciliation has to be told which to read, and eventually reads the stale
@@ -59,7 +61,7 @@ update public.ksa_asset_master_upload
 create index if not exists ksa_asset_master_upload_file_idx
   on public.ksa_asset_master_upload (source_file, asset_no);
 
--- ---------------------------------------------------------------- V491d ----
+-- --------------------------------------------------------------- part 2 ----
 -- The key was the asset code alone, so the table could hold exactly ONE copy of
 -- the sheet - and the owner sends it repeatedly. The second copy is precisely
 -- what shows what changed, so the key becomes (file, asset). An asset still
@@ -71,7 +73,7 @@ drop index if exists public.ux_ksa_asset_master_upload_asset;
 create unique index if not exists ux_ksa_asset_master_upload_file_asset
   on public.ksa_asset_master_upload (coalesce(source_file, ''), asset_no);
 
--- ---------------------------------------------------------------- V491e ----
+-- --------------------------------------------------------------- part 3 ----
 insert into public.site_aliases (alias, canonical)
 values
   ('QIDDIYA L',  'QIDDIYA-LOWER PLATEAU'),
@@ -79,7 +81,7 @@ values
   ('KSP TP',     'KSP-TP')
 on conflict (alias) do nothing;
 
--- ---------------------------------------------------------------- V491f ----
+-- --------------------------------------------------------------- part 4 ----
 create schema if not exists _bak;
 
 drop table if exists _bak.fleet_master_v491f;

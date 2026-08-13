@@ -33,6 +33,7 @@ export const NAV_COMMANDS = [
   { id: 'assets',         label: 'Asset Management',     path: '/assets',      icon: 'LayoutGrid' },
   { id: 'asset-disposals', label: 'Asset Disposal',      path: '/asset-disposals', icon: 'Recycle', roles: ANALYTICS_ROLES, moduleKey: 'asset_disposals' },
   { id: 'asset-breakdowns', label: 'Breakdown Register', path: '/asset-breakdowns', icon: 'Wrench', roles: ANALYTICS_ROLES, moduleKey: 'asset_breakdowns' },
+  { id: 'broadcast', label: 'Message the Team',      path: '/broadcast', icon: 'Megaphone', roles: ANALYTICS_ROLES, moduleKey: 'broadcast' },
   { id: 'actions',        label: 'Corrective Actions',   path: '/actions',     icon: 'ClipboardList' },
   { id: 'rca',            label: 'Root Cause',           path: '/rca',         icon: 'Search' },
   { id: 'daily-ops',      label: 'Daily Ops',            path: '/daily-ops',   icon: 'Calendar',      adminOnly: true },

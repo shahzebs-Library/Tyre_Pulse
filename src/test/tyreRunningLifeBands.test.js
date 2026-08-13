@@ -7,11 +7,18 @@
  *
  * If a test here fails, the number was changed in JS. Change
  * MIGRATIONS_V526_RUNNING_LIFE_FILTERS.sql in the SAME edit and re-apply it.
+ *
+ * The SHAPE of the rule is mirrored too: V541 made the server's is_due the
+ * UNION of the two budgets ("whichever runs out first"), matching measureFor
+ * here. If that shape changes on one side, change MIGRATIONS_V541_RUNNING_LIFE_
+ * DUE_EITHER_BUDGET.sql on the other, or the due-only fetch and the on-screen
+ * badge start disagreeing about which tyres are due - silently.
  */
 import { describe, it, expect } from 'vitest'
 import {
   DUE_SOON_KM, DUE_SOON_HOURS, LIFE_USED_DUE_PCT, bandFor, isDueRow,
   measureFor, measureNote, isHoursUnit, vehicleTypesIn, filterRows, filterDescription, coverage,
+  budgetsFor,
 } from '../lib/tyreRunningLife'
 
 describe('running-life due thresholds (mirrored by the V526 SQL)', () => {
@@ -137,5 +144,63 @@ describe('coverage counts plant as plant', () => {
     const c = coverage(rows)
     expect(c.onHours).toBe(1)
     expect(c.noCurrentKm).toBe(1)
+  })
+})
+
+/**
+ * WHICHEVER BUDGET RUNS OUT FIRST.
+ *
+ * The owner sets TWO targets for a pump - 30,000 km and 5,000 hours - and both
+ * are real. Measured live: all 719 KSA pump tyres carry both, and on 73 of them
+ * the DISTANCE is the one further along. So neither meter may win by default:
+ * reading km first missed 55 tyres spent on hours, reading hours first missed
+ * the tyre spent on distance.
+ */
+describe('two budgets, whichever comes first', () => {
+  const pump = (o = {}) => ({ unit: 'hours', vehicleType: 'PUMPS', ...o })
+
+  it('a pump spent on HOURS is due even though its distance looks fine', () => {
+    const r = pump({ remainingKm: 20000, lifeUsedPct: 30, remainingHours: 100, hoursUsedPct: 98 })
+    expect(bandFor(r)).toBe('due-soon')
+    expect(measureFor(r).dimension).toBe('hours')
+    expect(measureNote(r)).toBe('') // its own meter decided; nothing surprising
+  })
+
+  it('a pump spent on DISTANCE is due even though its hours look fine', () => {
+    // this is the case a strict hours-only rule silently missed
+    const r = pump({ remainingKm: 0, lifeUsedPct: 100, remainingHours: 3000, hoursUsedPct: 40 })
+    expect(bandFor(r)).toBe('overdue')
+    expect(measureFor(r).dimension).toBe('km')
+    expect(measureNote(r)).toMatch(/Distance budget runs out first/i)
+    expect(measureNote(r)).toContain('100% used')
+  })
+
+  it('takes the worse of the two, never the average and never the kinder one', () => {
+    const r = pump({ remainingKm: 500, lifeUsedPct: 95, remainingHours: 4000, hoursUsedPct: 20 })
+    expect(bandFor(r)).toBe('due-soon')
+    expect(measureFor(r).used).toBe(95)
+  })
+
+  it('a tie goes to the meter the machine is managed by, so the figure is the familiar one', () => {
+    const r = pump({ remainingKm: 20000, lifeUsedPct: 30, remainingHours: 4000, hoursUsedPct: 30 })
+    expect(measureFor(r).dimension).toBe('hours')
+    expect(measureNote(r)).toBe('')
+  })
+
+  it('publishes both budgets so the screen can show what the owner set', () => {
+    const r = pump({ remainingKm: 500, lifeUsedPct: 95, remainingHours: 4000, hoursUsedPct: 20 })
+    const b = budgetsFor(r)
+    expect(b.map((x) => x.label)).toEqual(['Distance', 'Engine hours'])
+    expect(b.find((x) => x.leading).label).toBe('Distance')
+    // a machine with only one budget has nothing to compare
+    expect(budgetsFor({ unit: 'km', remainingKm: 100, lifeUsedPct: 50 })).toEqual([])
+  })
+
+  it('a mixer has no hours target at all, so nothing about it changes', () => {
+    const mixer = { unit: 'km', remainingKm: 500, lifeUsedPct: 97, remainingHours: null, hoursUsedPct: null }
+    expect(bandFor(mixer)).toBe('due-soon')
+    expect(measureFor(mixer).dimension).toBe('km')
+    expect(measureFor(mixer).both).toBe(false)
+    expect(measureNote(mixer)).toBe('')
   })
 })

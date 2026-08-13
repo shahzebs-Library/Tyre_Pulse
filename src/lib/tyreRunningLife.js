@@ -183,49 +183,138 @@ export const LIFE_USED_DUE_PCT = 90
  * @returns {{remaining:number|null, used:number|null, soon:boolean,
  *            dimension:'km'|'hours'|null, onFallback:boolean}}
  */
-export function measureFor(row) {
-  if (!row) return { remaining: null, used: null, soon: false, dimension: null, onFallback: false }
-  const km = {
-    remaining: row.remainingKm, used: row.lifeUsedPct,
-    soon: row.remainingKm != null && row.remainingKm < DUE_SOON_KM, dimension: 'km',
-  }
-  const hours = {
-    remaining: row.remainingHours, used: row.hoursUsedPct,
-    soon: row.remainingHours != null && row.remainingHours < DUE_SOON_HOURS, dimension: 'hours',
-  }
-  // shapeRow folds 'engine_hours' to 'hours'; accept BOTH tokens so this is
-  // correct whether it is handed a shaped row or a raw RPC row. Testing only
-  // one spelling is how the coverage counter below silently read zero.
-  const onHours = isHoursUnit(row.unit)
-  const own = onHours ? hours : km
-  const other = onHours ? km : hours
-  if (own.remaining != null) return { ...own, onFallback: false }
-  if (other.remaining != null) return { ...other, onFallback: true }
-  return { remaining: null, used: null, soon: false, dimension: null, onFallback: false }
-}
+/** Worst-first, so "whichever comes first" can be resolved by comparison. */
+const BAND_RANK = { overdue: 4, 'due-soon': 3, 'mid-life': 2, healthy: 1, unknown: 0 }
 
-export function bandFor(row) {
-  if (!row) return 'unknown'
-  const { remaining, used, soon } = measureFor(row)
+/** The verdict for ONE budget, judged only against that budget's own limits. */
+function dimensionBand(remaining, used, soonLimit) {
   if (remaining == null) return 'unknown'
   if (remaining === 0) return 'overdue'
-  if (soon || (used != null && used >= LIFE_USED_DUE_PCT)) return 'due-soon'
+  if (remaining < soonLimit || (used != null && used >= LIFE_USED_DUE_PCT)) return 'due-soon'
   if (used != null && used >= 60) return 'mid-life'
   return 'healthy'
 }
 
 /**
- * One line saying what the State was judged on. Silent in the ordinary case -
- * a note on every row is a note nobody reads - and speaks up exactly when the
- * figure came from the meter this machine is NOT managed by.
+ * WHICHEVER BUDGET RUNS OUT FIRST.
+ *
+ * A concrete pump carries TWO targets because the owner set two: 30,000 km AND
+ * 5,000 hours. Both are real, and a tyre is finished when EITHER is spent - the
+ * one that arrives first is the one that decides. All 719 pump tyres in KSA
+ * carry both targets, and on 73 of them it is the DISTANCE that is further
+ * along, not the hours.
+ *
+ * So neither meter may win by default:
+ *   - reading km first missed 55 pump tyres that were spent on hours
+ *   - reading hours first missed the pump tyre that was spent on distance
+ * Each budget is judged against its own limits and the WORSE verdict governs,
+ * which is what "whichever comes first" means in arithmetic.
+ *
+ * A machine's own unit still matters, but only as the tie-break and as the
+ * thing the screen leads with - a mixer has no hours target at all, so nothing
+ * changes for it.
+ *
+ * @returns {{remaining:number|null, used:number|null, soon:boolean,
+ *            dimension:'km'|'hours'|null, band:string, onFallback:boolean,
+ *            leadingOther:boolean, km:object, hours:object, both:boolean}}
+ */
+export function measureFor(row) {
+  const none = {
+    remaining: null, used: null, soon: false, dimension: null, band: 'unknown',
+    onFallback: false, leadingOther: false,
+    km: { remaining: null, used: null, band: 'unknown', dimension: 'km' },
+    hours: { remaining: null, used: null, band: 'unknown', dimension: 'hours' },
+    both: false,
+  }
+  if (!row) return none
+
+  const km = {
+    dimension: 'km',
+    remaining: row.remainingKm,
+    used: row.lifeUsedPct,
+    soon: row.remainingKm != null && row.remainingKm < DUE_SOON_KM,
+    band: dimensionBand(row.remainingKm, row.lifeUsedPct, DUE_SOON_KM),
+  }
+  const hours = {
+    dimension: 'hours',
+    remaining: row.remainingHours,
+    used: row.hoursUsedPct,
+    soon: row.remainingHours != null && row.remainingHours < DUE_SOON_HOURS,
+    band: dimensionBand(row.remainingHours, row.hoursUsedPct, DUE_SOON_HOURS),
+  }
+
+  // shapeRow folds 'engine_hours' to 'hours'; accept BOTH tokens so this is
+  // correct whether it is handed a shaped row or a raw RPC row. Testing only
+  // one spelling is how the coverage counter above silently read zero.
+  const onHours = isHoursUnit(row.unit)
+  const own = onHours ? hours : km
+  const other = onHours ? km : hours
+
+  const measured = [km, hours].filter((d) => d.remaining != null)
+  if (!measured.length) return { ...none, km, hours }
+
+  // Worst budget wins; a tie goes to the meter the machine is managed by, so
+  // the screen leads with the figure the operator recognises.
+  let lead = own.remaining != null ? own : other
+  for (const d of measured) {
+    if (BAND_RANK[d.band] > BAND_RANK[lead.band]) lead = d
+  }
+
+  return {
+    ...lead,
+    band: lead.band,
+    // Its own meter has never been read - we are measuring on the other one.
+    onFallback: own.remaining == null,
+    // Both were measurable and the OTHER budget is the one running out first.
+    leadingOther: own.remaining != null && lead.dimension !== own.dimension,
+    km,
+    hours,
+    both: km.remaining != null && hours.remaining != null,
+  }
+}
+
+export function bandFor(row) {
+  if (!row) return 'unknown'
+  return measureFor(row).band
+}
+
+/**
+ * One line saying what the State was judged on.
+ *
+ * Silent in the ordinary case - a note on every row is a note nobody reads - and
+ * speaks up on exactly the two occasions a reader would otherwise be surprised:
+ * the machine's own meter has never been read, or the machine carries two
+ * budgets and it is the OTHER one that is running out first.
  */
 export function measureNote(row) {
   const m = measureFor(row)
   if (!m.dimension) return ''
-  if (!m.onFallback) return ''
-  return isHoursUnit(row?.unit)
-    ? 'Judged on distance: no hour-meter reading has been recorded for this machine.'
-    : 'Judged on engine hours: no odometer reading has been recorded for this machine.'
+  if (m.onFallback) {
+    return isHoursUnit(row?.unit)
+      ? 'Judged on distance: no hour-meter reading has been recorded for this machine.'
+      : 'Judged on engine hours: no odometer reading has been recorded for this machine.'
+  }
+  if (m.leadingOther) {
+    const pct = (v) => (v == null ? 'unmeasured' : `${v}% used`)
+    return m.dimension === 'km'
+      ? `Distance budget runs out first: ${pct(m.km.used)} against ${pct(m.hours.used)} of the hours budget.`
+      : `Hours budget runs out first: ${pct(m.hours.used)} against ${pct(m.km.used)} of the distance budget.`
+  }
+  return ''
+}
+
+/**
+ * Both budgets, side by side, for a machine that carries two - so the screen
+ * can show what the owner actually set rather than only the half that decided.
+ * Empty for a machine with a single budget; there is nothing to compare.
+ */
+export function budgetsFor(row) {
+  const m = measureFor(row)
+  if (!m.both) return []
+  return [
+    { label: 'Distance', used: m.km.used, remaining: m.km.remaining, band: m.km.band, unit: 'km', leading: m.dimension === 'km' },
+    { label: 'Engine hours', used: m.hours.used, remaining: m.hours.remaining, band: m.hours.band, unit: 'hrs', leading: m.dimension === 'hours' },
+  ]
 }
 
 /**

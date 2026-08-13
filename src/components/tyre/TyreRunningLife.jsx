@@ -14,7 +14,7 @@ import {
 } from '../../lib/api/tyreRunningLife'
 import {
   shapeRunningLife, filterRows, bandFor, BAND_META, fmtNum, lifeDisplay, basisLabel, dueLabel,
-  vehicleTypesIn, measureNote, measureFor,
+  vehicleTypesIn, measureNote, measureFor, budgetsFor,
   summarize, inFittedRange, filterDescription, coverageNote, bandNeedsFullSet,
 } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
@@ -570,6 +570,7 @@ function TyreLifeDetailModal({ row, onClose }) {
   // on, or the badge and the number under it disagree.
   const usedPct = measureFor(row).used
   const judgedNote = measureNote(row)
+  const budgets = budgetsFor(row)
   const fields = [
     ['Serial', row.serial || 'N/A'],
     ['Asset', row.asset || 'N/A'],
@@ -579,6 +580,13 @@ function TyreLifeDetailModal({ row, onClose }) {
     ['Size', row.size || 'N/A'],
     ['Brand', row.brand || 'N/A'],
     ['Measured in', row.unit === 'hours' ? 'Engine hours' : 'Kilometres'],
+    // A machine the owner gave two targets shows BOTH, marked with the one
+    // running out first - that is the budget deciding the state, and hiding the
+    // other half would hide a target they deliberately set.
+    ...budgets.map((b) => [
+      `${b.label} budget${b.leading ? ' (runs out first)' : ''}`,
+      b.used != null ? `${b.used}% used, ${fmtNum(b.remaining)} ${b.unit} left` : 'Not measurable',
+    ]),
     ...(judgedNote ? [['State judged on', judgedNote]] : []),
     ['Fitted on', row.fittedOn ? String(row.fittedOn).slice(0, 10) : 'N/A'],
     ['Days on vehicle', fmtNum(row.daysOn)],

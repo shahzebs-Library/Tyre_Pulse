@@ -24,7 +24,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
   listAssetBreakdowns, saveAssetBreakdown, markReturnedToService,
-  reopenAssetBreakdown, deleteAssetBreakdown,
+  reopenAssetBreakdown,
 } from '../lib/api/assetBreakdowns'
 import {
   EMPTY_BREAKDOWN_FILTERS, filterBreakdowns, breakdownSummary, severityBands,

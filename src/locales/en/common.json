@@ -58,5 +58,7 @@
   "completed": "Completed",
   "country": "Country",
   "allCountries": "All Countries",
-  "language": "Language"
+  "language": "Language",
+  "collapse": "Collapse",
+  "expand": "Expand"
 }

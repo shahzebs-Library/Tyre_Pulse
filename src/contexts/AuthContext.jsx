@@ -309,7 +309,7 @@ export function AuthProvider({ children }) {
     // in particular is documented as able to throw a non-AuthError.
     const settle = () => ({ data: null, error: true })
     const [profileRes, permsRes, factorsRes, grantsRes, capsRes] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single().then(r => r, settle),
+      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,sites,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single().then(r => r, settle),
       supabase.rpc('get_user_module_permissions').then(r => r, settle),
       supabase.auth.mfa.listFactors().then(r => r, settle),
       // Per-user access grants. Fail-closed: on any error keep {} — never throw
@@ -409,7 +409,7 @@ export function AuthProvider({ children }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,web_access,created_at')
+        .select('id,full_name,username,role,email,employee_id,site,sites,country,approved,locked,is_super_admin,web_access,created_at')
         .eq('id', uid).single()
       if (error || !data) return
       if (data.locked === true || data.approved === false) {

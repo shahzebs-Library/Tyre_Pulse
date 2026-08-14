@@ -359,13 +359,20 @@ export const RECORD_SOURCES = [
     id: 'vehicles',
     label: 'Vehicles',
     table: 'vehicle_fleet',
-    select: 'id,asset_no,make,model,site',
-    fields: ['asset_no', 'make', 'model'],
+    // registration_no IS the plate on this table - there is no `plate_number`
+    // column on vehicle_fleet (that one lives on `accidents`). chassis_no is the
+    // VIN/chassis. Both were verified against the live column lists before being
+    // added: a column PostgREST cannot find fails the ENTIRE request, so an
+    // unverified name here would kill vehicle search outright rather than just
+    // returning nothing.
+    select: 'id,asset_no,make,model,site,registration_no,chassis_no',
+    fields: ['asset_no', 'make', 'model', 'registration_no', 'chassis_no'],
     access: { path: '/fleet-master' },
     toResult: (row) => ({
       id: `vehicles-${row.id}`,
       label: row.asset_no || 'Unknown asset',
-      sub: [row.make, row.model, row.site].filter(Boolean).join(' · '),
+      // Plate is shown so a plate/VIN search visibly explains WHY the row matched.
+      sub: [row.make, row.model, row.registration_no, row.site].filter(Boolean).join(' · '),
       path: row.asset_no ? `/vehicle/${encodeURIComponent(row.asset_no)}` : '/fleet-master',
       icon: 'Truck',
     }),
@@ -374,13 +381,13 @@ export const RECORD_SOURCES = [
     id: 'tyres',
     label: 'Tyre Records',
     table: 'tyre_records',
-    select: 'id,serial_no,asset_no,brand',
-    fields: ['serial_no', 'asset_no', 'brand'],
+    select: 'id,serial_no,asset_no,brand,size',
+    fields: ['serial_no', 'asset_no', 'brand', 'size'],
     access: { path: '/tyres' },
     toResult: (row) => ({
       id: `tyres-${row.id}`,
       label: row.serial_no || row.asset_no || 'Tyre',
-      sub: [row.asset_no, row.brand].filter(Boolean).join(' · '),
+      sub: [row.asset_no, row.brand, row.size].filter(Boolean).join(' · '),
       // Deep link: TyreRecords pre-filters from ?search= (serial jumps straight to the record)
       path: row.serial_no ? `/tyres?search=${encodeURIComponent(row.serial_no)}` : '/tyres',
       icon: 'CircleDot',
@@ -429,6 +436,102 @@ export const RECORD_SOURCES = [
       sub: [row.inspector, row.inspection_date, row.site].filter(Boolean).join(' · '),
       path: '/inspections',
       icon: 'ClipboardCheck',
+    }),
+  },
+  {
+    id: 'work-orders',
+    label: 'Work Orders',
+    table: 'work_orders',
+    select: 'id,work_order_no,asset_no,status,site',
+    fields: ['work_order_no', 'asset_no'],
+    // Route guard is ModuleRoute moduleKey="work_orders" (App.jsx), which is also
+    // what NAV_MODULE_KEY['/work-orders'] resolves to. Stated explicitly so the
+    // custom-role branch of isCommandVisible gates on the same key.
+    access: { path: '/work-orders', moduleKey: 'work_orders' },
+    toResult: (row) => ({
+      id: `work-orders-${row.id}`,
+      label: row.work_order_no || row.asset_no || 'Job card',
+      sub: [row.asset_no, row.status, row.site].filter(Boolean).join(' · '),
+      // No deep link: the Work Orders page reads no URL search param, so a
+      // ?search= link would look like a filter and silently do nothing.
+      path: '/work-orders',
+      icon: 'Wrench',
+    }),
+  },
+  {
+    id: 'accidents',
+    label: 'Accidents',
+    table: 'accidents',
+    select: 'id,reference_no,asset_no,incident_date,severity,status,site',
+    fields: ['asset_no', 'reference_no'],
+    access: { path: '/accidents', moduleKey: 'accidents' },
+    toResult: (row) => ({
+      id: `accidents-${row.id}`,
+      label: row.reference_no || row.asset_no || 'Incident',
+      sub: [row.asset_no, row.incident_date, row.severity, row.status].filter(Boolean).join(' · '),
+      // /accidents/:id is a real route (AccidentDetail), so this deep link works.
+      path: row.id ? `/accidents/${encodeURIComponent(row.id)}` : '/accidents',
+      icon: 'AlertTriangle',
+    }),
+  },
+  {
+    id: 'insurance-claims',
+    label: 'Insurance Claims',
+    table: 'insurance_claims',
+    select: 'id,claim_no,asset_no,insurer,policy_no,status',
+    fields: ['claim_no', 'asset_no', 'policy_no'],
+    // /insurance-claims is RoleRoute allowed={['Admin','Manager','Director']}
+    // (App.jsx) - this data carries insurer/policy detail, so the record search
+    // is held to the same role gate as the page.
+    access: { path: '/insurance-claims', roles: ANALYTICS_ROLES },
+    toResult: (row) => ({
+      id: `insurance-claims-${row.id}`,
+      label: row.claim_no || row.asset_no || 'Claim',
+      sub: [row.asset_no, row.insurer, row.status].filter(Boolean).join(' · '),
+      path: '/insurance-claims',
+      icon: 'ShieldAlert',
+    }),
+  },
+  {
+    id: 'purchase-orders',
+    label: 'Purchase Orders',
+    table: 'purchase_orders',
+    select: 'id,po_number,vendor_name,supplier_name,order_date,status,site',
+    fields: ['po_number', 'vendor_name', 'supplier_name'],
+    // Same gate as the Suppliers source: adminOnly nav entry + ModuleRoute 'stock'.
+    access: { path: '/procurement', adminOnly: true, moduleKey: 'stock' },
+    toResult: (row) => ({
+      id: `purchase-orders-${row.id}`,
+      label: row.po_number || 'Purchase order',
+      sub: [row.vendor_name || row.supplier_name, row.order_date, row.status].filter(Boolean).join(' · '),
+      path: '/procurement',
+      icon: 'ShoppingCart',
+    }),
+  },
+  {
+    id: 'stock',
+    label: 'Stock Items',
+    table: 'stock_records',
+    // stock_records carries no item/part code column - `description` IS the item
+    // name here (see the stock import field set), so it is the only sensible
+    // search field. Site is deliberately NOT searched: matching it would return
+    // a whole site's inventory and crowd out the item the user typed.
+    select: 'id,description,site,stock_qty,stock_status',
+    fields: ['description'],
+    access: { path: '/stock', moduleKey: 'stock' },
+    toResult: (row) => ({
+      id: `stock-${row.id}`,
+      label: row.description || 'Stock item',
+      // stock_qty is formatted separately rather than dropped into filter(Boolean):
+      // 0 is falsy, and a zero-stock item is exactly the row someone is hunting for,
+      // so a truthiness filter would hide the quantity precisely when it matters.
+      sub: [
+        row.site,
+        row.stock_qty == null ? null : `Qty ${row.stock_qty}`,
+        row.stock_status,
+      ].filter(Boolean).join(' · '),
+      path: '/stock',
+      icon: 'Package',
     }),
   },
 ]

@@ -749,8 +749,11 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   )
 }
 
-const SIDEBAR_EXPANDED = 240
-const SIDEBAR_COLLAPSED = 54
+// Widths per the shell spec: 260-280 expanded, 68-72 collapsed. Was 240/54,
+// which was tight for a nav that now carries group headings AND sub-headings,
+// and too narrow collapsed for an icon plus its active indicator.
+const SIDEBAR_EXPANDED = 264
+const SIDEBAR_COLLAPSED = 70
 // Mobile drawer: min(86vw, MOBILE_DRAWER_MAX) so it fits a 360px phone and does
 // not sprawl on a tablet. Was a flat 240px on every device.
 const MOBILE_DRAWER_MAX = 360

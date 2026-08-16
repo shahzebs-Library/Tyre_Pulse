@@ -6,6 +6,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { loadWorkshopKpis } from '../lib/api/workshopLive'
 import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import useLatestRequest from '../lib/useLatestRequest'
 import { costScopeLabel } from '../components/cost/CostValue'
 import DailyJobCards from '../components/dashboard/DailyJobCards'
 import { COST_MODES, pickCost } from '../lib/costSources'
@@ -292,7 +293,13 @@ export default function Dashboard() {
   // Note: no window-focus reload - it made the page appear to refresh on its
   // own when switching tabs. Use the manual Refresh button to re-pull on demand.
 
+  // Changing the date range starts a new load without waiting for the old one.
+  // Without this guard a slow earlier response lands last and paints the PREVIOUS
+  // window's rows under the new filter chips - wrong numbers, no error.
+  const latestLoad = useLatestRequest()
+
   async function load() {
+    const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
       // Null-safe country filter (behind the service layer) never silently
@@ -315,6 +322,7 @@ export default function Dashboard() {
       // empty dashboard that looks identical to "no data".
       const firstErr = [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes].find(r => r?.error)?.error
       if (firstErr) throw new Error(firstErr.message || firstErr)
+      if (stale()) return
       setRawTyres(tyreRes.data ?? [])
       setCapped(Boolean(tyreRes.truncated))
       setSummary(summaryRes?.data ?? null)
@@ -323,9 +331,11 @@ export default function Dashboard() {
       setRecentRecords(recentRes.data ?? [])
       setOpenActions(openActRes.data ?? [])
     } catch (e) {
-      setError(toUserMessage(e, t('dashboard.states.errorDefault')))
+      // A superseded load must not raise an error banner over data that loaded
+      // fine, and must not clear the newer load's busy state.
+      if (!stale()) setError(toUserMessage(e, t('dashboard.states.errorDefault')))
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
   }
 

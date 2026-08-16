@@ -28,8 +28,51 @@
  * expense bundle.
  *
  * PURE: no I/O, no React, no Date.now().
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE REPORT URL CONVENTION (adopt this on every shareable reporting page)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A reporting page must be linkable: a reader needs to send a colleague the
+ * report they are looking at, and a browser refresh must come back to the same
+ * report rather than to whatever was last stored. So the REPORTING SCOPE and the
+ * page's own window controls live in QUERY PARAMETERS:
+ *
+ *     /expense-trends?scope=KSA,UAE&grain=month&from=2024-03&to=2025-12
+ *
+ *   scope   comma separated country NAMES, or the literal `All`
+ *   grain   the period granularity, omitted while it is the page default
+ *   from/to `YYYY` or `YYYY-MM`, omitted when the window is open-ended
+ *
+ * Four rules, and each one is a decision rather than a style preference:
+ *
+ *  1. QUERY PARAMETERS, NOT A ROUTE SEGMENT. The scope is a filter over one
+ *     report, not a different resource, and it is optional and multi-valued.
+ *     `/expense-trends/KSA,UAE` would fight the router the moment a second
+ *     control (grain, date window) needed sharing.
+ *
+ *  2. NAMES, NEVER INTERNAL IDS. Country names are already on screen and in
+ *     every export, so a link leaks nothing new. Organisation ids, user ids and
+ *     site ids stay out of the URL: a shared link travels through chat and
+ *     ticket systems and must not carry the tenant's internals.
+ *
+ *  3. THE WORKING CONTEXT IS NOT IN THE URL. Where you OPERATE is a property of
+ *     you, not of the link, and is deliberately left in session/user state -
+ *     otherwise opening a colleague's report link would silently re-point the
+ *     operational selection of 212 other screens. Only the REPORTING scope, the
+ *     thing the link is actually about, is shareable.
+ *
+ *  4. PERMISSION IS RE-CHECKED ON EVERY READ. A URL is untrusted input from
+ *     whoever pasted it. `scopeFromParam` resolves it through the SAME
+ *     `scopeCountries` the in-page control uses, so a link naming a country the
+ *     reader may not see drops that country instead of widening anything. A link
+ *     can therefore never become a way to reach another country's data. RLS
+ *     remains the real boundary; this keeps the UI from even asking.
+ *
+ * A parameter that is absent, malformed, or resolves to nothing usable returns
+ * null so the caller keeps its stored/default scope: an unreadable link must
+ * still land on a VALID page, never on an empty or a widened one.
  */
-import { scopeCountries } from './reportingScope'
+import { scopeCountries, SCOPE_ALL } from './reportingScope'
 
 const txt = (v) => (v == null ? '' : String(v).trim())
 
@@ -152,4 +195,170 @@ export function scopeCount(entries, field = 'lines') {
     seen += 1
   }
   return seen > 0 ? sum : null
+}
+
+/* ── The report URL (see THE REPORT URL CONVENTION at the top) ─────────────── */
+
+/** Parameter names. Shared so two reporting pages cannot invent two spellings. */
+export const SCOPE_PARAM = 'scope'
+export const GRAIN_PARAM = 'grain'
+export const FROM_PARAM = 'from'
+export const TO_PARAM = 'to'
+
+/**
+ * Separator between country names. A comma reads naturally in an address bar and
+ * survives copy/paste unescaped. No country in this system contains a comma; one
+ * that did could not be represented here and would need its own encoding.
+ */
+export const SCOPE_SEPARATOR = ','
+
+/**
+ * Does this token mean "every country I may report on"?
+ * MIRRORS the sentinel test inside reportingScope.js (which does not export it).
+ * If that file ever accepts another spelling, widen this with it.
+ */
+function isAllToken(v) {
+  const s = txt(v).toLowerCase()
+  return s === String(SCOPE_ALL).toLowerCase() || s === '*'
+}
+
+/**
+ * Split a `scope=` value into raw tokens. TEXT ONLY - no permission logic, so it
+ * can be used before the profile has loaded. Blank entries are dropped, so
+ * "KSA,,UAE" and "KSA, UAE" both read cleanly.
+ */
+export function parseScopeParam(raw) {
+  return txt(raw).split(SCOPE_SEPARATOR).map(txt).filter(Boolean)
+}
+
+/**
+ * Resolve a `scope=` value against what this profile may aggregate over.
+ *
+ * THIS IS THE PERMISSION SEAM FOR SHARED LINKS. The URL is untrusted input, so
+ * every token goes through `scopeCountries` - the same resolver the in-page
+ * control uses - and anything not permitted is dropped rather than requested.
+ *
+ * `scope` is null whenever the caller should keep the scope it already has:
+ * an absent parameter, an unparseable one, or one naming only countries this
+ * reader may not see. Falling back to the stored scope keeps the reader on a
+ * VALID report; falling back to "All" would widen it, and falling back to
+ * nothing would strand them on an empty page because of someone else's link.
+ *
+ * @returns {{scope:{countries:string[]}|null, countries:string[],
+ *            requested:string[], dropped:string[], all:boolean}}
+ */
+export function scopeFromParam(raw, allowed) {
+  const requested = parseScopeParam(raw)
+  const all = requested.some(isAllToken)
+  const countries = scopeCountries(requested, allowed)
+  const dropped = requested.filter(
+    (c) => !isAllToken(c) && !countries.some((k) => k.toLowerCase() === c.toLowerCase()),
+  )
+  return {
+    // Keep the sentinel as the sentinel: a link that said "all countries" should
+    // go on meaning that for the reader who opens it, bounded by their own
+    // permissions rather than by the sender's.
+    scope: countries.length ? { countries: all ? [SCOPE_ALL] : countries } : null,
+    countries,
+    requested,
+    dropped,
+    all,
+  }
+}
+
+/**
+ * The `scope=` value for a scope, or '' when there is nothing worth writing.
+ * Canonical form: the sentinel stays `All`, anything else is spelled out in the
+ * permitted order so the link records exactly which countries were reported on.
+ */
+export function scopeToParam(scope, allowed) {
+  const countries = scopeCountries(scope, allowed)
+  if (!countries.length) return ''
+  const asked = Array.isArray(scope?.countries) ? scope.countries : []
+  if (asked.some(isAllToken)) return SCOPE_ALL
+  return countries.join(SCOPE_SEPARATOR)
+}
+
+/** A value restricted to a known set, else the fallback. Junk never reaches a query. */
+export function oneOfParam(raw, options, fallback = '') {
+  const v = txt(raw).toLowerCase()
+  const hit = (Array.isArray(options) ? options : []).find((o) => txt(o).toLowerCase() === v)
+  return hit ?? fallback
+}
+
+/**
+ * Read a `from=` / `to=` value: 'YYYY' or 'YYYY-MM'. Anything else (including an
+ * impossible month) reads as unset rather than as a wrong window.
+ */
+export function periodFromParam(raw) {
+  const m = txt(raw).match(/^(\d{4})(?:-(\d{1,2}))?$/)
+  if (!m) return { year: '', month: '' }
+  const mo = m[2] == null ? null : Number(m[2])
+  const month = mo != null && mo >= 1 && mo <= 12 ? String(mo).padStart(2, '0') : ''
+  return { year: m[1], month }
+}
+
+/**
+ * Write a `from=` / `to=` value.
+ * A month with no year is NOT written, because it does not bound anything: the
+ * report's window opens only once a year is chosen, so the link carries the
+ * window that is actually in force rather than a control position that is not.
+ */
+export function periodToParam(year, month) {
+  const y = txt(year)
+  if (!/^\d{4}$/.test(y)) return ''
+  const m = txt(month)
+  return /^(0[1-9]|1[0-2])$/.test(m) ? `${y}-${m}` : y
+}
+
+/**
+ * Everything a reporting page seeds itself from, read off a `location.search`
+ * string. Deliberately does NO permission work: the profile may not have loaded
+ * when a page first paints, so the scope is returned as RAW TEXT and resolved
+ * separately through `scopeFromParam` once `allowed` is known.
+ */
+export function readReportUrl(search, { grains = [], defaultGrain = '' } = {}) {
+  const p = new URLSearchParams(txt(search))
+  return {
+    scopeRaw: p.get(SCOPE_PARAM) || '',
+    grain: oneOfParam(p.get(GRAIN_PARAM), grains, defaultGrain),
+    from: periodFromParam(p.get(FROM_PARAM)),
+    to: periodFromParam(p.get(TO_PARAM)),
+  }
+}
+
+/**
+ * The parameters a reporting page should be showing right now. An entry of ''
+ * means REMOVE that parameter, so a default-valued control leaves the URL clean
+ * and a bookmark stays short.
+ *
+ * The scope is written even at its default: the whole point is that the address
+ * bar can be copied and sent, and a link that omits the scope would be read by
+ * the recipient's stored scope instead of the sender's report.
+ */
+export function reportUrlParams({
+  scope, allowed, grain, defaultGrain = '', from, to,
+} = {}) {
+  return {
+    [SCOPE_PARAM]: scopeToParam(scope, allowed),
+    [GRAIN_PARAM]: txt(grain) && txt(grain) !== txt(defaultGrain) ? txt(grain) : '',
+    [FROM_PARAM]: periodToParam(from?.year, from?.month),
+    [TO_PARAM]: periodToParam(to?.year, to?.month),
+  }
+}
+
+/**
+ * Apply those parameters to the current query string, returning a new
+ * URLSearchParams. Parameters this page does not own are carried through
+ * untouched, so a report link can sit beside anything else already in the URL.
+ */
+export function applyReportUrlParams(current, updates) {
+  const next = new URLSearchParams(
+    current instanceof URLSearchParams ? current.toString() : txt(current),
+  )
+  for (const [key, value] of Object.entries(updates || {})) {
+    if (txt(value)) next.set(key, txt(value))
+    else next.delete(key)
+  }
+  return next
 }

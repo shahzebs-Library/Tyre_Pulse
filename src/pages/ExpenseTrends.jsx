@@ -24,11 +24,25 @@
  * combined spend ONLY when one currency is in scope and otherwise reads N/A with
  * the reason. Line COUNTS carry no currency and are aggregated.
  *
+ * SHAREABLE URL. The scope and the period controls live in query parameters
+ * (`?scope=KSA,UAE&grain=month&from=2024-03`) so this report can be sent to a
+ * colleague and survives a refresh. The convention, and the reasoning behind
+ * every part of it, is documented once in `src/lib/reportingScopeQuery.js` -
+ * follow it on the next reporting page rather than inventing a second one.
+ * Two properties matter most here:
+ *   - the link is UNTRUSTED: its countries are re-checked against
+ *     `allowedScopeCountries` on every read, so a link can never widen access
+ *   - the URL is only ever REPLACED, never pushed, so using the filters does not
+ *     bury the page the reader came from under a stack of history entries
+ * The WORKING CONTEXT stays out of the URL: it belongs to the reader, not to
+ * the link.
+ *
  * Data: `get_expense_period_trend` RPC via `src/lib/api/expenseTrends.js`.
  * All maths live in the pure `src/lib/expenseTrends.js` +
  * `src/lib/reportingScopeQuery.js` engines.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useSearchParams, useInRouterContext } from 'react-router-dom'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Filler, Tooltip, Legend,
@@ -44,12 +58,13 @@ import { useSettings } from '../contexts/SettingsContext'
 import { getExpensePeriodTrend } from '../lib/api/expenseTrends'
 import {
   byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num,
-  filterPeriods, availableYears, MONTHS,
+  filterPeriods, availableYears, MONTHS, GRAINS,
 } from '../lib/expenseTrends'
 import { scopeLabel } from '../lib/reportingScope'
 import {
   scopeRequestCountries, scopeQueryKey, rowsInScope,
   scopeMoneyTotal, moneyTotalNote, scopeCount,
+  scopeFromParam, readReportUrl, reportUrlParams, applyReportUrlParams,
 } from '../lib/reportingScopeQuery'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -226,30 +241,124 @@ function CountryTrend({ entry, grain }) {
 }
 
 const GRAIN_OPTS = [['year', 'Year'], ['quarter', 'Quarter'], ['month', 'Month']]
+const DEFAULT_GRAIN = 'year'
+
+/**
+ * Mirrors the report's state into the address bar so the page can be linked and
+ * survives a refresh.
+ *
+ * REPLACE, NEVER PUSH. Every scope tick and every date select would otherwise
+ * become a history entry, and a reader pressing Back once would step through
+ * their own filter changes instead of leaving the report. `{ replace: true }` is
+ * the same rule `useFilterState` follows for filter params.
+ *
+ * It is a child, and it is rendered only inside a Router, because
+ * `useSearchParams` throws outside one - that keeps the page itself mountable
+ * without a router (which is how it is unit tested).
+ *
+ * `params` of null means "not ready yet": the URL is left exactly as the reader
+ * opened it until the incoming link has been read, so a shared scope is never
+ * overwritten by the stored one before it has been applied.
+ */
+function ReportUrlSync({ params }) {
+  const [search, setSearch] = useSearchParams()
+  useEffect(() => {
+    if (!params) return
+    const next = applyReportUrlParams(search, params)
+    // No write when nothing moved - otherwise every render would touch history.
+    if (next.toString() === search.toString()) return
+    setSearch(next, { replace: true })
+  }, [params, search, setSearch])
+  return null
+}
 
 export default function ExpenseTrends() {
   // REPORTING SCOPE, not the working context: this report aggregates the set of
   // countries the reader picked. `activeCountry` is deliberately NOT read here.
-  const { reportingScope, allowedScopeCountries } = useSettings()
-  const [grain, setGrain] = useState('year')
-  const [fromYear, setFromYear] = useState('')
-  const [fromMonth, setFromMonth] = useState('')
-  const [toYear, setToYear] = useState('')
-  const [toMonth, setToMonth] = useState('')
+  const { reportingScope, setReportingScope, allowedScopeCountries } = useSettings()
+  const inRouter = useInRouterContext()
+
+  // The address bar as this page was OPENED. Read once, synchronously, straight
+  // off window.location (the same string BrowserRouter parses) rather than
+  // through a hook: the first fetch has to be the one the link asked for, and a
+  // hook value that arrives an effect later would fire a request for the stored
+  // scope first. Reading it once also means later replacements by ReportUrlSync
+  // cannot feed back in here.
+  const initialUrl = useMemo(
+    () => readReportUrl(
+      typeof window === 'undefined' ? '' : window.location.search,
+      { grains: GRAINS, defaultGrain: DEFAULT_GRAIN },
+    ),
+    [],
+  )
+
+  const [grain, setGrain] = useState(initialUrl.grain)
+  const [fromYear, setFromYear] = useState(initialUrl.from.year)
+  const [fromMonth, setFromMonth] = useState(initialUrl.from.month)
+  const [toYear, setToYear] = useState(initialUrl.to.year)
+  const [toMonth, setToMonth] = useState(initialUrl.to.month)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // False until the incoming link has been read and applied to the shared scope.
+  const [linkApplied, setLinkApplied] = useState(false)
 
-  // Every country we will request. Permission-filtered, so a persisted or stale
-  // scope can never ask for a country this profile may not aggregate over.
-  // Resolved through a stable string key so the list identity changes only when
-  // the SET changes - an equal-but-new array must not retrigger the fetch.
+  // The link's scope, RE-CHECKED against what this profile may aggregate over.
+  // A link is untrusted input: countries the reader may not see are dropped
+  // here, so the URL can never widen access however it was edited or forwarded.
+  // `scope` is null when the link says nothing usable, and the stored scope
+  // stands - an unreadable link must still land on a valid report.
+  const linkedScope = useMemo(
+    () => scopeFromParam(initialUrl.scopeRaw, allowedScopeCountries),
+    [initialUrl.scopeRaw, allowedScopeCountries],
+  )
+
+  // Until the link has been written into the shared scope, the LINK is the
+  // scope. That keeps the very first request the right one instead of fetching
+  // the stored scope and then correcting it a render later.
+  const effectiveScope = (!linkApplied && linkedScope.scope) ? linkedScope.scope : reportingScope
+
+  // Adopt the link into the shared reporting scope, once, as soon as the profile
+  // has resolved (allowed is empty on the first paint, and resolving against an
+  // empty allow-list would drop every country in the link). After this the
+  // in-page control and the URL describe the same report.
+  useEffect(() => {
+    if (linkApplied) return
+    if (!Array.isArray(allowedScopeCountries) || allowedScopeCountries.length === 0) return
+    if (linkedScope.scope
+      && scopeQueryKey(linkedScope.countries)
+        !== scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries))) {
+      setReportingScope?.(linkedScope.scope)
+    }
+    setLinkApplied(true)
+  }, [linkApplied, linkedScope, reportingScope, allowedScopeCountries, setReportingScope])
+
+  // Every country we will request. Permission-filtered, so a persisted, linked
+  // or stale scope can never ask for a country this profile may not aggregate
+  // over. Resolved through a stable string key so the list identity changes only
+  // when the SET changes - an equal-but-new array must not retrigger the fetch.
   const scopeKey = useMemo(
-    () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
-    [reportingScope, allowedScopeCountries],
+    () => scopeQueryKey(scopeRequestCountries(effectiveScope, allowedScopeCountries)),
+    [effectiveScope, allowedScopeCountries],
   )
   const scopeCountryList = useMemo(() => (scopeKey ? scopeKey.split('|') : []), [scopeKey])
-  const scopeTitle = scopeLabel(reportingScope, allowedScopeCountries)
+  const scopeTitle = scopeLabel(effectiveScope, allowedScopeCountries)
+
+  // What the address bar should say for the report now on screen. Null while the
+  // profile or the incoming link is still being resolved, so the URL the reader
+  // arrived on is never overwritten before it has been read.
+  const urlParams = useMemo(() => {
+    if (!linkApplied) return null
+    return reportUrlParams({
+      scope: effectiveScope,
+      allowed: allowedScopeCountries,
+      grain,
+      defaultGrain: DEFAULT_GRAIN,
+      from: { year: fromYear, month: fromMonth },
+      to: { year: toYear, month: toMonth },
+    })
+  }, [linkApplied, effectiveScope, allowedScopeCountries, grain,
+      fromYear, fromMonth, toYear, toMonth])
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -319,6 +428,9 @@ export default function ExpenseTrends() {
 
   return (
     <div className="space-y-5">
+      {/* Keeps the address bar describing this report, by REPLACE only. Rendered
+          only inside a Router; the page works without one. */}
+      {inRouter && <ReportUrlSync params={urlParams} />}
       <PageHeader
         title="Expense Trends & Forecast"
         subtitle="Spend by year, quarter or month, split by tyres / spare parts / lubricants, with period-on-period comparison and a forward forecast."

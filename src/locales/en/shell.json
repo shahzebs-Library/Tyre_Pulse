@@ -46,5 +46,6 @@
   "preferences": "Preferences",
   "theme": "Theme",
   "signingOut": "Signing out...",
-  "scopeCaption": "Controls which countries this report aggregates. Each country reports in its own currency; figures are never added across currencies."
+  "scopeCaption": "Controls which countries this report aggregates. Each country reports in its own currency; figures are never added across currencies.",
+  "allCountriesHint": "No country filter"
 }

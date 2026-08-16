@@ -327,12 +327,17 @@ export function SettingsProvider({ children }) {
       // can use as a React key to remount a screen when the place changes.
       workingContext, setWorkingContext, allowedContext: allowed,
       canSwitchWorkingContext, contextKey,
+      // Whether 'All countries' is a legitimate choice for this user. Exposed so
+      // the selector can offer a way BACK to it: without this the context could
+      // start as All (the default) and become a one-way door the moment a
+      // country was picked.
+      canSelectAll,
       // Reporting scope (analytics). Separate from the working context.
       reportingScope, setReportingScope, allowedScopeCountries: scopeCountryOptions,
     }),
     [appSettings, refreshSettings, activeCountry, setActiveCountry, activeCurrency,
      systemConfig, refreshSystemConfig, maintenanceActive,
-     workingContext, setWorkingContext, allowed, canSwitchWorkingContext, contextKey,
+     workingContext, setWorkingContext, allowed, canSwitchWorkingContext, contextKey, canSelectAll,
      reportingScope, setReportingScope, scopeCountryOptions],
   )
 

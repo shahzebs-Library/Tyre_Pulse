@@ -152,7 +152,8 @@ function flattenLeaves(allowed) {
 export default function WorkingContextSelector({ compact = false, className = '' }) {
   const settings = useSettings() || {}
   const { t } = useLanguage()
-  const { workingContext, setWorkingContext, allowedContext, canSwitchWorkingContext } = settings
+  const { workingContext, setWorkingContext, allowedContext, canSwitchWorkingContext,
+          canSelectAll } = settings
 
   // Defensive: these may not have resolved on the first paint, and a
   // not-yet-loaded value must never crash the whole app shell.
@@ -203,9 +204,12 @@ export default function WorkingContextSelector({ compact = false, className = ''
   }, [open])
 
   const select = useCallback((next) => {
-    // Never write a context the current permissions do not cover, even when it
-    // came from a stale recents row.
-    if (!isAllowedContext(allowed, next)) return
+    // A deliberate 'All countries' (no country) is a legitimate context, but only
+    // for a user who may see every country. isAllowedContext rejects a blank
+    // country by design, so that case is admitted here and nowhere else.
+    // SettingsContext refuses it again for a scoped user, so this cannot widen.
+    const wantsAll = !next?.country
+    if (wantsAll ? !canSelectAll : !isAllowedContext(allowed, next)) return
     const ctxNext = {
       country: next.country || null,
       region: next.region || null,
@@ -216,7 +220,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
     writeRecents(merged)
     setRecents(merged)
     setOpen(false)
-  }, [allowed, setWorkingContext])
+  }, [allowed, canSelectAll, setWorkingContext])
 
   const toggleBranch = useCallback((key) => {
     setExpanded((prev) => {
@@ -390,6 +394,25 @@ export default function WorkingContextSelector({ compact = false, className = ''
                         onClick={() => select(r)}
                       />
                     ))}
+                    <div className="my-1.5 h-px" style={{ background: 'var(--border-dim)' }} />
+                  </>
+                )}
+
+                {/* 'All countries' is only a legitimate choice for a user who may
+                    see EVERY country, and the context can legitimately START there
+                    (it is the default). Without this row it was a one-way door:
+                    the trigger read 'All', and picking any country left no way
+                    back. Hidden for a scoped user, whose 'All' would overstate
+                    their coverage. */}
+                {canSelectAll && (
+                  <>
+                    <ContextRow
+                      icon={Globe}
+                      label={tx(t, 'shell.allCountries', 'All countries')}
+                      hint={tx(t, 'shell.allCountriesHint', 'No country filter')}
+                      selected={!ctx.country}
+                      onClick={() => select({ country: null, region: null, site: null })}
+                    />
                     <div className="my-1.5 h-px" style={{ background: 'var(--border-dim)' }} />
                   </>
                 )}

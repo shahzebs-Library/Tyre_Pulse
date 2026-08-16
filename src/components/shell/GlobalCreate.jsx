@@ -215,7 +215,6 @@ export default function GlobalCreate({ isMobile = false }) {
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
-  const popRef = useRef(null)
 
   const actions = useMemo(
     () => availableCreateActions({
@@ -230,16 +229,19 @@ export default function GlobalCreate({ isMobile = false }) {
   )
 
   // Sized from the real entry count so the popover never opens off-screen.
-  const { triggerRef, coords } = useAnchoredPopover(open, {
+  // nav:'menu' gives the panel the arrow-key model its role=menu advertises.
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
     width: 232,
     height: 20 + actions.length * 38,
     align: 'right',
+    nav: 'menu',
+    onRequestClose: () => setOpen(false),
   })
 
   useEffect(() => {
     if (!open) return undefined
     function onDocClick(e) {
-      const inside = rootRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      const inside = rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)
       if (!inside) setOpen(false)
     }
     function onKey(e) { if (e.key === 'Escape') setOpen(false) }
@@ -249,7 +251,7 @@ export default function GlobalCreate({ isMobile = false }) {
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, panelRef])
 
   const go = useCallback((path) => {
     setOpen(false)
@@ -273,7 +275,7 @@ export default function GlobalCreate({ isMobile = false }) {
         aria-expanded={open}
         aria-label={menuLabel}
         title={menuLabel}
-        className="h-8 flex items-center gap-1.5 pl-2 pr-1.5 rounded-xl text-xs font-semibold transition-colors hover:text-green-300"
+        className="h-8 flex items-center gap-1.5 ps-2 pe-1.5 rounded-xl text-xs font-semibold transition-colors hover:text-green-300"
         style={{
           color: 'var(--brand-bright, #4ade80)',
           background: 'rgba(22,163,74,0.10)',
@@ -290,7 +292,7 @@ export default function GlobalCreate({ isMobile = false }) {
 
       {open && coords && createPortal(
         <div
-          ref={popRef}
+          ref={panelRef}
           role="menu"
           aria-label={menuLabel}
           className="tp-popover w-[232px] p-1.5"
@@ -302,7 +304,7 @@ export default function GlobalCreate({ isMobile = false }) {
               type="button"
               role="menuitem"
               onClick={() => go(a.path)}
-              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-left transition-colors hover:bg-[var(--input-bg)]"
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-start transition-colors hover:bg-[var(--input-bg)]"
               style={{ color: 'var(--text-secondary)' }}
             >
               <a.icon size={14} aria-hidden="true" className="flex-shrink-0" style={{ color: 'var(--text-dim)' }} />

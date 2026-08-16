@@ -18,18 +18,25 @@ import { supabase, applyCountries, countryList } from './_client'
  * the query is built exactly as it always was, so nothing else moves. When it
  * holds ONE country the emitted filter is the same `country=eq.X`.
  *
- * The `id` tiebreak is added only on the multi-country path. These reads are
- * paged with no ORDER BY, which PostgREST does not guarantee is stable across
- * pages; a multi-country scope reads several times as many rows, so it crosses
- * several times as many page boundaries. Adding the tiebreak only where the new
- * risk is keeps the single-country query byte-identical to today's.
+ * The `id` tiebreak is added on the WHOLE reporting-scope path, including a
+ * one-country scope - NOT just the multi-country one.
+ *
+ * These selects carry no ORDER BY of their own, and every reporting-scope caller
+ * drives them through `fetchAllPages`, which fetches pages CONCURRENTLY. An
+ * OFFSET/LIMIT read with no sort key has no defined row order, so two pages can
+ * omit and duplicate the same rows. Measured on live data: page 2 of the KSA
+ * tyre_records read (8,145 rows = 9 pages) returned 781 DIFFERENT rows out of
+ * 1,000 when the planner chose a different scan - a one-country scope is not
+ * safe merely because it is one country, it is unsafe as soon as it pages.
+ * `id` is a uuid with a unique index on every table read here, so it is a real
+ * tiebreak; ordering cannot change WHICH rows match, only that paging is stable.
+ *
+ * The legacy scalar `country` path is deliberately left byte-identical, so the
+ * Engineering KPI page's own queries do not move with this change.
  */
 function scopeCountry(query, country, countries) {
   const list = countryList(countries)
-  if (list.length) {
-    const q = applyCountries(query, list, { nullSafe: false })
-    return list.length > 1 ? q.order('id') : q
-  }
+  if (list.length) return applyCountries(query, list, { nullSafe: false }).order('id')
   return country ? query.eq('country', country) : query
 }
 

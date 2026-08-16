@@ -155,7 +155,7 @@ export default function TopBar({
           type="button"
           onClick={openSearch}
           aria-label={searchLabel}
-          className="ml-2 flex items-center gap-2 h-8 px-3 rounded-xl min-w-0 flex-1 max-w-md text-xs transition-colors hover:text-green-400 group"
+          className="ms-2 flex items-center gap-2 h-8 px-3 rounded-xl min-w-0 flex-1 max-w-md text-xs transition-colors hover:text-green-400 group"
           style={{
             color: 'var(--panel-ink-3)',
             background: 'rgba(22,163,74,0.04)',
@@ -163,7 +163,7 @@ export default function TopBar({
           }}
         >
           <Search size={13} aria-hidden="true" className="flex-shrink-0" />
-          <span className="flex-1 text-left font-medium truncate">{searchLabel}</span>
+          <span className="flex-1 text-start font-medium truncate">{searchLabel}</span>
           <kbd
             aria-hidden="true"
             className="flex-shrink-0 text-[9.5px] px-1.5 py-0.5 rounded-md font-mono font-semibold"
@@ -227,7 +227,7 @@ export default function TopBar({
               <Bell size={16} aria-hidden="true" />
               {alertCount > 0 && (
                 <span
-                  className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
+                  className="absolute top-0.5 end-0.5 min-w-[14px] h-3.5 flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
                   style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }}
                 >
                   {alertCount > 9 ? '9+' : alertCount}
@@ -260,13 +260,20 @@ function HelpMenu() {
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
-  const popRef = useRef(null)
-  const { triggerRef, coords } = useAnchoredPopover(open, { width: 236, height: 220, align: 'right' })
+  // nav:'menu' gives the panel the arrow-key model its role=menu advertises;
+  // the hook owns it so all five shell menus behave identically.
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
+    width: 236,
+    height: 220,
+    align: 'right',
+    nav: 'menu',
+    onRequestClose: () => setOpen(false),
+  })
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      const inside = rootRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      const inside = rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)
       if (!inside) setOpen(false)
     }
     function onKey(e) { if (e.key === 'Escape') setOpen(false) }
@@ -276,7 +283,7 @@ function HelpMenu() {
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, panelRef])
 
   const canSeeStatus = isSuperAdmin === true || profile?.role === 'Admin'
   // Rendered only when actually configured; a hardcoded number would be a lie.
@@ -325,7 +332,7 @@ function HelpMenu() {
 
       {open && coords && createPortal(
         <div
-          ref={popRef}
+          ref={panelRef}
           role="menu"
           aria-label={label}
           className="tp-popover w-[236px] p-1.5"
@@ -337,7 +344,7 @@ function HelpMenu() {
               type="button"
               role="menuitem"
               onClick={() => { setOpen(false); item.onClick() }}
-              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-left transition-colors hover:bg-[var(--input-bg)]"
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-start transition-colors hover:bg-[var(--input-bg)]"
               style={{ color: 'var(--text-secondary)' }}
             >
               <item.icon size={14} aria-hidden="true" className="flex-shrink-0" style={{ color: 'var(--text-dim)' }} />

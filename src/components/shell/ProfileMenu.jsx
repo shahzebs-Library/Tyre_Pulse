@@ -110,13 +110,20 @@ export default function ProfileMenu({
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const rootRef = useRef(null)
-  const popRef = useRef(null)
-  const { triggerRef, coords } = useAnchoredPopover(open, { width: 268, height: 380, align: 'right' })
+  // nav:'menu' gives the panel the arrow-key model its role=menu advertises;
+  // the hook owns it so all five shell menus behave identically.
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
+    width: 268,
+    height: 380,
+    align: 'right',
+    nav: 'menu',
+    onRequestClose: () => setOpen(false),
+  })
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      const inside = rootRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      const inside = rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)
       if (!inside) setOpen(false)
     }
     function onKey(e) { if (e.key === 'Escape') setOpen(false) }
@@ -126,7 +133,7 @@ export default function ProfileMenu({
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, panelRef])
 
   const name = profile?.full_name || profile?.username || 'User'
   const initial = (profile?.full_name?.[0] || profile?.username?.[0] || 'U').toUpperCase()
@@ -162,7 +169,7 @@ export default function ProfileMenu({
         aria-expanded={open}
         aria-label={`${tx(t, 'shell.account', 'Account')}: ${name}`}
         title={name}
-        className={`flex items-center gap-1 rounded-xl transition-colors hover:bg-green-400/10 pl-0.5 pr-1 py-0.5 ${className}`}
+        className={`flex items-center gap-1 rounded-xl transition-colors hover:bg-green-400/10 ps-0.5 pe-1 py-0.5 ${className}`}
       >
         <span
           className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -185,7 +192,7 @@ export default function ProfileMenu({
 
       {open && coords && createPortal(
         <div
-          ref={popRef}
+          ref={panelRef}
           role="menu"
           aria-label={tx(t, 'shell.account', 'Account')}
           className="tp-popover w-[268px] p-0"
@@ -283,7 +290,7 @@ export default function ProfileMenu({
               role="menuitem"
               onClick={handleSignOut}
               disabled={signingOut}
-              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-left text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-60"
+              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-start text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-60"
             >
               <LogOut size={14} aria-hidden="true" className="flex-shrink-0" />
               <span className="truncate">
@@ -306,7 +313,7 @@ function MenuItem({ icon: Icon, label, onClick }) {
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-left transition-colors hover:bg-[var(--input-bg)]"
+      className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-start transition-colors hover:bg-[var(--input-bg)]"
       style={{ color: 'var(--text-secondary)' }}
     >
       {Icon && <Icon size={14} aria-hidden="true" className="flex-shrink-0" style={{ color: 'var(--text-dim)' }} />}

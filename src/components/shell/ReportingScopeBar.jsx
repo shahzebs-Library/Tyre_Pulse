@@ -74,13 +74,20 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
-  const popRef = useRef(null)
-  const { triggerRef, coords } = useAnchoredPopover(open, { width: 248, height: 300, align: 'left' })
+  // nav:'menu' gives the panel the arrow-key model its role=menu advertises;
+  // align 'left' is the READING-direction start edge, mirrored under RTL by the hook.
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
+    width: 248,
+    height: 300,
+    align: 'left',
+    nav: 'menu',
+    onRequestClose: () => setOpen(false),
+  })
 
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      const inside = rootRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      const inside = rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)
       if (!inside) setOpen(false)
     }
     function onKey(e) { if (e.key === 'Escape') setOpen(false) }
@@ -90,7 +97,7 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, panelRef])
 
   const scopeWord = tx(t, 'shell.scope', 'Scope')
   const caption = tx(
@@ -98,6 +105,27 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
     'shell.scopeCaption',
     'Controls which countries this report aggregates. Each country reports in its own currency; figures are never added across currencies.',
   )
+
+  /**
+   * Say the new scope out loud, once.
+   *
+   * Changing the scope changes what every figure on the page counts. A sighted
+   * user sees the chip and the numbers move; without a live region a screen
+   * reader user gets no signal at all that the report they are reading now
+   * covers a different set of countries.
+   *
+   * Deliberately silent on FIRST render: announcing the starting scope would
+   * speak on every page load, and a region that talks unprompted is one people
+   * learn to ignore. `lastAnnounced` starts null purely to mark that first pass.
+   */
+  const [announcement, setAnnouncement] = useState('')
+  const lastAnnounced = useRef(null)
+  useEffect(() => {
+    if (lastAnnounced.current === null) { lastAnnounced.current = label; return }
+    if (lastAnnounced.current === label) return
+    lastAnnounced.current = label
+    setAnnouncement(`${tx(t, 'shell.scopeChanged', 'Reporting scope changed to')} ${label}`)
+  }, [label, t])
 
   function apply(countries) {
     // Never write a country the user may not aggregate over, and never write the
@@ -181,9 +209,14 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
         <p className="text-[10.5px] mt-1" style={{ color: 'var(--text-dim)' }}>{caption}</p>
       )}
 
+      {/* Mounted with the trigger, never inside the popover: a live region that
+          appears at the same moment as its text is not reliably announced, and
+          this panel unmounts on select. */}
+      <span aria-live="polite" className="sr-only">{announcement}</span>
+
       {open && coords && createPortal(
         <div
-          ref={popRef}
+          ref={panelRef}
           role="menu"
           aria-label={tx(t, 'shell.reportingScope', 'Reporting scope')}
           className="tp-popover w-[248px] p-1.5"
@@ -194,7 +227,7 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
             role="menuitemcheckbox"
             aria-checked={allSelected}
             onClick={() => apply([SCOPE_ALL])}
-            className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[var(--input-bg)]"
+            className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-start transition-colors hover:bg-[var(--input-bg)]"
             style={allSelected ? { background: 'rgba(22,163,74,0.1)' } : undefined}
           >
             <Globe
@@ -228,7 +261,7 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
                   ? tx(t, 'shell.scopeKeepOne', 'At least one country must stay selected.')
                   : undefined}
                 onClick={() => toggleCountry(country)}
-                className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[var(--input-bg)] disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-start transition-colors hover:bg-[var(--input-bg)] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <span
                   aria-hidden="true"

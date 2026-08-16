@@ -31,7 +31,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, ChevronRight, Globe, MapPin, Search, Check, Clock, Building2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Globe, MapPin, Search, Check, Clock, Building2 } from 'lucide-react'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -151,7 +151,7 @@ function flattenLeaves(allowed) {
  */
 export default function WorkingContextSelector({ compact = false, className = '' }) {
   const settings = useSettings() || {}
-  const { t } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { workingContext, setWorkingContext, allowedContext, canSwitchWorkingContext,
           canSelectAll } = settings
 
@@ -165,9 +165,16 @@ export default function WorkingContextSelector({ compact = false, className = ''
   const [expanded, setExpanded] = useState(() => new Set())
   const [recents, setRecents] = useState(() => readRecents())
   const rootRef = useRef(null)
-  const popRef = useRef(null)
-  const searchRef = useRef(null)
-  const { triggerRef, coords } = useAnchoredPopover(open, { width: 320, height: 460, align: 'right' })
+  // nav:'trap' keeps Tab inside the panel, which is what role=dialog promises:
+  // without it the next Tab walks the page BEHIND an open dialog. The hook also
+  // moves focus into the panel on open, which is why there is no manual focus
+  // call here any more - one less thing racing the user.
+  const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
+    width: 320,
+    height: 460,
+    align: 'right',
+    nav: 'trap',
+  })
 
   const leaves = useMemo(() => flattenLeaves(allowed), [allowed])
   const showSearch = leaves.length >= SEARCH_THRESHOLD
@@ -181,8 +188,6 @@ export default function WorkingContextSelector({ compact = false, className = ''
       ctx.country || null,
       ctx.country && ctx.region ? `${ctx.country}||${ctx.region}` : null,
     ].filter(Boolean)))
-    const id = setTimeout(() => searchRef.current?.focus(), 30)
-    return () => clearTimeout(id)
     // Only on open: re-running on every context change would fight the user's
     // own expand/collapse while the menu is sitting there open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,7 +196,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
   useEffect(() => {
     if (!open) return
     function onDocClick(e) {
-      const inside = rootRef.current?.contains(e.target) || popRef.current?.contains(e.target)
+      const inside = rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)
       if (!inside) setOpen(false)
     }
     function onKey(e) { if (e.key === 'Escape') setOpen(false) }
@@ -201,7 +206,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, panelRef])
 
   const select = useCallback((next) => {
     // A deliberate 'All countries' (no country) is a legitimate context, but only
@@ -242,6 +247,30 @@ export default function WorkingContextSelector({ compact = false, className = ''
   // The country only earns a second line when the headline is something else.
   const subtitle = ctx.site || ctx.region ? ctx.country : null
   const titleText = `${tx(t, 'shell.workingContext', 'Working location')}: ${label}`
+
+  /**
+   * Say the new location out loud, once.
+   *
+   * Switching the working context re-points every screen in the app. A sighted
+   * user sees the chip change; without a live region a screen reader user gets
+   * no signal that the data they are about to read is from somewhere else.
+   *
+   * Deliberately silent on FIRST render: announcing the starting location would
+   * speak on every page load, and a region that talks unprompted is one people
+   * learn to ignore. `lastAnnounced` starts null purely to mark that first pass.
+   */
+  const [announcement, setAnnouncement] = useState('')
+  const lastAnnounced = useRef(null)
+  useEffect(() => {
+    if (lastAnnounced.current === null) { lastAnnounced.current = null }
+    if (lastAnnounced.current === label) return
+    lastAnnounced.current = label
+    setAnnouncement(`${tx(t, 'shell.contextChanged', 'Working location changed to')} ${label}`)
+  }, [label, t])
+
+  // A collapsed branch opens toward the reading direction, so the arrow has to
+  // mirror: pointing right in Arabic would point back at the parent.
+  const CollapsedIcon = isRTL ? ChevronLeft : ChevronRight
 
   const chipStyle = { background: 'rgba(22,163,74,0.05)', border: '1px solid rgba(22,163,74,0.12)' }
 
@@ -296,7 +325,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
         style={chipStyle}
       >
         <MapPin size={13} className="flex-shrink-0" style={{ color: '#16a34a' }} aria-hidden="true" />
-        <span className="min-w-0 text-left">
+        <span className="min-w-0 text-start">
           <span className="block text-[12px] font-semibold leading-none truncate" style={{ color: 'var(--panel-ink-2)' }}>
             {short}
           </span>
@@ -317,9 +346,14 @@ export default function WorkingContextSelector({ compact = false, className = ''
         />
       </button>
 
+      {/* Mounted with the trigger, never inside the popover: a live region that
+          appears at the same moment as its text is not reliably announced, and
+          this panel unmounts on select. */}
+      <span aria-live="polite" className="sr-only">{announcement}</span>
+
       {open && coords && createPortal(
         <div
-          ref={popRef}
+          ref={panelRef}
           role="dialog"
           aria-label={tx(t, 'shell.workingContext', 'Working location')}
           className="tp-popover w-[320px] p-0"
@@ -340,17 +374,16 @@ export default function WorkingContextSelector({ compact = false, className = ''
                 <Search
                   size={12}
                   aria-hidden="true"
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2"
+                  className="absolute start-2.5 top-1/2 -translate-y-1/2"
                   style={{ color: 'var(--text-dim)' }}
                 />
                 <input
-                  ref={searchRef}
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={tx(t, 'shell.findSite', 'Find a site or region')}
                   aria-label={tx(t, 'shell.findSite', 'Find a site or region')}
-                  className="w-full h-7 pl-7 pr-2 rounded-lg text-[12px] outline-none"
+                  className="w-full h-7 ps-7 pe-2 rounded-lg text-[12px] outline-none"
                   style={{
                     background: 'var(--input-bg)',
                     border: '1px solid var(--input-border)',
@@ -444,7 +477,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
                           >
                             {isOpen
                               ? <ChevronDown size={13} aria-hidden="true" />
-                              : <ChevronRight size={13} aria-hidden="true" />}
+                              : <CollapsedIcon size={13} aria-hidden="true" />}
                           </button>
                         ) : (
                           <span className="w-6" aria-hidden="true" />
@@ -466,7 +499,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
                       </div>
 
                       {isOpen && (
-                        <div className="ml-6">
+                        <div className="ms-6">
                           {/* A country with no regions goes straight to its sites.
                               No placeholder region level is invented. */}
                           {regions.map((region) => {
@@ -488,7 +521,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
                                     >
                                       {rOpen
                                         ? <ChevronDown size={13} aria-hidden="true" />
-                                        : <ChevronRight size={13} aria-hidden="true" />}
+                                        : <CollapsedIcon size={13} aria-hidden="true" />}
                                     </button>
                                   ) : (
                                     <span className="w-6" aria-hidden="true" />
@@ -502,7 +535,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
                                   />
                                 </div>
                                 {rOpen && (
-                                  <div className="ml-6">
+                                  <div className="ms-6">
                                     {sites.map((s) => {
                                       const siteCtx = { country: country.country, region: region.region, site: s }
                                       return (
@@ -566,7 +599,7 @@ function ContextRow({ icon: Icon, label, hint, onClick, selected = false, strong
       type="button"
       onClick={onClick}
       aria-current={selected ? 'true' : undefined}
-      className="flex-1 min-w-0 w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-[var(--input-bg)]"
+      className="flex-1 min-w-0 w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-start transition-colors hover:bg-[var(--input-bg)]"
       style={selected ? { background: 'rgba(22,163,74,0.1)' } : undefined}
     >
       {Icon && (

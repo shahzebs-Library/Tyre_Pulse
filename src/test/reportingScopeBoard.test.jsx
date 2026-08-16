@@ -436,11 +436,21 @@ describe('the widened service functions are byte-identical without `countries`',
     expect(q.state.last._calls.gte).toContainEqual(['opened_at', '2026-01-01'])
   })
 
-  it('a ONE-country scope emits the same query as the scalar country did', async () => {
+  it('a ONE-country scope emits the same FILTER as the scalar country, plus a paging tiebreak', async () => {
     await engKpi.listKpiTyreRecords({ countries: ['KSA'], from: 0, to: 999 })
     expect(q.state.last._calls.eq).toEqual([['country', 'KSA']])
     expect(q.state.last._calls.in).toHaveLength(0)
-    expect(q.state.last._calls.order).toHaveLength(0)
+    // The FILTER is byte-identical, so the rows selected are unchanged - that is
+    // the guarantee that matters, and the scalar-`country` path above still
+    // emits no ordering at all, so no existing page's query moved.
+    //
+    // The tiebreak IS added here, though, because a one-country SCOPE is not
+    // safe merely for being one country: Board Overview drives this read through
+    // `fetchAllPages`, which pages CONCURRENTLY, and this select carries no
+    // ORDER BY. Measured on live data, page 2 of the KSA read (8,145 rows =
+    // 9 pages) came back with 781 of 1,000 rows different under another sort
+    // plan. Ordering cannot change which rows match, only that paging is stable.
+    expect(q.state.last._calls.order).toEqual([['id', undefined]])
   })
 
   it('a MULTI-country scope emits one `in` filter plus a unique-key tiebreak', async () => {

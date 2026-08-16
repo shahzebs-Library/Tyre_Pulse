@@ -83,13 +83,15 @@ export function listAccidentsForPage({ country, countries, from, to } = {}) {
     .order('incident_date', { ascending: false })
   // Reporting scope: a SET of countries. Absent (every caller but Board
   // Overview) leaves the query exactly as it was; one country emits the same
-  // `country=eq.X`. The `id` tiebreak is added only on the multi-country path,
-  // because `incident_date` is not unique and a scope spanning countries reads
-  // several times as many rows, so it crosses several times as many page
-  // boundaries - where a non-unique sort key can drop or repeat a row.
+  // `country=eq.X`.
+  //
+  // The `id` tiebreak is added on the WHOLE reporting-scope path, not just the
+  // multi-country one: `incident_date` is not unique (38 rows, 26 distinct
+  // today), and the gate has to be right for the table this grows into, not for
+  // today's row count. It is applied uniformly with work orders and the KPI
+  // reads so one rule covers every scoped read.
   if (list.length) {
-    q = applyCountries(q, list, { nullSafe: false })
-    if (list.length > 1) q = q.order('id')
+    q = applyCountries(q, list, { nullSafe: false }).order('id')
   } else if (country && country !== 'All') {
     q = q.eq('country', country)
   }

@@ -54,5 +54,7 @@
   "newWorkOrder": "New Work Order",
   "newRequisition": "New Purchase Request",
   "newAsset": "New Asset",
-  "newTyre": "New Tyre"
+  "newTyre": "New Tyre",
+  "contextChanged": "Working location changed to",
+  "scopeChanged": "Reporting scope changed to"
 }

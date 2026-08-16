@@ -54,5 +54,7 @@
   "newWorkOrder": "أمر عمل جديد",
   "newRequisition": "طلب شراء جديد",
   "newAsset": "أصل جديد",
-  "newTyre": "إطار جديد"
+  "newTyre": "إطار جديد",
+  "contextChanged": "تم تغيير موقع العمل إلى",
+  "scopeChanged": "تم تغيير نطاق التقارير إلى"
 }

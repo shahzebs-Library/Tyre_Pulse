@@ -88,13 +88,18 @@ export function listWorkOrdersPage({ country, countries, from, to, openedFrom, o
     .select(lean ? AGGREGATE_COLS : PAGE_COLS)
     .order('opened_at', { ascending: false })
   // Reporting scope: a SET of countries. Absent (the Work Orders page) the query
-  // is exactly as it was; one country emits the same `country=eq.X`. The `id`
-  // tiebreak is added only on the multi-country path: `opened_at` is not unique
-  // and a scope spanning countries reads several times as many rows, so it
-  // crosses several times as many page boundaries.
+  // is exactly as it was; one country emits the same `country=eq.X`.
+  //
+  // The `id` tiebreak is added on the WHOLE reporting-scope path, not just the
+  // multi-country one. `opened_at` is NOT unique (measured live: 89,628 rows but
+  // only 61,767 distinct timestamps, with tie groups up to 175 rows), so a page
+  // boundary landing inside a tie group lets rows drop or repeat - and
+  // `fetchAllPages` fetches pages CONCURRENTLY, so the two sides of a boundary
+  // can come from different plans. Measured: page 2 of the scoped read returned
+  // 4 rows that differed under a different sort plan without the tiebreak, and 0
+  // with it. A one-country scope still reads 62 pages, so it is exposed too.
   if (list.length) {
-    q = applyCountries(q, list, { nullSafe: false })
-    if (list.length > 1) q = q.order('id')
+    q = applyCountries(q, list, { nullSafe: false }).order('id')
   } else if (country && country !== 'All') {
     q = q.eq('country', country)
   }

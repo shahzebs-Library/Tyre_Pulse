@@ -7,6 +7,30 @@
  * come from the shared engines (kpiEngine, claimsAnalytics) via boardOverview.js
  * - nothing is fabricated; an empty module renders an honest "N/A" / empty state.
  * Colours use the single shared palette (reportColors) so it reads as one system.
+ *
+ * REPORTING SCOPE (not the working context). A board report legitimately spans
+ * countries, so this page reports on the set of countries chosen in the
+ * ReportingScopeBar rather than on the one operational country in the top bar.
+ * `activeCountry` is deliberately NOT read here, and nothing on this page writes
+ * the working context: a cross-country report must not re-point the operational
+ * selection of every other screen.
+ *
+ * The scope drives the QUERIES, not just the display. Every read is passed the
+ * resolved country list (`countries`), which the service layer turns into ONE
+ * bounded `country in (...)` read per table - not one read per country, which
+ * would multiply each read's row ceiling behind the page's back. The countries
+ * come from `scopeRequestCountries`, which drops anything the profile may not
+ * aggregate over, so the scope can never widen access. A scope that resolves to
+ * nothing issues ZERO requests and says so; it never falls back to "All".
+ *
+ * CURRENCY IS THE HARD RULE. KSA=SAR, UAE=AED, Egypt=EGP, and this page never
+ * adds them - a blended SAR+AED+EGP total was a real shipped defect here. When
+ * the scope spans one currency every money figure reads exactly as it always
+ * did. When it spans more, every money figure is reported PER COUNTRY (tiles,
+ * trend series, cost panel, PDF) and a scalar that cannot be split reads "N/A"
+ * with the reason. Counts, rates and percentages carry no currency, so those
+ * still aggregate across the whole scope. The split lives in the pure
+ * `src/lib/boardScope.js` engine.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
@@ -20,6 +44,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
+import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
@@ -40,6 +65,13 @@ import { getFleetCpk } from '../lib/api/fleetCpk'
 import {
   fmtCpkValue, fmtDistance, fmtCoverage, unitSuffix, sortByTypeWorstFirst, fleetTiles,
 } from '../lib/fleetCpkView'
+import { scopeLabel } from '../lib/reportingScope'
+import { scopeRequestCountries, scopeQueryKey } from '../lib/reportingScopeQuery'
+import {
+  scopeCurrency, isMixedCurrencyScope, currencyScopeNote, splitRowsByCountry,
+  perCountryMoney, perCountryMonthlySeries, mergeCostSplits, mergeFleetCpk,
+  formatPerCountryMoney,
+} from '../lib/boardScope'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel } from '../lib/exportUtils'
 import EmailPdfButton from '../components/EmailPdfButton'
@@ -141,8 +173,54 @@ function ChartCard({ title, children, refCb }) {
   )
 }
 
+/**
+ * A money figure under the reporting scope.
+ *
+ * One currency in scope: exactly the single figure this page always rendered.
+ * More than one: one line per country in its own currency, because that IS the
+ * answer - there is no single number to show. Never a blend, and 'N/A' when
+ * nothing in scope reported a usable figure (which is a different statement from
+ * a country reporting zero).
+ */
+function ScopeMoney({ mixed, value, currency, entries, pick }) {
+  if (!mixed) return <>{value == null || !Number.isFinite(Number(value)) ? 'N/A' : formatCurrency(Number(value), currency)}</>
+  const rows = perCountryMoney(entries, pick).filter((r) => r.value != null)
+  if (!rows.length) return <>N/A</>
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+      {rows.map((r) => (
+        <span key={r.country} style={{ whiteSpace: 'nowrap', fontSize: '0.62em', lineHeight: 1.35 }}>
+          <span style={{ opacity: 0.65, marginRight: 6 }}>{r.country}</span>
+          {formatCurrency(r.value, r.currency)}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 export default function BoardOverview() {
-  const { activeCountry, appSettings, activeCurrency } = useSettings()
+  // REPORTING SCOPE, not the working context: this report aggregates the set of
+  // countries the reader picked. `activeCountry` / `activeCurrency` are
+  // deliberately NOT read - the currency of this report follows its scope.
+  const { appSettings, reportingScope, allowedScopeCountries } = useSettings()
+
+  // Every country this page will request. Permission-filtered by
+  // `scopeRequestCountries`, so a persisted or stale scope can never ask for a
+  // country this profile may not aggregate over. Resolved through a stable
+  // string key so an equal-but-newly-built array cannot retrigger the fetches.
+  const scopeKey = useMemo(
+    () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
+    [reportingScope, allowedScopeCountries],
+  )
+  const scopeCountryList = useMemo(() => (scopeKey ? scopeKey.split('|') : []), [scopeKey])
+  const scopeTitle = scopeLabel(reportingScope, allowedScopeCountries)
+  const hasScope = scopeCountryList.length > 0
+  // The single currency this report is denominated in, or null when the scope
+  // spans several - which is the signal to report every money figure per country.
+  const scopeCur = useMemo(() => scopeCurrency(scopeCountryList), [scopeCountryList])
+  const mixedCurrency = useMemo(() => isMixedCurrencyScope(scopeCountryList), [scopeCountryList])
+  const currencyNote = useMemo(() => currencyScopeNote(scopeCountryList), [scopeCountryList])
+
   const [raw, setRaw] = useState(null)
   const [loading, setLoading] = useState(true)
   // Client-side date range (calendar from/to). Empty = existing behavior.
@@ -167,14 +245,26 @@ export default function BoardOverview() {
   const setRef = (key) => (el) => { chartRefs.current[key] = el }
 
   const load = useCallback(async () => {
+    // A scope that resolves to no country reports on nothing, and asks the
+    // server for nothing. Falling back to an unscoped read here would silently
+    // report on every country the reader did not select.
+    if (!hasScope) {
+      setRaw(null); setTruncated(false); setError('')
+      setLoading(false); setRefreshing(false)
+      return
+    }
     setRefreshing(true); setError('')
     try {
+      // `countries` is the reporting scope. Each service turns it into ONE
+      // bounded `country in (...)` read, so the row ceilings below still cap the
+      // whole read rather than being applied once per country.
+      const countries = scopeCountryList
       const [tyresRes, inspRes, actionsQ, fleetQ, accRes, workOrders, stock] = await Promise.all([
-        fetchAllPages((from, to) => listKpiTyreRecords({ country: activeCountry, from, to }), { max: ROW_CAP }),
-        fetchAllPages((from, to) => listKpiInspections({ country: activeCountry, from, to }), { max: ROW_CAP }),
-        fetchAllPages((from, to) => listKpiCorrectiveActions({ country: activeCountry, from, to }), { max: ROW_CAP }),
-        fetchAllPages((from, to) => listKpiFleet({ country: activeCountry, from, to }), { max: FLEET_CAP }),
-        listAllAccidentsForPage({ country: activeCountry }),
+        fetchAllPages((from, to) => listKpiTyreRecords({ countries, from, to }), { max: ROW_CAP }),
+        fetchAllPages((from, to) => listKpiInspections({ countries, from, to }), { max: ROW_CAP }),
+        fetchAllPages((from, to) => listKpiCorrectiveActions({ countries, from, to }), { max: ROW_CAP }),
+        fetchAllPages((from, to) => listKpiFleet({ countries, from, to }), { max: FLEET_CAP }),
+        listAllAccidentsForPage({ countries }),
         // `lean` drops custom_data / notes / parts_used from the select. The
         // board reads the whole table on purpose - its KPIs are all-time - but
         // it only ever counts statuses and dates, so shipping the raw ERP jsonb
@@ -182,8 +272,8 @@ export default function BoardOverview() {
         // The window stays unbounded deliberately; narrowing it would change
         // what the executive KPIs mean, which is the owner's call, not a
         // performance fix.
-        listWorkOrdersForPage({ country: activeCountry, lean: true }).catch(() => []),
-        listStockRecords({ country: activeCountry }).catch(() => []),
+        listWorkOrdersForPage({ countries, lean: true }).catch(() => []),
+        listStockRecords({ countries }).catch(() => []),
       ])
       const tyres = tyresRes.data ?? []
       const inspections = inspRes.data ?? []
@@ -202,7 +292,7 @@ export default function BoardOverview() {
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [activeCountry])
+  }, [hasScope, scopeCountryList])
 
   useEffect(() => { load() }, [load])
 
@@ -220,13 +310,62 @@ export default function BoardOverview() {
     const workOrders = rangeActive ? raw.workOrders.filter((r) => inDateRange(r.completed_at || r.created_at, fromDate, toDate)) : raw.workOrders
     const now = new Date()
     return {
+      rows: { tyres, inspections, accidents, workOrders },
       kpis: buildBoardKpis({ tyres, inspections, actions: raw.actions, fleetSize: raw.fleetSize, accidents, workOrders, stock: raw.stock, now }),
       trends: buildTrends({ tyres, accidents, inspections, now }),
       breakdowns: buildBreakdowns({ accidents, tyres }),
     }
   }, [raw, rangeActive, fromDate, toDate])
 
-  const recs = useMemo(() => buildBoardRecommendations(data?.kpis), [data])
+  /**
+   * The same board, computed once PER COUNTRY. Only built when the scope spans
+   * currencies, because that is the only case where a blended money figure would
+   * be wrong; a single-currency scope keeps using the whole-scope numbers above
+   * and pays nothing for this.
+   *
+   * No extra I/O: every row is already loaded and simply partitioned. Counts are
+   * NOT read from here - a count carries no currency, so aggregating it over the
+   * whole scope is honest and is what the tiles keep doing.
+   */
+  const perCountry = useMemo(() => {
+    if (!mixedCurrency || !data || !raw) return []
+    const now = new Date()
+    const tyresBy = splitRowsByCountry(data.rows.tyres, scopeCountryList)
+    const inspBy = splitRowsByCountry(data.rows.inspections, scopeCountryList)
+    const accBy = splitRowsByCountry(data.rows.accidents, scopeCountryList)
+    const woBy = splitRowsByCountry(data.rows.workOrders, scopeCountryList)
+    const actBy = splitRowsByCountry(raw.actions, scopeCountryList)
+    return scopeCountryList.map((country, i) => ({
+      country,
+      currency: tyresBy[i].currency,
+      kpis: buildBoardKpis({
+        tyres: tyresBy[i].rows,
+        inspections: inspBy[i].rows,
+        actions: actBy[i].rows,
+        // The fleet roster is a count, not money, and this page does not hold a
+        // per-country roster split - so it is left out of the per-country KPI
+        // set rather than guessed. Only the money fields below are read from it.
+        fleetSize: 0,
+        accidents: accBy[i].rows,
+        workOrders: woBy[i].rows,
+        stock: [],
+        now,
+      }),
+      trends: buildTrends({ tyres: tyresBy[i].rows, accidents: accBy[i].rows, inspections: inspBy[i].rows, now }),
+    }))
+  }, [mixedCurrency, data, raw, scopeCountryList])
+
+  /**
+   * Recommendations. On a mixed scope they are derived PER COUNTRY and named,
+   * because the recovery-rate line divides claimed by recovered - a ratio of two
+   * sums that would each be a blend of currencies, and therefore meaningless.
+   */
+  const recs = useMemo(() => {
+    if (!mixedCurrency) return buildBoardRecommendations(data?.kpis)
+    return perCountry
+      .flatMap((pc) => buildBoardRecommendations(pc.kpis).map((r) => ({ ...r, text: `${pc.country}: ${r.text}` })))
+      .slice(0, 8)
+  }, [mixedCurrency, data, perCountry])
 
   // ── Tyres vs Maintenance cost split (own tri-state + cancel guard) ──────────
   const [cost, setCost] = useState(null)      // { tyre, maintenance, byMonth } | null
@@ -236,16 +375,34 @@ export default function BoardOverview() {
 
   useEffect(() => {
     let cancelled = false
+    if (!hasScope) { setCost(null); setCostError(''); setCostLoading(false); return undefined }
     setCostLoading(true); setCostError('')
-    loadGovernedCostSplit({ country: activeCountry })
-      .then((res) => { if (!cancelled) setCost(res) })
+    // ONE governed split per country, merged by the pure engine. Per country and
+    // not one blended call, because each country's spend has to stay in its own
+    // currency - `loadGovernedCostSplit` is the only reader that knows how to
+    // denominate a total, and it can only do that for a single country.
+    Promise.all(
+      scopeCountryList.map((country) =>
+        loadGovernedCostSplit({ country }).then((split) => ({ country, split })),
+      ),
+    )
+      .then((res) => { if (!cancelled) setCost(mergeCostSplits(res)) })
       .catch((e) => { if (!cancelled) setCostError(toUserMessage(e, 'Could not load the cost split.')) })
       .finally(() => { if (!cancelled) setCostLoading(false) })
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [hasScope, scopeCountryList])
 
+  // True when the cost panel spans currencies, so it must report per country.
+  const costMixed = Boolean(cost?.blended)
+  const costPerCountry = useMemo(() => cost?.perCountry || [], [cost])
   const costTotals = useMemo(() => splitTotals(cost?.byMonth || []), [cost])
   const costHeadline = useMemo(() => pickCost(costMode, costTotals), [costMode, costTotals])
+  // Is there any spend at all in scope? On a mixed scope `costTotals` is 0 by
+  // construction (the merge refuses to add currencies), so asking it would
+  // render "no spend recorded" over real money.
+  const costHasSpend = costMixed
+    ? costPerCountry.some((p) => Number(p.combined) > 0)
+    : costTotals.combined > 0
 
   // ── Unit-aware Fleet CPK (cost per km / hour) ───────────────────────────────
   // Server aggregate get_fleet_cpk chooses km for road assets and engine-hours for
@@ -255,18 +412,27 @@ export default function BoardOverview() {
   const [fleetCpkLoading, setFleetCpkLoading] = useState(true)
   useEffect(() => {
     let cancelled = false
+    if (!hasScope) {
+      setFleetCpk({ perVehicle: [], byType: [], fleet: [] }); setFleetCpkLoading(false)
+      return undefined
+    }
     setFleetCpkLoading(true)
-    const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
     const p = (n) => String(n).padStart(2, '0')
     const today = new Date()
     const start = new Date(); start.setDate(start.getDate() - 365)
     const iso = (d) => `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-    getFleetCpk({ country: scopedCountry, from: iso(start), to: iso(today) })
-      .then((res) => { if (!cancelled) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
+    // One aggregate RPC per country in scope. This one is safe to fan out: it
+    // returns a handful of pre-aggregated rows, each already carrying its own
+    // country and currency, and the page renders one tile per row rather than
+    // adding them - so merging is concatenation, not arithmetic.
+    Promise.all(
+      scopeCountryList.map((country) => getFleetCpk({ country, from: iso(start), to: iso(today) })),
+    )
+      .then((res) => { if (!cancelled) setFleetCpk(mergeFleetCpk(res)) })
       .catch(() => { if (!cancelled) setFleetCpk({ perVehicle: [], byType: [], fleet: [] }) })
       .finally(() => { if (!cancelled) setFleetCpkLoading(false) })
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [hasScope, scopeCountryList])
 
   const cpkFleetTiles = useMemo(() => fleetTiles(fleetCpk.fleet), [fleetCpk])
   // Top worst asset-types (highest CPK first). Cap at 6 for a board summary.
@@ -284,13 +450,61 @@ export default function BoardOverview() {
     () => (costTotals.tyre > 0 ? costTotals.tyre : (data?.kpis?.tyreSpend ?? null)),
     [costTotals, data],
   )
+  /**
+   * Per-country tyre spend for a mixed scope. Prefers the authoritative expense
+   * grid and falls back to the country's own tyre-record total, so each country
+   * is measured the same way the single-country headline is.
+   */
+  const tyreSpendPerCountry = useMemo(() => {
+    if (!mixedCurrency) return []
+    const grid = new Map(costPerCountry.map((p) => [p.country, p.tyre]))
+    return perCountry.map((pc) => ({
+      country: pc.country,
+      value: Number(grid.get(pc.country)) > 0 ? grid.get(pc.country) : pc.kpis?.tyreSpend ?? null,
+    }))
+  }, [mixedCurrency, costPerCountry, perCountry])
+
   const costChart = useMemo(() => {
+    // Mixed scope: one series PER COUNTRY, each labelled with its own currency,
+    // never one blended line. The caption below the chart says the axis mixes
+    // currencies, which a shared y-axis cannot say for itself.
+    if (costMixed) {
+      const s = perCountryMonthlySeries(costPerCountry, (m) => pickCost(costMode, m))
+      return { labels: s.labels.map(monthLabel), datasets: s.datasets }
+    }
     const rows = cost?.byMonth || []
     return {
       labels: rows.map((r) => monthLabel(r.month)),
       datasets: [{ label: `${costModeLabel(costMode)} spend`, data: pickMonthly(costMode, rows).map((m) => m.value) }],
     }
-  }, [cost, costMode])
+  }, [cost, costMode, costMixed, costPerCountry])
+
+  /**
+   * The two MONEY trend charts under a mixed scope: one series per country in
+   * its own currency instead of a single blended line. The count trends
+   * (accidents, inspections) are untouched - they carry no currency.
+   */
+  const tyreSpendTrend = useMemo(() => {
+    if (!mixedCurrency || !data?.trends) return data?.trends?.tyreSpend
+    return {
+      labels: data.trends.labels,
+      datasets: perCountry.map((pc) => ({
+        label: pc.currency ? `${pc.country} (${pc.currency})` : pc.country,
+        data: pc.trends.tyreSpend.datasets[0].data,
+      })),
+    }
+  }, [mixedCurrency, data, perCountry])
+
+  const claimsTrend = useMemo(() => {
+    if (!mixedCurrency || !data?.trends) return data?.trends?.claims
+    return {
+      labels: data.trends.labels,
+      datasets: perCountry.flatMap((pc) => pc.trends.claims.datasets.map((ds) => ({
+        ...ds,
+        label: pc.currency ? `${pc.country} ${ds.label} (${pc.currency})` : `${pc.country} ${ds.label}`,
+      }))),
+    }
+  }, [mixedCurrency, data, perCountry])
 
   // Chart Builder catalog: the board's own breakdowns + trends, ready to present.
   const studioCatalog = useMemo(() => {
@@ -314,14 +528,18 @@ export default function BoardOverview() {
       out.push(flat('claim_status', 'Claim status', b.claimStatus, 'count'))
     }
     if (t) {
-      out.push(series('m_tyre', 'Monthly tyre spend', t.tyreSpend, 'money'))
+      // The money series come from the scope-aware versions, so a deck built
+      // from a multi-country scope carries one series per country rather than a
+      // blended line. `allowTotal` stays off for them: totalling across
+      // currencies is exactly what must not happen.
+      out.push(series('m_tyre', 'Monthly tyre spend', tyreSpendTrend, 'money'))
       out.push(series('m_acc', 'Monthly accidents', t.accidents, 'count'))
       out.push(series('m_insp', 'Monthly inspections', t.inspections, 'count'))
-      out.push(series('m_claims', 'Monthly claims (claimed vs recovered)', t.claims, 'money', true))
+      out.push(series('m_claims', 'Monthly claims (claimed vs recovered)', claimsTrend, 'money', !mixedCurrency))
     }
     if ((costChart.labels || []).length) out.push(series('m_cost', `Monthly ${costModeLabel(costMode).toLowerCase()} cost`, costChart, 'money'))
     return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
-  }, [data, costChart, costMode])
+  }, [data, costChart, costMode, tyreSpendTrend, claimsTrend, mixedCurrency])
 
   // Build the Board Overview PDF doc. Shared by Download + Email so the emailed
   // report is identical to the downloaded one. Returns { doc, company } or null.
@@ -333,18 +551,35 @@ export default function BoardOverview() {
       const W = doc.internal.pageSize.getWidth()
       const M = 12
       const company = appSettings?.company_name || 'TyrePulse'
-      const scope = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+      const scope = scopeCountryList.join(', ') || scopeTitle
       doc.setFontSize(16); doc.setTextColor(15, 23, 42)
       doc.text(`${company} - Board Overview`, M, 16)
       doc.setFontSize(9); doc.setTextColor(100, 116, 139)
       doc.text(`${scope}  |  ${reportDateLabel(new Date())}`, M, 22)
 
       const k = data.kpis
+      // A PDF cell can only hold a string, so on a mixed scope each money figure
+      // is written out per country on one line. The printed copy must never say
+      // something the screen refuses to.
+      const perCountryFmt = (pick) => formatPerCountryMoney(
+        perCountryMoney(perCountry, pick),
+        (v, cur) => formatCurrency(v, cur),
+      )
+      const scopeMoney = (value, pick) => (
+        mixedCurrency ? perCountryFmt(pick) : money(value, scopeCur)
+      )
       const tiles = [
         ['Fleet vehicles', num(k.fleetSize)], ['Tyres tracked', num(k.tyresTracked)],
-        ['Fleet avg CPK', money(k.fleetAvgCpk, activeCurrency)], ['Tyre spend', money(tyreSpendValue, activeCurrency)],
+        ['Fleet avg CPK', scopeMoney(k.fleetAvgCpk, (e) => e.kpis?.fleetAvgCpk)],
+        ['Tyre spend', mixedCurrency
+          ? formatPerCountryMoney(
+            perCountryMoney(tyreSpendPerCountry, (e) => e.value),
+            (v, cur) => formatCurrency(v, cur),
+          )
+          : money(tyreSpendValue, scopeCur)],
         ['Accidents', num(k.accidents)], ['Open accidents', num(k.openAccidents)],
-        ['Claims value', money(k.claimed, activeCurrency)], ['Recovered', money(k.recovered, activeCurrency)],
+        ['Claims value', scopeMoney(k.claimed, (e) => e.kpis?.claimed)],
+        ['Recovered', scopeMoney(k.recovered, (e) => e.kpis?.recovered)],
         ['Inspections', num(k.inspections)], ['Work orders open', num(k.workOrdersOpen)],
       ]
       let y = 30
@@ -353,10 +588,22 @@ export default function BoardOverview() {
         const col = i % 5, row = Math.floor(i / 5)
         const x = M + col * ((W - 2 * M) / 5)
         const yy = y + row * 16
-        doc.setTextColor(15, 23, 42); doc.setFontSize(11); doc.text(String(t[1]), x, yy + 6)
-        doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.text(String(t[0]), x, yy + 11)
+        doc.setTextColor(15, 23, 42)
+        // A per-country money string is far longer than a single figure, so it
+        // is set smaller and wrapped inside its column instead of running over
+        // the neighbouring tile.
+        const value = String(t[1])
+        const wide = value.length > 22
+        doc.setFontSize(wide ? 7 : 11)
+        doc.text(doc.splitTextToSize(value, (W - 2 * M) / 5 - 4).slice(0, 3), x, yy + (wide ? 4 : 6))
+        doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.text(String(t[0]), x, yy + 12)
       })
       y += 34
+      if (currencyNote) {
+        doc.setTextColor(100, 116, 139); doc.setFontSize(7)
+        doc.text(doc.splitTextToSize(currencyNote, W - 2 * M), M, y)
+        y += 8
+      }
 
       // Fleet CPK summary (text): one line per country tile, each in its own
       // currency. Straightforward text, so it travels with the board PDF.
@@ -420,6 +667,13 @@ export default function BoardOverview() {
     <div className="space-y-5">
       <PageHeader title="Board Overview" subtitle="One report: KPIs, trends and charts across every module" icon={LayoutDashboard} />
 
+      {/* Reporting scope: which countries this report aggregates. Separate from
+          the working context in the top bar, and it drives every query below. */}
+      <div className="card p-3 space-y-2">
+        <ReportingScopeBar />
+        {currencyNote && <p className="text-[11px] text-[var(--text-muted)]">{currencyNote}</p>}
+      </div>
+
       {/* Section toggles + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -477,16 +731,20 @@ export default function BoardOverview() {
       )}
 
       {error && <div className="card border border-red-700/50 text-red-300 text-sm">{error}</div>}
-      {loading ? (
+      {!hasScope ? (
+        <div className="card text-center text-[var(--text-muted)] py-10">
+          No countries are selected in the reporting scope, so there is nothing to report on.
+        </div>
+      ) : loading ? (
         <div className="card text-center text-[var(--text-muted)] py-10">Loading the board overview...</div>
       ) : !hasAny ? (
-        <div className="card text-center text-[var(--text-muted)] py-10">No data yet for the selected scope. Records will appear here as they are captured.</div>
+        <div className="card text-center text-[var(--text-muted)] py-10">No data yet for {scopeTitle}. Records will appear here as they are captured.</div>
       ) : (
         <>
           {truncated && (
             <div className="flex items-center gap-2 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-2.5">
               <AlertTriangle size={13} />
-              Showing a capped view of up to {ROW_CAP.toLocaleString('en-US')} records. KPIs, trends and charts reflect this capped set. Narrow the country scope for full detail.
+              Showing a capped view of up to {ROW_CAP.toLocaleString('en-US')} records for {scopeTitle}. KPIs, trends and charts reflect this capped set. Select fewer countries in the reporting scope for full detail.
             </div>
           )}
 
@@ -494,21 +752,35 @@ export default function BoardOverview() {
           {sections.kpis && k && (
             <section className="space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {/* Counts and rates carry no currency, so they aggregate across
+                    the whole scope. Every MONEY tile goes through ScopeMoney,
+                    which reports per country the moment the scope spans more
+                    than one currency. */}
                 <Kpi label="Fleet vehicles" value={num(k.fleetSize)} accent={ACCENTS.primary} />
                 <Kpi label="Tyres tracked" value={num(k.tyresTracked)} accent={ACCENTS.info} />
-                <Kpi label="Fleet avg CPK" value={money(k.fleetAvgCpk, activeCurrency)} accent={ACCENTS.good} />
+                <Kpi label="Fleet avg CPK" accent={ACCENTS.good}
+                  value={<ScopeMoney mixed={mixedCurrency} value={k.fleetAvgCpk} currency={scopeCur}
+                    entries={perCountry} pick={(e) => e.kpis?.fleetAvgCpk} />} />
                 {/* GOVERNED: renders one figure per currency when the scope
                     spans countries, instead of labelling a blend as SAR. */}
                 <Kpi label="Tyre spend"
-                  value={costTotals.tyre > 0
+                  value={costHasSpend && (costMixed || costTotals.tyre > 0)
                     ? <CostValue split={cost} mode="tyres" />
-                    : money(tyreSpendValue, activeCurrency)}
+                    : <ScopeMoney mixed={mixedCurrency} value={tyreSpendValue} currency={scopeCur}
+                      entries={tyreSpendPerCountry} pick={(e) => e.value} />}
                   accent={ACCENTS.watch}
-                  sub={costTotals.tyre > 0 ? 'expense grid, last 12 mo' : 'from tyre records'} />
+                  sub={costHasSpend && (costMixed || costTotals.tyre > 0) ? 'expense grid, last 12 mo' : 'from tyre records'} />
                 <Kpi label="Failure rate" value={pct(k.failureRatePct)} accent={ACCENTS.risk} />
                 <Kpi label="Accidents" value={num(k.accidents)} accent={ACCENTS.risk} sub={`${num(k.openAccidents)} open`} />
-                <Kpi label="Claims value" value={money(k.claimed, activeCurrency)} accent={ACCENTS.primary} sub={`${money(k.recovered, activeCurrency)} recovered`} />
-                <Kpi label="Net exposure" value={money(k.netExposure, activeCurrency)} accent={ACCENTS.watch} />
+                <Kpi label="Claims value" accent={ACCENTS.primary}
+                  value={<ScopeMoney mixed={mixedCurrency} value={k.claimed} currency={scopeCur}
+                    entries={perCountry} pick={(e) => e.kpis?.claimed} />}
+                  sub={mixedCurrency
+                    ? `${formatPerCountryMoney(perCountryMoney(perCountry, (e) => e.kpis?.recovered), (v, cur) => formatCurrency(v, cur))} recovered`
+                    : `${money(k.recovered, scopeCur)} recovered`} />
+                <Kpi label="Net exposure" accent={ACCENTS.watch}
+                  value={<ScopeMoney mixed={mixedCurrency} value={k.netExposure} currency={scopeCur}
+                    entries={perCountry} pick={(e) => e.kpis?.netExposure} />} />
                 <Kpi label="Inspections" value={num(k.inspections)} accent={ACCENTS.info} sub={k.inspectionCompliancePct != null ? `${pct(k.inspectionCompliancePct)} compliant` : undefined} />
                 <Kpi label="Work orders open" value={num(k.workOrdersOpen)} accent={ACCENTS.good} sub={`${num(k.workOrdersOverdue)} overdue`} />
               </div>
@@ -519,10 +791,15 @@ export default function BoardOverview() {
           {sections.trends && t && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Trends, last 12 months</h2>
+              {mixedCurrency && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  The two spend charts carry one line per country in its own currency. They share an axis but are never added together; compare each country against itself.
+                </p>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Tyre spend" refCb={setRef('trendSpend')}><Line data={stylize(t.tyreSpend, 'area')} options={chartBase(false)} /></ChartCard>
+                <ChartCard title="Tyre spend" refCb={setRef('trendSpend')}><Line data={stylize(tyreSpendTrend, mixedCurrency ? 'line' : 'area')} options={chartBase(mixedCurrency)} /></ChartCard>
                 <ChartCard title="Accidents" refCb={setRef('trendAccidents')}><Line data={stylize(t.accidents, 'area')} options={chartBase(false)} /></ChartCard>
-                <ChartCard title="Claims: claimed vs recovered" refCb={setRef('trendClaims')}><Line data={stylize(t.claims, 'line')} options={chartBase(true)} /></ChartCard>
+                <ChartCard title="Claims: claimed vs recovered" refCb={setRef('trendClaims')}><Line data={stylize(claimsTrend, 'line')} options={chartBase(true)} /></ChartCard>
                 <ChartCard title="Inspections" refCb={setRef('trendInspections')}><Line data={stylize(t.inspections, 'area')} options={chartBase(false)} /></ChartCard>
               </div>
             </section>
@@ -558,19 +835,40 @@ export default function BoardOverview() {
                   <div className="text-center text-[var(--text-muted)] py-8">Loading the cost split...</div>
                 ) : costError ? (
                   <div className="text-sm text-red-300">{costError}</div>
-                ) : costTotals.combined === 0 ? (
-                  <div className="text-center text-[var(--text-muted)] py-8">No tyre or maintenance spend recorded in the last 12 months for the selected scope.</div>
+                ) : !costHasSpend ? (
+                  <div className="text-center text-[var(--text-muted)] py-8">No tyre or maintenance spend recorded in the last 12 months for {scopeTitle}.</div>
                 ) : (
                   <>
                     <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
                       <div>
-                        <p className="text-3xl font-bold" style={{ color: ACCENTS.primary }}>{formatCurrency(costHeadline, activeCurrency, 0)}</p>
+                        {/* A mixed scope has no single headline: the figure would
+                            be a blend. It reads N/A and every country reports its
+                            own three totals underneath. */}
+                        <p className="text-3xl font-bold" style={{ color: ACCENTS.primary }}>
+                          {costMixed ? 'N/A' : formatCurrency(costHeadline, scopeCur, 0)}
+                        </p>
                         <p className="text-xs text-[var(--text-muted)] mt-1">{costModeLabel(costMode)} spend, last 12 months</p>
-                        <div className="flex items-center gap-4 mt-2 text-[11px] text-[var(--text-dim)]">
-                          <span>Tyres: {formatCurrency(costTotals.tyre, activeCurrency, 0)}</span>
-                          <span>Maintenance: {formatCurrency(costTotals.maintenance, activeCurrency, 0)}</span>
-                          <span>Combined: {formatCurrency(costTotals.combined, activeCurrency, 0)}</span>
-                        </div>
+                        {costMixed ? (
+                          <div className="mt-2 space-y-1 text-[11px] text-[var(--text-dim)]">
+                            {costPerCountry.map((p) => (
+                              <div key={p.country} className="flex items-center gap-3 flex-wrap">
+                                <span className="text-[var(--text-secondary)] font-medium">{p.country}</span>
+                                <span>Tyres: {formatCurrency(p.tyre, p.currency, 0)}</span>
+                                <span>Maintenance: {formatCurrency(p.maintenance, p.currency, 0)}</span>
+                                <span>Combined: {formatCurrency(p.combined, p.currency, 0)}</span>
+                              </div>
+                            ))}
+                            <p className="text-[var(--text-muted)]">
+                              Shown per country because the scope spans more than one currency. These figures are never added together.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-4 mt-2 text-[11px] text-[var(--text-dim)]">
+                            <span>Tyres: {formatCurrency(costTotals.tyre, scopeCur, 0)}</span>
+                            <span>Maintenance: {formatCurrency(costTotals.maintenance, scopeCur, 0)}</span>
+                            <span>Combined: {formatCurrency(costTotals.combined, scopeCur, 0)}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="inline-flex rounded-lg border border-[var(--input-border)] overflow-hidden self-start">
                         {COST_MODES.map((m) => (
@@ -585,7 +883,7 @@ export default function BoardOverview() {
                       </div>
                     </div>
                     <div style={{ height: 240 }} ref={setRef('costSplit')}>
-                      <Bar data={stylize(costChart, 'bar')} options={chartBase(false)} />
+                      <Bar data={stylize(costChart, 'bar')} options={chartBase(costMixed)} />
                     </div>
                   </>
                 )}
@@ -691,12 +989,17 @@ export default function BoardOverview() {
             <StudioBoundary>
               <PresentationStudio
                 catalog={studioCatalog}
-                currency={activeCurrency}
-                money={(v) => money(v, activeCurrency)}
-                scope={activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'}
+                // The studio labels its own money axis. On a mixed scope there is
+                // no single currency to label it with, so it is left unset and
+                // each series carries its country and currency in its name.
+                currency={mixedCurrency ? undefined : scopeCur}
+                money={(v) => (mixedCurrency ? num(v) : money(v, scopeCur))}
+                scope={scopeCountryList.join(', ') || scopeTitle}
                 company={appSettings?.company_name || 'TyrePulse'}
                 filePrefix="Board"
-                note="Present any board figure as a chart, then copy, download a PNG, or export a PowerPoint deck."
+                note={mixedCurrency
+                  ? 'Present any board figure as a chart, then copy, download a PNG, or export a PowerPoint deck. Spend series are per country in their own currency and are never added together.'
+                  : 'Present any board figure as a chart, then copy, download a PNG, or export a PowerPoint deck.'}
               />
             </StudioBoundary>
           )}

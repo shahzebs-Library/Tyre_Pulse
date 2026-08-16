@@ -3,7 +3,7 @@
  * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const DIRECT_CLOSURE_FIELDS = new Set([
@@ -75,14 +75,25 @@ export async function updateAccident(id, patch) {
  * drops directly into `fetchAllPages` for transparent multi-page fetching.
  * @param {{country?:string, from:number, to:number}} opts
  */
-export function listAccidentsForPage({ country, from, to } = {}) {
+export function listAccidentsForPage({ country, countries, from, to } = {}) {
+  const list = countryList(countries)
   let q = supabase
     .from('accidents')
     .select(PAGE_COLS)
     .order('incident_date', { ascending: false })
-    .range(from, to)
-  if (country && country !== 'All') q = q.eq('country', country)
-  return q
+  // Reporting scope: a SET of countries. Absent (every caller but Board
+  // Overview) leaves the query exactly as it was; one country emits the same
+  // `country=eq.X`. The `id` tiebreak is added only on the multi-country path,
+  // because `incident_date` is not unique and a scope spanning countries reads
+  // several times as many rows, so it crosses several times as many page
+  // boundaries - where a non-unique sort key can drop or repeat a row.
+  if (list.length) {
+    q = applyCountries(q, list, { nullSafe: false })
+    if (list.length > 1) q = q.order('id')
+  } else if (country && country !== 'All') {
+    q = q.eq('country', country)
+  }
+  return q.range(from, to)
 }
 
 /**
@@ -91,8 +102,8 @@ export function listAccidentsForPage({ country, from, to } = {}) {
  * @param {{country?:string, max?:number}} [opts]
  * @returns {Promise<{data:any[], error:any, truncated:boolean}>}
  */
-export function listAllAccidentsForPage({ country, max = 100000 } = {}) {
-  return fetchAllPages((from, to) => listAccidentsForPage({ country, from, to }), { max })
+export function listAllAccidentsForPage({ country, countries, max = 100000 } = {}) {
+  return fetchAllPages((from, to) => listAccidentsForPage({ country, countries, from, to }), { max })
 }
 
 /**

@@ -22,6 +22,9 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
+import ReportingScopeBar from '../components/shell/ReportingScopeBar'
+import { scopeLabel } from '../lib/reportingScope'
+import { scopeRequestCountries, scopeQueryKey } from '../lib/reportingScopeQuery'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
@@ -416,7 +419,36 @@ function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
 }
 
 export default function ExpenseReport() {
-  const { activeCountry, appSettings, activeCurrency } = useSettings()
+  // REPORTING SCOPE, not the working context. This is an analytics page, so the
+  // countries it covers are the ones chosen in the ReportingScopeBar, not the one
+  // operational country in the top bar. `activeCountry` / `activeCurrency` are
+  // deliberately not read, and nothing here writes the working context.
+  //
+  // THE DEEP REPORT IS SINGLE-COUNTRY BY CONSTRUCTION, and that is a server fact
+  // rather than a UI choice: five of the six aggregates behind it
+  // (get_parts_expense_snapshot, get_cost_cpk_overview, get_cost_variance,
+  // get_expense_period_trend, get_site_operating_cost) take exactly ONE country
+  // and return comparison windows, movers, breakdowns and evidence that cannot
+  // be merged across countries without re-deriving the analysis. So the scope
+  // resolves to one of three states:
+  //   no country     nothing is requested and the page says so
+  //   one country    the full deep report, in that country's own currency
+  //   more than one  the per-country comparison, each country in its own
+  //                  currency - exactly the cross-country view this page has
+  //                  always shown, now bounded to the countries in scope
+  // Feeding the resolved country and currency into the SAME two names the rest
+  // of this page already uses keeps that switch to one place; every panel below
+  // is unchanged.
+  const { appSettings, reportingScope, allowedScopeCountries } = useSettings()
+  const scopeKey = useMemo(
+    () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
+    [reportingScope, allowedScopeCountries],
+  )
+  const scopeCountryList = useMemo(() => (scopeKey ? scopeKey.split('|') : []), [scopeKey])
+  const hasScope = scopeCountryList.length > 0
+  const scopeTitle = scopeLabel(reportingScope, allowedScopeCountries)
+  const activeCountry = scopeCountryList.length === 1 ? scopeCountryList[0] : 'All'
+  const activeCurrency = currencyForCountry(activeCountry, appSettings?.currency || 'SAR')
   const { profile, isSuperAdmin } = useAuth()
   const canMap = isSuperAdmin === true || ['Admin', 'Manager', 'Director'].includes(profile?.role)
   const [snap, setSnap] = useState(null)
@@ -475,6 +507,16 @@ export default function ExpenseReport() {
   const money = useMemo(() => moneyIn(activeCurrency), [activeCurrency])
 
   const load = useCallback(async () => {
+    // A scope that resolves to no country reports on nothing, and asks the
+    // server for nothing. Falling back to an un-scoped read here would report on
+    // every country the reader did not select.
+    if (!hasScope) {
+      setSnap(null); setOverview(null); setVariance(null)
+      setByCountry([]); setSiteGroups([]); setBySiteErr('')
+      setTyreAgg(null); setYearly(null); setTyreForecast(null)
+      setError(''); setLoading(false); setRefreshing(false)
+      return
+    }
     setRefreshing(true); setError('')
     try {
       const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
@@ -495,8 +537,17 @@ export default function ExpenseReport() {
       let countries = []
       if (isAll) {
         const rows = await getExpenseByCountry({ from: from || undefined, to: to || undefined }).catch(() => [])
-        setByCountry(rows)
-        countries = rows.map((r) => r.country).filter(Boolean)
+        // BOUND TO THE REPORTING SCOPE. This RPC takes no country and returns
+        // every country RLS allows, so without this filter a scope of two
+        // countries would still report on three. It cannot widen anything (RLS
+        // is the boundary and it has already applied), but reporting on a
+        // country the reader did not select is its own defect. Matching is
+        // case-insensitive so a spelling difference cannot silently blank a
+        // country's row.
+        const wanted = new Set(scopeCountryList.map((c) => String(c).toLowerCase()))
+        const scoped = rows.filter((r) => wanted.has(String(r?.country || '').toLowerCase()))
+        setByCountry(scoped)
+        countries = scoped.map((r) => r.country).filter(Boolean)
       } else {
         setByCountry([])
       }
@@ -542,7 +593,7 @@ export default function ExpenseReport() {
     } finally {
       setLoading(false); setRefreshing(false)
     }
-  }, [activeCountry, activeCurrency, from, to])
+  }, [hasScope, isAll, activeCountry, activeCurrency, from, to, scopeCountryList])
 
   useEffect(() => { load() }, [load])
 
@@ -561,6 +612,12 @@ export default function ExpenseReport() {
 
   useEffect(() => {
     let cancelled = false
+    // No scope, no request. The CPK tiles carry money, so an un-scoped read here
+    // would put another country's currency on the page.
+    if (!hasScope) {
+      setFleetCpk({ perVehicle: [], byType: [], fleet: [] }); setFleetCpkLoading(false)
+      return undefined
+    }
     setFleetCpkLoading(true)
     const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
     getFleetCpk({ country: scopedCountry, from: cpkFrom, to: cpkTo })
@@ -568,7 +625,7 @@ export default function ExpenseReport() {
       .catch(() => { if (!cancelled) setFleetCpk({ perVehicle: [], byType: [], fleet: [] }) })
       .finally(() => { if (!cancelled) setFleetCpkLoading(false) })
     return () => { cancelled = true }
-  }, [activeCountry, cpkFrom, cpkTo])
+  }, [hasScope, activeCountry, cpkFrom, cpkTo])
 
   const cpkFleetTiles = useMemo(() => fleetTiles(fleetCpk.fleet), [fleetCpk])
   const cpkByType = useMemo(() => sortByTypeWorstFirst(fleetCpk.byType), [fleetCpk])
@@ -579,6 +636,7 @@ export default function ExpenseReport() {
   // Runs once per country; a feed we cannot read is left on the current month.
   useEffect(() => {
     let cancelled = false
+    if (!hasScope) return undefined
     const scoped = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
     defaultPeriodFor('parts_consumption', { country: scoped }).then((p) => {
       if (cancelled || !p) return
@@ -586,7 +644,7 @@ export default function ExpenseReport() {
       if (p.fellBack) { setFrom(p.from); setTo(p.to); setPeriod('') }
     })
     return () => { cancelled = true }
-  }, [activeCountry])
+  }, [hasScope, activeCountry])
 
   /** One period control drives the whole page, so every panel describes one window. */
   const applyPeriod = useCallback((key) => {
@@ -988,6 +1046,24 @@ export default function ExpenseReport() {
   return (
     <div className="space-y-5">
       <PageHeader title="Expense Report" subtitle="Maintenance and parts expense: tyres, spare parts and oil" icon={Wallet} />
+
+      {/* Reporting scope: which countries this report covers. Separate from the
+          working context in the top bar, and it drives every query below. */}
+      <div className="card p-3 space-y-2">
+        <ReportingScopeBar />
+        {isAll && hasScope && (
+          <p className="text-[11px] text-[var(--text-muted)]">
+            The scope covers {scopeTitle}, which report in different currencies, so this page shows each country
+            its own totals and never one combined figure. Select a single country to open the full report for it.
+          </p>
+        )}
+      </div>
+
+      {!hasScope && (
+        <div className="card text-center text-[var(--text-muted)] py-10">
+          No countries are selected in the reporting scope, so there is nothing to report on.
+        </div>
+      )}
 
       {/* Says which month is on screen whenever it is not the current one. */}
       <PeriodNotice period={defaultPeriod} onShowAll={() => { setFrom(''); setTo(''); setPeriod('') }} />

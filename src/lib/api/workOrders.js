@@ -3,7 +3,7 @@
  * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPages, ServiceError } from './_client'
 
 const COLS =
   'id,work_order_no,asset_no,tyre_serial,tyre_position,status,priority,work_type,description,technician_name,workshop_name,site,country,opened_at,started_at,completed_at,target_completion,labour_hours,labour_rate,labour_cost,parts_cost,total_cost,created_at'
@@ -81,13 +81,24 @@ export async function updateWorkOrder(id, patch) {
  * raw Supabase `{ data, error }` so it drops straight into `fetchAllPages`.
  * @param {{country?:string, from:number, to:number, openedFrom?:string, openedTo?:string}} opts
  */
-export function listWorkOrdersPage({ country, from, to, openedFrom, openedTo, lean = false } = {}) {
+export function listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean = false } = {}) {
+  const list = countryList(countries)
   let q = supabase
     .from('work_orders')
     .select(lean ? AGGREGATE_COLS : PAGE_COLS)
     .order('opened_at', { ascending: false })
-    .range(from, to)
-  if (country && country !== 'All') q = q.eq('country', country)
+  // Reporting scope: a SET of countries. Absent (the Work Orders page) the query
+  // is exactly as it was; one country emits the same `country=eq.X`. The `id`
+  // tiebreak is added only on the multi-country path: `opened_at` is not unique
+  // and a scope spanning countries reads several times as many rows, so it
+  // crosses several times as many page boundaries.
+  if (list.length) {
+    q = applyCountries(q, list, { nullSafe: false })
+    if (list.length > 1) q = q.order('id')
+  } else if (country && country !== 'All') {
+    q = q.eq('country', country)
+  }
+  q = q.range(from, to)
   // Bound the window SERVER-side. The page filtered by date client-side, which
   // meant every visit still fetched all 88,773 rows to then show one month of
   // them. The (organisation_id, country, opened_at) index answers this directly.
@@ -112,9 +123,9 @@ export function listWorkOrdersPage({ country, from, to, openedFrom, openedTo, le
  * @param {{country?:string, max?:number, openedFrom?:string, openedTo?:string}} [opts]
  * @returns {Promise<any[]>}
  */
-export async function listWorkOrdersForPage({ country, max = 200000, openedFrom, openedTo, lean = false } = {}) {
+export async function listWorkOrdersForPage({ country, countries, max = 200000, openedFrom, openedTo, lean = false } = {}) {
   const { data, error } = await fetchAllPages(
-    (from, to) => listWorkOrdersPage({ country, from, to, openedFrom, openedTo, lean }),
+    (from, to) => listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean }),
     { max },
   )
   if (error) throw new ServiceError(error.message, error.code, error)

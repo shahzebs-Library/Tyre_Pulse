@@ -44,6 +44,29 @@ export default function useAnchoredPopover(open, { width = 224, height = 280, al
     setCoords({ top, left, maxHeight: Math.max(160, (flip ? above : below) - 6) })
   }, [align, width, height])
 
+  /**
+   * Give focus back to the trigger when the popover closes.
+   *
+   * The popover is portalled to the body, so whatever was focused inside it is
+   * removed from the document on close and focus falls to <body>. A keyboard or
+   * screen-reader user is then stranded at the top of the page, having to tab
+   * all the way back to where they were - WCAG 2.4.3, and the reason this lives
+   * in the hook rather than in each of the five menus that use it.
+   *
+   * It only reclaims ORPHANED focus. If the user closed the menu by clicking or
+   * tabbing to something else, that element holds focus and is left alone;
+   * pulling focus off it would be its own bug.
+   */
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (open) { wasOpen.current = true; return }
+    if (!wasOpen.current) return
+    wasOpen.current = false
+    const active = typeof document !== 'undefined' ? document.activeElement : null
+    if (active && active !== document.body) return
+    triggerRef.current?.focus?.()
+  }, [open])
+
   useEffect(() => {
     if (!open) { setCoords(null); return }
     reposition()

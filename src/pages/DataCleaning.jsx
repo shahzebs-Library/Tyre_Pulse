@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { dataCleaning } from '../lib/api'
+import useLatestRequest from '../lib/useLatestRequest'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify, RISK_COLOUR, CONFIDENCE_COLOUR, ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
@@ -227,7 +228,12 @@ export default function DataCleaning() {
     setSites([...new Set((data ?? []).map(r => r.site))].sort())
   }
 
+  // Paging and both filters drive this read; a slower earlier one would repaint
+  // the previous page's records and, worse, reset the selection under them.
+  const latestPending = useLatestRequest()
+
   const loadPending = useCallback(async () => {
+    const stale = latestPending.begin()
     setLoading(true)
     const { data, count } = await dataCleaning.listPendingRecords({
       country: activeCountry,
@@ -235,6 +241,7 @@ export default function DataCleaning() {
       from: page * PAGE_SIZE,
       to: (page + 1) * PAGE_SIZE - 1,
     })
+    if (stale()) return
     const records = data ?? []
     setRawRecords(records)
     setTotalPending(count ?? 0)
@@ -244,7 +251,7 @@ export default function DataCleaning() {
     setClassified(results)
     setSelected(new Set())
     setLoading(false)
-  }, [page, filterConf, filterSite, activeCountry])
+  }, [page, filterConf, filterSite, activeCountry, latestPending])
 
   async function loadCleaned() {
     setLoading(true)

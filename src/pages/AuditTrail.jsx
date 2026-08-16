@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import useLatestRequest from '../lib/useLatestRequest'
 import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -193,7 +194,13 @@ export default function AuditTrail() {
     loadUsers()
   }, [])
 
+  // Five filters plus paging drive this read, so changing any of them twice
+  // quickly leaves two in flight and the slower one can paint the previous
+  // filter's entries under the new ones.
+  const latestAudit = useLatestRequest()
+
   const loadAudit = useCallback(async () => {
+    const stale = latestAudit.begin()
     setAuditLoading(true)
     try {
       let q = supabase
@@ -208,11 +215,12 @@ export default function AuditTrail() {
       if (userFilter)    q = q.eq('user_id', userFilter)
 
       const { data, count } = await q
+      if (stale()) return
       setAuditRows(data ?? [])
       setAuditTotal(count ?? 0)
     } catch { /* ignore */ }
-    setAuditLoading(false)
-  }, [auditPage, dateFrom, dateTo, actionFilter, userFilter])
+    if (!stale()) setAuditLoading(false)
+  }, [auditPage, dateFrom, dateTo, actionFilter, userFilter, latestAudit])
 
   useEffect(() => { if (activeTab === 'audit') loadAudit() }, [loadAudit, activeTab])
 

@@ -8,6 +8,7 @@ import * as domainEvents from '../lib/api/domainEvents'
 import { formatDistanceToNow } from 'date-fns'
 import { formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,13 @@ export default function EventStream() {
     return () => clearTimeout(t)
   }, [search])
 
+  // The search box is debounced, so typing produces a burst of loads and the
+  // paging offset changes under them. If an earlier one finishes last it shows
+  // the results for a query the box no longer contains.
+  const latestLoad = useLatestRequest()
+
   const fetchEvents = useCallback(async ({ silent = false } = {}) => {
+    const stale = latestLoad.begin()
     if (!silent) setLoading(true)
     else setRefreshing(true)
     setError(null)
@@ -131,16 +138,17 @@ export default function EventStream() {
         status: status === 'all' ? null : status,
         search: debounced || null,
       })
+      if (stale()) return
       setRows(data || [])
       setCount(total || 0)
       setLastRefresh(new Date())
     } catch (err) {
-      setError(toUserMessage(err, 'Failed to load events'))
+      if (!stale()) setError(toUserMessage(err, 'Failed to load events'))
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      // A stale load clearing these would make the newer one look finished.
+      if (!stale()) { setLoading(false); setRefreshing(false) }
     }
-  }, [page, eventType, status, debounced])
+  }, [page, eventType, status, debounced, latestLoad])
 
   const fetchMeta = useCallback(async () => {
     setMetaLoading(true)

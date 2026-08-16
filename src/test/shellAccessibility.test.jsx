@@ -114,6 +114,16 @@ const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:n
 
 const liveText = () => document.querySelector('[aria-live="polite"]')?.textContent ?? null
 
+/**
+ * The expand/collapse chevron for a branch.
+ *
+ * It is aria-hidden by design - the treeitem beside it carries aria-expanded and
+ * answers the arrow keys, and a second focusable control per node both made the
+ * tree malformed and doubled the tab stops - so it cannot be reached by a role
+ * query and is addressed by its data hook instead.
+ */
+const openTwisty = (branchKey) => document.querySelector(`[data-twisty="${branchKey}"]`)
+
 beforeEach(() => {
   h.settings = baseSettings()
   h.auth = baseAuth()
@@ -223,10 +233,13 @@ describe('role=menu answers the keyboard', () => {
     expect(document.activeElement).toBe(items[1])
   })
 
-  it('skips a disabled item, which cannot take focus anyway', () => {
-    // The scope menu disables its last remaining country so a report can never
-    // cover nothing. Including it in the arrow order would produce a keypress
-    // that silently does nothing.
+  it('lands ON the held last country rather than stepping over it', () => {
+    // SUPERSEDES an earlier assertion that the arrow key SKIPPED this row.
+    // It skipped it because the row carried a real `disabled` attribute, and a
+    // disabled element is dropped from the accessibility tree entirely: the user
+    // could not find the country, could not hear that it was still in scope, and
+    // got no reason why it would not turn off. aria-disabled keeps it announced
+    // and reachable and refuses only the action, which is what APG asks for.
     h.settings = baseSettings({
       allowedScopeCountries: ['KSA', 'UAE'],
       reportingScope: { countries: ['KSA'] },
@@ -235,17 +248,34 @@ describe('role=menu answers the keyboard', () => {
     fireEvent.click(screen.getByRole('button', { name: /change reporting scope/i }))
 
     const items = screen.getAllByRole('menuitemcheckbox')
-    const disabled = screen.getByRole('menuitemcheckbox', { name: /^KSA$/ })
-    const uae = screen.getByRole('menuitemcheckbox', { name: /^UAE$/ })
-    expect(disabled.hasAttribute('disabled')).toBe(true)
-    // Disabled KSA sits BETWEEN the two reachable rows in the DOM, so an arrow
-    // press that honoured DOM order alone would land on it and appear to hang.
-    expect(items.indexOf(disabled)).toBe(1)
+    const held = screen.getByRole('menuitemcheckbox', { name: /^KSA$/ })
+    expect(held.hasAttribute('disabled')).toBe(false)
+    expect(held.getAttribute('aria-disabled')).toBe('true')
+    // It sits BETWEEN the two other rows, so this proves the arrow order follows
+    // the DOM rather than quietly routing around it.
+    expect(items.indexOf(held)).toBe(1)
 
     expect(document.activeElement).toBe(items[0])
     press('ArrowDown')
-    expect(document.activeElement).toBe(uae)
-    expect(document.activeElement).not.toBe(disabled)
+    expect(document.activeElement).toBe(held)
+  })
+
+  it('still refuses the action once the arrow key has reached it', () => {
+    // Discoverable must not mean operable: emptying the scope would leave the
+    // report covering nothing.
+    const setReportingScope = vi.fn()
+    h.settings = baseSettings({
+      allowedScopeCountries: ['KSA', 'UAE'],
+      reportingScope: { countries: ['KSA'] },
+      setReportingScope,
+    })
+    render(<ReportingScopeBar />)
+    fireEvent.click(screen.getByRole('button', { name: /change reporting scope/i }))
+
+    const held = screen.getByRole('menuitemcheckbox', { name: /^KSA$/ })
+    held.focus()
+    fireEvent.click(held)
+    expect(setReportingScope).not.toHaveBeenCalled()
   })
 })
 
@@ -311,6 +341,253 @@ describe('role=dialog keeps focus inside itself', () => {
     fireEvent.keyDown(outside, { key: 'Tab' })
     expect(document.activeElement).toBe(outside)
     outside.remove()
+  })
+})
+
+/* --- The location hierarchy is a TREE ---
+   Before this, the panel announced "dialog" and then handed the user a flat pile
+   of buttons: no depth, no position, no sibling count, no way to tell a country
+   from a site. These pin the structure that fixes that, and the keyboard model
+   the role now promises. */
+
+describe('the location hierarchy is exposed as a tree', () => {
+  function openTree(over) {
+    if (over) h.settings = baseSettings(over)
+    render(<WorkingContextSelector />)
+    fireEvent.click(screen.getByRole('button', { name: /working location/i }))
+    return screen.getByRole('tree')
+  }
+
+  const node = (name) => screen.getByRole('treeitem', { name })
+
+  it('owns the countries as a tree rather than loose buttons', () => {
+    const tree = openTree()
+    expect(tree).not.toBeNull()
+    // Every direct structural child is a tree node or a group. A stray button
+    // sitting inside role=tree is either read out as loose furniture between
+    // nodes or pruned outright, which is what the old twisty buttons were.
+    expect(tree.querySelectorAll('button:not([role="treeitem"])').length).toBe(0)
+  })
+
+  it('gives each country its level, position and sibling count', () => {
+    // "KSA" alone tells a screen reader nothing. "level 1, 1 of 3" is the whole
+    // point of the tree.
+    openTree()
+    const ksa = node(/^KSA/)
+    expect(ksa.getAttribute('aria-level')).toBe('1')
+    expect(ksa.getAttribute('aria-posinset')).toBe('1')
+    expect(ksa.getAttribute('aria-setsize')).toBe('3')
+    expect(node(/^Egypt/).getAttribute('aria-posinset')).toBe('3')
+  })
+
+  it('nests a region under its country and a site under its region', () => {
+    openTree()
+    const central = node(/^CENTRAL/)
+    expect(central.getAttribute('aria-level')).toBe('2')
+    // The sites of the open region sit one level deeper again, inside a group.
+    const site = node(/^QIDDIYA-UPPER PLATEAU/)
+    expect(site.getAttribute('aria-level')).toBe('3')
+    expect(site.closest('[role="group"]')).not.toBeNull()
+  })
+
+  it('numbers regions and loose sites as ONE run of siblings', () => {
+    // KSA has 2 regions and JED, which carries no region. They are all children
+    // of KSA at the same level, so a separate sequence per kind would announce
+    // "1 of 2" twice under one country.
+    openTree()
+    expect(node(/^CENTRAL/).getAttribute('aria-setsize')).toBe('3')
+    expect(node(/^WESTERN/).getAttribute('aria-posinset')).toBe('2')
+    const jed = node(/^JED/)
+    expect(jed.getAttribute('aria-level')).toBe('2')
+    expect(jed.getAttribute('aria-posinset')).toBe('3')
+    expect(jed.getAttribute('aria-setsize')).toBe('3')
+  })
+
+  it('puts a region-less country its sites at level 2, inventing no region', () => {
+    openTree({
+      allowedContext: [UAE],
+      workingContext: { country: 'UAE', region: null, site: 'SHARJAH' },
+    })
+    expect(node(/^SHARJAH/).getAttribute('aria-level')).toBe('2')
+    expect(node(/^SHARJAH/).getAttribute('aria-setsize')).toBe('2')
+  })
+
+  it('marks a branch expanded or collapsed, and says nothing on a leaf', () => {
+    openTree()
+    expect(node(/^KSA/).getAttribute('aria-expanded')).toBe('true')
+    expect(node(/^UAE/).getAttribute('aria-expanded')).toBe('false')
+    // A leaf that reports "collapsed" invites the user to open an empty branch.
+    expect(node(/^QIDDIYA-UPPER PLATEAU/).hasAttribute('aria-expanded')).toBe(false)
+    expect(node(/^JED/).hasAttribute('aria-expanded')).toBe(false)
+  })
+
+  it('marks the current working location selected, in the tree\'s own terms', () => {
+    // aria-selected is what a tree uses; aria-current means nothing on a
+    // treeitem and would leave the node reading as just another site.
+    openTree()
+    expect(node(/^QIDDIYA-UPPER PLATEAU/).getAttribute('aria-selected')).toBe('true')
+    expect(node(/^JED/).getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('walks the visible nodes with ArrowDown and ArrowUp', () => {
+    openTree({
+      allowedContext: [UAE],
+      workingContext: { country: 'UAE', region: null, site: 'SHARJAH' },
+    })
+    node(/^UAE/).focus()
+    press('ArrowDown')
+    expect(document.activeElement).toBe(node(/^DUBAI YARD/))
+    press('ArrowDown')
+    expect(document.activeElement).toBe(node(/^SHARJAH/))
+    press('ArrowUp')
+    expect(document.activeElement).toBe(node(/^DUBAI YARD/))
+  })
+
+  it('clamps at the ends instead of wrapping like the menus do', () => {
+    // A tree is a spatial structure: jumping from the last site back to the
+    // first country reads as having lost your place.
+    openTree({
+      allowedContext: [UAE],
+      workingContext: { country: 'UAE', region: null, site: 'SHARJAH' },
+    })
+    node(/^UAE/).focus()
+    press('ArrowUp')
+    expect(document.activeElement).toBe(node(/^UAE/))
+    node(/^SHARJAH/).focus()
+    press('ArrowDown')
+    expect(document.activeElement).toBe(node(/^SHARJAH/))
+  })
+
+  it('jumps to the first and last visible node with Home and End', () => {
+    openTree({
+      allowedContext: [UAE],
+      workingContext: { country: 'UAE', region: null, site: 'SHARJAH' },
+    })
+    node(/^DUBAI YARD/).focus()
+    press('End')
+    expect(document.activeElement).toBe(node(/^SHARJAH/))
+    press('Home')
+    expect(document.activeElement).toBe(node(/^UAE/))
+  })
+
+  it('opens a collapsed branch with ArrowRight and steps into it on the next press', () => {
+    // The key that opens every other tree the user has met. Without it, role=tree
+    // announces "collapsed" and then answers nothing, which is worse than having
+    // said nothing at all.
+    openTree()
+    const uae = () => node(/^UAE/)
+    uae().focus()
+    expect(uae().getAttribute('aria-expanded')).toBe('false')
+
+    press('ArrowRight')
+    expect(uae().getAttribute('aria-expanded')).toBe('true')
+    // Focus stays put on the open, which is what lets the user read the branch
+    // before entering it.
+    expect(document.activeElement).toBe(uae())
+
+    press('ArrowRight')
+    expect(document.activeElement).toBe(node(/^DUBAI YARD/))
+  })
+
+  it('collapses with ArrowLeft, then steps out to the parent', () => {
+    openTree()
+    node(/^CENTRAL/).focus()
+    press('ArrowLeft')
+    expect(node(/^CENTRAL/).getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(node(/^CENTRAL/))
+
+    // Already collapsed, so the same key now walks out of the group.
+    press('ArrowLeft')
+    expect(document.activeElement).toBe(node(/^KSA/))
+  })
+
+  it('does nothing when stepping out of a root node', () => {
+    openTree()
+    const ksa = () => node(/^KSA/)
+    ksa().focus()
+    press('ArrowLeft')           // collapses
+    expect(ksa().getAttribute('aria-expanded')).toBe('false')
+    press('ArrowLeft')           // no parent to step to
+    expect(document.activeElement).toBe(ksa())
+  })
+
+  it('mirrors the expand and collapse keys under RTL', () => {
+    // In Arabic the tree indents leftward, so ArrowRight is the way OUT. An
+    // unmirrored handler would collapse the branch the user is trying to open.
+    h.isRTL = true
+    openTree({
+      allowedContext: [UAE],
+      workingContext: { country: 'UAE', region: null, site: 'SHARJAH' },
+    })
+    const uae = () => node(/^UAE/)
+    uae().focus()
+    press('ArrowRight')
+    expect(uae().getAttribute('aria-expanded')).toBe('false')
+    press('ArrowLeft')
+    expect(uae().getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('keeps collapsed children out of the arrow order entirely', () => {
+    // Not merely hidden: a collapsed branch renders nothing, so the order a user
+    // arrows through cannot drift from what is on screen.
+    // No country in context, so nothing opens pre-expanded and UAE stays shut.
+    const tree = openTree({
+      allowedContext: [UAE],
+      workingContext: { country: null, region: null, site: null },
+    })
+    expect(tree.querySelectorAll('[role="treeitem"]').length).toBe(1)
+    node(/^UAE/).focus()
+    press('ArrowDown')
+    expect(document.activeElement).toBe(node(/^UAE/))
+  })
+
+  it('leaves the flat lists flat, because they are not a hierarchy', () => {
+    // Recents, All countries and the search results are unordered shortcuts. A
+    // treeitem outside a tree, or a level on a row that has none, would be a lie.
+    localStorage.setItem(
+      'tp_context_recents',
+      JSON.stringify([{ country: 'UAE', region: null, site: 'SHARJAH' }]),
+    )
+    h.settings = baseSettings({ canSelectAll: true })
+    render(<WorkingContextSelector />)
+    fireEvent.click(screen.getByRole('button', { name: /working location/i }))
+
+    const all = screen.getByRole('button', { name: /All countries/ })
+    expect(all.getAttribute('role')).toBeNull()
+    expect(all.hasAttribute('aria-level')).toBe(false)
+    expect(screen.getByRole('tree').contains(all)).toBe(false)
+  })
+
+  it('still keeps Tab inside the dialog with the tree in place', () => {
+    // The tree adds an arrow-key model; it must not cost the dialog its trap.
+    const tree = openTree()
+    const dialog = screen.getByRole('dialog', { name: /working location/i })
+    const focusable = [...dialog.querySelectorAll(FOCUSABLE)]
+    expect(tree.querySelectorAll('[role="treeitem"]').length).toBeGreaterThan(1)
+
+    focusable[focusable.length - 1].focus()
+    press('Tab')
+    expect(document.activeElement).toBe(focusable[0])
+  })
+
+  it('still closes on Escape with the tree focused', () => {
+    openTree()
+    node(/^KSA/).focus()
+    fireEvent.keyDown(document.activeElement, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: /working location/i })).toBeNull()
+  })
+
+  it('still filters through the search box, which the tree never intercepts', () => {
+    // The panel already answers "find a node by name" with a search box that
+    // covers sites, regions and countries at once. No typeahead was added to the
+    // tree: two different answers to the same keystroke, depending on where
+    // focus happened to be, is worse than one good one.
+    openTree()
+    fireEvent.change(screen.getByRole('textbox', { name: /find a site or region/i }), {
+      target: { value: 'sharjah' },
+    })
+    expect(screen.getByText('SHARJAH')).toBeTruthy()
+    expect(screen.queryByRole('tree')).toBeNull()
   })
 })
 
@@ -423,13 +700,15 @@ describe('right to left', () => {
     render(<WorkingContextSelector />)
     fireEvent.click(screen.getByRole('button', { name: /working location/i }))
 
-    const dialog = screen.getByRole('dialog', { name: /working location/i })
+    // The twisty is aria-hidden now that the treeitem beside it carries
+    // aria-expanded, so it is reached by its data hook rather than by a role
+    // query. The assertion itself - which way the chevron points - is unchanged.
+    const twisty = () => openTwisty('UAE')
     // The current branch opens expanded, so collapse it to see the arrow.
-    fireEvent.click(within(dialog).getByRole('button', { name: /collapse uae/i }))
+    fireEvent.click(twisty())
 
-    const expand = within(dialog).getByRole('button', { name: /expand uae/i })
-    expect(expand.querySelector('svg')?.getAttribute('class')).toMatch(/chevron-left/)
-    expect(expand.querySelector('svg')?.getAttribute('class')).not.toMatch(/chevron-right/)
+    expect(twisty().querySelector('svg')?.getAttribute('class')).toMatch(/chevron-left/)
+    expect(twisty().querySelector('svg')?.getAttribute('class')).not.toMatch(/chevron-right/)
   })
 
   it('points it the other way when reading left to right', () => {
@@ -441,11 +720,27 @@ describe('right to left', () => {
     render(<WorkingContextSelector />)
     fireEvent.click(screen.getByRole('button', { name: /working location/i }))
 
-    const dialog = screen.getByRole('dialog', { name: /working location/i })
-    fireEvent.click(within(dialog).getByRole('button', { name: /collapse uae/i }))
+    fireEvent.click(openTwisty('UAE'))
+    expect(openTwisty('UAE').querySelector('svg')?.getAttribute('class')).toMatch(/chevron-right/)
+  })
 
-    const expand = within(dialog).getByRole('button', { name: /expand uae/i })
-    expect(expand.querySelector('svg')?.getAttribute('class')).toMatch(/chevron-right/)
+  it('still toggles the branch when the twisty is clicked', () => {
+    // Making the twisty decorative must not make it inert: a pointer user has no
+    // arrow keys and this is the only thing they can hit.
+    h.settings = baseSettings({
+      allowedContext: [UAE],
+      workingContext: { country: 'UAE', region: null, site: 'SHARJAH' },
+    })
+    render(<WorkingContextSelector />)
+    fireEvent.click(screen.getByRole('button', { name: /working location/i }))
+
+    const node = () => screen.getByRole('treeitem', { name: /UAE/ })
+    expect(node().getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(openTwisty('UAE'))
+    expect(node().getAttribute('aria-expanded')).toBe('false')
+    // Scoped to the tree: the trigger chip prints the current site too, so an
+    // unscoped query for SHARJAH is ambiguous by design.
+    expect(within(screen.getByRole('tree')).queryByText('SHARJAH')).toBeNull()
   })
 
   it('uses logical spacing classes so the shell mirrors as a whole', () => {

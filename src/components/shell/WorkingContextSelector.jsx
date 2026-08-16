@@ -27,6 +27,15 @@
  * Reporting scope (which countries a report AGGREGATES) is a different question
  * with its own control, ReportingScopeBar. This one never multi-selects: you
  * work in one place at a time.
+ *
+ * WHY THE PANEL IS A DIALOG AND THE HIERARCHY INSIDE IT IS A TREE: the panel
+ * holds a search box, a Recents list and an All-countries row as well as the
+ * hierarchy, so it is genuinely a dialog. But the hierarchy itself used to be a
+ * flat pile of buttons, which is what a screen reader read out: no depth, no
+ * position, no sibling count, no way to tell a country from a site. role=tree
+ * with aria-level / aria-posinset / aria-setsize is what turns "button, button,
+ * button" into "KSA, level 1, 1 of 3, collapsed". The flat lists stay flat
+ * because they ARE flat; only the hierarchy is owned by the tree.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -235,6 +244,75 @@ export default function WorkingContextSelector({ compact = false, className = ''
       return next
     })
   }, [])
+
+  /* Explicit open/close rather than a toggle, because the arrow keys are
+     directional: ArrowRight on an already-open branch must step INTO it, never
+     shut the branch the user is trying to enter. */
+  const setBranch = useCallback((key, wantOpen) => {
+    setExpanded((prev) => {
+      if (prev.has(key) === wantOpen) return prev
+      const next = new Set(prev)
+      if (wantOpen) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }, [])
+
+  /**
+   * The keyboard model role=tree promises.
+   *
+   * Declaring role=tree and then answering nothing but Tab is the failure this
+   * whole pass exists to stop: a screen reader announces "tree, collapsed" and
+   * the key that opens every other tree the user has met does nothing. Handled
+   * once on the container rather than per node, so a tree of 69 sites does not
+   * carry 69 listeners.
+   *
+   * Collapsed children are not rendered at all, so DOM order IS the visible
+   * order and no separate flattening pass can drift from what is on screen.
+   */
+  const treeRef = useRef(null)
+  const onTreeKeyDown = useCallback((e) => {
+    const tree = treeRef.current
+    const el = document.activeElement
+    if (!tree || !el || !tree.contains(el) || el.getAttribute?.('role') !== 'treeitem') return
+
+    const items = Array.from(tree.querySelectorAll('[role="treeitem"]'))
+    const at = items.indexOf(el)
+    if (at < 0) return
+
+    const branch = el.getAttribute('data-branch-key')
+    const isExpanded = el.getAttribute('aria-expanded') === 'true'
+    // A branch opens toward the reading direction, so the key that opens it
+    // mirrors with the language: in Arabic the tree indents leftward and
+    // ArrowRight is the way OUT, not the way in.
+    const intoKey = isRTL ? 'ArrowLeft' : 'ArrowRight'
+    const outKey = isRTL ? 'ArrowRight' : 'ArrowLeft'
+
+    // Deliberately CLAMPED, not wrapped, unlike the menus next door: a tree is a
+    // spatial structure and jumping from the last site back to the first country
+    // reads as having lost your place.
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[Math.min(at + 1, items.length - 1)].focus(); return }
+    if (e.key === 'ArrowUp') { e.preventDefault(); items[Math.max(at - 1, 0)].focus(); return }
+    if (e.key === 'Home') { e.preventDefault(); items[0].focus(); return }
+    if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); return }
+
+    if (e.key === intoKey) {
+      e.preventDefault()
+      if (branch && !isExpanded) setBranch(branch, true)
+      else if (isExpanded) items[at + 1]?.focus()
+      return
+    }
+
+    if (e.key === outKey) {
+      e.preventDefault()
+      if (branch && isExpanded) { setBranch(branch, false); return }
+      // Step out to the parent, which is the first treeitem in the wrapper that
+      // owns this node's group. A root node has no group and correctly does
+      // nothing rather than jumping somewhere arbitrary.
+      const group = el.closest('[role="group"]')
+      group?.parentElement?.querySelector('[role="treeitem"]')?.focus()
+    }
+  }, [isRTL, setBranch])
 
   // The pure lib returns stable English ('All' / 'All countries') because it has
   // no access to t() and its output is pinned by tests. The no-country case is
@@ -456,121 +534,141 @@ export default function WorkingContextSelector({ compact = false, className = ''
                   </>
                 )}
 
-                {allowed.map((country) => {
-                  const regions = regionsOf(country)
-                  const loose = looseSitesOf(country)
-                  const hasChildren = regions.length > 0 || loose.length > 0
-                  const isOpen = expanded.has(country.country)
-                  const countryCtx = { country: country.country, region: null, site: null }
-                  const totalSites = allSitesOf(country).length
-                  return (
-                    <div key={country.country}>
-                      <div className="flex items-stretch gap-0.5">
-                        {hasChildren ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleBranch(country.country)}
-                            aria-expanded={isOpen}
-                            aria-label={`${isOpen ? tx(t, 'common.collapse', 'Collapse') : tx(t, 'common.expand', 'Expand')} ${country.country}`}
-                            className="w-6 flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--input-bg)]"
-                            style={{ color: 'var(--text-dim)' }}
-                          >
-                            {isOpen
-                              ? <ChevronDown size={13} aria-hidden="true" />
-                              : <CollapsedIcon size={13} aria-hidden="true" />}
-                          </button>
-                        ) : (
-                          <span className="w-6" aria-hidden="true" />
-                        )}
-                        <ContextRow
-                          icon={Globe}
-                          label={country.country}
-                          hint={
-                            regions.length > 0
-                              ? `${regions.length} ${regionWord(regions.length)}, ${totalSites} ${siteWord(totalSites)}`
-                              : totalSites > 0
-                                ? `${totalSites} ${siteWord(totalSites)}`
-                                : null
-                          }
-                          strong
-                          selected={sameContext(countryCtx, ctx)}
-                          onClick={() => select(countryCtx)}
-                        />
-                      </div>
-
-                      {isOpen && (
-                        <div className="ms-6">
-                          {/* A country with no regions goes straight to its sites.
-                              No placeholder region level is invented. */}
-                          {regions.map((region) => {
-                            const rKey = `${country.country}||${region.region}`
-                            const rOpen = expanded.has(rKey)
-                            const sites = sitesOf(region)
-                            const regionCtx = { country: country.country, region: region.region, site: null }
-                            return (
-                              <div key={rKey}>
-                                <div className="flex items-stretch gap-0.5">
-                                  {sites.length > 0 ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleBranch(rKey)}
-                                      aria-expanded={rOpen}
-                                      aria-label={`${rOpen ? tx(t, 'common.collapse', 'Collapse') : tx(t, 'common.expand', 'Expand')} ${region.region}`}
-                                      className="w-6 flex items-center justify-center rounded-lg transition-colors hover:bg-[var(--input-bg)]"
-                                      style={{ color: 'var(--text-dim)' }}
-                                    >
-                                      {rOpen
-                                        ? <ChevronDown size={13} aria-hidden="true" />
-                                        : <CollapsedIcon size={13} aria-hidden="true" />}
-                                    </button>
-                                  ) : (
-                                    <span className="w-6" aria-hidden="true" />
-                                  )}
-                                  <ContextRow
-                                    icon={Building2}
-                                    label={region.region}
-                                    hint={sites.length > 0 ? `${sites.length} ${siteWord(sites.length)}` : null}
-                                    selected={sameContext(regionCtx, ctx)}
-                                    onClick={() => select(regionCtx)}
-                                  />
-                                </div>
-                                {rOpen && (
-                                  <div className="ms-6">
-                                    {sites.map((s) => {
-                                      const siteCtx = { country: country.country, region: region.region, site: s }
-                                      return (
-                                        <ContextRow
-                                          key={`${rKey}||${s}`}
-                                          icon={MapPin}
-                                          label={s}
-                                          selected={sameContext(siteCtx, ctx)}
-                                          onClick={() => select(siteCtx)}
-                                        />
-                                      )
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })}
-
-                          {loose.map((s) => {
-                            const siteCtx = { country: country.country, region: null, site: s }
-                            return (
-                              <ContextRow
-                                key={`${country.country}||loose||${s}`}
-                                icon={MapPin}
-                                label={s}
-                                selected={sameContext(siteCtx, ctx)}
-                                onClick={() => select(siteCtx)}
-                              />
-                            )
-                          })}
+                <div
+                  ref={treeRef}
+                  role="tree"
+                  aria-label={tx(t, 'shell.locationTree', 'Locations by country')}
+                  onKeyDown={onTreeKeyDown}
+                >
+                  {allowed.map((country, ci) => {
+                    const regions = regionsOf(country)
+                    const loose = looseSitesOf(country)
+                    const hasChildren = regions.length > 0 || loose.length > 0
+                    const isOpen = expanded.has(country.country)
+                    const countryCtx = { country: country.country, region: null, site: null }
+                    const totalSites = allSitesOf(country).length
+                    // Regions and loose sites are ONE run of siblings at the same
+                    // level, so they share a set size and a single position
+                    // sequence. Numbering them separately would tell a screen
+                    // reader "1 of 2" twice under one country.
+                    const childCount = regions.length + loose.length
+                    return (
+                      <div key={country.country} role="none">
+                        <div className="flex items-stretch gap-0.5" role="none">
+                          {hasChildren ? (
+                            <Twisty
+                              open={isOpen}
+                              collapsedIcon={CollapsedIcon}
+                              branchKey={country.country}
+                              onToggle={() => toggleBranch(country.country)}
+                            />
+                          ) : (
+                            <span className="w-6" aria-hidden="true" />
+                          )}
+                          <ContextRow
+                            icon={Globe}
+                            label={country.country}
+                            hint={
+                              regions.length > 0
+                                ? `${regions.length} ${regionWord(regions.length)}, ${totalSites} ${siteWord(totalSites)}`
+                                : totalSites > 0
+                                  ? `${totalSites} ${siteWord(totalSites)}`
+                                  : null
+                            }
+                            strong
+                            selected={sameContext(countryCtx, ctx)}
+                            onClick={() => select(countryCtx)}
+                            treeItem
+                            level={1}
+                            posinset={ci + 1}
+                            setsize={allowed.length}
+                            expanded={hasChildren ? isOpen : undefined}
+                            branchKey={hasChildren ? country.country : undefined}
+                          />
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
+
+                        {isOpen && (
+                          <div className="ms-6" role="group">
+                            {/* A country with no regions goes straight to its sites.
+                                No placeholder region level is invented. */}
+                            {regions.map((region, ri) => {
+                              const rKey = `${country.country}||${region.region}`
+                              const rOpen = expanded.has(rKey)
+                              const sites = sitesOf(region)
+                              const regionCtx = { country: country.country, region: region.region, site: null }
+                              return (
+                                <div key={rKey} role="none">
+                                  <div className="flex items-stretch gap-0.5" role="none">
+                                    {sites.length > 0 ? (
+                                      <Twisty
+                                        open={rOpen}
+                                        collapsedIcon={CollapsedIcon}
+                                        branchKey={rKey}
+                                        onToggle={() => toggleBranch(rKey)}
+                                      />
+                                    ) : (
+                                      <span className="w-6" aria-hidden="true" />
+                                    )}
+                                    <ContextRow
+                                      icon={Building2}
+                                      label={region.region}
+                                      hint={sites.length > 0 ? `${sites.length} ${siteWord(sites.length)}` : null}
+                                      selected={sameContext(regionCtx, ctx)}
+                                      onClick={() => select(regionCtx)}
+                                      treeItem
+                                      level={2}
+                                      posinset={ri + 1}
+                                      setsize={childCount}
+                                      expanded={sites.length > 0 ? rOpen : undefined}
+                                      branchKey={sites.length > 0 ? rKey : undefined}
+                                    />
+                                  </div>
+                                  {rOpen && (
+                                    <div className="ms-6" role="group">
+                                      {sites.map((s, si) => {
+                                        const siteCtx = { country: country.country, region: region.region, site: s }
+                                        return (
+                                          <ContextRow
+                                            key={`${rKey}||${s}`}
+                                            icon={MapPin}
+                                            label={s}
+                                            selected={sameContext(siteCtx, ctx)}
+                                            onClick={() => select(siteCtx)}
+                                            treeItem
+                                            level={3}
+                                            posinset={si + 1}
+                                            setsize={sites.length}
+                                          />
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+
+                            {loose.map((s, li) => {
+                              const siteCtx = { country: country.country, region: null, site: s }
+                              return (
+                                <ContextRow
+                                  key={`${country.country}||loose||${s}`}
+                                  icon={MapPin}
+                                  label={s}
+                                  selected={sameContext(siteCtx, ctx)}
+                                  onClick={() => select(siteCtx)}
+                                  treeItem
+                                  level={2}
+                                  posinset={regions.length + li + 1}
+                                  setsize={childCount}
+                                />
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </>
             )}
           </div>
@@ -593,12 +691,62 @@ function SectionLabel({ icon: Icon, text }) {
   )
 }
 
-function ContextRow({ icon: Icon, label, hint, onClick, selected = false, strong = false }) {
+/**
+ * The expand/collapse chevron.
+ *
+ * DELIBERATELY NOT A BUTTON, and that is the load-bearing half of the tree fix.
+ * role=tree may only own treeitem and group, so a second focusable control
+ * sitting beside each node made the tree malformed: assistive tech either reads
+ * the chevron out as loose furniture between nodes or prunes it. It also
+ * doubled the tab stops in a panel that carries 69 sites in the live register.
+ *
+ * Nothing is lost by making it decorative, because the treeitem beside it now
+ * carries aria-expanded and answers ArrowRight/ArrowLeft, which is how every
+ * other tree a keyboard or screen-reader user has met already behaves. A span
+ * with no tabindex is genuinely unfocusable, which is what makes aria-hidden
+ * legal here.
+ */
+function Twisty({ open, collapsedIcon: Collapsed, onToggle, branchKey }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-twisty={branchKey}
+      onClick={onToggle}
+      className="w-6 flex-shrink-0 flex items-center justify-center rounded-lg cursor-pointer transition-colors hover:bg-[var(--input-bg)]"
+      style={{ color: 'var(--text-dim)' }}
+    >
+      {open ? <ChevronDown size={13} /> : <Collapsed size={13} />}
+    </span>
+  )
+}
+
+/**
+ * One row. A hierarchy node when `treeItem` is set, a plain button otherwise.
+ *
+ * The two forms carry DIFFERENT selection attributes on purpose: aria-selected
+ * is the tree's own idea of "this is the one", and it is only meaningful on a
+ * role that supports it, so the flat Recents / All-countries / search rows keep
+ * aria-current. Stamping aria-selected on a plain button says nothing to a
+ * screen reader while looking, in review, as though it did.
+ */
+function ContextRow({
+  icon: Icon, label, hint, onClick, selected = false, strong = false,
+  treeItem = false, level, posinset, setsize, expanded, branchKey,
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-current={selected ? 'true' : undefined}
+      role={treeItem ? 'treeitem' : undefined}
+      aria-level={treeItem ? level : undefined}
+      aria-posinset={treeItem ? posinset : undefined}
+      aria-setsize={treeItem ? setsize : undefined}
+      // A LEAF gets no aria-expanded at all. Reporting "collapsed" on a site
+      // that has nothing under it invites the user to open an empty branch.
+      aria-expanded={treeItem && expanded !== undefined ? expanded : undefined}
+      aria-selected={treeItem ? selected : undefined}
+      aria-current={!treeItem && selected ? 'true' : undefined}
+      data-branch-key={branchKey}
       className="flex-1 min-w-0 w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-start transition-colors hover:bg-[var(--input-bg)]"
       style={selected ? { background: 'rgba(22,163,74,0.1)' } : undefined}
     >

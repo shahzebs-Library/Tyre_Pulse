@@ -56,5 +56,6 @@
   "newAsset": "New Asset",
   "newTyre": "New Tyre",
   "contextChanged": "Working location changed to",
-  "scopeChanged": "Reporting scope changed to"
+  "scopeChanged": "Reporting scope changed to",
+  "locationTree": "Locations by country"
 }

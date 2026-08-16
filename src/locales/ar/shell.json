@@ -56,5 +56,6 @@
   "newAsset": "أصل جديد",
   "newTyre": "إطار جديد",
   "contextChanged": "تم تغيير موقع العمل إلى",
-  "scopeChanged": "تم تغيير نطاق التقارير إلى"
+  "scopeChanged": "تم تغيير نطاق التقارير إلى",
+  "locationTree": "المواقع حسب الدولة"
 }

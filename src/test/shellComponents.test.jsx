@@ -220,9 +220,12 @@ describe('WorkingContextSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /working location/i }))
 
     // The branch holding the current selection opens already expanded, so the
-    // user never has to hunt for where they already are - hence "Collapse".
+    // user never has to hunt for where they already are. Read off the node's own
+    // aria-expanded rather than off a "Collapse UAE" button label: the twisty is
+    // decorative now that the treeitem carries the state, and the state is the
+    // thing a screen reader actually announces.
     const picker = within(screen.getByRole('dialog', { name: /working location/i }))
-    expect(picker.getByRole('button', { name: /collapse uae/i })).toBeTruthy()
+    expect(picker.getByRole('treeitem', { name: /UAE/ }).getAttribute('aria-expanded')).toBe('true')
     expect(picker.getByText('DUBAI YARD')).toBeTruthy()
     expect(picker.getByText('SHARJAH')).toBeTruthy()
     // No invented region placeholder for a country the register gives none.
@@ -365,9 +368,34 @@ describe('ReportingScopeBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /change reporting scope/i }))
 
     const last = screen.getByRole('menuitemcheckbox', { name: /^KSA$/ })
-    expect(last.hasAttribute('disabled')).toBe(true)
+    // aria-disabled, NOT the disabled attribute. A disabled element is dropped
+    // from the accessibility tree, so a screen reader user could not find the
+    // country at all, could not hear that it is still IN scope, and got no
+    // reason why it would not turn off. The refusal is what matters here and it
+    // is unchanged; the discoverability is what improved.
+    expect(last.hasAttribute('disabled')).toBe(false)
+    expect(last.getAttribute('aria-disabled')).toBe('true')
+    expect(last.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(last)
     expect(setReportingScope).not.toHaveBeenCalled()
+  })
+
+  it('explains WHY the last remaining country will not switch off', () => {
+    // Without a description the row is simply inert: it looks like a control
+    // that is broken rather than one that is deliberately held.
+    h.settings = baseSettings({ reportingScope: { countries: ['KSA'] } })
+    render(<ReportingScopeBar />)
+    fireEvent.click(screen.getByRole('button', { name: /change reporting scope/i }))
+
+    const last = screen.getByRole('menuitemcheckbox', { name: /^KSA$/ })
+    const describedBy = last.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(describedBy).textContent)
+      .toMatch(/at least one country must stay selected/i)
+    // The explanation is a DESCRIPTION, never folded into the name: a name of
+    // "KSA. At least one country must stay selected." is read on every pass over
+    // the row and buries the country it is supposed to identify.
+    expect(last.textContent).not.toMatch(/must stay selected/i)
   })
 
   it('renders a static label when only one country may be reported on', () => {

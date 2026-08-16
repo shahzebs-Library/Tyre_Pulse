@@ -45,9 +45,13 @@ const FOCUSABLE = [
 
 /* Menu navigation walks the ITEMS, not every focusable node, so a decorative
    control could never land in the arrow-key order.
-   `:not([disabled])` matters: the reporting scope menu genuinely disables its
-   last remaining country, and a disabled button cannot take focus, so including
-   it would produce an arrow press that appears to do nothing. */
+   `:not([disabled])` excludes nothing today and is kept for a future item that
+   really is disabled: a disabled button cannot take focus, so including one
+   would produce an arrow press that appears to do nothing. The reporting scope
+   menu USED to disable its last remaining country and now marks it
+   aria-disabled instead, precisely so it stays discoverable and reachable by
+   arrow - an item the user must be able to find in order to learn why it will
+   not turn off. */
 const MENU_ITEMS = ['[role="menuitem"]', '[role="menuitemcheckbox"]', '[role="menuitemradio"]']
   .map((s) => `${s}:not([disabled])`)
   .join(',')

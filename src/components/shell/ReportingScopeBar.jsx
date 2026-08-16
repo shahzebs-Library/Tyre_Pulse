@@ -26,7 +26,7 @@
  * is nothing to choose, so it renders as a static label.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Check, Globe, BarChart3 } from 'lucide-react'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
@@ -74,6 +74,8 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
+  // One description node, referenced by whichever row is the last one standing.
+  const keepOneId = useId()
   // nav:'menu' gives the panel the arrow-key model its role=menu advertises;
   // align 'left' is the READING-direction start edge, mirrored under RTL by the hook.
   const { triggerRef, panelRef, coords } = useAnchoredPopover(open, {
@@ -100,6 +102,7 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
   }, [open, panelRef])
 
   const scopeWord = tx(t, 'shell.scope', 'Scope')
+  const keepOne = tx(t, 'shell.scopeKeepOne', 'At least one country must stay selected.')
   const caption = tx(
     t,
     'shell.scopeCaption',
@@ -247,6 +250,13 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
 
           <div className="my-1 h-px" style={{ background: 'var(--border-dim)' }} />
 
+          {/* The reason the last remaining country cannot be switched off, said
+              once and pointed at by aria-describedby rather than folded into the
+              row's NAME. A name of "KSA. At least one country must stay
+              selected." is read out on every pass over the row and buries the
+              country it is supposed to identify. */}
+          <span id={keepOneId} role="none" className="sr-only">{keepOne}</span>
+
           {allowed.map((country) => {
             const on = selected.includes(country)
             const isLastOn = on && selected.length === 1
@@ -256,12 +266,21 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
                 type="button"
                 role="menuitemcheckbox"
                 aria-checked={on}
-                disabled={isLastOn}
-                title={isLastOn
-                  ? tx(t, 'shell.scopeKeepOne', 'At least one country must stay selected.')
-                  : undefined}
+                /* aria-disabled, NOT the disabled attribute. A disabled element
+                   is dropped from the accessibility tree entirely, so a screen
+                   reader user could not find this country at all, could not tell
+                   it was still IN scope, and got no hint why it would not turn
+                   off. aria-disabled keeps it announced and arrow-reachable and
+                   only refuses the action. The refusal itself lives in
+                   toggleCountry, which is what a pointer, a keypress and a
+                   scripted click all go through. */
+                aria-disabled={isLastOn || undefined}
+                aria-describedby={isLastOn ? keepOneId : undefined}
+                title={isLastOn ? keepOne : undefined}
                 onClick={() => toggleCountry(country)}
-                className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-start transition-colors hover:bg-[var(--input-bg)] disabled:cursor-not-allowed disabled:opacity-70"
+                className={`w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-start transition-colors ${
+                  isLastOn ? 'cursor-not-allowed opacity-70' : 'hover:bg-[var(--input-bg)]'
+                }`}
               >
                 <span
                   aria-hidden="true"

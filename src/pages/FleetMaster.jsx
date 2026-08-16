@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useFilterState } from '../hooks/useFilterState'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -21,6 +23,9 @@ import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 
 const DEFAULT_PAGE_SIZE = 25
+// Mirrors EnterpriseTable's own page-size selector. The page size is restored
+// from the URL, so it is validated against this list rather than trusted.
+const PAGE_SIZE_OPTIONS = [25, 50, 100]
 
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Retired', 'Transferred']
 
@@ -92,20 +97,38 @@ export default function FleetMaster() {
   // ── data ─────────────────────────────────────────────────────────────────────
   const [records, setRecords]   = useState([])
   const [total, setTotal]       = useState(0)
-  const [page, setPage]         = useState(0)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading]   = useState(true)
   const [loadError, setLoadError] = useState('')
   const [sites, setSites]       = useState([])
   const [summaryCapped, setSummaryCapped] = useState(false)
 
   // ── filters ──────────────────────────────────────────────────────────────────
-  const [search, setSearch]         = useState('')
+  // Search, site, status, page and page size live in the URL (useFilterState) so
+  // they SURVIVE opening a vehicle and pressing Back: the row opens
+  // `/vehicle/:asset_no` as a route, so without this the register would remount
+  // and reset to page 1 of an unfiltered list.
+  const [filters, setFilter, , , setFilters] = useFilterState({
+    search: '', site: '', status: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
+  })
+  const search = filters.search
+  const siteFilter = filters.site
+  const statusFilter = filters.status
+  // The URL carries a human-readable 1-based page; the query is 0-based.
+  const page = Math.max(0, (Number(filters.page) || 1) - 1)
+  // Clamped to the sizes the table itself offers. The value now comes from the
+  // URL, and an arbitrary one would widen the server range this read is bounded
+  // by - a hand-typed `?size=100000` must not become a bigger query.
+  const pageSize = PAGE_SIZE_OPTIONS.includes(Number(filters.size))
+    ? Number(filters.size)
+    : DEFAULT_PAGE_SIZE
+  const setPage = useCallback(p => setFilter('page', String((Number(p) || 0) + 1)), [setFilter])
+  // Puts the list back where it was scrolled to when the user returns from
+  // /vehicle/:asset_no. Only once the rows exist, or there is nothing to scroll.
+  const listRef = useScrollRestore('fleet-master', !loading && records.length > 0)
   // Debounced copy that actually drives the query, so we don't fire a Supabase
-  // request on every keystroke (was one round-trip per character).
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [siteFilter, setSiteFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  // request on every keystroke (was one round-trip per character). Seeded from
+  // the URL so a restored `?search=` queries immediately instead of after 300ms.
+  const [debouncedSearch, setDebouncedSearch] = useState(() => filters.search)
   // Monotonic request id: only the newest loadRecords() response is applied, so a
   // slow earlier query can't overwrite a faster later one (out-of-order race).
   const reqIdRef = useRef(0)
@@ -136,10 +159,13 @@ export default function FleetMaster() {
   // ── load ─────────────────────────────────────────────────────────────────────
   useEffect(() => { loadSites() }, [])
   // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
+  // The page reset only fires when the term actually changed, so arriving on a
+  // restored URL (`?search=TM&page=3`) keeps its page instead of snapping to 1.
   useEffect(() => {
+    if (search === debouncedSearch) return
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search, debouncedSearch, setPage])
   useEffect(() => { loadRecords() }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
   async function loadSites() {
@@ -549,14 +575,14 @@ export default function FleetMaster() {
                   className="input pl-9"
                   placeholder={t('fleetmaster.filters.searchPlaceholder')}
                   value={search}
-                  onChange={e => { setSearch(e.target.value); setPage(0) }}
+                  onChange={e => setFilters({ search: e.target.value, page: '1' })}
                 />
               </div>
-              <select className="input w-auto min-w-36" value={siteFilter} onChange={e => { setSiteFilter(e.target.value); setPage(0) }}>
+              <select className="input w-auto min-w-36" value={siteFilter} onChange={e => setFilters({ site: e.target.value, page: '1' })}>
                 <option value="">{t('fleetmaster.filters.allSites')}</option>
                 {sites.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select className="input w-auto min-w-36" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0) }}>
+              <select className="input w-auto min-w-36" value={statusFilter} onChange={e => setFilters({ status: e.target.value, page: '1' })}>
                 <option value="">{t('fleetmaster.filters.allStatuses')}</option>
                 {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -587,7 +613,9 @@ export default function FleetMaster() {
             </div>
           )}
 
-          {/* Table */}
+          {/* Table. The wrapper is the anchor the scroll-restore hook measures
+              from, so returning from a vehicle lands back on the same row. */}
+          <div ref={listRef}>
           <EnterpriseTable
             reportMeta={reportMeta}
             columns={tableColumns}
@@ -606,11 +634,12 @@ export default function FleetMaster() {
             totalRows={total}
             pageSize={pageSize}
             onPageChange={setPage}
-            onPageSizeChange={size => { setPageSize(size); setPage(0) }}
+            onPageSizeChange={size => setFilters({ size: String(size), page: '1' })}
             paginationLabel={({ from, to, total: totalCount }) =>
               t('fleetmaster.pagination.showing', { from, to, total: totalCount.toLocaleString() })}
             exportFileName={`TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`}
           />
+          </div>
       </>
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}

@@ -12,6 +12,8 @@ import {
   X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useFilterState } from '../hooks/useFilterState'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -36,6 +38,11 @@ const DRIVER_PALETTE = [
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
   '#06b6d4', '#a855f7', '#e11d48', '#78716c', '#0ea5e9',
 ]
+
+// Marks a hand-typed date range in the URL. It cannot be the empty string:
+// useFilterState drops a param whose value is blank, which would silently put
+// the window back on the default preset.
+const CUSTOM_PRESET = 'custom'
 
 const DATE_PRESETS = [
   { label: '3mo', days: 90 },
@@ -282,18 +289,42 @@ export default function DriverManagement() {
   const [error, setError]       = useState(null)
   const [truncated, setTruncated] = useState(false)
 
-  // Filters
-  const [datePreset, setDatePreset] = useState('1yr')
-  const [dateFrom, setDateFrom]     = useState(() => applyDatePreset(365).from)
-  const [dateTo, setDateTo]         = useState(() => applyDatePreset(365).to)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [siteFilter, setSiteFilter]   = useState('all')
-  const [countryFilter, setCountryFilter] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
+  // Filters. Search, site, country, date window and sort live in the URL
+  // (useFilterState) so they SURVIVE opening a driver and pressing Back: a row
+  // opens `/driver-management/:name` as a route, so without this the leaderboard
+  // would remount unfiltered and re-sorted.
+  const [filters, setFilter, , , setFilters] = useFilterState({
+    search: '', site: 'all', country: 'all',
+    preset: '1yr', from: '', to: '',
+    sort: 'riskScore', dir: 'asc',
+  })
+  const searchQuery = filters.search
+  const siteFilter = filters.site
+  const countryFilter = filters.country
+  const datePreset = filters.preset
+  // A named preset owns the window, so a restored link shows "the last year"
+  // rather than a year frozen to the day it was copied. CUSTOM_PRESET marks a
+  // hand-typed range, which uses the stored dates verbatim (a blank bound there
+  // means "no bound", exactly as the All preset does).
+  const presetDef = DATE_PRESETS.find(p => p.label === datePreset)
+  const presetWindow = useMemo(
+    () => applyDatePreset(presetDef ? presetDef.days : 365),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [datePreset],
+  )
+  const dateFrom = presetDef ? presetWindow.from : filters.from
+  const dateTo   = presetDef ? presetWindow.to   : filters.to
+  // Opens on arrival when the restored URL already carries one of the collapsed
+  // filters - an applied filter the reader cannot see looks like a wrong result.
+  const [showFilters, setShowFilters] = useState(
+    () => filters.site !== 'all' || filters.country !== 'all' || !presetDef,
+  )
 
   // Table state
-  const [sortCol, setSortCol] = useState('riskScore')
-  const [sortDir, setSortDir] = useState('asc')
+  const sortCol = filters.sort
+  const sortDir = filters.dir === 'desc' ? 'desc' : 'asc'
+  // Puts the leaderboard back where it was scrolled to on return from a driver.
+  const listRef = useScrollRestore('driver-management', !loading && records.length > 0)
 
   // Guards against a slow earlier response overwriting a newer one after the
   // active country changes (fetch-race cancellation).
@@ -447,16 +478,19 @@ export default function DriverManagement() {
 
   // ── Sort handler ──────────────────────────────────────────────────────────
   function handleSort(col) {
-    setSortDir(prev => sortCol === col && prev === 'asc' ? 'desc' : 'asc')
-    setSortCol(col)
+    setFilters({ sort: col, dir: sortCol === col && sortDir === 'asc' ? 'desc' : 'asc' })
   }
 
   // ── Date preset handler ────────────────────────────────────────────────────
   function handlePreset(preset) {
-    setDatePreset(preset.label)
-    const { from, to } = applyDatePreset(preset.days)
-    setDateFrom(from)
-    setDateTo(to)
+    // The preset owns the window, so the explicit bounds are dropped.
+    setFilters({ preset: preset.label, from: '', to: '' })
+  }
+
+  // Typing a bound switches the window to a hand-typed range, materialising the
+  // other bound so it keeps whatever the preset was showing.
+  function handleCustomRange(patch) {
+    setFilters({ preset: CUSTOM_PRESET, from: dateFrom, to: dateTo, ...patch })
   }
 
   // ── Export handlers ────────────────────────────────────────────────────────
@@ -621,13 +655,13 @@ export default function DriverManagement() {
               type="text"
               placeholder="Search driver..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => setFilter('search', e.target.value)}
               className="w-full pl-8 pr-3 py-2 rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-dim)] focus:outline-none"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => setFilter('search', '')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-dim)] hover:text-[var(--text-muted)]"
               >
                 <X size={12} />
@@ -688,7 +722,7 @@ export default function DriverManagement() {
                 <input
                   type="date"
                   value={dateFrom}
-                  onChange={e => { setDateFrom(e.target.value); setDatePreset('') }}
+                  onChange={e => handleCustomRange({ from: e.target.value })}
                   className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 />
@@ -696,7 +730,7 @@ export default function DriverManagement() {
                 <input
                   type="date"
                   value={dateTo}
-                  onChange={e => { setDateTo(e.target.value); setDatePreset('') }}
+                  onChange={e => handleCustomRange({ to: e.target.value })}
                   className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 />
@@ -706,7 +740,7 @@ export default function DriverManagement() {
               {uniqueSites.length > 1 && (
                 <select
                   value={siteFilter}
-                  onChange={e => setSiteFilter(e.target.value)}
+                  onChange={e => setFilter('site', e.target.value)}
                   className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
@@ -721,7 +755,7 @@ export default function DriverManagement() {
               {uniqueCountries.length > 2 && (
                 <select
                   value={countryFilter}
-                  onChange={e => setCountryFilter(e.target.value)}
+                  onChange={e => setFilter('country', e.target.value)}
                   className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
@@ -734,7 +768,7 @@ export default function DriverManagement() {
 
               {(siteFilter !== 'all' || countryFilter !== 'all') && (
                 <button
-                  onClick={() => { setSiteFilter('all'); setCountryFilter('all') }}
+                  onClick={() => setFilters({ site: 'all', country: 'all' })}
                   className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
                 >
                   <X size={11} /> Clear filters
@@ -856,7 +890,9 @@ export default function DriverManagement() {
             description="No drivers match the current filters. Try adjusting your search or date range."
           />
         ) : (
-          <div className="overflow-x-auto">
+          // The wrapper anchors the scroll-restore hook, so returning from a
+          // driver lands on the same row.
+          <div ref={listRef} className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead style={{ background: 'rgba(255,255,255,0.03)' }}>
                 <tr>

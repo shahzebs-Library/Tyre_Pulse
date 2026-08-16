@@ -7,6 +7,9 @@ import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from 
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { getNavLayout } from '../lib/api/navLayout'
+import {
+  MAX_FAVORITES, loadFavorites, toggleFavorite, pushRecent, visibleFavorites,
+} from '../lib/navFavorites'
 import TopBar from './shell/TopBar'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
@@ -34,7 +37,7 @@ import {
   Droplet, KeyRound, GraduationCap, FileClock,
   CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
   Wallet, FileCheck, Building2, Lock, ArrowLeft,
-  Megaphone,
+  Megaphone, Star,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -438,6 +441,31 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   return true
 }
 
+// ── Label resolvers ──────────────────────────────────────────────────────────
+// The nav, the sub-headings and the Favourites section must all name a module
+// the SAME way, so the lookup + English fallback lives in one place. An
+// untranslated key renders the plain English label rather than leaking
+// "nav.items./tyres" to the UI.
+function tOr(t, key, fallback) {
+  const raw = t(key)
+  return (!raw || raw === key) ? fallback : raw
+}
+
+/** Display label for a nav item's route. */
+function navLabelFor(t, to, fallback) {
+  return tOr(t, `nav.items.${to}`, fallback)
+}
+
+/**
+ * Display heading for a group. A super-admin rename in the Navigation Customizer
+ * WINS over the translation - they typed that name deliberately.
+ */
+function groupHeadingFor(t, group) {
+  const groupId = group.key || group.label
+  const renamed = group.label && group.label !== groupId
+  return renamed ? group.label : tOr(t, `nav.groups.${groupId}`, group.label)
+}
+
 // Translated role label; a CUSTOM role has no i18n entry, so the raw key
 // ("roles.Fleet Supervisor") would leak to the UI - show the plain name instead.
 function roleLabel(t, role) {
@@ -445,6 +473,38 @@ function roleLabel(t, role) {
   const key = `roles.${role}`
   const v = t(key)
   return v === key ? role : v
+}
+
+/**
+ * Pin/unpin control for one nav item.
+ *
+ * Rendered as a SIBLING of the NavLink inside a relative wrapper, never nested
+ * inside it: an interactive control inside an anchor is invalid markup and one
+ * stray click would navigate instead of pinning. Reveal is pure CSS
+ * (group-hover / group-focus-within) - a React hover handler here would set
+ * state on the Layout and re-run the permission filter over ~210 nav items on
+ * every frame of a mouse movement, which is a defect this sidebar has had before.
+ */
+function FavStar({ pinned, label, onToggle, t }) {
+  const action = pinned
+    ? tOr(t, 'nav.favorites.remove', 'Remove from favourites')
+    : tOr(t, 'nav.favorites.add', 'Add to favourites')
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`${action}: ${label}`}
+      aria-label={`${action}: ${label}`}
+      aria-pressed={pinned}
+      className={`absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
+        rounded-md transition-opacity duration-150 focus-visible:opacity-100 hover:bg-green-400/10
+        ${pinned
+          ? 'opacity-100 text-amber-300'
+          : 'opacity-0 text-gray-600 hover:text-amber-300 group-hover/fav:opacity-100 group-focus-within/fav:opacity-100'}`}
+    >
+      <Star size={11} strokeWidth={2} fill={pinned ? 'currentColor' : 'none'} />
+    </button>
+  )
 }
 
 function roleBadgeClass(role) {
@@ -760,6 +820,80 @@ export default function Layout({ children }) {
 
   const effectiveGroups = useMemo(() => applyNavLayout(NAV_GROUPS, navLayout), [navLayout])
 
+  // ── Favourites + recents ───────────────────────────────────────────────────
+  // Storage holds ROUTES ONLY (see src/lib/navFavorites.js). Everything a
+  // favourite renders - its label, its group, and whether the user may open it
+  // at all - is resolved HERE, against the same `effectiveGroups` the sidebar
+  // draws, so a renamed module cannot show a stale name, a route removed by the
+  // Navigation Customizer disappears, and a module revoked in the access matrix
+  // can never linger as a clickable shortcut.
+  const [favorites, setFavorites] = useState(loadFavorites)
+  const [favNote, setFavNote]     = useState('')
+
+  // Route -> the live nav item + its group heading. Built from effectiveGroups
+  // BEFORE permission filtering: the filter is applied by `canSeeRoute` below,
+  // so there is exactly one permission rule rather than two that can drift.
+  const navByRoute = useMemo(() => {
+    const map = new Map()
+    for (const group of effectiveGroups) {
+      const heading = groupHeadingFor(t, group)
+      for (const item of group.items || []) {
+        if (!item?.to || map.has(item.to)) continue
+        map.set(item.to, { item, group: heading, label: navLabelFor(t, item.to, item.label) })
+      }
+    }
+    return map
+  }, [effectiveGroups, t])
+
+  // Shape navFavorites expects: { '/route': { label, group } }.
+  const navIndex = useMemo(() => {
+    const idx = {}
+    for (const [route, entry] of navByRoute) idx[route] = { label: entry.label, group: entry.group }
+    return idx
+  }, [navByRoute])
+
+  // THE permission predicate for a favourite is the sidebar's own
+  // `shouldShowNavItem`, called with the same arguments. A favourite must never
+  // become a way to reach something the sidebar would hide, so this deliberately
+  // does not re-derive the rule. Boolean() matches the sidebar's own truthiness
+  // filter exactly, and navFavorites requires a strict `true`.
+  const canSeeRoute = useCallback((route) => {
+    const entry = navByRoute.get(route)
+    if (!entry) return false
+    return Boolean(
+      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin),
+    )
+  }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin])
+
+  const favoriteItems = useMemo(
+    () => visibleFavorites(favorites, navIndex, canSeeRoute)
+      .map((f) => ({ ...f, icon: navByRoute.get(f.route)?.item?.icon })),
+    [favorites, navIndex, canSeeRoute, navByRoute],
+  )
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites])
+
+  const toggleFav = useCallback((route) => {
+    const wasPinned = favoriteSet.has(route)
+    // At the cap navFavorites drops the OLDEST pin so the click still visibly
+    // works. That is a pin quietly disappearing, so say it rather than let the
+    // user discover it later.
+    const willReplace = !wasPinned && favorites.length >= MAX_FAVORITES
+    setFavorites(toggleFavorite(route))
+    setFavNote(willReplace ? 'full' : '')
+  }, [favoriteSet, favorites.length])
+
+  // The "favourites are full" note is transient; it must not outlive the action.
+  useEffect(() => {
+    if (!favNote) return undefined
+    const id = setTimeout(() => setFavNote(''), 5000)
+    return () => clearTimeout(id)
+  }, [favNote])
+
+  // Record where the user has been. '/' and '/dashboard' are excluded inside
+  // pushRecent - everyone lands there, so recording it would push out the real
+  // signal. Recents are surfaced in the command palette, not as a second list.
+  useEffect(() => { pushRecent(location.pathname) }, [location.pathname])
+
   // App version label (system_config.app_version). Read from the primed config
   // cache (SettingsContext primes it for authed pages); empty when unset.
 
@@ -964,6 +1098,49 @@ export default function Layout({ children }) {
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
+          {/* ── Favourites ───────────────────────────────────────────────────
+              Pinned at the top, above the groups, and only when the user has at
+              least one favourite they can actually open. Collapsed (icon-only)
+              sidebar skips it: there is no room for a second icon list and the
+              star control needs a label to be meaningful. */}
+          {sidebarOpen && favoriteItems.length > 0 && (
+            <div className="mb-1" data-testid="nav-favorites">
+              <p className="px-2.5 pt-2 pb-1.5 text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700">
+                {tOr(t, 'nav.favorites.heading', 'Favourites')}
+              </p>
+              {favNote === 'full' && (
+                <p className="px-2.5 pb-1.5 text-[9.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+                  {tOr(t, 'nav.favorites.full', 'Favourites are full, so the oldest pin was replaced.')}
+                </p>
+              )}
+              {favoriteItems.map(({ route, label, group: favGroup, icon: FavIcon }) => (
+                <div key={route} className="relative group/fav">
+                  <NavLink
+                    to={route}
+                    end={route === '/'}
+                    title={favGroup ? `${favGroup}: ${label}` : label}
+                    className={({ isActive }) =>
+                      `relative flex items-center gap-2.5 pl-2.5 pr-7 py-[6.5px] rounded-xl text-[12.5px] font-medium
+                       transition-all duration-150 mb-px group
+                       ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
+                    }
+                    style={({ isActive }) => isActive ? {
+                      background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
+                      border: '1px solid rgba(22,163,74,0.24)',
+                    } : { border: '1px solid transparent' }}
+                  >
+                    {FavIcon
+                      ? <FavIcon size={13.5} strokeWidth={1.8} className="flex-shrink-0" />
+                      : <Star size={13.5} strokeWidth={1.8} className="flex-shrink-0" />}
+                    <span className="truncate leading-none">{label}</span>
+                  </NavLink>
+                  <FavStar pinned label={label} t={t} onToggle={() => toggleFav(route)} />
+                </div>
+              ))}
+              <div className="mt-1.5 mx-2.5" style={{ borderTop: '1px solid rgba(22,163,74,0.12)' }} />
+            </div>
+          )}
+
           {effectiveGroups.map((group) => {
             const { items } = group
             // Stable identity = the group's default key (survives renames) for the
@@ -973,13 +1150,7 @@ export default function Layout({ children }) {
             const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(groupId)
-            const _grpKey = `nav.groups.${groupId}`
-            const _grpRaw = t(_grpKey)
-            const renamed = group.label && group.label !== groupId
-            // A super-admin rename wins; otherwise use the translation (fallback to label).
-            const groupHeading = renamed
-              ? group.label
-              : ((!_grpRaw || _grpRaw === _grpKey) ? group.label : _grpRaw)
+            const groupHeading = groupHeadingFor(t, group)
             return (
               <div key={groupId} className="mb-0.5">
                 {sidebarOpen && (
@@ -1010,9 +1181,7 @@ export default function Layout({ children }) {
                       style={{ overflow: 'hidden' }}
                     >
                       {visibleItems.map(({ to, label: lbl, icon: Icon, end, parent }, _i) => {
-                        const _navKey = `nav.items.${to}`
-                        const _navRaw = t(_navKey)
-                        const navLabel = (!_navRaw || _navRaw === _navKey) ? lbl : _navRaw
+                        const navLabel = navLabelFor(t, to, lbl)
                         // Items arrive already ordered by parent, so a sub-heading is
                         // drawn when the parent changes. Guarded by GROUP_PARENTS so a
                         // regrouped item cannot render a heading from another group.
@@ -1034,14 +1203,15 @@ export default function Layout({ children }) {
                             })()}
                           </p>
                         )}
+                        <div className="relative group/fav">
                         <NavLink
                           to={to}
                           end={end}
                           title={!sidebarOpen ? navLabel : undefined}
                           className={({ isActive }) =>
-                            `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
+                            `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group
-                             ${!sidebarOpen ? 'justify-center' : ''}
+                             ${sidebarOpen ? 'pl-2.5 pr-7' : 'px-2.5 justify-center'}
                              ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
                           }
                           style={({ isActive }) => isActive ? {
@@ -1092,6 +1262,15 @@ export default function Layout({ children }) {
                             </>
                           )}
                         </NavLink>
+                        {sidebarOpen && (
+                          <FavStar
+                            pinned={favoriteSet.has(to)}
+                            label={navLabel}
+                            t={t}
+                            onToggle={() => toggleFav(to)}
+                          />
+                        )}
+                        </div>
                         </Fragment>
                         )
                       })}

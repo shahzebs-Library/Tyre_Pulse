@@ -231,8 +231,14 @@ export default function WorkingContextSelector({ compact = false, className = ''
     })
   }, [])
 
-  const label = contextLabel(ctx)
-  const short = contextShortLabel(ctx)
+  // The pure lib returns stable English ('All' / 'All countries') because it has
+  // no access to t() and its output is pinned by tests. The no-country case is
+  // the only one that is a WORD rather than a proper noun, so it is the only one
+  // that needs translating here; a site or country name is the same in any
+  // language. Without this the chip read "All" in an otherwise Arabic bar.
+  const allLabel = tx(t, 'shell.allCountries', 'All countries')
+  const label = ctx.country ? contextLabel(ctx) : allLabel
+  const short = ctx.country ? contextShortLabel(ctx) : allLabel
   // The country only earns a second line when the headline is something else.
   const subtitle = ctx.site || ctx.region ? ctx.country : null
   const titleText = `${tx(t, 'shell.workingContext', 'Working location')}: ${label}`

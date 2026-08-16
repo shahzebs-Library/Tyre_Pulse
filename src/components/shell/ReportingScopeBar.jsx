@@ -64,7 +64,13 @@ export default function ReportingScopeBar({ showCaption = true, onChange, classN
     [allowedScopeCountries],
   )
   const selected = useMemo(() => scopeCountries(reportingScope, allowed), [reportingScope, allowed])
-  const label = scopeLabel(reportingScope, allowed)
+  // Same reason as the working-context chip: scopeLabel returns English
+  // 'All countries' for the all-case because it is a pure, test-pinned lib.
+  // Translate just that case; country names need no translation.
+  const rawLabel = scopeLabel(reportingScope, allowed)
+  const label = rawLabel === 'All countries'
+    ? tx(t, 'shell.allCountries', 'All countries')
+    : rawLabel
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)

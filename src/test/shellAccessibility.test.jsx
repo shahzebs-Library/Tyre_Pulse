@@ -24,7 +24,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { useState } from 'react'
 
-/* ── Mocks ────────────────────────────────────────────────────────────────────
+/* --- Mocks ---
    Same shape as shellComponents.test.jsx so the two files agree on what the
    contexts look like, plus a controllable isRTL that file does not need. */
 const h = vi.hoisted(() => ({
@@ -66,7 +66,7 @@ import ProfileMenu from '../components/shell/ProfileMenu'
 import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import WorkingContextSelector from '../components/shell/WorkingContextSelector'
 
-/* ── Fixtures ─────────────────────────────────────────────────────────────── */
+/* --- Fixtures --- */
 
 const KSA = {
   country: 'KSA',
@@ -127,7 +127,7 @@ afterEach(() => {
   document.documentElement.removeAttribute('dir')
 })
 
-/* ── The menu keyboard model ─────────────────────────────────────────────────
+/* --- The menu keyboard model ---
    role=menu is a promise. These assert it is kept. */
 
 describe('role=menu answers the keyboard', () => {
@@ -249,7 +249,7 @@ describe('role=menu answers the keyboard', () => {
   })
 })
 
-/* ── The dialog focus trap ───────────────────────────────────────────────── */
+/* --- The dialog focus trap --- */
 
 describe('role=dialog keeps focus inside itself', () => {
   function openDialog() {
@@ -314,7 +314,7 @@ describe('role=dialog keeps focus inside itself', () => {
   })
 })
 
-/* ── Announcing a context change ─────────────────────────────────────────── */
+/* --- Announcing a context change --- */
 
 describe('a context change is announced', () => {
   it('says nothing on first render', () => {
@@ -368,7 +368,7 @@ describe('a context change is announced', () => {
   })
 })
 
-/* ── Right to left ───────────────────────────────────────────────────────── */
+/* --- Right to left --- */
 
 function AlignHarness({ align }) {
   const [open, setOpen] = useState(false)

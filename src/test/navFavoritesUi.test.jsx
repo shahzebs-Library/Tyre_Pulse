@@ -21,7 +21,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { FAVORITES_KEY, RECENTS_KEY, loadFavorites } from '../lib/navFavorites'
+import { FAVORITES_KEY, RECENTS_KEY, MAX_FAVORITES, loadFavorites } from '../lib/navFavorites'
 
 /* ── Mocks ────────────────────────────────────────────────────────────────────
    Hoisted so the factories can read them and each test can drive a different
@@ -233,6 +233,27 @@ describe('sidebar Favourites section', () => {
     // name lookup across ~200 nav links is pathologically slow in jsdom.)
     fireEvent.click(screen.getByText('Tyre Records').closest('a'))
     expect(screen.getByTestId('pathname')).toHaveTextContent('/tyres')
+  })
+
+  it('says so when a new pin replaces the oldest at the cap', () => {
+    // navFavorites drops the OLDEST pin at MAX_FAVORITES so the click still
+    // visibly works. That is a pin quietly disappearing, so the section has to
+    // admit it rather than let the user discover it later.
+    // '/' is deliberately absent: navFavorites rejects it as a route, so the
+    // dashboard can never be pinned (nor recorded as a recent).
+    const full = [
+      '/assets', '/tyres', '/work-orders', '/stock', '/budgets', '/actions',
+      '/rca', '/inspections', '/reports', '/gate-pass', '/scrap', '/settings',
+    ]
+    expect(full).toHaveLength(MAX_FAVORITES)
+    renderLayout({ favorites: full })
+
+    fireEvent.click(screen.getByLabelText('Add to favourites: Fleet Master'))
+
+    const favs = screen.getByTestId('nav-favorites')
+    expect(within(favs).getByText(/Favourites are full/i)).toBeInTheDocument()
+    expect(loadFavorites()).toContain('/fleet-master')
+    expect(loadFavorites()).toHaveLength(MAX_FAVORITES)
   })
 
   it('offers a star on nav rows without ever nesting it inside the link', () => {

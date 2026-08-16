@@ -496,7 +496,7 @@ function FavStar({ pinned, label, onToggle, t }) {
       title={`${action}: ${label}`}
       aria-label={`${action}: ${label}`}
       aria-pressed={pinned}
-      className={`absolute right-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
+      className={`absolute end-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
         rounded-md transition-opacity duration-150 focus-visible:opacity-100 hover:bg-green-400/10
         ${pinned
           ? 'opacity-100 text-amber-300'
@@ -1120,7 +1120,7 @@ export default function Layout({ children }) {
                     end={route === '/'}
                     title={favGroup ? `${favGroup}: ${label}` : label}
                     className={({ isActive }) =>
-                      `relative flex items-center gap-2.5 pl-2.5 pr-7 py-[6.5px] rounded-xl text-[12.5px] font-medium
+                      `relative flex items-center gap-2.5 ps-2.5 pe-7 py-[6.5px] rounded-xl text-[12.5px] font-medium
                        transition-all duration-150 mb-px group
                        ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
                     }
@@ -1211,7 +1211,7 @@ export default function Layout({ children }) {
                           className={({ isActive }) =>
                             `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group
-                             ${sidebarOpen ? 'pl-2.5 pr-7' : 'px-2.5 justify-center'}
+                             ${sidebarOpen ? 'ps-2.5 pe-7' : 'px-2.5 justify-center'}
                              ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
                           }
                           style={({ isActive }) => isActive ? {

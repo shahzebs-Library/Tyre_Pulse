@@ -165,5 +165,11 @@
     "Data": "Data",
     "Organisation": "Organisation",
     "System": "System"
+  },
+  "favorites": {
+    "remove": "Remove from favourites",
+    "add": "Add to favourites",
+    "heading": "Favourites",
+    "full": "Favourites are full, so the oldest pin was replaced."
   }
 }

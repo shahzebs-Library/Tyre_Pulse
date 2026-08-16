@@ -12,6 +12,8 @@
  * No em / en dashes, arrows, middle dots or curly quotes in any user-facing string.
  */
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
+import { canUseReportBuilder } from '../../lib/reportBuilderAccess'
 import {
   Plus, Trash2, X, Save, Loader2, LayoutGrid, ChevronUp, ChevronDown,
   Copy, ExternalLink, Palette, Type,
@@ -44,7 +46,7 @@ function blockLabel(block) {
   return block.title || (s ? s.label : 'Block')
 }
 
-export default function ReportShareBuilder({ share, onClose, onSaved }) {
+function ReportShareBuilderInner({ share, onClose, onSaved }) {
   const [draft, setDraft] = useState(() => normalizeLayout(share?.layout) || emptyLayout())
   const [activeBoardIdx, setActiveBoardIdx] = useState(0)
   const [selectedBlockId, setSelectedBlockId] = useState(null)
@@ -584,4 +586,21 @@ function Stepper({ label, value, min, max, onChange }) {
       </div>
     </div>
   )
+}
+
+/**
+ * Only an Admin may reach any kind of report builder (owner instruction).
+ *
+ * Gated in a WRAPPER rather than by an early return inside ReportShareBuilderInner,
+ * because that inner component calls hooks and an early return above them
+ * violates the rules of hooks. The wrapper's own hook is unconditional and the
+ * inner component simply never mounts for anyone else.
+ *
+ * Gated HERE rather than at each mount: this builder is embedded in ordinary
+ * pages, so a per-mount guard is one that someone eventually forgets to add.
+ */
+export default function ReportShareBuilder(props) {
+  const { profile, isSuperAdmin } = useAuth()
+  if (!canUseReportBuilder(profile, isSuperAdmin)) return null
+  return <ReportShareBuilderInner {...props} />
 }

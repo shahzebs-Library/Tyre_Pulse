@@ -6,6 +6,7 @@ import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAcc
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
+import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from '../lib/reportBuilderAccess'
 import { getNavLayout } from '../lib/api/navLayout'
 import {
   MAX_FAVORITES, loadFavorites, toggleFavorite, pushRecent, visibleFavorites,
@@ -329,9 +330,9 @@ const NAV_GROUPS = [
       { to: '/continuous-improvement', label: 'Continuous Improvement', parent: 'Intelligence', icon: Zap, adminOnly: A },
       { to: '/reports',           label: 'Reports', parent: 'Reporting',           icon: FileText },
       { to: '/report-center',     label: 'Report Center', parent: 'Reporting',     icon: ScrollText, roles: ANALYTICS_ROLES },
-      { to: '/report-sharing',    label: 'Report Sharing', parent: 'Reporting',    icon: Share2, roles: ANALYTICS_ROLES },
+      { to: '/report-sharing',    label: 'Report Sharing', parent: 'Reporting',    icon: Share2, adminOnly: true },
       { to: '/scheduled-reports', label: 'Scheduled Reports', parent: 'Reporting', icon: CalendarCheck2 },
-      { to: '/dashboard-builder', label: 'Dashboard Builder', parent: 'Reporting', icon: LayoutGrid },
+      { to: '/dashboard-builder', label: 'Dashboard Builder', parent: 'Reporting', icon: LayoutGrid, adminOnly: true },
       { to: '/display',           label: 'TV Display Mode', parent: 'Reporting',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'Smart Analytics (AI)', parent: 'AI', icon: Sparkles, adminOnly: A },
       { to: '/knowledge-base',    label: 'Knowledge Base', parent: 'AI',    icon: Brain, adminOnly: A },
@@ -407,6 +408,11 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // this module's access sees the nav item even if the role rules below would
   // reject it. (Revoke is enforced by hasPermission/route guards; this only
   // opens visibility, so we do not hide here.)
+  // Report builders are Admin-only and this is checked BEFORE the per-user grant
+  // below, so a grant cannot open one. Mirrors isCommandVisible in commandSearch.
+  if (REPORT_BUILDER_ROUTES.includes(item.to)
+      && !canUseReportBuilder(profile, isSuperAdmin)) return false
+
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
   // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.

@@ -24,6 +24,8 @@
  *   note       string                   optional caption under the heading
  */
 import { useMemo, useRef, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
+import { canUseReportBuilder } from '../../lib/reportBuilderAccess'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Filler, Title, Tooltip, Legend,
@@ -103,7 +105,7 @@ function Sel({ value, onChange, options }) {
   )
 }
 
-export default function PresentationStudio({
+function PresentationStudioInner({
   catalog = [], currency = 'SAR', money, scope = '', company = 'TyrePulse',
   filePrefix = 'Chart', note = '', showInsights = false,
 }) {
@@ -666,4 +668,21 @@ export default function PresentationStudio({
       </div>
     </div>
   )
+}
+
+/**
+ * Only an Admin may reach any kind of report builder (owner instruction).
+ *
+ * Gated in a WRAPPER rather than by an early return inside PresentationStudioInner,
+ * because that inner component calls hooks and an early return above them
+ * violates the rules of hooks. The wrapper's own hook is unconditional and the
+ * inner component simply never mounts for anyone else.
+ *
+ * Gated HERE rather than at each mount: this builder is embedded in ordinary
+ * pages, so a per-mount guard is one that someone eventually forgets to add.
+ */
+export default function PresentationStudio(props) {
+  const { profile, isSuperAdmin } = useAuth()
+  if (!canUseReportBuilder(profile, isSuperAdmin)) return null
+  return <PresentationStudioInner {...props} />
 }

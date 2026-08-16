@@ -11,6 +11,7 @@
 import { sanitizeSearchTerm } from './searchFilter'
 import { NAV_MODULE_KEY, governingModuleKey, ALWAYS_ALLOWED_PATHS } from './navAccess'
 import { isChecklistOnlyRole, isChecklistPathAllowed } from './checklistAccess'
+import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from './reportBuilderAccess'
 import { ACCESS_ROLES } from './moduleCatalog'
 
 // Mirrors ANALYTICS_ROLES in Layout.jsx
@@ -298,6 +299,12 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   if (role === 'Inspector') return path === '/inspections' || path === '/settings'
   if (role === 'Data Monitor Officer') return path === '/accidents' || path === '/settings'
   if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
+
+  // Report builders are Admin-only, and deliberately checked BEFORE the per-user
+  // grant below: the owner's instruction is that nobody else gets access, so a
+  // grant must not be able to open one. The builder components refuse to render
+  // for a non-Admin anyway, so showing the entry would only lead to a dead page.
+  if (REPORT_BUILDER_ROUTES.includes(path) && !canUseReportBuilder(profile, isSuperAdmin)) return false
 
   // Per-user GRANT opens visibility for the exact key the route guard resolves.
   const routeKey = cmd.moduleKey || governingModuleKey(path)

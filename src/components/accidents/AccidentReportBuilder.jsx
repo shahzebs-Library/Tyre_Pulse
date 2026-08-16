@@ -19,6 +19,7 @@
  * All data is live from the accident record set passed in — nothing fabricated.
  */
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { canUseReportBuilder } from '../../lib/reportBuilderAccess'
 import { useNavigate } from 'react-router-dom'
 import { Bar, Doughnut, Line, Radar, PolarArea } from 'react-chartjs-2'
 import {
@@ -164,7 +165,7 @@ const BLOCK_ICONS = {
 
 const LS_KEY = 'accidentReportBuilder.local.v1'
 
-export default function AccidentReportBuilder({ records = [], company = 'TyrePulse', currency = 'SAR' }) {
+function AccidentReportBuilderInner({ records = [], company = 'TyrePulse', currency = 'SAR' }) {
   const navigate = useNavigate()
   const { profile } = useAuth() || {}
   // Advanced chart formatting (data labels / borders / palettes) is an Admin and
@@ -1021,3 +1022,20 @@ function BlockPreview({ block: b, ctx, records, money, company, chartRefs, orien
 }
 
 function Placeholder({ children }) { return <div className="rounded-lg bg-slate-50 border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">{children}</div> }
+
+/**
+ * Only an Admin may reach any kind of report builder (owner instruction).
+ *
+ * Gated in a WRAPPER rather than by an early return inside AccidentReportBuilderInner,
+ * because that inner component calls hooks and an early return above them
+ * violates the rules of hooks. The wrapper's own hook is unconditional and the
+ * inner component simply never mounts for anyone else.
+ *
+ * Gated HERE rather than at each mount: this builder is embedded in ordinary
+ * pages, so a per-mount guard is one that someone eventually forgets to add.
+ */
+export default function AccidentReportBuilder(props) {
+  const { profile, isSuperAdmin } = useAuth()
+  if (!canUseReportBuilder(profile, isSuperAdmin)) return null
+  return <AccidentReportBuilderInner {...props} />
+}

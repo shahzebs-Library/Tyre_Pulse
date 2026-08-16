@@ -683,7 +683,7 @@ function MainApp() {
                       <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
                       <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />
-                      <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportSharing /></RoleRoute></Safe>} />
+                      <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin']}><ReportSharing /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
                       <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
                       <Route path="/benchmark"               element={<Safe><ModuleRoute moduleKey="analytics"><PerformanceBenchmark /></ModuleRoute></Safe>} />
@@ -817,8 +817,8 @@ function MainApp() {
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
 <Route path="/qr-labels"   element={<Safe><RoleRoute allowed={['Admin']}><QrLabels /></RoleRoute></Safe>} />
                       <Route path="/rfid-registry" element={<Safe><ModuleRoute moduleKey="tyre_records"><RfidRegistry /></ModuleRoute></Safe>} />
-                      <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportBuilder /></RoleRoute></Safe>} />
-                      <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DashboardBuilder /></RoleRoute></Safe>} />
+                      <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin']}><ReportBuilder /></RoleRoute></Safe>} />
+                      <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin']}><DashboardBuilder /></RoleRoute></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExecutiveAnalytics /></RoleRoute></Safe>} />
                       <Route path="/security-center"     element={<Navigate to="/console/access?tab=security" replace />} />
                       <Route path="/system-health"       element={<Safe><RoleRoute allowed={['Admin']}><SystemHealth /></RoleRoute></Safe>} />

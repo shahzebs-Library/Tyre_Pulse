@@ -78,11 +78,35 @@
 -- closed one (the V396 lesson).
 --
 -- VERIFIED AFTER, by impersonation:
---   * KSA-only Manager asking for UAE: all twenty return ok:false/forbidden.
---   * The same user's OWN country is unchanged, value for value.
---   * A null p_country still means "no country filter" and still works.
---   * Super admin still reads UAE.
---   * anon still cannot execute any of them.
+--   * KSA-only Manager asking for UAE: all twenty return ok:false / forbidden.
+--   * The four confirmed cross-country WRITES now land nothing. Re-run of the
+--     exact reproduction, counted as a privileged reader in the same
+--     transaction: UAE tyres scrapped 2 -> 0, UAE tyres rebranded 1 -> 0, UAE
+--     material_master rows 1 -> 0, UAE correction cases 1 -> 0.
+--   * The same user's OWN country is unchanged, value for value:
+--     upload coverage KSA 174,217 rows; report snapshot KSA fleet 1,030 /
+--     tyres 7,977 / tyre spend 6,079,607 / 60 open job cards; classification
+--     decisions 20 items; explain_metric source rows 8,145; pipeline runs 5;
+--     apply_production_station_map KSA dry run 206,868 rows.
+--   * A null p_country still means "no country filter" and still works:
+--     coverage 218,640 rows and snapshot fleet 1,617 / tyres 11,022 /
+--     tyre spend 12,397,679, all unchanged.
+--   * Super admin still reads UAE: fleet 452, tyres 2,455, tyre spend 424,468,
+--     coverage 26,853 rows - the same figures the Manager used to receive.
+--   * anon still cannot execute any of them; all twenty keep SECURITY DEFINER
+--     and their pinned search_path, and authenticated keeps EXECUTE.
+--
+-- THE DECISIVE REGRESSION PROOF is textual rather than behavioural: for all
+-- twenty, stripping the guard from the live definition reproduces the backed-up
+-- definition BYTE FOR BYTE. The guard is therefore the only change, so a
+-- permitted country and a null country cannot take a different path. That check
+-- is worth more than re-timing each function, because two of them
+-- (get_tyre_gap_overview, tyre_learn_suggestions) run a pre-existing expensive
+-- correlated subquery over the 192k-row ksa_country_upload_template_staging and
+-- exceeded a 45s statement timeout while a parallel session was loading the
+-- server. That cost is on their `recoverable` computation, reached only for a
+-- PERMITTED country, several lines below the guard - unrelated to this change,
+-- and a standing optimisation candidate.
 --
 -- DELIBERATELY NOT TOUCHED, with reasons, so the remainder stays honest:
 --   * get_report_snapshot / get_report_tyre_maintenance are the ANONYMOUS public

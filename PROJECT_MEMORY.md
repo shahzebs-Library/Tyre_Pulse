@@ -3,6 +3,300 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-16 (part 2) - THE SECURITY DEFINER SWEEP: EIGHT HOLES, EVERY ONE REPRODUCED (V545-V553). Next free **V554**.
+Continues the shell session below. Branch `claude/accident-builder-report-ui-2bkwb5`; **everything is now MERGED -
+branch == origin/main == `148fa223`**, which SUPERSEDES the part-1 note that nothing was merged and production was
+on `f2d5870b` (the shell went in as PR #331). Migrations applied live on `jhssdmeruxtrlqnwfksc`: V544 (the
+multi-country expense aggregates, NOT security - N aggregates side by side, never one blended total) then
+V545-V553. V543 was applied live with no repo file. **Every migration header carries its own reproduction, its
+verification figures and a `_bak.*` rollback table - those headers are the primary source and they are detailed;
+this entry is the index into them.**
+
+### **THE ONE ROOT CAUSE. IT EXPLAINS ALL EIGHT HOLES, SO READ IT BEFORE THE LIST.**
+**A SECURITY DEFINER function runs as its OWNER, and no public table sets FORCE ROW LEVEL SECURITY, so RLS NEVER
+RUNS INSIDE ONE.** Such a function sits outside the policy system by construction and must re-ask every question
+itself: org, country AND site. These did not.
+- Population measured, so the boundary of the claim is explicit: **400 SECURITY DEFINER functions in `public`,
+  352 executable by `authenticated`** (V551).
+- **RLS ITSELF WAS NEVER AT FAULT.** On every probe the same user's DIRECT table read returned 0 rows. The wall
+  held everywhere except inside the functions that stepped around it.
+- **RULE: a new SECURITY DEFINER function is not finished until it re-checks org, country and site itself.** A
+  view is the same defect wearing a friendlier name - it runs as its owner unless `security_invoker` is set.
+- **RULE: static analysis alone does not settle this.** V551 audited 67 candidates by regex and **dismissed 61 on
+  impersonation evidence**, and the regex was wrong in BOTH directions: `get_console_stats` reads
+  `WHERE is_super_admin = true` as a column filter, which a gate-detecting regex reads as a gate (it has none),
+  while the accident RPC family looks unscoped and is not (it delegates to `_accident_rpc_context`).
+
+### **THE MEASUREMENT TRAP THAT HID THREE OF THEM**
+**A count taken from inside an impersonated session counts what is READABLE, not what exists or what was
+written.** A blocked write and an invisible write both return 0 and look identical.
+- **RULE: `reset role` and count as a privileged reader in the SAME transaction.** That is what turned "the
+  insert was refused" into "the insert landed in UAE" (V542), and it is the only reason the four V547
+  cross-country writes, the two V550 ones and the V552 store-map write were ever confirmed.
+- Two sibling traps, same class, both from V551: **an md5 of a whole payload reports CHANGED for every user when
+  the payload carries `generated_at: now()`** - compare the substantive counts, not a hash of a timestamp; and
+  probing the wrong key returned NULL for everyone, which was briefly mistaken for "no rows". **RULE: confirm a
+  probe CAN return data before reading null as proof.**
+
+### THE EIGHT HOLES, each reproduced before it was touched
+**1. V542 - COUNTRY AND SITE SCOPING GOVERNED READS ONLY.** A restrictive SELECT policy has USING and no WITH
+CHECK, so it says nothing about a row being WRITTEN: a real KSA-only Manager inserted a `tyre_records` row
+stamped UAE. 78 country + 55 site tables given a FOR ALL policy carrying each table's OWN expression in both
+USING and WITH CHECK. Full detail in the part-1 entry below.
+
+**2. V543 - TWO VIEWS RAN AS THEIR OWNER.** An Egypt-only Director read 0 rows from `tyre_records` directly but
+249 through `v_tyre_life_over_cap` and 6,220 through `v_ksa_master_tyre_fitments`. Detail in part 1 below.
+
+**3. V545/V546/V547 - THE COUNTRY ARGUMENT WAS NEVER CHECKED AGAINST THE CALLER.** Probed as the real approved
+KSA-only Manager `34793423`, for whom `app_can_see_country('UAE')` is false and a direct UAE read returns 0:
+- **V545, eight plpgsql cost/fleet RPCs**: `get_cost_cpk_overview('UAE')` AED 4,458,439 plus its comparison
+  windows, `get_fleet_cpk('UAE')` AED 1,367,960 tyre cost over 42.2M km, `get_parts_expense_snapshot(...,'UAE')`
+  AED 4,458,439, `get_maintenance_snapshot(...,'UAE')` 4,315 job cards, `get_cost_variance('UAE')` the full
+  variance analysis. It said plainly in writing that seven LANGUAGE sql siblings STILL LEAKED.
+- **V546, those seven.** Every one leaked, none was already empty: `get_country_kpi('UAE')` 2,455 tyre records /
+  AED 424,468, `get_expense_by_site('UAE')` 5 sites / AED 15,631,823 over 59,810 lines, `get_tyre_cost_by_asset`
+  246 assets / AED 3,931,756, `get_brand_size_cpk` 8 rows, `report_asset_metrics` and `report_asset_overview`
+  170 assets each, `report_tyre_summary` 2,455 records / AED 424,467.79. Six keep LANGUAGE sql and take the
+  guard as a WHERE predicate (refusal = zero rows or `[]`). **`report_tyre_summary` was CONVERTED to plpgsql
+  because its jsonb-object aggregate has no GROUP BY, so empty input still yields one row of zeros - and a
+  populated row of zeros is not a refusal, it is a false measurement asserting UAE has no tyres and no spend.**
+- **V547, twenty more, and FOUR of them WROTE.** Reads: `get_data_trust_overview` AED 15,631,822.96 over 59,810
+  expense lines, `run_quality_checks`, `get_upload_coverage`, `get_report_snapshot_authed` (UAE fleet 452 /
+  tyres 2,455 / tyre spend 424,468 / 44 open job cards), `explain_metric`, `get_pipeline_runs`,
+  `tyre_learn_suggestions` (UAE tyre serial numbers), `run_reconciliation`, `get_classification_decisions`.
+  **WRITES: `scrap_tyre_by_serial` SCRAPPED 2 real UAE `tyre_records`; `tyre_learn_confirm` REBRANDED 1 real UAE
+  tyre; `material_master_set` created a UAE row; `correction_case_open` wrote a UAE-tagged case.** Three more
+  were guarded WITHOUT an observed disclosure and are labelled as such rather than dressed up as leaks
+  (`apply_production_station_map`, `parts_cost_fill`, `tyre_price_backfill` return nothing for UAE today).
+
+**4. V548 + V551 - THE TENANT WALL, which is the more serious boundary because org separates one company from
+another.** Probed as the real approved Egypt-only Director `a4fd5401` (org `e340fa7a`), whose every direct table
+read returns 0:
+- **`get_console_users(null)` handed over 38 profiles across 2 orgs, 38 real email addresses joined from
+  `auth.users`, plus role / is_super_admin / approved / locked - INCLUDING BOTH SUPER ADMINS. A super admin
+  calling it gets the SAME 38 rows, i.e. the function granted every authenticated user super-admin visibility of
+  the entire user base.** It has no caller anywhere in the repo (the console Users page reads `profiles` under
+  RLS), so the grant was simply withdrawn rather than guarded.
+- `get_accident_audit` 16 rows and `get_inspection_audit` 5 rows (both ARE live, so both were guarded, and both
+  stay DEFINER on purpose - turning them into invokers would apply RLS to the `profiles` join and collapse every
+  other person's name to "System" in the case timeline). `fleet_tyre_km_by_asset` 356 assets / 165,861,400 km,
+  no client caller, grant withdrawn; its own same-signature sibling `fleet_hours_by_asset` is SECURITY INVOKER,
+  which is what makes the definer marking look accidental. `match_knowledge_documents` honoured a
+  caller-supplied `filter_org` with no check - latent only because that table holds 0 rows today.
+- **V551, six more, and the two sharpest are proof by identity: `count_records_with_extra_fields` (11,191) and
+  `get_console_stats` (38 users, 4 organisations, 358 inspections) each returned exactly ONE distinct payload
+  measured across ALL 38 approved users. They cannot tell any two callers apart, in any org.**
+  `report_tyre_summary` handed that Director 591 tyre records / EGP 5,893,603.79.
+- **THE BLANK-SCREEN OBJECTION WAS ANSWERED BY MEASUREMENT, not argued.** An org filter takes that Director from
+  591 rows to none, which reads like breaking a working screen - except the screen is not working: the KPI tile
+  printed another tenant's money directly above a tyre list showing 0 rows, with asset register, work orders,
+  inspections, accidents and expense lines all 0. **These functions were the INCONSISTENCY, not the working
+  state.** Blast radius: 4 organisations, only Company A holds data, 38 approved users of whom 37 and both super
+  admins are in Company A, and **EXACTLY ONE account is outside it.**
+
+**5. V549 - THE ALL-COUNTRIES PATH, which leaked most because it is the DEFAULT almost every screen uses.**
+`p_country` NULL (and the `'All'` sentinel) meant "no country filter", and on that path these functions applied
+no row-level country restriction of any kind.
+- **ON ALL FIFTEEN FUNCTIONS THE KSA-ONLY MANAGER'S FULL-PAYLOAD md5 WAS BYTE-IDENTICAL TO THE SUPER ADMIN'S.
+  Not similar - identical.** `get_parts_expense_snapshot` 138,507,286 over 209,381 lines across 3 countries
+  (KSA alone is 8,145 tyre records); `get_maintenance_snapshot` 89,628 job cards; `report_tyre_summary` 11,191
+  records / 553 assets; `get_country_kpi` 3 country rows. **And 138,507,286 is SAR + AED + EGP added together, so
+  the figure was at once a disclosure of two other countries and a number that is not a quantity of anything.**
+- **THE DECISIVE CHECK AFTER: that user's ALL-scope result is now byte-identical to their own explicit KSA-scope
+  result on 14 of 15** (the exception, `get_country_kpi`, is understood - its corrective_actions sub-selects now
+  admit the 2 null-country rows the RLS idiom deliberately shows everyone). Super admin and the 3-country user
+  byte-identical on 15 of 15; the Egypt Director dropped from 11,191 rows to their own 591.
+- 31 replacements over 19 functions, including four helpers (`_cost_totals`, `_cost_cpk`, `_cost_dim`,
+  `_cost_var_dim`) because the two entry points barely read rows themselves - **guarding only the entry points
+  would have put the boundary somewhere it does nothing**, and `_cost_cpk` would have divided one country's cost
+  by three countries' distance.
+- **It got FASTER, not slower**: `get_parts_expense_snapshot` for that user 5160/5746/5729 ms -> 1447/971/975 ms,
+  because a scoped user now scans one country instead of three. Super admin flat.
+
+**6. V550 - THE GUARD CHECKED THE ARGUMENT, NOT THE WRITE.** `p_country` DEFAULTS TO NULL on both writers, null
+legitimately means "no country filter", and the writes were keyed on serial plus organisation with no country
+predicate at all - **so omitting the argument, which is what a caller does normally, walked straight past V547's
+guard: the same KSA-only Manager still SCRAPPED 2 real UAE tyres and REBRANDED 1.** Scrapping takes equipment out
+of service, so of everything found today this is the one with physical consequences. The fix scopes the ROWS
+(`and (country is null or public.app_can_see_country(country))`) in the UPDATE **and** in the read that captures
+prior status, so a row the caller cannot touch is never recorded as having been scrapped either. Control after:
+their OWN country still scraps 1 row, so the feature works.
+
+**7. V552 - THE REMAINDER THAT RESISTED A MECHANICAL GUARD.** **On ALL 31 probes the KSA-only Manager's md5 was
+byte-identical to the super admin's, and so was the 3-country user's.** Named path:
+`reference_asset_options('UAE')` 452 asset numbers, `reference_site_options('UAE')` 20 site names,
+**`import_existing_keys('tyre','UAE')` 1,926 UAE tyre keys each carrying the tyre SERIAL NUMBER**,
+`get_extra_field_stats('UAE')` 5 custom field keys over 5,019 records with sample VALUES, `material_category_for`
+enumerable over all 9,321 reviewed UAE item codes, and `set_store_site_map('UAE',...)` WROTE a UAE-tagged
+store-to-site row. All-countries path: `reference_asset_options(null)` 1,380 assets against KSA's 1,033,
+`import_existing_keys('tyre')` 8,432 keys against KSA's 6,022.
+- `set_store_site_map` returns void so it cannot carry a jsonb refusal; it gets a RAISE with errcode 42501, and
+  **no client change was needed - verified by reading the callers**, not assumed (`storeSiteExpense.js` throws,
+  `ExpenseReport.jsx` catches, `safeError.js` maps 42501 to a clean sentence, and it already raised for a
+  non-elevated caller).
+- `gate_pass_blockers` was rewritten though it CANNOT leak today (three independently measured reasons for zero),
+  because it keys on `asset_no`, defaults its country to NULL, and asset numbers are a per-country sequence -
+  so the first `High`/`Critical` row filed outside the caller's country arms it.
+
+**8. V553 - SITE HAD NO WALL INSIDE DEFINER FUNCTIONS, and had never been tested at all.** Measured first: **38
+profiles, `sites` NULL on 0, `{}` on 0, containing `ALL` on 38 - narrowed to real sites: ZERO, including both
+super admins.** So site isolation has never been exercised by one user on this database. Tested by narrowing the
+real KSA-only Manager to `ARRAY['NHC']` in a ROLLED BACK transaction (authorised by setting
+`request.jwt.claims` to a super admin so `trg_guard_profile_privileged` passes - **NO trigger was disabled and no
+ACCESS EXCLUSIVE lock was taken on `profiles`**).
+- Direct reads HOLD: `tyre_records` 8,145 -> 3,846 (1,805 NHC + 2,041 site IS NULL), DIRIYAH 1,382 -> 0. V542
+  writes HOLD: a DIRIYAH insert was refused, NHC and null-site inserts landed, confirmed by privileged recount.
+- **Definer functions: the wall DOES NOT EXIST. All six probed returned a byte-identical md5 to the super
+  admin's for DIRIYAH** - `get_cost_cpk_overview` DIRIYAH spend 802,829 over 7,931,803 km, `get_cost_variance`
+  down to item detail, `get_maint_tyre_split` DIRIYAH tyre 61,804.09, `get_maintenance_snapshot` 13,258 line
+  items. Nine functions now guarded on the NAMED-site path; **the all-sites path is deliberately left open and
+  recorded** (see OPEN).
+- Loose ends closed with it: the branding cross-org gate (`set_org_branding` gains a SEPARATE cross-org check
+  after the target org is resolved - its `app_is_org_admin()` is the permission to edit at all, not a cross-org
+  check, and substituting `is_super_admin()` there would break the feature for every future plain Admin); and
+  **three EXECUTE grants nothing legitimate uses. `consume_event_accident_notify` was proven forgeable by the
+  LOWEST-privilege real user on the database - a Tyre Man, with a wholly fabricated event row: notifications
+  1,564 -> 1,566, injected into two Managers' bells.** It is forgery, not disclosure (title and body come from
+  the real accident's own fields). `cron_run_backup` and `cron_purge_audit_logs` revoked too - the Egypt
+  Director had successfully executed a global cross-tenant audit-log purge (V551).
+
+### **THE FIVE TRAPS THAT WOULD HAVE BROKEN THE FIXES. THIS IS THE HIGHEST-VALUE SECTION IN THIS ENTRY.**
+1. **`app_sees_all_countries()` IS TRUE FOR NOBODY HERE.** The super admin's `profiles.country` is NULL, so BOTH
+   scope readers are false/empty for them (`app_country_scope()` = `{}`). **A predicate built from the scope
+   readers alone - the obvious shape - returns ZERO ROWS to the platform owner on all fifteen reports.**
+   `is_super_admin()` is what makes it correct. Never write the V396/V549 predicate without that term.
+2. **`app_can_see_country()` RETURNS NULL, NOT FALSE, WITH NO JWT.** For a cron job, an edge function on the
+   service role, any backend caller, a predicate written `(p_country is null or app_can_see_country(p_country))`
+   evaluates to NULL, the row is filtered out, and **every backend read silently returns nothing.** Use
+   **`is not false`**, which refuses only on a DEFINITIVE false and mirrors what the plpgsql `if not ...` guards
+   already do (`if NULL` is not taken, so those fail open too).
+3. **`app_is_elevated()` IS `app_role() in ('admin','manager','director')`, so a plain Manager PASSES every
+   "elevated" gate.** It is not a meaningful restriction. Sixteen of V547's twenty sat behind it and were
+   reachable by the very user they leaked to. Only `is_super_admin()` / `app_is_org_admin()` actually excludes.
+4. **`app_can_see_country('All')` IS FALSE** - `'All'` is the app's own all-countries SENTINEL, not a country
+   anyone is scoped to - **and several functions DEFAULT `p_country` to it.** A guard without an exemption would
+   have refused the All view to every country-scoped user in the app. **But the exemption is decided PER
+   FUNCTION, never blanket: `import_existing_keys` must NOT get it**, because it treats `'All'` as a LITERAL
+   through `country is not distinct from $2` and already returns 0 rows - exempting it would take that to 8,432,
+   a widening dressed as a guard.
+5. **`is_admin_or_above()` COMPARES LOWERCASE TO A TITLE CASE ROLE, so it is FALSE for every user on this
+   database including both super admins, and the two policies depending on it have never once fired. REPAIRING
+   THE CASE OPENS A CROSS-TENANT HOLE, measured rather than reasoned about:** `accident_audit_log` carries no
+   organisation_id, no country and no site column, its only real scoping is the sibling permissive policy's
+   EXISTS against `accidents`, and permissive policies OR together - so a repaired `is_admin_or_above()` grants
+   the whole table unconditionally. A DIFFERENT tenant's Director goes from 0 rows to ALL 284. **The bug is
+   load-bearing by accident. It is NOT fixed.** Both dependent policies were retargeted to `is_super_admin()` so
+   they express something true instead of sitting there as a landmine for the next person who "fixes" the case;
+   the function itself is left alone and is now referenced by nothing in the database and nothing in `src/`.
+
+### METHOD RULES WORTH KEEPING
+- **NOTHING WAS RETYPED.** Every guard is inserted by reading the function's own LIVE `pg_get_functiondef` and
+  doing an anchored `replace()`, and **every replacement ABORTS unless its anchor occurs EXACTLY the expected
+  number of times.** A partial run is the failure mode that matters: half a boundary reads as a closed one (the
+  V396 lesson). `CREATE OR REPLACE` preserves SECURITY DEFINER, the pinned `search_path` and the grants.
+- **THE STRONGEST REGRESSION PROOF IS TEXTUAL, NOT BEHAVIOURAL.** V547: for all twenty, stripping the guard from
+  the live definition reproduces the backed-up definition BYTE FOR BYTE, so the guard is provably the only
+  change and a permitted country cannot take a different path. Worth more than re-timing each function.
+- **PREFER THE ZERO-ARGUMENT SCOPE READERS over the row-argument `app_can_see_country(country)`** in a row
+  predicate. Written `(select f())` they are uncorrelated subqueries hoisted to a once-per-query InitPlan; the
+  row-argument helper takes the row value so it cannot be hoisted, and is SECURITY DEFINER so it can never be
+  inlined - a per-row `profiles` lookup over tables of 89k to 209k rows. Proven by EXPLAIN ANALYZE, not assumed.
+- **THE REFUSAL SHAPE IS CHOSEN PER FUNCTION so nothing is invented**: `{"ok":false,"reason":"forbidden"}` where
+  that is already the function's own error path, zero rows for TABLE-returning option lists, `[]` through an
+  existing coalesce, NULL for `material_category_for` (its own documented "fall back to the patterns"), RAISE
+  42501 for a void writer. **Never a populated row of zeros** - that asserts a measurement instead of refusing.
+
+### SHELL WORK THAT SHIPPED TODAY - EXTENDS THE PART-1 ENTRY BELOW, DOES NOT REPEAT IT
+- **The app was rendered in a REAL BROWSER for the first time**, which CLOSES the part-1 open item "nothing in
+  this session was verified in a real browser". It found two things:
+  1. **A build shipped without `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` was a SILENT WHITE PAGE.**
+     supabase-js throws `supabaseUrl is required.` from `createClient` at MODULE LOAD, which is before React
+     mounts, so no error boundary exists to catch it and `#root` simply stays empty. The throw is right - going
+     on with a broken client fails somewhere far more confusing - but it must not be the only thing that
+     happens, so `src/lib/supabase.js` now paints what is missing and says it is a deployment setting the reader
+     cannot fix from that page. **Built with `textContent`, never `innerHTML`**, so it can never become an
+     injection point if someone later interpolates a value into it.
+  2. **Five contrast failures, measured from REAL PIXELS rather than computed style.** `--text-dim` was 3.4:1
+     dark and 2.6:1 light, `--panel-ink-4` 4.0:1 dark, all under the AA 4.5 minimum; raised only as far as AA
+     requires so "dim" stays visibly dimmer than "muted" and the hierarchy those tokens exist to express
+     survives. **The worst was the Create pill at about 1.9:1 in light** - the weakest text in the shell and the
+     only primary action on the bar. **RULE: one accent hex cannot serve both themes.** Bright green reads 10:1
+     on the dark tint and is unreadable on the pale one, so it is a theme-aware token now: bright in dark, deep
+     green at 6.4:1 in light.
+- **The location hierarchy is a real tree now** (`WorkingContextSelector`): `treeitem` carrying level, position
+  and set size, `group` for children, **`aria-expanded` on BRANCHES ONLY** - a leaf reporting "collapsed" invites
+  the user to open nothing. **The twisty stopped being a button**, because a tree may own only `treeitem` and
+  `group`, and a second focusable control per node both malformed the tree and doubled the tab stops in a panel
+  carrying 69 sites. That in turn obliged the tree to earn its role with arrow keys - declaring `role=tree` and
+  answering only Tab promises a behaviour that is not there - so Up/Down/Home/End plus Right/Left to expand and
+  collapse, **MIRRORED under RTL** where the tree indents leftward and Right is the way out. They clamp rather
+  than wrap, unlike the menus next door. **Typeahead was skipped deliberately**: the panel's search box already
+  answers "find a node by name" and answers it better, matching sites, regions and countries at once, while tree
+  typeahead can only reach nodes that happen to be expanded.
+- **The scope bar's last remaining country used a real `disabled` attribute, which removes an element from the
+  accessibility tree ENTIRELY** - a screen-reader user could neither find it nor learn why it would not switch
+  off. It is `aria-disabled` now, still announced and still reachable by arrow, with the reason exposed through
+  `aria-describedby` rather than folded into the name (a name that recites "at least one country must stay
+  selected" on every pass buries the country it is supposed to identify).
+- Working context vs reporting scope, report builders being Admin-only including the three embedded PANEL
+  builders, and the §39 context rules are all recorded in the part-1 entry below and are unchanged.
+
+### OPEN - DECISIONS FOR THE OWNER, not work
+- **The Egypt Director's ORG MEMBERSHIP.** Mahmoud Taher (`a4fd5401`, Director, org `e340fa7a`) is the ONE
+  account outside Company A, and after V551 their screens are consistently empty - which is the honest rendering
+  and is exactly what a direct table read already gave them. Moving them into Company A (as was done for
+  `mohamed`/bassiouni previously) restores the screens. **It is NOT a substitute for V551**: moving the user
+  hides the leak rather than removing it and leaves the tenant wall absent for any second tenant onboarded
+  later. The two are complementary and only the code half was safe to apply unattended.
+- **`get_email_by_identifier` is still an anon account-enumeration oracle** (carried, unchanged): it returns a
+  real email address to an unauthenticated caller and CANNOT be reduced to a boolean because `signIn` needs the
+  address for `signInWithPassword`. The real fix is moving sign-in into an edge function, an authentication
+  change not to be made unattended on a live system.
+- **2,041 `tyre_records` rows carry `site IS NULL` and stay visible to every site scope BY DESIGN** - that is the
+  convention every RLS policy here uses (a null-dimension row is visible to everyone), and V542's write policies
+  preserve it. If that convention is ever wrong for site, it is a product decision, not a bug.
+
+### OPEN - WORK, recorded so it is not re-derived
+- **THE ALL-SITES PATH.** V553 closed the NAMED-site path only; `p_site` NULL or `''` still means "no site
+  filter" and on that path the nine functions apply no site restriction of any kind - exactly the position
+  country was in between V545 and V549. Closing it is the V549 treatment: a row-predicate rewrite inside each
+  function, per function, not a mechanical insertion. **Unreachable by anyone today because all 38 users are on
+  `{ALL}`.** NOTE: **no `MIGRATIONS_V554_*.sql` exists in the repo at the time of writing** - a parallel agent
+  may be closing this under that number, so CHECK the repo before claiming V554.
+- **The import staging write gap (`import_batches` / `import_files` / `import_rows`) is REAL but INERT.** A
+  KSA-only Manager CAN insert a batch row stamped UAE (privileged count = 1) and cannot read it back - but
+  `import_commit_batch` re-checks BOTH org and `import_user_can_commit_country` before writing to any master
+  table and refuses with "Cross-country commit denied", so staged rows for an unreachable country can never be
+  promoted. Adding a WITH CHECK would change the staging flow, which is the entire purpose of those tables, to
+  close a path already closed one step later. Deliberately left; V542 excluded them for the same reason.
+- **`import_existing_keys` is DELIBERATELY GLOBAL for the `workorder` module**, and the trade-off is named rather
+  than hidden. `work_orders.work_order_no` carries a GLOBAL unique constraint, and this codebase already
+  recorded that a per-country dedupe scope reintroduced cross-country contamination and aborted whole import
+  batches on 23505. So the row filter is applied to the shared predicate which `workorder` then overwrites with
+  `true`, leaving it global by construction. **A KSA caller can still learn that some `work_order_no` exists
+  under another country** - a bare opaque identifier with no financial or operational content, and there is no
+  way to both hide it and prevent the duplicate insert, because the client needs the key string to match its
+  file. Correctness of a global unique key wins.
+- **`parts_consumption` carries NO site isolation policy** (it is not among V269's 21 site-scoped tables and
+  nothing since adds one), so site scope does not bound the expense ledger at the table level. Untested and
+  unreachable today because nobody holds a narrowed site scope, but it is the gap a first real site assignment
+  would expose.
+- **Guarded WITHOUT an observed disclosure, so they are empty only by today's data, not by rule**:
+  `apply_production_station_map`, `parts_cost_fill`, `tyre_price_backfill`, `get_integration_events` (V547),
+  `get_production_stations` and `gate_pass_blockers` (V552). They are labelled as such in their headers; do not
+  cite them as leaks.
+- **DELIBERATELY EXCLUDED from every country and site guard: `get_report_snapshot` and
+  `get_report_tyre_maintenance`**, the ANONYMOUS public share-token boards. They derive the org from the token
+  row after checking active / expiry / password, and the country and site are presentation filters chosen by
+  whoever minted the link. Inside a definer function invoked by an anon caller `auth.uid()` is NULL, so
+  `app_can_see_country`/`app_can_see_site` return false for every viewer. **Guarding these would be an outage,
+  not a fix.** The `_cost_*` / `_report_cost_block` helpers are likewise untouched: they take a `p_org` and are
+  already revoked from `authenticated` and `anon` (the V378 pattern applied correctly).
+- Standing optimisation candidate found while sweeping: `get_tyre_gap_overview` and `tyre_learn_suggestions`
+  run a pre-existing expensive correlated subquery over the 192k-row `ksa_country_upload_template_staging` and
+  exceeded a 45s statement timeout under load. Pre-existing, on the `recoverable` computation, reached only for
+  a PERMITTED country and unrelated to the guard.
+
 ## SESSION 2026-08-16 — WEB SHELL REBUILT (WORKING CONTEXT vs REPORTING SCOPE) + TWO REAL ACCESS HOLES CLOSED (V542/V543). Next free **V544**.
 Owner sent a 74-section "Web Enterprise Navigation and Application Shell" prompt: redesign the shell, do NOT
 rebuild the app, preserve every route/permission/RLS/RTL/mobile integration, audit before implementing. Then

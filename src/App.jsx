@@ -482,57 +482,64 @@ function MaintenanceGate({ children }) {
 }
 
 /**
- * How long the shell picker waits for the system_config read before giving up
- * and taking the default. This bound is load-bearing: loadSystemConfig() never
- * throws and never marks the cache authoritative on failure, so without a
- * timeout an unreadable config would leave the app on a spinner forever.
+ * Which shell we settled on last time. Read synchronously so the very first
+ * paint already matches what this administrator chose, with no wait.
  */
-const SHELL_DECISION_TIMEOUT_MS = 2500
+const SHELL_CHOICE_KEY = 'tp_shell_choice'
+
+/** Last resolved choice, or null. Never throws; storage may be disabled. */
+function rememberedShellChoice() {
+  try {
+    const v = localStorage.getItem(SHELL_CHOICE_KEY)
+    return v === 'new' ? true : v === 'legacy' ? false : null
+  } catch { return null }
+}
+function rememberShellChoice(useNew) {
+  try { localStorage.setItem(SHELL_CHOICE_KEY, useNew ? 'new' : 'legacy') } catch { /* storage off */ }
+}
 
 /**
- * Picks the app shell ONCE per page load: the new Layout, or the frozen
- * LegacyLayout when an administrator has switched `new_shell` off.
+ * Picks the app shell: the new Layout, or the frozen LegacyLayout when an
+ * administrator has switched `new_shell` off.
  *
- * Two properties matter more than the choice itself.
+ * THE SHELL MUST NEVER WAIT FOR CONFIG. An earlier version of this held the
+ * first paint until the config read settled, bounded at 2.5s. That was a
+ * straight violation of the rule that the shell renders immediately and does
+ * not block on anything asynchronous, and it charged every single load for a
+ * switch almost nobody has flipped.
  *
- * 1. It never swaps after first paint. configBool reads the config cache
- *    synchronously, but SettingsContext only primes that cache after the
- *    session exists, so a naive read at mount could answer "new" and then flip
- *    to "legacy" a moment later. Re-parenting the entire app mid-session would
- *    remount every screen and throw away whatever the user was doing - worse
- *    than either shell. So the picker holds the first paint until the read has
- *    settled, then freezes the answer in state and never recomputes it. The
- *    holding state renders the SAME <LoadingSpinner /> ProtectedRoute was
- *    showing a beat earlier, so there is no new visual state, just (usually a
- *    few ms) more of the one already on screen.
+ * So it paints at once, using the best answer available in this order:
+ *   1. the config cache, when SettingsContext has already primed it;
+ *   2. the choice resolved on the PREVIOUS load, remembered in localStorage;
+ *   3. the default, which is the new shell.
  *
- * 2. It always resolves. If the config read fails or never settles, the
- *    timeout fires and the DEFAULT wins - the current shell, not a silent
- *    rollback to a frozen one.
- *
- * Flipping the flag therefore takes effect on the next page load, which is
- * what a rollback switch means; it is not a live in-session theme toggle.
+ * The config read is still honoured when it lands: if it disagrees with what we
+ * painted, the shell swaps once and the answer is remembered so the next load is
+ * correct immediately. That swap only happens on the first load after an admin
+ * flips the flag - the case the fallback exists for - rather than on every load
+ * for everyone. Re-parenting is the cost of being wrong once, not of being slow
+ * always.
  */
 function AppShell({ children }) {
-  // Subscribing to the context is what re-renders this component when the
-  // config read lands; the value itself is only used as a settled signal.
+  // Subscribing re-renders this component when the config read lands.
   const { systemConfig } = useSettings()
-  // null = not decided yet. Once set it is never recomputed.
-  const [useNew, setUseNew] = useState(() => (isSystemConfigLoaded() ? shouldUseNewShell() : null))
+  const [useNew, setUseNew] = useState(() => {
+    if (isSystemConfigLoaded()) return shouldUseNewShell()
+    const remembered = rememberedShellChoice()
+    return remembered === null ? true : remembered
+  })
 
-  // isSystemConfigLoaded() flips only after a FULL read was cached, which is
-  // the honest signal. The key check is a second, cheaper witness for the same
-  // thing in case the value arrived through another path.
+  // Settled only once a FULL read was cached; the key check is a cheaper second
+  // witness for the same thing in case the value arrived by another path.
   const settled = isSystemConfigLoaded() || !!(systemConfig && NEW_SHELL_KEY in systemConfig)
 
   useEffect(() => {
-    if (useNew !== null) return undefined
-    if (settled) { setUseNew(shouldUseNewShell()); return undefined }
-    const timer = setTimeout(() => setUseNew(shouldUseNewShell()), SHELL_DECISION_TIMEOUT_MS)
-    return () => clearTimeout(timer)
-  }, [useNew, settled])
+    if (!settled) return
+    const actual = shouldUseNewShell()
+    rememberShellChoice(actual)
+    setUseNew((prev) => (prev === actual ? prev : actual))
+  }, [settled, systemConfig])
 
-  if (useNew === null) return <LoadingSpinner />
   const Shell = useNew ? Layout : LegacyLayout
   // Both shells take exactly the same props and children; nothing else about
   // routing, guards or providers differs between the two paths.

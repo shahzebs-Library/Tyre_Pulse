@@ -23,6 +23,7 @@
  * an administrator explicitly asked for it, never because a value was blank,
  * misspelt or unreachable.
  */
+import { readFileSync } from 'node:fs'
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   shouldUseNewShell, NEW_SHELL_KEY, CONFIG_DEFAULTS, ENFORCEMENT_STATUS,
@@ -42,8 +43,9 @@ describe('new_shell flag - which app shell renders', () => {
 
   it('defaults to the NEW shell before the config cache is primed', () => {
     // A cold load reads the flag before SettingsContext has fetched anything.
-    // The default must win here; App.jsx additionally holds first paint until
-    // the read settles, so this default never becomes a visible shell swap.
+    // The default must win here. App.jsx paints straight away on this answer
+    // (or on the choice remembered from the previous load) and corrects itself
+    // once the read lands - it never holds the first paint waiting for config.
     withConfig({ some_other_key: 'x' })
     expect(shouldUseNewShell()).toBe(true)
   })
@@ -98,6 +100,24 @@ describe('new_shell flag - registration', () => {
     // If this ever flipped to false the new shell would be hidden behind an
     // opt-in nobody set, and every user would silently get the frozen fallback.
     expect(CONFIG_DEFAULTS[NEW_SHELL_KEY]).toBe(true)
+  })
+
+  it('never holds the first paint waiting for the config read', () => {
+    // The shell spec is explicit that the shell renders immediately and blocks
+    // on nothing asynchronous. An earlier version of AppShell showed a spinner
+    // until the system_config read settled, bounded by a timeout - that charged
+    // EVERY load for a switch almost nobody has flipped. Source-scan, because
+    // the regression is a few lines in a component that is expensive to render
+    // in a test (it pulls auth, settings, tenant and the Supabase client).
+    const src = readFileSync('src/App.jsx', 'utf8')
+    const shell = src.slice(src.indexOf('function AppShell('))
+    const body = shell.slice(0, shell.indexOf('\n}\n'))
+    expect(body).not.toMatch(/setTimeout|TIMEOUT/)
+    expect(body).not.toMatch(/LoadingSpinner|Suspense|return null/)
+    // It must still honour the read once it lands, or an admin turning the flag
+    // off would never take effect for someone already carrying a remembered
+    // choice.
+    expect(body).toMatch(/shouldUseNewShell\(\)/)
   })
 
   it('is registered as actually enforced, naming the real enforcement site', () => {

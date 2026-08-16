@@ -39,26 +39,22 @@ const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'S
 const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import {
-  LayoutDashboard, CircleDot, Package, DollarSign,
-  ClipboardList, Search, Upload, Settings, LogOut,
-  Menu, X, Wand2, BarChart2, Shield, ClipboardCheck, ListChecks,
-  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, User, Sparkles,
-  Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare, QrCode,
-  ChevronDown, ChevronRight,
-  Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
-  TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
-  Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
-  RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
-  Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
-  Webhook, CheckSquare, CreditCard, Palette, LifeBuoy, Share2,
-  Award, PackageCheck, Calculator, Siren, ShieldAlert, SlidersHorizontal,
-  Leaf, BadgeCheck, ScrollText, Navigation,
-  Boxes, Combine, Snowflake, BatteryCharging, Router, Video, Receipt,
-  Satellite, Landmark, BookMarked, PhoneCall, Scale,
-  Droplet, KeyRound, GraduationCap, FileClock,
-  CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
-  Wallet, FileCheck, Building2, Lock, ArrowLeft,
-  Megaphone,
+  LayoutDashboard, Package, DollarSign, ClipboardList, Search, Upload,
+  Settings, LogOut, Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
+  ListChecks, Bell, GitBranch, Layers, AlertTriangle, Globe, Users, User,
+  Sparkles, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
+  QrCode, ChevronDown, Cpu, MapPin, Activity, CalendarClock, Trophy,
+  BarChartBig, Microscope, TrendingUp, BookOpen, Zap, Database, Wrench,
+  Calendar, Target, HeartPulse, RefreshCw, Clock, Gauge, Fuel, RotateCcw,
+  AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee, Recycle,
+  Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Webhook,
+  CheckSquare, CreditCard, Palette, LifeBuoy, Share2, Award, PackageCheck,
+  Calculator, Siren, ShieldAlert, SlidersHorizontal, Leaf, BadgeCheck,
+  ScrollText, Navigation, Boxes, Combine, Snowflake, BatteryCharging, Router,
+  Video, Receipt, Satellite, Landmark, BookMarked, PhoneCall, Scale, Droplet,
+  KeyRound, GraduationCap, FileClock, CalendarRange, ListTodo, Thermometer,
+  Network, Play, Code, Repeat, Store, Rocket, Wallet, FileCheck, Building2,
+  ArrowLeft, Megaphone
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -888,11 +884,6 @@ export default function LegacyLayout({ children }) {
 
   if (profile?.role === 'Tyre Man') {
     return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}>{children}</TyreManShell>
-  }
-
-  const navItemVariants = {
-    hidden: { opacity: 0, x: -8 },
-    visible: { opacity: 1, x: 0 },
   }
 
   return (

@@ -208,7 +208,10 @@ export default function GlobalCreate({ isMobile = false }) {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { profile, hasPermission, grantedModules, isSuperAdmin, capabilities } = useAuth() || {}
-  const { isEnabled } = useFeatureFlags() || {}
+  // No `|| {}` guard here, unlike useAuth above: useFeatureFlags is a plain hook
+  // that always returns an object, not a context read that can be undefined
+  // outside its provider.
+  const { isEnabled } = useFeatureFlags()
 
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)

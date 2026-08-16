@@ -7,8 +7,26 @@
  * and plain-language findings. Real data only, honest empty/error states,
  * currencies never blended (one panel per country in its own currency).
  *
- * Data: `get_expense_yearly_trend` RPC via `src/lib/api/expenseTrends.js`.
- * All maths live in the pure `src/lib/expenseTrends.js` engine.
+ * REPORTING SCOPE (not the working context). This page reports on the set of
+ * countries chosen in the ReportingScopeBar, NOT on the one operational country
+ * in the top bar. That distinction is the whole point of the two controls: a
+ * board-level trend legitimately spans countries, while the working context is
+ * the single place you are operating in. Nothing here writes the working
+ * context.
+ *
+ * The scope drives the QUERY, not just the display: one `get_expense_period_trend`
+ * call is issued per country in scope, so changing the scope refetches. The
+ * countries requested come from `scopeRequestCountries`, which drops anything the
+ * profile may not aggregate over, so the scope can never widen access.
+ *
+ * CURRENCY: KSA=SAR, UAE=AED, Egypt=EGP and this page never adds them. Each
+ * country keeps its own panel in its own currency; the scope summary shows a
+ * combined spend ONLY when one currency is in scope and otherwise reads N/A with
+ * the reason. Line COUNTS carry no currency and are aggregated.
+ *
+ * Data: `get_expense_period_trend` RPC via `src/lib/api/expenseTrends.js`.
+ * All maths live in the pure `src/lib/expenseTrends.js` +
+ * `src/lib/reportingScopeQuery.js` engines.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -18,15 +36,21 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
   TrendingUp, TrendingDown, LineChart, Layers, Calendar, FileSpreadsheet,
-  FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge, X,
+  FileText, RefreshCcw, AlertTriangle, Sparkles, Gauge, X, Coins, Hash,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import { useSettings } from '../contexts/SettingsContext'
 import { getExpensePeriodTrend } from '../lib/api/expenseTrends'
 import {
   byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num,
   filterPeriods, availableYears, MONTHS,
 } from '../lib/expenseTrends'
+import { scopeLabel } from '../lib/reportingScope'
+import {
+  scopeRequestCountries, scopeQueryKey, rowsInScope,
+  scopeMoneyTotal, moneyTotalNote, scopeCount,
+} from '../lib/reportingScopeQuery'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { colorAt, withAlpha } from '../lib/reportColors'
@@ -107,7 +131,7 @@ function CountryTrend({ entry, grain }) {
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <h3 className="text-base font-semibold text-slate-100">{t.country}</h3>
-        <span className="text-xs text-slate-500">{cur} · {t.years.length} periods</span>
+        <span className="text-xs text-slate-500">{cur || 'Currency not recorded'} | {t.years.length} periods</span>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -179,7 +203,7 @@ function CountryTrend({ entry, grain }) {
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.spare, '')}</td>
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.lubricant, '')}</td>
                   <td className="px-3 py-2 text-right font-semibold text-fuchsia-200">{fmtMoney(y.total, '')}</td>
-                  <td className="px-3 py-2 text-right text-slate-500">—</td>
+                  <td className="px-3 py-2 text-right text-slate-500">N/A</td>
                 </tr>
               ))}
             </tbody>
@@ -204,7 +228,9 @@ function CountryTrend({ entry, grain }) {
 const GRAIN_OPTS = [['year', 'Year'], ['quarter', 'Quarter'], ['month', 'Month']]
 
 export default function ExpenseTrends() {
-  const { activeCountry } = useSettings()
+  // REPORTING SCOPE, not the working context: this report aggregates the set of
+  // countries the reader picked. `activeCountry` is deliberately NOT read here.
+  const { reportingScope, allowedScopeCountries } = useSettings()
   const [grain, setGrain] = useState('year')
   const [fromYear, setFromYear] = useState('')
   const [fromMonth, setFromMonth] = useState('')
@@ -214,20 +240,44 @@ export default function ExpenseTrends() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Every country we will request. Permission-filtered, so a persisted or stale
+  // scope can never ask for a country this profile may not aggregate over.
+  // Resolved through a stable string key so the list identity changes only when
+  // the SET changes - an equal-but-new array must not retrigger the fetch.
+  const scopeKey = useMemo(
+    () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
+    [reportingScope, allowedScopeCountries],
+  )
+  const scopeCountryList = useMemo(() => (scopeKey ? scopeKey.split('|') : []), [scopeKey])
+  const scopeTitle = scopeLabel(reportingScope, allowedScopeCountries)
+
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      setRows(await getExpensePeriodTrend({ country: activeCountry, grain }))
+      // A scope that resolves to nothing reports on nothing. Falling back to
+      // "All" here would silently widen the report past what was asked for.
+      if (scopeCountryList.length === 0) { setRows([]); return }
+      // One call per country in scope. The RPC takes a single country, and asking
+      // for exactly the countries in scope keeps the request as narrow as the
+      // report rather than fetching everything and hiding the rest client-side.
+      const batches = await Promise.all(
+        scopeCountryList.map((country) => getExpensePeriodTrend({ country, grain })),
+      )
+      setRows(batches.flat())
     } catch (err) {
       setError(toUserMessage(err))
+      setRows([])
     } finally {
       setLoading(false)
     }
-  }, [activeCountry, grain])
+  }, [scopeCountryList, grain])
 
   useEffect(() => { load() }, [load])
 
-  const allCountries = useMemo(() => byCountry(rows), [rows])
+  const allCountries = useMemo(
+    () => byCountry(rowsInScope(rows, scopeCountryList)),
+    [rows, scopeCountryList],
+  )
   const yearOpts = useMemo(() => availableYears(allCountries), [allCountries])
   const fromYm = fromYear ? `${fromYear}-${fromMonth || '01'}` : null
   const toYm = toYear ? `${toYear}-${toMonth || '12'}` : null
@@ -241,6 +291,20 @@ export default function ExpenseTrends() {
   )
   const rangeActive = !!(fromYm || toYm)
   function clearRange() { setFromYear(''); setFromMonth(''); setToYear(''); setToMonth('') }
+
+  // ── Scope summary. Built from the SAME windowed `countries` the panels render,
+  // so the header can never describe a different set of periods than the charts.
+  const scopeEntries = useMemo(() => countries.map((c) => ({
+    country: c.country,
+    currency: c.currency,
+    total: c.years.reduce((s, y) => s + (num(y.total) ?? 0), 0),
+    lines: c.years.reduce((s, y) => s + (num(y.lines) ?? 0), 0),
+  })), [countries])
+  // Money: withheld as N/A the moment more than one currency is in scope.
+  const scopeMoney = useMemo(() => scopeMoneyTotal(scopeEntries), [scopeEntries])
+  const scopeMoneyNote = moneyTotalNote(scopeMoney)
+  // Counts carry no currency, so aggregating them across countries is honest.
+  const scopeLines = useMemo(() => scopeCount(scopeEntries, 'lines'), [scopeEntries])
 
   function exportAll() {
     const out = []
@@ -271,10 +335,41 @@ export default function ExpenseTrends() {
             </div>
             <button onClick={load} className="btn-ghost" title="Refresh"><RefreshCcw className="w-4 h-4" /></button>
             <button onClick={() => exportToExcel(exportAll(), cols, heads, 'Expense Trends')} disabled={!countries.length} className="btn-ghost gap-1"><FileSpreadsheet className="w-4 h-4" /> Excel</button>
-            <button onClick={() => exportToPdf(exportAll(), cols.map((k, i) => ({ key: k, header: heads[i] })), 'Expense Trends & Forecast', 'Expense Trends', 'landscape')} disabled={!countries.length} className="btn-ghost gap-1"><FileText className="w-4 h-4" /> PDF</button>
+            <button onClick={() => exportToPdf(exportAll(), cols.map((k, i) => ({ key: k, header: heads[i] })), `Expense Trends & Forecast (${scopeTitle})`, 'Expense Trends', 'landscape')} disabled={!countries.length} className="btn-ghost gap-1"><FileText className="w-4 h-4" /> PDF</button>
           </div>
         }
       />
+
+      {/* Reporting scope: which countries this report aggregates. Separate from
+          the working context in the top bar, and it drives the queries below. */}
+      <div className="card p-3 flex flex-wrap items-start justify-between gap-4">
+        <ReportingScopeBar />
+        {scopeEntries.length > 0 && (
+          <div className="flex flex-wrap items-start gap-4 text-xs">
+            <div className="min-w-0" role="group" aria-label="Combined spend">
+              <div className="text-slate-500 flex items-center gap-1"><Coins className="w-3.5 h-3.5" aria-hidden="true" /> Combined spend</div>
+              <div className={`font-semibold ${scopeMoney.total == null ? 'text-slate-400' : 'text-slate-100'}`}>
+                {scopeMoney.total == null ? 'N/A' : fmtMoney(scopeMoney.total, scopeMoney.currency)}
+              </div>
+            </div>
+            <div className="min-w-0" role="group" aria-label="Expense lines">
+              <div className="text-slate-500 flex items-center gap-1"><Hash className="w-3.5 h-3.5" aria-hidden="true" /> Expense lines</div>
+              <div className="font-semibold text-slate-100">
+                {scopeLines == null ? 'N/A' : Math.round(scopeLines).toLocaleString()}
+              </div>
+            </div>
+            <div className="min-w-0 max-w-md" role="group" aria-label="Spend per country">
+              <div className="text-slate-500">Per country</div>
+              <div className="font-medium text-slate-200">
+                {scopeEntries.map((e) => `${e.country}: ${fmtMoney(e.total, e.currency)}`).join('  |  ')}
+              </div>
+            </div>
+          </div>
+        )}
+        {scopeMoneyNote && (
+          <p className="w-full text-[11px] text-slate-500">{scopeMoneyNote}</p>
+        )}
+      </div>
 
       {/* Date-range window (feeds the trend + forecast) */}
       <div className="card p-3 flex flex-wrap items-center gap-3">
@@ -314,8 +409,14 @@ export default function ExpenseTrends() {
 
       {loading ? (
         <div className="card p-10 text-center text-slate-400">Loading expense history…</div>
+      ) : scopeCountryList.length === 0 ? (
+        <div className="card p-10 text-center text-slate-400">
+          No countries are selected in the reporting scope, so there is nothing to report on.
+        </div>
       ) : countries.length === 0 ? (
-        <div className="card p-10 text-center text-slate-400">No expense history for this scope yet.</div>
+        <div className="card p-10 text-center text-slate-400">
+          No expense history for {scopeTitle}{rangeActive ? ' in the selected date range' : ''} yet.
+        </div>
       ) : (
         <div className="space-y-8">
           {countries.map((c) => (

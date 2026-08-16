@@ -7,6 +7,7 @@ import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from 
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from '../lib/reportBuilderAccess'
+import { isModuleHiddenInContext, isModuleInContext } from '../lib/contextRules'
 import { getNavLayout } from '../lib/api/navLayout'
 import {
   MAX_FAVORITES, loadFavorites, toggleFavorite, pushRecent, visibleFavorites,
@@ -400,7 +401,7 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin) {
+function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) {
   // Feature-flag gate first: a disabled capability is hidden entirely, so its
   // nav item never renders (not just redirected at the route).
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
@@ -412,6 +413,10 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // below, so a grant cannot open one. Mirrors isCommandVisible in commandSearch.
   if (REPORT_BUILDER_ROUTES.includes(item.to)
       && !canUseReportBuilder(profile, isSuperAdmin)) return false
+
+  // A context rule may remove an item entirely, but only when it explicitly says
+  // to. Default is to keep it and dim it (see the render below).
+  if (activeCountry && isModuleHiddenInContext(item.to, activeCountry)) return false
 
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
@@ -870,7 +875,7 @@ export default function Layout({ children }) {
     const entry = navByRoute.get(route)
     if (!entry) return false
     return Boolean(
-      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin),
+      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry),
     )
   }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin])
 
@@ -1156,7 +1161,7 @@ export default function Layout({ children }) {
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(groupId)
             const groupHeading = groupHeadingFor(t, group)
@@ -1194,6 +1199,13 @@ export default function Layout({ children }) {
                         // Items arrive already ordered by parent, so a sub-heading is
                         // drawn when the parent changes. Guarded by GROUP_PARENTS so a
                         // regrouped item cannot render a heading from another group.
+                        // Context rules: a module that does not apply in the current
+                        // working location is DIMMED, not removed, because "no data
+                        // here yet" and "cannot apply here" look identical from the
+                        // outside and hiding the first would stop the first record
+                        // ever being entered. Only a rule that explicitly asks to
+                        // hide removes an item, and none does today.
+                        const _outOfContext = !isModuleInContext(to, activeCountry)
                         const _prevParent = _i > 0 ? visibleItems[_i - 1].parent : null
                         const _showParent = sidebarOpen && parent && parent !== _prevParent
                           && GROUP_PARENTS.get(groupId)?.has(parent)
@@ -1216,7 +1228,10 @@ export default function Layout({ children }) {
                         <NavLink
                           to={to}
                           end={end}
-                          title={!sidebarOpen ? navLabel : undefined}
+                          title={_outOfContext
+                            ? `${navLabel} - no data in ${activeCountry}`
+                            : (!sidebarOpen ? navLabel : undefined)}
+                          style={_outOfContext ? { opacity: 0.45 } : undefined}
                           className={({ isActive }) =>
                             `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group

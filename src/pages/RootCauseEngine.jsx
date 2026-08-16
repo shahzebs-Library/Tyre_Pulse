@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
@@ -316,8 +317,14 @@ export default function RootCauseEngine() {
     return preset ? applyDatePreset(preset) : null
   }, [datePreset])
 
+  // Moving the date preset refetches while the previous read is still paging.
+  // If the earlier one finishes last, the root causes describe the PREVIOUS
+  // window under the new cutoff - an analysis that looks fine and is not.
+  const latestLoad = useLatestRequest()
+
   // ── Data fetch ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
 
@@ -338,6 +345,9 @@ export default function RootCauseEngine() {
       if (dateCutoff) q = q.or(`issue_date.is.null,issue_date.gte.${dateCutoff}`)
       return q.range(from, to)
     }, { max: 50000 }).then(({ data, error: err, truncated: trunc }) => {
+      // A superseded read must not paint its rows, raise a banner over data that
+      // loaded fine, or clear the newer load's spinner.
+      if (stale()) return
       if (err) {
         setError(toUserMessage(err, 'Could not load root cause data.'))
       } else {
@@ -346,7 +356,7 @@ export default function RootCauseEngine() {
       }
       setLoading(false)
     })
-  }, [activeCountry, dateCutoff])
+  }, [activeCountry, dateCutoff, latestLoad])
 
   // ── Sites list ──────────────────────────────────────────────────────────────
   const allSites = useMemo(() => {

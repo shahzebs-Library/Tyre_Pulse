@@ -43,6 +43,7 @@ import {
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -107,21 +108,30 @@ export default function TyrePool() {
   const [search, setSearch] = useState('')
 
   // ── Loaders ────────────────────────────────────────────────────────────────
+  // The status filter refetches the pool without waiting for the read already in
+  // flight. If the earlier one finishes last it lists the PREVIOUS status under
+  // the new selection, so a spare reads as available when it is not.
+  const latestPool = useLatestRequest()
+
   const loadManager = useCallback(async () => {
+    const stale = latestPool.begin()
     setMgrError(''); setNotProvisioned(false)
     try {
       const [list, vehicles] = await Promise.all([
         listPoolEntries({ country: activeCountry, status: statusFilter || undefined }),
         countActiveVehicles({ country: activeCountry }).catch(() => 0),
       ])
+      if (stale()) return
       setEntries(Array.isArray(list) ? list : [])
       setActiveVehicles(vehicles || 0)
     } catch (err) {
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (stale()) return
       if (isMissingRelation(err)) setNotProvisioned(true)
       else setMgrError(toUserMessage(err, 'Could not load the tyre pool.'))
       setEntries([])
     }
-  }, [activeCountry, statusFilter])
+  }, [activeCountry, statusFilter, latestPool])
 
   const loadAnalytics = useCallback(async () => {
     setError('')

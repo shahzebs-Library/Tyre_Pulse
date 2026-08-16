@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useFilterState } from '../hooks/useFilterState'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
 import { sanitizeSearchTerm } from '../lib/searchFilter'
@@ -21,10 +23,26 @@ import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 
 const DEFAULT_PAGE_SIZE = 25
+// Mirrors EnterpriseTable's own page-size selector. The page size is restored
+// from the URL, so it is validated against this list rather than trusted.
+const PAGE_SIZE_OPTIONS = [25, 50, 100]
 
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Retired', 'Transferred']
 
-const EMPTY_FORM = (country = 'KSA') => ({
+/**
+ * Country a NEW vehicle inherits from the working context. On the All-countries
+ * view there is no country to inherit, so the field opens BLANK and the user has
+ * to choose one - a silent 'KSA' default would file the asset under a country
+ * nobody picked, taking its currency and RLS visibility with it.
+ */
+const defaultCountryFor = (active) => (active && active !== 'All' ? active : '')
+
+// Plain literals, not t() keys: the locale files are outside this change, and a
+// missing key would render the key itself on screen.
+const COUNTRY_REQUIRED_HINT = 'Select a country. You are viewing all countries.'
+const COUNTRY_PLACEHOLDER = 'Select a country'
+
+const EMPTY_FORM = (country = '') => ({
   asset_no: '',
   fleet_number: '',
   make: '',
@@ -79,20 +97,38 @@ export default function FleetMaster() {
   // ── data ─────────────────────────────────────────────────────────────────────
   const [records, setRecords]   = useState([])
   const [total, setTotal]       = useState(0)
-  const [page, setPage]         = useState(0)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading]   = useState(true)
   const [loadError, setLoadError] = useState('')
   const [sites, setSites]       = useState([])
   const [summaryCapped, setSummaryCapped] = useState(false)
 
   // ── filters ──────────────────────────────────────────────────────────────────
-  const [search, setSearch]         = useState('')
+  // Search, site, status, page and page size live in the URL (useFilterState) so
+  // they SURVIVE opening a vehicle and pressing Back: the row opens
+  // `/vehicle/:asset_no` as a route, so without this the register would remount
+  // and reset to page 1 of an unfiltered list.
+  const [filters, setFilter, , , setFilters] = useFilterState({
+    search: '', site: '', status: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
+  })
+  const search = filters.search
+  const siteFilter = filters.site
+  const statusFilter = filters.status
+  // The URL carries a human-readable 1-based page; the query is 0-based.
+  const page = Math.max(0, (Number(filters.page) || 1) - 1)
+  // Clamped to the sizes the table itself offers. The value now comes from the
+  // URL, and an arbitrary one would widen the server range this read is bounded
+  // by - a hand-typed `?size=100000` must not become a bigger query.
+  const pageSize = PAGE_SIZE_OPTIONS.includes(Number(filters.size))
+    ? Number(filters.size)
+    : DEFAULT_PAGE_SIZE
+  const setPage = useCallback(p => setFilter('page', String((Number(p) || 0) + 1)), [setFilter])
+  // Puts the list back where it was scrolled to when the user returns from
+  // /vehicle/:asset_no. Only once the rows exist, or there is nothing to scroll.
+  const listRef = useScrollRestore('fleet-master', !loading && records.length > 0)
   // Debounced copy that actually drives the query, so we don't fire a Supabase
-  // request on every keystroke (was one round-trip per character).
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [siteFilter, setSiteFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  // request on every keystroke (was one round-trip per character). Seeded from
+  // the URL so a restored `?search=` queries immediately instead of after 300ms.
+  const [debouncedSearch, setDebouncedSearch] = useState(() => filters.search)
   // Monotonic request id: only the newest loadRecords() response is applied, so a
   // slow earlier query can't overwrite a faster later one (out-of-order race).
   const reqIdRef = useRef(0)
@@ -106,6 +142,9 @@ export default function FleetMaster() {
   const [atLimit, setAtLimit]                 = useState(false)
   const [deleteError, setDeleteError]         = useState('')
   const [form, setForm]                       = useState(() => EMPTY_FORM())
+  // True only while the country is genuinely unchosen (the All-countries case),
+  // which is when the field needs the hint rather than a quiet default.
+  const countryUnset = !String(form.country || '').trim()
 
   // ── multi-select bulk delete (Admin only) ─────────────────────────────────────
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
@@ -120,10 +159,13 @@ export default function FleetMaster() {
   // ── load ─────────────────────────────────────────────────────────────────────
   useEffect(() => { loadSites() }, [])
   // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
+  // The page reset only fires when the term actually changed, so arriving on a
+  // restored URL (`?search=TM&page=3`) keeps its page instead of snapping to 1.
   useEffect(() => {
+    if (search === debouncedSearch) return
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search, debouncedSearch, setPage])
   useEffect(() => { loadRecords() }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
   async function loadSites() {
@@ -200,7 +242,7 @@ export default function FleetMaster() {
 
   // ── add / edit ────────────────────────────────────────────────────────────────
   async function openAdd() {
-    setForm(EMPTY_FORM(activeCountry !== 'All' ? activeCountry : 'KSA'))
+    setForm(EMPTY_FORM(defaultCountryFor(activeCountry)))
     setEditRecord({})
     setFormError('')
     // Proactively surface a reached plan cap so the Save button is disabled with a
@@ -238,6 +280,9 @@ export default function FleetMaster() {
   async function saveRecord(e) {
     e.preventDefault()
     if (!form.asset_no.trim()) { setFormError(t('fleetmaster.form.required')); return }
+    // Never stamp a country the user did not choose: on the All-countries view the
+    // field opens blank, so it has to be picked before the vehicle can be saved.
+    if (!String(form.country || '').trim()) { setFormError(COUNTRY_REQUIRED_HINT); return }
     setSaving(true)
     setFormError('')
 
@@ -530,14 +575,14 @@ export default function FleetMaster() {
                   className="input pl-9"
                   placeholder={t('fleetmaster.filters.searchPlaceholder')}
                   value={search}
-                  onChange={e => { setSearch(e.target.value); setPage(0) }}
+                  onChange={e => setFilters({ search: e.target.value, page: '1' })}
                 />
               </div>
-              <select className="input w-auto min-w-36" value={siteFilter} onChange={e => { setSiteFilter(e.target.value); setPage(0) }}>
+              <select className="input w-auto min-w-36" value={siteFilter} onChange={e => setFilters({ site: e.target.value, page: '1' })}>
                 <option value="">{t('fleetmaster.filters.allSites')}</option>
                 {sites.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select className="input w-auto min-w-36" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0) }}>
+              <select className="input w-auto min-w-36" value={statusFilter} onChange={e => setFilters({ status: e.target.value, page: '1' })}>
                 <option value="">{t('fleetmaster.filters.allStatuses')}</option>
                 {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -568,7 +613,9 @@ export default function FleetMaster() {
             </div>
           )}
 
-          {/* Table */}
+          {/* Table. The wrapper is the anchor the scroll-restore hook measures
+              from, so returning from a vehicle lands back on the same row. */}
+          <div ref={listRef}>
           <EnterpriseTable
             reportMeta={reportMeta}
             columns={tableColumns}
@@ -587,11 +634,12 @@ export default function FleetMaster() {
             totalRows={total}
             pageSize={pageSize}
             onPageChange={setPage}
-            onPageSizeChange={size => { setPageSize(size); setPage(0) }}
+            onPageSizeChange={size => setFilters({ size: String(size), page: '1' })}
             paginationLabel={({ from, to, total: totalCount }) =>
               t('fleetmaster.pagination.showing', { from, to, total: totalCount.toLocaleString() })}
             exportFileName={`TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`}
           />
+          </div>
       </>
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
@@ -665,10 +713,12 @@ export default function FleetMaster() {
                 <div>
                   <label className="label">{t('fleetmaster.form.country')}</label>
                   <select className="input" value={form.country} onChange={F('country')}>
-                    <option value="KSA">KSA</option>
-                    <option value="UAE">UAE</option>
-                    <option value="Egypt">Egypt</option>
+                    <option value="">{COUNTRY_PLACEHOLDER}</option>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {countryUnset && (
+                    <p className="mt-1 text-xs text-amber-300">{COUNTRY_REQUIRED_HINT}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -720,7 +770,7 @@ export default function FleetMaster() {
               </div>
             )}
             <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button type="submit" disabled={saving || countryUnset || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Save size={15} /> {saving ? t('fleetmaster.form.saving') : t('fleetmaster.form.save')}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('fleetmaster.form.cancel')}</button>

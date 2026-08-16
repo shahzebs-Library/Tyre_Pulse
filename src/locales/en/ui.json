@@ -21,7 +21,8 @@
       "recent": "Recent",
       "actions": "Actions",
       "navigation": "Navigation",
-      "commands": "Commands"
+      "commands": "Commands",
+      "favorites": "Favourites"
     }
   },
   "hints": {

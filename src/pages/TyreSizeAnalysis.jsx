@@ -22,6 +22,7 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
@@ -178,8 +179,14 @@ export default function TyreSizeAnalysis() {
   const [sortDir, setSortDir]           = useState('desc')
   const [exporting, setExporting]       = useState(false)
 
+  // Moving the date range (or pressing refresh) starts a new paged read before
+  // the old one returns. If the earlier answer lands last it paints the PREVIOUS
+  // window's tyres under the new dates, so every size metric is quietly wrong.
+  const latestLoad = useLatestRequest()
+
   // ── Fetch ────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
     fetchAllPages((from, to) => {
@@ -193,12 +200,15 @@ export default function TyreSizeAnalysis() {
       if (dateTo)   q = q.or(`issue_date.is.null,issue_date.lte.${dateTo}`)
       return q.range(from, to)
     }, { max: 50000 }).then(({ data, error: err, truncated: trunc }) => {
+      // A superseded read must not paint its rows, raise a banner over data that
+      // loaded fine, or clear the newer load's spinner.
+      if (stale()) return
       if (err) { setError(toUserMessage(err, 'Could not load tyre data.')); setLoading(false); return }
       setRecords(data || [])
       setTruncated(!!trunc)
       setLoading(false)
     })
-  }, [activeCountry, dateFrom, dateTo, refreshKey])
+  }, [activeCountry, dateFrom, dateTo, refreshKey, latestLoad])
 
   // ── Filter options ───────────────────────────────────────────────────────────
   const filterOptions = useMemo(() => {

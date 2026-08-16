@@ -28,6 +28,7 @@ import { summarizeAttendance } from '../lib/workshopAbsence'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -99,7 +100,14 @@ export default function WorkshopAbsence() {
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const resetFilters = () => setFilters({ from: daysAgo(7), to: todayISO(), site: 'All' })
 
+  // Changing the date range or site refetches without waiting for the load
+  // already in flight. If the earlier one finishes last it marks the PREVIOUS
+  // window's attendance under the new filters, so someone reads as absent for a
+  // day nobody asked about.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setRefreshing(true)
     setError('')
     try {
@@ -109,16 +117,22 @@ export default function WorkshopAbsence() {
         site: filters.site,
         country: activeCountry,
       })
+      if (stale()) return
       setData(res)
       setUpdatedAt(new Date())
     } catch (err) {
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (stale()) return
       if (isMissingRelation(err)) { setMissing(true); setData({ shifts: [], attendance: [], staff: [] }) }
       else setError(toUserMessage(err, 'Could not load attendance data.'))
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      // Clearing these from a stale load would make the newer one look finished.
+      if (!stale()) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
-  }, [filters.from, filters.to, filters.site, activeCountry])
+  }, [filters.from, filters.to, filters.site, activeCountry, latestLoad])
 
   useEffect(() => { setLoading(true); load() }, [load])
 

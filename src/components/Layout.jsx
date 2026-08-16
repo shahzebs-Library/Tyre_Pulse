@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -6,14 +6,19 @@ import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAcc
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
+import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from '../lib/reportBuilderAccess'
+import { isModuleHiddenInContext, isModuleInContext } from '../lib/contextRules'
 import { getNavLayout } from '../lib/api/navLayout'
-import { configStr } from '../lib/api/systemConfig'
+import {
+  MAX_FAVORITES, loadFavorites, toggleFavorite, pushRecent, visibleFavorites,
+} from '../lib/navFavorites'
+import TopBar from './shell/TopBar'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
 // is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
 const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'Store Keeper'])
 const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
-import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
+import { useSettings } from '../contexts/SettingsContext'
 import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
@@ -34,7 +39,7 @@ import {
   Droplet, KeyRound, GraduationCap, FileClock,
   CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
   Wallet, FileCheck, Building2, Lock, ArrowLeft,
-  Megaphone,
+  Megaphone, Star,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -69,8 +74,6 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolveBrandLogo } from '../lib/brand/library'
 import BrandIcon from './ui/BrandIcon'
 import InstallPwaPrompt from './InstallPwaPrompt'
-import NotificationCenter from './NotificationCenter'
-import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeToggle from './ui/ThemeToggle'
@@ -101,263 +104,287 @@ const NAV_GROUPS = [
     label: 'Overview',
     items: [
       { to: '/',      label: 'Dashboard',    icon: LayoutDashboard, end: true },
-      { to: '/tyres', label: 'Tyre Records', icon: TyreIc },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [
-      { to: '/fleet-master',        label: 'Fleet Master',       icon: TruckIc },
-      { to: '/assets',              label: 'Asset Management',   icon: LayoutGrid },
-      { to: '/asset-disposals',     label: 'Asset Disposal',     icon: Recycle, roles: ANALYTICS_ROLES },
-      { to: '/asset-breakdowns',    label: 'Breakdown Register', icon: Wrench, roles: ANALYTICS_ROLES },
-      { to: '/sites',               label: 'Site Management',    icon: MapPin },
-      { to: '/actions',             label: 'Corrective Actions', icon: ClipboardList },
-      { to: '/rca',                 label: 'Root Cause',         icon: Search },
-      { to: '/broadcast',            label: 'Message the Team',   icon: Megaphone, adminOnly: A },
-      { to: '/daily-ops',           label: 'Daily Ops',          icon: Coffee, adminOnly: A },
-      { to: '/live-fleet',          label: 'Live Fleet Status',  icon: Radio, adminOnly: A },
-      { to: '/serial-tracker',      label: 'Serial Tracker',     icon: BarcodeScanIc, adminOnly: A },
-      { to: '/qr-labels',           label: 'QR Labels',          icon: QrCode, adminOnly: A },
-      { to: '/vehicle-history',     label: 'Vehicle History',    icon: OdometerIc, adminOnly: A },
-      { to: '/anomalies',           label: 'Anomaly Scan',       icon: AnomalyScanIc, adminOnly: A },
-      { to: '/maintenance-calendar', label: 'Maintenance Calendar', icon: Calendar, adminOnly: A },
-      { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, roles: ERP_ROLES },
-      { to: '/rfid',                label: 'RFID Registry',      icon: Radio, adminOnly: A },
-      { to: '/geofencing',          label: 'Geofencing',         icon: MapPin, adminOnly: A },
-      { to: '/journeys',            label: 'Journey Log',        icon: Navigation, adminOnly: A },
-      { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', icon: ArrowLeftRight, adminOnly: A },
-      { to: '/combinations',        label: 'Combinations',       icon: Combine, adminOnly: A },
-      { to: '/dispatch',            label: 'Dispatch Planning',  icon: Truck, adminOnly: A },
-      { to: '/batteries',           label: 'Battery Lifecycle',  icon: BatteryCharging, adminOnly: A },
-      { to: '/telematics-devices',  label: 'Telematics Devices', icon: Router, adminOnly: A },
-      { to: '/shifts',              label: 'Shift Scheduling',   icon: CalendarClock, adminOnly: A },
-      { to: '/speed-limiter',       label: 'Speed Limiter',      icon: Gauge, adminOnly: A },
-      { to: '/engine-hours',        label: 'Engine Hours',       icon: Gauge, adminOnly: A },
-      { to: '/odometer-logs',       label: 'Odometer Logs',      icon: Activity, adminOnly: A },
-      { to: '/fleet-utilization',   label: 'Fleet Utilization',  icon: Gauge, roles: ANALYTICS_ROLES },
-      { to: '/trips',               label: 'Trip History',       icon: MapPin, adminOnly: A },
-      { to: '/route-optimization',  label: 'Route Optimization', icon: Navigation, adminOnly: A },
-      { to: '/charging-sessions',   label: 'EV Charging',        icon: Zap, adminOnly: A },
-      { to: '/load-planning',       label: 'Load Planning',      icon: Package, adminOnly: A },
-      { to: '/toll-transactions',   label: 'Toll Transactions',  icon: Receipt, adminOnly: A },
-      { to: '/gps-tracking',        label: 'GPS Tracking',       icon: Satellite, adminOnly: A },
-      { to: '/reservations',        label: 'Vehicle Reservations', icon: BookMarked, adminOnly: A },
-      { to: '/weighbridge',         label: 'Weighbridge',        icon: Scale, adminOnly: A },
-      { to: '/proof-of-delivery',   label: 'Proof of Delivery',  icon: PackageCheck, adminOnly: A },
-      { to: '/handovers',           label: 'Vehicle Handover',   icon: KeyRound, adminOnly: A },
       { to: '/action-center',       label: 'Action Center',      icon: ListTodo, adminOnly: A },
-      { to: '/fleet-groups',        label: 'Fleet Groups',       icon: Network, adminOnly: A },
-      { to: '/trip-replay',         label: 'Trip Replay',        icon: Play, adminOnly: A },
-      { to: '/fleet-health',        label: 'Fleet Health Board', icon: HeartPulse, adminOnly: A },
-    ],
-  },
-  {
-    label: 'Tyre Performance',
-    items: [
-      { to: '/analytics',    label: 'Analytics',          icon: BarChart2,      roles: ANALYTICS_ROLES },
-      { to: '/brand-perf',   label: 'Brand Performance',  icon: Shield,         roles: ANALYTICS_ROLES },
-      { to: '/site-comp',    label: 'Site Comparison',    icon: Layers,         roles: ANALYTICS_ROLES },
-      { to: '/fleet',        label: 'Fleet Analytics',    icon: GitBranch,      roles: ANALYTICS_ROLES },
-      { to: '/kpi',          label: 'KPI Center',         icon: ClipboardCheck, roles: ANALYTICS_ROLES },
-      { to: '/kpi-engine',   label: 'Engineering KPI',    icon: Gauge,          roles: ANALYTICS_ROLES },
-      { to: '/kpi-command',  label: 'KPI Command Center', icon: Target,         roles: ANALYTICS_ROLES },
-      { to: '/country-comp', label: 'Country Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
-      { to: '/comparison',   label: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
-      { to: '/position-intelligence',  label: 'Position Intelligence',  icon: MapPin, adminOnly: A },
-      { to: '/pressure-intel',         label: 'Pressure Intelligence',  icon: PsiGaugeIc, adminOnly: A },
-      { to: '/predictive-maintenance', label: 'Predictive Maintenance', icon: ServiceCalendarIc, adminOnly: A },
-      { to: '/benchmark',              label: 'Performance Benchmark',  icon: Target, adminOnly: A },
-      { to: '/tyre-size',              label: 'Size Optimizer',         icon: Layers, adminOnly: A },
-      { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle',         icon: RefreshCw, adminOnly: A },
-      { to: '/tyre-exchange',          label: 'Tyre Exchange',          icon: TyreSwapIc, adminOnly: A },
-      { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: PlyRatingIc, adminOnly: A },
-      { to: '/tyre-age-compliance',    label: 'Tyre Age Compliance',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
-      { to: '/tyre-passport',          label: 'Tyre Passport',          icon: ScanLine },
-      { to: '/fleet-risk-score',       label: 'Fleet Risk Score',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
-      { to: '/rotation-optimizer',     label: 'Rotation Optimizer',     icon: RotateCcw, roles: ANALYTICS_ROLES },
-      { to: '/carbon-tracker',         label: 'Carbon Tracker',         icon: Leaf, roles: ANALYTICS_ROLES },
-      { to: '/digital-twin',           label: 'Digital Twin',           icon: Cpu, roles: ANALYTICS_ROLES },
-      { to: '/tyre-service-events',    label: 'Tyre Service Events',    icon: Activity, roles: ANALYTICS_ROLES },
-      { to: '/heat-intelligence',      label: 'Heat Intelligence',      icon: Thermometer, roles: ANALYTICS_ROLES },
-      { to: '/fleet-optimizer',        label: 'Fleet Optimizer',        icon: SlidersHorizontal, adminOnly: A },
-      { to: '/rotation',               label: 'Rotation Schedule',      icon: TyreRotationIc, adminOnly: A },
-      { to: '/advanced-analytics',     label: 'Advanced Analytics',     icon: BarChartBig, roles: ANALYTICS_ROLES },
-      { to: '/fleet-intelligence',     label: 'Fleet Intelligence',     icon: Brain, roles: ANALYTICS_ROLES },
-      { to: '/root-cause',             label: 'Root Cause Engine',      icon: Microscope, roles: ANALYTICS_ROLES },
-    ],
-  },
-  {
-    label: 'Workshop & Downtime',
-    items: [
-      { to: '/work-orders',     label: 'Work Orders',        icon: WorkOrderIc },
-      { to: '/workshop-live',   label: 'Live Control',       icon: Activity, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/workshop-absence', label: 'Absence & Attendance', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/workshop-analytics', label: 'Workshop Analytics', icon: TrendingUp, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/workshop-settings', label: 'Workshop Settings', icon: SlidersHorizontal, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/parts-requests', label: 'Parts Requests', icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/gate-pass',       label: 'Gate Pass',          icon: GatePassIc },
-      { to: '/workshop',        label: 'Workshop Management', icon: WorkshopIc, adminOnly: A },
-      { to: '/technician-scorecard', label: 'Technician Scorecard', icon: Award, adminOnly: A },
-      { to: '/pm-programs',     label: 'Preventive Maintenance', icon: CalendarClock, adminOnly: A },
-      { to: '/vehicle-washing', label: 'Vehicle Washing',    icon: Droplet },
-      { to: '/dtc',             label: 'DTC Diagnostics',    icon: Cpu, adminOnly: A },
-      { to: '/fuel-cards',      label: 'Fuel Cards',         icon: CreditCard, adminOnly: A },
-      { to: '/fuel-delivery',   label: 'Fuel Delivery',      icon: Fuel, adminOnly: A },
-      { to: '/equipment',       label: 'Tool & Equipment',   icon: Wrench, adminOnly: A },
-      { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
-      { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: FuelPumpIc, adminOnly: A },
-      { to: '/service-requests', label: 'Service Requests',   icon: LifeBuoy, adminOnly: A },
-      { to: '/breakdowns',      label: 'Breakdown Callouts', icon: PhoneCall, adminOnly: A },
-      { to: '/bay-scheduling',  label: 'Bay Scheduling',     icon: CalendarRange, adminOnly: A },
-    ],
-  },
-  {
-    label: 'Stock & Procurement',
-    items: [
-      { to: '/stock',               label: 'Stock',               icon: StockBoxIc },
-      { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
-      { to: '/scrap',               label: 'Scrap Management',    icon: ScrapBinIc },
-      { to: '/tyre-pool',           label: 'Tyre Pool',           icon: PackageCheck },
-      { to: '/parts-catalog',       label: 'Parts Catalog',       icon: Boxes },
-      { to: '/requisitions',        label: 'Requisitions',        icon: ClipboardList },
-      { to: '/goods-receipt',       label: 'Goods Receipt',       icon: PackageCheck },
-      { to: '/cost-scenario-planner', label: 'Cost Scenario Planner', icon: SlidersHorizontal, roles: ANALYTICS_ROLES },
-      { to: '/contracts',           label: 'Contracts',           icon: FileText },
-      { to: '/budgets',             label: 'Budgets & Cost',      icon: DollarSign },
-      { to: '/procurement',         label: 'Procurement',         icon: PurchaseOrderIc, adminOnly: A },
-      { to: '/suppliers',           label: 'Supplier Management', icon: SupplierTruckIc, adminOnly: A },
-      { to: '/vendor-intelligence', label: 'Vendor Intelligence', icon: Trophy, adminOnly: A },
-      { to: '/forecasting',         label: 'Forecasting Engine',  icon: ForecastTrendIc, adminOnly: A },
-      { to: '/ifta-reporting',      label: 'IFTA Fuel Tax',       icon: Landmark, adminOnly: A },
-      { to: '/materials',           label: 'Materials',           icon: Layers, adminOnly: A },
-      { to: '/marketplace',         label: 'Supplier Marketplace', icon: Store, adminOnly: A },
-      { to: '/cost-center',         label: 'Cost Center',         icon: Wallet, roles: ANALYTICS_ROLES },
-      { to: '/budget-planner',      label: 'Budget Planner',      icon: Calculator, roles: ANALYTICS_ROLES },
-    ],
-  },
-  {
-    label: 'Safety & Compliance',
-    items: [
-      { to: '/inspections',            label: 'Inspections',         icon: ClipboardCheck },
-      { to: '/fitment-validation',     label: 'Fitment Validation',  icon: ShieldCheck, roles: ANALYTICS_ROLES },
-      { to: '/tpms',                   label: 'TPMS',                icon: Radio, adminOnly: A },
-      { to: '/certifications',         label: 'Certifications',      icon: BadgeCheck },
-      { to: '/policies',               label: 'Policy Management',    icon: ScrollText, adminOnly: A },
-      { to: '/cold-chain',             label: 'Cold-Chain Monitor',  icon: Snowflake, adminOnly: A },
-      { to: '/retread-claims',         label: 'Retread Claims',      icon: Recycle, adminOnly: A },
-      { to: '/driver-documents',       label: 'Driver Documents',    icon: FileCheck, adminOnly: A },
-      { to: '/driver-expenses',        label: 'Driver Expenses',     icon: Wallet, adminOnly: A },
-      { to: '/dvir',                   label: 'DVIR Reports',        icon: ClipboardCheck, adminOnly: A },
-      { to: '/checklists',             label: 'Checklists',          icon: ListChecks },
+      { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES, flag: 'automation_platform' },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
-      { to: '/checklist-schedules',    label: 'Checklist Schedules', icon: Calendar, adminOnly: A },
-      { to: '/checklist-insights',     label: 'Checklist Insights',  icon: ClipboardCheck, adminOnly: A },
-      { to: '/inspection-planner',     label: 'Inspection Planner',  icon: CalendarClock },
-      { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity, adminOnly: A },
-      { to: '/safety-compliance',      label: 'Safety & Compliance', icon: ShieldCheck, adminOnly: A },
-      { to: '/compliance',             label: 'Compliance Dashboard', icon: Shield, adminOnly: A },
-      { to: '/alerts',                 label: 'Alerts',              icon: Bell, adminOnly: A },
-      { to: '/alert-thresholds',       label: 'Alert Thresholds',    icon: BellRing, adminOnly: A },
+      { to: '/broadcast',            label: 'Message the Team',   icon: Megaphone, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Fleet & Assets',
+    items: [
+      { to: '/fleet-master',        label: 'Fleet Master', parent: 'Registry',       icon: TruckIc },
+      { to: '/assets',              label: 'Asset Management', parent: 'Registry',   icon: LayoutGrid },
+      { to: '/sites',               label: 'Site Management', parent: 'Registry',    icon: MapPin },
+      { to: '/fleet-groups',        label: 'Fleet Groups', parent: 'Registry',       icon: Network, adminOnly: A },
+      { to: '/combinations',        label: 'Combinations', parent: 'Registry',       icon: Combine, adminOnly: A },
+      { to: '/customers',        label: 'Customers', parent: 'Registry',          icon: Building2, adminOnly: A },
+      { to: '/vehicle-history',     label: 'Vehicle History', parent: 'Lifecycle',    icon: OdometerIc, adminOnly: A },
+      { to: '/asset-disposals',     label: 'Asset Disposal', parent: 'Lifecycle',     icon: Recycle, roles: ANALYTICS_ROLES },
+      { to: '/fleet-renewal',     label: 'Fleet Renewal', parent: 'Lifecycle',     icon: Truck, roles: ANALYTICS_ROLES },
+      { to: '/batteries',           label: 'Battery Lifecycle', parent: 'Lifecycle',  icon: BatteryCharging, adminOnly: A },
+      { to: '/qr-labels',           label: 'QR Labels', parent: 'Identification',          icon: QrCode, adminOnly: A },
+      { to: '/rfid',                label: 'RFID Registry', parent: 'Identification',      icon: Radio, adminOnly: A },
+      { to: '/engine-hours',        label: 'Engine Hours', parent: 'Meters',       icon: Gauge, adminOnly: A },
+      { to: '/odometer-logs',       label: 'Odometer Logs', parent: 'Meters',      icon: Activity, adminOnly: A },
+      { to: '/fleet-utilization',   label: 'Fleet Utilization', parent: 'Meters',  icon: Gauge, roles: ANALYTICS_ROLES },
+      { to: '/vehicle-checkinout',  label: 'Vehicle Check In/Out', parent: 'Movement', icon: ArrowLeftRight, adminOnly: A },
+      { to: '/handovers',           label: 'Vehicle Handover', parent: 'Movement',   icon: KeyRound, adminOnly: A },
+      { to: '/reservations',        label: 'Vehicle Reservations', parent: 'Movement', icon: BookMarked, adminOnly: A },
+      { to: '/gate-pass',       label: 'Gate Pass', parent: 'Movement',          icon: GatePassIc },
+    ],
+  },
+  {
+    label: 'Tyre Management',
+    items: [
+      { to: '/tyres', label: 'Tyre Records', parent: 'Records', icon: TyreIc },
+      { to: '/serial-tracker',      label: 'Serial Tracker', parent: 'Records',     icon: BarcodeScanIc, adminOnly: A },
+      { to: '/tyre-passport',          label: 'Tyre Passport', parent: 'Records',          icon: ScanLine },
+      { to: '/tyre-specs',             label: 'Tyre Specifications', parent: 'Records',    icon: PlyRatingIc, adminOnly: A },
+      { to: '/tyre-exchange',          label: 'Tyre Exchange', parent: 'Fitment & Rotation',          icon: TyreSwapIc, adminOnly: A },
+      { to: '/rotation',               label: 'Rotation Schedule', parent: 'Fitment & Rotation',      icon: TyreRotationIc, adminOnly: A },
+      { to: '/rotation-optimizer',     label: 'Rotation Optimizer', parent: 'Fitment & Rotation',     icon: RotateCcw, roles: ANALYTICS_ROLES },
+      { to: '/fitment-validation',     label: 'Fitment Validation', parent: 'Fitment & Rotation',  icon: ShieldCheck, roles: ANALYTICS_ROLES },
+      { to: '/tyre-size',              label: 'Size Optimizer', parent: 'Fitment & Rotation',         icon: Layers, adminOnly: A },
+      { to: '/pressure-intel',         label: 'Pressure Intelligence', parent: 'Condition',  icon: PsiGaugeIc, adminOnly: A },
+      { to: '/tpms',                   label: 'TPMS', parent: 'Condition',                icon: Radio, adminOnly: A },
+      { to: '/position-intelligence',  label: 'Position Intelligence', parent: 'Condition',  icon: MapPin, adminOnly: A },
+      { to: '/tyre-age-compliance',    label: 'Tyre Age Compliance', parent: 'Condition',    icon: ShieldCheck, roles: ANALYTICS_ROLES },
+      { to: '/heat-intelligence',      label: 'Heat Intelligence', parent: 'Condition',      icon: Thermometer, roles: ANALYTICS_ROLES },
+      { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle', parent: 'Lifecycle',         icon: RefreshCw, adminOnly: A },
+      { to: '/tyre-service-events',    label: 'Tyre Service Events', parent: 'Lifecycle',    icon: Activity, roles: ANALYTICS_ROLES },
+      { to: '/tyre-pool',           label: 'Tyre Pool', parent: 'Lifecycle',           icon: PackageCheck },
+      { to: '/scrap',               label: 'Scrap Management', parent: 'Lifecycle',    icon: ScrapBinIc },
+      { to: '/retread',                label: 'Retread Management', parent: 'Lifecycle',  icon: Recycle, adminOnly: A },
+      { to: '/retread-claims',         label: 'Retread Claims', parent: 'Lifecycle',      icon: Recycle, adminOnly: A },
+      { to: '/warranty',       label: 'Warranty Tracker', parent: 'Lifecycle', icon: ShieldCheck },
+      { to: '/brand-perf',   label: 'Brand Performance', parent: 'Performance',  icon: Shield,         roles: ANALYTICS_ROLES },
+      { to: '/tyre-failure-cpk',  label: 'Tyre Failure & CPK', parent: 'Performance', icon: AlertTriangle, roles: ANALYTICS_ROLES },
+      { to: '/cpk-intelligence',  label: 'CPK Intelligence', parent: 'Performance',  icon: Gauge,      roles: ANALYTICS_ROLES },
+      { to: '/fleet-risk-score',       label: 'Fleet Risk Score', parent: 'Performance',       icon: ShieldAlert, roles: ANALYTICS_ROLES },
+      { to: '/digital-twin',           label: 'Digital Twin', parent: 'Performance',           icon: Cpu, roles: ANALYTICS_ROLES },
+    ],
+  },
+  {
+    label: 'Workshop & Maintenance',
+    items: [
+      { to: '/work-orders',     label: 'Work Orders', parent: 'Jobs',        icon: WorkOrderIc },
+      { to: '/workshop',        label: 'Workshop Management', parent: 'Jobs', icon: WorkshopIc, adminOnly: A },
+      { to: '/workshop-live',   label: 'Live Control', parent: 'Jobs',       icon: Activity, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/bay-scheduling',  label: 'Bay Scheduling', parent: 'Jobs',     icon: CalendarRange, adminOnly: A },
+      { to: '/service-requests', label: 'Service Requests', parent: 'Jobs',   icon: LifeBuoy, adminOnly: A },
+      { to: '/breakdowns',      label: 'Breakdown Callouts', parent: 'Jobs', icon: PhoneCall, adminOnly: A },
+      { to: '/asset-breakdowns',    label: 'Breakdown Register', parent: 'Jobs', icon: Wrench, roles: ANALYTICS_ROLES },
+      { to: '/pm-programs',     label: 'Preventive Maintenance', parent: 'Maintenance', icon: CalendarClock, adminOnly: A },
+      { to: '/maintenance-calendar', label: 'Maintenance Calendar', parent: 'Maintenance', icon: Calendar, adminOnly: A },
+      { to: '/predictive-maintenance', label: 'Predictive Maintenance', parent: 'Maintenance', icon: ServiceCalendarIc, adminOnly: A },
+      { to: '/downtime',        label: 'Downtime Tracker', parent: 'Maintenance',   icon: Clock, adminOnly: A },
+      { to: '/dtc',             label: 'DTC Diagnostics', parent: 'Maintenance',    icon: Cpu, adminOnly: A },
+      { to: '/vehicle-washing', label: 'Vehicle Washing', parent: 'Maintenance',    icon: Droplet },
+      { to: '/workshop-absence', label: 'Absence & Attendance', parent: 'People', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/technician-scorecard', label: 'Technician Scorecard', parent: 'People', icon: Award, adminOnly: A },
+      { to: '/shifts',              label: 'Shift Scheduling', parent: 'People',   icon: CalendarClock, adminOnly: A },
+      { to: '/parts-requests', label: 'Parts Requests', parent: 'Parts & Tools', icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/equipment',       label: 'Tool & Equipment', parent: 'Parts & Tools',   icon: Wrench, adminOnly: A },
+      { to: '/workshop-analytics', label: 'Workshop Analytics', parent: 'Analysis', icon: TrendingUp, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/maintenance-cost-board', label: 'Maintenance Cost & Tasks', parent: 'Analysis', icon: Wrench, roles: ANALYTICS_ROLES },
+      { to: '/workshop-settings', label: 'Workshop Settings', parent: 'Analysis', icon: SlidersHorizontal, roles: ['Admin', 'Manager', 'Director'] },
+    ],
+  },
+  {
+    label: 'Inspections & Compliance',
+    items: [
+      { to: '/inspections',            label: 'Inspections', parent: 'Inspections',         icon: ClipboardCheck },
+      { to: '/inspection-planner',     label: 'Inspection Planner', parent: 'Inspections',  icon: CalendarClock },
+      { to: '/inspection-intelligence', label: 'Inspection Intelligence', parent: 'Inspections', icon: Activity, adminOnly: A },
+      { to: '/dvir',                   label: 'DVIR Reports', parent: 'Inspections',        icon: ClipboardCheck, adminOnly: A },
+      { to: '/checklists',             label: 'Checklists', parent: 'Checklists',          icon: ListChecks },
+      { to: '/checklist-schedules',    label: 'Checklist Schedules', parent: 'Checklists', icon: Calendar, adminOnly: A },
+      { to: '/checklist-insights',     label: 'Checklist Insights', parent: 'Checklists',  icon: ClipboardCheck, adminOnly: A },
+      { to: '/actions',             label: 'Corrective Actions', parent: 'Findings', icon: ClipboardList },
+      { to: '/rca',                 label: 'Root Cause', parent: 'Findings',         icon: Search },
+      { to: '/root-cause',             label: 'Root Cause Engine', parent: 'Findings',      icon: Microscope, roles: ANALYTICS_ROLES },
+      { to: '/anomalies',           label: 'Anomaly Scan', parent: 'Findings',       icon: AnomalyScanIc, adminOnly: A },
+      { to: '/compliance',             label: 'Compliance Dashboard', parent: 'Compliance', icon: Shield, adminOnly: A },
+      { to: '/safety-compliance',      label: 'Safety & Compliance', parent: 'Compliance', icon: ShieldCheck, adminOnly: A },
+      { to: '/certifications',         label: 'Certifications', parent: 'Compliance',      icon: BadgeCheck },
+      { to: '/policies',               label: 'Policy Management', parent: 'Compliance',    icon: ScrollText, adminOnly: A },
+      { to: '/emissions',              label: 'Emissions Tests', parent: 'Compliance',     icon: Leaf, adminOnly: A },
+      { to: '/hours-of-service',       label: 'Hours of Service', parent: 'Compliance',    icon: Clock, adminOnly: A },
+      { to: '/tachograph',             label: 'Tachograph', parent: 'Compliance',          icon: FileClock, adminOnly: A },
+      { to: '/speed-limiter',       label: 'Speed Limiter', parent: 'Compliance',      icon: Gauge, adminOnly: A },
+      { to: '/alerts',                 label: 'Alerts', parent: 'Alerts',              icon: Bell, adminOnly: A },
+      { to: '/alert-thresholds',       label: 'Alert Thresholds', parent: 'Alerts',    icon: BellRing, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Drivers & Safety',
+    items: [
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
-      { to: '/video-telematics',       label: 'Video Telematics',    icon: Video, adminOnly: A },
-      { to: '/hours-of-service',       label: 'Hours of Service',    icon: Clock, adminOnly: A },
-      { to: '/emissions',              label: 'Emissions Tests',     icon: Leaf, adminOnly: A },
       { to: '/driver-training',        label: 'Driver Training',     icon: GraduationCap, adminOnly: A },
-      { to: '/tachograph',             label: 'Tachograph',          icon: FileClock, adminOnly: A },
-      { to: '/fuel-theft',             label: 'Fuel Theft Alerts',   icon: Droplet, adminOnly: A },
       { to: '/driver-coaching',        label: 'Driver Coaching',     icon: Award, adminOnly: A },
-      { to: '/retread',                label: 'Retread Management',  icon: Recycle, adminOnly: A },
+      { to: '/driver-documents',       label: 'Driver Documents',    icon: FileCheck, adminOnly: A },
+      { to: '/driver-expenses',        label: 'Driver Expenses',     icon: Wallet, adminOnly: A },
+      { to: '/video-telematics',       label: 'Video Telematics',    icon: Video, adminOnly: A },
+      { to: '/fuel-theft',             label: 'Fuel Theft Alerts',   icon: Droplet, adminOnly: A },
     ],
   },
   {
-    label: 'Accident & Insurance',
+    label: 'Monitoring & Logistics',
+    items: [
+      { to: '/live-fleet',          label: 'Live Fleet Status', parent: 'Live',  icon: Radio, adminOnly: A },
+      { to: '/daily-ops',           label: 'Daily Ops', parent: 'Live',          icon: Coffee, adminOnly: A },
+      { to: '/gps-tracking',        label: 'GPS Tracking', parent: 'Live',       icon: Satellite, adminOnly: A },
+      { to: '/fleet-health',        label: 'Fleet Health Board', parent: 'Live', icon: HeartPulse, adminOnly: A },
+      { to: '/trip-replay',         label: 'Trip Replay', parent: 'Live',        icon: Play, adminOnly: A },
+      { to: '/trips',               label: 'Trip History', parent: 'Journeys',       icon: MapPin, adminOnly: A },
+      { to: '/journeys',            label: 'Journey Log', parent: 'Journeys',        icon: Navigation, adminOnly: A },
+      { to: '/route-optimization',  label: 'Route Optimization', parent: 'Journeys', icon: Navigation, adminOnly: A },
+      { to: '/geofencing',          label: 'Geofencing', parent: 'Journeys',         icon: MapPin, adminOnly: A },
+      { to: '/dispatch',            label: 'Dispatch Planning', parent: 'Journeys',  icon: Truck, adminOnly: A },
+      { to: '/load-planning',       label: 'Load Planning', parent: 'Journeys',      icon: Package, adminOnly: A },
+      { to: '/telematics-devices',  label: 'Telematics Devices', parent: 'Devices', icon: Router, adminOnly: A },
+      { to: '/cold-chain',             label: 'Cold-Chain Monitor', parent: 'Devices',  icon: Snowflake, adminOnly: A },
+      { to: '/weighbridge',         label: 'Weighbridge', parent: 'Logistics',        icon: Scale, adminOnly: A },
+      { to: '/proof-of-delivery',   label: 'Proof of Delivery', parent: 'Logistics',  icon: PackageCheck, adminOnly: A },
+      { to: '/toll-transactions',   label: 'Toll Transactions', parent: 'Logistics',  icon: Receipt, adminOnly: A },
+      { to: '/fuel-cards',      label: 'Fuel Cards', parent: 'Fuel & Energy',         icon: CreditCard, adminOnly: A },
+      { to: '/fuel-delivery',   label: 'Fuel Delivery', parent: 'Fuel & Energy',      icon: Fuel, adminOnly: A },
+      { to: '/fuel-efficiency', label: 'Fuel Efficiency', parent: 'Fuel & Energy',    icon: FuelPumpIc, adminOnly: A },
+      { to: '/charging-sessions',   label: 'EV Charging', parent: 'Fuel & Energy',        icon: Zap, adminOnly: A },
+      { to: '/ifta-reporting',      label: 'IFTA Fuel Tax', parent: 'Fuel & Energy',       icon: Landmark, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Inventory & Procurement',
+    items: [
+      { to: '/stock',               label: 'Stock', parent: 'Stock',               icon: StockBoxIc },
+      { to: '/stock-replenishment', label: 'Stock Replenishment', parent: 'Stock', icon: PackagePlus },
+      { to: '/parts-catalog',       label: 'Parts Catalog', parent: 'Stock',       icon: Boxes },
+      { to: '/materials',           label: 'Materials', parent: 'Stock',           icon: Layers, adminOnly: A },
+      { to: '/goods-receipt',       label: 'Goods Receipt', parent: 'Stock',       icon: PackageCheck },
+      { to: '/procurement',         label: 'Procurement', parent: 'Purchasing',         icon: PurchaseOrderIc, adminOnly: A },
+      { to: '/requisitions',        label: 'Requisitions', parent: 'Purchasing',        icon: ClipboardList },
+      { to: '/suppliers',           label: 'Supplier Management', parent: 'Purchasing', icon: SupplierTruckIc, adminOnly: A },
+      { to: '/vendor-intelligence', label: 'Vendor Intelligence', parent: 'Purchasing', icon: Trophy, adminOnly: A },
+      { to: '/marketplace',         label: 'Supplier Marketplace', parent: 'Purchasing', icon: Store, adminOnly: A },
+      { to: '/contracts',           label: 'Contracts', parent: 'Purchasing',           icon: FileText },
+    ],
+  },
+  {
+    label: 'Accidents & Claims',
     items: [
       { to: '/accidents',      label: 'Accidents',       icon: AlertOctagon },
       { to: '/accident-cases', label: 'Accident Cases',  icon: Layers, roles: ANALYTICS_ROLES },
-      { to: '/claims-summary', label: 'Claims Summary',  icon: BarChart2 },
-      { to: '/insurance-policies', label: 'Insurance Policies', icon: Shield, adminOnly: A },
-      { to: '/warranty',       label: 'Warranty Tracker', icon: ShieldCheck },
-      { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert },
       { to: '/incidents',        label: 'Incident Reports', icon: FileWarning },
+      { to: '/claims-summary', label: 'Claims Summary',  icon: BarChart2 },
+      { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert },
+      { to: '/insurance-policies', label: 'Insurance Policies', icon: Shield, adminOnly: A },
       { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
       { to: '/accident-workflow-settings', label: 'Accident Workflow', icon: GitBranch, roles: ANALYTICS_ROLES },
-      { to: '/approval-matrix', label: 'Approval Matrix', icon: ShieldCheck, adminOnly: true },
     ],
   },
   {
-    label: 'Reports & Executive',
+    label: 'Finance & Commercial',
     items: [
-      { to: '/board-overview',    label: 'Board Overview',    icon: BarChartBig, roles: ANALYTICS_ROLES },
-      { to: '/tyre-failure-cpk',  label: 'Tyre Failure & CPK', icon: AlertTriangle, roles: ANALYTICS_ROLES },
-      { to: '/maintenance-cost-board', label: 'Maintenance Cost & Tasks', icon: Wrench, roles: ANALYTICS_ROLES },
-      { to: '/expense-report',    label: 'Expenses & CPK',    icon: Wallet, roles: ANALYTICS_ROLES },
-      { to: '/expense-trends',    label: 'Expense Trends',    icon: TrendingUp, roles: ANALYTICS_ROLES },
-      { to: '/cpk-intelligence',  label: 'CPK Intelligence',  icon: Gauge,      roles: ANALYTICS_ROLES },
-      { to: '/cost-per-m3',       label: 'Cost per M3',       icon: Layers,     roles: ANALYTICS_ROLES },
-      { to: '/production-m3',     label: 'Production (M3)',    icon: Boxes,      roles: ANALYTICS_ROLES },
-      { to: '/sco-costs',         label: 'SCO Cost',          icon: Receipt,    roles: ANALYTICS_ROLES },
-      { to: '/sany-invoices',     label: 'SANY Invoices',     icon: FileText,   roles: ANALYTICS_ROLES },
-      { to: '/sany-delay-penalty', label: 'SANY Delay Penalty', icon: Clock,     roles: ANALYTICS_ROLES },
-      { to: '/reports',           label: 'Reports',           icon: FileText },
-      { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
-      { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
-      { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
-      { to: '/roi-calculator',    label: 'ROI Calculator',    icon: DollarSign, roles: ANALYTICS_ROLES },
-      { to: '/fleet-renewal',     label: 'Fleet Renewal',     icon: Truck, roles: ANALYTICS_ROLES },
-      { to: '/tco-calculator',    label: 'TCO Calculator',    icon: Calculator, roles: ANALYTICS_ROLES },
-      { to: '/sla-dashboard',     label: 'SLA Dashboard',     icon: Target, adminOnly: A },
-      { to: '/taas',              label: 'Tyre-as-a-Service', icon: Repeat, adminOnly: A },
-      { to: '/ops-intelligence',  label: 'Ops Intelligence',  icon: Siren, adminOnly: A },
-      { to: '/report-sharing',    label: 'Report Sharing',    icon: Share2, roles: ANALYTICS_ROLES },
-      { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
-      { to: '/ai-command-center', label: 'Smart Analytics (AI)', icon: Sparkles, adminOnly: A },
-      { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
-      { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
-      { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
-      { to: '/executive-analytics', label: 'Executive Analytics', icon: TrendingUp, roles: ANALYTICS_ROLES },
-      { to: '/report-center',     label: 'Report Center',     icon: ScrollText, roles: ANALYTICS_ROLES },
+      { to: '/cost-center',         label: 'Cost Center', parent: 'Cost',         icon: Wallet, roles: ANALYTICS_ROLES },
+      { to: '/budgets',             label: 'Budgets & Cost', parent: 'Cost',      icon: DollarSign },
+      { to: '/budget-planner',      label: 'Budget Planner', parent: 'Cost',      icon: Calculator, roles: ANALYTICS_ROLES },
+      { to: '/expense-report',    label: 'Expenses & CPK', parent: 'Cost',    icon: Wallet, roles: ANALYTICS_ROLES },
+      { to: '/expense-trends',    label: 'Expense Trends', parent: 'Cost',    icon: TrendingUp, roles: ANALYTICS_ROLES },
+      { to: '/cost-scenario-planner', label: 'Cost Scenario Planner', parent: 'Cost', icon: SlidersHorizontal, roles: ANALYTICS_ROLES },
+      { to: '/cost-per-m3',       label: 'Cost per M3', parent: 'Production & Vendor',       icon: Layers,     roles: ANALYTICS_ROLES },
+      { to: '/production-m3',     label: 'Production (M3)', parent: 'Production & Vendor',    icon: Boxes,      roles: ANALYTICS_ROLES },
+      { to: '/sco-costs',         label: 'SCO Cost', parent: 'Production & Vendor',          icon: Receipt,    roles: ANALYTICS_ROLES },
+      { to: '/sany-invoices',     label: 'SANY Invoices', parent: 'Production & Vendor',     icon: FileText,   roles: ANALYTICS_ROLES },
+      { to: '/sany-delay-penalty', label: 'SANY Delay Penalty', parent: 'Production & Vendor', icon: Clock,     roles: ANALYTICS_ROLES },
+      { to: '/roi-calculator',    label: 'ROI Calculator', parent: 'Modelling',    icon: DollarSign, roles: ANALYTICS_ROLES },
+      { to: '/tco-calculator',    label: 'TCO Calculator', parent: 'Modelling',    icon: Calculator, roles: ANALYTICS_ROLES },
+      { to: '/taas',              label: 'Tyre-as-a-Service', parent: 'Modelling', icon: Repeat, adminOnly: A },
+      { to: '/customer-portal',  label: 'Customer Portal', parent: 'Commercial',    icon: Building2, adminOnly: A },
+      { to: '/billing',          label: 'Billing & Subscription', parent: 'Commercial', icon: CreditCard, adminOnly: true, flag: 'billing' },
+    ],
+  },
+  {
+    label: 'Analytics & Reports',
+    items: [
+      { to: '/board-overview',    label: 'Board Overview', parent: 'Dashboards',    icon: BarChartBig, roles: ANALYTICS_ROLES },
+      { to: '/executive-report',  label: 'Executive Report', parent: 'Dashboards',  icon: BookOpen, adminOnly: A },
+      { to: '/executive-analytics', label: 'Executive Analytics', parent: 'Dashboards', icon: TrendingUp, roles: ANALYTICS_ROLES },
+      { to: '/analytics',    label: 'Analytics', parent: 'Dashboards',          icon: BarChart2,      roles: ANALYTICS_ROLES },
+      { to: '/advanced-analytics',     label: 'Advanced Analytics', parent: 'Dashboards',     icon: BarChartBig, roles: ANALYTICS_ROLES },
+      { to: '/kpi',          label: 'KPI Center', parent: 'KPIs',         icon: ClipboardCheck, roles: ANALYTICS_ROLES },
+      { to: '/kpi-engine',   label: 'Engineering KPI', parent: 'KPIs',    icon: Gauge,          roles: ANALYTICS_ROLES },
+      { to: '/kpi-command',  label: 'KPI Command Center', parent: 'KPIs', icon: Target,         roles: ANALYTICS_ROLES },
+      { to: '/benchmark',              label: 'Performance Benchmark', parent: 'KPIs',  icon: Target, adminOnly: A },
+      { to: '/sla-dashboard',     label: 'SLA Dashboard', parent: 'KPIs',     icon: Target, adminOnly: A },
+      { to: '/site-comp',    label: 'Site Comparison', parent: 'Comparison',    icon: Layers,         roles: ANALYTICS_ROLES },
+      { to: '/country-comp', label: 'Country Comparison', parent: 'Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
+      { to: '/comparison',   label: 'Comparison', parent: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
+      { to: '/fleet',        label: 'Fleet Analytics', parent: 'Comparison',    icon: GitBranch,      roles: ANALYTICS_ROLES },
+      { to: '/fleet-intelligence',     label: 'Fleet Intelligence', parent: 'Intelligence',     icon: Brain, roles: ANALYTICS_ROLES },
+      { to: '/ops-intelligence',  label: 'Ops Intelligence', parent: 'Intelligence',  icon: Siren, adminOnly: A },
+      { to: '/forecasting',         label: 'Forecasting Engine', parent: 'Intelligence',  icon: ForecastTrendIc, adminOnly: A },
+      { to: '/fleet-optimizer',        label: 'Fleet Optimizer', parent: 'Intelligence',        icon: SlidersHorizontal, adminOnly: A },
+      { to: '/carbon-tracker',         label: 'Carbon Tracker', parent: 'Intelligence',         icon: Leaf, roles: ANALYTICS_ROLES },
+      { to: '/continuous-improvement', label: 'Continuous Improvement', parent: 'Intelligence', icon: Zap, adminOnly: A },
+      { to: '/reports',           label: 'Reports', parent: 'Reporting',           icon: FileText },
+      { to: '/report-center',     label: 'Report Center', parent: 'Reporting',     icon: ScrollText, roles: ANALYTICS_ROLES },
+      { to: '/report-sharing',    label: 'Report Sharing', parent: 'Reporting',    icon: Share2, adminOnly: true },
+      { to: '/scheduled-reports', label: 'Scheduled Reports', parent: 'Reporting', icon: CalendarCheck2 },
+      { to: '/dashboard-builder', label: 'Dashboard Builder', parent: 'Reporting', icon: LayoutGrid, adminOnly: true },
+      { to: '/display',           label: 'TV Display Mode', parent: 'Reporting',   icon: Radio, adminOnly: A },
+      { to: '/ai-command-center', label: 'Smart Analytics (AI)', parent: 'AI', icon: Sparkles, adminOnly: A },
+      { to: '/knowledge-base',    label: 'Knowledge Base', parent: 'AI',    icon: Brain, adminOnly: A },
+      { to: '/ai-cost-monitor',   label: 'AI Cost Monitor', parent: 'AI',   icon: BarChart, adminOnly: A },
     ],
   },
   {
     label: 'Automation',
     items: [
-      { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES, flag: 'automation_platform' },
       { to: '/events',            label: 'Event Stream',       icon: Radio, adminOnly: A, flag: 'automation_platform' },
       { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A, flag: 'automation_platform' },
       { to: '/approval-delegations', label: 'Approval Delegations', icon: ArrowLeftRight, flag: 'automation_platform' },
+      { to: '/approval-matrix', label: 'Approval Matrix', icon: ShieldCheck, adminOnly: true },
       { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A, flag: 'automation_platform' },
       { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A, flag: 'automation_platform' },
     ],
   },
   {
-    label: 'Administration & Data',
+    label: 'Administration',
     items: [
-      { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, roles: CLEANING_ROLES },
-      { to: '/data-reconciliation', label: 'Data Reconciliation', icon: GitCompare, adminOnly: true },
-      { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
-      { to: '/erp-import',       label: 'ERP Data Import',    icon: Upload, roles: ANALYTICS_ROLES },
-      { to: '/erp-intake',       label: 'Data Intake (ERP)', icon: Layers, roles: ANALYTICS_ROLES },
-      { to: '/expense-import',   label: 'Expense Import',     icon: Receipt, roles: ANALYTICS_ROLES },
-      { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, roles: UPLOAD_ROLES },
-      { to: '/custom-data',      label: 'Custom Data',        icon: Database },
-      { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, roles: AUDIT_ROLES },
-      { to: '/system-health',    label: 'System Health',      icon: HeartPulse, adminOnly: true },
-      { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
-      { to: '/billing',          label: 'Billing & Subscription', icon: CreditCard, adminOnly: true, flag: 'billing' },
-      { to: '/brand-assets',     label: 'Brand Assets',       icon: Palette, adminOnly: true },
-      { to: '/customers',        label: 'Customers',          icon: Building2, adminOnly: A },
-      { to: '/customer-portal',  label: 'Customer Portal',    icon: Building2, adminOnly: A },
-      { to: '/advanced-search',  label: 'Advanced Search',    icon: Search },
-      { to: '/ocr-scanner',      label: 'OCR Scanner',        icon: ScanLine, adminOnly: A },
-      { to: '/onboarding-wizard', label: 'Onboarding Wizard', icon: Rocket, adminOnly: true },
-      { to: '/developer-portal', label: 'Developer Portal',   icon: Code, adminOnly: true },
-      { to: '/help',             label: 'Help & Support',     icon: LifeBuoy },
-      { to: '/settings',         label: 'Settings',           icon: Settings },
+      { to: '/data-intake',      label: 'Data Intake Center', parent: 'Data', icon: Database },
+      { to: '/erp-import',       label: 'ERP Data Import', parent: 'Data',    icon: Upload, roles: ANALYTICS_ROLES },
+      { to: '/erp-intake',       label: 'Data Intake (ERP)', parent: 'Data', icon: Layers, roles: ANALYTICS_ROLES },
+      { to: '/expense-import',   label: 'Expense Import', parent: 'Data',     icon: Receipt, roles: ANALYTICS_ROLES },
+      { to: '/upload-approvals', label: 'Upload Approvals', parent: 'Data',   icon: ClipboardList, roles: UPLOAD_ROLES },
+      { to: '/cleaning',         label: 'Data Cleaning', parent: 'Data',      icon: Wand2, roles: CLEANING_ROLES },
+      { to: '/data-reconciliation', label: 'Data Reconciliation', parent: 'Data', icon: GitCompare, adminOnly: true },
+      { to: '/custom-data',      label: 'Custom Data', parent: 'Data',        icon: Database },
+      { to: '/erp-sync',            label: 'ERP Sync', parent: 'Data',           icon: Database, roles: ERP_ROLES },
+      { to: '/ocr-scanner',      label: 'OCR Scanner', parent: 'Data',        icon: ScanLine, adminOnly: A },
+      { to: '/advanced-search',  label: 'Advanced Search', parent: 'Data',    icon: Search },
+      { to: '/brand-assets',     label: 'Brand Assets', parent: 'Organisation',       icon: Palette, adminOnly: true },
+      { to: '/onboarding-wizard', label: 'Onboarding Wizard', parent: 'Organisation', icon: Rocket, adminOnly: true },
+      { to: '/audit',            label: 'Audit Trail', parent: 'System',        icon: ClipboardList, roles: AUDIT_ROLES },
+      { to: '/system-health',    label: 'System Health', parent: 'System',      icon: HeartPulse, adminOnly: true },
+      { to: '/tenant-health',    label: 'Usage & Adoption', parent: 'System',   icon: BarChart, adminOnly: true },
+      { to: '/developer-portal', label: 'Developer Portal', parent: 'System',   icon: Code, adminOnly: true },
+      { to: '/settings',         label: 'Settings', parent: 'System',           icon: Settings },
+      { to: '/help',             label: 'Help & Support', parent: 'System',     icon: LifeBuoy },
     ],
   },
 ]
+
+// Sub-headings ("parents") that legitimately belong to each group, derived from
+// NAV_GROUPS so it cannot drift. Used as a GUARD at render: a super-admin can move
+// an item to a different group in the Navigation Customizer, which would leave its
+// `parent` naming a heading that belongs elsewhere. Such an item renders directly
+// under its new group instead of inventing a stray heading.
+const GROUP_PARENTS = new Map(
+  NAV_GROUPS.map((g) => [g.label, new Set(g.items.map((i) => i.parent).filter(Boolean))]),
+)
 
 // Lightweight, icon-free descriptor of the built-in nav (group key = its label,
 // item key = its route) for the super-admin Navigation Customizer console page.
@@ -374,7 +401,7 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin) {
+function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry) {
   // Feature-flag gate first: a disabled capability is hidden entirely, so its
   // nav item never renders (not just redirected at the route).
   if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
@@ -382,6 +409,15 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // this module's access sees the nav item even if the role rules below would
   // reject it. (Revoke is enforced by hasPermission/route guards; this only
   // opens visibility, so we do not hide here.)
+  // Report builders are Admin-only and this is checked BEFORE the per-user grant
+  // below, so a grant cannot open one. Mirrors isCommandVisible in commandSearch.
+  if (REPORT_BUILDER_ROUTES.includes(item.to)
+      && !canUseReportBuilder(profile, isSuperAdmin)) return false
+
+  // A context rule may remove an item entirely, but only when it explicitly says
+  // to. Default is to keep it and dim it (see the render below).
+  if (activeCountry && isModuleHiddenInContext(item.to, activeCountry)) return false
+
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
   // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.
@@ -416,6 +452,31 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   return true
 }
 
+// ── Label resolvers ──────────────────────────────────────────────────────────
+// The nav, the sub-headings and the Favourites section must all name a module
+// the SAME way, so the lookup + English fallback lives in one place. An
+// untranslated key renders the plain English label rather than leaking
+// "nav.items./tyres" to the UI.
+function tOr(t, key, fallback) {
+  const raw = t(key)
+  return (!raw || raw === key) ? fallback : raw
+}
+
+/** Display label for a nav item's route. */
+function navLabelFor(t, to, fallback) {
+  return tOr(t, `nav.items.${to}`, fallback)
+}
+
+/**
+ * Display heading for a group. A super-admin rename in the Navigation Customizer
+ * WINS over the translation - they typed that name deliberately.
+ */
+function groupHeadingFor(t, group) {
+  const groupId = group.key || group.label
+  const renamed = group.label && group.label !== groupId
+  return renamed ? group.label : tOr(t, `nav.groups.${groupId}`, group.label)
+}
+
 // Translated role label; a CUSTOM role has no i18n entry, so the raw key
 // ("roles.Fleet Supervisor") would leak to the UI - show the plain name instead.
 function roleLabel(t, role) {
@@ -423,6 +484,38 @@ function roleLabel(t, role) {
   const key = `roles.${role}`
   const v = t(key)
   return v === key ? role : v
+}
+
+/**
+ * Pin/unpin control for one nav item.
+ *
+ * Rendered as a SIBLING of the NavLink inside a relative wrapper, never nested
+ * inside it: an interactive control inside an anchor is invalid markup and one
+ * stray click would navigate instead of pinning. Reveal is pure CSS
+ * (group-hover / group-focus-within) - a React hover handler here would set
+ * state on the Layout and re-run the permission filter over ~210 nav items on
+ * every frame of a mouse movement, which is a defect this sidebar has had before.
+ */
+function FavStar({ pinned, label, onToggle, t }) {
+  const action = pinned
+    ? tOr(t, 'nav.favorites.remove', 'Remove from favourites')
+    : tOr(t, 'nav.favorites.add', 'Add to favourites')
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`${action}: ${label}`}
+      aria-label={`${action}: ${label}`}
+      aria-pressed={pinned}
+      className={`absolute end-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
+        rounded-md transition-opacity duration-150 focus-visible:opacity-100 hover:bg-green-400/10
+        ${pinned
+          ? 'opacity-100 text-amber-300'
+          : 'opacity-0 text-gray-600 hover:text-amber-300 group-hover/fav:opacity-100 group-focus-within/fav:opacity-100'}`}
+    >
+      <Star size={11} strokeWidth={2} fill={pinned ? 'currentColor' : 'none'} />
+    </button>
+  )
 }
 
 function roleBadgeClass(role) {
@@ -667,20 +760,19 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   )
 }
 
-const SEARCH_TABLES = [
-  { table: 'tyre_records',       fields: ['serial_no','asset_no','brand','site','description'],  label: 'Tyre',   route: '/tyres' },
-  { table: 'corrective_actions', fields: ['title','site','assigned_to','asset_no'],              label: 'Action', route: '/actions' },
-  { table: 'rca_records',        fields: ['asset_no','tyre_serial','brand','site','root_cause'], label: 'RCA',    route: '/rca' },
-  { table: 'stock_records',      fields: ['site','description'],                                  label: 'Stock',  route: '/stock' },
-]
-
-const SIDEBAR_EXPANDED = 240
-const SIDEBAR_COLLAPSED = 54
+// Widths per the shell spec: 260-280 expanded, 68-72 collapsed. Was 240/54,
+// which was tight for a nav that now carries group headings AND sub-headings,
+// and too narrow collapsed for an icon plus its active indicator.
+const SIDEBAR_EXPANDED = 264
+const SIDEBAR_COLLAPSED = 70
+// Mobile drawer: min(86vw, MOBILE_DRAWER_MAX) so it fits a 360px phone and does
+// not sprawl on a tablet. Was a flat 240px on every device.
+const MOBILE_DRAWER_MAX = 360
 
 export default function Layout({ children }) {
   useRealtimeSync()
 
-  const { profile, signOut, hasPermission, grantedModules, isSuperAdmin } = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -700,7 +792,13 @@ export default function Layout({ children }) {
   }, [customAppIcon])
   const appIcon = customAppIcon || companyLogo || TpLogo
   const hasCustomIcon = Boolean(customAppIcon || companyLogo)
-  const { activeCountry, setActiveCountry } = useSettings()
+  // `contextKey` changes whenever the working context (country/region/site)
+  // changes. It is folded into the routed content's React key below so pages
+  // REMOUNT on a context switch. Without it a stale in-flight response can land
+  // after the switch and paint the previous country's rows under the new label:
+  // 0 pages use react-query and 188 of 247 have no cancellation guard, so this
+  // one key is the honest fix rather than retrofitting every page.
+  const { activeCountry, contextKey } = useSettings()
   const navigate     = useNavigate()
   const location     = useLocation()
 
@@ -714,11 +812,6 @@ export default function Layout({ children }) {
     () => typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
   )
   const [collapsedGroups, setCollapsedGroups] = useState(new Set())
-  const [searchOpen, setSearchOpen]           = useState(false)
-  const [query, setQuery]                     = useState('')
-  const [results, setResults]                 = useState([])
-  const [searching, setSearching]             = useState(false)
-  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [alertCount, setAlertCount]           = useState(0)
   // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
   // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
@@ -741,9 +834,82 @@ export default function Layout({ children }) {
 
   const effectiveGroups = useMemo(() => applyNavLayout(NAV_GROUPS, navLayout), [navLayout])
 
+  // ── Favourites + recents ───────────────────────────────────────────────────
+  // Storage holds ROUTES ONLY (see src/lib/navFavorites.js). Everything a
+  // favourite renders - its label, its group, and whether the user may open it
+  // at all - is resolved HERE, against the same `effectiveGroups` the sidebar
+  // draws, so a renamed module cannot show a stale name, a route removed by the
+  // Navigation Customizer disappears, and a module revoked in the access matrix
+  // can never linger as a clickable shortcut.
+  const [favorites, setFavorites] = useState(loadFavorites)
+  const [favNote, setFavNote]     = useState('')
+
+  // Route -> the live nav item + its group heading. Built from effectiveGroups
+  // BEFORE permission filtering: the filter is applied by `canSeeRoute` below,
+  // so there is exactly one permission rule rather than two that can drift.
+  const navByRoute = useMemo(() => {
+    const map = new Map()
+    for (const group of effectiveGroups) {
+      const heading = groupHeadingFor(t, group)
+      for (const item of group.items || []) {
+        if (!item?.to || map.has(item.to)) continue
+        map.set(item.to, { item, group: heading, label: navLabelFor(t, item.to, item.label) })
+      }
+    }
+    return map
+  }, [effectiveGroups, t])
+
+  // Shape navFavorites expects: { '/route': { label, group } }.
+  const navIndex = useMemo(() => {
+    const idx = {}
+    for (const [route, entry] of navByRoute) idx[route] = { label: entry.label, group: entry.group }
+    return idx
+  }, [navByRoute])
+
+  // THE permission predicate for a favourite is the sidebar's own
+  // `shouldShowNavItem`, called with the same arguments. A favourite must never
+  // become a way to reach something the sidebar would hide, so this deliberately
+  // does not re-derive the rule. Boolean() matches the sidebar's own truthiness
+  // filter exactly, and navFavorites requires a strict `true`.
+  const canSeeRoute = useCallback((route) => {
+    const entry = navByRoute.get(route)
+    if (!entry) return false
+    return Boolean(
+      shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry),
+    )
+  }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin])
+
+  const favoriteItems = useMemo(
+    () => visibleFavorites(favorites, navIndex, canSeeRoute)
+      .map((f) => ({ ...f, icon: navByRoute.get(f.route)?.item?.icon })),
+    [favorites, navIndex, canSeeRoute, navByRoute],
+  )
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites])
+
+  const toggleFav = useCallback((route) => {
+    const wasPinned = favoriteSet.has(route)
+    // At the cap navFavorites drops the OLDEST pin so the click still visibly
+    // works. That is a pin quietly disappearing, so say it rather than let the
+    // user discover it later.
+    const willReplace = !wasPinned && favorites.length >= MAX_FAVORITES
+    setFavorites(toggleFavorite(route))
+    setFavNote(willReplace ? 'full' : '')
+  }, [favoriteSet, favorites.length])
+
+  // The "favourites are full" note is transient; it must not outlive the action.
+  useEffect(() => {
+    if (!favNote) return undefined
+    const id = setTimeout(() => setFavNote(''), 5000)
+    return () => clearTimeout(id)
+  }, [favNote])
+
+  // Record where the user has been. '/' and '/dashboard' are excluded inside
+  // pushRecent - everyone lands there, so recording it would push out the real
+  // signal. Recents are surfaced in the command palette, not as a second list.
+  useEffect(() => { pushRecent(location.pathname) }, [location.pathname])
+
   // App version label (system_config.app_version). Read from the primed config
   // cache (SettingsContext primes it for authed pages); empty when unset.
-  const appVersion = configStr('app_version', '')
 
   function toggleGroup(label) {
     setCollapsedGroups(prev => {
@@ -754,8 +920,6 @@ export default function Layout({ children }) {
     })
   }
 
-  const searchRef   = useRef(null)
-  const debounceRef = useRef(null)
 
   // Responsive breakpoint tracking
   useEffect(() => {
@@ -767,6 +931,25 @@ export default function Layout({ children }) {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
+
+  // Mobile drawer width. The drawer used to be a fixed 240px on every handset,
+  // which is cramped on a 360px phone and wasteful on a tablet. Sized from the
+  // viewport instead (min(86vw, 360px)), computed as a NUMBER because framer
+  // animates the width and a CSS min() string would not tween. Tracked on
+  // resize/orientation change so a rotation does not leave a stale width.
+  const [viewportW, setViewportW] = useState(
+    () => (typeof window !== 'undefined' ? window.innerWidth : SIDEBAR_EXPANDED),
+  )
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('orientationchange', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('orientationchange', onResize)
+    }
+  }, [])
+  const drawerWidth = Math.min(Math.round(viewportW * 0.86), MOBILE_DRAWER_MAX)
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -818,52 +1001,12 @@ export default function Layout({ children }) {
   useEffect(() => {
     function onKeyDown(e) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
-      if (e.key === 'Escape') { setGlobalSearchOpen(false); setSearchOpen(false); setQuery('') }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [setCmdOpen])
 
-  useEffect(() => {
-    if (searchOpen && searchRef.current) setTimeout(() => searchRef.current?.focus(), 50)
-  }, [searchOpen])
 
-  const doSearch = useCallback(async (q) => {
-    if (!q.trim() || q.length < 2) { setResults([]); return }
-    setSearching(true)
-    const allResults = []
-    await Promise.all(SEARCH_TABLES.map(async ({ table, fields, label, route }) => {
-      const orClause = fields.map(f => `${f}.ilike.%${q}%`).join(',')
-      const { data } = await supabase.from(table).select(fields.join(',') + ',id').or(orClause).limit(5)
-      if (data) {
-        data.forEach(row => {
-          const primary   = row[fields[0]] || row[fields[1]] || 'Unknown'
-          const secondary = fields.slice(1, 3).map(f => row[f]).filter(Boolean).join(' · ')
-          allResults.push({ id: row.id, label, table, primary, secondary, route })
-        })
-      }
-    }))
-    setResults(allResults.slice(0, 15))
-    setSearching(false)
-  }, [])
-
-  useEffect(() => {
-    clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => doSearch(query), 300)
-    return () => clearTimeout(debounceRef.current)
-  }, [query, doSearch])
-
-  async function handleSignOut() { await signOut(); navigate('/login') }
-
-  const pillClass = (c) =>
-    `flex-1 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${
-      activeCountry === c
-        ? 'text-white shadow-sm'
-        : 'text-gray-600 hover:text-gray-400'
-    }`
-  const pillStyle = (c) => activeCountry === c
-    ? { background: 'linear-gradient(135deg, #15803d, #16a34a)', boxShadow: '0 0 12px rgba(22,163,74,0.35)' }
-    : {}
 
   if (profile?.role === 'Tyre Man') {
     return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}>{children}</TyreManShell>
@@ -898,7 +1041,7 @@ export default function Layout({ children }) {
         className={`flex-shrink-0 flex flex-col ${isMobile ? 'fixed top-0 left-0 h-full z-50' : 'relative z-20'}`}
         animate={
           isMobile
-            ? { x: sidebarOpen ? 0 : -SIDEBAR_EXPANDED, width: SIDEBAR_EXPANDED }
+            ? { x: sidebarOpen ? 0 : -drawerWidth, width: drawerWidth }
             : { width: sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED, x: 0 }
         }
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -960,78 +1103,68 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        {/* ── Search + Country ───────────────────────────────────────────────── */}
-        <AnimatePresence>
-          {sidebarOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              style={{ overflow: 'hidden' }}
-            >
-              {/* Search */}
-              <div className="px-2.5 pt-3 pb-1">
-                <button
-                  onClick={() => setCmdOpen(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-500 hover:text-green-400 transition-all duration-200 text-xs group"
-                  style={{
-                    background: 'rgba(22,163,74,0.04)',
-                    border: '1px solid rgba(22,163,74,0.1)',
-                  }}
-                >
-                  <Search size={11} className="flex-shrink-0 group-hover:text-green-400 transition-colors" />
-                  <span className="flex-1 text-left font-medium">Search...</span>
-                  <kbd className="text-[9px] px-1.5 py-0.5 rounded-md font-mono text-gray-600"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    ⌘K
-                  </kbd>
-                </button>
-              </div>
-
-              {/* Country selector */}
-              {(profile?.role === 'Admin' || !profile?.country || profile.country.length === 0) && (
-                <div className="px-2.5 pb-1">
-                  <p className="nav-section px-0.5 pt-2 pb-1.5">{t('shell.country')}</p>
-                  <div className="flex gap-0.5 rounded-xl p-0.5"
-                    style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.09)' }}>
-                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>{t('common.all')}</button>
-                    {COUNTRIES.map(c => (
-                      <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
-                        {COUNTRY_LABEL[c]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Language selector */}
-              <div className="px-2.5 pb-2">
-                <p className="nav-section px-0.5 pt-2 pb-1.5">{t('common.language')}</p>
-                <LanguageSwitcher className="w-full justify-between" />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Search, working context and language used to live here. They are
+            global controls, not navigation, so they now sit in <TopBar>. The
+            sidebar is navigation only. The old hardcoded All/KSA/UAE/EGY pill
+            row is gone: it could not scale past three countries and it mixed an
+            aggregation mode into everyday operations. See WorkingContextSelector
+            (operations) and ReportingScopeBar (analytics). */}
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
+          {/* ── Favourites ───────────────────────────────────────────────────
+              Pinned at the top, above the groups, and only when the user has at
+              least one favourite they can actually open. Collapsed (icon-only)
+              sidebar skips it: there is no room for a second icon list and the
+              star control needs a label to be meaningful. */}
+          {sidebarOpen && favoriteItems.length > 0 && (
+            <div className="mb-1" data-testid="nav-favorites">
+              <p className="px-2.5 pt-2 pb-1.5 text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700">
+                {tOr(t, 'nav.favorites.heading', 'Favourites')}
+              </p>
+              {favNote === 'full' && (
+                <p className="px-2.5 pb-1.5 text-[9.5px] leading-snug" style={{ color: 'var(--text-dim)' }}>
+                  {tOr(t, 'nav.favorites.full', 'Favourites are full, so the oldest pin was replaced.')}
+                </p>
+              )}
+              {favoriteItems.map(({ route, label, group: favGroup, icon: FavIcon }) => (
+                <div key={route} className="relative group/fav">
+                  <NavLink
+                    to={route}
+                    end={route === '/'}
+                    title={favGroup ? `${favGroup}: ${label}` : label}
+                    className={({ isActive }) =>
+                      `relative flex items-center gap-2.5 ps-2.5 pe-7 py-[6.5px] rounded-xl text-[12.5px] font-medium
+                       transition-all duration-150 mb-px group
+                       ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
+                    }
+                    style={({ isActive }) => isActive ? {
+                      background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
+                      border: '1px solid rgba(22,163,74,0.24)',
+                    } : { border: '1px solid transparent' }}
+                  >
+                    {FavIcon
+                      ? <FavIcon size={13.5} strokeWidth={1.8} className="flex-shrink-0" />
+                      : <Star size={13.5} strokeWidth={1.8} className="flex-shrink-0" />}
+                    <span className="truncate leading-none">{label}</span>
+                  </NavLink>
+                  <FavStar pinned label={label} t={t} onToggle={() => toggleFav(route)} />
+                </div>
+              ))}
+              <div className="mt-1.5 mx-2.5" style={{ borderTop: '1px solid rgba(22,163,74,0.12)' }} />
+            </div>
+          )}
+
           {effectiveGroups.map((group) => {
             const { items } = group
             // Stable identity = the group's default key (survives renames) for the
             // React key, collapse state, and translation lookup.
             const groupId = group.key || group.label
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(groupId)
-            const _grpKey = `nav.groups.${groupId}`
-            const _grpRaw = t(_grpKey)
-            const renamed = group.label && group.label !== groupId
-            // A super-admin rename wins; otherwise use the translation (fallback to label).
-            const groupHeading = renamed
-              ? group.label
-              : ((!_grpRaw || _grpRaw === _grpKey) ? group.label : _grpRaw)
+            const groupHeading = groupHeadingFor(t, group)
             return (
               <div key={groupId} className="mb-0.5">
                 {sidebarOpen && (
@@ -1061,20 +1194,48 @@ export default function Layout({ children }) {
                       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       style={{ overflow: 'hidden' }}
                     >
-                      {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => {
-                        const _navKey = `nav.items.${to}`
-                        const _navRaw = t(_navKey)
-                        const navLabel = (!_navRaw || _navRaw === _navKey) ? lbl : _navRaw
+                      {visibleItems.map(({ to, label: lbl, icon: Icon, end, parent }, _i) => {
+                        const navLabel = navLabelFor(t, to, lbl)
+                        // Items arrive already ordered by parent, so a sub-heading is
+                        // drawn when the parent changes. Guarded by GROUP_PARENTS so a
+                        // regrouped item cannot render a heading from another group.
+                        // Context rules: a module that does not apply in the current
+                        // working location is DIMMED, not removed, because "no data
+                        // here yet" and "cannot apply here" look identical from the
+                        // outside and hiding the first would stop the first record
+                        // ever being entered. Only a rule that explicitly asks to
+                        // hide removes an item, and none does today.
+                        const _outOfContext = !isModuleInContext(to, activeCountry)
+                        const _prevParent = _i > 0 ? visibleItems[_i - 1].parent : null
+                        const _showParent = sidebarOpen && parent && parent !== _prevParent
+                          && GROUP_PARENTS.get(groupId)?.has(parent)
                         return (
+                        <Fragment key={to}>
+                        {_showParent && (
+                          <p className="px-3 pt-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.09em]"
+                             style={{ color: 'var(--text-dim)' }}>
+                            {(() => {
+                              // Same fallback contract as the group/item labels: an
+                              // untranslated key renders the plain English heading
+                              // rather than leaking "nav.parents.Registry".
+                              const k = `nav.parents.${parent}`
+                              const raw = t(k)
+                              return (!raw || raw === k) ? parent : raw
+                            })()}
+                          </p>
+                        )}
+                        <div className="relative group/fav">
                         <NavLink
-                          key={to}
                           to={to}
                           end={end}
-                          title={!sidebarOpen ? navLabel : undefined}
+                          title={_outOfContext
+                            ? `${navLabel} - no data in ${activeCountry}`
+                            : (!sidebarOpen ? navLabel : undefined)}
+                          style={_outOfContext ? { opacity: 0.45 } : undefined}
                           className={({ isActive }) =>
-                            `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
+                            `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group
-                             ${!sidebarOpen ? 'justify-center' : ''}
+                             ${sidebarOpen ? 'ps-2.5 pe-7' : 'px-2.5 justify-center'}
                              ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
                           }
                           style={({ isActive }) => isActive ? {
@@ -1125,6 +1286,16 @@ export default function Layout({ children }) {
                             </>
                           )}
                         </NavLink>
+                        {sidebarOpen && (
+                          <FavStar
+                            pinned={favoriteSet.has(to)}
+                            label={navLabel}
+                            t={t}
+                            onToggle={() => toggleFav(to)}
+                          />
+                        )}
+                        </div>
+                        </Fragment>
                         )
                       })}
                     </motion.div>
@@ -1141,178 +1312,83 @@ export default function Layout({ children }) {
               ConsoleSurfaceGate). Do not re-add a console link to this nav. */}
         </nav>
 
-        {/* ── User footer ────────────────────────────────────────────────────── */}
-        <div
-          className="flex-shrink-0 p-2.5"
-          style={{ borderTop: '1px solid rgba(22,163,74,0.09)' }}
-        >
-          <div className={`flex items-center gap-2 ${!sidebarOpen ? 'flex-col' : ''}`}>
-            {/* avatar */}
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0 cursor-default"
-              style={{
-                background: 'linear-gradient(135deg, #16a34a, #15803d)',
-                boxShadow: '0 0 14px rgba(22,163,74,0.45)',
-                border: '1px solid rgba(22,163,74,0.4)',
-              }}
-            >
-              {profile?.full_name?.[0]?.toUpperCase() ?? profile?.username?.[0]?.toUpperCase() ?? 'U'}
-            </div>
+        {/* The user footer (avatar, role, app version, theme, notifications,
+            sign-out) moved into <ProfileMenu> in the top bar, so each of those
+            controls exists exactly once in the shell. */}
 
-            <AnimatePresence>
-              {sidebarOpen && (
-                <motion.div
-                  className="flex-1 min-w-0"
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                    <p className="text-[11.5px] font-semibold text-gray-300 truncate leading-none">
-                      {profile?.full_name ?? profile?.username ?? 'User'}
-                    </p>
-                    {profile?.role && (
-                      <span className={`flex-shrink-0 leading-none ${roleBadgeClass(profile.role)}`}>
-                        {roleLabel(t, profile.role)}
-                      </span>
-                    )}
-                  </div>
-                  {/* App version (system_config.app_version). Rendered only when set. */}
-                  {appVersion && (
-                    <p className="text-[9.5px] font-medium text-gray-600 truncate leading-none mt-1">
-                      v{appVersion}
-                    </p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* actions */}
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              <ThemeToggle
-                size={13}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10"
-              />
-              <NotificationCenter />
-              <button
-                onClick={handleSignOut}
-                title="Sign out"
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 transition-all duration-200 hover:bg-red-400/10"
-              >
-                <LogOut size={13} />
-              </button>
-            </div>
-          </div>
-        </div>
       </motion.aside>
 
-      {/* ── Mobile top header ────────────────────────────────────────────────── */}
-      {isMobile && (
-        <div
-          className="fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3"
+      {/* ── Top bar + main content ───────────────────────────────────────────
+          The desktop app previously had NO top bar at all: search, country,
+          language, theme, notifications, profile, version and sign-out were all
+          inside the 240px sidebar, which also carries the whole nav. TopBar now
+          owns the global controls (desktop AND mobile, replacing the old fixed
+          52px mobile header), leaving the sidebar for navigation only. It sits
+          as a sibling ABOVE <main> in a flex column, so it stays visible without
+          needing position:fixed or a matching paddingTop on the scroll area. */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <TopBar
+          onToggleSidebar={() => setSidebarOpen(v => !v)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+          alertCount={alertCount}
+          appIcon={appIcon}
+          hasCustomIcon={hasCustomIcon}
+        />
+
+        <main
+          className="flex-1 overflow-y-auto"
           style={{
-            height: 52,
-            background: 'var(--panel-deep)',
-            borderBottom: '1px solid rgba(22,163,74,0.12)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: '0 1px 20px rgba(0,0,0,0.4)',
+            scrollbarWidth: 'thin',
+            paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
           }}
         >
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors flex-shrink-0"
-            style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.12)' }}
-            aria-label={t('shell.openMenu')}
-          >
-            <Menu size={16} />
-          </button>
-
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <BrandIcon src={appIcon} custom={hasCustomIcon} size={20} className="flex-shrink-0" />
-            <span className="tp-wordmark font-extrabold text-sm tracking-tight">
-              TyrePulse
-            </span>
-          </div>
-
-          <button
-            onClick={() => setGlobalSearchOpen(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors"
-            aria-label="Search"
-          >
-            <Search size={16} />
-          </button>
-
-          <ThemeToggle
-            size={16}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 hover:text-green-400 transition-colors"
-          />
-
-          <button
-            onClick={() => navigate('/alerts')}
-            className="relative w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors"
-            aria-label="Alerts"
-          >
-            <Bell size={16} />
-            {alertCount > 0 && (
-              <span
-                className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
-                style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }}
-              >
-                {alertCount > 9 ? '9+' : alertCount}
-              </span>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* ── Main content ────────────────────────────────────────────────────── */}
-      <main
-        className="flex-1 overflow-y-auto"
-        style={{
-          scrollbarWidth: 'thin',
-          paddingTop: isMobile ? 52 : 0,
-          paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
-        }}
-      >
-        {/* ── Wayfinding bar: single global Back + breadcrumbs ────────────────
-            The ONE canonical "Back to previous page" control for the whole app
-            shell, so every routed page (including the many that do not use
-            PageHeader) gets exactly one, consistently placed. Hidden on the
-            top-level home/dashboard; the Back button itself is also hidden when
-            there is no history to go back to (deep link / first page). */}
-        {location.pathname !== '/' && location.pathname !== '/dashboard' && (
-          <div className="w-full max-w-[1800px] mx-auto px-4 pt-4 sm:px-6 xl:px-8 2xl:px-10">
-            <div className="flex items-center gap-2 min-w-0">
-              {typeof window !== 'undefined' && window.history.length > 1 && (
-                <button
-                  onClick={() => navigate(-1)}
-                  title="Back to previous page"
-                  aria-label="Back to previous page"
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
-                  style={{
-                    color: 'var(--text-muted)',
-                    background: 'rgba(22,163,74,0.05)',
-                    border: '1px solid rgba(22,163,74,0.12)',
-                  }}
-                >
-                  <ArrowLeft size={13} className="flex-shrink-0" />
-                  <span className="hidden sm:inline">Back</span>
-                </button>
-              )}
-              <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
+          {/* ── Wayfinding bar: single global Back + breadcrumbs ────────────────
+              The ONE canonical "Back to previous page" control for the whole app
+              shell, so every routed page (including the many that do not use
+              PageHeader) gets exactly one, consistently placed. Hidden on the
+              top-level home/dashboard; the Back button itself is also hidden when
+              there is no history to go back to (deep link / first page). */}
+          {location.pathname !== '/' && location.pathname !== '/dashboard' && (
+            <div className="w-full max-w-[1800px] mx-auto px-4 pt-4 sm:px-6 xl:px-8 2xl:px-10">
+              <div className="flex items-center gap-2 min-w-0">
+                {typeof window !== 'undefined' && window.history.length > 1 && (
+                  <button
+                    onClick={() => navigate(-1)}
+                    title="Back to previous page"
+                    aria-label="Back to previous page"
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
+                    style={{
+                      color: 'var(--text-muted)',
+                      background: 'rgba(22,163,74,0.05)',
+                      border: '1px solid rgba(22,163,74,0.12)',
+                    }}
+                  >
+                    <ArrowLeft size={13} className="flex-shrink-0" />
+                    <span className="hidden sm:inline">Back</span>
+                  </button>
+                )}
+                <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
+              </div>
             </div>
-          </div>
-        )}
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 1, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
-        >
-          {children}
-        </motion.div>
-      </main>
+          )}
+          <motion.div
+            // Route AND working context. Changing the context remounts the page
+            // so a response that was already in flight cannot resolve into the
+            // new context and paint the previous country's rows under the new
+            // label. The route half is unchanged, so switching context keeps you
+            // on the same module rather than bouncing you to the dashboard.
+            key={`${location.pathname}|${contextKey ?? ''}`}
+            initial={{ opacity: 1, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
+          >
+            {children}
+          </motion.div>
+        </main>
+      </div>
+
 
       {/* PWA */}
       <InstallPwaPrompt />
@@ -1325,8 +1401,6 @@ export default function Layout({ children }) {
         />
       )}
 
-      {/* Global search */}
-      <GlobalSearch isOpen={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
 
       {/* Command palette - Ctrl/Cmd+K */}
       <CommandPalette />
@@ -1334,92 +1408,11 @@ export default function Layout({ children }) {
       {/* Role-based first-run onboarding */}
       <OnboardingWizard />
 
-      {/* ── Search palette ───────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {searchOpen && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh] px-4"
-            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => { setSearchOpen(false); setQuery('') }}
-          >
-            <motion.div
-              className="w-full max-w-xl overflow-hidden"
-              style={{
-                background: 'linear-gradient(145deg, rgba(6,13,8,0.99) 0%, var(--panel-deep) 100%)',
-                border: '1px solid rgba(22,163,74,0.28)',
-                borderRadius: 20,
-                boxShadow: '0 0 80px rgba(22,163,74,0.16), 0 32px 100px rgba(0,0,0,0.85)',
-              }}
-              initial={{ scale: 0.95, y: -16 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: -16 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* top glow line */}
-              <div className="h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(22,163,74,0.65) 40%,rgba(74,222,128,0.8) 50%,rgba(22,163,74,0.65) 60%,transparent)' }} />
-
-              {/* input */}
-              <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid rgba(22,163,74,0.1)' }}>
-                <Search size={14} className="text-green-600 flex-shrink-0" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  className="flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none text-sm font-medium"
-                  placeholder="Search tyres, actions, RCA, stock..."
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                />
-                {searching && <span className="text-[11px] text-gray-600 animate-pulse font-medium">Searching</span>}
-                <kbd
-                  className="text-[11px] text-gray-600 px-1.5 py-0.5 rounded-md cursor-pointer font-mono"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-                  onClick={() => { setSearchOpen(false); setQuery('') }}
-                >ESC</kbd>
-              </div>
-
-              <div className="max-h-72 overflow-y-auto">
-                {query.length >= 2 && results.length === 0 && !searching && (
-                  <p className="text-gray-600 text-sm text-center py-10">No results for &ldquo;{query}&rdquo;</p>
-                )}
-                {query.length < 2 && (
-                  <p className="text-gray-700 text-xs text-center py-7 font-medium">Type at least 2 characters to search</p>
-                )}
-                {results.map((r, i) => (
-                  <motion.button
-                    key={`${r.id}-${i}`}
-                    onClick={() => { navigate(r.route); setSearchOpen(false); setQuery('') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-                    style={{ borderBottom: '1px solid rgba(22,163,74,0.05)' }}
-                    whileHover={{ background: 'rgba(22,163,74,0.06)' }}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.025 }}
-                  >
-                    <span className="text-[10px] font-bold rounded-lg px-2 py-0.5 flex-shrink-0 min-w-[44px] text-center"
-                      style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)', color: '#16a34a' }}>
-                      {r.label}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-200 text-sm font-medium truncate">{r.primary}</p>
-                      {r.secondary && <p className="text-gray-600 text-xs truncate mt-0.5">{r.secondary}</p>}
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-
-              <div className="px-4 py-2.5 flex gap-4 text-[10px] text-gray-700 font-medium" style={{ borderTop: '1px solid rgba(22,163,74,0.06)' }}>
-                <span>↩ navigate</span>
-                <span>Esc close</span>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* An inline search palette used to live here. It was ALREADY dead code
+          on main: nothing ever set `searchOpen` to true. Removed along with
+          the orphaned <GlobalSearch> mount so the shell has exactly ONE
+          search surface, <CommandPalette>, which is the only one that reads
+          the shared permission-gated RECORD_SOURCES. */}
     </div>
   )
 }

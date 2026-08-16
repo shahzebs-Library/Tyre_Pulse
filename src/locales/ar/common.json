@@ -58,5 +58,7 @@
   "completed": "مكتمل",
   "country": "الدولة",
   "allCountries": "كل الدول",
-  "language": "اللغة"
+  "language": "اللغة",
+  "collapse": "طي",
+  "expand": "توسيع"
 }

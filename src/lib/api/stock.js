@@ -3,7 +3,7 @@
  * (no SELECT *); null-safe country scoping. Pages migrate onto these methods
  * instead of inline queries. Additive only - mirrors assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPages, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 
 const COLS =
@@ -59,10 +59,15 @@ export async function updateStock(id, patch) {
  * set.
  * @param {{country?:string}} [opts]
  */
-export async function listStockRecords({ country } = {}) {
+export async function listStockRecords({ country, countries } = {}) {
+  const list = countryList(countries)
   return unwrap(await fetchAllPages((from, to) => {
     let q = supabase.from('stock_records').select(COLS).order('site').order('id').range(from, to)
-    if (country && country !== 'All') q = q.eq('country', country)
+    // Reporting scope: a SET of countries. Absent, the query is exactly as it
+    // was; one country emits the same `country=eq.X`. Already ordered on a
+    // unique `id` tiebreak, so the extra rows page safely.
+    if (list.length) q = applyCountries(q, list, { nullSafe: false })
+    else if (country && country !== 'All') q = q.eq('country', country)
     return q
   }))
 }

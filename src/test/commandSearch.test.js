@@ -130,6 +130,71 @@ describe('visibleRecordSources', () => {
     const ids = visibleRecordSources(RECORD_SOURCES, inspector, allowAll).map((s) => s.id)
     expect(ids).toEqual(['inspections'])
   })
+
+  // ── Added record sources: each must be gated like the page it links to ──
+  it('purchase orders are admin-only (same gate as suppliers)', () => {
+    const forRole = (p, perm = allowAll) =>
+      visibleRecordSources(RECORD_SOURCES, p, perm).map((s) => s.id)
+    expect(forRole(admin)).toContain('purchase-orders')
+    expect(forRole(manager)).not.toContain('purchase-orders')
+    expect(forRole(tyreMan)).not.toContain('purchase-orders')
+  })
+
+  it('insurance claims follow the Admin/Manager/Director route gate', () => {
+    const forRole = (p) => visibleRecordSources(RECORD_SOURCES, p, allowAll).map((s) => s.id)
+    expect(forRole(admin)).toContain('insurance-claims')
+    expect(forRole(manager)).toContain('insurance-claims')
+    expect(forRole({ role: 'Director' })).toContain('insurance-claims')
+    expect(forRole(tyreMan)).not.toContain('insurance-claims')
+    expect(forRole({ role: 'Reporter' })).not.toContain('insurance-claims')
+  })
+
+  it('work orders, accidents and stock are hidden when their module is denied', () => {
+    const denied = visibleRecordSources(RECORD_SOURCES, manager, denyAll).map((s) => s.id)
+    expect(denied).not.toContain('work-orders')
+    expect(denied).not.toContain('accidents')
+    expect(denied).not.toContain('stock')
+
+    const allowed = visibleRecordSources(RECORD_SOURCES, manager, allowAll).map((s) => s.id)
+    expect(allowed).toContain('work-orders')
+    expect(allowed).toContain('accidents')
+    expect(allowed).toContain('stock')
+  })
+
+  it('a per-user grant opens a denied record source', () => {
+    const granted = new Set(['work_orders'])
+    const ids = visibleRecordSources(RECORD_SOURCES, manager, denyAll, granted).map((s) => s.id)
+    expect(ids).toContain('work-orders')
+    expect(ids).not.toContain('stock')
+  })
+
+  it('Data Monitor Officer searches accidents only', () => {
+    const dmo = { role: 'Data Monitor Officer' }
+    const ids = visibleRecordSources(RECORD_SOURCES, dmo, allowAll).map((s) => s.id)
+    expect(ids).toEqual(['accidents'])
+  })
+
+  it('every record source declares a table, a select, fields and an access gate', () => {
+    RECORD_SOURCES.forEach((s) => {
+      expect(typeof s.table).toBe('string')
+      expect(s.table.length).toBeGreaterThan(0)
+      expect(typeof s.select).toBe('string')
+      expect(s.select).not.toContain('*')          // never SELECT *
+      expect(Array.isArray(s.fields)).toBe(true)
+      expect(s.fields.length).toBeGreaterThan(0)
+      expect(typeof s.access?.path).toBe('string')
+      expect(typeof s.toResult).toBe('function')
+      // Every searched field must be in the projection, or the ilike filters a
+      // column the row does not carry back.
+      const cols = s.select.split(',')
+      s.fields.forEach((f) => expect(cols).toContain(f))
+    })
+  })
+
+  it('record source ids are unique', () => {
+    const ids = RECORD_SOURCES.map((s) => s.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,5 +292,111 @@ describe('mapRecordRows', () => {
   it('handles null/empty row sets', () => {
     expect(mapRecordRows(source('tyres'), null)).toEqual([])
     expect(mapRecordRows(source('tyres'), [])).toEqual([])
+  })
+
+  // ── Added / extended sources ──────────────────────────────────────────────
+  it('vehicles can be found by plate and by chassis, and show the plate', () => {
+    const s = source('vehicles')
+    // registration_no IS the plate on vehicle_fleet; there is no plate_number column.
+    expect(s.fields).toContain('registration_no')
+    expect(s.fields).toContain('chassis_no')
+    expect(s.fields).not.toContain('plate_number')
+    expect(s.select).toContain('registration_no')
+    expect(s.select).toContain('chassis_no')
+
+    const [item] = mapRecordRows(s, [
+      { id: 9, asset_no: 'TM400', make: 'Sany', model: 'FH', registration_no: '7326 HRA', site: 'NHC' },
+    ])
+    expect(item.sub).toBe('Sany · FH · 7326 HRA · NHC')
+  })
+
+  it('tyres can be found by size, and the size is shown', () => {
+    const s = source('tyres')
+    expect(s.fields).toContain('size')
+    expect(s.select).toContain('size')
+    const [item] = mapRecordRows(s, [
+      { id: 1, serial_no: 'SN1', asset_no: 'TM400', brand: 'Triangle', size: '315/80R22.5' },
+    ])
+    expect(item.sub).toBe('TM400 · Triangle · 315/80R22.5')
+  })
+
+  it('work order rows label on the job card number and link to the module page', () => {
+    const [item] = mapRecordRows(source('work-orders'), [
+      { id: 5, work_order_no: 'GCKR/JC/1005/0826', asset_no: 'TM400', status: 'Open', site: 'NHC' },
+    ])
+    expect(item.label).toBe('GCKR/JC/1005/0826')
+    expect(item.sub).toBe('TM400 · Open · NHC')
+    expect(item.path).toBe('/work-orders')
+    expect(item.id).toBe('work-orders-5')
+  })
+
+  it('accident rows deep-link to the real /accidents/:id detail route', () => {
+    const [item] = mapRecordRows(source('accidents'), [
+      { id: 'abc-1', reference_no: 'ACC-2026-0007', asset_no: 'TM400', incident_date: '2026-07-08', severity: 'minor', status: 'reported' },
+    ])
+    expect(item.label).toBe('ACC-2026-0007')
+    expect(item.path).toBe('/accidents/abc-1')
+
+    // Falls back to the asset number as a label, and to the register with no id.
+    const [noRef] = mapRecordRows(source('accidents'), [{ id: 2, asset_no: 'MP093' }])
+    expect(noRef.label).toBe('MP093')
+    const [noId] = mapRecordRows(source('accidents'), [{ asset_no: 'MP093' }])
+    expect(noId.path).toBe('/accidents')
+  })
+
+  it('insurance claim rows label on the claim number', () => {
+    const [item] = mapRecordRows(source('insurance-claims'), [
+      { id: 3, claim_no: 'CLM-77', asset_no: 'TM400', insurer: 'Walaa', status: 'submitted' },
+    ])
+    expect(item.label).toBe('CLM-77')
+    expect(item.sub).toBe('TM400 · Walaa · submitted')
+    expect(item.path).toBe('/insurance-claims')
+  })
+
+  it('purchase order rows fall back from vendor_name to supplier_name', () => {
+    const s = source('purchase-orders')
+    expect(mapRecordRows(s, [{ id: 4, po_number: 'PO-1', vendor_name: 'Acme', order_date: '2026-08-01', status: 'open' }])[0].sub)
+      .toBe('Acme · 2026-08-01 · open')
+    expect(mapRecordRows(s, [{ id: 5, po_number: 'PO-2', supplier_name: 'Beta Co' }])[0].sub)
+      .toBe('Beta Co')
+    expect(mapRecordRows(s, [{ id: 6 }])[0].label).toBe('Purchase order')
+  })
+
+  it('stock rows keep a ZERO quantity visible (0 is falsy but meaningful)', () => {
+    const s = source('stock')
+    // A zero-stock item is exactly the row someone searches for, so the quantity
+    // must survive the sub-line filter.
+    const [zero] = mapRecordRows(s, [
+      { id: 7, description: 'MS BOLT 8*25', site: 'JED', stock_qty: 0, stock_status: 'Critical' },
+    ])
+    expect(zero.sub).toBe('JED · Qty 0 · Critical')
+
+    const [some] = mapRecordRows(s, [{ id: 8, description: 'GEAR OIL', site: 'JED', stock_qty: 42 }])
+    expect(some.sub).toBe('JED · Qty 42')
+
+    // A missing quantity is genuinely unknown and is simply omitted, not shown as 0.
+    const [unknown] = mapRecordRows(s, [{ id: 9, description: 'GREASE', site: 'JED' }])
+    expect(unknown.sub).toBe('JED')
+    expect(unknown.path).toBe('/stock')
+  })
+
+  it('buildOrClause covers every new field set', () => {
+    const clause = (id) => buildOrClause(source(id).fields, 'ab')
+    expect(clause('vehicles'))
+      .toBe('asset_no.ilike.%ab%,make.ilike.%ab%,model.ilike.%ab%,registration_no.ilike.%ab%,chassis_no.ilike.%ab%')
+    expect(clause('work-orders')).toBe('work_order_no.ilike.%ab%,asset_no.ilike.%ab%')
+    expect(clause('accidents')).toBe('asset_no.ilike.%ab%,reference_no.ilike.%ab%')
+    expect(clause('insurance-claims')).toBe('claim_no.ilike.%ab%,asset_no.ilike.%ab%,policy_no.ilike.%ab%')
+    expect(clause('purchase-orders')).toBe('po_number.ilike.%ab%,vendor_name.ilike.%ab%,supplier_name.ilike.%ab%')
+    expect(clause('stock')).toBe('description.ilike.%ab%')
+    // Still skips a too-short term on every source.
+    RECORD_SOURCES.forEach((s) => expect(buildOrClause(s.fields, 'a')).toBeNull())
+  })
+
+  it('every new source maps a null/empty row set to []', () => {
+    ;['work-orders', 'accidents', 'insurance-claims', 'purchase-orders', 'stock'].forEach((id) => {
+      expect(mapRecordRows(source(id), null)).toEqual([])
+      expect(mapRecordRows(source(id), [])).toEqual([])
+    })
   })
 })

@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useFilterState } from '../hooks/useFilterState'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -325,24 +327,39 @@ export default function AssetManagement() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   // ── filter state ─────────────────────────────────────────────────────────────
-  const [search, setSearch] = useState('')
-  const [filterSite, setFilterSite] = useState('')
-  const [filterCountry, setFilterCountry] = useState('')
-  const [filterType, setFilterType] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterRisk, setFilterRisk] = useState('')
+  // Search, filters, sort and page live in the URL (useFilterState) so they
+  // SURVIVE opening an asset and pressing Back: a row opens `/assets/:assetNo`
+  // as a route, so without this the registry would remount unfiltered on page 1.
+  // NOTE: `country` here is the page's own column filter over the loaded rows,
+  // NOT the working-context country - that stays in the settings context.
+  const [filters, setFilter, , , setFilters] = useFilterState({
+    search: '', site: '', country: '', type: '', status: '', risk: '', ops: '',
+    sort: 'asset_no', dir: 'asc', page: '1',
+  })
+  const search = filters.search
+  const filterSite = filters.site
+  const filterCountry = filters.country
+  const filterType = filters.type
+  const filterStatus = filters.status
+  const filterRisk = filters.risk
   // Operational state from the owner's monthly asset sheet. Kept SEPARATE from
   // the register's Active/Inactive: a machine can be on the current fleet and
   // broken down today, and merging the two would hide exactly that.
-  const [filterOps, setFilterOps] = useState('')
-  const [showFilters, setShowFilters] = useState(false)
+  const filterOps = filters.ops
+  // Opens on arrival when the restored URL already carries an advanced filter -
+  // a filter that is applied but hidden reads as a wrong result, not a filter.
+  const [showFilters, setShowFilters] = useState(
+    () => !!(filters.site || filters.country || filters.type || filters.status || filters.risk || filters.ops),
+  )
 
   // ── sort state ───────────────────────────────────────────────────────────────
-  const [sortCol, setSortCol] = useState('asset_no')
-  const [sortDir, setSortDir] = useState('asc')
+  const sortCol = filters.sort
+  const sortDir = filters.dir === 'desc' ? 'desc' : 'asc'
 
   // ── pagination ───────────────────────────────────────────────────────────────
-  const [page, setPage] = useState(0)
+  // The URL carries a human-readable 1-based page; the list is 0-based.
+  const page = Math.max(0, (Number(filters.page) || 1) - 1)
+  const setPage = useCallback(p => setFilter('page', String((Number(p) || 0) + 1)), [setFilter])
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   // Full asset detail (profile, tyres, costs, work orders, disposal approval) now
@@ -355,6 +372,8 @@ export default function AssetManagement() {
     (assetNo) => navigate(`/assets/${encodeURIComponent(assetNo)}`),
     [navigate],
   )
+  // Puts the registry back where it was scrolled to on return from an asset.
+  const listRef = useScrollRestore('asset-management', !loading && assets.length > 0)
 
   // ── load data ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -518,9 +537,8 @@ export default function AssetManagement() {
 
   // ── Sort helper ───────────────────────────────────────────────────────────────
   function toggleSort(col) {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(col); setSortDir('asc') }
-    setPage(0)
+    const dir = sortCol === col && sortDir === 'asc' ? 'desc' : 'asc'
+    setFilters({ sort: col, dir, page: '1' })
   }
   function SortIcon({ col }) {
     if (sortCol !== col) return <ChevronDown className="w-3 h-3 text-[var(--text-dim)] inline ml-1" />
@@ -673,7 +691,7 @@ export default function AssetManagement() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
                     <input
                       value={search}
-                      onChange={e => { setSearch(e.target.value); setPage(0) }}
+                      onChange={e => setFilters({ search: e.target.value, page: '1' })}
                       placeholder="Search by asset no, fleet no, make, model, operator, reg..."
                       className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg pl-10 pr-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
@@ -694,14 +712,14 @@ export default function AssetManagement() {
                       className="overflow-hidden">
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 pt-4 border-t border-[var(--border-dim)]">
                         {[
-                          { label: 'Site', value: filterSite, onChange: setFilterSite, opts: siteOptions },
-                          { label: 'Country', value: filterCountry, onChange: setFilterCountry, opts: countryOptions },
-                          { label: 'Vehicle Type', value: filterType, onChange: setFilterType, opts: typeOptions },
-                          { label: 'Operational status', value: filterOps, onChange: setFilterOps, opts: opsOptions },
+                          { label: 'Site', value: filterSite, key: 'site', opts: siteOptions },
+                          { label: 'Country', value: filterCountry, key: 'country', opts: countryOptions },
+                          { label: 'Vehicle Type', value: filterType, key: 'type', opts: typeOptions },
+                          { label: 'Operational status', value: filterOps, key: 'ops', opts: opsOptions },
                         ].map(f => (
                           <div key={f.label}>
                             <label className="text-xs text-[var(--text-muted)] mb-1 block">{f.label}</label>
-                            <select value={f.value} onChange={e => { f.onChange(e.target.value); setPage(0) }}
+                            <select value={f.value} onChange={e => setFilters({ [f.key]: e.target.value, page: '1' })}
                               className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                               <option value="">All</option>
                               {f.opts.map(o => <option key={o}>{o}</option>)}
@@ -710,7 +728,7 @@ export default function AssetManagement() {
                         ))}
                         <div>
                           <label className="text-xs text-[var(--text-muted)] mb-1 block">Status</label>
-                          <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(0) }}
+                          <select value={filterStatus} onChange={e => setFilters({ status: e.target.value, page: '1' })}
                             className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                             <option value="">All</option>
                             <option value="active">Active</option>
@@ -719,7 +737,7 @@ export default function AssetManagement() {
                         </div>
                         <div>
                           <label className="text-xs text-[var(--text-muted)] mb-1 block">Risk Level</label>
-                          <select value={filterRisk} onChange={e => { setFilterRisk(e.target.value); setPage(0) }}
+                          <select value={filterRisk} onChange={e => setFilters({ risk: e.target.value, page: '1' })}
                             className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500">
                             <option value="">All</option>
                             {['Critical','High','Medium','Low'].map(r => <option key={r}>{r}</option>)}
@@ -731,8 +749,9 @@ export default function AssetManagement() {
                 </AnimatePresence>
               </div>
 
-              {/* Table */}
-              <div className="bg-[var(--surface-1)] rounded-xl border border-[var(--border-dim)] overflow-hidden">
+              {/* Table. The wrapper anchors the scroll-restore hook, so
+                  returning from /assets/:assetNo lands on the same row. */}
+              <div ref={listRef} className="bg-[var(--surface-1)] rounded-xl border border-[var(--border-dim)] overflow-hidden">
                 <div className="px-5 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
                   <span className="text-sm text-[var(--text-secondary)]">
                     {filteredAssets.length} asset{filteredAssets.length !== 1 ? 's' : ''}
@@ -859,7 +878,7 @@ export default function AssetManagement() {
                   <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border-dim)] text-sm text-[var(--text-secondary)]">
                     <span>Page {page + 1} of {totalPages}</span>
                     <div className="flex items-center gap-2">
-                      <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+                      <button disabled={page === 0} onClick={() => setPage(page - 1)}
                         className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-30 transition-colors">
                         <ChevronLeft className="w-4 h-4" />
                       </button>
@@ -873,7 +892,7 @@ export default function AssetManagement() {
                           </button>
                         )
                       })}
-                      <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+                      <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
                         className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-30 transition-colors">
                         <ChevronRight className="w-4 h-4" />
                       </button>

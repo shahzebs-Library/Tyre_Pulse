@@ -26,6 +26,7 @@ import {
 import { fetchAllPages } from '../lib/fetchAll'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -246,9 +247,16 @@ export default function AdvancedAnalytics() {
   const [sortField,      setSortField]      = useState('totalCost')
   const [sortDir,        setSortDir]        = useState('desc')
 
+  // Changing the date preset refetches while the previous read is still paging.
+  // If the earlier one finishes last it paints the PREVIOUS preset's records
+  // under the new one - every chart on the page then describes a window nobody
+  // selected, and a refresh appears to fix it.
+  const latestLoad = useLatestRequest()
+
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
+      const stale = latestLoad.begin()
       setLoading(true)
       setError(null)
       setCapped(false)
@@ -267,16 +275,19 @@ export default function AdvancedAnalytics() {
           return q.range(from, to)
         }, { max: ROW_CAP })
         if (err) throw err
+        if (stale()) return
         setRecords(data || [])
         setCapped(!!truncated)
       } catch (e) {
-        setError(toUserMessage(e, t('advancedanalytics.states.loadFailed')))
+        // A superseded load must not raise a banner over data that loaded fine.
+        if (!stale()) setError(toUserMessage(e, t('advancedanalytics.states.loadFailed')))
       } finally {
-        setLoading(false)
+        // Clearing this from a stale load would make the newer one look finished.
+        if (!stale()) setLoading(false)
       }
     }
     load()
-  }, [activeCountry, datePreset])
+  }, [activeCountry, datePreset, latestLoad])
 
   // ── Derived filter options ─────────────────────────────────────────────────
   const uniqueSites = useMemo(() => {

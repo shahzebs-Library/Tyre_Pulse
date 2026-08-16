@@ -84,3 +84,68 @@ export function applyCountry(query, country) {
   }
   return query
 }
+
+/**
+ * Normalise a country LIST into the distinct, non-blank countries to filter on.
+ *
+ * The "All" sentinel is dropped rather than treated as a country: a caller that
+ * genuinely means every country passes an empty list (or omits the parameter),
+ * which applies no filter - exactly what `applyCountry` does with "All". Keeping
+ * the sentinel in the list would send `country=in.(All,...)` and match nothing.
+ *
+ * @param {string[]|string} [countries]
+ * @returns {string[]}
+ */
+export function countryList(countries) {
+  const raw = Array.isArray(countries) ? countries : countries ? [countries] : []
+  const out = []
+  for (const c of raw) {
+    const v = String(c ?? '').trim()
+    if (!v || v === 'All' || out.includes(v)) continue
+    out.push(v)
+  }
+  return out
+}
+
+/**
+ * Country scoping for a LIST of countries - the multi-country generalisation of
+ * `applyCountry`, for reporting surfaces whose scope is a SET of countries
+ * rather than the one operational country.
+ *
+ * WHY ONE QUERY, NOT ONE PER COUNTRY. Every read this replaces is bounded (a
+ * `fetchAllPages` with a `{ max }` ceiling). Issuing N separate reads would turn
+ * one bounded read into N bounded reads and multiply the ceiling by N behind the
+ * page's back; a single `in.(...)` keeps the read - and its cap - exactly as
+ * bounded as it was.
+ *
+ * NULL-COUNTRY BEHAVIOUR IS THE CALLER'S EXISTING BEHAVIOUR, and getting it
+ * wrong silently moves totals. Two conventions live in this codebase and both
+ * are deliberate:
+ *   nullSafe: true  (default, mirrors `applyCountry`) - rows with a NULL country
+ *                   are INCLUDED, so legitimately uncategorised rows are not
+ *                   dropped.
+ *   nullSafe: false - a strict `country = X` match, which is what the page-level
+ *                   reads (engineeringKpi, accidents, work orders, stock) have
+ *                   always used. Switching them to the null-safe form would pull
+ *                   in rows they have never counted.
+ * A SINGLE-country list is emitted in exactly the form the scalar helpers
+ * already emit, so a one-country scope is byte-identical to today's query.
+ *
+ * @param {object} query                 a Supabase query builder
+ * @param {string[]} countries           country names ("All" and blanks dropped)
+ * @param {{nullSafe?:boolean}} [opts]
+ */
+export function applyCountries(query, countries, { nullSafe = true } = {}) {
+  const list = countryList(countries)
+  if (!list.length) return query
+  if (list.length === 1) {
+    return nullSafe ? applyCountry(query, list[0]) : query.eq('country', list[0])
+  }
+  // `.in()` builds and escapes the value list itself, so no country name can
+  // break out of the filter expression.
+  if (!nullSafe) return query.in('country', list)
+  // Null-safe needs an OR tree, which is a string. Quote each value so a name
+  // containing a comma or a space cannot split the expression.
+  const quoted = list.map((c) => `"${String(c).replace(/(["\\])/g, '\\$1')}"`).join(',')
+  return query.or(`country.in.(${quoted}),country.is.null`)
+}

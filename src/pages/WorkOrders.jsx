@@ -18,6 +18,7 @@ import {
   FileSpreadsheet, Trash2, Lock,
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
+import useLatestRequest from '../lib/useLatestRequest'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
@@ -183,7 +184,13 @@ export default function WorkOrders() {
   const [partRow, setPartRow]       = useState({ part_name: '', quantity: 1, unit_cost: '' })
 
   // ── Load ──────────────────────────────────────────────────────────────────
+  // A date-range change starts a new load while the old one is still in flight;
+  // without this the slower answer lands last and shows the previous window's
+  // job cards under the new filters.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
     try {
@@ -194,13 +201,14 @@ export default function WorkOrders() {
       })
       // Normalise status to the shared canonical vocabulary on read so filters,
       // badges and stats agree with the Workshop Live dashboard.
+      if (stale()) return
       setOrders((data || []).map((o) => ({ ...o, status: normalizeWoStatus(o.status) })))
     } catch (e) {
-      setError(toUserMessage(e))
+      if (!stale()) setError(toUserMessage(e))
     } finally {
-      setLoading(false)
+      if (!stale()) setLoading(false)
     }
-  }, [activeCountry, dateFrom, dateTo])
+  }, [activeCountry, dateFrom, dateTo, latestLoad])
 
   useEffect(() => { load() }, [load])
 

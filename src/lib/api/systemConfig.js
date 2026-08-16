@@ -53,7 +53,30 @@ export const CONFIG_DEFAULTS = Object.freeze({
   max_upload_rows: 100000,
   data_retention_months: 0,      // 0 = keep forever
   audit_retention_days: 0,       // 0 = keep forever
+  // Which app shell renders. TRUE (the new top-bar + regrouped-sidebar shell)
+  // is the default on purpose: it is the shell that is current and tested, and
+  // this flag exists to switch it OFF in a hurry, not to hide it behind an
+  // opt-in. Turning it off falls back to the frozen LegacyLayout.
+  new_shell: true,
 })
+
+/** system_config key for the app-shell rollout flag. */
+export const NEW_SHELL_KEY = 'new_shell'
+
+/**
+ * Should the app render the NEW shell (Layout) rather than the frozen fallback
+ * (LegacyLayout)? The single sanctioned reader for this flag - src/App.jsx
+ * calls this and nothing else interprets the key.
+ *
+ * Reads the primed cache synchronously, so it is safe to call during render.
+ * Fails FORWARD: unset, unreadable or junk resolves to the new shell. An
+ * unparseable value means somebody typed something we do not understand, and
+ * the sane response to that is the current shell, never a silent rollback to
+ * a frozen one nobody asked for.
+ */
+export function shouldUseNewShell() {
+  return configBool(NEW_SHELL_KEY, true)
+}
 
 // ── raw value cache (key -> raw string from the table) ────────────────────────
 let _cache = {}
@@ -279,6 +302,7 @@ export const ENFORCEMENT_STATUS = Object.freeze({
   email_notifications:   { status: 'active', where: 'send-email edge function (skips when off)' },
   push_notifications:    { status: 'active', where: 'workflow-notify edge push channel (skips when off)' },
   max_login_attempts:    { status: 'active', where: 'Account lockout on repeated failed logins (login guard, V287)' },
+  new_shell:             { status: 'active', where: 'App shell picker in App.jsx (on = Layout, off = LegacyLayout fallback); applies on the next page load' },
   // Honestly still SAVED ONLY (stored; not yet enforced) - never claimed active:
   ai_model:              { status: 'saved', where: 'Model is locked server-side for safety; this value is not used' },
   alert_email:           { status: 'saved', where: 'Sentry alerts use their own console-configured email, not this key' },

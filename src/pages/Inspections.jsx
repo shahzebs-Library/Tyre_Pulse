@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useFilterState } from '../hooks/useFilterState'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -680,21 +682,35 @@ export default function Inspections() {
   const [wfLocked, setWfLocked] = useState(false)
   const [saving, setSaving]     = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [filterSite, setFilterSite]     = useState('all')
+  // The register's filters live in the URL (useFilterState) so they SURVIVE
+  // drilling out to the tyre-change tracking page and pressing Back, and so a
+  // filtered view can be shared. The keys are deliberately distinct from the
+  // page's existing deep-link params (`asset`, `approve`), which useFilterState
+  // leaves untouched.
+  const [filters, setFilter, , , setFilters] = useFilterState({
+    search: '', status: 'all', site: 'all', region: 'all', inspector: 'all',
+    from: '', to: '',
+  })
+  const filterStatus = filters.status
+  const filterSite = filters.site
   // Region is not a column on an inspection - it is read from the site
   // register, so it stays recorded in one place. See siteRegionMap.
-  const [filterRegion, setFilterRegion] = useState('all')
-  const [filterInspector, setFilterInspector] = useState('all')
+  const filterRegion = filters.region
+  const filterInspector = filters.inspector
   const [siteRows, setSiteRows]         = useState([])
   // The advanced filters collapse behind one toggle, the same as the accident
   // register: a row of eight controls above a table is read as clutter, and the
-  // two people use every day (search and status) stay out here.
-  const [showFilters, setShowFilters]   = useState(false)
+  // two people use every day (search and status) stay out here. It opens on
+  // arrival when a restored URL already carries one of the collapsed filters -
+  // a filter that is applied but hidden reads as a wrong result, not a filter.
+  const [showFilters, setShowFilters]   = useState(
+    () => filters.site !== 'all' || filters.region !== 'all'
+      || filters.inspector !== 'all' || !!filters.from || !!filters.to,
+  )
   // Client-side date range on the register (scheduled_date, falling back to
   // completed_date, then created_at). Empty = existing behavior.
-  const [filterFrom, setFilterFrom]     = useState('')
-  const [filterTo, setFilterTo]         = useState('')
+  const filterFrom = filters.from
+  const filterTo = filters.to
   // Tyre-change flags: per-asset overdue/due-soon tyres from the running-life
   // calc. null = not loaded (still checking, or the read failed).
   const [flagMap, setFlagMap]           = useState(null)
@@ -707,7 +723,7 @@ export default function Inspections() {
   const [flagStatus, setFlagStatus]     = useState('loading') // loading | ok | error
   const [flagError, setFlagError]       = useState('')
   const [flagReload, setFlagReload]     = useState(0)
-  const [search, setSearch]             = useState('')
+  const search = filters.search
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
   // Lock TyreMan to checklist tab; switch to checklist if asset param present
@@ -725,6 +741,15 @@ export default function Inspections() {
       })
       .catch(() => { /* silent - invalid/inaccessible approve link */ })
   }, [searchParams, authLoading])
+  // Drops only the consumed approve key, leaving the register's own filter
+  // params in place.
+  const clearApproveParam = useCallback(() => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('approve')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [raisingAction, setRaisingAction] = useState(null)
   const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
@@ -932,8 +957,14 @@ export default function Inspections() {
     if (!assetParam || authLoading) return
     setClAsset(assetParam)
     loadFleetInfo(assetParam)
-    // Remove param from URL so refresh doesn't re-trigger
-    setSearchParams({}, { replace: true })
+    // Remove the consumed param so a refresh does not re-trigger. Only that one
+    // key is dropped: the register's filters now live in the query string too,
+    // and clearing the whole string would wipe them.
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('asset')
+      return next
+    }, { replace: true })
   }, [searchParams, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
@@ -1090,6 +1121,11 @@ export default function Inspections() {
     estimateSize: () => 52,
     overscan: 10,
   })
+
+  // Puts the register back where it was scrolled to when the user returns from
+  // the tyre-change tracking page. The list scrolls inside its own fixed-height
+  // box, so that element is restored rather than the shell around it.
+  useScrollRestore('inspections', !loading && filtered.length > 0, tableParentRef)
 
   function handlePhotoChange(e) {
     const file = e.target.files?.[0]
@@ -2386,7 +2422,7 @@ export default function Inspections() {
                   </div>
                 )}
               </div>
-              <button onClick={() => { setShowApproveModal(false); setSearchParams({}) }}
+              <button onClick={() => { setShowApproveModal(false); clearApproveParam() }}
                 style={{ background: 'none', border: 'none', color: 'var(--panel-ink-3)', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
@@ -2699,7 +2735,7 @@ export default function Inspections() {
         ].map(([val, label, cls]) => (
           <button
             key={val}
-            onClick={() => setFilterStatus(val)}
+            onClick={() => setFilter('status', val)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${cls} ${filterStatus === val ? 'ring-2 ring-white/20' : 'opacity-70 hover:opacity-100'}`}
           >
             {label} ({statusCounts[val] ?? 0})
@@ -2720,7 +2756,7 @@ export default function Inspections() {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <input className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
-                value={search} onChange={e => setSearch(e.target.value)} />
+                value={search} onChange={e => setFilter('search', e.target.value)} />
               <button
                 onClick={() => setShowFilters(v => !v)}
                 aria-expanded={showFilters}
@@ -2737,8 +2773,10 @@ export default function Inspections() {
               {anyActive && (
                 <button
                   onClick={() => {
-                    setSearch(''); setFilterSite('all'); setFilterRegion('all')
-                    setFilterInspector('all'); setFilterFrom(''); setFilterTo('')
+                    setFilters({
+                      search: '', site: 'all', region: 'all',
+                      inspector: 'all', from: '', to: '',
+                    })
                   }}
                   className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
                 >
@@ -2756,23 +2794,23 @@ export default function Inspections() {
                     these sites in one. An empty dropdown is a control that can
                     only ever return nothing. */}
                 {regions.length > 0 && (
-                  <select className="input text-sm w-40" value={filterRegion} onChange={e => setFilterRegion(e.target.value)}>
+                  <select className="input text-sm w-40" value={filterRegion} onChange={e => setFilter('region', e.target.value)}>
                     <option value="all">All regions</option>
                     {regions.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 )}
-                <select className="input text-sm w-44" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                <select className="input text-sm w-44" value={filterSite} onChange={e => setFilter('site', e.target.value)}>
                   <option value="all">{t('inspections.filters.allSites')}</option>
                   {sites.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 {inspectors.length > 0 && (
-                  <select className="input text-sm w-44" value={filterInspector} onChange={e => setFilterInspector(e.target.value)}>
+                  <select className="input text-sm w-44" value={filterInspector} onChange={e => setFilter('inspector', e.target.value)}>
                     <option value="all">All inspectors</option>
                     {inspectors.map(i => <option key={i} value={i}>{i}</option>)}
                   </select>
                 )}
-                <DateField className="text-sm w-40" value={filterFrom} onChange={setFilterFrom} placeholder="From date" ariaLabel="From date" />
-                <DateField className="text-sm w-40" value={filterTo} onChange={setFilterTo} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
+                <DateField className="text-sm w-40" value={filterFrom} onChange={v => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
+                <DateField className="text-sm w-40" value={filterTo} onChange={v => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
               </div>
             )}
           </div>

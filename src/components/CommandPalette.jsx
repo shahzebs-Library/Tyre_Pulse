@@ -21,7 +21,12 @@ import { useLanguage } from '../contexts/LanguageContext'
 import {
   NAV_COMMANDS, ACTION_COMMANDS, RECORD_SOURCES,
   visibleCommands, visibleRecordSources, rankCommands, buildOrClause, mapRecordRows,
+  isCommandVisible,
 } from '../lib/commandSearch'
+import {
+  MAX_RECENTS, loadFavorites, loadRecents, visibleFavorites, visibleRecents,
+  loadRecentRecords, pushRecentRecord, visibleRecentRecords,
+} from '../lib/navFavorites'
 
 // ── Icon lookup ───────────────────────────────────────────────────────────────
 const ICON_MAP = {
@@ -122,6 +127,13 @@ function GroupHeader({ label }) {
   )
 }
 
+// A key with no locale entry must render its English heading, never leak
+// "ui.command.groups.favorites" into the results list.
+function labelOr(t, key, fallback) {
+  const v = t(key)
+  return (!v || v === key) ? fallback : v
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
@@ -151,6 +163,39 @@ export default function CommandPalette() {
     () => new Set([...navCommands, ...actionCommands].map((c) => c.path)),
     [navCommands, actionCommands],
   )
+
+  // ── Favourites + recents (empty query only) ────────────────────────────────
+  // Both stores hold ROUTES ONLY, so labels and icons come from the command
+  // registry here and access is re-checked every render. The index is built from
+  // EVERY command, visible or not, so `canSeePath` below stays the single gate:
+  // it is `allowedPaths`, i.e. the palette's own visibleCommands filter, so a
+  // shortcut can never reach a page the palette itself would refuse to list.
+  const commandByPath = useMemo(() => {
+    const m = new Map()
+    for (const c of [...NAV_COMMANDS, ...ACTION_COMMANDS]) if (!m.has(c.path)) m.set(c.path, c)
+    return m
+  }, [])
+  const navIndex = useMemo(() => {
+    const idx = {}
+    for (const [path, c] of commandByPath) idx[path] = { label: c.label, group: '' }
+    return idx
+  }, [commandByPath])
+  const canSeePath = useCallback((path) => allowedPaths.has(path), [allowedPaths])
+
+  // A stored RECORD is re-checked against the very source that produced it, so
+  // losing a module stops its records appearing at once - exactly as a revoked
+  // favourite disappears. An unknown source (registry entry removed or renamed)
+  // is dropped rather than guessed at.
+  const recordSourceById = useMemo(() => {
+    const m = new Map()
+    for (const s of RECORD_SOURCES) m.set(s.id, s)
+    return m
+  }, [])
+  const canSeeRecord = useCallback((entry) => {
+    const src = recordSourceById.get(entry?.source)
+    if (!src) return false
+    return isCommandVisible(src.access, profile, hasPermission, grantedModules, isSuperAdmin)
+  }, [recordSourceById, profile, hasPermission, grantedModules, isSuperAdmin])
 
   // ── Reset on open + focus input ────────────────────────────────────────────
   useEffect(() => {
@@ -195,7 +240,12 @@ export default function CommandPalette() {
       settled.forEach((res, i) => {
         if (res.status === 'fulfilled' && !res.value?.error) {
           anyOk = true
+          // Stamp each hit with the source that produced it. That id - not a
+          // guess parsed back out of the row id - is what lets a picked record
+          // be re-permission-checked later against the SAME `access` descriptor
+          // this search was filtered by.
           const items = mapRecordRows(sources[i], res.value?.data)
+            .map((it) => ({ ...it, source: sources[i].id }))
           if (items.length) groups.push({ label: sources[i].label, items })
         }
       })
@@ -210,19 +260,53 @@ export default function CommandPalette() {
   const groups = useMemo(() => {
     const q = query.trim()
     if (!q) {
+      // A stored route becomes a row only after the registry gives it a label
+      // and `canSeePath` clears it, so ids are namespaced to stay unique against
+      // the same page appearing again under Actions or Navigation below.
+      const toRow = (prefix) => (entry) => ({
+        id: `${prefix}:${entry.route}`,
+        label: entry.label,
+        path: entry.route,
+        icon: commandByPath.get(entry.route)?.icon,
+      })
       const result = []
-      const recents = loadRecent().filter((r) => allowedPaths.has(r.path) || r.path?.startsWith('/vehicle/'))
+      const favs = visibleFavorites(loadFavorites(), navIndex, canSeePath).map(toRow('fav'))
+      if (favs.length) {
+        result.push({ label: labelOr(t, 'ui.command.groups.favorites', 'Favourites'), items: favs.slice(0, 6) })
+      }
+      // Nav routes come from the shared trail the sidebar records, so the two
+      // surfaces agree. RECORDS (a vehicle, a tyre, a job card) are not nav
+      // routes and cannot live in that store, so they keep their own - see
+      // navFavorites RECORD_RECENTS_KEY - and are permission-checked here
+      // against the record source that produced them.
+      const navRecents = visibleRecents(loadRecents(), navIndex, canSeePath).map(toRow('rec'))
+      const recordRecents = visibleRecentRecords(loadRecentRecords(), canSeeRecord).map((r) => ({
+        id: `rec-record:${r.path}`,
+        label: r.label,
+        path: r.path,
+        icon: r.icon,
+      }))
+      // Each side gets a reserved half of the row budget so a busy week of
+      // navigation cannot push every record out, or the other way round.
+      const half = Math.ceil(MAX_RECENTS / 2)
+      const recents = [...navRecents.slice(0, half), ...recordRecents.slice(0, half)]
+        .slice(0, MAX_RECENTS)
       if (recents.length) result.push({ label: t('ui.command.groups.recent'), items: recents })
       if (actionCommands.length) result.push({ label: t('ui.command.groups.actions'), items: actionCommands })
       result.push({ label: t('ui.command.groups.navigation'), items: navCommands.slice(0, 8) })
       return result
     }
+    // Typed query: ranking is unchanged, and shortcuts do not jump the queue.
     const result = []
     const commands = rankCommands([...actionCommands, ...navCommands], q, 8)
     if (commands.length) result.push({ label: t('ui.command.groups.commands'), items: commands })
     for (const g of recordGroups) result.push({ label: g.label, items: g.items })
     return result
-  }, [query, navCommands, actionCommands, allowedPaths, recordGroups, t])
+    // `open` is deliberate and the exhaustive-deps warning about it is expected:
+    // loadFavorites/loadRecents/loadRecent read localStorage, which the linter
+    // cannot see, so reopening the palette is what re-reads a star pinned in the
+    // sidebar while it was closed. Removing it serves a stale list.
+  }, [query, open, navCommands, actionCommands, navIndex, canSeePath, canSeeRecord, commandByPath, recordGroups, t])
 
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
@@ -230,7 +314,15 @@ export default function CommandPalette() {
 
   // ── Select ──────────────────────────────────────────────────────────────────
   const handleSelect = useCallback((item) => {
-    saveRecent(item)
+    // A RECORD hit carries the source it came from; a command does not. Keeping
+    // the two in separate stores is the point: a record must never crowd the
+    // nav-route trail the sidebar shares, and a command must never land in a
+    // store whose rows are re-checked against a record source.
+    if (item?.source) {
+      pushRecentRecord({ label: item.label, path: item.path, source: item.source, icon: item.icon })
+    } else {
+      saveRecent(item)
+    }
     setOpen(false)
     navigate(item.path)
   }, [navigate, setOpen])

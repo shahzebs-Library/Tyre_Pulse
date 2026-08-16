@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import * as analytics from '../lib/api/analyticsReads'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
@@ -149,7 +150,13 @@ export default function PerformanceBenchmark() {
   const [period, setPeriod]        = useState('1yr')
   const [site, setSite]            = useState('All')
 
+  // Switching the period starts a second load over the first. If the earlier one
+  // finishes last the benchmark compares the PREVIOUS period's records while the
+  // control says otherwise, so the ranking is wrong with nothing to flag it.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
       const country = activeCountry !== 'All' ? activeCountry : null
@@ -161,11 +168,17 @@ export default function PerformanceBenchmark() {
         analytics.listTyreRecordsSince({ country, since: from }),
         analytics.listInspectionsSince({ since: from.slice(0, 10) }),
       ])
+      if (stale()) return
       setRecords(tr.data || [])
       setInspections(insp.data || [])
-    } catch (e) { setError(toUserMessage(e, 'Could not load benchmark data.')) }
-    finally { setLoading(false) }
-  }, [activeCountry, period])
+    } catch (e) {
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (!stale()) setError(toUserMessage(e, 'Could not load benchmark data.'))
+    } finally {
+      // Clearing this from a stale load would make the newer one look finished.
+      if (!stale()) setLoading(false)
+    }
+  }, [activeCountry, period, latestLoad])
 
   useEffect(() => { load() }, [load])
 

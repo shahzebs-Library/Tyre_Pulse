@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { formatCurrency, formatDate } from '../lib/formatters'
 import {
   listPolicies, getPolicy, createPolicy, updatePolicy, deletePolicy,
@@ -42,6 +42,17 @@ import CoverageGapsSection from '../components/insurance/CoverageGapsSection'
 import ClaimRegisterSection from '../components/insurance/ClaimRegisterSection'
 import LossExperienceSection from '../components/insurance/LossExperienceSection'
 import PropertyRisksSection from '../components/insurance/PropertyRisksSection'
+
+/**
+ * Country a NEW policy inherits from the working context. On the All-countries
+ * view there is no country to inherit, so the field opens BLANK and the reviewer
+ * has to choose one - a silent 'KSA' default would file a policy under a country
+ * nobody picked, and country drives which fleet the cover is matched against.
+ */
+const defaultCountryFor = (active) => (active && active !== 'All' ? active : '')
+
+const COUNTRY_REQUIRED_HINT = 'Select a country. You are viewing all countries.'
+const COUNTRY_PLACEHOLDER = 'Select a country'
 
 // ── small presentational helpers ─────────────────────────────────────────────
 function money(v, ccy) {
@@ -211,7 +222,7 @@ export default function InsurancePolicies() {
       const condNote = Array.isArray(parsed.conditions) && parsed.conditions.length
         ? `${parsed.conditions.length} condition(s) detected in the PDF; add them below after saving.`
         : ''
-      setPolicyModal({ mode: 'create', row: { country: activeCountry && activeCountry !== 'All' ? activeCountry : 'KSA', ...parsed, notes: condNote } })
+      setPolicyModal({ mode: 'create', row: { country: defaultCountryFor(activeCountry), ...parsed, notes: condNote } })
     } catch (err) {
       setError(toUserMessage(err))
     } finally {
@@ -421,6 +432,11 @@ export default function InsurancePolicies() {
 
   // ── policy CRUD ───────────────────────────────────────────────────────────────
   async function savePolicy(form) {
+    const isCreate = policyModal.mode !== 'edit'
+    // Never stamp a country the reviewer did not choose: on the All-countries view
+    // a NEW policy opens blank, so it has to be picked before it can be saved. An
+    // existing policy keeps whatever it already stores, including nothing.
+    if (isCreate && !String(form.country || '').trim()) { setError(COUNTRY_REQUIRED_HINT); return }
     setBusy(true)
     const payload = {
       country: form.country || null,
@@ -514,7 +530,7 @@ export default function InsurancePolicies() {
             </button>
             <button
               type="button"
-              onClick={() => setPolicyModal({ mode: 'create', row: {} })}
+              onClick={() => setPolicyModal({ mode: 'create', row: { country: defaultCountryFor(activeCountry) } })}
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500"
             >
               <Plus size={16} /> Add policy
@@ -1147,6 +1163,15 @@ function PolicyModal({ mode, row, busy, onClose, onSave }) {
     notes: row.notes || '',
   })
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }))
+  const countryUnset = !String(form.country || '').trim()
+  // A policy already on file may store a country spelling outside the app's list;
+  // keep it as an option so opening it never silently rewrites what it stores.
+  const countryOptions = [
+    { value: '', label: COUNTRY_PLACEHOLDER },
+    ...COUNTRIES.map((c) => ({ value: c, label: c })),
+    ...(!countryUnset && !COUNTRIES.includes(form.country) ? [{ value: form.country, label: form.country }] : []),
+  ]
+  const requireCountry = mode !== 'edit'
   return (
     <ModalShell title={mode === 'edit' ? 'Edit policy' : 'Add policy'} onClose={onClose}>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -1154,7 +1179,12 @@ function PolicyModal({ mode, row, busy, onClose, onSave }) {
         <Select label="Type" value={form.policy_type} onChange={set('policy_type')} options={POLICY_TYPE_KEYS.map((k) => ({ value: k, label: POLICY_TYPE_LABELS[k] }))} />
         <Text label="Insurer" value={form.insurer} onChange={set('insurer')} />
         <Text label="Insured name" value={form.insured_name} onChange={set('insured_name')} />
-        <Text label="Country" value={form.country} onChange={set('country')} />
+        <div>
+          <Select label="Country" value={form.country} onChange={set('country')} options={countryOptions} />
+          {requireCountry && countryUnset && (
+            <p className="mt-1 text-xs text-amber-300">{COUNTRY_REQUIRED_HINT}</p>
+          )}
+        </div>
         <Text label="Currency" value={form.currency} onChange={set('currency')} />
         <Text label="Period from" type="date" value={form.period_from} onChange={set('period_from')} />
         <Text label="Period to" type="date" value={form.period_to} onChange={set('period_to')} />
@@ -1168,7 +1198,7 @@ function PolicyModal({ mode, row, busy, onClose, onSave }) {
       </div>
       <div className="mt-5 flex justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Cancel</button>
-        <button type="button" disabled={busy} onClick={() => onSave(form)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
+        <button type="button" disabled={busy || (requireCountry && countryUnset)} onClick={() => onSave(form)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
           <Save size={15} /> {busy ? 'Saving...' : 'Save'}
         </button>
       </div>

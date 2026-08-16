@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES } from './lib/checklistAccess'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -11,6 +11,12 @@ import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
 import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
+import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/api/systemConfig'
+// The pre-rewrite shell, kept as an instant rollback behind the `new_shell`
+// flag. LAZY on purpose: it is dead weight on the ~99% of loads that never
+// reach it, and the eager graph here is watched closely (a chart library once
+// leaked onto the login screen). Its chunk is only fetched if the flag is off.
+const LegacyLayout = lazy(() => import('./components/LegacyLayout'))
 import LoadingSpinner from './components/LoadingSpinner'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -475,6 +481,71 @@ function MaintenanceGate({ children }) {
   )
 }
 
+/**
+ * Which shell we settled on last time. Read synchronously so the very first
+ * paint already matches what this administrator chose, with no wait.
+ */
+const SHELL_CHOICE_KEY = 'tp_shell_choice'
+
+/** Last resolved choice, or null. Never throws; storage may be disabled. */
+function rememberedShellChoice() {
+  try {
+    const v = localStorage.getItem(SHELL_CHOICE_KEY)
+    return v === 'new' ? true : v === 'legacy' ? false : null
+  } catch { return null }
+}
+function rememberShellChoice(useNew) {
+  try { localStorage.setItem(SHELL_CHOICE_KEY, useNew ? 'new' : 'legacy') } catch { /* storage off */ }
+}
+
+/**
+ * Picks the app shell: the new Layout, or the frozen LegacyLayout when an
+ * administrator has switched `new_shell` off.
+ *
+ * THE SHELL MUST NEVER WAIT FOR CONFIG. An earlier version of this held the
+ * first paint until the config read settled, bounded at 2.5s. That was a
+ * straight violation of the rule that the shell renders immediately and does
+ * not block on anything asynchronous, and it charged every single load for a
+ * switch almost nobody has flipped.
+ *
+ * So it paints at once, using the best answer available in this order:
+ *   1. the config cache, when SettingsContext has already primed it;
+ *   2. the choice resolved on the PREVIOUS load, remembered in localStorage;
+ *   3. the default, which is the new shell.
+ *
+ * The config read is still honoured when it lands: if it disagrees with what we
+ * painted, the shell swaps once and the answer is remembered so the next load is
+ * correct immediately. That swap only happens on the first load after an admin
+ * flips the flag - the case the fallback exists for - rather than on every load
+ * for everyone. Re-parenting is the cost of being wrong once, not of being slow
+ * always.
+ */
+function AppShell({ children }) {
+  // Subscribing re-renders this component when the config read lands.
+  const { systemConfig } = useSettings()
+  const [useNew, setUseNew] = useState(() => {
+    if (isSystemConfigLoaded()) return shouldUseNewShell()
+    const remembered = rememberedShellChoice()
+    return remembered === null ? true : remembered
+  })
+
+  // Settled only once a FULL read was cached; the key check is a cheaper second
+  // witness for the same thing in case the value arrived by another path.
+  const settled = isSystemConfigLoaded() || !!(systemConfig && NEW_SHELL_KEY in systemConfig)
+
+  useEffect(() => {
+    if (!settled) return
+    const actual = shouldUseNewShell()
+    rememberShellChoice(actual)
+    setUseNew((prev) => (prev === actual ? prev : actual))
+  }, [settled, systemConfig])
+
+  const Shell = useNew ? Layout : LegacyLayout
+  // Both shells take exactly the same props and children; nothing else about
+  // routing, guards or providers differs between the two paths.
+  return <Shell>{children}</Shell>
+}
+
 // ── Main app wrapped in its own providers (keeps console completely isolated)
 function MainApp() {
   return (
@@ -519,7 +590,7 @@ function MainApp() {
               element={
                 <ProtectedRoute>
                   <MaintenanceGate>
-                  <Layout>
+                  <AppShell>
                     <SubscriptionGate>
                     <ChecklistOnlyGate>
                     {/* Suspense INSIDE the shell. The outer boundary (above
@@ -619,7 +690,7 @@ function MainApp() {
                       <Route path="/production-m3"           element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ProductionM3 /></RoleRoute></Safe>} />
                       <Route path="/erp-intake"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ErpIntake /></RoleRoute></Safe>} />
                       <Route path="/expense-import"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExpenseImport /></RoleRoute></Safe>} />
-                      <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportSharing /></RoleRoute></Safe>} />
+                      <Route path="/report-sharing"          element={<Safe><RoleRoute allowed={['Admin']}><ReportSharing /></RoleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
                       <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
                       <Route path="/benchmark"               element={<Safe><ModuleRoute moduleKey="analytics"><PerformanceBenchmark /></ModuleRoute></Safe>} />
@@ -753,8 +824,8 @@ function MainApp() {
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
 <Route path="/qr-labels"   element={<Safe><RoleRoute allowed={['Admin']}><QrLabels /></RoleRoute></Safe>} />
                       <Route path="/rfid-registry" element={<Safe><ModuleRoute moduleKey="tyre_records"><RfidRegistry /></ModuleRoute></Safe>} />
-                      <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ReportBuilder /></RoleRoute></Safe>} />
-                      <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DashboardBuilder /></RoleRoute></Safe>} />
+                      <Route path="/report-builder"      element={<Safe><RoleRoute allowed={['Admin']}><ReportBuilder /></RoleRoute></Safe>} />
+                      <Route path="/dashboard-builder"   element={<Safe><RoleRoute allowed={['Admin']}><DashboardBuilder /></RoleRoute></Safe>} />
                       <Route path="/executive-analytics" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ExecutiveAnalytics /></RoleRoute></Safe>} />
                       <Route path="/security-center"     element={<Navigate to="/console/access?tab=security" replace />} />
                       <Route path="/system-health"       element={<Safe><RoleRoute allowed={['Admin']}><SystemHealth /></RoleRoute></Safe>} />
@@ -785,7 +856,7 @@ function MainApp() {
                     </Suspense>
                     </ChecklistOnlyGate>
                     </SubscriptionGate>
-                  </Layout>
+                  </AppShell>
                   </MaintenanceGate>
                 </ProtectedRoute>
               }

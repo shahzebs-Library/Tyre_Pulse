@@ -7,6 +7,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -168,7 +169,13 @@ export default function BudgetPlanner() {
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
   // ── Load persisted budgets from Supabase ───────────────────────────────────
+  // Stepping the year twice quickly leaves two reads in flight. If the earlier
+  // one lands last the planner shows the PREVIOUS year's budgets against the new
+  // year's spend, which reads as a variance rather than as stale data.
+  const latestBudgets = useLatestRequest()
+
   const fetchBudgets = useCallback(async () => {
+    const stale = latestBudgets.begin()
     setBudgetsLoading(true)
     setBudgetsError(null)
     try {
@@ -190,16 +197,20 @@ export default function BudgetPlanner() {
         if (row.site === ANNUAL_SITE) annual = annualVal
         else siteMap[row.site] = annualVal
       }
+      if (stale()) return
       setSiteBudgets(siteMap)
       setStoredAnnual(annual)
     } catch (e) {
+      // A superseded load must not raise a banner over budgets that loaded fine.
+      if (stale()) return
       setBudgetsError(toUserMessage(e, 'Failed to load budgets'))
       setSiteBudgets({})
       setStoredAnnual(null)
     } finally {
-      setBudgetsLoading(false)
+      // Clearing this from a stale load would make the newer one look finished.
+      if (!stale()) setBudgetsLoading(false)
     }
-  }, [selectedYear, budgetCountry])
+  }, [selectedYear, budgetCountry, latestBudgets])
 
   useEffect(() => { fetchBudgets() }, [fetchBudgets])
 

@@ -36,7 +36,7 @@ const h = vi.hoisted(() => {
       { country: 'UAE', tyre: 6_000_000, spare: 11_000_000, oil: 2_240_000, total: 19_240_000, lines: 70_696 },
       { country: 'Egypt', tyre: 30_000_000, spare: 55_000_000, oil: 11_360_000, total: 96_360_000, lines: 47_446 },
     ],
-    calls: { bySite: [], excel: [], setMap: [] },
+    calls: { bySite: [], excel: [], setMap: [], snapshot: [], byCountry: [] },
   }
 })
 
@@ -48,20 +48,28 @@ vi.mock('chart.js', () => ({
   PointElement: {}, ArcElement: {}, Filler: {}, Title: {}, Tooltip: {}, Legend: {},
 }))
 vi.mock('react-chartjs-2', () => ({ Bar: () => null, Doughnut: () => null, Line: () => null }))
+// The page reads the REPORTING SCOPE, not the working context: which countries
+// an analytics surface covers is a different question from where you are
+// operating, and this page answers the first one. `activeCountry` is
+// deliberately NOT supplied here - if the page ever reads it again, every case
+// below fails rather than silently following the wrong control.
 vi.mock('../contexts/SettingsContext', () => ({
   COUNTRY_CURRENCY: { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' },
   useSettings: () => ({
-    activeCountry: h.scope.activeCountry,
-    activeCurrency: h.scope.activeCurrency,
+    reportingScope: h.scope.reportingScope,
+    allowedScopeCountries: h.scope.allowed,
     appSettings: { company_name: 'Green Concrete', currency: 'SAR' },
   }),
+}))
+vi.mock('../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ t: (k) => k, isRTL: false }),
 }))
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: false }),
 }))
 vi.mock('../lib/api/partsConsumption', () => ({
-  getPartsExpenseSnapshot: () => Promise.resolve(h.snapshot),
-  getExpenseByCountry: () => Promise.resolve(h.byCountry),
+  getPartsExpenseSnapshot: (args) => { h.calls.snapshot.push(args); return Promise.resolve(h.snapshot) },
+  getExpenseByCountry: (args) => { h.calls.byCountry.push(args); return Promise.resolve(h.byCountry) },
   // The comparison / cost-per-km panels load from their own RPC. These tests
   // cover the legacy snapshot behaviour, so it returns not-provisioned and those
   // sections stay unrendered - which is also the real degrade path.
@@ -82,7 +90,8 @@ import ExpenseReport from '../pages/ExpenseReport'
 
 beforeEach(() => {
   h.calls.bySite = []; h.calls.excel = []; h.calls.setMap = []
-  h.scope = { activeCountry: 'All', activeCurrency: 'SAR' }
+  h.calls.snapshot = []; h.calls.byCountry = []
+  h.scope = { reportingScope: { countries: ['All'] }, allowed: ['KSA', 'UAE', 'Egypt'] }
 })
 
 describe('ExpenseReport - All countries scope', () => {
@@ -147,7 +156,7 @@ describe('ExpenseReport - All countries scope', () => {
 })
 
 describe('ExpenseReport - single country scope is unchanged', () => {
-  beforeEach(() => { h.scope = { activeCountry: 'KSA', activeCurrency: 'SAR' } })
+  beforeEach(() => { h.scope = { reportingScope: { countries: ['KSA'] }, allowed: ['KSA', 'UAE', 'Egypt'] } })
 
   it('renders the charts and the blended-scope note is absent', async () => {
     render(<ExpenseReport />)
@@ -174,5 +183,56 @@ describe('ExpenseReport - single country scope is unchanged', () => {
     expect(columns).toEqual(['section', 'name', 'spend', 'count'])
     expect(headers).toEqual(['Section', 'Name', 'Spend', 'Count'])
     expect(rows.map((r) => r.section)).toEqual(['Store', 'Top Item', 'Month'])
+  })
+})
+
+/**
+ * The reporting scope, not the working context, decides what this page covers.
+ *
+ * `get_expense_by_country` takes no country and returns every country RLS
+ * allows, so without a scope bound the page reported on countries the reader had
+ * not selected. These pin the three states the scope can be in.
+ */
+describe('ExpenseReport follows the reporting scope', () => {
+  it('reports only the countries in scope, even though the source returns more', async () => {
+    h.scope = { reportingScope: { countries: ['KSA', 'UAE'] }, allowed: ['KSA', 'UAE', 'Egypt'] }
+    render(<ExpenseReport />)
+    await screen.findByText('By country (own currency)')
+
+    expect(screen.getByText('SAR 40,550,000')).toBeTruthy()
+    expect(screen.getByText('AED 19,240,000')).toBeTruthy()
+    // Egypt is in the RPC's answer and in this profile's allow-list, but it is
+    // NOT in the scope, so it must not be reported on.
+    expect(screen.queryByText('EGP 96,360,000')).toBeNull()
+    await waitFor(() => expect(h.calls.bySite.map((c) => c.country)).toEqual(['KSA', 'UAE']))
+  })
+
+  it('never reports a country outside allowedScopeCountries', async () => {
+    // A stored scope naming a country this profile may no longer aggregate over.
+    h.scope = { reportingScope: { countries: ['KSA', 'Egypt'] }, allowed: ['KSA', 'UAE'] }
+    render(<ExpenseReport />)
+    await waitFor(() => expect(h.calls.bySite.length).toBeGreaterThan(0))
+
+    expect(h.calls.bySite.map((c) => c.country)).toEqual(['KSA'])
+    expect(document.body.textContent).not.toContain('96,360,000')
+  })
+
+  it('opens the full single-country report when the scope names exactly one country', async () => {
+    h.scope = { reportingScope: { countries: ['UAE'] }, allowed: ['KSA', 'UAE', 'Egypt'] }
+    render(<ExpenseReport />)
+    await screen.findByText('Top stores by spend')
+    // In UAE's OWN currency, taken from the scope - not from the working context.
+    await waitFor(() => expect(h.calls.bySite[0].country).toBe('UAE'))
+    expect(await screen.findByText('AED 13')).toBeTruthy()
+  })
+
+  it('asks for nothing, and says so, when the scope resolves to no country', async () => {
+    h.scope = { reportingScope: { countries: ['Egypt'] }, allowed: ['KSA', 'UAE'] }
+    render(<ExpenseReport />)
+
+    await screen.findByText(/no countries are selected in the reporting scope/i)
+    expect(h.calls.snapshot).toHaveLength(0)
+    expect(h.calls.byCountry).toHaveLength(0)
+    expect(h.calls.bySite).toHaveLength(0)
   })
 })

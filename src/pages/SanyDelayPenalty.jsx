@@ -24,6 +24,16 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
 const STATUSES = ['draft', 'deducted', 'waived']
+
+/**
+ * Country this page works in, taken from the working context. On the
+ * All-countries view there is nothing to inherit, so it opens UNSET and the user
+ * picks a country - a silent 'KSA' default would book penalty rows against a
+ * country nobody chose (and every row here is written in SAR).
+ */
+const defaultCountryFor = (active) => (active && active !== 'All' ? active : '')
+
+const COUNTRY_REQUIRED_HINT = 'Select a country. You are viewing all countries.'
 const fmtSar = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : `SAR ${Math.round(Number(v)).toLocaleString()}`)
 const fmtHrs = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })} h`)
 const fmtDate = (v) => (v ? String(v).slice(0, 10) : '-')
@@ -36,7 +46,7 @@ const monthEnd = (ym) => {
 
 export default function SanyDelayPenalty() {
   const { activeCountry } = useSettings()
-  const [country, setCountry] = useState(activeCountry && activeCountry !== 'All' ? activeCountry : 'KSA')
+  const [country, setCountry] = useState(defaultCountryFor(activeCountry))
   const [fromM, setFromM] = useState('')
   const [toM, setToM] = useState('')
   const [minDays, setMinDays] = useState(DEFAULT_MIN_DAYS)
@@ -52,6 +62,9 @@ export default function SanyDelayPenalty() {
 
   const loadLedger = useCallback(() => {
     let cancelled = false
+    // With no country chosen there is no scope to read: an unfiltered read would
+    // blend the three countries' rows under this page's fixed SAR formatting.
+    if (!country) { setLedger([]); setLoading(false); setError(''); return () => { cancelled = true } }
     setLoading(true); setError('')
     listDelayPenalties({ country, from: monthStart(fromM), to: monthEnd(toM) })
       .then((rows) => { if (!cancelled) setLedger(rows) })
@@ -65,6 +78,9 @@ export default function SanyDelayPenalty() {
   const summary = useMemo(() => summarizeDelayPenalties(ledger), [ledger])
 
   async function findCandidates() {
+    // The candidate RPC falls back to KSA when it is handed no country, so this
+    // must not run until the user has actually chosen one.
+    if (!country) { setError(COUNTRY_REQUIRED_HINT); return }
     setCandLoading(true); setError(''); setNotice(''); setSelected({})
     try {
       const res = await getDelayCandidates({ country, from: monthStart(fromM), to: monthEnd(toM), minDays })
@@ -94,6 +110,7 @@ export default function SanyDelayPenalty() {
   }
 
   async function addSelected() {
+    if (!country) { setError(COUNTRY_REQUIRED_HINT); return }
     const rows = Object.values(selected).map((c) => penaltyFromCandidate(c, { rate: DEFAULT_RATE_PER_HOUR, country }))
     if (!rows.length) return
     setNotice(''); setError('')
@@ -120,6 +137,7 @@ export default function SanyDelayPenalty() {
   const [manual, setManual] = useState(null)
   async function saveManual() {
     if (!manual) return
+    if (!country) { setError(COUNTRY_REQUIRED_HINT); return }
     const hours = Number(manual.downtime_hours)
     const rate = Number(manual.rate_per_hour || DEFAULT_RATE_PER_HOUR)
     if (!Number.isFinite(hours) || hours <= 0) { setError('Downtime hours must be a number greater than 0.'); return }
@@ -166,12 +184,17 @@ export default function SanyDelayPenalty() {
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="inline-flex rounded-lg border border-[var(--border-subtle)] p-0.5">
-          {COUNTRIES.map((c) => (
-            <button key={c} type="button" onClick={() => setCountry(c)}
-              className={`px-3 py-1.5 text-sm rounded-md ${country === c ? 'bg-[var(--accent)] text-white' : ''}`}
-              style={country === c ? undefined : { color: 'var(--text-secondary)' }}>{c}</button>
-          ))}
+        <div>
+          <div className="inline-flex rounded-lg border border-[var(--border-subtle)] p-0.5">
+            {COUNTRIES.map((c) => (
+              <button key={c} type="button" onClick={() => setCountry(c)}
+                className={`px-3 py-1.5 text-sm rounded-md ${country === c ? 'bg-[var(--accent)] text-white' : ''}`}
+                style={country === c ? undefined : { color: 'var(--text-secondary)' }}>{c}</button>
+            ))}
+          </div>
+          {!country && (
+            <p className="mt-1 text-xs text-amber-300">{COUNTRY_REQUIRED_HINT}</p>
+          )}
         </div>
         <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>From
           <input type="month" value={fromM} onChange={(e) => setFromM(e.target.value)} className="ml-2 rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1 text-sm" />
@@ -199,7 +222,7 @@ export default function SanyDelayPenalty() {
       <section className="mb-6 rounded-xl border border-[var(--border-subtle)] p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-base font-semibold"><Search size={18} /> Job-card candidates (repairs over {minDays} days)</h3>
-          <button type="button" onClick={findCandidates} className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-white">
+          <button type="button" onClick={findCandidates} disabled={!country} className="inline-flex items-center gap-2 rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed">
             <Search size={14} /> {candLoading ? 'Searching...' : 'Find candidates'}
           </button>
         </div>
@@ -207,7 +230,9 @@ export default function SanyDelayPenalty() {
           Repairs whose downtime (Production Out to Production In) exceeded {minDays} days. Tick the ones sent to a SANY workshop, then add them - penalty = downtime hours x {DEFAULT_RATE_PER_HOUR} SAR.
         </p>
 
-        {candidates == null ? (
+        {!country ? (
+          <div className="py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>{COUNTRY_REQUIRED_HINT}</div>
+        ) : candidates == null ? (
           <div className="py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Press "Find candidates" to list repairs over {minDays} days.</div>
         ) : candidates.length === 0 ? (
           <div className="py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>No repairs over {minDays} days found for {country} in this window.</div>
@@ -260,7 +285,7 @@ export default function SanyDelayPenalty() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-base font-semibold"><Timer size={18} /> Penalty ledger</h3>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setManual(manual ? null : { downtime_hours: '', rate_per_hour: DEFAULT_RATE_PER_HOUR })} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs"><Plus size={12} /> Manual add</button>
+            <button type="button" disabled={!country} onClick={() => setManual(manual ? null : { downtime_hours: '', rate_per_hour: DEFAULT_RATE_PER_HOUR })} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs disabled:opacity-50 disabled:cursor-not-allowed"><Plus size={12} /> Manual add</button>
             <button type="button" onClick={() => exportLedger('excel')} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs"><FileSpreadsheet size={12} /> Excel</button>
             <button type="button" onClick={() => exportLedger('pdf')} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1 text-xs"><FileText size={12} /> PDF</button>
           </div>
@@ -279,6 +304,8 @@ export default function SanyDelayPenalty() {
 
         {loading ? (
           <div className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
+        ) : !country ? (
+          <div className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>{COUNTRY_REQUIRED_HINT}</div>
         ) : ledger.length === 0 ? (
           <div className="py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>No penalty rows yet. Find job-card candidates above and add the ones sent to SANY.</div>
         ) : (

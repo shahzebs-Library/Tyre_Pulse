@@ -8,7 +8,7 @@ import { FormField, FormSelect, FormDate, FormActions } from '../components/form
 import * as tyreRecordsApi from '../lib/api/tyreRecords'
 import { scrapTyreBySerial, getScrapPermissions } from '../lib/api/tyreExchange'
 import { useAuth } from '../contexts/AuthContext'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -40,7 +40,20 @@ const RISK_STYLE = {
   Low:      'bg-green-900/30 text-green-300 border-green-800/50',
 }
 
-const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({
+/**
+ * Country a NEW record inherits from the working context. On the All-countries
+ * view there is no country to inherit, so the field opens BLANK and the user has
+ * to choose one - a silent 'KSA' default would stamp a fabricated country (and
+ * with it the currency and every cost report) onto a record nobody scoped.
+ */
+const defaultCountryFor = (active) => (active && active !== 'All' ? active : '')
+
+// Plain literal, not a t() key: the locale files are outside this change, and a
+// missing key would render the key itself on screen.
+const COUNTRY_REQUIRED_HINT = 'Select a country. You are viewing all countries.'
+const COUNTRY_PLACEHOLDER = 'Select a country'
+
+const EMPTY_FORM = (defaultCost = 1200, country = '') => ({
   sr: '', issue_date: '', description: '', brand: '', serial_no: '',
   qty: 1, job_card: '', mis_number: '', asset_no: '', site: '', country,
   remarks: '', cost_per_tyre: defaultCost, risk_level: '', category: '',
@@ -88,11 +101,16 @@ export default function TyreRecords() {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors: formErrors },
   } = useForm({
     resolver: zodResolver(tyreRecordFormSchema),
     defaultValues: EMPTY_FORM(),
   })
+
+  // True only while the country is genuinely unchosen (the All-countries case),
+  // which is when the field needs the hint rather than a quiet default.
+  const countryUnset = !String(watch('country') || '').trim()
 
   // Bulk selection - driven by the current page's records
   const {
@@ -153,7 +171,7 @@ export default function TyreRecords() {
   function openAdd() {
     // Cost is left blank so the user enters the ACTUAL cost - no settings default
     // is written into a record.
-    reset(EMPTY_FORM('', activeCountry !== 'All' ? activeCountry : 'KSA'))
+    reset(EMPTY_FORM('', defaultCountryFor(activeCountry)))
     setEditRecord({})
     setFormError('')
   }
@@ -173,6 +191,12 @@ export default function TyreRecords() {
   }
 
   async function saveRecord(form) {
+    // Never stamp a country the user did not choose: on the All-countries view the
+    // field opens blank, so it has to be picked before the record can be saved.
+    if (!String(form.country || '').trim()) {
+      setFormError(COUNTRY_REQUIRED_HINT)
+      return
+    }
     setSaving(true)
     setFormError('')
     const payload = {
@@ -185,7 +209,7 @@ export default function TyreRecords() {
       cost_per_tyre: form.cost_per_tyre !== '' && form.cost_per_tyre != null ? +form.cost_per_tyre : null,
       km_at_fitment: form.km_at_fitment !== '' ? +form.km_at_fitment : null,
       km_at_removal: form.km_at_removal !== '' ? +form.km_at_removal : null,
-      country: form.country || 'KSA',
+      country: form.country,
       region: profile?.region ?? 'KSA',
       uploaded_by: profile?.id,
     }
@@ -699,7 +723,19 @@ export default function TyreRecords() {
             </div>
             <FormField label={t('records.form.remarks')} multiline rows={2} error={formErrors.remarks} {...register('remarks')} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <FormSelect label={t('records.form.country')} options={['KSA', 'UAE', 'Egypt']} error={formErrors.country} {...register('country')} />
+              <div>
+                <FormSelect
+                  label={t('records.form.country')}
+                  required
+                  placeholder={COUNTRY_PLACEHOLDER}
+                  options={COUNTRIES}
+                  error={formErrors.country}
+                  {...register('country')}
+                />
+                {countryUnset && (
+                  <p className="mt-1 text-xs text-amber-300">{COUNTRY_REQUIRED_HINT}</p>
+                )}
+              </div>
               <FormField label={t('records.form.kmAtFitment')} type="number" min={0} placeholder={t('records.form.optional')} error={formErrors.km_at_fitment} {...register('km_at_fitment')} />
               <FormField label={t('records.form.kmAtRemoval')} type="number" min={0} placeholder={t('records.form.optional')} error={formErrors.km_at_removal} {...register('km_at_removal')} />
             </div>

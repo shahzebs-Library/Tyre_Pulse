@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
@@ -7,13 +7,13 @@ import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from 
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
 import { getNavLayout } from '../lib/api/navLayout'
-import { configStr } from '../lib/api/systemConfig'
+import TopBar from './shell/TopBar'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
 // is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
 const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'Store Keeper'])
 const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
-import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
+import { useSettings } from '../contexts/SettingsContext'
 import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
@@ -69,8 +69,6 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolveBrandLogo } from '../lib/brand/library'
 import BrandIcon from './ui/BrandIcon'
 import InstallPwaPrompt from './InstallPwaPrompt'
-import NotificationCenter from './NotificationCenter'
-import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeToggle from './ui/ThemeToggle'
@@ -667,20 +665,16 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
   )
 }
 
-const SEARCH_TABLES = [
-  { table: 'tyre_records',       fields: ['serial_no','asset_no','brand','site','description'],  label: 'Tyre',   route: '/tyres' },
-  { table: 'corrective_actions', fields: ['title','site','assigned_to','asset_no'],              label: 'Action', route: '/actions' },
-  { table: 'rca_records',        fields: ['asset_no','tyre_serial','brand','site','root_cause'], label: 'RCA',    route: '/rca' },
-  { table: 'stock_records',      fields: ['site','description'],                                  label: 'Stock',  route: '/stock' },
-]
-
 const SIDEBAR_EXPANDED = 240
 const SIDEBAR_COLLAPSED = 54
+// Mobile drawer: min(86vw, MOBILE_DRAWER_MAX) so it fits a 360px phone and does
+// not sprawl on a tablet. Was a flat 240px on every device.
+const MOBILE_DRAWER_MAX = 360
 
 export default function Layout({ children }) {
   useRealtimeSync()
 
-  const { profile, signOut, hasPermission, grantedModules, isSuperAdmin } = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -700,7 +694,13 @@ export default function Layout({ children }) {
   }, [customAppIcon])
   const appIcon = customAppIcon || companyLogo || TpLogo
   const hasCustomIcon = Boolean(customAppIcon || companyLogo)
-  const { activeCountry, setActiveCountry } = useSettings()
+  // `contextKey` changes whenever the working context (country/region/site)
+  // changes. It is folded into the routed content's React key below so pages
+  // REMOUNT on a context switch. Without it a stale in-flight response can land
+  // after the switch and paint the previous country's rows under the new label:
+  // 0 pages use react-query and 188 of 247 have no cancellation guard, so this
+  // one key is the honest fix rather than retrofitting every page.
+  const { activeCountry, contextKey } = useSettings()
   const navigate     = useNavigate()
   const location     = useLocation()
 
@@ -714,11 +714,6 @@ export default function Layout({ children }) {
     () => typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
   )
   const [collapsedGroups, setCollapsedGroups] = useState(new Set())
-  const [searchOpen, setSearchOpen]           = useState(false)
-  const [query, setQuery]                     = useState('')
-  const [results, setResults]                 = useState([])
-  const [searching, setSearching]             = useState(false)
-  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [alertCount, setAlertCount]           = useState(0)
   // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
   // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
@@ -743,7 +738,6 @@ export default function Layout({ children }) {
 
   // App version label (system_config.app_version). Read from the primed config
   // cache (SettingsContext primes it for authed pages); empty when unset.
-  const appVersion = configStr('app_version', '')
 
   function toggleGroup(label) {
     setCollapsedGroups(prev => {
@@ -754,8 +748,6 @@ export default function Layout({ children }) {
     })
   }
 
-  const searchRef   = useRef(null)
-  const debounceRef = useRef(null)
 
   // Responsive breakpoint tracking
   useEffect(() => {
@@ -767,6 +759,25 @@ export default function Layout({ children }) {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
+
+  // Mobile drawer width. The drawer used to be a fixed 240px on every handset,
+  // which is cramped on a 360px phone and wasteful on a tablet. Sized from the
+  // viewport instead (min(86vw, 360px)), computed as a NUMBER because framer
+  // animates the width and a CSS min() string would not tween. Tracked on
+  // resize/orientation change so a rotation does not leave a stale width.
+  const [viewportW, setViewportW] = useState(
+    () => (typeof window !== 'undefined' ? window.innerWidth : SIDEBAR_EXPANDED),
+  )
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('orientationchange', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('orientationchange', onResize)
+    }
+  }, [])
+  const drawerWidth = Math.min(Math.round(viewportW * 0.86), MOBILE_DRAWER_MAX)
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -818,52 +829,12 @@ export default function Layout({ children }) {
   useEffect(() => {
     function onKeyDown(e) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
-      if (e.key === 'Escape') { setGlobalSearchOpen(false); setSearchOpen(false); setQuery('') }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [setCmdOpen])
 
-  useEffect(() => {
-    if (searchOpen && searchRef.current) setTimeout(() => searchRef.current?.focus(), 50)
-  }, [searchOpen])
 
-  const doSearch = useCallback(async (q) => {
-    if (!q.trim() || q.length < 2) { setResults([]); return }
-    setSearching(true)
-    const allResults = []
-    await Promise.all(SEARCH_TABLES.map(async ({ table, fields, label, route }) => {
-      const orClause = fields.map(f => `${f}.ilike.%${q}%`).join(',')
-      const { data } = await supabase.from(table).select(fields.join(',') + ',id').or(orClause).limit(5)
-      if (data) {
-        data.forEach(row => {
-          const primary   = row[fields[0]] || row[fields[1]] || 'Unknown'
-          const secondary = fields.slice(1, 3).map(f => row[f]).filter(Boolean).join(' · ')
-          allResults.push({ id: row.id, label, table, primary, secondary, route })
-        })
-      }
-    }))
-    setResults(allResults.slice(0, 15))
-    setSearching(false)
-  }, [])
-
-  useEffect(() => {
-    clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => doSearch(query), 300)
-    return () => clearTimeout(debounceRef.current)
-  }, [query, doSearch])
-
-  async function handleSignOut() { await signOut(); navigate('/login') }
-
-  const pillClass = (c) =>
-    `flex-1 py-1 text-[10px] font-bold rounded-md transition-all duration-200 ${
-      activeCountry === c
-        ? 'text-white shadow-sm'
-        : 'text-gray-600 hover:text-gray-400'
-    }`
-  const pillStyle = (c) => activeCountry === c
-    ? { background: 'linear-gradient(135deg, #15803d, #16a34a)', boxShadow: '0 0 12px rgba(22,163,74,0.35)' }
-    : {}
 
   if (profile?.role === 'Tyre Man') {
     return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}>{children}</TyreManShell>
@@ -898,7 +869,7 @@ export default function Layout({ children }) {
         className={`flex-shrink-0 flex flex-col ${isMobile ? 'fixed top-0 left-0 h-full z-50' : 'relative z-20'}`}
         animate={
           isMobile
-            ? { x: sidebarOpen ? 0 : -SIDEBAR_EXPANDED, width: SIDEBAR_EXPANDED }
+            ? { x: sidebarOpen ? 0 : -drawerWidth, width: drawerWidth }
             : { width: sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED, x: 0 }
         }
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -960,59 +931,12 @@ export default function Layout({ children }) {
           </button>
         </div>
 
-        {/* ── Search + Country ───────────────────────────────────────────────── */}
-        <AnimatePresence>
-          {sidebarOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              style={{ overflow: 'hidden' }}
-            >
-              {/* Search */}
-              <div className="px-2.5 pt-3 pb-1">
-                <button
-                  onClick={() => setCmdOpen(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-500 hover:text-green-400 transition-all duration-200 text-xs group"
-                  style={{
-                    background: 'rgba(22,163,74,0.04)',
-                    border: '1px solid rgba(22,163,74,0.1)',
-                  }}
-                >
-                  <Search size={11} className="flex-shrink-0 group-hover:text-green-400 transition-colors" />
-                  <span className="flex-1 text-left font-medium">Search...</span>
-                  <kbd className="text-[9px] px-1.5 py-0.5 rounded-md font-mono text-gray-600"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    ⌘K
-                  </kbd>
-                </button>
-              </div>
-
-              {/* Country selector */}
-              {(profile?.role === 'Admin' || !profile?.country || profile.country.length === 0) && (
-                <div className="px-2.5 pb-1">
-                  <p className="nav-section px-0.5 pt-2 pb-1.5">{t('shell.country')}</p>
-                  <div className="flex gap-0.5 rounded-xl p-0.5"
-                    style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.09)' }}>
-                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>{t('common.all')}</button>
-                    {COUNTRIES.map(c => (
-                      <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
-                        {COUNTRY_LABEL[c]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Language selector */}
-              <div className="px-2.5 pb-2">
-                <p className="nav-section px-0.5 pt-2 pb-1.5">{t('common.language')}</p>
-                <LanguageSwitcher className="w-full justify-between" />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Search, working context and language used to live here. They are
+            global controls, not navigation, so they now sit in <TopBar>. The
+            sidebar is navigation only. The old hardcoded All/KSA/UAE/EGY pill
+            row is gone: it could not scale past three countries and it mixed an
+            aggregation mode into everyday operations. See WorkingContextSelector
+            (operations) and ReportingScopeBar (analytics). */}
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
@@ -1141,178 +1065,83 @@ export default function Layout({ children }) {
               ConsoleSurfaceGate). Do not re-add a console link to this nav. */}
         </nav>
 
-        {/* ── User footer ────────────────────────────────────────────────────── */}
-        <div
-          className="flex-shrink-0 p-2.5"
-          style={{ borderTop: '1px solid rgba(22,163,74,0.09)' }}
-        >
-          <div className={`flex items-center gap-2 ${!sidebarOpen ? 'flex-col' : ''}`}>
-            {/* avatar */}
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0 cursor-default"
-              style={{
-                background: 'linear-gradient(135deg, #16a34a, #15803d)',
-                boxShadow: '0 0 14px rgba(22,163,74,0.45)',
-                border: '1px solid rgba(22,163,74,0.4)',
-              }}
-            >
-              {profile?.full_name?.[0]?.toUpperCase() ?? profile?.username?.[0]?.toUpperCase() ?? 'U'}
-            </div>
+        {/* The user footer (avatar, role, app version, theme, notifications,
+            sign-out) moved into <ProfileMenu> in the top bar, so each of those
+            controls exists exactly once in the shell. */}
 
-            <AnimatePresence>
-              {sidebarOpen && (
-                <motion.div
-                  className="flex-1 min-w-0"
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                    <p className="text-[11.5px] font-semibold text-gray-300 truncate leading-none">
-                      {profile?.full_name ?? profile?.username ?? 'User'}
-                    </p>
-                    {profile?.role && (
-                      <span className={`flex-shrink-0 leading-none ${roleBadgeClass(profile.role)}`}>
-                        {roleLabel(t, profile.role)}
-                      </span>
-                    )}
-                  </div>
-                  {/* App version (system_config.app_version). Rendered only when set. */}
-                  {appVersion && (
-                    <p className="text-[9.5px] font-medium text-gray-600 truncate leading-none mt-1">
-                      v{appVersion}
-                    </p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* actions */}
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              <ThemeToggle
-                size={13}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10"
-              />
-              <NotificationCenter />
-              <button
-                onClick={handleSignOut}
-                title="Sign out"
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 transition-all duration-200 hover:bg-red-400/10"
-              >
-                <LogOut size={13} />
-              </button>
-            </div>
-          </div>
-        </div>
       </motion.aside>
 
-      {/* ── Mobile top header ────────────────────────────────────────────────── */}
-      {isMobile && (
-        <div
-          className="fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3"
+      {/* ── Top bar + main content ───────────────────────────────────────────
+          The desktop app previously had NO top bar at all: search, country,
+          language, theme, notifications, profile, version and sign-out were all
+          inside the 240px sidebar, which also carries the whole nav. TopBar now
+          owns the global controls (desktop AND mobile, replacing the old fixed
+          52px mobile header), leaving the sidebar for navigation only. It sits
+          as a sibling ABOVE <main> in a flex column, so it stays visible without
+          needing position:fixed or a matching paddingTop on the scroll area. */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <TopBar
+          onToggleSidebar={() => setSidebarOpen(v => !v)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+          alertCount={alertCount}
+          appIcon={appIcon}
+          hasCustomIcon={hasCustomIcon}
+        />
+
+        <main
+          className="flex-1 overflow-y-auto"
           style={{
-            height: 52,
-            background: 'var(--panel-deep)',
-            borderBottom: '1px solid rgba(22,163,74,0.12)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            boxShadow: '0 1px 20px rgba(0,0,0,0.4)',
+            scrollbarWidth: 'thin',
+            paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
           }}
         >
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors flex-shrink-0"
-            style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.12)' }}
-            aria-label={t('shell.openMenu')}
-          >
-            <Menu size={16} />
-          </button>
-
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <BrandIcon src={appIcon} custom={hasCustomIcon} size={20} className="flex-shrink-0" />
-            <span className="tp-wordmark font-extrabold text-sm tracking-tight">
-              TyrePulse
-            </span>
-          </div>
-
-          <button
-            onClick={() => setGlobalSearchOpen(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors"
-            aria-label="Search"
-          >
-            <Search size={16} />
-          </button>
-
-          <ThemeToggle
-            size={16}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 hover:text-green-400 transition-colors"
-          />
-
-          <button
-            onClick={() => navigate('/alerts')}
-            className="relative w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors"
-            aria-label="Alerts"
-          >
-            <Bell size={16} />
-            {alertCount > 0 && (
-              <span
-                className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
-                style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }}
-              >
-                {alertCount > 9 ? '9+' : alertCount}
-              </span>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* ── Main content ────────────────────────────────────────────────────── */}
-      <main
-        className="flex-1 overflow-y-auto"
-        style={{
-          scrollbarWidth: 'thin',
-          paddingTop: isMobile ? 52 : 0,
-          paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
-        }}
-      >
-        {/* ── Wayfinding bar: single global Back + breadcrumbs ────────────────
-            The ONE canonical "Back to previous page" control for the whole app
-            shell, so every routed page (including the many that do not use
-            PageHeader) gets exactly one, consistently placed. Hidden on the
-            top-level home/dashboard; the Back button itself is also hidden when
-            there is no history to go back to (deep link / first page). */}
-        {location.pathname !== '/' && location.pathname !== '/dashboard' && (
-          <div className="w-full max-w-[1800px] mx-auto px-4 pt-4 sm:px-6 xl:px-8 2xl:px-10">
-            <div className="flex items-center gap-2 min-w-0">
-              {typeof window !== 'undefined' && window.history.length > 1 && (
-                <button
-                  onClick={() => navigate(-1)}
-                  title="Back to previous page"
-                  aria-label="Back to previous page"
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
-                  style={{
-                    color: 'var(--text-muted)',
-                    background: 'rgba(22,163,74,0.05)',
-                    border: '1px solid rgba(22,163,74,0.12)',
-                  }}
-                >
-                  <ArrowLeft size={13} className="flex-shrink-0" />
-                  <span className="hidden sm:inline">Back</span>
-                </button>
-              )}
-              <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
+          {/* ── Wayfinding bar: single global Back + breadcrumbs ────────────────
+              The ONE canonical "Back to previous page" control for the whole app
+              shell, so every routed page (including the many that do not use
+              PageHeader) gets exactly one, consistently placed. Hidden on the
+              top-level home/dashboard; the Back button itself is also hidden when
+              there is no history to go back to (deep link / first page). */}
+          {location.pathname !== '/' && location.pathname !== '/dashboard' && (
+            <div className="w-full max-w-[1800px] mx-auto px-4 pt-4 sm:px-6 xl:px-8 2xl:px-10">
+              <div className="flex items-center gap-2 min-w-0">
+                {typeof window !== 'undefined' && window.history.length > 1 && (
+                  <button
+                    onClick={() => navigate(-1)}
+                    title="Back to previous page"
+                    aria-label="Back to previous page"
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
+                    style={{
+                      color: 'var(--text-muted)',
+                      background: 'rgba(22,163,74,0.05)',
+                      border: '1px solid rgba(22,163,74,0.12)',
+                    }}
+                  >
+                    <ArrowLeft size={13} className="flex-shrink-0" />
+                    <span className="hidden sm:inline">Back</span>
+                  </button>
+                )}
+                <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
+              </div>
             </div>
-          </div>
-        )}
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 1, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
-        >
-          {children}
-        </motion.div>
-      </main>
+          )}
+          <motion.div
+            // Route AND working context. Changing the context remounts the page
+            // so a response that was already in flight cannot resolve into the
+            // new context and paint the previous country's rows under the new
+            // label. The route half is unchanged, so switching context keeps you
+            // on the same module rather than bouncing you to the dashboard.
+            key={`${location.pathname}|${contextKey ?? ''}`}
+            initial={{ opacity: 1, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
+          >
+            {children}
+          </motion.div>
+        </main>
+      </div>
+
 
       {/* PWA */}
       <InstallPwaPrompt />
@@ -1325,8 +1154,6 @@ export default function Layout({ children }) {
         />
       )}
 
-      {/* Global search */}
-      <GlobalSearch isOpen={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
 
       {/* Command palette - Ctrl/Cmd+K */}
       <CommandPalette />
@@ -1334,92 +1161,11 @@ export default function Layout({ children }) {
       {/* Role-based first-run onboarding */}
       <OnboardingWizard />
 
-      {/* ── Search palette ───────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {searchOpen && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh] px-4"
-            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => { setSearchOpen(false); setQuery('') }}
-          >
-            <motion.div
-              className="w-full max-w-xl overflow-hidden"
-              style={{
-                background: 'linear-gradient(145deg, rgba(6,13,8,0.99) 0%, var(--panel-deep) 100%)',
-                border: '1px solid rgba(22,163,74,0.28)',
-                borderRadius: 20,
-                boxShadow: '0 0 80px rgba(22,163,74,0.16), 0 32px 100px rgba(0,0,0,0.85)',
-              }}
-              initial={{ scale: 0.95, y: -16 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: -16 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              onClick={e => e.stopPropagation()}
-            >
-              {/* top glow line */}
-              <div className="h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(22,163,74,0.65) 40%,rgba(74,222,128,0.8) 50%,rgba(22,163,74,0.65) 60%,transparent)' }} />
-
-              {/* input */}
-              <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid rgba(22,163,74,0.1)' }}>
-                <Search size={14} className="text-green-600 flex-shrink-0" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  className="flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none text-sm font-medium"
-                  placeholder="Search tyres, actions, RCA, stock..."
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                />
-                {searching && <span className="text-[11px] text-gray-600 animate-pulse font-medium">Searching</span>}
-                <kbd
-                  className="text-[11px] text-gray-600 px-1.5 py-0.5 rounded-md cursor-pointer font-mono"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
-                  onClick={() => { setSearchOpen(false); setQuery('') }}
-                >ESC</kbd>
-              </div>
-
-              <div className="max-h-72 overflow-y-auto">
-                {query.length >= 2 && results.length === 0 && !searching && (
-                  <p className="text-gray-600 text-sm text-center py-10">No results for &ldquo;{query}&rdquo;</p>
-                )}
-                {query.length < 2 && (
-                  <p className="text-gray-700 text-xs text-center py-7 font-medium">Type at least 2 characters to search</p>
-                )}
-                {results.map((r, i) => (
-                  <motion.button
-                    key={`${r.id}-${i}`}
-                    onClick={() => { navigate(r.route); setSearchOpen(false); setQuery('') }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-                    style={{ borderBottom: '1px solid rgba(22,163,74,0.05)' }}
-                    whileHover={{ background: 'rgba(22,163,74,0.06)' }}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.025 }}
-                  >
-                    <span className="text-[10px] font-bold rounded-lg px-2 py-0.5 flex-shrink-0 min-w-[44px] text-center"
-                      style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)', color: '#16a34a' }}>
-                      {r.label}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-gray-200 text-sm font-medium truncate">{r.primary}</p>
-                      {r.secondary && <p className="text-gray-600 text-xs truncate mt-0.5">{r.secondary}</p>}
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
-
-              <div className="px-4 py-2.5 flex gap-4 text-[10px] text-gray-700 font-medium" style={{ borderTop: '1px solid rgba(22,163,74,0.06)' }}>
-                <span>↩ navigate</span>
-                <span>Esc close</span>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* An inline search palette used to live here. It was ALREADY dead code
+          on main: nothing ever set `searchOpen` to true. Removed along with
+          the orphaned <GlobalSearch> mount so the shell has exactly ONE
+          search surface, <CommandPalette>, which is the only one that reads
+          the shared permission-gated RECORD_SOURCES. */}
     </div>
   )
 }

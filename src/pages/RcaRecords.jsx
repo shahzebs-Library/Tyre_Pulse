@@ -38,8 +38,20 @@ const FACTOR_COLOR_MAP = Object.fromEntries(
   CONTRIBUTING_FACTOR_OPTIONS.map((f, i) => [f, FACTOR_COLORS[i % FACTOR_COLORS.length]])
 )
 
+/**
+ * Country a NEW RCA record inherits from the working context. On the
+ * All-countries view there is no country to inherit, so the field opens BLANK
+ * and the user has to choose one - a silent 'KSA' default would file the failure
+ * under a country nobody picked.
+ */
+const defaultCountryFor = (active) => (active && active !== 'All' ? active : '')
+
+// Plain literals, not t() keys: this page carries its own English strings.
+const COUNTRY_REQUIRED_HINT = 'Select a country. You are viewing all countries.'
+const COUNTRY_PLACEHOLDER = 'Select a country'
+
 const EMPTY_FORM = {
-  asset_no: '', tyre_serial: '', brand: '', site: '', country: 'KSA',
+  asset_no: '', tyre_serial: '', brand: '', site: '', country: '',
   failure_date: '', km_at_failure: '', hours_at_failure: '',
   root_cause: '', contributing_factors: [], ai_analysis: '',
 }
@@ -64,6 +76,10 @@ export default function RcaRecords() {
   const [creatingAction, setCreatingAction] = useState(false)
   const photoRef = useRef(null)
 
+  // True only while the country is genuinely unchosen (the All-countries case),
+  // which is when the field needs the hint rather than a quiet default.
+  const countryUnset = !String(form.country || '').trim()
+
   function handlePhoto(e, setter) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -87,8 +103,7 @@ export default function RcaRecords() {
   }
 
   function startAdd() {
-    const defaultCountry = activeCountry !== 'All' ? activeCountry : 'KSA'
-    setForm({ ...EMPTY_FORM, country: defaultCountry })
+    setForm({ ...EMPTY_FORM, country: defaultCountryFor(activeCountry) })
     setEditId(null); setShowForm(true); setError('')
   }
 
@@ -123,6 +138,9 @@ export default function RcaRecords() {
 
   async function save(e) {
     e.preventDefault()
+    // Never stamp a country the user did not choose: on the All-countries view the
+    // field opens blank, so it has to be picked before the record can be saved.
+    if (!String(form.country || '').trim()) { setError(COUNTRY_REQUIRED_HINT); return }
     setSaving(true)
     setError('')
     const payload = {
@@ -132,7 +150,7 @@ export default function RcaRecords() {
       km_at_failure:        form.km_at_failure    ? +form.km_at_failure    : null,
       hours_at_failure:     form.hours_at_failure ? +form.hours_at_failure : null,
       contributing_factors: Array.isArray(form.contributing_factors) ? form.contributing_factors : [],
-      country:              form.country || 'KSA',
+      country:              form.country,
       created_by:           editId ? undefined : profile?.id,
     }
     try {
@@ -454,8 +472,12 @@ export default function RcaRecords() {
                 <div>
                   <label className="label">Country</label>
                   <select className="input" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))}>
+                    <option value="">{COUNTRY_PLACEHOLDER}</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {countryUnset && (
+                    <p className="mt-1 text-xs text-amber-300">{COUNTRY_REQUIRED_HINT}</p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -515,7 +537,7 @@ export default function RcaRecords() {
                 )}
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+                <button type="submit" disabled={saving || countryUnset} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                   <Save size={16} /> {saving ? 'Saving...' : 'Save'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>

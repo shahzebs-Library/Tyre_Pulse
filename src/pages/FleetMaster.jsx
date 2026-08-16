@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
 import { sanitizeSearchTerm } from '../lib/searchFilter'
@@ -24,7 +24,20 @@ const DEFAULT_PAGE_SIZE = 25
 
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Retired', 'Transferred']
 
-const EMPTY_FORM = (country = 'KSA') => ({
+/**
+ * Country a NEW vehicle inherits from the working context. On the All-countries
+ * view there is no country to inherit, so the field opens BLANK and the user has
+ * to choose one - a silent 'KSA' default would file the asset under a country
+ * nobody picked, taking its currency and RLS visibility with it.
+ */
+const defaultCountryFor = (active) => (active && active !== 'All' ? active : '')
+
+// Plain literals, not t() keys: the locale files are outside this change, and a
+// missing key would render the key itself on screen.
+const COUNTRY_REQUIRED_HINT = 'Select a country. You are viewing all countries.'
+const COUNTRY_PLACEHOLDER = 'Select a country'
+
+const EMPTY_FORM = (country = '') => ({
   asset_no: '',
   fleet_number: '',
   make: '',
@@ -106,6 +119,9 @@ export default function FleetMaster() {
   const [atLimit, setAtLimit]                 = useState(false)
   const [deleteError, setDeleteError]         = useState('')
   const [form, setForm]                       = useState(() => EMPTY_FORM())
+  // True only while the country is genuinely unchosen (the All-countries case),
+  // which is when the field needs the hint rather than a quiet default.
+  const countryUnset = !String(form.country || '').trim()
 
   // ── multi-select bulk delete (Admin only) ─────────────────────────────────────
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
@@ -200,7 +216,7 @@ export default function FleetMaster() {
 
   // ── add / edit ────────────────────────────────────────────────────────────────
   async function openAdd() {
-    setForm(EMPTY_FORM(activeCountry !== 'All' ? activeCountry : 'KSA'))
+    setForm(EMPTY_FORM(defaultCountryFor(activeCountry)))
     setEditRecord({})
     setFormError('')
     // Proactively surface a reached plan cap so the Save button is disabled with a
@@ -238,6 +254,9 @@ export default function FleetMaster() {
   async function saveRecord(e) {
     e.preventDefault()
     if (!form.asset_no.trim()) { setFormError(t('fleetmaster.form.required')); return }
+    // Never stamp a country the user did not choose: on the All-countries view the
+    // field opens blank, so it has to be picked before the vehicle can be saved.
+    if (!String(form.country || '').trim()) { setFormError(COUNTRY_REQUIRED_HINT); return }
     setSaving(true)
     setFormError('')
 
@@ -665,10 +684,12 @@ export default function FleetMaster() {
                 <div>
                   <label className="label">{t('fleetmaster.form.country')}</label>
                   <select className="input" value={form.country} onChange={F('country')}>
-                    <option value="KSA">KSA</option>
-                    <option value="UAE">UAE</option>
-                    <option value="Egypt">Egypt</option>
+                    <option value="">{COUNTRY_PLACEHOLDER}</option>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {countryUnset && (
+                    <p className="mt-1 text-xs text-amber-300">{COUNTRY_REQUIRED_HINT}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -720,7 +741,7 @@ export default function FleetMaster() {
               </div>
             )}
             <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button type="submit" disabled={saving || countryUnset || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Save size={15} /> {saving ? t('fleetmaster.form.saving') : t('fleetmaster.form.save')}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('fleetmaster.form.cancel')}</button>

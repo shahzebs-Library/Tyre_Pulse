@@ -3,6 +3,142 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-16 — WEB SHELL REBUILT (WORKING CONTEXT vs REPORTING SCOPE) + TWO REAL ACCESS HOLES CLOSED (V542/V543). Next free **V544**.
+Owner sent a 74-section "Web Enterprise Navigation and Application Shell" prompt: redesign the shell, do NOT
+rebuild the app, preserve every route/permission/RLS/RTL/mobile integration, audit before implementing. Then
+"only admin is allowd to any kond og report builder dont give permission". Branch
+`claude/accident-builder-report-ui-2bkwb5`, 23 commits, tip `35e0ffb8`. **NOT MERGED, NO PR OPENED YET** -
+production is still on `f2d5870b`; the owner believed it was merged and it is not.
+
+### THE ONE ARCHITECTURAL IDEA: two questions the old shell answered with one control
+The sidebar carried permanent `All | KSA | UAE | EGY` pills, which cannot survive a 5th country and conflated
+two different questions. Now separated, and this split is the thing to preserve:
+- **WORKING CONTEXT** = where am I operating (Company > Country > Region > Site). One place at a time. Pure
+  engine `src/lib/workingContext.js`; `contextToCountry(ctx)` is the BRIDGE that writes through to the legacy
+  `activeCountry`, so **212 files that read activeCountry needed no edit at all**. Deliberately NOT in the URL.
+- **REPORTING SCOPE** = which countries does this report aggregate. Multi-select, may include All. Pure
+  `src/lib/reportingScope.js`; IS url-borne so a report can be shared. Drives Expense Trends, Board Overview
+  and Expenses.
+- `Layout` remounts on `key={pathname|contextKey}`, so a context change cannot leave a stale page behind.
+- Shell surfaces live in `src/components/shell/` (TopBar 52px, WorkingContextSelector, ReportingScopeBar,
+  ProfileMenu, GlobalCreate). Sidebar search / country pills / language / user footer were REMOVED from the
+  sidebar - they are the top bar's job now. NAV_GROUPS regrouped from a flat 210 into 13 groups via an optional
+  `parent` string; the flat NAV_CATALOG contract is unchanged.
+- **`t(key, vars)` TAKES INTERPOLATION VARS, NOT A FALLBACK.** Passing English as a second argument silently
+  renders nothing. Every shell string goes through a `tx`/`tOr` wrapper, and `shellI18nKeys.test.js` scans every
+  .jsx in the shell folder and FAILS if a wrapped key is missing from en OR ar - proven by deleting a key.
+  I claimed all keys resolved once when 5 did not; the guard exists because of that.
+
+### **V542 - COUNTRY SCOPING GOVERNED READS ONLY. A KSA MANAGER COULD WRITE A UAE ROW.**
+Country isolation was a **SELECT-only** RESTRICTIVE policy on 83 tables (site likewise on 55). A restrictive
+SELECT policy has USING and **no WITH CHECK**, so it says nothing about a row being WRITTEN. Reproduced as a
+real approved KSA-only Manager in a rolled-back transaction: `insert into tyre_records (... country) values
+(...,'UAE')` **landed**.
+- **IT WAS INVISIBLE BECAUSE THE OBVIOUS MEASUREMENT LIES**: counting the inserted row from inside that session
+  returns 0 (the reader cannot see it) and looks exactly like a refusal. **Count as a privileged reader in the
+  same transaction** - `reset role` then count. Same trap as V501.
+- Not a read leak: nothing about another country became visible. The damage is INJECTION - a row in another
+  country's registers, cost reports and exports, created by someone who cannot see it to undo it.
+- UPDATE was already refused in practice (Postgres re-checks the new row against the SELECT policy) - a side
+  effect of how UPDATE reads rows, not a rule anyone wrote. Now explicit.
+- **THE FIX COPIES EACH TABLE'S OWN EXPRESSION** via `pg_get_expr` into a RESTRICTIVE **FOR ALL** policy in both
+  USING and WITH CHECK, so read and write rules can never disagree. 78 country + 55 site tables. TWO shapes
+  exist and both are legitimate (46 V396-InitPlan form, 32 row-arg `app_can_see_country`); anything else aborts.
+  **import_batches/import_files/import_rows EXCLUDED on purpose** - their gate is `import_user_can_commit_country`
+  and staging writes are the point of those tables.
+- Blast radius measured FIRST: 38 approved users, **0 with no country scope**, 0 plain Admins, and the only
+  country values anywhere are KSA/UAE/Egypt - so no legitimate write can be refused. `country IS NULL` still
+  passes. Verified after: KSA Manager reads 8,145 unchanged, still updates AND still inserts its own rows
+  (including a country-less one), cross-country insert now raises, 3-country user still 8,145/2,455/591, super
+  admin unaffected.
+
+### **V543 - TWO VIEWS READ PAST RLS FOR WHOEVER QUERIED THEM**
+A Postgres view runs as its OWNER unless `security_invoker` is set. Measured: an **Egypt-only Director read 0
+rows from tyre_records directly, but 249 through `v_tyre_life_over_cap` and 6,220 rows of the admin-only KSA
+master staging through `v_ksa_master_tyre_fitments`**. Both now `security_invoker = on` (that Director now reads
+0/0/0; super admin unchanged). Also pinned search_path on `normalize_asset_no()`, `normalize_asset_code()`,
+`tyre_size_key(text)`. **RULE: a view over an RLS table must set security_invoker, or it is a hole with a
+friendly name.** Advisor ERROR count 2 -> 0.
+
+### REPORT BUILDERS ARE ADMIN-ONLY, INCLUDING THE EMBEDDED ONES
+Owner instruction. `src/lib/reportBuilderAccess.js` is the single predicate. The two builder ROUTES were the
+easy half; **three builders are PANELS inside ordinary pages** (PresentationStudio on Board Overview/Expenses/
+Cost per M3, the Report Builder tab in Accidents, the share-layout designer in Report Sharing), so guarding
+routes alone would have left them open to anyone who could reach the host page. Each self-gates in its exported
+wrapper (a source-scan test enforces that, so a NEW mount inherits the rule). **A per-user GRANT may NOT open a
+builder** - the check runs BEFORE the grant short-circuit in both `Layout.shouldShowNavItem` and
+`commandSearch.isCommandVisible`. Report READING (/reports, /report-center, /scheduled-reports) is untouched.
+
+### §39 CONTEXT RULES - DERIVED FROM THE DATA, AND DEFAULT IS *NOTICE*, NEVER *HIDE*
+`src/lib/contextRules.js`. Row counts per country were measured and recorded in the file header. The load-bearing
+distinction: an empty module in a country means one of two opposite things. **`structural`** (SANY/SCO/production
+m3 are KSA arrangements - can never apply elsewhere) vs **`not_rolled_out`** (inspections/accidents/breakdowns/
+disposals - the module works fine, nobody has used it there yet). **Hiding the second kind would stop the first
+UAE inspection ever being recorded**, so nothing hides by default; the module stays reachable and says why it is
+empty. The All-countries view ALWAYS passes - hiding a one-country module there defeats the view.
+
+### OTHER SHELL WORK, each with the defect it fixes
+- **The flag made the shell WAIT (§57 violation, my own regression).** AppShell held first paint until the
+  config read settled, capped at 2.5s, charging every load for a switch almost nobody flips. Now paints at once
+  from config cache > choice remembered in localStorage > default, and swaps once if the read disagrees. Pinned
+  by a source scan: no timeout, no spinner in that component.
+- **`LegacyLayout.jsx`** is the pre-rewrite shell frozen from `1e2584f7`, lazy-loaded, behind `system_config
+  .new_shell`. Fail-FORWARD: junk/blank/unreadable resolves to the NEW shell; only an explicit off rolls back.
+- **Search aliases**, measured before writing: "job card" (this ERP's own word - numbers are GCKR/JC/...),
+  "purchase order", "plate", "vin", "chassis", "hour meter", "grn", "sso", "2fa", "api key" all returned
+  **NOTHING**. Also `scoreCommand` only read `keywords` when it was an ARRAY, and one command had written its
+  aliases as a sentence - those had never matched anything. Now a string is kept whole AND split.
+- **Popover focus return (WCAG 2.4.3)** fixed once in the shared `useAnchoredPopover` for all five menus:
+  panels portal to the body, so on close focus fell to `<body>` and a keyboard user was stranded at the top of
+  the page. Reclaims only ORPHANED focus - if the user tabbed elsewhere, that element keeps it.
+- **`useLatestRequest`** - change a date range twice quickly and the slower answer landed last, painting the OLD
+  window's rows under the NEW filter chips. Sequence numbers, not AbortController (every read goes through the
+  service layer and fetchAllPages; threading a signal through all of it is far larger than the bug). The hook
+  memoises its return value or callers' useCallback deps turn the fix into a refetch loop. Wired into Dashboard
+  and Work Orders.
+- **Global create** offers six destinations, each gated by the SAME predicate as the sidebar so it can never
+  land on Access Denied (accidents additionally checks the `accidents_module` flag, which permission alone
+  cannot see); renders nothing below 2 reachable options or on mobile; **no entry at a builder route**.
+  New Asset goes to `/fleet-master` not `/assets` - the latter hides its Add button behind role Admin.
+- **Recents store the record's SOURCE, never an allow**, so a withdrawn permission cannot be replayed out of
+  localStorage.
+
+### REPORTING SCOPE ON BOARD OVERVIEW + EXPENSES - and the limit that is a SERVER fact
+BoardOverview: all 9 reads driven by the scope; `activeCountry` no longer read on the page. ExpenseReport wired
+through a 6-line seam so its 62 downstream references did not move. **Its deep report is single-country BY
+CONSTRUCTION**: five of the six aggregates behind it (`get_parts_expense_snapshot`, `get_cost_cpk_overview`,
+`get_cost_variance`, `get_expense_period_trend`, `get_site_operating_cost`) take exactly ONE country and return
+comparison windows and movers that cannot be merged without re-deriving the analysis - that needs a migration.
+So: no country -> nothing requested; one -> full deep report; more than one -> the per-country comparison, now
+BOUNDED to the scope (it previously showed every country RLS allowed, so a 2-country scope reported on 3).
+**MONEY IS NEVER BLENDED** - per-country lines, per-country trend series each labelled with its currency, `N/A`
+for a refused total (`mergeCostSplits` returns null, never 0), while counts and rates still aggregate.
+New `applyCountries(query, countries, {nullSafe})` in `_client.js`; a ONE-country list emits byte-identically to
+the scalar `applyCountry`. Nine service signatures gained an OPTIONAL `countries`; N countries stay ONE bounded
+`country in (...)` read per table (pinned), so row ceilings do not multiply.
+
+### PROCESS - what cost time and must not be repeated
+- **NEVER COMMIT WHILE A SUBAGENT IS EDITING, AND WAIT FOR ITS COMPLETION NOTIFICATION, NOT FILE QUIET.** I
+  waited 90 seconds of quiet, committed, and the agent resumed and deleted two committed files.
+- **A SUBAGENT USING `git stash` ON A SHARED TREE HIDES YOUR IN-FLIGHT WORK.** One did, twice; the tree went
+  clean and its work looked lost. It was recoverable from dangling stash commits (`git fsck --unreachable`,
+  then `git show <sha>:<path>`), and I tagged them as insurance. Tell agents: stage/inspect by explicit path,
+  never stash/checkout/reset on a shared tree.
+- Stage by EXPLICIT PATH always - `git add -A` sweeps another agent's half-finished files.
+- Guessing an English string from a locale KEY NAME is guessing. `shell.searchScope` is the search placeholder,
+  not "Search countries"; deriving every value from the components own fallbacks is what fixed it.
+
+### OPEN AT SESSION END
+- **NO PR EXISTS for these 23 commits and nothing is deployed.** Production is `f2d5870b`.
+- §15 write scoping is closed for country+site but NOT for the three import staging tables (deliberate).
+- §14 request cancellation is wired on Dashboard and Work Orders only; ~186 other pages have no guard. The hook
+  is shared, so each is a 3-line change.
+- The ExpenseReport deep report stays single-country until those five RPCs learn a country LIST (migration).
+- Nothing in this session was verified in a real browser, and the scope work was never run against PostgREST -
+  the `country in (...)` filters and the multi-country paging tiebreak are exercised against a mock builder.
+- Tyre price backfill was DRY-RUN ONLY at the owner's choice: 1,976 of 2,285 fillable, SAR 1,719,423. Not
+  applied. August KSA expense re-upload was stamped with import_uid (1,541 rows, 0 money moved).
+
 ## SESSION 2026-08-13 (part 3) — CLOSED CLEAN. THE APP ONLY UNDERSTOOD HALF ITS OWN CONDITION VOCABULARY.
 No migration this part; next free **V542**. PRs #328 + #329 MERGED to main; branch == origin/main ==
 `6e74e748`, nothing uncommitted or unpushed. Full suite **7,534 tests / 497 files green**, lint 0 errors, web

@@ -26,6 +26,7 @@ import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import { scopeLabel } from '../lib/reportingScope'
 import { scopeRequestCountries, scopeQueryKey } from '../lib/reportingScopeQuery'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
 import {
@@ -567,6 +568,137 @@ function CountryReport({
   )
 }
 
+/**
+ * Build the Chart Builder catalog for ONE country.
+ *
+ * Every source below is denominated in `currency` or is a plain count, so a
+ * catalog only ever describes one country. That is what makes the studio safe:
+ * it can stack, total and percentage anything it is handed, and it is never
+ * handed two currencies. Pure - it derives from payloads the page has already
+ * loaded and issues no query.
+ *
+ * `fleetCpk` is accepted only when its payload is attributable to this one
+ * country: its by_type / fleet rows carry no country of their own, so on an
+ * All-countries read there is no way to split them back out. The caller passes
+ * null instead of guessing, and the three CPK sources are simply absent.
+ */
+export function buildStudioCatalog({
+  snap, currency = 'SAR', fleetCpk = null, tyreAgg = null, tyreForecast = null, yearly = null,
+} = {}) {
+  const activeCurrency = currency
+  if (!snap?.ok) return []
+  const flat = (key, label) => ({
+    key, label, kind: 'flat', valueKind: 'money',
+    rows: (snap[key] || []).map((r) => ({ label: r.label, value: Number(r.spend) || 0 })),
+  })
+  const out = [
+    flat('by_asset', 'Asset'),
+    flat('by_store', 'Site / store'),
+    flat('by_category', 'Category'),
+    flat('top_items', 'Item'),
+  ]
+  const m = snap.monthly || []
+  if (m.length) {
+    out.push({
+      key: 'monthly', label: 'Month', kind: 'series', valueKind: 'money', allowTotal: true,
+      labels: m.map((r) => monthLabel(r.m)),
+      series: [
+        { name: 'Tyres', data: m.map((r) => Number(r.tyre) || 0) },
+        { name: 'Spare Parts', data: m.map((r) => Number(r.spare) || 0) },
+        { name: 'Oil', data: m.map((r) => Number(r.oil) || 0) },
+      ],
+    })
+  }
+  // Cost mix as a percentage (tyres / spare / oil share of total spend).
+  const kp = snap.kpis || {}
+  const mixTotal = (Number(kp.tyre_expense) || 0) + (Number(kp.spare_expense) || 0) + (Number(kp.oil_expense) || 0)
+  if (mixTotal > 0) {
+    const pct = (v) => Math.round(((Number(v) || 0) / mixTotal) * 1000) / 10
+    out.push({
+      key: 'cost_mix_pct', label: 'Cost mix (%)', kind: 'flat', valueKind: 'percent',
+      rows: [
+        { label: 'Tyres', value: pct(kp.tyre_expense) },
+        { label: 'Spare Parts', value: pct(kp.spare_expense) },
+        { label: 'Oil', value: pct(kp.oil_expense) },
+      ],
+    })
+  }
+  // Fleet CPK (cost per km / per engine-hour) by vehicle type - split by unit so
+  // a km-rate and an hour-rate never share one axis. Rates keep their decimals.
+  const byType = Array.isArray(fleetCpk?.byType) ? fleetCpk.byType : []
+  const kmRows = byType.filter((r) => r.unit === 'km' && r.cpk_total != null)
+    .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
+  const hrRows = byType.filter((r) => r.unit === 'engine_hours' && r.cpk_total != null)
+    .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
+  if (kmRows.length) out.push({ key: 'cpk_km', label: 'CPK per km by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: kmRows })
+  if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Cost per hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
+
+  // Overall fleet CPK (one bar per unit) from the fleet-level tiles.
+  const tiles = fleetTiles(fleetCpk?.fleet)
+  const cpkOverall = tiles
+    .filter((t) => t.cpkTotal != null)
+    .map((t) => ({ label: t.unit === 'engine_hours' ? 'Cost per engine-hour' : 'Cost per km', value: Number(t.cpkTotal) || 0 }))
+  if (cpkOverall.length) out.push({ key: 'cpk_overall', label: 'Overall CPK', kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
+
+  // Tyre quantity + tyre CPK by site (from the loaded tyre records).
+  if (tyreAgg) {
+    if (tyreAgg.bySite.length) out.push({ key: 'tyre_qty_site', label: 'Tyres used by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySite })
+    if (tyreAgg.bySize.length) out.push({ key: 'tyre_qty_size', label: 'Tyres used by size', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySize })
+    if (tyreAgg.byBrand.length) out.push({ key: 'tyre_qty_brand', label: 'Tyres used by brand', kind: 'flat', valueKind: 'count', rows: tyreAgg.byBrand })
+    if (tyreAgg.avgCostByBrand.length) out.push({ key: 'tyre_avgcost_brand', label: 'Average cost per tyre by brand', kind: 'flat', valueKind: 'money', rows: tyreAgg.avgCostByBrand })
+    if (tyreAgg.avgKmByBrand.length) out.push({ key: 'tyre_avgkm_brand', label: 'Average km per tyre by brand', kind: 'flat', valueKind: 'count', unitLabel: 'km', format: (v) => `${Math.round(v).toLocaleString('en-US')} km`, rows: tyreAgg.avgKmByBrand })
+    if (tyreAgg.cpkSite.length) out.push({ key: 'tyre_cpk_site', label: 'Tyre cost per km by site', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: tyreAgg.cpkSite })
+    if (tyreAgg.monthLabels.length) out.push({ key: 'tyre_qty_month', label: 'Tyres used by month', kind: 'series', valueKind: 'count', labels: tyreAgg.monthLabels, series: [{ name: 'Tyres', data: tyreAgg.monthQty }] })
+    if (tyreAgg.removalBySite.length) out.push({ key: 'tyre_rem_site', label: 'Tyre removals by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.removalBySite })
+    if (tyreAgg.remMonthLabels.length) out.push({ key: 'tyre_rem_month', label: 'Tyre removals by month', kind: 'series', valueKind: 'count', labels: tyreAgg.remMonthLabels, series: [{ name: 'Removals', data: tyreAgg.remMonthQty }] })
+  }
+
+  // Tyre demand FORECAST by size (next 3 months) from the fitment history.
+  if (tyreForecast && tyreForecast.sizes.length) {
+    const fcSizes = tyreForecast.sizes.filter((s) => s.forecastTotal > 0 || s.total > 0)
+    if (fcSizes.length) {
+      out.push({
+        key: 'tyre_forecast_size', label: 'Tyre forecast by size (next 3 months)', kind: 'flat', valueKind: 'count',
+        unitLabel: 'tyres', rows: fcSizes.map((s) => ({ label: s.size, value: s.forecastTotal })),
+      })
+      // History + forecast on one monthly axis (actual, then the projected months).
+      const labels = [...tyreForecast.monthLabels, ...tyreForecast.forecastLabels]
+      const hist = tyreForecast.totals.history
+      const fc = tyreForecast.totals.forecast
+      out.push({
+        key: 'tyre_forecast_month', label: 'Tyre demand: actual + forecast', kind: 'series', valueKind: 'count',
+        // No trend line here, for two reasons. The forecast months are ALREADY
+        // a fitted projection, so a trend across them regresses on a
+        // regression while looking like independent evidence. And each series
+        // is zero-padded over the months it does not cover, so picking one
+        // series alone would fit a line through those zeros as if they were
+        // real readings of nothing.
+        ordered: false,
+        labels,
+        series: [
+          { name: 'Actual', data: [...hist, ...fc.map(() => 0)] },
+          { name: 'Forecast', data: [...hist.map(() => 0), ...fc] },
+        ],
+      })
+    }
+  }
+
+  // Yearly expenses (compare years) from the per-year trend.
+  const yr = Array.isArray(yearly) ? [...yearly].sort((a, b) => String(a.year ?? a.period).localeCompare(String(b.year ?? b.period))) : []
+  if (yr.length) {
+    out.push({
+      key: 'yearly', label: 'Year', kind: 'series', valueKind: 'money', allowTotal: true,
+      labels: yr.map((r) => String(r.year ?? r.period)),
+      series: [
+        { name: 'Tyres', data: yr.map((r) => Number(r.tyre) || 0) },
+        { name: 'Spare Parts', data: yr.map((r) => Number(r.spare) || 0) },
+        { name: 'Oil', data: yr.map((r) => Number(r.lubricant ?? r.oil) || 0) },
+      ],
+    })
+  }
+  return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
+}
+
 export default function ExpenseReport() {
   // REPORTING SCOPE, not the working context. This is an analytics page, so the
   // countries it covers are the ones chosen in the ReportingScopeBar, not the one
@@ -597,6 +729,15 @@ export default function ExpenseReport() {
   // `activeCountry` stays the resolved single country (or 'All'), because the
   // exports, the Chart Builder and the Tyre Forecast still key off it.
   const { appSettings, reportingScope, allowedScopeCountries } = useSettings()
+  const { t } = useLanguage()
+  // `t(key, vars)` takes INTERPOLATION VARS, not a fallback, and a key missing
+  // from a loaded namespace renders as the raw dotted path. This wrapper keeps
+  // the English sentence as the last resort so a locale gap degrades to a
+  // readable line rather than to `expense.scope.builderOneCountry` on screen.
+  const tx = useCallback((key, fallback) => {
+    const v = t(key)
+    return v && v !== key ? v : fallback
+  }, [t])
   const scopeKey = useMemo(
     () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
     [reportingScope, allowedScopeCountries],
@@ -645,12 +786,35 @@ export default function ExpenseReport() {
   // last 365 days (the rest of the page can default to all-time).
   const [fleetCpk, setFleetCpk] = useState({ perVehicle: [], byType: [], fleet: [] })
   const [fleetCpkLoading, setFleetCpkLoading] = useState(true)
-  // Tyre-quantity + tyre-CPK-by-site aggregation and multi-year expenses, for the
-  // Chart Builder. Best-effort: null when unavailable so nothing else breaks.
-  const [tyreAgg, setTyreAgg] = useState(null)
+  // Tyre records, aggregated PER COUNTRY: { [country]: { agg, forecast } }.
+  //
+  // Per country rather than one merged pile, because both consumers are
+  // denominated. The forecast multiplies tyres by an average cost per tyre, and
+  // the Chart Builder's tyre CPK is money over km - a merged read would put SAR,
+  // AED and EGP in one average. Splitting the read by country is also what lets
+  // the forecast render per country instead of being withheld from a
+  // multi-country scope.
+  //
+  // MEASURED COST of doing this for the whole scope, against the live row counts
+  // (tyre_records KSA 8,145 / UAE 2,455 / Egypt 591) and the real column list
+  // `listTcoActualRecords` selects, at ~354 bytes per row:
+  //     KSA alone     8,145 rows   2.75 MB   9 requests (3 paged waves)
+  //     all three    11,191 rows   3.78 MB  13 requests (3 waves, run in
+  //                                             parallel, so no slower)
+  // So covering the two extra countries costs about +1.03 MB and +4 requests
+  // over the single largest country, and ~3 ms more CPU in the forecast. That is
+  // not prohibitive, which is why the forecast is no longer withheld.
+  const [tyreByCountry, setTyreByCountry] = useState({})
   const [yearly, setYearly] = useState(null)
-  // Tyre demand forecast by size (from the full country history, not the window).
-  const [tyreForecast, setTyreForecast] = useState(null)
+  // Which country the Chart Builder is presenting. Stored as a raw pick and
+  // RESOLVED against the scope below, so a country that leaves the scope cannot
+  // leave the studio rendering a country the reader is no longer reporting on.
+  const [studioPick, setStudioPick] = useState('')
+  // Guards the per-country tyre reads against a superseded load. These reads are
+  // the slowest thing on the page (three paged fan-outs), so changing the date
+  // range twice quickly can land an OLD window's aggregation under the NEW
+  // filters. One read had the same race; three widen it.
+  const tyreRun = useRef(0)
 
   const [sections, setSections] = useState(() => {
     try {
@@ -680,7 +844,7 @@ export default function ExpenseReport() {
     if (!hasScope) {
       setReports([]); setRefused([])
       setByCountry([]); setSiteGroups([]); setBySiteErr('')
-      setTyreAgg(null); setYearly(null); setTyreForecast(null)
+      setTyreByCountry({}); setYearly(null)
       setError(''); setLoading(false); setRefreshing(false)
       return
     }
@@ -744,29 +908,44 @@ export default function ExpenseReport() {
       }))
       setSiteGroups(groups)
 
-      // Tyre quantity + tyre CPK aggregation (single country only; the studio is
-      // hidden on the All view). Best-effort, capped, never blocks the page.
-      if (!isAll) {
-        fetchAllPages(
-          (f, t) => listTcoActualRecords({ country: activeCountry, from: f, to: t }),
+      // Tyre quantity, tyre CPK by site and the demand forecast - ONE READ PER
+      // COUNTRY IN SCOPE, run in parallel. Each country is aggregated on its own
+      // so nothing is ever averaged across currencies. Best-effort, capped, and
+      // it never blocks the page.
+      //
+      // The reads are country-scoped through `applyCountry`, which is null-safe:
+      // a tyre row with no country would be admitted to every country's read.
+      // There are none today (tyre_records NULL country = 0 measured live), and
+      // such a row belongs to no country, so it would be counted in each panel
+      // rather than added across them - the panels stay per country either way.
+      const run = ++tyreRun.current
+      Promise.all(scopeCountryList.map(async (country) => {
+        const r = await fetchAllPages(
+          (f, t) => listTcoActualRecords({ country, from: f, to: t }),
           { max: 50000 },
-        ).then((r) => {
-          const rows = r?.data || []
-          setTyreAgg(aggregateTyres(rows, from || '', to || ''))
-          // Forecast is built from the FULL history (12-month window), independent
-          // of the page date range, so the projection has enough signal.
-          setTyreForecast(forecastTyreDemand(rows, { window: 12, ahead: 3 }))
-        }).catch(() => { setTyreAgg(null); setTyreForecast(null) })
-        // Multi-year totals for the Chart Builder. Read through the scoped
-        // aggregate like everything else on this page, so there is ONE way of
-        // asking the server what a scope covers rather than one read that takes
-        // the scope and another that takes a bare country string.
-        getExpensePeriodTrendMulti({ countries: scopeCountryList, grain: 'year' })
-          .then((res) => setYearly(res.rows.length ? res.rows : null))
-          .catch(() => setYearly(null))
-      } else {
-        setTyreAgg(null); setYearly(null); setTyreForecast(null)
-      }
+        )
+        const rows = r?.data || []
+        return [country, {
+          agg: aggregateTyres(rows, from || '', to || ''),
+          // Forecast is built from the FULL history (12-month window),
+          // independent of the page date range, so the projection has enough
+          // signal.
+          forecast: forecastTyreDemand(rows, { window: 12, ahead: 3 }),
+        }]
+      }))
+        // A superseded load must not paint the previous window's tyres under the
+        // current filters.
+        .then((pairs) => { if (run === tyreRun.current) setTyreByCountry(Object.fromEntries(pairs)) })
+        .catch(() => { if (run === tyreRun.current) setTyreByCountry({}) })
+      // Multi-year totals for the Chart Builder. Read through the scoped
+      // aggregate like everything else on this page, so there is ONE way of
+      // asking the server what a scope covers rather than one read that takes
+      // the scope and another that takes a bare country string. Every row
+      // carries its own country and currency, so the studio can pick out the one
+      // country it is presenting without anything being merged.
+      getExpensePeriodTrendMulti({ countries: scopeCountryList, grain: 'year' })
+        .then((res) => setYearly(res.rows.length ? res.rows : null))
+        .catch(() => setYearly(null))
       setUpdatedAt(new Date())
     } catch (e) {
       setError(toUserMessage(e, 'Could not load the expense report.'))
@@ -844,120 +1023,64 @@ export default function ExpenseReport() {
   const snap = single?.snap || null
   const overview = single?.overview || null
 
-  // ── Chart Builder catalog (the shared Presentation Studio renders it) ────────
-  const studioCatalog = useMemo(() => {
-    if (!snap?.ok) return []
-    const flat = (key, label) => ({
-      key, label, kind: 'flat', valueKind: 'money',
-      rows: (snap[key] || []).map((r) => ({ label: r.label, value: Number(r.spend) || 0 })),
-    })
-    const out = [
-      flat('by_asset', 'Asset'),
-      flat('by_store', 'Site / store'),
-      flat('by_category', 'Category'),
-      flat('top_items', 'Item'),
-    ]
-    const m = snap.monthly || []
-    if (m.length) {
-      out.push({
-        key: 'monthly', label: 'Month', kind: 'series', valueKind: 'money', allowTotal: true,
-        labels: m.map((r) => monthLabel(r.m)),
-        series: [
-          { name: 'Tyres', data: m.map((r) => Number(r.tyre) || 0) },
-          { name: 'Spare Parts', data: m.map((r) => Number(r.spare) || 0) },
-          { name: 'Oil', data: m.map((r) => Number(r.oil) || 0) },
-        ],
-      })
-    }
-    // Cost mix as a percentage (tyres / spare / oil share of total spend).
-    const kp = snap.kpis || {}
-    const mixTotal = (Number(kp.tyre_expense) || 0) + (Number(kp.spare_expense) || 0) + (Number(kp.oil_expense) || 0)
-    if (mixTotal > 0) {
-      const pct = (v) => Math.round(((Number(v) || 0) / mixTotal) * 1000) / 10
-      out.push({
-        key: 'cost_mix_pct', label: 'Cost mix (%)', kind: 'flat', valueKind: 'percent',
-        rows: [
-          { label: 'Tyres', value: pct(kp.tyre_expense) },
-          { label: 'Spare Parts', value: pct(kp.spare_expense) },
-          { label: 'Oil', value: pct(kp.oil_expense) },
-        ],
-      })
-    }
-    // Fleet CPK (cost per km / per engine-hour) by vehicle type - split by unit so
-    // a km-rate and an hour-rate never share one axis. Rates keep their decimals.
-    const byType = Array.isArray(fleetCpk?.byType) ? fleetCpk.byType : []
-    const kmRows = byType.filter((r) => r.unit === 'km' && r.cpk_total != null)
-      .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
-    const hrRows = byType.filter((r) => r.unit === 'engine_hours' && r.cpk_total != null)
-      .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
-    if (kmRows.length) out.push({ key: 'cpk_km', label: 'CPK per km by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: kmRows })
-    if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Cost per hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
+  // ── Chart Builder ───────────────────────────────────────────────────────────
+  //
+  // THE STUDIO STAYS SINGLE-COUNTRY BY CONSTRUCTION, and the reason is specific
+  // to what the studio is, not to how much data it would take.
+  //
+  // Everywhere else on this page a multi-country scope is answered by REPEATING
+  // a fixed panel per country, which cannot blend because each panel is built
+  // once for one country in one currency. The studio is the opposite: its whole
+  // value is that the reader recombines whatever it is handed. Give it a series
+  // per country and one click produces a blend, in four separate ways -
+  //   * split bars default to STACKED, which literally piles AED on top of SAR;
+  //   * the trend line is fitted to the TOTAL across the drawn series, so it
+  //     regresses on a sum of currencies;
+  //   * a series source may offer "Total", which sums the series;
+  //   * "share %" divides each row by the sum of the rows.
+  // On top of that the studio formats every value with ONE currency, so an AED
+  // figure would be labelled SAR. So the honest multi-country chart shape used
+  // elsewhere in this repo (one labelled series per country, boardScope
+  // .perCountryMonthlySeries) is safe in a PURPOSE-BUILT chart and is not safe
+  // here.
+  //
+  // What is fixed instead is that the studio used to VANISH on a multi-country
+  // scope. It is now offered for one country at a time, chosen by the reader,
+  // and it is handed exactly that country's snapshot, tyres, years, currency and
+  // money formatter - so a blend is not reachable, rather than merely discouraged.
+  const studioCountry = useMemo(
+    () => (scopeCountryList.includes(studioPick) ? studioPick : (scopeCountryList[0] || '')),
+    [scopeCountryList, studioPick],
+  )
+  const studioCurrency = currencyForCountry(studioCountry, appSettings?.currency || 'SAR')
+  const studioMoney = useMemo(() => moneyIn(studioCurrency), [studioCurrency])
+  const studioSnap = useMemo(
+    () => reports.find((r) => r.country === studioCountry)?.snap || null,
+    [reports, studioCountry],
+  )
+  const studioTyres = tyreByCountry[studioCountry] || null
+  // The unit-aware CPK payload is only attributable to one country when the
+  // REQUEST named one: `by_type` and `per_vehicle` rows carry no country of their
+  // own, so on an All-countries read there is no way to split them back out.
+  // Rather than guess, those three sources are left out of a multi-country
+  // catalog and the note below says so.
+  const cpkIsSingleCountry = !isAll
 
-    // Overall fleet CPK (one bar per unit) from the fleet-level tiles.
-    const tiles = fleetTiles(fleetCpk?.fleet)
-    const cpkOverall = tiles
-      .filter((t) => t.cpkTotal != null)
-      .map((t) => ({ label: t.unit === 'engine_hours' ? 'Cost per engine-hour' : 'Cost per km', value: Number(t.cpkTotal) || 0 }))
-    if (cpkOverall.length) out.push({ key: 'cpk_overall', label: 'Overall CPK', kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
-
-    // Tyre quantity + tyre CPK by site (from the loaded tyre records).
-    if (tyreAgg) {
-      if (tyreAgg.bySite.length) out.push({ key: 'tyre_qty_site', label: 'Tyres used by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySite })
-      if (tyreAgg.bySize.length) out.push({ key: 'tyre_qty_size', label: 'Tyres used by size', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySize })
-      if (tyreAgg.byBrand.length) out.push({ key: 'tyre_qty_brand', label: 'Tyres used by brand', kind: 'flat', valueKind: 'count', rows: tyreAgg.byBrand })
-      if (tyreAgg.avgCostByBrand.length) out.push({ key: 'tyre_avgcost_brand', label: 'Average cost per tyre by brand', kind: 'flat', valueKind: 'money', rows: tyreAgg.avgCostByBrand })
-      if (tyreAgg.avgKmByBrand.length) out.push({ key: 'tyre_avgkm_brand', label: 'Average km per tyre by brand', kind: 'flat', valueKind: 'count', unitLabel: 'km', format: (v) => `${Math.round(v).toLocaleString('en-US')} km`, rows: tyreAgg.avgKmByBrand })
-      if (tyreAgg.cpkSite.length) out.push({ key: 'tyre_cpk_site', label: 'Tyre cost per km by site', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: tyreAgg.cpkSite })
-      if (tyreAgg.monthLabels.length) out.push({ key: 'tyre_qty_month', label: 'Tyres used by month', kind: 'series', valueKind: 'count', labels: tyreAgg.monthLabels, series: [{ name: 'Tyres', data: tyreAgg.monthQty }] })
-      if (tyreAgg.removalBySite.length) out.push({ key: 'tyre_rem_site', label: 'Tyre removals by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.removalBySite })
-      if (tyreAgg.remMonthLabels.length) out.push({ key: 'tyre_rem_month', label: 'Tyre removals by month', kind: 'series', valueKind: 'count', labels: tyreAgg.remMonthLabels, series: [{ name: 'Removals', data: tyreAgg.remMonthQty }] })
-    }
-
-    // Tyre demand FORECAST by size (next 3 months) from the fitment history.
-    if (tyreForecast && tyreForecast.sizes.length) {
-      const fcSizes = tyreForecast.sizes.filter((s) => s.forecastTotal > 0 || s.total > 0)
-      if (fcSizes.length) {
-        out.push({
-          key: 'tyre_forecast_size', label: 'Tyre forecast by size (next 3 months)', kind: 'flat', valueKind: 'count',
-          unitLabel: 'tyres', rows: fcSizes.map((s) => ({ label: s.size, value: s.forecastTotal })),
-        })
-        // History + forecast on one monthly axis (actual, then the projected months).
-        const labels = [...tyreForecast.monthLabels, ...tyreForecast.forecastLabels]
-        const hist = tyreForecast.totals.history
-        const fc = tyreForecast.totals.forecast
-        out.push({
-          key: 'tyre_forecast_month', label: 'Tyre demand: actual + forecast', kind: 'series', valueKind: 'count',
-          // No trend line here, for two reasons. The forecast months are ALREADY
-          // a fitted projection, so a trend across them regresses on a
-          // regression while looking like independent evidence. And each series
-          // is zero-padded over the months it does not cover, so picking one
-          // series alone would fit a line through those zeros as if they were
-          // real readings of nothing.
-          ordered: false,
-          labels,
-          series: [
-            { name: 'Actual', data: [...hist, ...fc.map(() => 0)] },
-            { name: 'Forecast', data: [...hist.map(() => 0), ...fc] },
-          ],
-        })
-      }
-    }
-
-    // Yearly expenses (compare years) from the per-year trend.
-    const yr = Array.isArray(yearly) ? [...yearly].sort((a, b) => String(a.year ?? a.period).localeCompare(String(b.year ?? b.period))) : []
-    if (yr.length) {
-      out.push({
-        key: 'yearly', label: 'Year', kind: 'series', valueKind: 'money', allowTotal: true,
-        labels: yr.map((r) => String(r.year ?? r.period)),
-        series: [
-          { name: 'Tyres', data: yr.map((r) => Number(r.tyre) || 0) },
-          { name: 'Spare Parts', data: yr.map((r) => Number(r.spare) || 0) },
-          { name: 'Oil', data: yr.map((r) => Number(r.lubricant ?? r.oil) || 0) },
-        ],
-      })
-    }
-    return out.filter((s) => (s.kind === 'series' ? (s.labels || []).length : (s.rows || []).length))
-  }, [snap, fleetCpk, activeCurrency, tyreAgg, yearly, tyreForecast])
+  const studioCatalog = useMemo(() => buildStudioCatalog({
+    snap: studioSnap,
+    currency: studioCurrency,
+    // Withheld unless the CPK read named this one country (see above).
+    fleetCpk: cpkIsSingleCountry ? fleetCpk : null,
+    tyreAgg: studioTyres?.agg || null,
+    tyreForecast: studioTyres?.forecast || null,
+    // The per-year rows carry their own country, so the studio takes only the
+    // country it is presenting rather than every country in scope. Matched
+    // case-insensitively: a spelling difference between the register and the
+    // scope would otherwise blank this source silently rather than loudly.
+    yearly: Array.isArray(yearly)
+      ? yearly.filter((r) => String(r?.country || '').toLowerCase() === studioCountry.toLowerCase())
+      : null,
+  }), [studioSnap, studioCurrency, cpkIsSingleCountry, fleetCpk, studioTyres, yearly, studioCountry])
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
@@ -1233,11 +1356,11 @@ export default function ExpenseReport() {
         <ReportingScopeBar />
         {isAll && hasScope && (
           <p className="text-[11px] text-[var(--text-muted)]">
-            The scope covers {scopeTitle}. The full report is shown for each country separately, in its own
-            currency ({scopeCurrencies(scopeCountryList).join(', ') || 'own currency'}), because spend in different
-            currencies is never added together - so there is no combined total, no combined percentage change and
-            no combined cost per km on this page. The Chart Builder and the Tyre Forecast still cover one country
-            at a time.
+            {`${scopeTitle} (${scopeCurrencies(scopeCountryList).join(', ') || 'own currency'}). `}
+            {tx('expense.scope.perCountryReport',
+              'The full report is shown for each country separately, in its own currency, because spend in '
+              + 'different currencies is never added together. There is no combined total, no combined percentage '
+              + 'change and no combined cost per km on this page.')}
           </p>
         )}
         {refused.length > 0 && (
@@ -1265,9 +1388,13 @@ export default function ExpenseReport() {
       {/* Section toggles + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          {/* On the All view only the per-site section renders (see the note
-              below), so the chart/KPI toggles would be dead controls. */}
-          {SECTIONS.filter(([key]) => !isAll || key === 'bysite' || key === 'fleetcpk').map(([key, label, Icon]) => (
+          {/* On the All view the per-country panels below cover a subset of the
+              sections, so the toggles that would be dead controls are dropped.
+              The forecast and the Chart Builder both render on a multi-country
+              scope now, so their toggles stay. */}
+          {SECTIONS.filter(([key]) => !isAll
+            || key === 'bysite' || key === 'fleetcpk' || key === 'forecast' || key === 'builder',
+          ).map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => toggle(key)}
@@ -1385,31 +1512,110 @@ export default function ExpenseReport() {
             />
           )}
 
-          {/* Tyre demand forecast by size - exact projected tyre counts. */}
-          {sections.forecast && !isAll && tyreForecast && (
-            <TyreForecastSection forecast={tyreForecast} country={activeCountry} currency={activeCurrency} money={money} filePrefix="Expense" />
+          {/* Tyre demand forecast by size - exact projected tyre counts.
+              ONCE PER COUNTRY IN SCOPE. Nothing is added across them: each
+              projection is that country's own tyres priced in that country's own
+              currency, and tyres are ordered and paid for per country anyway. It
+              used to be withheld from a multi-country scope because it needs a
+              client-side read per country; that cost was measured (see
+              `tyreByCountry`) and comes to about +1 MB and +4 requests for two
+              extra countries, which does not justify hiding the report. */}
+          {sections.forecast && Object.keys(tyreByCountry).length > 0 && (
+            <section className="space-y-3">
+              {reports.length > 1 && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  {tx('expense.scope.forecastPerCountry',
+                    'The tyre forecast is shown once per country, each in its own currency. Forecast tyre counts '
+                    + 'are never added across countries, because each country is ordered and paid for separately.')}
+                </p>
+              )}
+              {scopeCountryList.map((c) => {
+                const fc = tyreByCountry[c]?.forecast
+                if (!fc) return null
+                const cur = currencyForCountry(c, appSettings?.currency || 'SAR')
+                return (
+                  <div key={c} className="space-y-2">
+                    {/* The section itself carries no country, so a repeated one
+                        would be several identical-looking cards of money with no
+                        country and no currency attached. */}
+                    {reports.length > 1 && (
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">
+                        {c} ({cur})
+                      </h3>
+                    )}
+                    <TyreForecastSection
+                      forecast={fc}
+                      country={c}
+                      currency={cur}
+                      money={moneyIn(cur)}
+                      filePrefix="Expense"
+                    />
+                  </div>
+                )
+              })}
+            </section>
           )}
 
-          {/* Chart Builder - the shared Presentation Studio over this snapshot.
-              STILL SINGLE-COUNTRY, and deliberately so. Unlike the report blocks
-              above, the studio lets a reader combine any two series it is given
-              onto one axis, so handing it three currencies would make a blended
-              chart reachable by a click. It also needs a per-country client-side
-              read of up to 50,000 tyre records; running that three times over
-              would slow the page for a tool that is exploratory rather than part
-              of the report. The note below says which country it covers. */}
-          {sections.builder && !isAll && studioCatalog.length > 0 && (
+          {/* Chart Builder - the shared Presentation Studio, over ONE country.
+              Single-country by construction rather than by policy: see the
+              reasoning at `studioCountry` above. What changed is that it no
+              longer disappears on a multi-country scope - the reader picks the
+              country and the studio is handed only that country's data,
+              currency and money formatter. */}
+          {sections.builder && studioCatalog.length > 0 && (
             <StudioBoundary>
-              <PresentationStudio
-                catalog={studioCatalog}
-                currency={activeCurrency}
-                money={money}
-                scope={activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'}
-                company={appSettings?.company_name || 'TyrePulse'}
-                filePrefix="Expense"
-                showInsights
-                note={`Present your own data - spend, cost mix % and CPK - then copy, download a PNG, or export a PowerPoint deck with talking points. Values in ${activeCurrency}.`}
-              />
+              <div className="space-y-2">
+                {reports.length > 1 && (
+                  <div className="card p-3 space-y-2">
+                    <p className="text-[11px] text-[var(--text-muted)]">
+                      {tx('expense.scope.builderOneCountry',
+                        'Charts are built one country at a time. This tool lets you put any two series on the same '
+                        + 'axis, stack them and total them, so it is only ever given one country in one currency - a '
+                        + 'chart that mixed SAR, AED and EGP would be a number that is not an amount of anything. '
+                        + 'Pick the country to chart below.')}
+                    </p>
+                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      <span className="font-semibold">
+                        {tx('expense.scope.builderCountry', 'Chart data for')}
+                      </span>
+                      <select
+                        value={studioCountry}
+                        onChange={(e) => setStudioPick(e.target.value)}
+                        // Named explicitly: the studio mounts several unlabelled
+                        // selects of its own, so this one needs its own name to
+                        // be reachable by anyone navigating by control name.
+                        aria-label={tx('expense.scope.builderCountry', 'Chart data for')}
+                        className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
+                      >
+                        {scopeCountryList.map((c) => (
+                          <option key={c} value={c}>
+                            {c} ({currencyForCountry(c, appSettings?.currency || 'SAR')})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {!cpkIsSingleCountry && (
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        {tx('expense.scope.builderCpkOmitted',
+                          'Cost per km and cost per hour by vehicle type are left out while more than one country '
+                          + 'is in scope: those rows do not record which country they came from, so they cannot be '
+                          + 'split per country. Narrow the reporting scope to one country to chart them.')}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <PresentationStudio
+                  key={studioCountry}
+                  catalog={studioCatalog}
+                  currency={studioCurrency}
+                  money={studioMoney}
+                  scope={studioCountry || 'All countries'}
+                  company={appSettings?.company_name || 'TyrePulse'}
+                  filePrefix="Expense"
+                  showInsights
+                  note={`Present your own data - spend, cost mix % and CPK - then copy, download a PNG, or export a PowerPoint deck with talking points. Values in ${studioCurrency}.`}
+                />
+              </div>
             </StudioBoundary>
           )}
 

@@ -1,0 +1,9 @@
+{
+  "scope": {
+    "perCountryReport": "The full report is shown for each country separately, in its own currency, because spend in different currencies is never added together. There is no combined total, no combined percentage change and no combined cost per km on this page.",
+    "forecastPerCountry": "The tyre forecast is shown once per country, each in its own currency. Forecast tyre counts are never added across countries, because each country is ordered and paid for separately.",
+    "builderOneCountry": "Charts are built one country at a time. This tool lets you put any two series on the same axis, stack them and total them, so it is only ever given one country in one currency - a chart that mixed SAR, AED and EGP would be a number that is not an amount of anything. Pick the country to chart below.",
+    "builderCountry": "Chart data for",
+    "builderCpkOmitted": "Cost per km and cost per hour by vehicle type are left out while more than one country is in scope: those rows do not record which country they came from, so they cannot be split per country. Narrow the reporting scope to one country to chart them."
+  }
+}

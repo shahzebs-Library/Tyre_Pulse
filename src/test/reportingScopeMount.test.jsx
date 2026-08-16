@@ -50,6 +50,9 @@ const h = vi.hoisted(() => {
   return {
     DATA,
     calls: [],
+    // V544 deployed. Flipped off in the degrade case so the page falls back to
+    // the per-country fan-out.
+    multiAvailable: true,
     allowed: ['KSA', 'UAE'],
     initialScope: { countries: ['KSA'] },
     settings: {},
@@ -77,10 +80,24 @@ vi.mock('../lib/exportUtils', () => ({
   exportToExcel: () => Promise.resolve(),
   exportToPdf: () => Promise.resolve(),
 }))
+// The page fetches the whole scope in ONE multi-country call and keeps the
+// per-country fan-out only as the degrade path for a database without V544.
+// Both are recorded the same way, so every assertion below reads "which
+// countries did this render ask the server for" regardless of which path ran.
 vi.mock('../lib/api/expenseTrends', () => ({
   getExpensePeriodTrend: (args) => {
     h.calls.push(args)
     return Promise.resolve(h.DATA[args?.country] || [])
+  },
+  getExpensePeriodTrendMulti: ({ countries, grain } = {}) => {
+    if (!h.multiAvailable) return Promise.resolve({ ok: false, rows: [], refused: [] })
+    const list = countries || []
+    list.forEach((country) => h.calls.push({ country, grain }))
+    return Promise.resolve({
+      ok: true,
+      refused: [],
+      rows: list.flatMap((c) => h.DATA[c] || []),
+    })
   },
 }))
 
@@ -114,6 +131,7 @@ async function openScopeMenu() {
 
 beforeEach(() => {
   h.calls = []
+  h.multiAvailable = true
   h.allowed = ['KSA', 'UAE']
   h.initialScope = { countries: ['KSA'] }
   h.settings = {}

@@ -14,10 +14,23 @@
  * the single place you are operating in. Nothing here writes the working
  * context.
  *
- * The scope drives the QUERY, not just the display: one `get_expense_period_trend`
- * call is issued per country in scope, so changing the scope refetches. The
- * countries requested come from `scopeRequestCountries`, which drops anything the
- * profile may not aggregate over, so the scope can never widen access.
+ * The scope drives the QUERY, not just the display: the whole scope is fetched
+ * in ONE `get_expense_period_trend_multi` call (V544), so changing the scope
+ * refetches. The countries requested come from `scopeRequestCountries`, which
+ * drops anything the profile may not aggregate over, so the scope can never
+ * widen access - and the server re-checks each one against
+ * `app_can_see_country`, which is the real boundary.
+ *
+ * WHY ONE CALL RATHER THAN ONE PER COUNTRY. The page used to fan out a request
+ * per country from the browser. Two things were wrong with that. N countries
+ * cost N round trips, and - the part that actually shows on screen - the answers
+ * came back from N different moments, so a three-country trend could mix a
+ * reading taken before an import with two taken after it and present them as one
+ * comparison. The multi aggregate CALLS THE SAME single-country function once
+ * per country inside one statement, so every country is read at one instant and
+ * each block is that country's own payload verbatim, never a re-derivation.
+ * Where the RPC is not deployed the per-country fan-out still runs, so an older
+ * database degrades to the previous behaviour rather than to an error.
  *
  * CURRENCY: KSA=SAR, UAE=AED, Egypt=EGP and this page never adds them. Each
  * country keeps its own panel in its own currency; the scope summary shows a
@@ -55,7 +68,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import ReportingScopeBar from '../components/shell/ReportingScopeBar'
 import { useSettings } from '../contexts/SettingsContext'
-import { getExpensePeriodTrend } from '../lib/api/expenseTrends'
+import { getExpensePeriodTrend, getExpensePeriodTrendMulti } from '../lib/api/expenseTrends'
 import {
   byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num,
   filterPeriods, availableYears, MONTHS, GRAINS,
@@ -361,10 +374,11 @@ export default function ExpenseTrends() {
   }, [linkApplied, effectiveScope, allowedScopeCountries, grain,
       fromYear, fromMonth, toYear, toMonth])
 
-  // Switching the grain (year/quarter/month) refetches every country in scope
-  // without waiting for the previous fan-out. If the earlier one finishes last
-  // the trend is bucketed by the OLD grain under the new toggle, so the periods
-  // on the axis do not mean what the control says they mean.
+  // Switching the grain (year/quarter/month) refetches the scope without waiting
+  // for the previous read. If the earlier one finishes last the trend is
+  // bucketed by the OLD grain under the new toggle, so the periods on the axis
+  // do not mean what the control says they mean. The guard still matters with a
+  // single request per load: two loads can still be in flight at once.
   const latestLoad = useLatestRequest()
 
   const load = useCallback(async () => {
@@ -374,9 +388,17 @@ export default function ExpenseTrends() {
       // A scope that resolves to nothing reports on nothing. Falling back to
       // "All" here would silently widen the report past what was asked for.
       if (scopeCountryList.length === 0) { if (!stale()) setRows([]); return }
-      // One call per country in scope. The RPC takes a single country, and asking
-      // for exactly the countries in scope keeps the request as narrow as the
-      // report rather than fetching everything and hiding the rest client-side.
+      // ONE round trip for the whole scope. The multi aggregate names the
+      // countries explicitly, so the request stays as narrow as the report
+      // rather than fetching everything and hiding the rest client-side, and
+      // every country is read at the same instant.
+      const multi = await getExpensePeriodTrendMulti({ countries: scopeCountryList, grain })
+      if (stale()) return
+      if (multi.ok) { setRows(multi.rows); return }
+      // The aggregate is not deployed on this database (or could not answer).
+      // Fall back to the per-country fan-out rather than showing an error: this
+      // service layer degrades, and the rows are identical either way - the
+      // multi function calls this very function once per country.
       const batches = await Promise.all(
         scopeCountryList.map((country) => getExpensePeriodTrend({ country, grain })),
       )

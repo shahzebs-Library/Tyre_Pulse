@@ -73,10 +73,18 @@ vi.mock('../lib/exportUtils', () => ({
   exportToExcel: () => Promise.resolve(),
   exportToPdf: () => Promise.resolve(),
 }))
+// One multi-country call per load (V544); the per-country function stays as the
+// degrade path. Both record the countries asked for, so the URL assertions below
+// read the same either way.
 vi.mock('../lib/api/expenseTrends', () => ({
   getExpensePeriodTrend: (args) => {
     h.calls.push(args)
     return Promise.resolve(h.DATA[args?.country] || [])
+  },
+  getExpensePeriodTrendMulti: ({ countries, grain } = {}) => {
+    const list = countries || []
+    list.forEach((country) => h.calls.push({ country, grain }))
+    return Promise.resolve({ ok: true, refused: [], rows: list.flatMap((c) => h.DATA[c] || []) })
   },
 }))
 

@@ -34,6 +34,21 @@ export const MAX_FAVORITES = 12
 export const MAX_RECENTS = 8
 
 /**
+ * Recently opened RECORDS (a vehicle, a tyre, a job card, a case) live in their
+ * own store under their own key. Deliberately NOT mixed into RECENTS_KEY:
+ *
+ *  - a nav recent is a ROUTE and nothing else, resolved against the live nav.
+ *    Records have no nav entry to resolve against, so they must carry a label,
+ *    and letting a labelled object into the route store would break every
+ *    resolver above (and a route into this one would render an untitled row).
+ *  - the two are recorded by different surfaces - Layout records nav routes on
+ *    navigation, the palette records a record when the user PICKS one - so
+ *    sharing a key would let one starve the other out of the cap.
+ */
+export const RECORD_RECENTS_KEY = 'tp_record_recents'
+export const MAX_RECORD_RECENTS = 6
+
+/**
  * Routes never recorded as a recent: the landing pages every session starts on.
  * Both are listed because '/' and '/dashboard' are the same destination here.
  */
@@ -144,6 +159,104 @@ export function pushRecent(route) {
   if (RECENTS_EXCLUDED.has(target)) return loadRecents()
   const current = loadRecents()
   return writeRoutes(RECENTS_KEY, [target, ...current.filter((r) => r !== target)], MAX_RECENTS)
+}
+
+// ── Recent records ───────────────────────────────────────────────────────────
+//
+// A record entry stores the MINIMUM that cannot be recovered later:
+//   path    where it opens ('/vehicle/TM527', '/tyres?search=24098182')
+//   label   what it is called ('TM527') - there is no nav entry to read it from
+//   source  which RECORD_SOURCES entry produced it ('vehicles', 'tyres', ...)
+//   icon    optional glyph name, display only
+//
+// `source` is what keeps the permission rule honest. Access is NOT stored;
+// instead the source id lets the caller re-resolve that source's live `access`
+// descriptor on every render, so a user who loses the module stops seeing its
+// records immediately - the same reason the route stores keep nothing but a
+// path. A source that no longer exists is dropped, never invented.
+
+/** Is this a usable stored record? All three required fields must be real. */
+function isRecord(v) {
+  return !!v
+    && typeof v === 'object'
+    && isRoute(v.path)
+    && typeof v.label === 'string' && v.label.trim().length > 0
+    && typeof v.source === 'string' && v.source.trim().length > 0
+}
+
+/** Clean a raw record list: keep real entries, trim, de-duplicate by PATH, cap. */
+function normalizeRecords(list, max = MAX_RECORD_RECENTS) {
+  if (!Array.isArray(list)) return []
+  const out = []
+  const seen = new Set()
+  for (const raw of list) {
+    if (!isRecord(raw)) continue
+    const path = raw.path.trim()
+    if (seen.has(path)) continue
+    seen.add(path)
+    out.push({
+      path,
+      label: raw.label.trim(),
+      source: raw.source.trim(),
+      ...(typeof raw.icon === 'string' && raw.icon ? { icon: raw.icon } : {}),
+    })
+    if (out.length >= max) break
+  }
+  return out
+}
+
+/** Recently opened records, most recent first. Returns [] on any failure. */
+export function loadRecentRecords() {
+  try {
+    const raw = globalThis.localStorage?.getItem(RECORD_RECENTS_KEY)
+    if (!raw) return []
+    return normalizeRecords(JSON.parse(raw))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Record that the user opened a record. Re-opening MOVES it to the front rather
+ * than adding a duplicate. Junk is ignored silently - a shortcut list is never
+ * worth failing a navigation over.
+ * @returns {Array} the new list
+ */
+export function pushRecentRecord(record) {
+  const [clean] = normalizeRecords([record], 1)
+  if (!clean) return loadRecentRecords()
+  const next = normalizeRecords(
+    [clean, ...loadRecentRecords().filter((r) => r.path !== clean.path)],
+  )
+  try {
+    globalThis.localStorage?.setItem(RECORD_RECENTS_KEY, JSON.stringify(next))
+  } catch {
+    // Storage disabled or full: the returned list is still right for this
+    // session, it just will not survive a reload.
+  }
+  return next
+}
+
+/**
+ * Resolve stored records against the user's CURRENT access. Pure.
+ *
+ * Fails closed for the same reason `resolveRoutes` does: without a usable
+ * predicate we cannot prove the user may open these, so none are returned.
+ *
+ * @param {Array} records  stored entries, in display order
+ * @param {(record:object)=>boolean} canSee  re-evaluated on every render
+ * @param {number} [max]
+ */
+export function visibleRecentRecords(records, canSee, max = MAX_RECORD_RECENTS) {
+  if (!Array.isArray(records)) return []
+  if (typeof canSee !== 'function') return []
+  const out = []
+  for (const entry of normalizeRecords(records, max)) {
+    if (canSee(entry) !== true) continue
+    out.push(entry)
+    if (out.length >= max) break
+  }
+  return out
 }
 
 // ── Pure resolvers ───────────────────────────────────────────────────────────

@@ -47,5 +47,12 @@
   "theme": "Theme",
   "signingOut": "Signing out...",
   "scopeCaption": "Controls which countries this report aggregates. Each country reports in its own currency; figures are never added across currencies.",
-  "allCountriesHint": "No country filter"
+  "allCountriesHint": "No country filter",
+  "createNew": "Create new record",
+  "newInspection": "New Inspection",
+  "newAccident": "New Accident",
+  "newWorkOrder": "New Work Order",
+  "newRequisition": "New Purchase Request",
+  "newAsset": "New Asset",
+  "newTyre": "New Tyre"
 }

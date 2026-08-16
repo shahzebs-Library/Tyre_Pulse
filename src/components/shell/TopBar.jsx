@@ -12,12 +12,14 @@
  * language the existing LanguageSwitcher. A second search or notification
  * implementation would be the thing to avoid, not the thing to build.
  *
- * Desktop:  [collapse] [brand] .... [search] [context] [lang] [bell] [help] [me]
+ * Desktop:  [collapse] [brand] .. [search] [+ create] [context] [lang] [bell] [help] [me]
  * Mobile:   [menu] [brand] [context chip] [search] [bell] [me]
  *
  * On mobile the keyboard hint is dropped (there is no keyboard to hint at) and
  * language moves inside ProfileMenu, because a 360px bar cannot carry six
- * controls and stay tappable.
+ * controls and stay tappable. The create menu is desktop-only for the same
+ * reason, and hides itself entirely for anyone with fewer than two creation
+ * destinations - see GlobalCreate.
  *
  * Height is 52px so it lines up exactly with the sidebar's own logo row.
  * Colours come from CSS vars (--panel-deep / --panel-ink-*) which flip with
@@ -46,6 +48,7 @@ import NotificationCenter from '../NotificationCenter'
 import LanguageSwitcher from '../LanguageSwitcher'
 import useAnchoredPopover from '../ui/useAnchoredPopover'
 import WorkingContextSelector from './WorkingContextSelector'
+import GlobalCreate from './GlobalCreate'
 import ProfileMenu from './ProfileMenu'
 import { useCommandPalette } from '../../contexts/CommandPaletteContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -185,6 +188,10 @@ export default function TopBar({
       <div className="flex items-center gap-1 flex-shrink-0">
         {!isMobile && (
           <>
+            {/* Secondary by design: GlobalCreate renders NOTHING unless the user
+                has at least two creation destinations they can actually reach,
+                so most roles never see it and the bar stays uncrowded. */}
+            <GlobalCreate />
             <WorkingContextSelector />
             <div className="w-px h-5 mx-0.5" style={{ background: 'rgba(127,127,127,0.2)' }} aria-hidden="true" />
             <LanguageSwitcher />

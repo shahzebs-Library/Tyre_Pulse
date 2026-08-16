@@ -18,6 +18,7 @@
  */
 import { supabase } from './_client'
 import { toUserMessage } from '../safeError'
+import { callScopedMulti } from './partsConsumption'
 
 /** Postgres codes that mean "this function is not deployed here". */
 const MISSING = new Set(['42883', 'PGRST202'])
@@ -59,4 +60,30 @@ export async function getCostVariance(opts = {}) {
   }
 }
 
-export default { getCostVariance }
+/**
+ * The same decomposition for every country in a reporting scope (V544).
+ *
+ * One block per country, each in its own currency. There is no scope-level
+ * effect total and there cannot be one: price, volume, started and stopped are
+ * SIGNED AMOUNTS that must add back up to the delta, and that closure only holds
+ * inside a single currency. Adding a SAR price effect to an AED one would break
+ * the one property that makes this decomposition trustworthy.
+ *
+ * @param {{countries:string[], site?:string, from?:string, to?:string, limit?:number}} opts
+ * @returns {Promise<{ok:boolean, blocks:Array, refused:string[]}>} never throws
+ */
+export async function getCostVarianceMulti(opts = {}) {
+  const { countries, site, from, to, limit = 25 } = opts
+  try {
+    return await callScopedMulti('get_cost_variance_multi', countries, {
+      p_site: site && site !== 'All' ? site : null,
+      p_from: from || null,
+      p_to: to || null,
+      p_limit: limit,
+    })
+  } catch {
+    return { ok: false, blocks: [], refused: [] }
+  }
+}
+
+export default { getCostVariance, getCostVarianceMulti }

@@ -28,9 +28,13 @@ import { scopeRequestCountries, scopeQueryKey } from '../lib/reportingScopeQuery
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
-import { getPartsExpenseSnapshot, getExpenseByCountry, getCostCpkOverview, listExpenseRows } from '../lib/api/partsConsumption'
+import {
+  getExpenseByCountry, listExpenseRows,
+  getPartsExpenseSnapshotMulti, getCostCpkOverviewMulti,
+} from '../lib/api/partsConsumption'
+import { scopeReportEntries, scopeRefusedCountries, scopeCurrencies } from '../lib/boardScope'
 import { listTcoActualRecords } from '../lib/api/tyreRecords'
-import { getExpenseYearlyTrend } from '../lib/api/expenseTrends'
+import { getExpensePeriodTrendMulti } from '../lib/api/expenseTrends'
 import { forecastTyreDemand } from '../lib/tyreDemandForecast'
 import TyreForecastSection from '../components/tyre/TyreForecastSection'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -39,7 +43,7 @@ import {
   PeriodBar, ComparisonStrip, CpkPanel, MoversPanel, EvidencePanel,
 } from '../components/expense/CostCpkPanels'
 import CostVariancePanel from '../components/expense/CostVariancePanel'
-import { getCostVariance } from '../lib/api/costVariance'
+import { getCostVarianceMulti } from '../lib/api/costVariance'
 import { getExpenseBySite, setStoreSiteMap, listSites } from '../lib/api/storeSiteExpense'
 import { getFleetCpk } from '../lib/api/fleetCpk'
 import {
@@ -418,27 +422,180 @@ function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
   )
 }
 
+/**
+ * The DEEP REPORT for exactly ONE country: headline KPIs, the comparison
+ * windows, cost per km, why it changed, what moved, the breakdown charts, the
+ * monthly trend, what each site costs to run, and how much of the split is a
+ * decision rather than a guess.
+ *
+ * WHY THIS IS A COMPONENT. It used to be inline JSX that only rendered when the
+ * scope named a single country, which is why a two-country scope dropped to a
+ * shallow comparison. Every panel inside is single-country by nature - each one
+ * reads amounts in ONE currency - so the honest way to report on several
+ * countries is not to widen the panels, it is to REPEAT this whole block once
+ * per country. Nothing here is ever added to another country's copy: the
+ * currency travels with the block and each instance formats its own money.
+ *
+ * @param {object} p
+ * @param {string} p.country
+ * @param {string} p.currency  the country's own currency, never the app default
+ * @param {object|null} p.snap      get_parts_expense_snapshot payload
+ * @param {object|null} p.overview  get_cost_cpk_overview payload
+ * @param {object|null} p.variance  get_cost_variance payload
+ * @param {boolean} p.showHeading   only when more than one country is on screen
+ * @param {(key:string)=>Function} p.setRef  chart ref registrar, country-scoped
+ */
+function CountryReport({
+  country, currency, snap, overview, variance, sections, moverDim, onMoverDim,
+  refreshing, from, to, showHeading, setRef,
+}) {
+  const money = useMemo(() => moneyIn(currency), [currency])
+  const k = snap?.ok ? snap.kpis : null
+
+  const categoryChart = useMemo(() => {
+    const rows = snap?.ok ? (snap.by_category || []) : []
+    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap])
+  const storeChart = useMemo(() => {
+    const rows = (snap?.ok ? (snap.by_store || []) : []).slice(0, 15)
+    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap])
+  const assetChart = useMemo(() => {
+    const rows = (snap?.ok ? (snap.by_asset || []) : []).slice(0, 15)
+    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap])
+  const itemChart = useMemo(() => {
+    const rows = (snap?.ok ? (snap.top_items || []) : []).slice(0, 15)
+    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap])
+  const trendChart = useMemo(() => {
+    const rows = snap?.ok ? (snap.monthly || []) : []
+    return {
+      labels: rows.map((r) => monthLabel(r.m)),
+      datasets: [
+        { label: 'Tyres', data: rows.map((r) => Number(r.tyre) || 0) },
+        { label: 'Spare Parts', data: rows.map((r) => Number(r.spare) || 0) },
+        { label: 'Oil', data: rows.map((r) => Number(r.oil) || 0) },
+      ],
+    }
+  }, [snap])
+
+  const hasSnap = !!(k && (Number(k.total_expense) || Number(k.lines)))
+
+  return (
+    <div className="space-y-5">
+      {showHeading && (
+        <div className="flex items-center gap-2 pt-2 border-t border-[var(--hairline)]">
+          <h2 className="text-base font-bold text-[var(--text-primary)]">{country}</h2>
+          {/* The currency is stated on every block because the page now shows
+              several, and a figure without its currency is not a figure. */}
+          <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--surface-2,#1e293b)] text-[var(--text-secondary)]">{currency}</span>
+        </div>
+      )}
+
+      {!hasSnap && (
+        <div className="card text-center text-[var(--text-muted)] py-6 text-sm">
+          No expense lines for {country} in this period.
+        </div>
+      )}
+
+      {sections.kpis && k && hasSnap && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <Kpi label="Total expense" value={money(k.total_expense)} accent={ACCENTS.primary} />
+          <Kpi label="Tyres" value={money(k.tyre_expense)} accent={ACCENTS.info} />
+          <Kpi label="Spare parts" value={money(k.spare_expense)} accent={ACCENTS.watch} />
+          <Kpi label="Oil" value={money(k.oil_expense)} accent={ACCENTS.good} />
+          <Kpi label="Lines" value={num(k.lines)} accent={ACCENTS.neutral} />
+          <Kpi label="Tyres issued" value={num(k.tyres_issued)} accent={ACCENTS.risk} sub={`${num(k.reassigned_tyres)} reassigned`} />
+        </div>
+      )}
+
+      {sections.compare && overview && <ComparisonStrip snap={overview} money={money} />}
+      {sections.cpk && overview && <CpkPanel snap={overview} money={money} />}
+      {sections.why && variance && (
+        <CostVariancePanel variance={variance} snapshot={overview} loading={refreshing} />
+      )}
+      {sections.movers && overview && (
+        <MoversPanel snap={overview} money={money} dim={moverDim} onDim={onMoverDim} />
+      )}
+
+      {sections.categories && hasSnap && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><PieChart size={15} /> Spend by category</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard title="Tyres vs Spare Parts vs Oil" refCb={setRef('category')}><Doughnut data={stylize(categoryChart, 'doughnut')} options={DOUGHNUT_OPTS} /></ChartCard>
+          </div>
+        </section>
+      )}
+
+      {(sections.sites || sections.assets) && hasSnap && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Building2 size={15} /> Spend by store and asset</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {sections.sites && <ChartCard title="Top stores by spend" refCb={setRef('store')}><Bar data={stylize(storeChart, 'bar')} options={chartBase(false)} /></ChartCard>}
+            {sections.assets && <ChartCard title="Top assets by spend" refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
+          </div>
+        </section>
+      )}
+
+      {/* What each site COSTS TO RUN - cost read through the asset, because an
+          expense line's own site is the store the parts came from. */}
+      {sections.bysite && (
+        <SiteOperatingCostPanel country={country} from={from} to={to} money={money} />
+      )}
+
+      {sections.items && hasSnap && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Package size={15} /> Top items</h3>
+          <div className="grid grid-cols-1 gap-4">
+            <ChartCard title="Top items by spend" refCb={setRef('item')}><Bar data={stylize(itemChart, 'bar')} options={H_BAR_OPTS} /></ChartCard>
+          </div>
+        </section>
+      )}
+
+      {sections.trend && hasSnap && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Monthly expense trend</h3>
+          <div className="grid grid-cols-1 gap-4">
+            <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
+          </div>
+        </section>
+      )}
+
+      {sections.evidence && overview && <EvidencePanel snap={overview} money={money} />}
+    </div>
+  )
+}
+
 export default function ExpenseReport() {
   // REPORTING SCOPE, not the working context. This is an analytics page, so the
   // countries it covers are the ones chosen in the ReportingScopeBar, not the one
   // operational country in the top bar. `activeCountry` / `activeCurrency` are
   // deliberately not read, and nothing here writes the working context.
   //
-  // THE DEEP REPORT IS SINGLE-COUNTRY BY CONSTRUCTION, and that is a server fact
-  // rather than a UI choice: five of the six aggregates behind it
-  // (get_parts_expense_snapshot, get_cost_cpk_overview, get_cost_variance,
-  // get_expense_period_trend, get_site_operating_cost) take exactly ONE country
-  // and return comparison windows, movers, breakdowns and evidence that cannot
-  // be merged across countries without re-deriving the analysis. So the scope
-  // resolves to one of three states:
+  // THE DEEP REPORT NOW COVERS EVERY COUNTRY IN SCOPE, one block per country.
+  //
+  // It used to be single-country by construction, because the five aggregates
+  // behind it (get_parts_expense_snapshot, get_cost_cpk_overview,
+  // get_cost_variance, get_expense_period_trend, get_site_operating_cost) each
+  // took exactly ONE country. V544 adds a `*_multi` sibling for each, which runs
+  // the SAME single-country analysis once per permitted country and returns the
+  // results side by side. So a multi-country scope now gets the real report.
+  //
+  // What has NOT changed, and must not: money is still never added across
+  // countries. KSA reports in SAR, UAE in AED, Egypt in EGP. Each block below
+  // carries its own currency and formats its own amounts; there is no scope
+  // total, no scope-level percentage movement and no averaged cost per km,
+  // because every one of those would require summing currencies first.
+  //
+  // The scope resolves to one of three states:
   //   no country     nothing is requested and the page says so
-  //   one country    the full deep report, in that country's own currency
-  //   more than one  the per-country comparison, each country in its own
-  //                  currency - exactly the cross-country view this page has
-  //                  always shown, now bounded to the countries in scope
-  // Feeding the resolved country and currency into the SAME two names the rest
-  // of this page already uses keeps that switch to one place; every panel below
-  // is unchanged.
+  //   one country    the deep report, in that country's own currency (the exact
+  //                  page this has always been - one entry in `reports`)
+  //   more than one  the per-country totals card, then the deep report repeated
+  //                  once per country
+  // `activeCountry` stays the resolved single country (or 'All'), because the
+  // exports, the Chart Builder and the Tyre Forecast still key off it.
   const { appSettings, reportingScope, allowedScopeCountries } = useSettings()
   const scopeKey = useMemo(
     () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
@@ -451,7 +608,6 @@ export default function ExpenseReport() {
   const activeCurrency = currencyForCountry(activeCountry, appSettings?.currency || 'SAR')
   const { profile, isSuperAdmin } = useAuth()
   const canMap = isSuperAdmin === true || ['Admin', 'Manager', 'Director'].includes(profile?.role)
-  const [snap, setSnap] = useState(null)
   const [siteGroups, setSiteGroups] = useState([])
   const [bySiteErr, setBySiteErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -472,12 +628,16 @@ export default function ExpenseReport() {
   // Period comparison + cost per km. The period picker drives BOTH this and the
   // date inputs below, so the whole page always describes one window.
   const [period, setPeriod] = useState('ytd')
-  const [overview, setOverview] = useState(null)
   const [moverDim, setMoverDim] = useState('by_asset')
-  // The variance decomposition: what the change is made of, and a plain-language
-  // account of it. Its own state so a backend without V378 leaves the section
-  // out rather than failing the page.
-  const [variance, setVariance] = useState(null)
+  // ONE ENTRY PER COUNTRY IN SCOPE, each carrying that country's own snapshot,
+  // comparison and variance in its own currency. A single-country scope produces
+  // exactly one entry, so the render path is the same code either way and the
+  // single-country page cannot drift from the multi-country one.
+  const [reports, setReports] = useState([])
+  // Countries the scope asked for that the server declined to report on. Shown
+  // rather than swallowed: a reader who selected three countries and sees two
+  // must be told which is missing, or they read the report as covering all three.
+  const [refused, setRefused] = useState([])
 
   // Unit-aware Fleet CPK (cost per km for road assets / cost per engine-hour for
   // plant). Server aggregate get_fleet_cpk chooses the unit per asset type and keeps
@@ -501,8 +661,15 @@ export default function ExpenseReport() {
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(sections)) } catch { /* ignore */ } }, [sections])
   const toggle = (key) => setSections((s) => ({ ...s, [key]: !s[key] }))
 
+  // Chart refs are keyed by COUNTRY and chart, because the deep report now
+  // repeats down the page. A bare key would have every country overwrite the
+  // previous one's canvas and the PDF would print the last country's charts
+  // under every country's heading.
   const chartRefs = useRef({})
-  const setRef = (key) => (el) => { chartRefs.current[key] = el }
+  const setRefFor = useCallback(
+    (country) => (key) => (el) => { chartRefs.current[`${country}:${key}`] = el },
+    [],
+  )
 
   const money = useMemo(() => moneyIn(activeCurrency), [activeCurrency])
 
@@ -511,7 +678,7 @@ export default function ExpenseReport() {
     // server for nothing. Falling back to an un-scoped read here would report on
     // every country the reader did not select.
     if (!hasScope) {
-      setSnap(null); setOverview(null); setVariance(null)
+      setReports([]); setRefused([])
       setByCountry([]); setSiteGroups([]); setBySiteErr('')
       setTyreAgg(null); setYearly(null); setTyreForecast(null)
       setError(''); setLoading(false); setRefreshing(false)
@@ -519,19 +686,28 @@ export default function ExpenseReport() {
     }
     setRefreshing(true); setError('')
     try {
-      const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : undefined
-      const [res, ov] = await Promise.all([
-        getPartsExpenseSnapshot({ country: scopedCountry, from: from || undefined, to: to || undefined }),
-        // Comparison + cost per km. Its own try/catch so a backend that predates
-        // V374 leaves those sections empty instead of failing the whole page.
-        getCostCpkOverview({ country: scopedCountry, from: from || undefined, to: to || undefined })
-          .catch(() => ({ ok: false })),
+      // THE DEEP REPORT, ONE BLOCK PER COUNTRY IN SCOPE. Each `*_multi`
+      // aggregate runs the identical single-country analysis once per country
+      // the caller is permitted to see and hands the results back side by side,
+      // so a country's block here is the same payload the single-country page
+      // has always rendered - never a re-derivation, and never a blend.
+      // Each read degrades on its own: a backend without V544/V374/V378 leaves
+      // that part of the report out rather than failing the page.
+      const [snapRes, ovRes, varRes] = await Promise.all([
+        getPartsExpenseSnapshotMulti({
+          countries: scopeCountryList, from: from || undefined, to: to || undefined,
+        }).catch(() => ({ ok: false, blocks: [], refused: [] })),
+        getCostCpkOverviewMulti({
+          countries: scopeCountryList, from: from || undefined, to: to || undefined,
+        }).catch(() => ({ ok: false, blocks: [], refused: [] })),
+        getCostVarianceMulti({
+          countries: scopeCountryList, from: from || undefined, to: to || undefined, limit: 25,
+        }).catch(() => ({ ok: false, blocks: [], refused: [] })),
       ])
-      getCostVariance({
-        country: scopedCountry, from: from || undefined, to: to || undefined, limit: 25,
-      }).then((v) => setVariance(v && v.ok ? v : null)).catch(() => setVariance(null))
-      setSnap(res && res.ok ? res : { ok: false })
-      setOverview(ov && ov.ok ? ov : null)
+      setReports(scopeReportEntries(scopeCountryList, {
+        snap: snapRes.blocks, overview: ovRes.blocks, variance: varRes.blocks,
+      }))
+      setRefused(scopeRefusedCountries(snapRes, ovRes, varRes))
       // On the "All countries" view, also load each country's total in its OWN
       // currency (SAR / AED / EGP) so they are shown side by side, never blended.
       let countries = []
@@ -581,8 +757,12 @@ export default function ExpenseReport() {
           // of the page date range, so the projection has enough signal.
           setTyreForecast(forecastTyreDemand(rows, { window: 12, ahead: 3 }))
         }).catch(() => { setTyreAgg(null); setTyreForecast(null) })
-        getExpenseYearlyTrend({ country: activeCountry })
-          .then((rows) => setYearly(Array.isArray(rows) ? rows : null))
+        // Multi-year totals for the Chart Builder. Read through the scoped
+        // aggregate like everything else on this page, so there is ONE way of
+        // asking the server what a scope covers rather than one read that takes
+        // the scope and another that takes a bare country string.
+        getExpensePeriodTrendMulti({ countries: scopeCountryList, grain: 'year' })
+          .then((res) => setYearly(res.rows.length ? res.rows : null))
           .catch(() => setYearly(null))
       } else {
         setTyreAgg(null); setYearly(null); setTyreForecast(null)
@@ -654,40 +834,15 @@ export default function ExpenseReport() {
     setTo(w.to)
   }, [])
 
-  const k = snap?.ok ? snap.kpis : null
-
-  // ── Chart data (built from the snapshot, styled with the shared palette) ─────
-  const categoryChart = useMemo(() => {
-    const rows = snap?.ok ? (snap.by_category || []) : []
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
-
-  const storeChart = useMemo(() => {
-    const rows = (snap?.ok ? (snap.by_store || []) : []).slice(0, 15)
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
-
-  const assetChart = useMemo(() => {
-    const rows = (snap?.ok ? (snap.by_asset || []) : []).slice(0, 15)
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
-
-  const itemChart = useMemo(() => {
-    const rows = (snap?.ok ? (snap.top_items || []) : []).slice(0, 15)
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
-
-  const trendChart = useMemo(() => {
-    const rows = snap?.ok ? (snap.monthly || []) : []
-    return {
-      labels: rows.map((r) => monthLabel(r.m)),
-      datasets: [
-        { label: 'Tyres', data: rows.map((r) => Number(r.tyre) || 0) },
-        { label: 'Spare Parts', data: rows.map((r) => Number(r.spare) || 0) },
-        { label: 'Oil', data: rows.map((r) => Number(r.oil) || 0) },
-      ],
-    }
-  }, [snap])
+  // The SINGLE-country payloads, for the surfaces that are single-country by
+  // nature: the legacy Excel export shape, the Chart Builder catalog and the
+  // period bar's window labels. On a multi-country scope these stay null and
+  // those surfaces render their per-country alternatives instead - which is why
+  // they are derived from `reports` rather than kept as separate state that
+  // could disagree with the blocks on screen.
+  const single = reports.length === 1 ? reports[0] : null
+  const snap = single?.snap || null
+  const overview = single?.overview || null
 
   // ── Chart Builder catalog (the shared Presentation Studio renders it) ────────
   const studioCatalog = useMemo(() => {
@@ -806,11 +961,21 @@ export default function ExpenseReport() {
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
-  const hasAny = !!(k && (Number(k.total_expense) || Number(k.lines))) || (isAll && byCountry.length > 0)
+  // Any expense to show/export at all: ANY country in scope reporting a value,
+  // or (All view) at least one country total. Drives the empty state + exports.
+  const hasAny = reports.some((r) => {
+    const kp = r.snap?.ok ? r.snap.kpis : null
+    return !!(kp && (Number(kp.total_expense) || Number(kp.lines)))
+  }) || (isAll && byCountry.length > 0)
 
   // Build the Expense Report PDF doc (mirrors BoardOverview.buildBoardDoc).
+  //
+  // The document repeats the same country blocks that are on screen, in the same
+  // order. Each block prints its own currency beside its heading, and there is
+  // no combined page anywhere: a printed report travels further than the screen
+  // does, so a blended total in it would be even harder to catch.
   async function buildExpenseDoc() {
-    if (!snap?.ok && !(isAll && byCountry.length)) return null
+    if (!hasAny) return null
     const { captureChartOnPaper } = await import('../lib/chartCapture')
     const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -844,38 +1009,53 @@ export default function ExpenseReport() {
         y += 13
       })
       y += 3
-    } else if (k) {
-      const tiles = [
-        ['Total expense', money(k.total_expense)], ['Tyres', money(k.tyre_expense)],
-        ['Spare parts', money(k.spare_expense)], ['Oil', money(k.oil_expense)],
-        ['Lines', num(k.lines)], ['Tyres issued', num(k.tyres_issued)],
-      ]
-      tiles.forEach((tl, i) => {
-        const col = i % 6
-        const x = M + col * ((W - 2 * M) / 6)
-        doc.setTextColor(15, 23, 42); doc.setFontSize(11); doc.text(String(tl[1]), x, y + 6)
-        doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.text(String(tl[0]), x, y + 11)
-      })
-      y += 20
     }
 
     const order = ['category', 'store', 'asset', 'item', 'trend']
-    let placed = 0
-    for (const key of order) {
-      const el = chartRefs.current[key]
-      const canvas = el?.querySelector?.('canvas')
-      if (!canvas) continue
-      const img = captureChartOnPaper(canvas) || canvas.toDataURL('image/png', 1)
-      if (!img) continue
-      const cw = (W - 2 * M - 8) / 2
-      const ch = 55
-      const col = placed % 2
-      const rowY = y + Math.floor(placed / 2) * (ch + 6)
-      if (rowY + ch > doc.internal.pageSize.getHeight() - 10) { doc.addPage('a4', 'landscape'); y = 14; placed = 0 }
-      const x = M + col * (cw + 8)
-      const yy = y + Math.floor(placed / 2) * (ch + 6)
-      doc.addImage(img, 'PNG', x, yy, cw, ch)
-      placed += 1
+    const multi = reports.length > 1
+    for (const r of reports) {
+      const kp = r.snap?.ok ? r.snap.kpis : null
+      const fmt = moneyIn(r.currency)
+      if (multi) {
+        // A country heading on every block. Without it the tiles below would be
+        // six numbers with no country and no currency attached to them.
+        if (y > doc.internal.pageSize.getHeight() - 60) { doc.addPage('a4', 'landscape'); y = 14 }
+        doc.setTextColor(15, 23, 42); doc.setFontSize(12)
+        doc.text(`${r.country} (${r.currency})`, M, y + 4)
+        y += 9
+      }
+      if (kp) {
+        const tiles = [
+          ['Total expense', fmt(kp.total_expense)], ['Tyres', fmt(kp.tyre_expense)],
+          ['Spare parts', fmt(kp.spare_expense)], ['Oil', fmt(kp.oil_expense)],
+          ['Lines', num(kp.lines)], ['Tyres issued', num(kp.tyres_issued)],
+        ]
+        tiles.forEach((tl, i) => {
+          const x = M + (i % 6) * ((W - 2 * M) / 6)
+          doc.setTextColor(15, 23, 42); doc.setFontSize(11); doc.text(String(tl[1]), x, y + 6)
+          doc.setTextColor(100, 116, 139); doc.setFontSize(7.5); doc.text(String(tl[0]), x, y + 11)
+        })
+        y += 20
+      }
+
+      let placed = 0
+      for (const key of order) {
+        const el = chartRefs.current[`${r.country}:${key}`]
+        const canvas = el?.querySelector?.('canvas')
+        if (!canvas) continue
+        const img = captureChartOnPaper(canvas) || canvas.toDataURL('image/png', 1)
+        if (!img) continue
+        const cw = (W - 2 * M - 8) / 2
+        const ch = 55
+        const col = placed % 2
+        const rowY = y + Math.floor(placed / 2) * (ch + 6)
+        if (rowY + ch > doc.internal.pageSize.getHeight() - 10) { doc.addPage('a4', 'landscape'); y = 14; placed = 0 }
+        const x = M + col * (cw + 8)
+        const yy = y + Math.floor(placed / 2) * (ch + 6)
+        doc.addImage(img, 'PNG', x, yy, cw, ch)
+        placed += 1
+      }
+      y += Math.ceil(placed / 2) * 61 + 4
     }
     return { doc, company }
   }
@@ -1053,8 +1233,18 @@ export default function ExpenseReport() {
         <ReportingScopeBar />
         {isAll && hasScope && (
           <p className="text-[11px] text-[var(--text-muted)]">
-            The scope covers {scopeTitle}, which report in different currencies, so this page shows each country
-            its own totals and never one combined figure. Select a single country to open the full report for it.
+            The scope covers {scopeTitle}. The full report is shown for each country separately, in its own
+            currency ({scopeCurrencies(scopeCountryList).join(', ') || 'own currency'}), because spend in different
+            currencies is never added together - so there is no combined total, no combined percentage change and
+            no combined cost per km on this page. The Chart Builder and the Tyre Forecast still cover one country
+            at a time.
+          </p>
+        )}
+        {refused.length > 0 && (
+          <p className="text-[11px] text-amber-300">
+            Not included: {refused.join(', ')}. The scope asked for {refused.length === 1 ? 'this country' : 'these countries'} but
+            your access does not cover {refused.length === 1 ? 'it' : 'them'}, so {refused.length === 1 ? 'it is' : 'they are'} left
+            out of every figure above rather than partly counted.
           </p>
         )}
       </div>
@@ -1127,21 +1317,6 @@ export default function ExpenseReport() {
         </div>
       ) : (
         <>
-          {/* KPIs - hidden on the All-countries view (the per-country panel below
-              shows each currency separately instead of a blended total). */}
-          {sections.kpis && k && !isAll && (
-            <section className="space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                <Kpi label="Total expense" value={money(k.total_expense)} accent={ACCENTS.primary} />
-                <Kpi label="Tyres" value={money(k.tyre_expense)} accent={ACCENTS.info} />
-                <Kpi label="Spare parts" value={money(k.spare_expense)} accent={ACCENTS.watch} />
-                <Kpi label="Oil" value={money(k.oil_expense)} accent={ACCENTS.good} />
-                <Kpi label="Lines" value={num(k.lines)} accent={ACCENTS.neutral} />
-                <Kpi label="Tyres issued" value={num(k.tyres_issued)} accent={ACCENTS.risk} sub={`${num(k.reassigned_tyres)} reassigned`} />
-              </div>
-            </section>
-          )}
-
           {/* Per-country totals in each own currency (All-countries view only, so
               SAR / AED / EGP are never blended into one meaningless sum). */}
           {isAll && byCountry.length > 0 && (
@@ -1176,68 +1351,29 @@ export default function ExpenseReport() {
             </section>
           )}
 
-          {/* Why the charts are not drawn on the All-countries view. Every chart
-              below sums line_cost across countries, which would put SAR, AED and
-              EGP on one axis - so they are shown per country instead. */}
-          {isAll && (
-            <div className="card">
-              <p className="text-sm font-semibold text-[var(--text-primary)]">Charts, Chart Builder and Tyre Forecast show per country</p>
-              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
-                KSA (SAR), UAE (AED) and Egypt (EGP) use different currencies, so spend cannot be summed into one
-                chart or one total. <span className="text-[var(--text-secondary)] font-medium">Pick a single country in the country selector at the top</span> to
-                see spend by category, store, asset, item and month, the <span className="text-[var(--text-secondary)] font-medium">Chart Builder</span>, and the
-                <span className="text-[var(--text-secondary)] font-medium"> Tyre demand forecast by size</span>. The per-country totals above and the spend by
-                site below are each shown in their own currency.
-              </p>
-            </div>
-          )}
-
-          {/* This period against last, and against the same period a year ago */}
-          {sections.compare && overview && (
-            <ComparisonStrip snap={overview} money={money} />
-          )}
-
-          {/* Cost per kilometre, with the coverage that makes it readable */}
-          {sections.cpk && overview && !isAll && (
-            <CpkPanel snap={overview} money={money} />
-          )}
-
-          {/* Why the total changed: price against volume, what started, what stopped */}
-          {sections.why && variance && !isAll && (
-            <CostVariancePanel variance={variance} snapshot={overview} loading={refreshing} />
-          )}
-
-          {/* What moved, which is the answer to why the total changed */}
-          {sections.movers && overview && !isAll && (
-            <MoversPanel snap={overview} money={money} dim={moverDim} onDim={setMoverDim} />
-          )}
-
-          {/* Categories */}
-          {sections.categories && !isAll && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><PieChart size={15} /> Spend by category</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Tyres vs Spare Parts vs Oil" refCb={setRef('category')}><Doughnut data={stylize(categoryChart, 'doughnut')} options={DOUGHNUT_OPTS} /></ChartCard>
-              </div>
-            </section>
-          )}
-
-          {/* Stores + Assets */}
-          {(sections.sites || sections.assets) && !isAll && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Building2 size={15} /> Spend by store and asset</h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {sections.sites && <ChartCard title="Top stores by spend" refCb={setRef('store')}><Bar data={stylize(storeChart, 'bar')} options={chartBase(false)} /></ChartCard>}
-                {sections.assets && <ChartCard title="Top assets by spend" refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
-              </div>
-            </section>
-          )}
-
-          {/* What each site COSTS TO RUN - cost read through the asset, because an
-              expense line's own site is the store the parts came from. */}
-          {sections.bysite && (
-            <SiteOperatingCostPanel country={activeCountry} from={from} to={to} money={money} />
-          )}
+          {/* THE DEEP REPORT, ONCE PER COUNTRY IN SCOPE. Each block reads one
+              country in one currency, so nothing inside is ever added across
+              countries - which is exactly why the report repeats rather than
+              widening. A single-country scope renders one block and is the page
+              it has always been. */}
+          {reports.map((r) => (
+            <CountryReport
+              key={r.country}
+              country={r.country}
+              currency={r.currency}
+              snap={r.snap}
+              overview={r.overview}
+              variance={r.variance}
+              sections={sections}
+              moverDim={moverDim}
+              onMoverDim={setMoverDim}
+              refreshing={refreshing}
+              from={from}
+              to={to}
+              showHeading={reports.length > 1}
+              setRef={setRefFor(r.country)}
+            />
+          ))}
 
           {/* By site (store_code -> site map). One table per country on the All view. */}
           {sections.bysite && (
@@ -1249,33 +1385,19 @@ export default function ExpenseReport() {
             />
           )}
 
-          {/* Top Items */}
-          {sections.items && !isAll && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Package size={15} /> Top items</h2>
-              <div className="grid grid-cols-1 gap-4">
-                <ChartCard title="Top items by spend" refCb={setRef('item')}><Bar data={stylize(itemChart, 'bar')} options={H_BAR_OPTS} /></ChartCard>
-              </div>
-            </section>
-          )}
-
-          {/* Trend */}
-          {sections.trend && !isAll && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Monthly expense trend</h2>
-              <div className="grid grid-cols-1 gap-4">
-                <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
-              </div>
-            </section>
-          )}
-
           {/* Tyre demand forecast by size - exact projected tyre counts. */}
           {sections.forecast && !isAll && tyreForecast && (
             <TyreForecastSection forecast={tyreForecast} country={activeCountry} currency={activeCurrency} money={money} filePrefix="Expense" />
           )}
 
           {/* Chart Builder - the shared Presentation Studio over this snapshot.
-              Single-country only (the snapshot dimensions are per country). */}
+              STILL SINGLE-COUNTRY, and deliberately so. Unlike the report blocks
+              above, the studio lets a reader combine any two series it is given
+              onto one axis, so handing it three currencies would make a blended
+              chart reachable by a click. It also needs a per-country client-side
+              read of up to 50,000 tyre records; running that three times over
+              would slow the page for a tool that is exploratory rather than part
+              of the report. The note below says which country it covers. */}
           {sections.builder && !isAll && studioCatalog.length > 0 && (
             <StudioBoundary>
               <PresentationStudio

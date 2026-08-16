@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapPin, AlertTriangle, Info } from 'lucide-react'
-import { getSiteOperatingCost, storeVsOperating } from '../../lib/api/siteOperatingCost'
+import { getSiteOperatingCostMulti, storeVsOperating } from '../../lib/api/siteOperatingCost'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 
 /**
@@ -20,10 +20,19 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
   const [state, setState] = useState({ loading: true, ok: false })
   const [showStores, setShowStores] = useState(false)
 
+  // Read through the scope-aware aggregate even for one country (V544). The
+  // single-country function it wraps has no country ABAC guard - asked for a
+  // country the caller may not see it answers anyway - so going through the
+  // guarded wrapper means this panel can never render a country the reader is
+  // not entitled to, whatever it is handed.
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }))
-    const res = await getSiteOperatingCost({ country, from, to })
-    setState({ loading: false, ...res })
+    const scoped = country && country !== 'All' ? [country] : []
+    const res = await getSiteOperatingCostMulti({ countries: scoped, from, to })
+    const block = res.blocks[0]
+    setState(block
+      ? { loading: false, ok: true, coverage: block.coverage, bySite: block.bySite, byStore: block.byStore }
+      : { loading: false, ok: false })
   }, [country, from, to])
 
   useEffect(() => { load() }, [load])

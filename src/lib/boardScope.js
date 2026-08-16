@@ -241,6 +241,73 @@ export function mergeFleetCpk(results) {
 }
 
 /**
+ * Assemble the per-country blocks of several multi-country aggregates into ONE
+ * entry per country, ready to render as a deep report repeated down the page.
+ *
+ * This is what makes a multi-country scope show the FULL report rather than a
+ * summary: each entry carries that country's own snapshot, comparison and
+ * variance, so every existing single-country panel can be handed one entry
+ * unchanged and stays correct - it is looking at one country in one currency,
+ * exactly as it always has.
+ *
+ * COUNTRY ORDER COMES FROM THE SCOPE, not from any payload, so the report reads
+ * in the order the reader chose and cannot be re-ordered by whichever aggregate
+ * happened to answer first.
+ *
+ * A country that is in scope but missing from a given payload keeps its entry
+ * with that part null. "This country reported nothing for this panel" and "this
+ * country was left out of the report" are different statements, and only the
+ * first one is true here.
+ *
+ * There is deliberately NO combining step: no scope total, no merged ranking, no
+ * averaged rate. Entries sit side by side and are never added.
+ *
+ * @param {string[]} countries the scope, in order
+ * @param {Record<string, Array<{country:string, currency:string|null, result:any}>>} blocksByPart
+ *   e.g. { snap: [...], overview: [...], variance: [...] }
+ * @returns {Array<{country:string, currency:string|null, [part:string]:any}>}
+ */
+export function scopeReportEntries(countries, blocksByPart = {}) {
+  const scope = (Array.isArray(countries) ? countries : []).map(txt).filter(Boolean)
+  const parts = Object.keys(blocksByPart || {})
+  const index = {}
+  for (const part of parts) {
+    const list = Array.isArray(blocksByPart[part]) ? blocksByPart[part] : []
+    index[part] = new Map(list.map((b) => [txt(b?.country).toLowerCase(), b]))
+  }
+  return scope.map((country) => {
+    const entry = { country, currency: currencyForCountry(country) }
+    for (const part of parts) {
+      const block = index[part].get(country.toLowerCase())
+      // `result` is the single-country payload verbatim; a block that carries no
+      // result at all resolves to null rather than to an empty object, so a
+      // panel renders its own honest empty state instead of zeros.
+      entry[part] = block ? (block.result ?? block) : null
+    }
+    return entry
+  })
+}
+
+/**
+ * The countries a scope asked for that the server declined to report on, folded
+ * across several multi-country payloads and de-duplicated.
+ *
+ * Worth surfacing rather than swallowing: a reader who selected three countries
+ * and is shown two must be told which one is missing and why, or they will read
+ * the report as covering everything they picked.
+ */
+export function scopeRefusedCountries(...payloads) {
+  const out = []
+  for (const p of payloads) {
+    for (const c of (p && Array.isArray(p.refused) ? p.refused : [])) {
+      const name = txt(c)
+      if (name && !out.some((x) => x.toLowerCase() === name.toLowerCase())) out.push(name)
+    }
+  }
+  return out
+}
+
+/**
  * Render per-country money on one line, for places that can only take a string
  * (a PDF cell, an export column). Returns 'N/A' when nothing is measurable, so
  * an empty scope never prints as a blank that reads like a zero.

@@ -1,4 +1,5 @@
 import { supabase } from './_client'
+import { callScopedMulti } from './partsConsumption'
 
 /**
  * What each site actually costs to run.
@@ -43,6 +44,42 @@ export async function getSiteOperatingCost({ country, from, to } = {}) {
     }
   } catch {
     return { ok: false, reason: 'unavailable' }
+  }
+}
+
+/**
+ * Site operating cost for every country in a reporting scope (V544).
+ *
+ * One block per country. `coverage` (the share of expense lines that resolve
+ * through a job card to an asset's registered site) stays PER COUNTRY rather
+ * than being averaged into one scope-wide figure: it is a data-quality reading,
+ * and three countries load their job cards differently, so one blended
+ * percentage would describe none of them.
+ *
+ * This also supplies the country guard the single-country function lacks - asked
+ * with no country it returns every country in the organisation regardless of
+ * what the caller may see.
+ *
+ * @param {{countries:string[], from?:string, to?:string}} opts
+ * @returns {Promise<{ok:boolean, blocks:Array, refused:string[]}>} never throws
+ */
+export async function getSiteOperatingCostMulti({ countries, from, to } = {}) {
+  try {
+    const res = await callScopedMulti('get_site_operating_cost_multi', countries, {
+      p_from: from || null, p_to: to || null,
+    })
+    return {
+      ...res,
+      blocks: res.blocks.map((b) => ({
+        country: b?.country,
+        currency: b?.currency || null,
+        coverage: b?.result?.coverage || null,
+        bySite: Array.isArray(b?.result?.by_site) ? b.result.by_site : [],
+        byStore: Array.isArray(b?.result?.by_store) ? b.result.by_store : [],
+      })),
+    }
+  } catch {
+    return { ok: false, blocks: [], refused: [] }
   }
 }
 

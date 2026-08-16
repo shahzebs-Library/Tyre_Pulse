@@ -9,7 +9,7 @@
  *
  * @module api/partsConsumption
  */
-import { supabase } from './_client'
+import { supabase, isMissingRelation } from './_client'
 import { PARTS_FIELDS } from '../partsExpense'
 
 const INSERT_CHUNK = 200
@@ -178,6 +178,64 @@ export async function listExpenseRows({ country, from, to, max = 100000 } = {}) 
   const { data, truncated, error } = await fetchAllPages(build, { max })
   if (error) throw error
   return { rows: data || [], truncated: Boolean(truncated) }
+}
+
+/**
+ * Ask a `*_multi` aggregate for a whole reporting scope at once (V544).
+ *
+ * Every multi aggregate answers in ONE shape - `{ok, countries:[{country,
+ * currency, result}], refused}` - where `result` is byte-identical to what the
+ * single-country function returns for that country. There is deliberately no
+ * scope-level total in the payload: KSA reports in SAR, UAE in AED and Egypt in
+ * EGP, and this app never adds them. `refused` names the countries the caller
+ * asked for but may not see, so a partly-permitted scope reports the part it may
+ * read instead of failing whole.
+ *
+ * Degrades to `{ok:false, blocks:[]}` on a backend that predates V544, so a page
+ * falls back to its per-country comparison rather than showing an error.
+ *
+ * @param {string} rpc the `*_multi` function name
+ * @param {string[]} countries
+ * @param {object} params extra named RPC arguments
+ * @returns {Promise<{ok:boolean, blocks:Array<{country:string,currency:string|null,result:any}>, refused:string[]}>}
+ */
+export async function callScopedMulti(rpc, countries, params = {}) {
+  const list = (Array.isArray(countries) ? countries : []).filter(Boolean)
+  if (!list.length) return { ok: false, blocks: [], refused: [] }
+  const { data, error } = await supabase.rpc(rpc, { p_countries: list, ...params })
+  if (error) {
+    if (isMissingRelation(error)) return { ok: false, blocks: [], refused: [] }
+    throw error
+  }
+  if (!data || data.ok !== true) return { ok: false, blocks: [], refused: [] }
+  return {
+    ok: true,
+    blocks: Array.isArray(data.countries) ? data.countries : [],
+    refused: Array.isArray(data.refused) ? data.refused : [],
+  }
+}
+
+/**
+ * The parts expense snapshot for every country in a reporting scope, one block
+ * per country in its own currency.
+ * @param {{countries:string[], site?:string, from?:string, to?:string}} opts
+ */
+export async function getPartsExpenseSnapshotMulti({ countries, site, from, to } = {}) {
+  return callScopedMulti('get_parts_expense_snapshot_multi', countries, {
+    p_site: site || null, p_from: from || null, p_to: to || null,
+  })
+}
+
+/**
+ * The comparison / cost-per-km overview for every country in a reporting scope.
+ * Each block carries its own currency, and a cost per km is a rate in THAT
+ * currency - rates in different currencies are never averaged together.
+ * @param {{countries:string[], site?:string, from?:string, to?:string}} opts
+ */
+export async function getCostCpkOverviewMulti({ countries, site, from, to } = {}) {
+  return callScopedMulti('get_cost_cpk_overview_multi', countries, {
+    p_site: site || null, p_from: from || null, p_to: to || null,
+  })
 }
 
 export async function getPartsExpenseSnapshot({ site, country, from, to } = {}) {

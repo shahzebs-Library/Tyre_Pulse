@@ -1,10 +1,14 @@
 /**
  * Expense Report - the "All countries" scope must never present one blended
  * figure. ONE tenant, three currencies (KSA=SAR, UAE=AED, Egypt=EGP): summing
- * them is meaningless, so on the All scope the page shows per-country totals,
- * per-country site tables and a per-currency export, and hides the charts that
- * can only be drawn from a cross-country sum. A single-country scope is
- * unchanged (charts render, one site table, legacy export columns).
+ * them is meaningless.
+ *
+ * Since V544 the deep report is no longer withheld from a multi-country scope -
+ * it is REPEATED, once per country, each block in its own currency. So these
+ * tests pin two things at once: that the full report now appears for every
+ * country in scope, and that nothing anywhere adds two currencies together. A
+ * single-country scope is unchanged (one block, one site table, legacy export
+ * columns).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
@@ -18,25 +22,32 @@ const h = vi.hoisted(() => {
   return {
     SITE_ROWS,
     scope: { activeCountry: 'All', activeCurrency: 'SAR' },
-    // Blended snapshot the RPC returns when p_country is NULL (SAR + AED + EGP).
-    snapshot: {
+    // One snapshot PER COUNTRY, which is what the *_multi aggregates return.
+    // Totals are deliberately distinct per country so a figure on screen can
+    // only have come from one country's block - a shared number would let a
+    // blended render pass unnoticed.
+    snapshotFor: (country) => ({
       ok: true,
       kpis: {
-        total_expense: 156_150_000, tyre_expense: 49_000_000, spare_expense: 88_000_000,
-        oil_expense: 19_150_000, lines: 224_540, tyres_issued: 7498, reassigned_tyres: 0,
+        total_expense: { KSA: 1000, UAE: 2000, Egypt: 3000 }[country] ?? 0,
+        tyre_expense: 10, spare_expense: 20, oil_expense: 30,
+        lines: 4, tyres_issued: 2, reassigned_tyres: 0,
       },
-      by_category: [{ label: 'Tyres', spend: 49_000_000 }],
+      by_category: [{ label: 'Tyres', spend: 10 }],
       by_store: [{ label: 'NHC-ST', spend: 5000 }],
       by_asset: [{ label: 'A-1', spend: 4000 }],
       top_items: [{ label: 'TYRE 315/80 R22.5', spend: 4000, n: 12 }],
       monthly: [{ m: '2026-01', tyre: 100, spare: 200, oil: 50, total: 350 }],
-    },
+    }),
+    // The number a blended read WOULD produce (SAR + AED + EGP). It must never
+    // appear anywhere on the page or in an export.
+    BLENDED: 156_150_000,
     byCountry: [
       { country: 'KSA', tyre: 13_000_000, spare: 22_000_000, oil: 5_550_000, total: 40_550_000, lines: 106_398 },
       { country: 'UAE', tyre: 6_000_000, spare: 11_000_000, oil: 2_240_000, total: 19_240_000, lines: 70_696 },
       { country: 'Egypt', tyre: 30_000_000, spare: 55_000_000, oil: 11_360_000, total: 96_360_000, lines: 47_446 },
     ],
-    calls: { bySite: [], excel: [], setMap: [], snapshot: [], byCountry: [] },
+    calls: { bySite: [], excel: [], setMap: [], snapshot: [], byCountry: [], overview: [] },
   }
 })
 
@@ -67,13 +78,38 @@ vi.mock('../contexts/LanguageContext', () => ({
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: false }),
 }))
+/** Shape one *_multi answer: a block per requested country, never a total. */
+const multiOf = (countries, make) => ({
+  ok: true,
+  refused: [],
+  blocks: (countries || []).map((c) => ({
+    country: c,
+    currency: { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }[c] || null,
+    result: make(c),
+  })),
+})
+
 vi.mock('../lib/api/partsConsumption', () => ({
-  getPartsExpenseSnapshot: (args) => { h.calls.snapshot.push(args); return Promise.resolve(h.snapshot) },
+  getPartsExpenseSnapshotMulti: (args) => {
+    h.calls.snapshot.push(args)
+    return Promise.resolve(multiOf(args?.countries, h.snapshotFor))
+  },
   getExpenseByCountry: (args) => { h.calls.byCountry.push(args); return Promise.resolve(h.byCountry) },
   // The comparison / cost-per-km panels load from their own RPC. These tests
-  // cover the legacy snapshot behaviour, so it returns not-provisioned and those
+  // cover the snapshot behaviour, so it returns not-provisioned and those
   // sections stay unrendered - which is also the real degrade path.
-  getCostCpkOverview: () => Promise.resolve(h.overview ?? { ok: false }),
+  getCostCpkOverviewMulti: (args) => {
+    h.calls.overview.push(args)
+    return Promise.resolve({ ok: false, blocks: [], refused: [] })
+  },
+  listExpenseRows: () => Promise.resolve({ rows: [], truncated: false }),
+}))
+vi.mock('../lib/api/costVariance', () => ({
+  getCostVarianceMulti: () => Promise.resolve({ ok: false, blocks: [], refused: [] }),
+}))
+vi.mock('../lib/api/siteOperatingCost', () => ({
+  getSiteOperatingCostMulti: () => Promise.resolve({ ok: false, blocks: [], refused: [] }),
+  storeVsOperating: () => [],
 }))
 vi.mock('../lib/api/storeSiteExpense', () => ({
   getExpenseBySite: (args) => { h.calls.bySite.push(args); return Promise.resolve(h.SITE_ROWS[args?.country] || []) },
@@ -90,7 +126,7 @@ import ExpenseReport from '../pages/ExpenseReport'
 
 beforeEach(() => {
   h.calls.bySite = []; h.calls.excel = []; h.calls.setMap = []
-  h.calls.snapshot = []; h.calls.byCountry = []
+  h.calls.snapshot = []; h.calls.byCountry = []; h.calls.overview = []
   h.scope = { reportingScope: { countries: ['All'] }, allowed: ['KSA', 'UAE', 'Egypt'] }
 })
 
@@ -98,21 +134,50 @@ describe('ExpenseReport - All countries scope', () => {
   it('shows each country in its own currency and never the blended total', async () => {
     render(<ExpenseReport />)
     await screen.findByText('By country (own currency)')
-    // The blended snapshot total (SAR 156,150,000) must appear nowhere.
+    // The blended total (SAR 156,150,000) must appear nowhere.
     expect(document.body.textContent).not.toContain('156,150,000')
     expect(screen.getByText('SAR 40,550,000')).toBeTruthy()
     expect(screen.getByText('AED 19,240,000')).toBeTruthy()
     expect(screen.getByText('EGP 96,360,000')).toBeTruthy()
   })
 
-  it('hides the cross-currency charts and says why', async () => {
+  /**
+   * THE LIMIT THIS CLOSES. The deep report used to be withheld from a
+   * multi-country scope because the aggregates behind it took one country. It
+   * is now repeated per country instead, so every country in scope gets the
+   * full breakdown - and each block is denominated in its own currency.
+   */
+  it('renders the deep report once per country in scope', async () => {
     render(<ExpenseReport />)
-    await screen.findByText('Charts, Chart Builder and Tyre Forecast show per country')
-    expect(screen.queryByText('Top stores by spend')).toBeNull()
-    expect(screen.queryByText('Top assets by spend')).toBeNull()
-    expect(screen.queryByText('Top items by spend')).toBeNull()
-    expect(screen.queryByText('Tyres, spare parts and oil by month')).toBeNull()
-    expect(screen.queryByText('Tyres vs Spare Parts vs Oil')).toBeNull()
+    await waitFor(() => expect(screen.getAllByText('Top stores by spend')).toHaveLength(3))
+    expect(screen.getAllByText('Top assets by spend')).toHaveLength(3)
+    expect(screen.getAllByText('Top items by spend')).toHaveLength(3)
+    expect(screen.getAllByText('Tyres, spare parts and oil by month')).toHaveLength(3)
+    expect(screen.getAllByText('Tyres vs Spare Parts vs Oil')).toHaveLength(3)
+  })
+
+  it('asks the server for every country in scope in ONE multi-country call', async () => {
+    render(<ExpenseReport />)
+    await waitFor(() => expect(h.calls.snapshot.length).toBe(1))
+    expect(h.calls.snapshot[0].countries).toEqual(['KSA', 'UAE', 'Egypt'])
+    expect(h.calls.overview[0].countries).toEqual(['KSA', 'UAE', 'Egypt'])
+    // No un-scoped read: a call without countries would report on whatever RLS
+    // allows rather than on what the reader selected.
+    h.calls.snapshot.forEach((c) => expect(c.countries.length).toBeGreaterThan(0))
+  })
+
+  it('labels each country block with its own currency and never adds the totals', async () => {
+    render(<ExpenseReport />)
+    // Distinct per-country KPI totals prove each block formatted its own money.
+    expect(await screen.findByText('SAR 1,000')).toBeTruthy()
+    expect(screen.getByText('AED 2,000')).toBeTruthy()
+    expect(screen.getByText('EGP 3,000')).toBeTruthy()
+    // 1000 + 2000 + 3000 under ANY single currency label would be the blend.
+    // Matched with the currency attached, and closed off with a lookahead: an
+    // unanchored "6,000" also matches the first five characters of the genuine
+    // "AED 6,000,000" on the per-country card, which would fail the test for a
+    // page that is behaving correctly.
+    expect(document.body.textContent).not.toMatch(/(SAR|AED|EGP)\s*6,000(?![\d,])/)
   })
 
   it('loads the per-site expense once per country, never un-scoped', async () => {
@@ -158,13 +223,14 @@ describe('ExpenseReport - All countries scope', () => {
 describe('ExpenseReport - single country scope is unchanged', () => {
   beforeEach(() => { h.scope = { reportingScope: { countries: ['KSA'] }, allowed: ['KSA', 'UAE', 'Egypt'] } })
 
-  it('renders the charts and the blended-scope note is absent', async () => {
+  it('renders one un-headed report block with the charts', async () => {
     render(<ExpenseReport />)
     await screen.findByText('Top stores by spend')
     expect(screen.getByText('Top assets by spend')).toBeTruthy()
     expect(screen.getByText('Tyres, spare parts and oil by month')).toBeTruthy()
-    expect(screen.queryByText('Charts, Chart Builder and Tyre Forecast show per country')).toBeNull()
     expect(screen.queryByText('By country (own currency)')).toBeNull()
+    // Exactly one block, so the report reads as the page it has always been.
+    expect(screen.getAllByText('Top stores by spend')).toHaveLength(1)
   })
 
   it('loads one country-scoped per-site table', async () => {

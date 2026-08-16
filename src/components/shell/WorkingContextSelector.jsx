@@ -262,7 +262,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
   const [announcement, setAnnouncement] = useState('')
   const lastAnnounced = useRef(null)
   useEffect(() => {
-    if (lastAnnounced.current === null) { lastAnnounced.current = null }
+    if (lastAnnounced.current === null) { lastAnnounced.current = label; return }
     if (lastAnnounced.current === label) return
     lastAnnounced.current = label
     setAnnouncement(`${tx(t, 'shell.contextChanged', 'Working location changed to')} ${label}`)
@@ -349,7 +349,6 @@ export default function WorkingContextSelector({ compact = false, className = ''
       {/* Mounted with the trigger, never inside the popover: a live region that
           appears at the same moment as its text is not reliably announced, and
           this panel unmounts on select. */}
-      <span aria-live="polite" className="sr-only">{announcement}</span>
 
       {open && coords && createPortal(
         <div
@@ -359,6 +358,7 @@ export default function WorkingContextSelector({ compact = false, className = ''
           className="tp-popover w-[320px] p-0"
           style={{ top: coords.top, left: coords.left, maxHeight: coords.maxHeight }}
         >
+          <span aria-live="polite" className="sr-only">{announcement}</span>
           <div
             className="px-3 py-2 sticky top-0 z-10"
             style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border-dim)' }}

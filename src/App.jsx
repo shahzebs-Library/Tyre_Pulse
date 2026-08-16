@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES } from './lib/checklistAccess'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -11,6 +11,12 @@ import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
 import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
+import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/api/systemConfig'
+// The pre-rewrite shell, kept as an instant rollback behind the `new_shell`
+// flag. LAZY on purpose: it is dead weight on the ~99% of loads that never
+// reach it, and the eager graph here is watched closely (a chart library once
+// leaked onto the login screen). Its chunk is only fetched if the flag is off.
+const LegacyLayout = lazy(() => import('./components/LegacyLayout'))
 import LoadingSpinner from './components/LoadingSpinner'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -475,6 +481,64 @@ function MaintenanceGate({ children }) {
   )
 }
 
+/**
+ * How long the shell picker waits for the system_config read before giving up
+ * and taking the default. This bound is load-bearing: loadSystemConfig() never
+ * throws and never marks the cache authoritative on failure, so without a
+ * timeout an unreadable config would leave the app on a spinner forever.
+ */
+const SHELL_DECISION_TIMEOUT_MS = 2500
+
+/**
+ * Picks the app shell ONCE per page load: the new Layout, or the frozen
+ * LegacyLayout when an administrator has switched `new_shell` off.
+ *
+ * Two properties matter more than the choice itself.
+ *
+ * 1. It never swaps after first paint. configBool reads the config cache
+ *    synchronously, but SettingsContext only primes that cache after the
+ *    session exists, so a naive read at mount could answer "new" and then flip
+ *    to "legacy" a moment later. Re-parenting the entire app mid-session would
+ *    remount every screen and throw away whatever the user was doing - worse
+ *    than either shell. So the picker holds the first paint until the read has
+ *    settled, then freezes the answer in state and never recomputes it. The
+ *    holding state renders the SAME <LoadingSpinner /> ProtectedRoute was
+ *    showing a beat earlier, so there is no new visual state, just (usually a
+ *    few ms) more of the one already on screen.
+ *
+ * 2. It always resolves. If the config read fails or never settles, the
+ *    timeout fires and the DEFAULT wins - the current shell, not a silent
+ *    rollback to a frozen one.
+ *
+ * Flipping the flag therefore takes effect on the next page load, which is
+ * what a rollback switch means; it is not a live in-session theme toggle.
+ */
+function AppShell({ children }) {
+  // Subscribing to the context is what re-renders this component when the
+  // config read lands; the value itself is only used as a settled signal.
+  const { systemConfig } = useSettings()
+  // null = not decided yet. Once set it is never recomputed.
+  const [useNew, setUseNew] = useState(() => (isSystemConfigLoaded() ? shouldUseNewShell() : null))
+
+  // isSystemConfigLoaded() flips only after a FULL read was cached, which is
+  // the honest signal. The key check is a second, cheaper witness for the same
+  // thing in case the value arrived through another path.
+  const settled = isSystemConfigLoaded() || !!(systemConfig && NEW_SHELL_KEY in systemConfig)
+
+  useEffect(() => {
+    if (useNew !== null) return undefined
+    if (settled) { setUseNew(shouldUseNewShell()); return undefined }
+    const timer = setTimeout(() => setUseNew(shouldUseNewShell()), SHELL_DECISION_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [useNew, settled])
+
+  if (useNew === null) return <LoadingSpinner />
+  const Shell = useNew ? Layout : LegacyLayout
+  // Both shells take exactly the same props and children; nothing else about
+  // routing, guards or providers differs between the two paths.
+  return <Shell>{children}</Shell>
+}
+
 // ── Main app wrapped in its own providers (keeps console completely isolated)
 function MainApp() {
   return (
@@ -519,7 +583,7 @@ function MainApp() {
               element={
                 <ProtectedRoute>
                   <MaintenanceGate>
-                  <Layout>
+                  <AppShell>
                     <SubscriptionGate>
                     <ChecklistOnlyGate>
                     {/* Suspense INSIDE the shell. The outer boundary (above
@@ -785,7 +849,7 @@ function MainApp() {
                     </Suspense>
                     </ChecklistOnlyGate>
                     </SubscriptionGate>
-                  </Layout>
+                  </AppShell>
                   </MaintenanceGate>
                 </ProtectedRoute>
               }

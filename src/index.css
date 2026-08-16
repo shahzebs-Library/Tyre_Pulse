@@ -34,6 +34,11 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   /* Brand */
   --brand:          #16a34a;
   --brand-bright:   #22c55e;
+  /* Brand green legible ON a pale brand tint. Measured in a real browser: the
+     bright green on the light theme's rgba(22,163,74,0.10) pill came out at
+     1.9:1, the weakest text in the shell and the only primary action. Bright is
+     right on the dark tint (10:1); light needs a deep green. */
+  --brand-on-tint:  #4ade80;
   --brand-electric: #4ade80;
   --brand-glow:     rgba(22,163,74,0.4);
   --brand-subtle:   rgba(22,163,74,0.06);
@@ -60,7 +65,7 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   --text-primary:   #f1f5f2;
   --text-secondary: #aab6ae;
   --text-muted:     #7e8c84;
-  --text-dim:       #5c6a62;
+  --text-dim:       #737f77; /* AA 4.68:1 on the panel; #5c6a62 measured 3.4 */
 
   /* Borders */
   --border-brand:   rgba(22,163,74,0.16);
@@ -140,7 +145,7 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
      flips to white in light mode. */
   --panel-ink-2:   #d1d5db;
   --panel-ink-3:   #9ca3af;
-  --panel-ink-4:   #6b7280;
+  --panel-ink-4:   #757d8b; /* AA 4.71:1 on the panel; #6b7280 measured 4.0 */
   --hairline:      #374151;
   --hero-from:     rgba(9,18,11,0.98);
   --hero-to:       rgba(5,12,7,0.99);
@@ -819,7 +824,8 @@ html.light {
   --text-primary:   #101828;
   --text-secondary: #344054;
   --text-muted:     #667085;
-  --text-dim:       #98a2b3;
+  --text-dim:       #6b768c; /* AA 4.57:1 on white; #98a2b3 measured 2.6 */
+  --brand-on-tint:  #166534; /* AA 6.4:1 on the pale brand tint */
   /* Elegant, soft enterprise shadows (Stripe / Linear style) */
   --shadow-card:    0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
   --shadow-glow:    0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.08);

@@ -62,6 +62,51 @@ const AUTH_STORAGE =
     ? window.sessionStorage
     : undefined // undefined -> supabase default (localStorage)
 
+// A build shipped without VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY gives the
+// user a SILENT WHITE PAGE. Verified in a real browser: supabase-js throws
+// "supabaseUrl is required." from createClient at MODULE LOAD, which is before
+// React mounts, so no error boundary exists to catch it and #root stays empty
+// with nothing on screen and nothing in the UI to explain it.
+//
+// The throw is still correct - carrying on with a broken client would fail later
+// in a far more confusing place - but it must not be the only thing that
+// happens. So say something first, straight into the DOM, since React is never
+// going to run. Built with textContent rather than innerHTML: the text is all
+// static today, and keeping it that way means this can never become an
+// injection point if someone later interpolates a value into it.
+if (!supabaseUrl || !supabaseAnonKey) {
+  const missing = [
+    !supabaseUrl ? 'VITE_SUPABASE_URL' : null,
+    !supabaseAnonKey ? 'VITE_SUPABASE_ANON_KEY' : null,
+  ].filter(Boolean).join(' and ')
+  const message = `TyrePulse is not configured: ${missing} is missing from this build.`
+
+  if (typeof document !== 'undefined') {
+    const host = document.getElementById('root') || document.body
+    if (host) {
+      const panel = document.createElement('div')
+      panel.setAttribute('role', 'alert')
+      panel.style.cssText = 'max-width:34rem;margin:12vh auto;padding:2rem;'
+        + 'font-family:system-ui,sans-serif;line-height:1.6;color:#0f172a;'
+        + 'background:#fff;border:1px solid #e2e8f0;border-radius:12px'
+      const title = document.createElement('h1')
+      title.textContent = 'This app is not configured'
+      title.style.cssText = 'margin:0 0 .75rem;font-size:1.25rem'
+      const detail = document.createElement('p')
+      detail.textContent = message
+      detail.style.cssText = 'margin:0 0 .75rem'
+      const hint = document.createElement('p')
+      hint.textContent = 'Nobody can sign in until it is set. This is a deployment '
+        + 'setting, not something you can fix from here - please tell whoever '
+        + 'deployed the site.'
+      hint.style.cssText = 'margin:0;color:#475569;font-size:.9rem'
+      panel.append(title, detail, hint)
+      host.append(panel)
+    }
+  }
+  throw new Error(message)
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession:     true,

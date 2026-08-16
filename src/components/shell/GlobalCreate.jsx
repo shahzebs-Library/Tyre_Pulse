@@ -277,7 +277,9 @@ export default function GlobalCreate({ isMobile = false }) {
         title={menuLabel}
         className="h-8 flex items-center gap-1.5 ps-2 pe-1.5 rounded-xl text-xs font-semibold transition-colors hover:text-green-300"
         style={{
-          color: 'var(--brand-bright, #4ade80)',
+          // Theme-aware: bright green reads on the dark tint, but measured 1.9:1
+          // on the light one. --brand-on-tint carries the legible value per theme.
+          color: 'var(--brand-on-tint, #4ade80)',
           background: 'rgba(22,163,74,0.10)',
           border: '1px solid rgba(22,163,74,0.24)',
         }}

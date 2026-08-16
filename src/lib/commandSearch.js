@@ -30,7 +30,7 @@ export const NAV_COMMANDS = [
   { id: 'dashboard',      label: 'Dashboard',            path: '/',            icon: 'LayoutDashboard' },
   { id: 'tyres',          label: 'Tyre Records',         path: '/tyres',       icon: 'CircleDot' },
   // Operations
-  { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck' },
+  { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck', keywords: ['plate', 'number plate', 'registration', 'vin', 'chassis', 'vehicle list', 'asset register'] },
   { id: 'assets',         label: 'Asset Management',     path: '/assets',      icon: 'LayoutGrid' },
   { id: 'asset-disposals', label: 'Asset Disposal',      path: '/asset-disposals', icon: 'Recycle', roles: ANALYTICS_ROLES, moduleKey: 'asset_disposals' },
   { id: 'asset-breakdowns', label: 'Breakdown Register', path: '/asset-breakdowns', icon: 'Wrench', roles: ANALYTICS_ROLES, moduleKey: 'asset_breakdowns' },
@@ -70,7 +70,7 @@ export const NAV_COMMANDS = [
   { id: 'root-cause',     label: 'Root Cause Engine',    path: '/root-cause',   icon: 'Search',     adminOnly: true, moduleKey: 'root_cause_engine' },
   { id: 'ai',             label: 'Smart Analytics',      path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center' },
   // Workshop & Downtime
-  { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench' },
+  { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench', keywords: ['job card', 'jobcard', 'jc', 'repair order', 'wo', 'maintenance job'] },
   { id: 'gate-pass',      label: 'Gate Pass',            path: '/gate-pass',    icon: 'ClipboardCheck' },
   { id: 'workshop',       label: 'Workshop Management',  path: '/workshop',     icon: 'Building2',  adminOnly: true, moduleKey: 'work_orders' },
   { id: 'downtime',       label: 'Downtime Tracker',     path: '/downtime',     icon: 'Clock',      adminOnly: true, moduleKey: 'fleet_analytics' },
@@ -80,7 +80,7 @@ export const NAV_COMMANDS = [
   { id: 'stock-replenishment', label: 'Stock Replenishment', path: '/stock-replenishment', icon: 'Package' },
   { id: 'scrap',          label: 'Scrap Management',     path: '/scrap',        icon: 'Trash2' },
   { id: 'budgets',        label: 'Budgets',              path: '/budgets',      icon: 'FileText' },
-  { id: 'procurement',    label: 'Procurement',          path: '/procurement',  icon: 'ShoppingCart', adminOnly: true, moduleKey: 'stock' },
+  { id: 'procurement',    label: 'Procurement',          path: '/procurement',  icon: 'ShoppingCart', adminOnly: true, moduleKey: 'stock', keywords: ['purchase order', 'po', 'buying', 'supplier order'] },
   { id: 'suppliers',      label: 'Supplier Management',  path: '/suppliers',    icon: 'Users',      adminOnly: true, moduleKey: 'stock' },
   { id: 'vendor-intelligence', label: 'Vendor Intelligence', path: '/vendor-intelligence', icon: 'TrendingUp', adminOnly: true, moduleKey: 'vendor_intelligence' },
   { id: 'budget-planner', label: 'Budget Planner',       path: '/budget-planner', icon: 'FileText', adminOnly: true, moduleKey: 'budgets' },
@@ -124,7 +124,7 @@ export const NAV_COMMANDS = [
   { id: 'dashboard-builder', label: 'Dashboard Builder',   path: '/dashboard-builder', icon: 'LayoutGrid', keywords: ['widgets', 'layout', 'custom dashboard'] },
   { id: 'executive-analytics', label: 'Executive Analytics', path: '/executive-analytics', icon: 'BarChart2', roles: ANALYTICS_ROLES, keywords: ['echarts', 'heatmap', 'sankey', 'treemap'] },
   { id: 'tv-display',        label: 'TV Display Mode',     path: '/display',           icon: 'Radio',      adminOnly: true, keywords: ['tv', 'board', 'screen', 'wall'] },
-  { id: 'security-center',   label: 'Security Center',     path: '/security-center',   icon: 'Settings',   keywords: ['login history', 'session', 'mfa', 'password'] },
+  { id: 'security-center',   label: 'Security Center',     path: '/security-center',   icon: 'Settings',   keywords: ['login history', 'session', 'mfa', '2fa', 'two factor', 'sso', 'single sign on', 'password'] },
   { id: 'permission-matrix', label: 'Permission Matrix',   path: '/permission-matrix', icon: 'UserCog',    adminOnly: true, keywords: ['roles', 'rbac', 'access'] },
   { id: 'system-health',     label: 'System Health',       path: '/system-health',     icon: 'Activity',   adminOnly: true, keywords: ['status', 'uptime', 'monitoring'] },
   { id: 'tenant-health',     label: 'Usage & Adoption',    path: '/tenant-health',     icon: 'BarChart2',  adminOnly: true, keywords: ['tenant', 'usage', 'ai cost', 'adoption'] },
@@ -140,7 +140,7 @@ export const NAV_COMMANDS = [
   { id: 'telematics-devices', label: 'Telematics Devices', path: '/telematics-devices', icon: 'Router', adminOnly: true },
   { id: 'shifts', label: 'Shift Scheduling', path: '/shifts', icon: 'CalendarClock', adminOnly: true },
   { id: 'speed-limiter', label: 'Speed Limiter', path: '/speed-limiter', icon: 'Gauge', adminOnly: true },
-  { id: 'engine-hours', label: 'Engine Hours', path: '/engine-hours', icon: 'Gauge', adminOnly: true },
+  { id: 'engine-hours', label: 'Engine Hours', path: '/engine-hours', icon: 'Gauge', adminOnly: true, keywords: ['hour meter', 'hourmeter', 'running hours', 'smr'] },
   { id: 'odometer-logs', label: 'Odometer Logs', path: '/odometer-logs', icon: 'Activity', adminOnly: true },
   { id: 'fleet-utilization', label: 'Fleet Utilization', path: '/fleet-utilization', icon: 'Gauge', roles: ANALYTICS_ROLES },
   { id: 'trips', label: 'Trip History', path: '/trips', icon: 'MapPin', adminOnly: true },
@@ -178,7 +178,7 @@ export const NAV_COMMANDS = [
   { id: 'tyre-pool', label: 'Tyre Pool', path: '/tyre-pool', icon: 'PackageCheck' },
   { id: 'parts-catalog', label: 'Parts Catalog', path: '/parts-catalog', icon: 'Boxes' },
   { id: 'requisitions', label: 'Requisitions', path: '/requisitions', icon: 'ClipboardList' },
-  { id: 'goods-receipt', label: 'Goods Receipt', path: '/goods-receipt', icon: 'PackageCheck' },
+  { id: 'goods-receipt', label: 'Goods Receipt', path: '/goods-receipt', icon: 'PackageCheck', keywords: ['grn', 'goods received note', 'delivery note', 'receiving'] },
   { id: 'cost-scenario-planner', label: 'Cost Scenario Planner', path: '/cost-scenario-planner', icon: 'SlidersHorizontal', roles: ANALYTICS_ROLES },
   { id: 'contracts', label: 'Contracts', path: '/contracts', icon: 'FileText' },
   { id: 'ifta-reporting', label: 'IFTA Fuel Tax', path: '/ifta-reporting', icon: 'Landmark', adminOnly: true },
@@ -223,15 +223,15 @@ export const NAV_COMMANDS = [
   { id: 'expense-report', label: 'Expenses & CPK', path: '/expense-report', icon: 'Wallet', roles: ANALYTICS_ROLES,
     keywords: ['expense report', 'real expenses', 'spend', 'cost per km', 'cpk', 'cost per kilometre', 'comparison', 'last year', 'last month'] },
   { id: 'expense-trends', label: 'Expense Trends', path: '/expense-trends', icon: 'TrendingUp', roles: ANALYTICS_ROLES,
-    keywords: ['expense trends', 'forecast', 'year over year', 'yoy', 'yearly spend', 'tyre spare lubricant', 'trend', 'compare years', 'projection'] },
+    keywords: ['forecast', 'year over year', 'yoy', 'yearly spend', 'tyre spare lubricant', 'trend', 'compare years', 'projection'] },
   { id: 'cpk-intelligence', label: 'CPK Intelligence', path: '/cpk-intelligence', icon: 'Gauge', roles: ANALYTICS_ROLES,
     keywords: ['cpk', 'cost per km', 'cost per hour', 'cost per kilometre', 'movable', 'non movable', 'engine hours', 'fleet cpk', 'per vehicle cost', 'scenario', 'brand value', 'why cpk changed'] },
   { id: 'cost-per-m3', label: 'Cost per M3', path: '/cost-per-m3', icon: 'Layers', roles: ANALYTICS_ROLES,
-    keywords: ['cost per m3', 'cost per cubic metre', 'cost per cubic meter', 'sar/m3', 'production cost', 'internal sco sany', 'grand total', 'concrete cost'] },
+    keywords: ['cost per cubic metre', 'cost per cubic meter', 'sar/m3', 'production cost', 'internal sco sany', 'grand total', 'concrete cost'] },
   { id: 'production-m3', label: 'Production (M3)', path: '/production-m3', icon: 'Boxes', roles: ANALYTICS_ROLES,
     keywords: ['production', 'approved m3', 'approved quantity', 'cubic metre', 'output', 'produced'] },
   { id: 'sco-costs', label: 'SCO Cost', path: '/sco-costs', icon: 'Receipt', roles: ANALYTICS_ROLES,
-    keywords: ['sco', 'subcontractor cost', 'sco cost', 'external cost'] },
+    keywords: ['sco', 'subcontractor cost', 'external cost'] },
   { id: 'sany-invoices', label: 'SANY Invoices', path: '/sany-invoices', icon: 'FileText', roles: ANALYTICS_ROLES,
     keywords: ['sany', 'workshop invoice', 'sany workshop', 'oem invoice'] },
   { id: 'sany-delay-penalty', label: 'SANY Delay Penalty', path: '/sany-delay-penalty', icon: 'Clock', roles: ANALYTICS_ROLES,
@@ -250,7 +250,7 @@ export const NAV_COMMANDS = [
   { id: 'workflow-settings', label: 'Approval Workflows', path: '/workflow-settings', icon: 'GitBranch', adminOnly: true },
   { id: 'approval-delegations', label: 'Approval Delegations', path: '/approval-delegations', icon: 'ArrowLeftRight' },
   { id: 'automation-rules', label: 'Automation Rules', path: '/automation-rules', icon: 'Zap', adminOnly: true },
-  { id: 'integrations', label: 'API & Webhooks', path: '/integrations', icon: 'Webhook', adminOnly: true },
+  { id: 'integrations', label: 'API & Webhooks', path: '/integrations', icon: 'Webhook', adminOnly: true, keywords: ['api key', 'api', 'token', 'integration'] },
   { id: 'data-reconciliation', label: 'Data Reconciliation', path: '/data-reconciliation', icon: 'GitCompare', adminOnly: true },
   { id: 'billing', label: 'Billing & Subscription', path: '/billing', icon: 'CreditCard', adminOnly: true },
   { id: 'brand-assets', label: 'Brand Assets', path: '/brand-assets', icon: 'Palette', adminOnly: true },
@@ -334,6 +334,23 @@ export function visibleCommands(commands, profile, hasPermission, grantedModules
 }
 
 // ── Command ranking ──────────────────────────────────────────────────────────
+/**
+ * A command's search aliases, as a lowercased list.
+ *
+ * `keywords` is written as an array almost everywhere, but at least one command
+ * was written as a plain sentence and `Array.isArray` silently dropped it - its
+ * aliases had never once matched anything. Accepting both spellings means an
+ * alias list can never be dead just because of how it was typed.
+ */
+export function commandKeywords(cmd) {
+  const k = cmd?.keywords
+  if (!k) return []
+  // A string is kept WHOLE as well as split, so a phrase query still matches it
+  // the way it would match a phrase written inside an array.
+  const list = Array.isArray(k) ? k : [k, ...String(k).split(/[\s,]+/)]
+  return list.map((x) => String(x).toLowerCase().trim()).filter(Boolean)
+}
+
 export function scoreCommand(cmd, query) {
   const q = String(query || '').trim().toLowerCase()
   if (!q) return 0
@@ -344,7 +361,7 @@ export function scoreCommand(cmd, query) {
   if (label.split(/[\s/&()-]+/).some((w) => w.startsWith(q))) return 80
   if (label.includes(q)) return 60
   if (path.includes(q)) return 40
-  if (Array.isArray(cmd.keywords) && cmd.keywords.some((k) => k.toLowerCase().includes(q))) return 30
+  if (commandKeywords(cmd).some((k) => k.includes(q))) return 30
   return 0
 }
 

@@ -25,6 +25,7 @@ import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
+import useLatestRequest from '../lib/useLatestRequest'
 import {
   mtkpis, taskChart, actionChart, workTypeSpendChart, siteSpendChart,
   assetSpendChart, monthlySpendChart, buildMaintenanceRecommendations,
@@ -111,7 +112,13 @@ export default function MaintenanceCostBoard() {
   const money0 = useCallback((v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : formatCurrency(Number(v), activeCurrency, 0)), [activeCurrency])
   const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 
+  // Moving the date range starts a new snapshot before the old one returns. If
+  // the earlier answer lands last it repaints the PREVIOUS window's spend under
+  // the new dates - wrong money, no error, and a refresh appears to fix it.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setRefreshing(true); setError('')
     try {
       const snap = await getMaintenanceSnapshot({
@@ -119,14 +126,17 @@ export default function MaintenanceCostBoard() {
         from: fromDate || undefined,
         to: toDate || undefined,
       })
+      if (stale()) return
       setSnapshot(snap && snap.ok !== false ? snap : { ok: false })
       setUpdatedAt(new Date())
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load the maintenance board.'))
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (!stale()) setError(toUserMessage(e, 'Could not load the maintenance board.'))
     } finally {
-      setLoading(false); setRefreshing(false)
+      // Clearing these from a stale load would make the newer one look finished.
+      if (!stale()) { setLoading(false); setRefreshing(false) }
     }
-  }, [activeCountry, fromDate, toDate])
+  }, [activeCountry, fromDate, toDate, latestLoad])
 
   useEffect(() => { load() }, [load])
 

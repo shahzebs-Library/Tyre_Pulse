@@ -25,6 +25,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exp
 import PageHeader from '../components/ui/PageHeader'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
@@ -80,7 +81,13 @@ export default function SafetyCompliance() {
   const [activeTab, setActiveTab]      = useState('overview')
   const [dateRange, setDateRange]      = useState('90d')
 
+  // Switching the range (30d/90d/6m/1y) fires a new load over the old one. If
+  // the earlier answer lands last, the compliance scores describe the PREVIOUS
+  // window while the chips say otherwise - a safety figure that is quietly wrong.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
       const country = activeCountry !== 'All' ? activeCountry : null
@@ -94,15 +101,18 @@ export default function SafetyCompliance() {
         analytics.listAccidentsSince({ since: from.slice(0, 10) }),
       ]
       const [tr, insp, acc] = await Promise.all(queries)
+      if (stale()) return
       setTyreRecords(tr.data || [])
       setInspections(insp.data || [])
       setAccidents(acc.data || [])
     } catch (e) {
-      setError(toUserMessage(e, 'Something went wrong. Please try again.'))
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (!stale()) setError(toUserMessage(e, 'Something went wrong. Please try again.'))
     } finally {
-      setLoading(false)
+      // Clearing this from a stale load would make the newer one look finished.
+      if (!stale()) setLoading(false)
     }
-  }, [activeCountry, dateRange])
+  }, [activeCountry, dateRange, latestLoad])
 
   useEffect(() => { load() }, [load])
 

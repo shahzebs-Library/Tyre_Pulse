@@ -67,6 +67,7 @@ import {
   scopeFromParam, readReportUrl, reportUrlParams, applyReportUrlParams,
 } from '../lib/reportingScopeQuery'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { colorAt, withAlpha } from '../lib/reportColors'
 
@@ -360,26 +361,37 @@ export default function ExpenseTrends() {
   }, [linkApplied, effectiveScope, allowedScopeCountries, grain,
       fromYear, fromMonth, toYear, toMonth])
 
+  // Switching the grain (year/quarter/month) refetches every country in scope
+  // without waiting for the previous fan-out. If the earlier one finishes last
+  // the trend is bucketed by the OLD grain under the new toggle, so the periods
+  // on the axis do not mean what the control says they mean.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true); setError('')
     try {
       // A scope that resolves to nothing reports on nothing. Falling back to
       // "All" here would silently widen the report past what was asked for.
-      if (scopeCountryList.length === 0) { setRows([]); return }
+      if (scopeCountryList.length === 0) { if (!stale()) setRows([]); return }
       // One call per country in scope. The RPC takes a single country, and asking
       // for exactly the countries in scope keeps the request as narrow as the
       // report rather than fetching everything and hiding the rest client-side.
       const batches = await Promise.all(
         scopeCountryList.map((country) => getExpensePeriodTrend({ country, grain })),
       )
+      if (stale()) return
       setRows(batches.flat())
     } catch (err) {
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (stale()) return
       setError(toUserMessage(err))
       setRows([])
     } finally {
-      setLoading(false)
+      // Clearing this from a stale load would make the newer one look finished.
+      if (!stale()) setLoading(false)
     }
-  }, [scopeCountryList, grain])
+  }, [scopeCountryList, grain, latestLoad])
 
   useEffect(() => { load() }, [load])
 

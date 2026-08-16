@@ -13,6 +13,7 @@ import DateField from '../components/ui/DateField'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { cn } from '../lib/cn'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import {
   detectAnomalies,
   detectVisitFrequency,
@@ -111,7 +112,14 @@ export default function Anomalies() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
+  // Changing the date range refetches without waiting for the load already in
+  // flight. If the earlier one finishes last it lists the PREVIOUS window's
+  // anomalies under the new dates, which reads as a real finding rather than a
+  // stale one.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
       let q = supabase
@@ -146,14 +154,17 @@ export default function Anomalies() {
       const engine = detectAnomalies(rows)
       const dq = detectDataQuality(rows)
       const freq = detectVisitFrequency(rows, { workOrders })
+      if (stale()) return
       setAnomalies([...freq, ...engine, ...dq])
       setVisitStats(computeVisitStats(rows, { workOrders }))
     } catch (e) {
-      setError(toUserMessage(e, 'Failed to load anomalies'))
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (!stale()) setError(toUserMessage(e, 'Failed to load anomalies'))
     } finally {
-      setLoading(false)
+      // Clearing this from a stale load would make the newer one look finished.
+      if (!stale()) setLoading(false)
     }
-  }, [activeCountry, fromDate, toDate])
+  }, [activeCountry, fromDate, toDate, latestLoad])
 
   useEffect(() => { load() }, [load])
 

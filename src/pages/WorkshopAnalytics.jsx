@@ -29,6 +29,7 @@ import { computeWorkshopAnalytics } from '../lib/workshopAnalytics'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 
 const VIEW_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -92,7 +93,14 @@ export default function WorkshopAnalytics() {
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const resetFilters = () => setFilters({ from: daysAgo(14), to: todayISO(), site: 'All' })
 
+  // Changing the date range or site refetches without waiting for the load
+  // already in flight. If the earlier one finishes last it shows the PREVIOUS
+  // window's productivity under the new filters - wrong hours, no error, and a
+  // refresh appears to fix it.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setRefreshing(true)
     setError('')
     try {
@@ -102,17 +110,23 @@ export default function WorkshopAnalytics() {
         site: filters.site,
         country: activeCountry,
       })
+      if (stale()) return
       setData(res)
       setMissing(false)
       setUpdatedAt(new Date())
     } catch (err) {
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (stale()) return
       if (isMissingRelation(err)) { setMissing(true); setData({ events: [], jobs: [], shifts: [], technicians: [] }) }
       else setError(toUserMessage(err, 'Could not load workshop analytics.'))
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      // Clearing these from a stale load would make the newer one look finished.
+      if (!stale()) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
-  }, [filters.from, filters.to, filters.site, activeCountry])
+  }, [filters.from, filters.to, filters.site, activeCountry, latestLoad])
 
   useEffect(() => { setLoading(true); load() }, [load])
 

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
@@ -295,7 +296,14 @@ export default function WorkshopManagement() {
   const [page, setPage]           = useState(1)
   const [activeTab, setActiveTab] = useState('overview')
 
+  // Five filters drive this load (site, type, priority and both dates), so two
+  // reads are in flight whenever any of them is changed twice quickly. If the
+  // earlier one finishes last it paints the PREVIOUS filter's job cards - and
+  // its cost tiles - under the new chips, with nothing to show it went wrong.
+  const latestLoad = useLatestRequest()
+
   const fetchData = useCallback(async () => {
+    const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
     // The grid is always bounded by a date window. Honour an explicit range;
@@ -336,6 +344,9 @@ export default function WorkshopManagement() {
         return q.range(from, to)
       }, { max: WORK_ORDER_CEILING })
 
+      // A newer filter superseded this read: drop it before any setter runs.
+      if (stale()) return
+
       if (err) {
         if (err.code === '42P01' || err.message?.toLowerCase().includes('does not exist')) {
           setTableExists(false)
@@ -372,14 +383,19 @@ export default function WorkshopManagement() {
       }
 
       const snap = await snapPromise
+      // Re-checked: the count query and the snapshot above are both awaited, so
+      // a newer filter can land between them and the setters below.
+      if (stale()) return
       setSnapshot(snap && snap.ok !== false ? snap : { ok: false })
       setLoadMeta({ truncated: !!truncated, totalCount, windowFrom: effFrom, windowDefault })
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load work orders.'))
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (!stale()) setError(toUserMessage(e, 'Could not load work orders.'))
     } finally {
-      setLoading(false)
+      // Clearing this from a stale load would make the newer one look finished.
+      if (!stale()) setLoading(false)
     }
-  }, [site, workType, priority, dateFrom, dateTo, activeCountry])
+  }, [site, workType, priority, dateFrom, dateTo, activeCountry, latestLoad])
 
   useEffect(() => { fetchData() }, [fetchData])
 

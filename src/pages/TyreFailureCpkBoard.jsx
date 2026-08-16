@@ -26,6 +26,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { listAllRecords } from '../lib/api/tyreRecords'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
+import useLatestRequest from '../lib/useLatestRequest'
 import { buildTyreFailureBoard } from '../lib/tyreFailureBoard'
 import { stylize, ACCENTS } from '../lib/reportColors'
 import { reportFileName, reportDateLabel, exportToExcel } from '../lib/exportUtils'
@@ -125,7 +126,14 @@ export default function TyreFailureCpkBoard() {
   const chartRefs = useRef({})
   const setRef = (key) => (el) => { chartRefs.current[key] = el }
 
+  // Two loads are in flight whenever the date range moves twice quickly. Without
+  // this the slower first answer lands last and paints the PREVIOUS window's
+  // failures and CPK under the new dates - wrong numbers with nothing to show
+  // that anything went wrong.
+  const latestLoad = useLatestRequest()
+
   const load = useCallback(async () => {
+    const stale = latestLoad.begin()
     setRefreshing(true); setError('')
     try {
       const [{ data }, grid] = await Promise.all([
@@ -151,14 +159,17 @@ export default function TyreFailureCpkBoard() {
           return grid.map.has(key) ? { ...a, totalCost: grid.map.get(key) } : a
         })
       }
+      if (stale()) return
       setBoard(built)
       setUpdatedAt(new Date())
     } catch (e) {
-      setError(toUserMessage(e, 'Could not load the tyre failure and CPK board.'))
+      // A superseded load must not raise a banner over data that loaded fine.
+      if (!stale()) setError(toUserMessage(e, 'Could not load the tyre failure and CPK board.'))
     } finally {
-      setLoading(false); setRefreshing(false)
+      // Clearing these from a stale load would make the newer one look finished.
+      if (!stale()) { setLoading(false); setRefreshing(false) }
     }
-  }, [activeCountry, fromDate, toDate])
+  }, [activeCountry, fromDate, toDate, latestLoad])
 
   useEffect(() => { load() }, [load])
 

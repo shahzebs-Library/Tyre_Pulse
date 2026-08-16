@@ -10,6 +10,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import useLatestRequest from '../lib/useLatestRequest'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -294,14 +295,22 @@ export default function StockManagement() {
   }
 
   // ── Timeline data load ──────────────────────────────────────────────────────
+  // Moving either timeline date starts a new read over the old one; without this
+  // the slower earlier answer lands last and charts the previous window.
+  const latestTimeline = useLatestRequest()
+
   useEffect(() => {
     if (activeTab === 'timeline') loadTimeline()
   }, [activeTab, tlFrom, tlTo, activeCountry])
 
   async function loadTimeline() {
+    const stale = latestTimeline.begin()
     setTlLoading(true)
     let data = []
     try { data = await stock.listTyreIssuesInRange({ from: tlFrom, to: tlTo, country: activeCountry }) } catch { data = [] }
+    // A superseded read must not paint its rows or clear the newer spinner: the
+    // timeline chart would otherwise plot the previous window under new dates.
+    if (stale()) return
     setTlRecords(data ?? [])
     setTlLoading(false)
   }

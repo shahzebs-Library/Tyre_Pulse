@@ -287,6 +287,20 @@ describe('role=dialog keeps focus inside itself', () => {
     expect(document.activeElement).toBe(focusable[focusable.length - 1])
   })
 
+  it('survives a panel with nothing focusable in it', () => {
+    // A user with no assigned locations opens a dialog whose only content is a
+    // sentence. Both the focus-on-open and the trap have to no-op rather than
+    // throw inside the app shell.
+    h.settings = baseSettings({ allowedContext: [], canSwitchWorkingContext: true })
+    expect(() => {
+      render(<WorkingContextSelector />)
+      fireEvent.click(screen.getByRole('button', { name: /working location/i }))
+      const dialog = screen.getByRole('dialog', { name: /working location/i })
+      expect(dialog.querySelectorAll(FOCUSABLE).length).toBe(0)
+      fireEvent.keyDown(dialog, { key: 'Tab' })
+    }).not.toThrow()
+  })
+
   it('does not swallow keys aimed at the page while the dialog is shut', () => {
     render(<WorkingContextSelector />)
     const outside = document.createElement('button')
@@ -344,9 +358,12 @@ describe('a context change is announced', () => {
     // A live region inserted at the same moment as its text is not reliably
     // announced, and this panel unmounts the instant a location is picked.
     render(<WorkingContextSelector />)
-    const region = document.querySelector('[aria-live="polite"]')
     fireEvent.click(screen.getByRole('button', { name: /working location/i }))
     const dialog = screen.getByRole('dialog', { name: /working location/i })
+    // Resolved while the panel is OPEN, so a region that had been moved inside
+    // it would be found here rather than reading as absent.
+    const region = document.querySelector('[aria-live="polite"]')
+    expect(region).not.toBeNull()
     expect(dialog.contains(region)).toBe(false)
   })
 })

@@ -421,7 +421,11 @@ export default function Accidents() {
   const [bulkBusy, setBulkBusy]                = useState(false)
 
   // Asset search combobox
+  // Rows for the form combobox (loaded lazily, see below) and, separately, the
+  // exact fleet size for the per-100-vehicles rate. They are different questions:
+  // the rate needs a number on every visit, the picker needs rows only when open.
   const [fleetAssets, setFleetAssets]          = useState([])
+  const [fleetCount, setFleetCount]            = useState(null)
   const [assetQuery, setAssetQuery]            = useState('')
   const [showAssetDrop, setShowAssetDrop]      = useState(false)
   const assetDropRef                           = useRef(null)
@@ -494,17 +498,39 @@ export default function Accidents() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, loading, records])
 
-  // Load fleet assets for search combobox.
+  // Fleet SIZE for the "N / 100 vehicles" tile: an exact server count, no rows.
+  // Null (not 0) when it cannot be read, so an unreadable fleet never renders as
+  // a real measurement of an empty one.
+  useEffect(() => {
+    let cancelled = false
+    accidentsApi.countAccidentFleet({ country: activeCountry })
+      .then((n) => { if (!cancelled) setFleetCount(n) })
+      .catch(() => { if (!cancelled) setFleetCount(null) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  // Fleet ROWS for the form's asset combobox - fetched only once the form is
+  // actually open, and once per country.
+  //
+  // This is the fix Inspections already carries for the same picker: the rows are
+  // 1,617 records over 5 paged round trips, and nothing outside the incident form
+  // reads them, so pulling them on every visit to the register paid for a control
+  // that was not on screen. The KPI that did need the number now gets it as a
+  // count above.
   //
   // Country-scoped, because asset_no is unique per COUNTRY and the same code in
   // two countries is usually a DIFFERENT machine (V376: GN103 is a generator in
   // KSA and a different generator in UAE). Offering both under one heading in a
   // KSA form invites attaching the wrong vehicle to an incident.
+  const fleetLoadedFor = useRef(null)
   useEffect(() => {
+    if (!showForm) return
+    if (fleetLoadedFor.current === activeCountry) return
+    fleetLoadedFor.current = activeCountry
     accidentsApi.listAccidentFleet({ country: activeCountry })
       .then((data) => setFleetAssets(data ?? []))
-      .catch(() => setFleetAssets([]))
-  }, [activeCountry])
+      .catch(() => { fleetLoadedFor.current = null; setFleetAssets([]) })
+  }, [showForm, activeCountry])
 
   // Close asset dropdown on outside click
   useEffect(() => {
@@ -656,12 +682,16 @@ export default function Accidents() {
     const withCost = records.filter(r => (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0) > 0)
     const avgClaim = withCost.length ? Math.round(cost / withCost.length) : 0
 
-    // Accidents per 100 vehicles (fleet-normalised frequency).
-    const fleetSize = fleetAssets.length
+    // Accidents per 100 vehicles (fleet-normalised frequency). The denominator is
+    // the exact server count, which is the same number the old
+    // `fleetAssets.length` produced once every page had been paged in - it just
+    // no longer costs 1,617 rows to obtain. A null count (unreadable) leaves
+    // fleetSize 0, which suppresses the rate rather than inventing one.
+    const fleetSize = fleetCount ?? 0
     const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
 
     return { total, open, delayed, insur, openClaims, cost, avgDays, avgDaysDenom, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
-  }, [records, fleetAssets])
+  }, [records, fleetCount])
 
   // Unified accident-workflow KPI set (single calc source: buildAccidentKpis in
   // src/lib/accidentWorkflow.js). Covers stage/VOR/repair/police/claims across the

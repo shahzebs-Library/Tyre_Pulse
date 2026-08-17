@@ -18,7 +18,7 @@ import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
-import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import CostValue from '../components/cost/CostValue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
@@ -153,7 +153,7 @@ export default function Analytics() {
   useEffect(() => {
     let cancelled = false
     setCostLoading(true); setCostError(null)
-    loadGovernedCostSplit({ country: activeCountry === 'All' ? undefined : activeCountry })
+    loadGovernedCostSplit({ country: activeCountry === 'All' ? undefined : activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
       .then((res) => { if (!cancelled) setCostSplit(res) })
       .catch((err) => {
         if (cancelled) return

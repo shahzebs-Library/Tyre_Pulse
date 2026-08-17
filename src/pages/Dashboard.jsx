@@ -5,7 +5,7 @@ import { dashboard } from '../lib/api'
 import { fetchAllPages } from '../lib/fetchAll'
 import { loadPmDashboard } from '../lib/api/pmPrograms'
 import { loadWorkshopKpis } from '../lib/api/workshopLive'
-import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import useLatestRequest from '../lib/useLatestRequest'
 import { costScopeLabel } from '../components/cost/CostValue'
 import DailyJobCards from '../components/dashboard/DailyJobCards'
@@ -75,6 +75,43 @@ const recordQty = t => Number(t.qty) || 1
 // Same {var} interpolation the i18n layer uses, applied to inline fallbacks.
 const interpolateFallback = (str, vars) =>
   vars ? str.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m)) : str
+
+const pad = n => String(n).padStart(2, '0')
+const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+/** The window the page opens on. Tyre records, accidents and job-card lines have
+ *  zero rows in the current month - they arrive in uploads, not daily - so a
+ *  month default rendered those panels blank while the data sat right there. The
+ *  year has data in every feed and still reads a fraction of the history. */
+export const DEFAULT_SHORTCUT = 'This Year'
+
+/**
+ * Date-shortcut label -> { from, to }, pure so the opening window can be set in
+ * a useState initialiser instead of a mount effect (see the note at the call
+ * site: the effect made every visit load twice, the first time unbounded).
+ * 'Custom' returns the empty range - the caller keeps whatever dates are set.
+ * @param {string} label @param {Date} [now]
+ */
+export function shortcutRange(label, now = new Date()) {
+  const today = fmt(now)
+  if (label === 'Today') return { from: today, to: today }
+  if (label === 'Yesterday') {
+    const y = new Date(now); y.setDate(y.getDate() - 1)
+    return { from: fmt(y), to: fmt(y) }
+  }
+  if (label === 'This Week') {
+    const d = new Date(now); d.setDate(d.getDate() - d.getDay())
+    return { from: fmt(d), to: today }
+  }
+  if (label === 'This Month') return { from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, to: today }
+  if (label === 'Last Month') {
+    const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lme = new Date(now.getFullYear(), now.getMonth(), 0)
+    return { from: fmt(lm), to: fmt(lme) }
+  }
+  if (label === 'This Year') return { from: `${now.getFullYear()}-01-01`, to: today }
+  return { from: undefined, to: undefined }
+}
 
 function inMonth(t, y, m) {
   if (!t.issue_date) return false
@@ -198,8 +235,11 @@ export default function Dashboard() {
   const [summary, setSummary]         = useState(null)
   const [rawActions, setRawActions]   = useState([])
   const [rawStock, setRawStock]       = useState([])
-  const [dateFrom, setDateFrom]       = useState('')
-  const [dateTo, setDateTo]           = useState('')
+  // Set up front, NOT from a mount effect: the loader depends on these and the
+  // service only applies a bound `if (from)`, so an empty first render read the
+  // whole tyre history before the effect narrowed it to the year.
+  const [dateFrom, setDateFrom]       = useState(() => shortcutRange(DEFAULT_SHORTCUT).from)
+  const [dateTo, setDateTo]           = useState(() => shortcutRange(DEFAULT_SHORTCUT).to)
   const [search, setSearch]           = useState('')
   const [siteFilter, setSiteFilter]   = useState('')
   const [loading, setLoading]         = useState(true)
@@ -208,7 +248,7 @@ export default function Dashboard() {
   // row ceiling, so the client-computed charts render a partial slice. KPIs are
   // unaffected (they come from the server summary RPC). Surfaced as a note.
   const [capped, setCapped]           = useState(false)
-  const [dateShortcut, setDateShortcut] = useState('This Year')
+  const [dateShortcut, setDateShortcut] = useState(DEFAULT_SHORTCUT)
   const [showCustom, setShowCustom]   = useState(false)
   const [granularity, setGranularity] = useState('monthly')
   const [recentRecords, setRecentRecords] = useState([])
@@ -231,35 +271,29 @@ export default function Dashboard() {
   // maths). hasData false = no workshop tables/rows -> the section stays hidden.
   const [ws, setWs] = useState({ status: 'loading', kpis: null, hasData: false })
 
-  const pad = n => String(n).padStart(2, '0')
-  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
-
   function applyShortcut(label) {
-    const now = new Date(); const today = fmt(now); let from, to
-    if (label === 'Today')       { from = today; to = today }
-    else if (label === 'Yesterday') { const y = new Date(now); y.setDate(y.getDate()-1); from = fmt(y); to = fmt(y) }
-    else if (label === 'This Week') { const d = new Date(now); d.setDate(d.getDate() - d.getDay()); from = fmt(d); to = today }
-    else if (label === 'This Month') { from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`; to = today }
-    else if (label === 'Last Month') {
-      const lm = new Date(now.getFullYear(), now.getMonth()-1, 1)
-      const lme = new Date(now.getFullYear(), now.getMonth(), 0)
-      from = fmt(lm); to = fmt(lme)
-    } else if (label === 'This Year') { from = `${now.getFullYear()}-01-01`; to = today }
+    const { from, to } = shortcutRange(label)
     if (label !== 'Custom') { setDateFrom(from); setDateTo(to) }
     setDateShortcut(label); setShowCustom(label === 'Custom')
   }
 
-  // Opens on THIS YEAR, not this month. Tyre records, accidents and job-card
-  // lines all have zero rows in the current month - they arrive in uploads, not
-  // daily - so a month default rendered the tyre and accident panels blank while
-  // the data was sitting right there. The year has data in every feed and still
-  // reads a fraction of the history.
-  useEffect(() => { applyShortcut('This Year') }, [])
+  // The opening window is set SYNCHRONOUSLY in the useState initialisers above
+  // (shortcutRange(DEFAULT_SHORTCUT)), not from a mount effect.
+  //
+  // It used to be `useEffect(() => applyShortcut('This Year'), [])`, and that
+  // cost every visit a whole second load. dateFrom/dateTo started as '', the
+  // loader depends on them, and the service applies a bound only `if (from)` -
+  // so the first load ran with NO date filter at all and paged the entire tyre
+  // history (KSA 8,147 rows over 9 round trips; All 11,193 over 13), which is
+  // precisely what defaulting to the year exists to avoid. The mount effect then
+  // set the dates, the dependency array changed, and all six reads fired again
+  // for the window that was actually wanted. Setting the state up front makes
+  // the first load the only load, with byte-identical dates.
 
   // Load the tyre vs maintenance cost split (last 12 months, country scoped).
   useEffect(() => {
     let cancelled = false
-    loadGovernedCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
       .then(res => { if (!cancelled) setCostSplit(res) })
       .catch(() => { if (!cancelled) setCostSplit(null) })
     return () => { cancelled = true }

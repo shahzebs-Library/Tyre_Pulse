@@ -140,6 +140,31 @@ export async function listAccidentFleet({ country } = {}) {
 }
 
 /**
+ * How many fleet vehicles the reader can see, as an exact SERVER count.
+ *
+ * This is the denominator of the register's "N / 100 vehicles" tile, which used
+ * to be `fleetAssets.length` - i.e. it paged the whole fleet (1,617 rows over 5
+ * round trips) on every mount purely to take its length, while the rows
+ * themselves are only ever needed by the combobox inside the incident form.
+ * `head: true` returns the count with no rows at all, and the country scoping is
+ * the same null-safe `applyCountry` the paged read uses, so the number is
+ * identical to the length it replaces.
+ *
+ * Returns null - never 0 - when the count cannot be read: 0 would render as a
+ * real measurement of an empty fleet and silently suppress the per-100 rate.
+ * @param {{country?:string}} [opts]
+ * @returns {Promise<number|null>}
+ */
+export async function countAccidentFleet({ country } = {}) {
+  const { count, error } = await applyCountry(
+    supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }),
+    country,
+  )
+  if (error) return null
+  return typeof count === 'number' ? count : null
+}
+
+/**
  * Pass-through insert for the owner page (single row or bulk array). The page
  * only checks for an error, so no `.select().single()` - that would reject a
  * bulk array insert. Returns the raw Supabase `{ data, error }`.

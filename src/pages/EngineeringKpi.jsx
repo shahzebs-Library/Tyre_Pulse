@@ -4,7 +4,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { toUserMessage } from '../lib/safeError'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
-import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import { COST_MODES, pickCost } from '../lib/costSources'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -227,6 +227,7 @@ export default function EngineeringKpi() {
       from: dateFrom || undefined,
       to: dateTo || undefined,
       site: siteFilter || undefined,
+      maxAgeMs: COST_SPLIT_TTL_MS,
     })
       .then(res => { if (!cancelled) setCostSplit(res) })
       .catch(() => { if (!cancelled) setCostSplit(null) })

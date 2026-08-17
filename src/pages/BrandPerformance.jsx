@@ -18,7 +18,7 @@ import { ChartModal } from '../components/ChartModal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
-import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useReportMeta } from '../hooks/useReportMeta'
 import { toUserMessage } from '../lib/safeError'
@@ -95,7 +95,7 @@ export default function BrandPerformance() {
   // (loadCostSplit.tyre), not from summing per-brand cost_per_tyre.
   useEffect(() => {
     let alive = true
-    loadGovernedCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
       .then(r => { if (alive) setFleetTyreCost(r?.tyre ?? null) })
       .catch(() => { if (alive) setFleetTyreCost(null) })
     return () => { alive = false }

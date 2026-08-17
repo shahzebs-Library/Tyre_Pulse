@@ -82,6 +82,10 @@ export default function TyreRecords() {
   const [search, setSearch]           = useState(() => {
     try { return new URLSearchParams(window.location.search).get('search') || '' } catch { return '' }
   })
+  // The term the QUERY runs on, 300 ms behind the box. Seeded from `search` so a
+  // deep link (/tyres?search=<serial>) queries immediately rather than after a
+  // needless empty read followed by the real one.
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   const [siteFilter, setSiteFilter]   = useState('')
   const [brandFilter, setBrandFilter] = useState('')
   const [riskFilter, setRiskFilter]   = useState('')
@@ -131,7 +135,19 @@ export default function TyreRecords() {
   const reqIdRef = useRef(0)
 
   useEffect(() => { loadFilters() }, [])
-  useEffect(() => { loadRecords() }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
+  // Debounce the search box - same shape as FleetMaster, which already does this.
+  // Typing straight into the dependency array below fired one
+  // `select('*', {count:'exact'})` PER KEYSTROKE, and each one is a four-column
+  // unanchored ILIKE plus an exact count over 11,193 rows, so it cannot use an
+  // index: an 8-character serial cost 8 sequential scans. The page reset only
+  // fires when the term actually changed, so landing on a restored `?search=`
+  // keeps its page instead of snapping to the first.
+  useEffect(() => {
+    if (search === debouncedSearch) return
+    const timer = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
+    return () => clearTimeout(timer)
+  }, [search, debouncedSearch])
+  useEffect(() => { loadRecords() }, [page, debouncedSearch, siteFilter, brandFilter, riskFilter, activeCountry])
 
   async function loadFilters() {
     const [sRes, bRes] = await Promise.all([
@@ -147,7 +163,7 @@ export default function TyreRecords() {
     setLoading(true)
     try {
       const { data, count } = await tyreRecordsApi.listRecords({
-        page, pageSize: PAGE_SIZE, search, siteFilter, brandFilter, riskFilter, country: activeCountry,
+        page, pageSize: PAGE_SIZE, search: debouncedSearch, siteFilter, brandFilter, riskFilter, country: activeCountry,
       })
       if (myReq !== reqIdRef.current) return   // a newer filter/page superseded this
       setRecords(data ?? [])
@@ -156,7 +172,7 @@ export default function TyreRecords() {
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)   // never leave the spinner stuck
     }
-  }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
+  }, [page, debouncedSearch, siteFilter, brandFilter, riskFilter, activeCountry])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
@@ -384,8 +400,10 @@ export default function TyreRecords() {
   ]
 
   async function fetchAll() {
+    // The exported set must be the set on screen, so this uses the term the grid
+    // is actually filtered by - not whatever is half-typed in the box.
     const { data } = await tyreRecordsApi.listAllRecords({
-      search, siteFilter, brandFilter, riskFilter, country: activeCountry,
+      search: debouncedSearch, siteFilter, brandFilter, riskFilter, country: activeCountry,
     })
     return data ?? []
   }

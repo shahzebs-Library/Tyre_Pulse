@@ -46,6 +46,51 @@ const num = (v) => {
 const scope = (v) => (v && v !== 'All' ? String(v) : null)
 
 /**
+ * In-flight and recent `loadGovernedCost` results, keyed by the FULL scope.
+ *
+ * Measured live as a real user, warm, three consecutive runs:
+ * `get_cost_cpk_overview('KSA', null, '2025-09-01', '2026-08-31')` takes
+ * **1,237 / 1,445 / 1,428 ms** of server time for a 13.6 kB answer. Ten pages
+ * call it on mount through `loadGovernedCostSplit` (Dashboard, Analytics, Board
+ * Overview, Executive, Cost Center, Engineering KPI, Brand Performance, PM,
+ * Vehicle History), so walking between four of them re-computed the identical
+ * answer four times - about five seconds of server time, against a
+ * shared_buffers of 256 MB that every other query is competing for.
+ *
+ * THE KEY MUST CARRY EVERY FILTER. country, site, from, to and mode all change
+ * the answer; keyed on country alone a site-scoped or narrower-window payload
+ * would be handed to a caller that asked for the whole scope, and the difference
+ * would read as a real change in the money rather than a bug.
+ *
+ * Deduping the IN-FLIGHT promise is always correct - it is the same request,
+ * already on the wire. The short result cache is OPT-IN per caller (`maxAgeMs`,
+ * default 0 = always fresh) because a screen with its own Refresh control must
+ * be able to insist on a re-read; nothing changes for a caller that does not
+ * ask. This mirrors `tyreRunningLife.js` deliberately rather than inventing a
+ * second caching shape.
+ */
+const _costCache = new Map()
+
+const costCacheKey = ({ country, site, from, to, mode }) =>
+  [scope(country) || '__all__', scope(site) || '__nosite__', from || '', to || '', mode || 'combined'].join('|')
+
+/** Drop every cached cost payload. For tests, and for a future explicit invalidate. */
+export function clearGovernedCostCache() {
+  _costCache.clear()
+}
+
+/**
+ * The TTL a read-only cost surface should pass as `maxAgeMs`.
+ *
+ * One minute, because this is a TWELVE-CALENDAR-MONTH rollup of an expense ledger
+ * that arrives in monthly bulk imports - it does not move second to second, and
+ * no screen that displays it is also the screen that loads a file. Surfaces with
+ * their own Refresh control deliberately do NOT pass it, so pressing Refresh
+ * always re-reads.
+ */
+export const COST_SPLIT_TTL_MS = 60_000
+
+/**
  * Per-country governed totals. Use this for ANY all-countries figure.
  *
  * Returns a CountryCostSet, which has no scalar total - so a caller physically
@@ -100,9 +145,37 @@ export async function loadCostByCountry({ from, to, mode = 'combined' } = {}) {
  * currency. When it is All / omitted the totals are NOT summed: `set` carries
  * the per-country split and `currency` is MIXED, so a caller must choose.
  *
- * @param {{country?:string, site?:string, from?:string, to?:string, mode?:string}} [opts]
+ * @param {{country?:string, site?:string, from?:string, to?:string, mode?:string,
+ *   maxAgeMs?:number}} [opts] `maxAgeMs` lets a caller reuse a recent identical
+ *   payload; omitting it is the default AND the way to insist on a fresh read, so
+ *   a screen with its own refresh control needs nothing extra.
  */
-export async function loadGovernedCost({ country, site, from, to, mode = 'combined' } = {}) {
+export async function loadGovernedCost({ country, site, from, to, mode = 'combined', maxAgeMs = 0 } = {}) {
+  const key = costCacheKey({ country, site, from, to, mode })
+  const hit = _costCache.get(key)
+  if (hit) {
+    // A request already on the wire is shared regardless of maxAgeMs: waiting for
+    // it is strictly better than starting a second identical ~1.3 s read.
+    if (hit.promise) return hit.promise
+    if (maxAgeMs > 0 && Date.now() - hit.at < maxAgeMs) return hit.value
+  }
+  const promise = _loadGovernedCost({ country, site, from, to, mode })
+  _costCache.set(key, { promise })
+  try {
+    const value = await promise
+    // Only a successful read is worth reusing. A failure is left uncached so the
+    // next visit retries instead of serving a remembered error - "we could not
+    // look" must not become sticky.
+    if (value && value.ok) _costCache.set(key, { value, at: Date.now() })
+    else _costCache.delete(key)
+    return value
+  } catch (e) {
+    _costCache.delete(key)
+    throw e
+  }
+}
+
+async function _loadGovernedCost({ country, site, from, to, mode = 'combined' } = {}) {
   const single = isSingleCountry(scope(country))
   const currency = single ? currencyForCountry(country) : MIXED_CURRENCY
 
@@ -247,11 +320,14 @@ export function calendarMonthWindow(now = new Date()) {
  * Falls back to the legacy loadCostSplit when the grid has nothing for the
  * scope (site-scoped store-code vocabulary, or an un-migrated org).
  */
-export async function loadGovernedCostSplit({ country, site, from, to, now } = {}) {
+export async function loadGovernedCostSplit({ country, site, from, to, now, maxAgeMs = 0 } = {}) {
   // Pin the legacy calendar-month window when the caller did not choose one.
   const win = from || to ? { from, to } : calendarMonthWindow(now)
 
-  const g = await loadGovernedCost({ country, site, from: win.from, to: win.to })
+  // The window is resolved BEFORE the cache is consulted, so the key always
+  // carries concrete dates and a `now` that has rolled into a new month can never
+  // be served last month's answer.
+  const g = await loadGovernedCost({ country, site, from: win.from, to: win.to, maxAgeMs })
   if (g.ok && g.totals && g.totals.total.amount > 0) {
     // Only the months inside the window: get_cost_cpk_overview returns a
     // 36-month monthly series for trend charts, which is wider than the window.

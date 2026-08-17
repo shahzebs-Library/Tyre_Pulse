@@ -7,7 +7,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { COST_MODES, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
 
-import { loadGovernedCostSplit } from '../lib/api/governedCost'
+import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import CostValue from '../components/cost/CostValue'
 import { buildCostIntelligence, UNIT_META } from '../lib/costIntelligence'
 import { listProduction, createProduction, updateProduction, deleteProduction, sumProductionM3 } from '../lib/api/production'
@@ -172,7 +172,7 @@ export default function CostCenter() {
     let cancelled = false
     setSplitLoading(true)
     setSplitError(null)
-    loadGovernedCostSplit({ country: activeCountry })
+    loadGovernedCostSplit({ country: activeCountry, maxAgeMs: COST_SPLIT_TTL_MS })
       .then(res => { if (!cancelled) setSplit(res) })
       .catch(e => { if (!cancelled) setSplitError(toUserMessage(e, 'Failed to load cost split')) })
       .finally(() => { if (!cancelled) setSplitLoading(false) })

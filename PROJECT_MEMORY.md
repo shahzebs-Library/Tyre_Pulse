@@ -120,7 +120,157 @@ Owner: the tyre-change flag and Running & Remaining are slow and often error. On
   the expensive expressions are the two engine_hours subqueries being RE-EXECUTED, not the baseline (470 ms, and
   it already materialises because `removed` is referenced twice).
 
-## SESSION 2026-08-17 (part 2) — V577-V581: THE ~1.7 s RESIDUE WAS EXPRESSION DUPLICATION, NOT THE BASELINE. Next free **V582**.
+## SESSION 2026-08-17 (part 3) — "APP SPEED BECOME WORST": THE CAUSE WAS THE REALTIME WAL DECODER, NOT A QUERY (V582-V584 + client). Next free **V585**.
+Owner: "App speed become worst very slow". Measured, and the first suspect was cleared with evidence before
+anything was touched. Migrations V582/V583/V584 applied live on `jhssdmeruxtrlqnwfksc`; client fixes in the same
+push. Suite 527 files / 8,005 tests green, lint 0 errors, build clean. Everything on main.
+
+### **THE MACHINE IS SMALL AND THAT FRAMES EVERY OTHER FINDING: `shared_buffers` = 32,768 blocks = 256 MB**
+`audit_log_v2` alone was 646 MB - 2.5x the whole cache. `work_orders` 181 MB. Any tuning conversation that
+ignores this arithmetic is theatre; the levers below removed ~135 MB of pressure and did NOT repeal it.
+**RULE: quote buffer counts, not milliseconds. Timings on this instance vary 5-7x call to call.**
+
+### **V582 - THE #1 DATABASE COST WAS SUPABASE REALTIME, AND 12 SUBSCRIPTIONS PER TAB FED NOTHING**
+Top of `pg_stat_statements` over 6 days: `SELECT wal->>$5 as type, ...` = **454,844 calls / 5,417,723 ms /
+1.19 BILLION shared-buffer accesses**, roughly **15x the next statement combined**. That is the WAL decoder, and
+1.19e9 blocks against a 32,768-block cache is continuous full-cache thrash - which is exactly why the symptom was
+"the whole app is slow" and not "this screen is slow".
+- **CLEARED FIRST, with evidence: it is NOT V578.** Of the 19 realtime-published tables exactly ONE (`stock`,
+  16 kB, 0 writes) gained a V578 policy; every other already carried its country policy from V226/V269. Nor a
+  stuck slot - both `active`, `reserved`, 16 MB retained, **0 bytes unconsumed**.
+- **THE CLIENT HALF IS THE BIG ONE. `useRealtimeSync` is no longer mounted.** It opened **12** postgres_changes
+  subscriptions inside `Layout` - every page load, every signed-in user - and each only invalidated a TanStack
+  Query key **nothing reads**. Measured: 231 pages, exactly TWO files call `useQuery` (`useBilling.js`, and
+  `useSupabaseQuery.js` which is imported nowhere). The other references are two more WRITERS and
+  `sourceTables: ['inspections']` KPI metadata. Realtime runs `apply_rls()` per change PER SUBSCRIBER, so this was
+  driving the most expensive statement on the database for zero benefit.
+- **V582 server half: publication 19 -> 13.** Removed the 6 published tables nothing subscribes to, enumerated by
+  reading every `postgres_changes`/`useRealtime` call site in **BOTH `src/` and `mobile/`** (mobile subscribes
+  page-by-page, which is what makes a naive prune dangerous): `vehicle_fleet` (5,358 writes, 2nd busiest, no
+  subscriber), `stock_movements`, `budgets`, `gate_passes`, `stock`, `purchase_orders`. Migration aborts if any of
+  the 13 CONSUMED tables is missing.
+- **STATED, NOT SILENTLY "FIXED": 7 subscriptions receive nothing today** because their tables are not published -
+  `system_config`, `system_logs`, `tech_activity_events`, `wo_assignments`, `wo_tasks`, `pm_programs`,
+  `pm_service_records`. So WorkshopLive's "live" board is really its 60 s poll. **Deliberately NOT added: adding a
+  table to the publication ADDS decode load to the thing that is already the largest cost here.** If ever wanted,
+  add ONE AT A TIME and re-measure the decoder.
+- Pinned by `src/test/realtimeSubscriptionCost.test.js` (mutation-tested: re-adding the call fails it).
+  **RULE: a realtime subscription must have a CONSUMER that acts on the payload. Never re-add a global
+  subscribe-to-everything hook - it cannot know whether anything is listening.**
+
+### **V583 - MY OWN HYPOTHESIS WAS WRONG. THE AUDIT TABLE IS YOUNGER THAN ITS OWN RETENTION WINDOW**
+I assumed retention was the lever. It is not, and this is worth NOT re-investigating: `audit_retention_days` is
+**365** (set, not 0), cron job 11 is active and has succeeded daily, and it deletes nothing because **the oldest
+row is 2026-07-03** - the entire table is 45 days old. `older_than_365d = 0`; even a 90-day window deletes 0 rows
+today. Retention is inert until 2027-07.
+- **THE REAL FIND WAS THE VISIBILITY MAP.** `audit_log_v2` was the ONLY large table with a half-empty one -
+  **54.61% all-visible** vs 99.66% on work_orders and 100% on production_logs. **A page that is not all-visible
+  cannot serve an index-only scan**, so every index scan was visiting a 591 MB heap behind a 256 MB cache. Plain
+  `VACUUM` (SHARE UPDATE EXCLUSIVE, app kept serving) fixed both: **646 -> 557 MB, dead 76,686 -> 0, all-visible
+  54.61% -> 100%.** Also `parts_consumption` 78.90% -> 99.86% and `production_logs` 40,331 dead -> 0.
+  **RULE: check `relallvisible/relpages` before blaming a query. It is a bigger lever than it looks and plain
+  VACUUM is enough.**
+- Integrity re-verified as a privileged reader: 503,416 rows, `approved_m3` = **2,193,569.9**, unchanged to the
+  decimal from V524.
+- **REFUSED: `VACUUM FULL`** (ACCESS EXCLUSIVE rewrite of a 646 MB heap for ~102 MB; plain VACUUM got 89 MB of it
+  free) and **`pg_repack`** (extension present but needs a client binary on a host that can reach the DB) -
+  maintenance-window SQL is in the header instead of an improvisation.
+- **V583 IS NOT IN `supabase_migrations` AND CANNOT BE: `VACUUM` cannot run inside a transaction block (25001)
+  and the migration runner wraps everything in one.** Verify it against the live object, never the catalog.
+- **CORRECTS V499**: its per-row `profiles` lookup in `trg_audit_row_change` is real but guarded by
+  `IF v_uid IS NOT NULL`, and `auth.uid()` IS NULL on ERP imports - so it is SKIPPED on the path writing 94.5% of
+  the table. Do not optimise it expecting an import speedup. Concentration is 442,952 of 503,416 (88.0%), not
+  the recorded 440,257 of 441,632 (99.7%).
+- **OWNER DECISION: 8 bulk-import days wrote 475,497 rows = 94.5% of that table** (a normal day is 846). Each
+  future import adds ~30,000 rows / ~20 MB and none expires until 2027. The only real lever is not auditing bulk
+  imports (V499's `app.bulk_import` guard), which changes the audit contract.
+
+### **V584 - TWO RECORDED INDEX FIGURES IN THIS FILE WERE STALE AND WOULD HAVE CAUSED DAMAGE**
+- **"work_order_line_items: 5 of 6 unused, 18 MB of 19 MB" IS FALSE.** Exactly ONE was unused. Verified: the
+  survivors carry 60/41/9/1 scans and the only zero is the **PRIMARY KEY**. Acting on the old note would have
+  dropped ~18 MB of LIVE indexes plus a constraint index.
+- **"parts_consumption: 0 unused - it is clean" IS ALSO FALSE**: two were unused (6,320 kB).
+- **SETTLES A STANDING OPEN QUESTION: the nightly backup does NOT restart the backend.** `pg_postmaster_start_time`
+  2026-08-11 07:23, `stats_reset` NULL, oldest `pg_stat_statements.stats_since` identical - **6 days 8.9 hours
+  unbroken through six nights**, 59.5M index scans. The recorded fear that "this evidence can never accumulate" is
+  refuted, and that window is the ONLY reason a usage-based drop was admissible.
+- **14 indexes dropped, net -46 MB: total index footprint 322 -> 276 MB.** 0 broken constraints. Highest-confidence
+  category first: 7 duplicate/redundant (one index a strict prefix of another, compared on ordered key signature
+  INCLUDING opclass/collation/sort options and identical partial predicates) - **stats-independent, so lead with
+  these**. Surviving sibling was hotter and usually SMALLER (a 2-column index at 2,032 kB vs the 3-column at
+  680 kB - the bulk was page-split bloat).
+- **THE REFUSALS ARE WORTH MORE THAN THE DROPS. Three had `idx_scan = 0` for the full 6.4 days and EXPLAIN shows
+  the planner CHOOSES each one** - dormant, not dead: `idx_work_orders_work_type` (PM is 1.2% of the table),
+  `material_master_review_idx` (supplies the ORDER BY so LIMIT 200 stops early instead of sorting 22,162),
+  `idx_domain_events_type_time` (**428 buffers with it vs 10,433** parallel seq scan without).
+  **THE DISCRIMINATION THAT MAKES THIS DEFENSIBLE RATHER THAN TIMID: `material_master_category_idx` ALSO had a
+  live query shape and was still dropped, because EXPLAIN shows Seq Scan + Sort even with its exact predicate.
+  A live query shape is NOT a reason to keep an index; the planner picking it is.**
+  Also instructive: `parts_consumption_date_idx` had a real server-side shape - `where txn_date ~ '^\d{4}'`, a
+  regex on text, which a btree provably cannot serve.
+- **ONE GENUINELY MISSING INDEX, confirmed not guessed.** `ksa_country_upload_template_staging`: 3,069 seq scans
+  reading **588M tuples**, only a pkey - the table this file records as hitting a 45 s timeout.
+  `get_tyre_gap_overview` runs a correlated EXISTS joining on EXPRESSIONS, 11,193 x 282,352. Two expression
+  indexes: **10,110 buffers -> 9** per lookup for +4,192 kB. **THE `ANALYZE` IS LOAD-BEARING, NOT HOUSEKEEPING -
+  with the indexes present but unanalyzed the planner ignored them entirely and kept the seq scan. That is exactly
+  how a correct index gets judged useless and reverted.**
+- Never dropped: UNIQUE/PK, FK-supporting (incl. `idx_audit_v2_user`), 3 `ivfflat` vector indexes (not a
+  round-trip to recreate). Rollback carries the full `CREATE INDEX` for all 14, read from `pg_indexes.indexdef`.
+- That agent WITHDREW ONE OF ITS OWN CLAIMS mid-flight: `n_live_tup = 1,640` on a 78 MB `domain_events` looked
+  like catastrophic bloat; `count(*)` is **209,086** - a stats-window artifact (never analyzed since restart).
+  **RULE: `n_live_tup` is an estimate. Confirm with `count(*)` before calling anything bloated.**
+
+### **CLIENT MOUNT COST - THE THREE REAL COSTS WERE NOT A MISSING CACHE**
+Measured round trips on mount (KSA scope; `fetchAllPages` is pageSize 1000 / concurrency 4, so 1,617 rows costs
+5 requests, not 2): **Dashboard 24 -> 10 · Accidents 7 -> 3 · TyreRecords 3 + 1/keystroke -> 3 + 1/search.**
+Unchanged and deliberately so: WorkOrders 26, ExpenseReport ~18, Analytics 7, Inspections 3, FleetMaster 6.
+1. **DASHBOARD LOADED EVERYTHING TWICE AND THE FIRST TIME WAS THE EXPENSIVE ONE.** `dateFrom`/`dateTo` started
+   `''`, a mount effect set them to the year, the loader depends on both - and `listDashboardTyres` applies a bound
+   only `if (from)`, so the first load ran with **NO date filter** and paged the whole tyre history (KSA 8,147 over
+   9 round trips; All 11,193 over 13). **That is precisely what the V511 year default exists to prevent.** Fixed by
+   a pure `shortcutRange(label, now)` used by the `useState` initialiser; dates byte-identical, every label pinned,
+   Custom returns the empty range so it cannot blank a window the user typed.
+   **RULE: if a loader depends on state a mount effect fills in, the first load runs with the EMPTY value. Seed it
+   in the initialiser.**
+2. **TyreRecords queried per keystroke** - `search` sat in the load effect's dependency array and each character
+   fired `select('*',{count:'exact'})` with four unanchored ILIKEs plus an exact count over 11,193 rows, so an
+   8-char serial cost 8 sequential scans. 300 ms debounce copying FleetMaster's existing shape; the export reads
+   the DEBOUNCED term (it must export the set on screen, not a half-typed one).
+3. **Accidents paged 1,617 fleet rows for a form that was not open** (Inspections already had this fix). The KPI
+   that needed the fleet needed a NUMBER: `countAccidentFleet()` is head-only with the same null-safe
+   `applyCountry` scoping, so `per100` is the identical figure, and it returns **null, not 0**, when unreadable.
+4. **`get_cost_cpk_overview` is ~1.3 s and TEN pages call it on mount** (1,237/1,445/1,428 ms warm; 1,257 ms after
+   V584). `loadGovernedCost` now dedupes the IN-FLIGHT promise (always correct - same request, already on the wire)
+   plus an OPT-IN `maxAgeMs`, copying `tyreRunningLife.js` rather than inventing a second caching shape. Default 0
+   so no existing caller changed; 7 verified mount-only surfaces opt in via one `COST_SPLIT_TTL_MS`. **PmPrograms
+   deliberately does NOT - its Refresh button calls that load() and Refresh must re-read.** The key carries
+   country+site+from+to+mode: keyed on country alone a site-scoped payload would be served to a caller that asked
+   for the whole scope and the difference would read as a real change in the money. Failures are never cached.
+- **CORRECTS THIS FILE TWICE.** (a) The note that the react-query layer being dead means the fix is *wiring up
+  react-query* is not what the measurements support - the three real costs were a duplicated effect, an
+  undebounced input and an eagerly-fetched picker, and **a cache would have HIDDEN all three**. (b)
+  `stats.fleetSize = fleetAssets.length` is recorded as "fixed" by paging the read; paging made it CORRECT but the
+  1,617-row cost stayed - taking `.length` of a paged read is what made those rows look load-bearing.
+- **OPEN, real correctness bug, needs an RPC nobody owned this session:** TyreRecords' `listSiteOptions` /
+  `listBrandOptions` are unpaged bare selects, therefore capped at 1000 of 11,193 rows, so **the filter dropdowns
+  may be silently incomplete**. Every zero-migration fix either changes which sites appear or makes it slower;
+  the honest fix is a distinct-values RPC.
+
+### METHOD NOTES WORTH KEEPING
+- **HEAVY MEASUREMENT AGAINST PRODUCTION IS ITSELF A LOAD THE OWNER FEELS.** Nearly every statement first seen in
+  the six hours before the complaint was this session's own probe work - impersonations, EXPLAINs, a rolled-back
+  FORCE RLS experiment holding ACCESS EXCLUSIVE on 8 tables, and a timed-out 120,000-row UPDATE on the 646 MB
+  audit table. On a 256 MB instance that competes directly with the app. **Say so when reporting a slowdown, and
+  prefer narrow probes to sweeps across many live tables.**
+- **THE 0 ms TRAP BIT AGAIN, and this file's existing note caught it.** A harness
+  `select ms from (select clock_timestamp() t0) s, lateral (select f(...) as n) r` returns **0 ms** because `n` is
+  unreferenced and the expression is skipped. The measured value MUST appear in the output.
+- **A merged commit proves nothing about the deployed site** (standing rule, exercised again): confirmed the newest
+  Vercel deployment is `target: production`, state READY, on the exact sha. Also **`git status` showing dirty files
+  while a subagent runs is NOT something to commit** - wait for the completion notification, not for file quiet,
+  and stage by explicit path.
+
+## SESSION 2026-08-17 (part 2) — V577-V581: THE ~1.7 s RESIDUE WAS EXPRESSION DUPLICATION, NOT THE BASELINE. SUPERSEDED: next free is **V585** (see part 3 above).
 Same branch. V577 + V578 APPLIED live; V579 + V580 are MEASURED REFUSALS with nothing applied. Suite 525 files /
 7,982 tests green. Every claim below was re-verified by hand against the live DB before being committed.
 

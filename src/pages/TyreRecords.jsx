@@ -149,13 +149,22 @@ export default function TyreRecords() {
   }, [search, debouncedSearch])
   useEffect(() => { loadRecords() }, [page, debouncedSearch, siteFilter, brandFilter, riskFilter, activeCountry])
 
+  // One RPC, already DISTINCT and sorted server-side. The two reads this
+  // replaced were capped by PostgREST at 1000 of 11,193 rows, so the dropdowns
+  // silently offered only 16 of 23 sites and 51 of 104 brands - a site with 92
+  // records could not be picked at all. Options are byte-exact so the grid's
+  // `.eq()` still matches every row behind them.
   async function loadFilters() {
-    const [sRes, bRes] = await Promise.all([
-      tyreRecordsApi.listSiteOptions(),
-      tyreRecordsApi.listBrandOptions(),
-    ])
-    setSites([...new Set((sRes.data ?? []).map(r => r.site))].sort())
-    setBrands([...new Set((bRes.data ?? []).map(r => r.brand))].sort())
+    try {
+      const { sites: s, brands: b } = await tyreRecordsApi.listFilterOptions()
+      setSites(s)
+      setBrands(b)
+    } catch {
+      // A failed options read must not blank the grid: leave the pickers empty
+      // rather than surfacing a filter list we know to be wrong.
+      setSites([])
+      setBrands([])
+    }
   }
 
   const loadRecords = useCallback(async () => {

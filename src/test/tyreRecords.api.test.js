@@ -24,7 +24,11 @@ const h = vi.hoisted(() => {
     state.last = b
     return b
   }
-  return { state, supabase: { from } }
+  function rpc(fn, args) {
+    state.lastRpc = { fn, args }
+    return Promise.resolve(state.rpcResult)
+  }
+  return { state, supabase: { from, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -34,18 +38,40 @@ const tyreRecords = await import('../lib/api/tyreRecords')
 beforeEach(() => {
   h.state.result = { data: [], error: null }
   h.state.last = null
+  h.state.lastRpc = null
+  h.state.rpcResult = { data: { sites: [], brands: [] }, error: null }
 })
 
 describe('service layer - tyreRecords', () => {
-  it('listSiteOptions / listBrandOptions read distinct non-null values', async () => {
-    await tyreRecords.listSiteOptions()
-    expect(h.state.last._table).toBe('tyre_records')
-    expect(h.state.last._calls.select).toBe('site')
-    expect(h.state.last._calls.not).toContainEqual(['site', 'is', null])
+  // These options used to come from two bare selects, which PostgREST caps at
+  // 1000 rows against an 11,193-row table - the dropdowns silently offered only
+  // 16 of 23 sites and 51 of 104 brands. The RPC does the DISTINCT server-side,
+  // so the read can no longer be truncated by a row cap.
+  it('listFilterOptions reads both option lists from the RPC in one round trip', async () => {
+    h.state.rpcResult = { data: { sites: ['JEDDAH', 'MONORAIL SITE'], brands: ['APOLLO'] }, error: null }
 
-    await tyreRecords.listBrandOptions()
-    expect(h.state.last._calls.select).toBe('brand')
-    expect(h.state.last._calls.not).toContainEqual(['brand', 'is', null])
+    const out = await tyreRecords.listFilterOptions()
+
+    expect(h.state.lastRpc.fn).toBe('get_tyre_filter_options')
+    expect(out).toEqual({ sites: ['JEDDAH', 'MONORAIL SITE'], brands: ['APOLLO'] })
+    // No table read at all: a capped select can never creep back in here.
+    expect(h.state.last).toBeNull()
+  })
+
+  it('listFilterOptions sends a NULL-inclusive country and treats All as no filter', async () => {
+    await tyreRecords.listFilterOptions('KSA')
+    expect(h.state.lastRpc.args).toEqual({ p_country: 'KSA' })
+
+    await tyreRecords.listFilterOptions('All')
+    expect(h.state.lastRpc.args).toEqual({ p_country: null })
+
+    await tyreRecords.listFilterOptions()
+    expect(h.state.lastRpc.args).toEqual({ p_country: null })
+  })
+
+  it('listFilterOptions degrades to empty lists when the payload is absent', async () => {
+    h.state.rpcResult = { data: null, error: null }
+    await expect(tyreRecords.listFilterOptions()).resolves.toEqual({ sites: [], brands: [] })
   })
 
   it('listRecords requests exact count, paged range, filters + NULL-safe country', async () => {

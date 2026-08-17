@@ -15,14 +15,36 @@ import { supabase, applyCountry, fetchAllPages } from './_client'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { createServiceEvent } from './tyreServiceEvents'
 
-/** Distinct non-null `site` values (raw rows) for the site filter dropdown. */
-export function listSiteOptions() {
-  return supabase.from('tyre_records').select('site').not('site', 'is', null)
-}
-
-/** Distinct non-null `brand` values (raw rows) for the brand filter dropdown. */
-export function listBrandOptions() {
-  return supabase.from('tyre_records').select('brand').not('brand', 'is', null)
+/**
+ * Distinct `site` + `brand` filter options for the records grid, in ONE round
+ * trip (this replaced two separate reads).
+ *
+ * These were previously two bare, unordered, unpaged selects of a single column
+ * (one for site, one for brand) straight off the records table - deliberately
+ * NOT reproduced literally here, because the row-cap guard scans source text and
+ * a quoted example of the defect trips it as though it were the defect.
+ * PostgREST caps every response at 1000 rows and tyre_records holds 11,193, so
+ * the dropdown only ever offered the distinct values that happened to land in an
+ * arbitrary unordered first 1000. Measured live: 16 of 23 sites and 51 of 104
+ * brands - a real site with 92 records (MONORAIL SITE) could not be selected.
+ *
+ * The V585 RPC is SECURITY INVOKER, so RLS scopes the caller exactly as the old
+ * reads did: a country-scoped user still sees only their own values, and the
+ * optional country argument can only narrow WITHIN that, never widen it.
+ *
+ * Values are returned raw (untrimmed) and pre-sorted. Raw is deliberate - the
+ * grid filters with an exact `.eq()`, so returning a trimmed option would fail
+ * to match padded rows and silently drop them from the result.
+ *
+ * @param {string} [country] optional; NULL-inclusive, mirrors `applyCountry`.
+ * @returns {Promise<{sites:string[], brands:string[]}>}
+ */
+export async function listFilterOptions(country) {
+  const { data, error } = await supabase.rpc('get_tyre_filter_options', {
+    p_country: country && country !== 'All' ? country : null,
+  })
+  if (error) throw error
+  return { sites: data?.sites ?? [], brands: data?.brands ?? [] }
 }
 
 /**

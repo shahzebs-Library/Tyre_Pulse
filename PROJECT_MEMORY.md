@@ -5,18 +5,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V585**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V586**)
 Live-verified state: main == branch == `9729ef59`, tree clean, production deploy READY on that sha,
 lint 0 errors, build clean, suite **527 files / 8,005 tests** green. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
 
-### NEEDS A MEASUREMENT, NOT CODE — do this before claiming any speed win
-1. **The realtime improvement is UNMEASURED.** V582 + the client change (12 dead subscriptions per tab removed)
-   are deployed, but immediately after, the WAL decoder was still at **~1.7 calls/s and ~31 MB/s** of buffer
-   traffic - ABOVE its 6-day average of 0.86 calls/s and ~18 MB/s, not below. That is expected, not a failure:
-   `skipWaiting:false` means every already-open tab keeps the old bundle AND its 12 subscriptions until it is
-   closed or the update prompt is accepted. **Re-measure `pg_stat_statements` for `SELECT wal->>%` (take two
-   samples ~60 s apart and compute the rate) once clients have reloaded. Do NOT report a win before that.**
+### ~~NEEDS A MEASUREMENT~~ — DONE 2026-08-17 18:00 UTC. THE REALTIME FIX IS CONFIRMED.
+1. **MEASURED, and V582 + the client change earned their keep.** Two `pg_stat_statements` samples 338 s apart
+   on the WAL decoder (`SELECT wal->>%`), after clients had reloaded:
+   **0.142 calls/s (was 0.876 lifetime avg = 6.2x lower) and 2.68 MB/s (was 17.84 = 6.7x lower).**
+   Immediately post-deploy it was ~1.7 calls/s / ~31 MB/s, i.e. ABOVE average, exactly as the stale-bundle
+   theory predicted; it is now well below.
+   **THE CONTROL IS WHAT MAKES THIS CREDIBLE, and any future re-measure MUST include it:** an absolute rate
+   drop is confounded by time of day (this window was ~21:00 Riyadh). So also compute the decoder's SHARE of
+   TOTAL `pg_stat_statements` traffic, which is load-independent:
+   **63.01% of all buffer traffic lifetime -> ~0.0% in-window; 49.50% of calls -> 9.0%.**
+   **STATED LIMIT, do not overclaim:** one 5.6-minute evening window, 122 total calls, and this session's own
+   probe queries are inside that total. Two independent measures agree, but a DAYTIME re-check under real load
+   is what would make it unimpeachable. Do not re-open this as "unmeasured"; re-open it only as "confirm under
+   load" if the owner reports slowness again.
 
 ### OWNER DECISIONS — do not decide these unilaterally
 2. **Stop auditing bulk imports?** 8 import days wrote 475,497 rows = **94.5% of `audit_log_v2`**; a normal day is
@@ -31,11 +38,34 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    mitigations not taken - rename the super-admin username, enable 2FA).
 
 ### REAL BUGS LEFT OPEN, deliberately, with the reason
-6. **TyreRecords' filter dropdowns may be SILENTLY INCOMPLETE.** `listSiteOptions` / `listBrandOptions` are
-   unpaged bare selects, so PostgREST caps them at 1000 of 11,193 rows. Every zero-migration fix either changes
-   which sites appear or makes it slower - **the honest fix is a distinct-values RPC.**
-7. **Re-verify V568's accident `x <> any(array[...])` accept/refuse proof** before relying on it. 14 accident RPCs
-   used a predicate that is true for every value, so they could never succeed.
+6. **~~TyreRecords' filter dropdowns~~ FIXED by V585 (2026-08-17). It was worse than "may be".** Measured:
+   **16 of 23 sites and 51 of 104 brands were offered - over HALF the brands unreachable**, and
+   **`MONORAIL SITE` (92 tyre records) could not be selected at all**; also DIRIYAH-ST2 (18), LING LONG (25),
+   APOLLO (18). Fixed by `get_tyre_filter_options(p_country)` + `listFilterOptions()` (2 round trips -> 1).
+   **THE RPC IS `SECURITY INVOKER` AND THAT IS LOAD-BEARING - do NOT "harden" it to DEFINER.** A definer
+   function runs as its owner and RLS never runs inside one; that is the whole V545-V576 class. INVOKER adds
+   ZERO new security surface and was PROVEN: as the KSA-only Manager, `get_tyre_filter_options('UAE')` returns
+   `[]` - a caller-supplied country can only NARROW within RLS, never widen it. Verified 16->17 sites /
+   51->97 brands for that Manager, 23/103 for the super admin, anon EXECUTE false, 42.2 ms.
+   **Options are returned RAW (untrimmed) on purpose:** the grid filters with an exact `.eq()`, so a trimmed
+   option would fail to match the 20 whitespace-padded rows and silently drop them - swapping one
+   silent-truncation bug for another. Blank/whitespace-only values ARE excluded (96 brand rows): they render as
+   an invisible unclickable entry, so they are a data gap, not a filter affordance.
+   **FOUND WHILE FIXING IT, NOT FIXED - `brand` splits by CASE, the V245/V246 class:** `Longmarch` vs
+   `LONGMARCH` (**910 rows**) and `Hankook` vs `HANKOOK` (60) are each offered as TWO options and picking one
+   MISSES the other's rows. The fix is a normalise + backfill + guard trigger ON THE COLUMN, exactly as V245 did
+   for vehicle_type and V246 for site. **Do NOT merge them in the dropdown instead** - the grid's `.eq()` would
+   then drop rows. Needs its own migration.
+7. **~~Re-verify V568~~ VERIFIED 2026-08-17, behaviourally, not by grep.** All **21** accident functions now use
+   `x <> all(array[...])`; **zero** still carry the broken `<> any(...)` (true for every value against a
+   >=2-element array, so the function could never succeed). Static check alone does not settle this, so it was
+   proven by impersonation as the real KSA Manager on a real KSA case, rolled back:
+   bogus workstream -> REFUSED 22023 · bogus status -> REFUSED 22023 · **valid+valid -> ACCEPTED**.
+   That last row is the one that matters - it is what the old form could never do.
+   **TRAP THAT BIT FIRST: probing with no JWT refused all three with 42501 from the SCOPE gate**
+   (`_accident_rpc_context`), never reaching the validation guard, which reads as a pass but proves nothing.
+   Impersonate a user who genuinely has scope on that accident, and note a temp probe table needs an explicit
+   `grant insert on <tbl> to authenticated` once `set local role authenticated` is in force.
 8. **`WorkOrders` pages 22,478 job cards on mount (26 round trips)** because it filters and sorts client-side.
    Server-side paging is a real refactor, not a tweak - measured and deliberately not attempted.
 

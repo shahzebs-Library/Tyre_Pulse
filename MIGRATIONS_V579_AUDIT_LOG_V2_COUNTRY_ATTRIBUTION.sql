@@ -1,0 +1,484 @@
+-- =====================================================================================
+-- V579  audit_log_v2 CROSS-COUNTRY DISCLOSURE - MEASURED, CONFIRMED, AND **NOT APPLIED**
+-- =====================================================================================
+-- STATUS: ASSESSMENT ONLY. NOTHING IN THIS FILE HAS BEEN APPLIED TO THE DATABASE.
+--         The only object written live is the read-only snapshot table
+--         `_bak.audit_log_v2_country_v579` (183 rows, see PART 6). No policy, no
+--         trigger, no column value on audit_log_v2 was changed.
+-- Project: jhssdmeruxtrlqnwfksc (org Company A 00000000-0000-0000-0000-000000000001)
+-- Date measured: 2026-08-17. Row count at measurement: 503,405.
+--
+-- =====================================================================================
+-- PART 0 - **READ THIS FIRST: A COUNTRY POLICY WENT LIVE MID-ASSESSMENT (V578) AND IT
+--          DOES NOT CLOSE THE LEAK. THE TABLE NOW READS AS SCOPED AND IS NOT.**
+-- =====================================================================================
+-- While this assessment was in progress a sibling session applied:
+--
+--     audit_log_v2_country_isolation_v578   RESTRICTIVE FOR ALL, to authenticated
+--     USING ((country IS NULL)
+--            OR (SELECT is_super_admin())
+--            OR (SELECT app_sees_all_countries())
+--            OR (lower(btrim(country)) = ANY (COALESCE((SELECT app_country_scope()), '{}'))))
+--
+-- That predicate is CORRECT - it is byte-identical to the canonical one recommended in
+-- STEP 4 below, casing trap and super-admin term included. **It is also currently INERT.**
+--
+-- MEASURED AFTER V578 WAS LIVE, same impersonated KSA-only Manager 34793423:
+--     total readable          503,288   (was 503,288 - unchanged)
+--     UAE rows still visible   17,981   (was  17,981 - unchanged)
+--     Egypt rows still visible 13,631   (was  13,631 - unchanged)
+--
+-- NOT ONE ROW WAS CLOSED. The reason is the first term: `country IS NULL` is TRUE on
+-- 503,222 of 503,405 rows, because nothing has ever populated audit_log_v2.country. Every
+-- leaking row satisfies the null-dimension term and passes. V578 scopes exactly the 183
+-- rows that already carried a country.
+--
+-- THIS IS THE "HALF A BOUNDARY READS AS A CLOSED ONE" FAILURE MODE (V396 / V550 / V573),
+-- and it is now the most dangerous state this table has been in: a reviewer enumerating
+-- policies sees a country_isolation policy on audit_log_v2 and concludes the country wall
+-- is closed. A token grep clears it. Only impersonation shows the truth. The V554 lesson
+-- applies verbatim - probe by impersonation, never by grep.
+--
+-- CONSEQUENCE FOR THIS FILE: the POLICY half of the fix is DONE (V578). The ONLY missing
+-- half is ATTRIBUTION - STEP 1 (stamp country in the trigger going forward) and STEP 2
+-- (backfill the existing rows). Until one of those runs, V578 does nothing. STEP 3 (index)
+-- and STEP 4 (policy) can be skipped; STEP 4 is retained below only as the record of what
+-- V578 already installed, and it must NOT be applied a second time.
+--
+-- The owner decision is therefore narrower than it looks: not "should we add a policy"
+-- (one is already there) but "should we populate the attribution that makes the policy
+-- real, knowing it hides 39,979 rows of audit history from KSA-scoped Admins/Managers".
+--
+-- WHY NOT APPLIED: the fix is a VISIBILITY CHANGE IN THE DIRECTION OF HIDING, not a
+-- backfill. Today every country policy on this database reads `country IS NULL OR ...`,
+-- so a null-country row is visible to EVERYONE. Stamping a country on an audit row makes
+-- it invisible to users outside that country. Measured blast radius: a KSA-scoped
+-- Admin/Manager/Director loses 39,979 rows of audit history (503,288 -> 463,309).
+-- Hiding audit history is an owner decision, not an unattended one. The exact SQL is
+-- below, measured and ready; it needs a yes.
+--
+-- =====================================================================================
+-- PART 1 - THE PREMISE THIS TASK WAS RAISED ON WAS WRONG IN ONE IMPORTANT RESPECT
+-- =====================================================================================
+-- The standing note in PROJECT_MEMORY said audit_log_v2 has "no `organisation_id`
+-- column", so the ORG wall "cannot apply either". **That is false.** Measured live:
+--
+--   * The column exists. It is named `org_id`, NOT `organisation_id`. A grep for
+--     `organisation_id` finds nothing and reads as an absent tenant wall.
+--   * It is POPULATED on 503,329 of 503,405 rows (99.985%).
+--   * It IS enforced, by a RESTRICTIVE policy:
+--         audit_log_v2_org_isolation  [RESTRICTIVE, FOR ALL]
+--         USING (NOT (org_id IS DISTINCT FROM (SELECT app_current_org())))
+--   * That form is STRICTER than this codebase's usual convention: because it is
+--     `IS NOT DISTINCT FROM` rather than `= x OR x IS NULL`, a NULL-org row is HIDDEN
+--     from any user who has an org, instead of being shown to everyone. So the 76
+--     null-org rows leak to nobody.
+--
+-- CONSEQUENCE, PROVEN BY IMPERSONATION: the TENANT wall on this table HOLDS.
+--   Egypt-only Director a4fd5401 (org e340fa7a) reads **0 rows** from audit_log_v2,
+--   before and after any change. The 41 rows belonging to org b4a4ba35 are unreachable
+--   from Company A. There is NO cross-tenant disclosure here to close.
+--
+-- **Do not re-raise "audit_log_v2 has no org wall". It has one, spelled `org_id`.**
+--
+-- What is genuinely absent is the COUNTRY wall: there is no country policy of any kind
+-- on this table, and `country` is populated on only 183 of 503,405 rows. That is the
+-- real and confirmed defect, and it lives INSIDE one org.
+--
+-- =====================================================================================
+-- PART 2 - WHO CAN READ IT TODAY (enumerated, then impersonated - not inferred)
+-- =====================================================================================
+-- Grants: `authenticated` holds SELECT/INSERT/UPDATE/DELETE. RLS enabled,
+-- FORCE ROW LEVEL SECURITY **off** (so SECURITY DEFINER callers bypass all of this).
+--
+-- Policies (as measured BEFORE V578 landed; see PART 0 for the fourth, now-live policy):
+--   audit_log_v2_org_isolation  RESTRICTIVE FOR ALL   -> the tenant wall (PART 1)
+--   audit_log_v2_select         PERMISSIVE  FOR SELECT to authenticated
+--       USING ((SELECT get_my_role()) = ANY (ARRAY['Admin','Manager','Director'])
+--              OR (SELECT is_super_admin()))
+--   audit_v2_insert             PERMISSIVE  FOR INSERT
+--       WITH CHECK (auth.uid() IS NOT NULL AND user_id = auth.uid())
+--
+-- So the reader set is: role Admin | Manager | Director, or a super admin - bounded to
+-- their own org. MEASURED per real, approved, unlocked user:
+--
+--   super admin d2d43a5f (Anum, Admin, country NULL)           503,288 rows
+--   KSA-only Manager 34793423 (country {KSA})                  503,288 rows   <-- LEAK
+--   3-country user e864b410 (Tire Planning Engineer)                 0 rows
+--       ^ not in the Admin/Manager/Director set and not super, so the role gate in
+--         audit_log_v2_select already excludes them. They see nothing today.
+--   Egypt-only Director a4fd5401 (org e340fa7a)                      0 rows   <-- org wall
+--
+-- THE DECISIVE CONTROL, same impersonated session, same transaction: that KSA-only
+-- Manager's DIRECT reads of the audited tables are correctly walled -
+--   tyre_records  UAE 0 / Egypt 0 / KSA 8,147
+--   work_orders   UAE 0 / Egypt 0
+-- ...while through audit_log_v2 they read 31,612 foreign-country rows. The wall holds on
+-- the real tables and is absent in the log that copies them. This is the V574 class:
+-- a table that republishes rows whose own table is scoped.
+--
+-- MEASUREMENT DISCIPLINE: every count above was taken inside
+--   set_config('request.jwt.claims', ...) + set local role authenticated
+-- then `reset role` / privileged recount in the same transaction, and rolled back.
+-- A count taken only from inside an impersonated session counts what is READABLE, not
+-- what exists.
+--
+-- =====================================================================================
+-- PART 3 - WHAT THE PAYLOADS ACTUALLY CONTAIN (real values; and what they do NOT)
+-- =====================================================================================
+-- 31,614 rows carry a country IN THE PAYLOAD that is not KSA (17,983 UAE + 13,631 Egypt),
+-- across 3 tables: work_orders (14,978 UAE / 12,525 Egypt), tyre_records (2,463 / 593),
+-- vehicle_fleet (542 / 513).
+--
+-- DISCLOSED - real rows a KSA-only Manager can read today:
+--   UAE  work_orders  asset MP097  job card RM/RMJC/0155/26   site DUBAI  odometer 10,824
+--        description "385/65 R 22.5"      notes "REPLACE NEW TYRE"
+--   UAE  work_orders  asset TM536  job card RM/RMJC/0001/0226 site DUBAI  odometer 214,554
+--        description "Brake Light"        notes "BRALE LIGHT REPLACE"
+--   UAE  work_orders  asset TM514  job card RM/RMJC/0014/0326 site DUBAI  odometer 230,431
+--   UAE  tyre_records asset TM537  serial 25C8173965  size 315/80 R 22.5  position LHCO
+--   UAE  tyre_records asset TM537  serials 2434568629 / 25C8426984 / 25C8457269 /
+--                                          2520894980 / 25C8176026  (a full 6-wheel set)
+--   Free text is present on 9,172 foreign rows (5,014 UAE + 4,158 Egypt): maintenance
+--   descriptions and fitter notes, verbatim.
+--   Payload keys on foreign rows include: asset_no (31,614), tyre_serial (30,559),
+--   serial_no (3,833), work_order_no (27,503), site (31,614), region (4,111),
+--   odometer, vehicle_type, tyre_position, status, priority, work_type, notes,
+--   description, custom_data, organisation_id, created_by.
+--
+-- **NOT DISCLOSED - and stating this precisely matters, because overstating a hole
+-- invites a fix aimed at the wrong place (the V565/V576 lesson):**
+--   * MONEY IS NOT DISCLOSED. total_cost / parts_cost / labour_cost / tyre_cost /
+--     outside_repair_cost / lubricant_cost are present as KEYS but are 0.00 on **every
+--     one** of the 31,614 foreign rows (max_total_cost = 0.00, nonzero count = 0).
+--     This is a property of the DATA, not of the log: on the same table KSA carries
+--     78,972 nonzero rows up to SAR 216,916.52. It corroborates the already-recorded
+--     V522 finding that UAE and Egypt job cards carry no cost columns.
+--   * NO PERSONAL NAMES. technician_name, driver_name and workshop_name appear as keys
+--     but are NULL on every foreign row (non-null count = 0).
+--   * No national IDs, no emails, no driver licences in these payloads.
+--
+-- So the honest characterisation is: a cross-country disclosure of OPERATIONAL
+-- IDENTIFIERS AND FREE TEXT - asset numbers, tyre serials, job card numbers, sites,
+-- odometer readings, maintenance notes - not of money or of people. That is still worth
+-- closing (V571/V572 treated serials and asset numbers as disclosure, and V574 closed
+-- tyre_price_backfill_log for exactly "serials, asset numbers"), but it is NOT the
+-- money-and-national-IDs scenario, and the fix should not be sold as one.
+--
+-- =====================================================================================
+-- PART 4 - IS ATTRIBUTION EVEN POSSIBLE? YES, ON 99.5% OF ROWS - THIS IS THE CRUX
+-- =====================================================================================
+-- You cannot scope what you cannot attribute, so this was settled before any fix was
+-- designed. Two independent signals, and they never contradict each other:
+--
+-- (a) THE PAYLOAD ITSELF. 316,937 rows carry `country` inside new_values/old_values.
+--     new_values->>'country' and old_values->>'country' DISAGREE on **0 of 503,405
+--     rows**, so the derivation rule is unambiguous - there is nothing to adjudicate.
+--
+-- (b) THE PARENT ROW, via table_name + record_id. Resolves the rows the payload cannot:
+--       work_orders   156,821 un-attributed -> 156,817 resolved (4 orphans)
+--       tyre_records   23,814 un-attributed ->  22,131 resolved (1,683 orphans)
+--       vehicle_fleet   4,275 un-attributed ->   4,266 resolved (9 orphans)
+--
+--     WHY so many rows lack a payload country - this is the mechanism, and it also
+--     dictates the fix: `trg_audit_row_change` stores only the CHANGED-KEYS DIFF on an
+--     UPDATE (it computes v_diff_old/v_diff_new from jsonb_each and keeps only keys
+--     where the value changed). A work order whose status changed logs {status,
+--     updated_at} and no country. It is not that the country was unavailable - the
+--     trigger HAS the full record in v_new/v_old before it diffs, and simply never
+--     stamped it.
+--
+-- PROJECTED ATTRIBUTION over all 503,405 rows (payload, then column, then parent join):
+--       KSA                                              460,802
+--       UAE                                               23,976
+--       Egypt                                             15,999
+--       ZZTEST (a test value already in the data)              6
+--       UNATTRIBUTABLE - parent deleted, must stay NULL     2,622  (0.52%)
+--
+-- A row that cannot be attributed stays NULL and therefore stays visible to everyone.
+-- No country is ever guessed. 2,622 rows is the honest, permanent residue.
+--
+-- HAZARD FOUND WHILE PROVING THIS, worth recording: `record_id` is TEXT and is not
+-- always a uuid - `WO-2026-00003` is a live value. A join must guard the cast with a
+-- CASE expression, because `... AND record_id ~ '<uuid regex>' AND id = record_id::uuid`
+-- DOES NOT PROTECT IT: the planner may evaluate the cast before the regex, and it threw
+-- `22P02 invalid input syntax for type uuid` on exactly that shape during this work.
+-- Only CASE guarantees ordered evaluation. **This alone disqualifies a join-based RLS
+-- policy** - an unguarded cast inside a policy would not merely be slow, it would throw
+-- and take down every read of the table.
+--
+-- =====================================================================================
+-- PART 5 - WHAT READS IT, AND WHETHER HIDING BREAKS ANYTHING
+-- =====================================================================================
+-- CLIENT (src/) - five consumers, and note the first is NOT console-only:
+--   1. src/pages/AuditTrail.jsx          route `/audit`, ModuleRoute moduleKey="audit_trail".
+--                                        Uses select('*'), so old_values/new_values ARE
+--                                        pulled into the browser. `audit_trail` is enabled
+--                                        for Admin, Manager, Insurance Officer, Integration
+--                                        Admin, PMV Manager, Tire Planning Engineer and
+--                                        Workshop Area Manager - but only Admin/Manager/
+--                                        Director pass the RLS role gate, so the others
+--                                        reach the page and get 0 rows. A KSA-only Manager
+--                                        passes both. **The disclosure is live and
+--                                        reachable in the product, not theoretical.**
+--   2. src/console/pages/ConsoleAuditTrail.jsx  /console/audit-trail, super-admin only,
+--                                        via src/lib/api/auditTrail.js. DATA_AUDIT_COLS
+--                                        selects old_values,new_values and it is the
+--                                        before/after diff viewer (canDiff).
+--   3. src/lib/securityCenter.js         LOGIN/LOGOUT history + security event feed.
+--   4. src/lib/tenantHealth.js           30-day events/day, active users, top tables.
+--   5. src/lib/audit.js / auditLogger.js writers only.
+--
+-- DATABASE - every consumer is SECURITY DEFINER, and FORCE RLS is off, so none of them
+-- is affected by a policy added for `authenticated`:
+--   cron_purge_audit_logs  DEFINER, DELETEs by created_at (a SELECT policy does not
+--                          govern DELETE, so retention keeps working)
+--   trg_audit_row_change / record_audit_event / _log_scrap_action   DEFINER, INSERT
+--   log_accident_change / log_inspection_change                     DEFINER
+--   _data_cleanup_spec     returns a safelist spec; reads no rows
+--
+-- WOULD HIDING BREAK A WORKING SURFACE? Checked directly, because V574's `sites` lesson
+-- is that a policy which silently hides a real record is worse than the leak it closes:
+--   * The SECURITY / LOGIN feed is UNAFFECTED. Of the non-`db.%` actions, LOGIN (20),
+--     LOGOUT (17), org_branding_update (8), stock_movement (2) and UPDATE (1) derive NO
+--     country at all, so they stay NULL and stay visible to every reader. Only
+--     tyre_scrap (183) and CREATE (1) would become scoped.
+--   * The console diff viewer is super-admin only and the predicate's is_super_admin()
+--     term leaves it at 503,288 rows - unchanged.
+--   * tenantHealth's 30-day counts WOULD drop for a KSA-scoped reader by that reader's
+--     foreign share. That is a real change in a reported number. It is arguably the
+--     correct number, but it is a change and the owner should expect it.
+--
+-- MEASURED BEFORE -> AFTER, per real user, computed against the projected attribution
+-- (read-only; nothing written):
+--
+--   super admin d2d43a5f (Anum)              503,288 -> 503,288    unchanged
+--   KSA-only Manager 34793423                503,288 -> 463,309    **-39,979**
+--   3-country Tire Planning Engineer e864b410      0 ->       0    role gate, unchanged
+--   Egypt-only Director a4fd5401                   0 ->       0    org wall, unchanged
+--
+-- The -39,979 is exactly the UAE + Egypt + ZZTEST rows in Company A. The super admin
+-- being unchanged is the load-bearing check: see the trap in PART 6.
+--
+-- =====================================================================================
+-- PART 6 - THE FIX, MEASURED AND READY, DELIBERATELY NOT APPLIED
+-- =====================================================================================
+-- OPTIONS CONSIDERED, with reasons:
+--
+--  (A) Narrow the READ policy to is_super_admin(). REJECTED. It is the cheapest change
+--      but the most destructive: `/audit` is a main-app page whose module is enabled for
+--      Manager, and securityCenter's login history is consumed by Admins. This would
+--      remove 503,288 rows from every Admin and Manager to hide 39,979 - it breaks four
+--      working surfaces to close one hole.
+--
+--  (B) Scope by a per-row join on table_name/record_id. REJECTED on two counts: the uuid
+--      cast hazard in PART 4 would throw inside the policy and break all reads, and a
+--      correlated join per row on a 503k-row / 556 MB table is the V576 failure mode
+--      (an 8-row lateral there cost 1.9 ms per row).
+--
+--  (C) Attribute once into the existing `country` column, stamp it going forward in the
+--      trigger, and add the standard cheap country policy. RECOMMENDED. The policy then
+--      reads a plain indexed column - no jsonb, no join, no per-row I/O - and the
+--      attribution work happens once instead of on every read.
+--
+-- COST NOTE on (C), since V499 is the relevant precedent: V499 refused to backfill 485k
+-- actor rows because it would ASSERT A PROVENANCE NOBODY MEASURED. That objection does
+-- not apply here - this country is MEASURED, from the row's own payload or its own parent
+-- row, it is filled only where derivable, and the two signals never disagree (0/503,405).
+-- The trigger cost objection also does not apply: the stamp is two `->>` reads off a
+-- jsonb the trigger has ALREADY built (v_new/v_old), with no extra query. V499's "71% of
+-- the insert cost on work_orders" is the cost of the audit trigger EXISTING, not of
+-- adding two field reads to it.
+--
+-- OPERATIONAL WARNING for whoever applies this: the backfill UPDATE does NOT fit a 60s
+-- window. A single 120,000-row batch was attempted during this assessment and timed out;
+-- it ROLLED BACK cleanly (verified: country non-null still 183, i.e. nothing landed).
+-- Batch it, drive each batch off an indexed predicate, and re-verify the count after
+-- every batch rather than trusting that a timeout meant failure - on this database a
+-- timed-out UPDATE has previously COMMITTED server-side.
+--
+-- -------------------------------------------------------------------------------------
+-- ALREADY DONE LIVE (the only live write from this assessment): the rollback snapshot.
+-- 183 rows = every row that already carried a country before any change. Every statement
+-- below is guarded `country IS NULL`, so these 183 can never be overwritten.
+-- -------------------------------------------------------------------------------------
+-- create schema if not exists _bak;
+-- drop table if exists _bak.audit_log_v2_country_v579;
+-- create table _bak.audit_log_v2_country_v579 as
+--   select id, country as prior_country from public.audit_log_v2 where country is not null;
+-- -- verified: 183 rows.
+
+-- -------------------------------------------------------------------------------------
+-- STEP 1  Stamp country/site at write time. Anchored replacement on the LIVE definition
+--         with an exact-count abort - the body is never retyped. Stamps from the FULL
+--         record (v_new/v_old), NOT from the diff, which is the whole point: the diff is
+--         why 185,836 rows have no country today.
+-- -------------------------------------------------------------------------------------
+-- DO $$
+-- DECLARE src text; out text; a1 text; a2 text; a3 text;
+-- BEGIN
+--   src := pg_get_functiondef('public.trg_audit_row_change()'::regprocedure);
+--
+--   a1 := '  v_rid := COALESCE(v_new ->> ''id'', v_old ->> ''id'');';
+--   a2 := '     old_values, new_values, actor_type, actor_detail)';
+--   a3 := '     ''db.'' || lower(TG_OP), TG_TABLE_NAME, v_rid, v_diff_old, v_diff_new,';
+--
+--   IF (length(src) - length(replace(src, a1, ''))) / length(a1) <> 1
+--      OR (length(src) - length(replace(src, a2, ''))) / length(a2) <> 1
+--      OR (length(src) - length(replace(src, a3, ''))) / length(a3) <> 1
+--   THEN RAISE EXCEPTION 'V579 abort: anchor not found exactly once; definition drifted';
+--   END IF;
+--
+--   out := replace(src, a1, a1 || E'\n' ||
+--     '  -- V579: attribute the row from the FULL record, never the diff.' || E'\n' ||
+--     '  v_country := NULLIF(btrim(COALESCE(v_new ->> ''country'', v_old ->> ''country'')), '''');' || E'\n' ||
+--     '  v_site    := NULLIF(btrim(COALESCE(v_new ->> ''site'',    v_old ->> ''site'')),    '''');');
+--   out := replace(out, a2, '     old_values, new_values, actor_type, actor_detail, country, site)');
+--   out := replace(out, a3, a3 || E'\n' || '     v_actor, v_detail, v_country, v_site,');
+--   -- declare the two new variables beside the existing ones
+--   out := replace(out, '  v_label text;', '  v_label text;' || E'\n' ||
+--                                          '  v_country text;' || E'\n  v_site text;');
+--   -- drop the now-duplicated tail of the original VALUES list
+--   out := replace(out, E'     v_actor, v_detail, v_country, v_site,\n     v_actor, v_detail);',
+--                       E'     v_actor, v_detail, v_country, v_site);');
+--   EXECUTE out;
+-- END $$;
+-- -- CREATE OR REPLACE preserves SECURITY DEFINER, the pinned search_path and all grants.
+-- -- REGRESSION PROOF to run after: strip the added lines from the live definition and it
+-- -- must reproduce the pre-V579 text byte for byte.
+
+-- -------------------------------------------------------------------------------------
+-- STEP 2  Backfill, only where NULL, only where derivable. BATCH THIS (see warning).
+-- -------------------------------------------------------------------------------------
+-- -- 2a  from the payload (316,937 rows). Repeat until 0 rows affected.
+-- with batch as (
+--   select id from public.audit_log_v2
+--    where country is null
+--      and coalesce(new_values->>'country', old_values->>'country') is not null
+--    limit 25000
+-- )
+-- update public.audit_log_v2 a
+--    set country = nullif(btrim(coalesce(a.new_values->>'country', a.old_values->>'country')), '')
+--   from batch b
+--  where a.id = b.id and a.country is null;
+--
+-- -- 2b  from the parent row, per table. CASE-guarded cast (PART 4). Repeat per table.
+-- with batch as (
+--   select a.id, w.country as c
+--     from public.audit_log_v2 a
+--     join public.work_orders w
+--       on w.id = (case when a.record_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+--                       then a.record_id::uuid end)
+--    where a.table_name = 'work_orders' and a.country is null and w.country is not null
+--    limit 25000
+-- )
+-- update public.audit_log_v2 a set country = b.c
+--   from batch b where a.id = b.id and a.country is null;
+-- -- ...repeat for table_name = 'tyre_records' (join tyre_records) and 'vehicle_fleet'.
+--
+-- -- EXPECTED FINAL STATE: KSA 460,802 / UAE 23,976 / Egypt 15,999 / ZZTEST 6 /
+-- --                       NULL 2,622 (unattributable, stays visible to all).
+
+-- -------------------------------------------------------------------------------------
+-- STEP 3  Index the column the policy now reads.
+-- -------------------------------------------------------------------------------------
+-- create index if not exists idx_audit_log_v2_org_country_created
+--   on public.audit_log_v2 (org_id, country, created_at desc);
+-- -- The dominant read is `order by created_at desc limit N` under org+country scope.
+
+-- -------------------------------------------------------------------------------------
+-- STEP 4  **ALREADY INSTALLED BY V578 AS A RESTRICTIVE FOR ALL POLICY - DO NOT APPLY
+--         THIS AGAIN.** Retained verbatim as the record of what is live and of the two
+--         traps its predicate is built around. See PART 0: it is inert until STEP 1/2 run.
+--         (Original intent was SELECT-only, matching the V226/V269 convention that
+--         country scoping governs reads; V578 made it FOR ALL instead.)
+--         PREDICATE COPIED VERBATIM from the live tyre_records / parts_consumption /
+--         vehicle_fleet / material_master_v574 policies - NOT reinvented.
+-- -------------------------------------------------------------------------------------
+-- -- SUPERSEDED BY audit_log_v2_country_isolation_v578. Do not run.
+-- create policy audit_log_v2_country_isolation on public.audit_log_v2
+--   as restrictive for select to authenticated
+--   using (
+--     (country IS NULL)
+--     OR (SELECT public.is_super_admin())
+--     OR (SELECT public.app_sees_all_countries())
+--     OR (lower(btrim(country)) = ANY (COALESCE((SELECT public.app_country_scope()), '{}'::text[])))
+--   );
+--
+-- **TWO TRAPS THIS PREDICATE IS BUILT AROUND. VERIFIED LIVE, DO NOT "SIMPLIFY" EITHER
+--   TERM AWAY:**
+--   1. `app_sees_all_countries()` IS TRUE FOR NOBODY on this database, and the super
+--      admin's profiles.country is NULL so `app_country_scope()` returns `{}`. Measured:
+--        Anum (super)      is_super=true  sees_all=false  scope={}
+--        KSA Manager       is_super=false sees_all=false  scope={ksa}
+--        Egypt Director    is_super=false sees_all=false  scope={egypt}
+--      A predicate built from the scope readers alone returns ZERO ROWS TO THE PLATFORM
+--      OWNER. The is_super_admin() term is what makes it correct.
+--   2. `app_country_scope()` RETURNS LOWERCASE (`ksa`, `egypt`) while this table's
+--      country values are `KSA` / `UAE` / `Egypt`. A bare `country = ANY(scope)` matches
+--      NOTHING and would return zero rows to EVERY scoped user - a total outage of the
+--      audit page dressed as a security fix. `lower(btrim(country))` is load-bearing.
+--   Written as `(select f())`, the zero-argument readers are uncorrelated subqueries
+--   hoisted to a once-per-query InitPlan (the V396 pattern). Do NOT substitute the
+--   row-argument `app_can_see_country(country)`: it takes the row value so it cannot be
+--   hoisted, and it is SECURITY DEFINER so it can never be inlined - a per-row profiles
+--   lookup across 503,405 rows.
+--
+-- =====================================================================================
+-- PART 7 - WHAT I DELIBERATELY DID NOT DO
+-- =====================================================================================
+--  * DID NOT redact, edit or delete any payload content. An audit trail that has been
+--    edited is not an audit trail. Nothing in the recommended fix touches old_values or
+--    new_values; it adds attribution metadata beside them.
+--  * DID NOT apply the backfill, the trigger change, the index or the policy. The
+--    per-user measurement shows this removes 39,979 rows of audit history from KSA-scoped
+--    Admins/Managers, which is an owner decision.
+--  * DID NOT narrow the read policy to super-admin (option A) - it would break `/audit`
+--    for every Admin and Manager.
+--  * DID NOT touch `is_admin_or_above()`. It compares lowercase to a Title Case role so
+--    it is false for everyone, and repairing it opens a cross-tenant hole on
+--    accident_audit_log. It stays broken and load-bearing.
+--  * DID NOT change any src/** file. The recommended fix needs no client change: the
+--    console viewer is super-admin (unaffected), and `/audit` keeps working with a
+--    correctly narrowed row set.
+--  * NOTED BUT OUT OF SCOPE - a separate finding worth its own migration: the INSERT
+--    policy `audit_v2_insert` is `auth.uid() IS NOT NULL AND user_id = auth.uid()`, and
+--    `authenticated` holds INSERT/UPDATE/DELETE on this table. Any authenticated user can
+--    therefore FORGE an audit row (and, subject to the org policy, tamper with the trail).
+--    That is a WRITE-side integrity problem, not the disclosure this file measures, and it
+--    is not fixed here. It is the same class as the forgeable
+--    `consume_event_accident_notify` in V553.
+--
+-- =====================================================================================
+-- PART 8 - ROLLBACK
+-- =====================================================================================
+-- Nothing to roll back today: no policy, trigger, index or country value was changed.
+-- To drop the snapshot table if this assessment is closed without acting:
+--     drop table if exists _bak.audit_log_v2_country_v579;
+--
+-- IF STEPS 1-4 ARE LATER APPLIED, the rollback is:
+--   -- 4. drop policy if exists audit_log_v2_country_isolation on public.audit_log_v2;
+--   -- 3. drop index if exists public.idx_audit_log_v2_org_country_created;
+--   -- 2. restore the column to its pre-V579 state - exact, because every fill was
+--   --    guarded `country IS NULL` and the 183 pre-existing values were snapshotted:
+--   --      update public.audit_log_v2 a set country = null
+--   --       where a.country is not null
+--   --         and not exists (select 1 from _bak.audit_log_v2_country_v579 b
+--   --                          where b.id = a.id);
+--   --      -- optional belt-and-braces: restore the 183 from the snapshot
+--   --      update public.audit_log_v2 a set country = b.prior_country
+--   --        from _bak.audit_log_v2_country_v579 b where b.id = a.id;
+--   -- 1. re-apply the pre-V579 body of trg_audit_row_change() (this file's STEP 1 is a
+--   --    textual transform of it, so reversing the three replacements reproduces it).
+--
+-- =====================================================================================
+-- THE ONE-LINE ANSWER FOR THE OWNER
+-- =====================================================================================
+-- The tenant wall on audit_log_v2 is intact - no other company's data is exposed. But
+-- inside Company A the audit log republishes 39,979 UAE and Egypt rows to KSA-scoped
+-- Admins and Managers - asset numbers, tyre serials, job card numbers, sites, odometers
+-- and fitter notes - which those same users are correctly refused on the real tables. No
+-- money and no personal names are in those payloads. The fix is measured and ready and
+-- costs one attribution pass; applying it hides 39,979 rows of audit history from
+-- KSA-scoped Admins and Managers, so it needs your yes.
+-- =====================================================================================

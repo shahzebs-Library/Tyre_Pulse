@@ -1,0 +1,271 @@
+-- =====================================================================================
+-- V580 — FORCE ROW LEVEL SECURITY: ASSESSMENT. **NOTHING APPLIED. NOTHING CHANGED.**
+-- Project jhssdmeruxtrlqnwfksc (org Company A). Date 2026-08-17.
+--
+-- STATUS: ASSESSMENT ONLY. This file executes NO DDL. It is the written record of a
+-- measured refusal. Every figure below was measured live; every behavioural claim was
+-- reproduced in a ROLLED-BACK transaction. No table was left with FORCE set.
+--
+-- =====================================================================================
+-- THE HEADLINE: THE RECORDED ROOT CAUSE IS MISATTRIBUTED, AND FORCE RLS IS A NO-OP HERE.
+-- =====================================================================================
+--
+-- ~30 migrations (V542-V576) record this root cause:
+--
+--   "A SECURITY DEFINER function runs as its OWNER, and no public table sets FORCE ROW
+--    LEVEL SECURITY, so RLS NEVER RUNS INSIDE ONE."
+--
+-- The CONSEQUENCE is true and the guards built on it were necessary. **The stated REASON
+-- is wrong.** RLS does not fail to run inside those functions because FORCE is off. It
+-- fails to run because the functions' owner holds the `BYPASSRLS` ROLE ATTRIBUTE, which
+-- is checked independently of FORCE and cannot be overridden by it.
+--
+--   pg_roles.rolbypassrls: postgres = TRUE, service_role = TRUE, supabase_admin = TRUE
+--   All 367 public tables    -> owner = postgres  (1 distinct owner, no exceptions)
+--   All 402 public SECURITY DEFINER functions -> owner = postgres
+--
+-- Therefore `ALTER TABLE ... FORCE ROW LEVEL SECURITY` on this database changes the
+-- behaviour of NOTHING AND NOBODY:
+--   * postgres / service_role are table owners AND hold BYPASSRLS -> bypass either way.
+--   * authenticated / anon are NOT owners and hold no BYPASSRLS -> already fully subject
+--     to RLS; FORCE is irrelevant to them.
+--   * There is no role on this database that is a table owner and lacks BYPASSRLS, which
+--     is the only population FORCE can affect.
+--
+-- FORCE RLS would not move the boundary back into the database. It would be a catalog
+-- write across 365 live tables that buys exactly zero security.
+--
+-- =====================================================================================
+-- HOW I KNOW — PROOF, NOT CITATION (both experiments rolled back)
+-- =====================================================================================
+--
+-- EXPERIMENT 1 (synthetic, mirrors production shape exactly: table owner = postgres,
+-- definer fn owner = postgres, RLS enabled with ZERO policies = deny-all):
+--
+--   probe, called as `authenticated`          FORCE off   FORCE on
+--   -------------------------------------------------------------
+--   direct read                                       0          0
+--   SECURITY INVOKER fn                               0          0
+--   SECURITY DEFINER fn (owner=postgres)              3        *3*   <-- NO-OP
+--   privileged recount after `reset role`             3          3   (ground truth: 3 rows exist)
+--
+-- EXPERIMENT 2 (THE CONTROL — identical structure, only the owner's BYPASSRLS differs.
+-- This is what isolates the variable and proves the mechanism):
+--
+--   definer fn owner = _v580_owner (NOBYPASSRLS)   FORCE off -> 3 rows
+--   definer fn owner = _v580_owner (NOBYPASSRLS)   FORCE on  -> *0 rows*   <-- FORCE BITES
+--   privileged recount                                        3 rows
+--
+-- Same table, same policy set, same call path. The ONLY difference is one role attribute.
+-- FORCE works when the owner lacks BYPASSRLS and is inert when it does not. Mechanism
+-- established behaviourally, not inferred from documentation.
+--
+-- EXPERIMENT 3 (IN SITU, real production tables, rolled back). FORCE turned ON for
+-- tyre_records, parts_consumption, vehicle_fleet, work_orders, report_shares, sites,
+-- production_logs, accidents; all four real users plus a LIVE anon share token measured
+-- before and after. **24 of 24 probes byte-identical:**
+--
+--   KSA-only Manager 34793423 (adnan, Manager, country={KSA}, Company A)
+--     tyre_records 8147 -> 8147 | parts_consumption 109019 -> 109019 | vehicle_fleet 1030 -> 1030
+--     report_tyre_summary md5 4bf3a783... -> 4bf3a783... | get_country_kpi md5 unchanged
+--   3-country user e864b410 (shah311, {KSA,UAE,Egypt})
+--     11193 -> 11193 | 209509 -> 209509 | 1617 -> 1617 | both definer md5 unchanged
+--   super admin d2d43a5f (shahzeb, is_super_admin, country NULL)
+--     11193 -> 11193 | 209509 -> 209509 | 1617 -> 1617 | both definer md5 unchanged
+--   Egypt-only Director a4fd5401 (Mahmoud, Director, org e340fa7a)
+--     0 -> 0 | 0 -> 0 | 0 -> 0 | both definer md5 unchanged  (the documented V551 state)
+--   ANON live share board rpt_fb773e73...  get_report_snapshot
+--     ok true -> true | kpis.fleet 1617 -> 1617 | kpis.tyres 11193 -> 11193
+--
+-- Scoped to 8 tables ON PURPOSE: ALTER TABLE takes ACCESS EXCLUSIVE, and holding that
+-- across 365 live tables risks stalling the running app even under rollback. lock_timeout
+-- was set to 5s so the probe could never queue behind live traffic. `profiles` excluded.
+--
+-- =====================================================================================
+-- WHAT WOULD BREAK — the register for the ONLY change that could deliver the benefit
+-- =====================================================================================
+--
+-- FORCE becomes meaningful only if table AND function ownership is ALSO reassigned to a
+-- role without BYPASSRLS. That is the real fix, and this is its measured blast radius:
+--
+--   402  SECURITY DEFINER functions in public (owner postgres), 348 executable by
+--        `authenticated`
+--   353  of those reference at least one RLS-enabled public table (lower bound; regex
+--        over prosrc, and static analysis is unreliable in BOTH directions per V551 —
+--        treat as a floor, not a census)
+--    54  are TRIGGER functions, 41 of which touch an RLS table. These fire on ordinary
+--        writes and bulk imports, where there is frequently no JWT at all.
+--    10  are anon-executable (exactly the V500 allowlist)
+--    10  active in-database pg_cron jobs, ALL running as `username = postgres`
+--
+-- CONFIRMED NO-JWT BEHAVIOUR (measured, request.jwt.claims cleared):
+--   app_can_see_country('KSA') -> FALSE     (definitive false, NOT null)
+--   app_can_see_country(NULL)  -> true      (null-dimension convention intact)
+--   app_current_org()          -> NULL
+--   app_sees_all_countries()   -> false
+--   app_country_scope()        -> {}        (empty scope grants NOTHING, per V309)
+--   is_super_admin()           -> false
+--   auth.uid()                 -> NULL
+--
+--   ==> The recorded rule "app_can_see_country returns NULL, so write `is not false`" is
+--       CONFIRMED STALE (V558 changed it). A no-JWT backend caller is now REFUSED, not
+--       failed open. Under an effective FORCE every path below returns nothing SILENTLY.
+--
+-- WOULD BREAK — ALL 10 anon-executable definer functions. auth.uid() is NULL inside them
+-- by definition, so every scope reader is false and every internal read returns zero:
+--   get_report_snapshot, get_report_tyre_maintenance, get_display_snapshot,
+--   get_workshop_snapshot, get_accident_portal_snapshot   (the 5 public/TV/portal boards)
+--   get_public_config                                     (pre-auth app config)
+--   get_email_by_identifier, login_attempt_status,
+--   record_login_failure, reset_login_attempts            (**SIGN-IN AND LOCKOUT**)
+-- An effective FORCE would therefore break AUTHENTICATION ITSELF, not merely reporting.
+-- This is the single strongest argument against the ownership-reassignment path.
+--
+-- WOULD BREAK — the 10 in-database cron jobs (no JWT, currently bypassing as postgres):
+--   process_domain_events (EVERY MINUTE — the whole event bus),
+--   deliver_workflow_notifications, deliver_pending_webhooks,
+--   escalate_overdue_workflow_steps, evaluate_alert_thresholds,
+--   generate_checklist_assignments, cron_run_backup, cron_purge_audit_logs,
+--   accident_sla_scan, cron_check_upload_gaps
+-- The 3 http_post jobs (send-scheduled-reports, embed-worker, sentry-crash-alert) call
+-- edge functions on the service_role key, which retains BYPASSRLS — unaffected.
+--
+-- WOULD BREAK — deliberate cross-boundary readers: holding_consolidated_kpis (a genuine
+-- cross-org rollup) and the `_cost_*` helpers (already revoked from authenticated/anon per
+-- the V378 pattern, so they run only from other definer functions).
+--
+-- HOW I KNOW the break set: the two premises are each measured — (1) the control
+-- experiment proves FORCE bites once the owner lacks BYPASSRLS, and (2) the no-JWT scope
+-- readers above return definitive false/empty. I did NOT reassign ownership of a live
+-- table to demonstrate it end to end: that needs ACCESS EXCLUSIVE plus a role change on
+-- production, and the inference from two measured premises does not justify the risk.
+-- Stated as a two-premise inference, not as an in-situ measurement.
+--
+-- =====================================================================================
+-- WHAT I APPLIED / WHAT I REFUSED
+-- =====================================================================================
+--
+-- APPLIED: NOTHING. Zero DDL. Verified after all probes: FORCE remains set on exactly
+--          the same 2 tables it was set on beforehand, and no probe artifacts survive
+--          (0 leftover _v580* tables, 0 functions, 0 roles).
+--
+-- REFUSED (1): FORCE on all 365 remaining tables. Proven no-op, so it cannot be the
+--   "safe subset where nothing breaks" — it is a subset where nothing CHANGES, which is
+--   not the same thing and is not worth 365 ACCESS EXCLUSIVE locks on a live database.
+--
+-- REFUSED (2): FORCE on any "safe" subset as defence-in-depth. This is the important
+--   refusal. It would be actively harmful for two reasons:
+--     (a) IT PLANTS A LANDMINE. The moment anyone later reassigns ownership to a
+--         non-BYPASSRLS role — i.e. does the real fix — FORCE would activate across 353
+--         definer functions, 41 trigger functions, 10 cron jobs and sign-in itself, all
+--         at once, with no warning. Same class as the `is_admin_or_above()` case already
+--         recorded: a dormant flag that detonates for the next person.
+--     (b) IT LIES. A future reader seeing relforcerowsecurity = true would reasonably
+--         conclude the definer-function hole is closed. It is not. A misattributed root
+--         cause is exactly what produced ~30 migrations of repeat work; making the
+--         catalog corroborate the wrong story would make that worse, not better.
+--
+-- REFUSED (3): removing FORCE from account_deletion_requests and support_sessions
+--   (set by V317/V318). They are equally no-ops, but they are harmless and documented;
+--   stripping them is churn. **They must NOT be cited as evidence that the boundary is
+--   closed on those tables — it is not. Their real protection is their policies.**
+--
+-- =====================================================================================
+-- RECOMMENDATION
+-- =====================================================================================
+--
+-- 1. DO NOT enable FORCE ROW LEVEL SECURITY on any table. It is a no-op on this database.
+--    Correct the recorded root cause instead: the reason RLS does not run inside a
+--    SECURITY DEFINER function here is that its owner (postgres) holds BYPASSRLS — not
+--    that FORCE is unset. Remove "FORCE RLS is off on every table" from the open-items
+--    list; it is not an actionable finding and has been standing as one for ~30 migrations.
+--
+-- 2. THE PER-FUNCTION GUARD DISCIPLINE OF V542-V576 IS NOT A WORKAROUND — IT IS THE
+--    ARCHITECTURE. Given BYPASSRLS ownership, a definer function re-asking org, country
+--    and site itself is the ONLY boundary available. The existing rule stands unchanged:
+--    a new SECURITY DEFINER function is not finished until it re-checks all three itself.
+--
+-- 3. Treat ownership reassignment as a LARGE, SEPARATE PROGRAMME, not a migration. It
+--    would break sign-in on day one (register above). If it is ever attempted, the order
+--    is: move the 10 anon paths and the 10 cron functions onto an explicitly
+--    BYPASSRLS-retaining owner FIRST, prove each, and only then reassign the rest — one
+--    table at a time, each with its own before/after proof. My judgement is that the
+--    cost/risk is not justified while the per-function guards hold.
+--
+-- 4. Cheaper and strictly better next step, if more assurance is wanted: keep probing by
+--    what a function TOUCHES (the V555 method that found what grep had cleared), since
+--    that is what actually finds unguarded definer functions. FORCE would not have found
+--    a single one of the V542-V576 holes.
+--
+-- =====================================================================================
+-- ROLLBACK
+-- =====================================================================================
+--
+-- Nothing was applied, so there is nothing to roll back.
+--
+-- Should FORCE ever be enabled on a table, the reversal is:
+--     ALTER TABLE public.<table> NO FORCE ROW LEVEL SECURITY;
+--
+-- To restore the exact state observed and left intact at V580 (FORCE on precisely two
+-- tables and no others), run:
+--
+--     DO $$
+--     DECLARE r record;
+--     BEGIN
+--       FOR r IN
+--         SELECT c.relname
+--         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+--         WHERE c.relkind = 'r' AND n.nspname = 'public'
+--           AND c.relforcerowsecurity
+--           AND c.relname NOT IN ('account_deletion_requests','support_sessions')
+--       LOOP
+--         EXECUTE format('ALTER TABLE public.%I NO FORCE ROW LEVEL SECURITY', r.relname);
+--       END LOOP;
+--     END $$;
+--
+-- Verification query (expects 2 / "account_deletion_requests, support_sessions"):
+--
+--     SELECT count(*) AS force_on,
+--            string_agg(c.relname, ', ' ORDER BY c.relname) AS which
+--     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+--     WHERE c.relkind = 'r' AND n.nspname = 'public' AND c.relforcerowsecurity;
+--
+-- =====================================================================================
+-- INCIDENTAL FINDINGS (measured while sweeping; NOT fixed here, NOT my migration's scope)
+-- =====================================================================================
+--
+-- A. "FORCE RLS is off on EVERY table" was already FALSE before this assessment.
+--    account_deletion_requests (V317) and support_sessions (V318) have carried
+--    relforcerowsecurity = true. Both are no-ops for the reason proven above. The claim
+--    should be corrected wherever it is recorded.
+--
+-- B. A NEAR-MISS FALSE POSITIVE OF MY OWN, recorded because the method matters more than
+--    the result. My first in-situ pass showed the KSA-only Manager, the 3-country user and
+--    the super admin returning a BYTE-IDENTICAL get_country_kpi md5 — the exact signature
+--    of a V549-class all-countries leak. It was my measurement, not a hole:
+--    get_country_kpi is SET-RETURNING, and casting it in scalar context silently captured
+--    only the FIRST ROW for everyone. Counted properly by row:
+--        KSA-only Manager -> 1 row  (KSA)
+--        3-country user   -> 3 rows (Egypt, KSA, UAE)
+--        super admin      -> 3 rows (Egypt, KSA, UAE)
+--        Egypt Director   -> 0 rows
+--    The V549 guard HOLDS and get_country_kpi is correctly bounded. Do not re-raise it.
+--    RULE: never md5 or scalar-cast a set-returning function to compare users — count the
+--    rows. Overstating a hole aims the fix at the wrong place (the V561 lesson).
+--
+-- C. `_bak` holds 90 tables with RLS DISABLED (including financial-ledger snapshots), as
+--    do backups / data_cleanup_backups / erp_promote_bak. VERIFIED NOT REACHABLE: neither
+--    `authenticated` nor `anon` has USAGE on those schemas and there are 0 table grants to
+--    app roles, so the boundary there is the SCHEMA GRANT, not RLS. Not a finding — noted
+--    so the next sweep does not raise it. Note this also means the recorded claim that the
+--    _bak snapshots are "deny-all via RLS with zero policies" is inaccurate as to
+--    mechanism; they are grant-walled.
+--
+-- D. Platform schemas owned by NON-BYPASSRLS roles (auth 23 tables /
+--    supabase_auth_admin, storage 8 / supabase_storage_admin, realtime, supabase_functions)
+--    are the only places FORCE could bite on this instance. They are Supabase-managed and
+--    out of scope — do NOT set FORCE there.
+--
+-- =====================================================================================
+-- No DDL follows. This file is intentionally inert.
+-- =====================================================================================

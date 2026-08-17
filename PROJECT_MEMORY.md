@@ -3,6 +3,135 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. Next free **V577**.
+Branch `claude/accident-builder-report-ui-2bkwb5`, merged to main. Full suite green. Migrations V555-V576 all
+applied live on `jhssdmeruxtrlqnwfksc` and verified; every header carries its own reproduction + rollback.
+
+### **THE ROOT CAUSE OF THE RECURRENCE: EVERY EARLIER SWEEP ENUMERATED BY ARGUMENT NAME**
+V545/V546 derived their population from `p_country`, V544 from `p_countries`, V554 from `p_site`. **An argument
+name describes the CALL, not the ROWS.** Every hole found on 08-17 lived outside the shape that had been
+searched. Both new sweeps enumerate by **what a function TOUCHES** (231 country-bearing relations -> 256 definer
+functions naming one -> 214 that actually SCAN one), and that is why they found what grep had cleared.
+- **`get_maint_tyre_split` mentions `is_super_admin` THREE TIMES and reads as guarded. Every one is V554's SITE
+  predicate; its country side was wide open.** A token grep clears it. Probe by impersonation, never by grep.
+- **PROBE BY NAMED ARGUMENT.** `get_report_snapshot_authed(p_from,p_to,p_site,p_country)` was reported as
+  "ignores its country argument" after a POSITIONAL probe put 'KSA' into `p_from`, where it failed to parse as a
+  date and an EXCEPTION handler swallowed it to NULL - so all four "different" calls were the same call. The
+  named-country guard was working the whole time; the real defect was only the all-scope path (V561).
+  **Overstating a hole is not harmless - the fix it invites is aimed at the wrong place.**
+
+### THE HOLES, by class (detail in each migration header)
+- **V555** four DESTRUCTIVE writes: `import_reverse_batch` let a KSA Manager reverse a UAE batch and the UAE tyre
+  went **1 -> 0** (reversal DELETES master rows; commit refused cross-country, its reversal sibling never did -
+  so the import gap is **NOT** bounded to staging). Plus `unscrap_tyre_by_serial`, `brain_classify_cached`
+  (cross-ORG cache write), `tyre_learn_confirm` (country-NULL fact later branded a UAE tyre).
+- **V556** all-countries path, 3rd occurrence: **40 of 54 zero-argument reports returned a byte-identical md5 to
+  the super admin's** - another country's site spend, the whole 1,617-asset fleet against KSA's 1,030, 107 kB of
+  cross-country tyre rows, and a `material_master_coverage` of 134,024,987.89 which is SAR+AED+EGP added.
+- **V557/V560** site, re-enumerated by body: 20 + 7 more. `reference_site_options` 40+ sites -> NHC alone.
+- **V558** `app_can_see_country` + `import_user_can_commit_country` bypassed for `app_is_org_admin()` = super OR
+  **plain admin**. Reproduced by promoting the real Manager to plain Admin (acting AS a super admin so
+  `trg_guard_profile_privileged` passes - **no trigger disabled, no ACCESS EXCLUSIVE lock**): 1 -> 3 country rows,
+  and `run_quality_checks('UAE')` WROTE 10 UAE rows.
+- **V559/V562/V563/V564/V565/V566/V567** the writers. Worst: `tyre_price_backfill_undo` stripped **AED 424,467.79
+  from 568 UAE tyres AND deleted the undo-log rows**, so the prior values went with them. `apply_tyre_change`
+  INSERTED a row **stamped UAE from the payload** (V542 injection, reopened through a definer path).
+  `material_master_set_bulk` rewrote UAE item `310673-O` (**321 lines / AED 757,400**) from tyre to capital and
+  restamped `reviewed_by` to the attacker. The three ERP promoters **guarded the DECLARED country while the write
+  used a DERIVED one** - stage a country-less row and the asset/job-card PREFIX picks the destination.
+- **V569** the five V556 measured but would not guess at. `get_asset_master` 389 rows naming UAE, 93 Egypt, 239
+  spanning countries. **`holding_consolidated_kpis` was DECIDED, not reflexed**: it IS a cross-org rollup, but all
+  four orgs have `parent_organisation_id` NULL and it reports `subsidiary_count: 0` - it consolidates nothing, so
+  the guard scopes rows INSIDE each subsidiary and never the subsidiary list.
+- **V571** the ~43 readers reachable ONLY WITH ARGUMENTS, which no sweep had probed. The instructive pair:
+  `check_duplicate_serials` hands over 7 foreign tyre rows **including the row UUIDs**, and
+  `get_record_provenance` then turns one of those UUIDs into the whole row (`cost_per_tyre 14,035.09`).
+- **V572** the largest disclosure, and **no role gate beyond org**: `get_cost_per_m3` gave a **Tyre Man**
+  grand_total **142,281,417.40** against KSA's 44,901,926 - blended SAR+AED+EGP, divided by KSA-only production,
+  and labelled **"AED"** to a KSA-only user because the currency came from an unordered `limit 1`.
+- **V573 CORRECTS V550 + V562, BOTH MINE.** V550 scoped the `tyre_records` UPDATE and not the
+  `tyre_status_marks` INSERT; V562 then guarded `set_scrap_reason` with `country is null or ...` **and that guard
+  was DEFEATED by the V550 gap**, because the mark stamped country from `p_country` = NULL when omitted, and NULL
+  satisfies the null term. **The null-dimension convention is right for READS and wrong for a value an attacker
+  controls.** It also returned `ok:true` with `updated:0`.
+- **V574 REFUTES "RLS ITSELF WAS NEVER AT FAULT"** - that was only ever tested on four tables. Six leaked foreign
+  rows on a **direct read, no function involved**: classification_feedback 12,720, material_master 12,719,
+  tyre_price_backfill_log 972 (**serials, asset numbers, per-tyre prices**), sites 23, parts_cost_fill_log 2,
+  tyre_life_targets 1. V501 had dismissed them as "org-walled", conflating the ORG wall with the COUNTRY wall.
+  **One data fix had to come FIRST**: `sites` held a `'Saudi Arabia'` row no scope matches, so a policy would have
+  silently HIDDEN a site; it is a genuine duplicate of the KSA RIY-MET row.
+
+### **DISMISSALS WITH EVIDENCE - worth more than the fixes, do NOT re-raise these**
+- **V565's assigned attack DID NOT EXIST**: the cost writers gate on `app_is_org_admin()`, not `app_is_elevated()`,
+  so a Manager is refused. Exactly 2 accounts pass, both super admins, **0 plain Admins**. But it found a worse
+  live defect the country guard does NOT fix: `cost_apply_actual_budgets` grouped by `asset_no` with no country
+  term, so **114 of 701 rows got a budget that is entirely another country's money** - two UAE machines at ~95,757
+  each derived from EGP, ~13x - written into the column the app raises budget-breach alerts from.
+- **`broadcast_audience` dismissed** - not because `country` is `text[]`, but because the same Manager already
+  reads all 37 profiles under RLS, and guarding it would silently drop 6 colleagues from safety broadcasts.
+- **`import_batch_country` LEAKS AND MUST STAY**: it feeds `import_rows_country_isolation` as
+  `import_user_can_commit_country(import_batch_country(id))`, which begins `p_country IS NULL OR ...`. Measured:
+  'Egypt' -> false (deny), **null -> TRUE (allow)**. Guarding it flips the policy from DENY to ALLOW. Two
+  independent agents reached this separately.
+- **`backfill_tyre_prices_from_grid` REVOKED, not guarded** - no caller anywhere, and V327's formula writes a
+  LINE total as the PER-TYRE price (20 tyres at AED 14,000 -> 14,000 each).
+- **The all-sites path is CLOSED** (the standing open item): a narrowed user got 1,963,970.54 against the super
+  admin's 6,079,607.38. **`app_can_see_country` no longer returns NULL without a JWT** (V558 changed it), so the
+  recorded "use `is not false`" rule is **STALE** and no longer protects a backend caller.
+- **`is_admin_or_above()` is still load-bearing by accident and was NOT "fixed"** - verified.
+
+### **NAV VISIBILITY vs ROUTE ACCESS - 20 routes were REACHABLE, not merely visible**
+`shouldShowNavItem` ends in a bare `return true`, so an item with no NAV_MODULE_KEY, no `adminOnly`, no `roles`
+and no `flag` shows to EVERY role. Audited all 210: **22 were in that state and 20 of their routes had NO guard at
+all** - `/data-intake` (bulk import), `/scheduled-reports` (emails arbitrary recipients), `/claims-summary`,
+`/contracts`, `/certifications`, procurement. Fixed in BOTH places (11 routes + 12 nav items); hiding a sidebar
+item is not access control. Left open deliberately: `/settings`, `/help`, the operational tyre/inspection screens,
+and `/scrap` (deliberately opened to Tyre Data Collectors).
+**NEW `src/test/navRouteAccessParity.test.js` pins BOTH directions** and **caught `/incidents` and
+`/insurance-claims` after I had already made my fixes**. It READS SOURCE deliberately: `NAV_CATALOG` is exported
+icon-free and DROPS adminOnly/roles/flag, so a test importing it would check nothing while appearing to pass.
+
+### **THE RUNNING-LIFE SLOWDOWN: AN 8-ROW TABLE'S RLS RAN PER ROW (V575/V576 + client)**
+Owner: the tyre-change flag and Running & Remaining are slow and often error. One cause.
+- **Timing was FLAT with page size** - `limit 1` 7,800 ms, `limit 1000` 7,589 ms - so V523's paging fixed a
+  dropped 2.2 MB payload and made the WALL CLOCK 4x worse: each page pays the whole cost again, ~30 s, and past a
+  gateway timeout that is the error being reported.
+- **THE PLAN: `Nested Loop 3,518 rows 7,138 ms` with the Hash Join beneath at 306 ms** = 1.9 ms PER ROW in the
+  LATERAL against `tyre_life_targets`, **which holds EIGHT rows**. An InitPlan inside a LATERAL is re-planned per
+  invocation, so three policies' DEFINER helpers each ran ~3,518 times. **V576 materialises those 8 rows once:
+  7,589 -> 3,832 ms**, equivalence ENFORCED (four parameter combinations hashed before/after, abort on any diff).
+- **TWO MEASUREMENT ERRORS OF MINE, both corrected before concluding**: referencing the function result more than
+  once RE-EXECUTES it (inflated timing), and an EXPLAIN without `set local role authenticated` **bypasses RLS**
+  (said 1,725 ms when the truth was 7,100).
+- **FOUR THINGS TRIED AND DISCARDED - do not repeat**: `PARALLEL SAFE` on tyre_size_key/cpk_unit_for_asset_type
+  (V575) is objectively correct and gave **NO measurable gain** (marking permits a parallel plan, it does not
+  force one - the V536 caveat); InitPlan-wrapping `tyre_life_targets_read` gave 7,370 -> 6,021 **alone** but
+  nothing once the lateral is materialised, so it was NOT applied; **pre-aggregating the two engine_hours
+  correlated subqueries is SLOWER (15 ms vs 55 ms)**; and V574's new policy was refuted as the cause (7,419 vs
+  7,401 with it dropped).
+- **CLIENT: the pages are now fetched CONCURRENTLY** (`src/lib/api/tyreRunningLife.js`), page 0 alone because its
+  `total` says how many more, then bounded windows of 4, reassembled BY OFFSET. One bad page fails the whole read.
+  `src/test/tyreRunningLifePaging.test.js` pins overlap-in-time, ordering under a slow page, and fail-whole-read -
+  and the concurrency assertion was **MUTATION-TESTED** (forcing the window to 1 makes it fail).
+- **The flag was ALREADY on the cheap path** - `loadTyreChangeTracking` passes `dueOnly:true` (2.5 s / 424 rows)
+  and the PDF passes a single asset. My earlier suggestion to change it was wrong.
+- **STILL SLOW, stated plainly**: ~3.8 s a page. A `Nested Loop` of ~1.7 s remains whose CHILDREN account for only
+  ~250 ms, so the residue is per-row EXPRESSION evaluation attributed to the node itself. The structural fix is to
+  precompute the fleet baseline (base_size/base_type) into a small table refreshed on tyre change - it is the same
+  for every caller in a country and is rebuilt on every call today.
+
+### OPEN
+- **~120 more tables share the shape V574 fixed but are EMPTY today** - armed, not leaking. A policy each,
+  deliberately, not a loop over 120 unmeasured tables.
+- **`audit_log_v2`**: 503,284 rows, country NULL on essentially all, **no `organisation_id` column**, and
+  `old_values`/`new_values` JSONB **UNMEASURED** for other tenants' field values.
+- **`FORCE ROW LEVEL SECURITY` is off on every table** - the stated root cause of the whole sweep, still true.
+- **14 accident RPCs used `x <> any(array[...])`, true for every value**, so they could never succeed. V568
+  addressed this; re-verify the accept/refuse proof before relying on it.
+- Owner decisions carried: the Egypt Director's org membership; `get_email_by_identifier` anon email oracle (free
+  mitigations not taken - rename the super-admin username, enable 2FA); whether the two blended scalar totals
+  should become per-currency (a CLIENT CONTRACT change, deliberately not slipped into a security migration).
+
 ## SESSION 2026-08-16 (part 2) - THE SECURITY DEFINER SWEEP: EIGHT HOLES, EVERY ONE REPRODUCED (V545-V553). Next free **V554**.
 Continues the shell session below. Branch `claude/accident-builder-report-ui-2bkwb5`; **everything is now MERGED -
 branch == origin/main == `148fa223`**, which SUPERSEDES the part-1 note that nothing was merged and production was

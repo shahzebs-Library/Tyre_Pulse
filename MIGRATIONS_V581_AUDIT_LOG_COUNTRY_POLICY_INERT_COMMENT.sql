@@ -1,0 +1,80 @@
+-- =====================================================================================
+-- V581 - V578's COUNTRY POLICY ON audit_log_v2 CLOSES NOTHING. SAY SO IN THE CATALOG.
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v581_audit_log_country_policy_is_inert_comment`. NO behaviour change - a COMMENT only.
+-- =====================================================================================
+--
+-- THIS CORRECTS V578, WHICH IS MINE FROM THE SAME DAY.
+--
+-- V578 scoped `audit_log_v2` on the reasoning that the feared failure mode did not exist
+-- (every audit writer is DEFINER owned by a rolbypassrls role, so a WITH CHECK can never
+-- be swallowed by the trigger's exception tail and lose a row silently). That reasoning
+-- was sound. The conclusion it licensed was not: the policy is INERT.
+--
+-- THE PREDICATE'S FIRST TERM IS `country IS NULL`, AND country IS NULL ON 503,222 OF
+-- 503,405 ROWS. So every leaking row passes it. It scopes 183 rows.
+--
+-- RE-MEASURED AFTER V578 WAS APPLIED, as the real approved KSA-only Manager 34793423:
+--   readable rows                                                       503,288
+--   of which the payload names UAE or Egypt   31,618  (17,981 + 13,631)
+--   the same user's DIRECT tyre_records UAE read, same transaction            0
+--
+-- So the wall holds on the real table and is absent in the log that copies it - and after
+-- V578 the catalog says otherwise.
+--
+--
+-- WHY A COMMENT AND NOT A DROP, AND NOT A REAL FIX
+--
+-- The policy is KEPT because it is correct and becomes effective the moment the country
+-- column is attributed, and because its WITH CHECK does bound a future write that carries
+-- a country. Dropping it would lose both and buy nothing.
+--
+-- The real fix is measured and ready in MIGRATIONS_V579_AUDIT_LOG_V2_COUNTRY_ATTRIBUTION
+-- .sql and is DELIBERATELY NOT APPLIED: attributing the column HIDES 39,979 rows of audit
+-- history from a KSA-scoped Admin/Manager/Director (503,288 -> 463,309) and drops
+-- tenantHealth's 30-day counts with it. Hiding audit history is the owner's call.
+--
+-- So the gap between "there is a country policy on this table" and "the country boundary
+-- on this table works" will stand until that decision is made. **Anyone enumerating
+-- pg_policies would close that gap in their head the wrong way.** That is the failure mode
+-- this project has already been bitten by and named - half a boundary reads as a closed
+-- one (V396), and V580 refused FORCE RLS partly on the same ground: do not make the
+-- catalog corroborate a story that is not true.
+--
+-- A comment is the cheapest honest fix. No behaviour change, and the caveat travels WITH
+-- THE OBJECT rather than living only in a migration file nobody greps. It names the
+-- numbers, points at V579, and states plainly that the TENANT wall on this table DOES
+-- hold (via `org_id` - see V579, the column is not called `organisation_id`).
+--
+--
+-- ALSO MEASURED HERE, because V579 raised it and was HALF WRONG - and overstating a hole
+-- invites a fix aimed at the wrong place:
+--
+--   "any authenticated user can forge or tamper with audit rows"
+--
+--   TAMPER / ERASE: REFUSED. As the KSA-only Manager, in rolled-back transactions,
+--     UPDATE ... where action='LOGIN'  ->  0 rows
+--     DELETE ... where action='LOGIN'  ->  0 rows
+--   There is no permissive UPDATE or DELETE policy on the table, so RLS denies both even
+--   though `authenticated` holds the GRANT. Existing audit history cannot be altered.
+--
+--   FORGE: ALLOWED, but bounded three ways. A self-attributed row in their own org
+--   inserts (verified: 1 row). It CANNOT be attributed to another user
+--   (audit_v2_insert requires user_id = auth.uid()), it cannot carry another org
+--   (audit_log_v2_org_isolation is RESTRICTIVE FOR ALL, and an omitted org_id defaults to
+--   NULL which its IS NOT DISTINCT FROM form REFUSES - observed), and now it cannot carry
+--   a foreign country (V578's WITH CHECK).
+--
+--   NOT FIXED, deliberately: the INSERT grant is LOAD-BEARING. `src/lib/auditLogger.js`
+--   inserts into this table directly as the signed-in user - that is where the LOGIN row
+--   on every sign-in comes from (AuthContext.jsx `audit.login()`). Revoking INSERT breaks
+--   login history. The real fix is moving that client write behind a SECURITY DEFINER RPC,
+--   which is an authentication-path change and not one to make unattended on a live
+--   system. So the residue is audit POLLUTION under the actor's own name, not
+--   impersonation and not tampering.
+--
+-- ROLLBACK:
+--   comment on policy audit_log_v2_country_isolation_v578 on public.audit_log_v2 is null;
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above: a guard that aborts unless
+--  the V578 policy exists, the COMMENT, and an assertion that the comment attached.)

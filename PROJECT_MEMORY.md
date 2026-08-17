@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. Next free **V577**.
+## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. SUPERSEDED: next free is **V582** (see part 2 below).
 Branch `claude/accident-builder-report-ui-2bkwb5`, merged to main. Full suite green. Migrations V555-V576 all
 applied live on `jhssdmeruxtrlqnwfksc` and verified; every header carries its own reproduction + rollback.
 
@@ -115,17 +115,149 @@ Owner: the tyre-change flag and Running & Remaining are slow and often error. On
   and the concurrency assertion was **MUTATION-TESTED** (forcing the window to 1 makes it fail).
 - **The flag was ALREADY on the cheap path** - `loadTyreChangeTracking` passes `dueOnly:true` (2.5 s / 424 rows)
   and the PDF passes a single asset. My earlier suggestion to change it was wrong.
-- **STILL SLOW, stated plainly**: ~3.8 s a page. A `Nested Loop` of ~1.7 s remains whose CHILDREN account for only
-  ~250 ms, so the residue is per-row EXPRESSION evaluation attributed to the node itself. The structural fix is to
-  precompute the fleet baseline (base_size/base_type) into a small table refreshed on tyre change - it is the same
-  for every caller in a country and is rebuilt on every call today.
+- **~3.8 s a page. RESOLVED BY V577 - and the "precompute the fleet baseline" plan recorded here was WRONG.**
+  See the V577 entry immediately below. The residue WAS per-row expression evaluation, correctly attributed, but
+  the expensive expressions are the two engine_hours subqueries being RE-EXECUTED, not the baseline (470 ms, and
+  it already materialises because `removed` is referenced twice).
+
+## SESSION 2026-08-17 (part 2) — V577-V581: THE ~1.7 s RESIDUE WAS EXPRESSION DUPLICATION, NOT THE BASELINE. Next free **V582**.
+Same branch. V577 + V578 APPLIED live; V579 + V580 are MEASURED REFUSALS with nothing applied. Suite 525 files /
+7,982 tests green. Every claim below was re-verified by hand against the live DB before being committed.
+
+### **V577 - ONE KEYWORD. THE CTE CHAIN RE-RAN TWO SUBQUERIES ~16 TIMES PER ROW.**
+Every CTE below `enriched` in `get_tyre_running_life` is referenced EXACTLY ONCE, so Postgres INLINES it, and
+**inlining COPIES an expression into each place it is referenced**: `hours_run` reads the two correlated
+`engine_hours_logs` subqueries 3x each, `rem_hours`/`used_hours_pct` read `hours_run` 5x, and `is_due` plus the
+final `select *` read those again. `scoped` IS materialised (referenced twice) but that barrier sits ABOVE the
+duplication so it does not stop it. Fix = **`enriched as materialized`**.
+- **4,675 ms -> 1,177 ms** as the real KSA-only Manager under RLS (warm re-measure 1,119 ms). The arithmetic
+  closes: whole call **380,317** shared buffers vs **40,611** for `enriched` alone, of which **22,602** are the
+  two subqueries; 22,602 x 15 = 339,030 against the observed 339,706 gap.
+- **EQUIVALENCE ENFORCED**: 9 (parameter, user) combinations hashed before/after with `generated_at` stripped,
+  all 9 byte-identical, and the Manager's UAE hash still differs from the super admin's - so the speedup did not
+  come from reading fewer rows.
+- **TWO CANDIDATES MEASURED AND REFUTED - do not re-raise**: the generic plan (a plain-SQL function's parameters
+  force one, and `(p_country is null or t.country = p_country)` looks like the culprit - tested with a PREPARE
+  executed six times: **357 ms**, index scans intact) and the baseline table itself.
+- **TWO MEASUREMENT ERRORS OF MINE, both easy to repeat.** (a) `select count(*) from enriched` does NOT evaluate
+  select-list scalar subqueries - it reported 472 ms and HID THE ENTIRE DEFECT; every column must be referenced.
+  (b) A timing harness `select ms from (select clock_timestamp() t0) s, lateral (select f(...) as n) r` returns
+  **0 ms** because `n` is unreferenced and the expression is skipped - the measured value MUST appear in the
+  output.
+- **STILL ~1.1 s a page, and it is honest work now**: the `removed` baseline (470 ms) plus one pass of the two
+  subqueries. The next lever, if ever needed, is the per-row `vehicle_fleet` index scan inside `removed` (12,505
+  buffers over 4,165 loops) - **NOT** a baseline table.
+
+### **V578 - THE ARMED TABLES. 102 SCOPED, 14 DISMISSED. THREE CORRECTIONS TO V574's PREMISE.**
+- **The population is 116, not ~120**: 215 tables carry a country column with RLS on + authenticated SELECT, 99
+  already had a policy.
+- **"The rest are empty" IS FALSE - 27 hold rows**, several heavily multi-country, including **9,812 rows of
+  DELETED EXPENSE LINES** (`dup_resolve_archive`) and 12,013 in `reclassify_log`, both spanning Egypt/KSA/UAE.
+- **BUT A ROW COUNT IS NOT A LEAK. Only 4 of 116 actually leaked.** A table with RLS on and NO PERMISSIVE read
+  policy is DENY-ALL, so a restrictive policy there is a no-op - the big tables returned 0 readable rows to the
+  KSA-only Manager, confirming V501's org-walled dismissal. Real leaks: `store_site_map` 21->19,
+  `import_mapping_profiles` 11->9, `accident_country_rule_profiles` 3->1 (all 0 foreign after).
+- Verified independently: **102 policies, all RESTRICTIVE FOR ALL, exactly ONE distinct USING and ONE distinct
+  WITH CHECK** = byte-identical copies of the live `tyre_records` predicate. Super admin before == after on every
+  probe. Write half proven rolled back: own-country INSERT allowed, cross-country REFUSED, country-NULL allowed,
+  privileged recount in the same transaction proving refusal not an invisible write.
+- **`country_currency` LEAKS 2 ROWS AND MUST STAY.** It is read by two **SECURITY INVOKER** paths so RLS DOES
+  apply to them - `currency_for_country()` and through it `classify_parts_consumption`, the trigger that STAMPS
+  `currency` on the 216k-row expense ledger, plus V544's per-currency aggregate. Scoping returns NULL for an
+  unseen country, and a NULL currency here is the documented MISLABELLED-MONEY class (V405 left EGP 5,392,835
+  labelled AED, ~13x). It would risk mislabelling money to conceal that Egypt uses the Egyptian Pound.
+- Also dismissed with evidence: `profiles` (country is `text[]`, the expression cannot even apply),
+  `organisations` (V314 already walled), 4 deny-all tables, 6 cross-boundary staging pipes (a WITH CHECK would
+  refuse the insert that is their purpose - V542's precedent), `org_units` (§3 scoping deliberately on hold).
+- `audit_log_v2` IS scoped, reversing V574's caution, **but only after testing the mechanism behind it**: the
+  feared failure was that an INVOKER audit writer's WITH CHECK refusal would be swallowed by the trigger's
+  exception-swallowing tail and LOSE audit rows silently. Every writer is DEFINER owned by a `rolbypassrls` role,
+  so that mechanism does not exist. Readable count 503,288 before and after.
+  **AND THAT LAST FIGURE IS THE TELL - V581 CORRECTS THIS. The policy is INERT.** Its first term is
+  `country IS NULL` and country is NULL on 503,222 of 503,405 rows, so it scopes 183 rows and every leaking row
+  passes. Re-measured AFTER V578: the KSA-only Manager still reads **31,618** rows whose payload names UAE or
+  Egypt while their direct `tyre_records` UAE read is 0.
+
+### **V581 - THE CATALOG MUST NOT IMPLY A BOUNDARY THAT IS NOT THERE. Comment only, no behaviour change.**
+The V578 policy is KEPT (it is correct, becomes effective the moment the country is attributed, and its WITH
+CHECK does bound a future write that carries a country) but **anyone enumerating `pg_policies` sees a country
+isolation policy on `audit_log_v2` and concludes the hole is closed** - the half-a-boundary-reads-as-closed mode
+(V396), and the same ground V580 refused FORCE RLS on. So a `COMMENT ON POLICY` now carries the caveat WITH THE
+OBJECT, names the numbers, and points at V579. **RULE: when a policy is deliberately left inert pending a
+decision, comment the object - a caveat that lives only in a migration file nobody greps is not a caveat.**
+- **V579's write-side claim was HALF WRONG and the correction matters** (overstating a hole aims the fix at the
+  wrong place). **TAMPER / ERASE: REFUSED** - as the KSA-only Manager, rolled back, `UPDATE ... where
+  action='LOGIN'` -> **0 rows** and `DELETE` -> **0 rows**; there is no permissive UPDATE or DELETE policy, so
+  RLS denies both despite the GRANT. Existing audit history **cannot be altered**. **FORGE: ALLOWED but bounded
+  three ways** - a self-attributed own-org row inserts (verified 1 row), and it cannot be attributed to another
+  user (`user_id = auth.uid()`), cannot carry another org (the RESTRICTIVE `IS NOT DISTINCT FROM` form refuses an
+  omitted org_id, observed), and cannot carry a foreign country (V578's WITH CHECK).
+- **NOT FIXED, deliberately: the INSERT grant is LOAD-BEARING.** `src/lib/auditLogger.js` inserts into this table
+  directly as the signed-in user - that is where the LOGIN row on every sign-in comes from (AuthContext
+  `audit.login()`). Revoking INSERT breaks login history. The real fix is moving that client write behind a
+  DEFINER RPC, an authentication-path change not to be made unattended. Residue = audit POLLUTION under the
+  actor's own name, not impersonation and not tampering.
+
+### **V580 - `FORCE ROW LEVEL SECURITY` IS A NO-OP HERE, AND THIS OVERTURNS THE RECORDED ROOT CAUSE. NOT APPLIED.**
+**The CONSEQUENCE that ~30 migrations rest on is true** - RLS genuinely never runs inside those definer functions
+and the guards were necessary. **The stated REASON is wrong.** It is not that FORCE is off; it is that the owner
+role holds the **`BYPASSRLS` ROLE ATTRIBUTE**, checked independently of FORCE and not overridable by it.
+- Re-verified by hand: `postgres` has `rolbypassrls`; **all 367 public tables have exactly ONE owner (postgres)**;
+  all 402 definer functions likewise. **There is no role here that owns a table and lacks BYPASSRLS - the only
+  population FORCE can affect.**
+- Proven by a control experiment, both rolled back: same table, same policies, same call path, only the owner's
+  role attribute differing - postgres owner **3 rows -> 3 (no-op)**, a control owner without BYPASSRLS
+  **3 -> 0 (FORCE bites)**. Then 24/24 in-situ probes byte-identical across four real users on 8 tables.
+- **REFUSED as defence-in-depth on two grounds**: it plants a landmine that activates across 353 definer
+  functions, 41 trigger functions and 10 cron jobs the moment anyone reassigns ownership (the
+  `is_admin_or_above()` class); and it makes the catalog corroborate a root cause that is wrong, which is exactly
+  what produced ~30 migrations of repeat work.
+- **"FORCE is off on every table" WAS ALREADY FALSE**: `account_deletion_requests` and `support_sessions`
+  (V317/V318) carry it. Equally no-ops. Do NOT cite them as evidence a boundary is closed.
+- **CONFIRMED STALE: `app_can_see_country()` now returns a DEFINITIVE FALSE with no JWT** (scope `{}`,
+  `is_super_admin()` false), so the recorded "use `is not false`" rule no longer protects a backend caller. Under
+  an effective FORCE all **10** anon-executable definer functions return nothing - which includes
+  `get_email_by_identifier` / `login_attempt_status` / `record_login_failure` / `reset_login_attempts`, i.e. **it
+  would break sign-in** - plus 10 in-DB cron jobs including `process_domain_events`.
+- A near-miss false positive recorded by that agent: its first pass showed three users with an IDENTICAL
+  `get_country_kpi` md5, the exact V549 leak signature. It was the measurement - the function is set-returning
+  and a scalar cast captured only the first row. Counted by row: 1 / 3 / 3 / 0. **The guard holds; do not
+  re-raise it.**
+- `_bak`'s 90 RLS-off tables are **grant-walled** (no schema USAGE for app roles, 0 table grants) - not a
+  finding, but the mechanism differs from what was recorded.
+
+### **V579 - audit_log_v2 CROSS-COUNTRY DISCLOSURE CONFIRMED. ASSESSMENT ONLY, NOT APPLIED.**
+- **THE LEAK IS REAL AND REACHABLE IN THE PRODUCT.** Re-verified by hand as the real KSA-only Manager:
+  **31,618 readable audit rows carry UAE or Egypt in their `new_values`/`old_values` payload** while the same
+  user's DIRECT `tyre_records` UAE read is **0**. A table that republishes rows whose own table is scoped - the
+  V574 class. `/audit` is a MAIN-APP page whose module is enabled for Manager, and it uses `select('*')` so the
+  payloads reach the browser.
+- **CORRECTS A STANDING NOTE: `audit_log_v2` DOES have a tenant wall. The column is spelled `org_id`, NOT
+  `organisation_id`** - so a grep for the usual name reads as an absent wall. Verified: populated on 503,329 of
+  503,405 and enforced by a RESTRICTIVE policy using `IS NOT DISTINCT FROM`, which is **STRICTER** than this
+  codebase's convention because a null-org row is HIDDEN rather than shown to everyone. Egypt-only Director reads
+  0. **There is no cross-TENANT disclosure to close**; the defect is inside one org.
+- **SCOPED PRECISELY RATHER THAN OVERSTATED** (the V565/V576 lesson): **MONEY IS NOT DISCLOSED** - every cost key
+  is 0.00 on all 31,614 foreign rows, a property of the DATA that corroborates V522 - and **NO PERSONAL NAMES**
+  (technician/driver/workshop null on every foreign row). What leaks is operational identifiers and free text:
+  asset numbers, tyre serials, job card numbers, sites, odometer readings, fitter notes verbatim on 9,172 rows.
+- **NOT APPLIED because the fix HIDES audit history.** Every country policy reads `country IS NULL OR ...`, so
+  stamping a country makes a row invisible outside it. Measured: a KSA-scoped Admin/Manager/Director loses
+  **39,979 rows (503,288 -> 463,309)**, and `tenantHealth`'s 30-day counts drop with it. Owner decision.
+- Attribution IS possible on 99.5%: payload and parent row **never disagree (0 of 503,405)**; 2,622 rows whose
+  parent is deleted stay NULL permanently. **No country is ever guessed.** The reason so many rows lack a payload
+  country is that `trg_audit_row_change` stores only the CHANGED-KEYS DIFF - it HAS the full record before it
+  diffs and simply never stamped the country.
+- **TWO HAZARDS FOR WHOEVER APPLIES IT.** `record_id` is TEXT and holds non-uuid values (`WO-2026-00003` is
+  live), and **a regex guard does NOT protect the cast** - the planner may evaluate the cast first; it threw
+  22P02 during this work. Only `CASE` orders it. **That alone disqualifies a join-based RLS policy** - it would
+  throw and take down every read. And the backfill does NOT fit a 60s window: a batch timed out here, and on this
+  database **a timed-out UPDATE has previously COMMITTED server-side**, so re-verify counts rather than trusting
+  the timeout.
 
 ### OPEN
-- **~120 more tables share the shape V574 fixed but are EMPTY today** - armed, not leaking. A policy each,
-  deliberately, not a loop over 120 unmeasured tables.
-- **`audit_log_v2`**: 503,284 rows, country NULL on essentially all, **no `organisation_id` column**, and
-  `old_values`/`new_values` JSONB **UNMEASURED** for other tenants' field values.
-- **`FORCE ROW LEVEL SECURITY` is off on every table** - the stated root cause of the whole sweep, still true.
+- **The audit-log country attribution (V579) needs the owner's yes** - it hides 39,979 rows of history from a
+  KSA-scoped admin. The exact measured SQL is in the migration file, ready.
 - **14 accident RPCs used `x <> any(array[...])`, true for every value**, so they could never succeed. V568
   addressed this; re-verify the accept/refuse proof before relying on it.
 - Owner decisions carried: the Egypt Director's org membership; `get_email_by_identifier` anon email oracle (free

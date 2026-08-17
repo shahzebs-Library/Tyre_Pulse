@@ -478,7 +478,14 @@
 -- inside Company A the audit log republishes 39,979 UAE and Egypt rows to KSA-scoped
 -- Admins and Managers - asset numbers, tyre serials, job card numbers, sites, odometers
 -- and fitter notes - which those same users are correctly refused on the real tables. No
--- money and no personal names are in those payloads. The fix is measured and ready and
--- costs one attribution pass; applying it hides 39,979 rows of audit history from
--- KSA-scoped Admins and Managers, so it needs your yes.
+-- money and no personal names are in those payloads.
+--
+-- A country policy for this table went live during this assessment (V578) and **closed
+-- none of it**: its predicate is right but the column it reads is empty, so all 39,979
+-- rows still pass. The table now LOOKS scoped and is not, which is worse than before,
+-- because the next reviewer will believe the policy. The missing half is one attribution
+-- pass - stamp the country the audit trigger already has in hand, and fill the existing
+-- rows from their own payloads. That is measured, unambiguous (the two signals never
+-- disagree on any of 503,405 rows) and ready to run. It needs your yes for one reason
+-- only: it hides 39,979 rows of audit history from KSA-scoped Admins and Managers.
 -- =====================================================================================

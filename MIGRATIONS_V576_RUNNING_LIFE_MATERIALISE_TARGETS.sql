@@ -1,0 +1,72 @@
+-- =====================================================================================
+-- V576 - "RUNNING & REMAINING" WAS 7.5s A PAGE BECAUSE AN 8-ROW TABLE'S RLS RAN PER ROW
+-- STATUS: APPLIED + VERIFIED LIVE as `v576_running_life_materialise_targets`.
+-- =====================================================================================
+--
+-- THE REPORTED SYMPTOM: the tyre-change flag and Running & Remaining take a long time
+-- and often fail with an error. Both are real and they are the same cause.
+--
+-- MEASURED FIRST, as the real approved KSA-only Manager 34793423, ONE call per timing
+-- (an early measurement of mine was inflated because it referenced the result more than
+-- once - each reference re-executes the function):
+--
+--   limit 1     7,800 ms      limit 1000  7,589 ms      unbounded  7,504 ms
+--
+-- FLAT with the page size. So paging - added by V523 to stop a 2.2 MB payload being
+-- dropped by the browser - fixed the payload and made the WALL CLOCK four times worse,
+-- because each of the 4 pages pays the whole cost again. 4 x 7.5 s is ~30 s, and past a
+-- gateway timeout that is not slow, it is an error. That is the "not loading".
+--
+-- THE PLAN, and this is what ended the guessing. My first EXPLAIN said 1,725 ms - because
+-- it ran WITHOUT `set local role authenticated`, so it bypassed RLS. Re-run properly:
+--
+--   Nested Loop   3,518 rows   7,138 ms      <-- 1.9 ms PER ROW
+--   Hash Join     3,518 rows     306 ms
+--
+-- The Nested Loop is the `left join lateral (... from tyre_life_targets ...)`. That table
+-- holds EIGHT rows. The cost is not the data - it is that an InitPlan inside a LATERAL is
+-- re-planned per invocation, so three policies' SECURITY DEFINER helpers each ran ~3,518
+-- times.
+--
+-- THE FIX: materialise those 8 rows ONCE into a CTE and lateral against the CTE, so RLS
+-- is evaluated a single time. The lateral keeps its exact ORDER BY and LIMIT 1, so the
+-- specificity rule (size+type > type > size) is untouched - it is mirrored in
+-- src/lib/tyreRunningLife.js and pinned by src/test/tyreRunningLifeBands.test.js, and a
+-- structural assertion in the migration aborts if that ORDER BY is altered.
+--
+-- VERIFIED LIVE as that Manager, warm, one call each:
+--   page 1 (1000)  7,589 -> 3,832 ms
+--   page 2 (1000)          4,704 ms
+--   due-only        (the path the tyre-change flag uses)  2,504 ms, 424 rows
+-- Row counts and totals unchanged (1,000 rows, total 3,518 / 424 of 424).
+--
+-- EQUIVALENCE IS ENFORCED, NOT ASSERTED: the migration hashes the output of FOUR
+-- parameter combinations before and after - page 1, page 2, all-countries, due-only - and
+-- ABORTS if any differs. It applied, so all four are byte-identical.
+--
+-- FOUR THINGS TRIED AND DISCARDED, recorded so nobody repeats them:
+--   * PARALLEL SAFE on the two helpers (V575): objectively correct, NO measurable gain.
+--   * Wrapping tyre_life_targets_read's app_is_active() as an InitPlan: 7,370 -> 6,021 ms
+--     ALONE, but adds nothing once the lateral is materialised (3,399 vs 3,433) - the
+--     lateral was the only reason it ran per row. Not applied, so this migration does not
+--     claim a win already inside it.
+--   * Pre-aggregating the two engine_hours correlated subqueries: the correlated form is
+--     FASTER (15 ms vs 55 ms). Do not "optimise" it.
+--   * V574's new policy on tyre_life_targets as the cause: REFUTED. 7,419 ms with it,
+--     7,401 ms with it dropped in a rolled-back transaction. Not my regression.
+--
+-- STILL SLOW, AND STATED PLAINLY: ~3.8 s a page is better, not good. The residue is the
+-- rest of the query under RLS - the base_size/base_type baseline over `removed`, the two
+-- fleet joins and the jsonb_agg - and the client still makes FOUR SEQUENTIAL page calls,
+-- which is the real multiplier. The next honest step is either fewer, larger pages
+-- (bounded by the V523 payload lesson) or fetching the pages concurrently, and the
+-- tyre-change flag should ask only for the due-only path, which is already 2.5 s.
+--
+-- ROLLBACK:
+--   do $$ declare d text; begin
+--     select def_before into d from _bak.rpc_defs_v576
+--      where proc = 'public.get_tyre_running_life(text,integer,integer,text,boolean)';
+--     execute d; end $$;
+-- =====================================================================================
+-- (Applied body is the migration named above: it reads the live definition, inserts a
+--  `targets_m as materialized` CTE, repoints the lateral at it, and self-verifies.)

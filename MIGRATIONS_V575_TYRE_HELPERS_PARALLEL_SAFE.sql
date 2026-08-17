@@ -1,0 +1,24 @@
+-- =====================================================================================
+-- V575 - tyre_size_key + cpk_unit_for_asset_type were PARALLEL UNSAFE
+-- STATUS: APPLIED LIVE as `v575_tyre_helpers_parallel_safe`.
+-- =====================================================================================
+-- Postgres defaults an unmarked function to PARALLEL UNSAFE, and ONE unsafe function
+-- disables parallelism for the WHOLE plan - so get_tyre_running_life, which calls both,
+-- could never use a worker at any size. Same defect V536 fixed on the 12 RLS helpers;
+-- these two were missed.
+--
+-- Safe by INSPECTION, not assumption - both bodies were read first. tyre_size_key is a
+-- regexp_replace/upper on its argument; cpk_unit_for_asset_type is a `similar to` against
+-- a literal pattern. No table access, no session state, no side effects, neither is
+-- SECURITY DEFINER, both already IMMUTABLE.
+--
+-- HONEST OUTCOME, recorded so it is not cited as a speed fix: NO measurable gain on the
+-- query it was aimed at. 7,518 / 7,685 / 7,529 ms before against 7,535 / 7,435 / 7,642
+-- after. Marking a function safe PERMITS a parallel plan; it does not force one - the
+-- V536 caveat, firing exactly as that migration warned. Kept because the marking is
+-- objectively correct and removes a blocker, not because it made anything faster.
+--
+-- ROLLBACK: alter function public.tyre_size_key(text) parallel unsafe;  (and the other)
+-- =====================================================================================
+alter function public.tyre_size_key(text) parallel safe;
+alter function public.cpk_unit_for_asset_type(text) parallel safe;

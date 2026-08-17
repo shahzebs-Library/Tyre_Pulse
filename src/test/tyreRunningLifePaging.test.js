@@ -40,37 +40,72 @@ describe('running-life paged read', () => {
   it('fetches the pages after the first CONCURRENTLY', async () => {
     // Page 0 must resolve before the rest can be planned (its `total` is what says
     // how many there are), so only pages 1..3 are expected to overlap.
+    //
+    // CONCURRENCY IS OBSERVED STRUCTURALLY, NOT BY WALL CLOCK. An earlier version of
+    // this test slept a few milliseconds per page, which makes it sensitive to load in
+    // a 525-file suite - a test that fails only when the machine is busy teaches
+    // nobody anything. Here each page is held open until this test releases it, so
+    // "were they in flight together" is a fact about the code, not about the host.
+    const gates = new Map()
     let inFlight = 0
     let maxInFlight = 0
-    rpc.mockImplementation(async (_fn, args) => {
+    rpc.mockImplementation((_fn, args) => {
       inFlight += 1
       maxInFlight = Math.max(maxInFlight, inFlight)
-      await new Promise((r) => setTimeout(r, 5))
-      inFlight -= 1
-      return { data: page(args.p_offset, 1000, 3518), error: null }
+      return new Promise((resolve) => {
+        gates.set(args.p_offset, () => {
+          inFlight -= 1
+          resolve({ data: page(args.p_offset, 1000, 3518), error: null })
+        })
+      })
     })
 
-    const res = await getTyreRunningLife({ country: 'KSA' })
-    expect(res.ok).not.toBe(false)
-    // 3,518 rows over pages of 1,000 = offsets 0, 1000, 2000, 3000.
-    expect(rpc.mock.calls.map((c) => c[1].p_offset)).toEqual(
-      expect.arrayContaining([0, 1000, 2000, 3000]),
-    )
-    // Sequential would never exceed 1. This is the whole point of the change.
+    const pending = getTyreRunningLife({ country: 'KSA' })
+
+    // Let page 0 be requested, then release it so `total` is known.
+    await vi.waitFor(() => expect(gates.has(0)).toBe(true))
+    gates.get(0)()
+
+    // Now the remaining three must ALL be on the wire before any of them answers.
+    // Sequential code could never reach this state.
+    await vi.waitFor(() => {
+      expect(gates.has(1000)).toBe(true)
+      expect(gates.has(2000)).toBe(true)
+      expect(gates.has(3000)).toBe(true)
+    })
     expect(maxInFlight).toBeGreaterThan(1)
+
+    for (const offset of [1000, 2000, 3000]) gates.get(offset)()
+    const res = await pending
+    expect(res.ok).not.toBe(false)
+    expect(rpc.mock.calls.map((c) => c[1].p_offset).sort((a, b) => a - b))
+      .toEqual([0, 1000, 2000, 3000])
   })
 
   it('keeps the server ordering even when a later page answers first', async () => {
-    // Page 2 is made deliberately slow. If the code concatenated by arrival, its rows
-    // would land after page 3's and the table would silently be in the wrong order -
-    // which for a list sorted by "remaining km" means the wrong tyres at the top.
-    rpc.mockImplementation(async (_fn, args) => {
-      const delay = args.p_offset === 1000 ? 30 : 1
-      await new Promise((r) => setTimeout(r, delay))
-      return { data: page(args.p_offset, args.p_offset === 3000 ? 518 : 1000, 3518), error: null }
-    })
+    // Page 2 is released LAST. If the code concatenated by arrival, its rows would land
+    // after page 3's and the table would silently be in the wrong order - which for a
+    // list sorted by "remaining km" means the wrong tyres at the top. Release order is
+    // controlled explicitly rather than by sleeping, so this proves ordering rather
+    // than merely observing it on one lucky run.
+    const gates = new Map()
+    rpc.mockImplementation((_fn, args) => new Promise((resolve) => {
+      gates.set(args.p_offset, () => resolve({
+        data: page(args.p_offset, args.p_offset === 3000 ? 518 : 1000, 3518),
+        error: null,
+      }))
+    }))
 
-    const res = await getTyreRunningLife({ country: 'KSA' })
+    const pending = getTyreRunningLife({ country: 'KSA' })
+    await vi.waitFor(() => expect(gates.has(0)).toBe(true))
+    gates.get(0)()
+    await vi.waitFor(() => expect(gates.size).toBe(4))
+    // Deliberately out of order: 3000, then 2000, and the slow 1000 last.
+    gates.get(3000)()
+    gates.get(2000)()
+    gates.get(1000)()
+
+    const res = await pending
     expect(res.rows).toHaveLength(3518)
     expect(res.rows[0].serial_no).toBe('S0')
     expect(res.rows[1000].serial_no).toBe('S1000')

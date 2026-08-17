@@ -64,10 +64,10 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0, asset = null, 
       // the dropped payload and made the WALL CLOCK four times worse, because
       // this RPC costs the same for one row as for a thousand - measured flat at
       // ~7.5 s for limit 1 and limit 1000 alike, since the expensive part is the
-      // fleet baseline it builds before slicing (V576 halved that to ~3.8 s, and
-      // the remaining cost is still per CALL, not per row). Four sequential
-      // calls is therefore four times the cost of one, for no benefit; past a
-      // gateway timeout it is not slow, it is an error.
+      // fleet baseline it builds before slicing. V576 then V577 took one call
+      // from ~7.5 s to ~1.1 s, but the cost is still per CALL and not per row,
+      // so four sequential calls would still be four times the cost of one for
+      // no benefit; past a gateway timeout that is not slow, it is an error.
       //
       // Page 0 goes first ALONE, because its `total` is what says how many more
       // there are - guessing would either miss rows or fire requests for pages

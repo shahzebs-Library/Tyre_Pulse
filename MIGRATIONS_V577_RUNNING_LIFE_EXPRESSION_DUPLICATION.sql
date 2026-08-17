@@ -1,0 +1,104 @@
+-- =====================================================================================
+-- V577 - THE RUNNING-LIFE READ RAN TWO CORRELATED SUBQUERIES ~16 TIMES PER ROW
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v577_running_life_stop_expression_duplication`.
+-- The whole fix is ONE KEYWORD: `enriched as materialized`.
+-- =====================================================================================
+--
+-- THIS SUPERSEDES THE PLAN V576 RECORDED FOR ITSELF, and the correction is the point.
+-- V576's header said the structural fix was to precompute the fleet baseline
+-- (base_size/base_type) into a small table refreshed on tyre change, because a
+-- `Nested Loop` of ~1.7 s remained whose CHILDREN accounted for only ~250 ms, and that
+-- residue was attributed to "per-row EXPRESSION evaluation". The attribution was right
+-- and the conclusion was wrong: the expensive per-row expressions are not the baseline,
+-- they are the two correlated `engine_hours_logs` subqueries, and they were being
+-- RE-EXECUTED because of how the CTE chain is inlined. A baseline table would have been
+-- real work, a new table to keep fresh, and would have bought almost nothing.
+--
+--
+-- THE MECHANISM
+--
+-- Every CTE below `enriched` is referenced EXACTLY ONCE, so Postgres INLINES it, and
+-- inlining copies an expression into each place it is referenced. Count the references:
+--
+--   hours_calc.hours_run          reads hours_at_fitment 3x and current_hours 3x
+--   judged.rem_hours              reads hours_run 2x
+--   judged.used_hours_pct         reads hours_run 3x
+--   banded.is_due                 reads rem_hours 3x and used_hours_pct 2x
+--   scoped `select *`             carries rem_hours and used_hours_pct out again
+--
+-- Multiplied out that is roughly 16 evaluations of BOTH subqueries per row, over 3,518
+-- rows. `scoped` is referenced twice by the final SELECT so it materialises - but that
+-- barrier sits ABOVE the duplication, so it does not stop it.
+--
+-- MEASURED, and the arithmetic closes almost exactly:
+--   whole call                                380,317 shared buffers
+--   `enriched` alone, all columns forced       40,611 shared buffers  / 1,098 ms
+--   the two subqueries inside it               22,602 of those buffers
+--   22,602 x 15 = 339,030  vs  the observed gap 380,317 - 40,611 = 339,706
+--
+-- A MATERIALIZED CTE is an optimisation barrier: each subquery runs once per row and
+-- every downstream reference reads a tuplestore column instead of re-deriving it.
+--
+--
+-- TWO CANDIDATE CAUSES WERE MEASURED AND REFUTED FIRST - do not re-raise them
+--
+-- 1. "The generic plan is the problem." A plain-SQL function's parameters force a generic
+--    plan, and `(p_country is null or t.country = p_country)` looks like exactly the
+--    predicate that would ruin an index choice. Tested with a PREPARE executed six times
+--    to force the generic plan: 357 ms, index scans intact, `($1 IS NULL) OR (country =
+--    $1)` handled fine. Parameterisation is NOT the cost.
+-- 2. "The baseline (removed/base_size/base_type) is the cost." It is 470 ms of the call
+--    including its RLS, and it already materialises because `removed` is referenced twice.
+--    Precomputing it into a table would have saved a fraction of what one keyword saved.
+--
+--
+-- RESULT (live, impersonated as the real approved KSA-only Manager 34793423, under RLS)
+--
+--   get_tyre_running_life('KSA',1000,0)   4,675 ms -> 1,177 ms   (~4x)
+--   warm re-measure on page 1              1,119 ms
+--
+-- Together with the client now fetching its pages CONCURRENTLY
+-- (src/lib/api/tyreRunningLife.js), the whole Running & Remaining read is about 1.2 s of
+-- wall clock. It was ~30 s when the owner reported it as "taking time and many times not
+-- loading" - four sequential pages at ~7.5 s each, past the gateway timeout, which is why
+-- it surfaced as an error rather than as slowness.
+--
+--
+-- EQUIVALENCE IS ENFORCED, NOT ASSERTED. Nine (parameter, user) combinations were hashed
+-- BEFORE and AFTER in one rolled-back transaction, with `generated_at` stripped so a
+-- timestamp cannot mask a difference. All nine returned exactly ONE distinct hash:
+--
+--   KSA page 0 · KSA page 1 · KSA due-only · all-countries · single asset TM448 · UAE
+--   as the KSA Manager, and KSA · UAE · all-countries as the super admin.
+--
+-- The boundary still holds after the change: the Manager's UAE hash differs from the
+-- super admin's UAE hash (they see nothing there), and their KSA hashes match (both see
+-- all of KSA). So the speedup did not come from reading fewer rows.
+--
+-- Structural assertions in the migration abort unless the barrier keyword is present, the
+-- function is still SECURITY INVOKER, and the pinned `search_path=public` survived.
+-- Verified after: anon EXECUTE false, authenticated EXECUTE true.
+--
+--
+-- TWO MEASUREMENT ERRORS OF MINE, corrected before concluding, and both easy to repeat:
+--   * A timing harness of the form
+--       select ms from (select clock_timestamp() t0) s, lateral (select f(...) as n) r
+--     reports 0 ms, because `n` is never referenced and Postgres skips the unused
+--     target-list expression. The measured value MUST appear in the output.
+--   * `select count(*) from enriched` does NOT evaluate the select-list scalar
+--     subqueries, so it measured 472 ms and hid the entire defect. Every column has to be
+--     referenced (count(hours_at_fitment), count(current_hours), ...) for the number to
+--     mean anything.
+--
+--
+-- STILL OPEN, stated plainly: ~1.1 s a page remains, and it is honest work now - the
+-- `removed` baseline (470 ms, four RLS-filtered index scans over 4,165 rows plus a
+-- per-row vehicle_fleet lookup) and one pass of the two engine_hours subqueries. If that
+-- ever needs to come down further, the next lever is the per-row `vehicle_fleet` index
+-- scan inside `removed` (12,505 buffers over 4,165 loops), not the baseline table.
+--
+-- ROLLBACK: re-apply the V576 body, i.e. this definition with the single word
+-- `materialized` removed from `enriched as materialized`. Nothing else differs.
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above.)

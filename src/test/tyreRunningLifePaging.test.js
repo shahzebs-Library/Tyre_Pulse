@@ -6,9 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  *
  * WHY IT MATTERS: this RPC costs the same for one row as for a thousand - measured flat
  * at ~7.5 s for `limit 1` and `limit 1000` alike, because the expensive part is the fleet
- * baseline it builds before slicing. So four SEQUENTIAL pages cost four times one page
- * for no benefit, and past a gateway timeout that is not slowness, it is the error users
- * were reporting. Paging fixed a dropped 2.2 MB payload and made the wall clock worse.
+ * baseline it builds before slicing. V576 and V577 took one call to ~1.1 s, but the cost
+ * is still per CALL, so four SEQUENTIAL pages would still cost four times one page for no
+ * benefit, and past a gateway timeout that is not slowness, it is the error users were
+ * reporting. Paging fixed a dropped 2.2 MB payload and made the wall clock worse.
  *
  * Three things are pinned here, and each of them was a real way to get this wrong:
  *   1. the pages after the first overlap in time (otherwise the fix does nothing)

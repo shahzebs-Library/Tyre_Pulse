@@ -3,6 +3,67 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
+---
+
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V585**)
+Live-verified state: main == branch == `9729ef59`, tree clean, production deploy READY on that sha,
+lint 0 errors, build clean, suite **527 files / 8,005 tests** green. Nothing is half-applied.
+Delete an item from this list ONLY when it is actually closed, and say what closed it.
+
+### NEEDS A MEASUREMENT, NOT CODE — do this before claiming any speed win
+1. **The realtime improvement is UNMEASURED.** V582 + the client change (12 dead subscriptions per tab removed)
+   are deployed, but immediately after, the WAL decoder was still at **~1.7 calls/s and ~31 MB/s** of buffer
+   traffic - ABOVE its 6-day average of 0.86 calls/s and ~18 MB/s, not below. That is expected, not a failure:
+   `skipWaiting:false` means every already-open tab keeps the old bundle AND its 12 subscriptions until it is
+   closed or the update prompt is accepted. **Re-measure `pg_stat_statements` for `SELECT wal->>%` (take two
+   samples ~60 s apart and compute the rate) once clients have reloaded. Do NOT report a win before that.**
+
+### OWNER DECISIONS — do not decide these unilaterally
+2. **Stop auditing bulk imports?** 8 import days wrote 475,497 rows = **94.5% of `audit_log_v2`**; a normal day is
+   846. Each future import adds ~30,000 rows / ~20 MB and nothing expires until 2027-07. V499's `app.bulk_import`
+   guard is the lever. **It changes the audit contract.**
+3. **Apply V579's audit-log country attribution?** Confirmed real: a KSA-only Manager reads **31,618** audit rows
+   whose payload names UAE or Egypt. The fix HIDES history - a KSA-scoped admin loses **39,979 rows**
+   (503,288 -> 463,309). Exact SQL is ready in `MIGRATIONS_V579_*.sql`. Not applied.
+4. **Shorten `audit_retention_days` 365 -> 90?** Deletes **0 rows today** (the whole table is 45 days old) but
+   bounds it going forward.
+5. Carried, unchanged: the Egypt Director's org membership; the `get_email_by_identifier` anon email oracle (free
+   mitigations not taken - rename the super-admin username, enable 2FA).
+
+### REAL BUGS LEFT OPEN, deliberately, with the reason
+6. **TyreRecords' filter dropdowns may be SILENTLY INCOMPLETE.** `listSiteOptions` / `listBrandOptions` are
+   unpaged bare selects, so PostgREST caps them at 1000 of 11,193 rows. Every zero-migration fix either changes
+   which sites appear or makes it slower - **the honest fix is a distinct-values RPC.**
+7. **Re-verify V568's accident `x <> any(array[...])` accept/refuse proof** before relying on it. 14 accident RPCs
+   used a predicate that is true for every value, so they could never succeed.
+8. **`WorkOrders` pages 22,478 job cards on mount (26 round trips)** because it filters and sorts client-side.
+   Server-side paging is a real refactor, not a tweak - measured and deliberately not attempted.
+
+### THE CEILING THAT IS NOT A SQL PROBLEM
+9. **`shared_buffers` is 256 MB; `audit_log_v2` is 557 MB.** This session removed ~135 MB of pressure (89 MB audit
+   heap via plain VACUUM + 46 MB of indexes) and restored the visibility map from 54.61% to 100%, which is real -
+   but a database whose largest table is twice its cache stays I/O-bound. **The remaining lever is the compute
+   tier, not more query tuning.** Do not promise more from SQL.
+
+### STANDING TRAPS THAT BIT THIS SESSION — re-read before measuring anything
+- **A STATUS header is a claim, not evidence.** Verify against `supabase_migrations.schema_migrations` AND the live
+  object. V572 said APPLIED and was not; V583 can NEVER appear there (`VACUUM` cannot run in a transaction block).
+- **An `EXPLAIN` without `set local role authenticated` BYPASSES RLS** - it reported 1,725 ms when the truth was
+  7,100 ms.
+- **A timing harness whose measured value never appears in the output returns 0 ms**, because the expression is
+  skipped. Reference the value.
+- **`select count(*)` does NOT evaluate select-list scalar subqueries** - it hid an entire defect at 472 ms.
+- **`n_live_tup` is an estimate**; confirm with `count(*)` before calling anything bloated.
+- **Timings vary 5-7x call to call on this instance.** Quote buffer counts, and only same-transaction,
+  warm-up-discarded comparisons.
+- **Heavy probing against production is itself a load the owner feels.** Prefer narrow probes; never sweep many
+  live tables or hold ACCESS EXCLUSIVE.
+- **The stop hook checks `origin/<branch>..HEAD`.** Pushes go to main, so the branch ref lags. **Push the branch
+  ref too - never rewrite.** Check `vercel.json` -> `git.deploymentEnabled` first (this branch is `false`, so no
+  preview build).
+
+---
+
 ## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. SUPERSEDED: next free is **V585** (see part 3 below).
 Branch `claude/accident-builder-report-ui-2bkwb5`, merged to main. Full suite green. Migrations V555-V576 all
 applied live on `jhssdmeruxtrlqnwfksc` and verified; every header carries its own reproduction + rollback.

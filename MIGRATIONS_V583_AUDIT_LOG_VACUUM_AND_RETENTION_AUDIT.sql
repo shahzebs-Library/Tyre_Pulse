@@ -1,0 +1,364 @@
+-- =====================================================================================
+-- V583 - THE 646 MB AUDIT TABLE IS 45 DAYS OLD, SO RETENTION CANNOT TOUCH IT.
+--        MAINTENANCE, NOT DELETION, RETURNED 89 MB AND FIXED A 45% VISIBILITY-MAP HOLE.
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc. Three VACUUM (ANALYZE)
+--         statements, no DDL, no schema change, no row deleted. `audit_retention_days`
+--         DELIBERATELY LEFT AT 365 - see THE REFUSAL.
+--
+--         NOT PRESENT IN `supabase_migrations.schema_migrations`, AND CANNOT BE. VACUUM
+--         cannot run inside a transaction block (25001) and the migration runner wraps
+--         every migration in one - attempted and it failed cleanly, leaving no stray row
+--         (verified: the newest recorded migration is still v582). So this file was
+--         applied statement-by-statement outside a transaction. Do NOT read the absence of
+--         a V583 row as "never applied" - verify against the live object instead:
+--         `audit_log_v2` at 100% all-visible with vacuum_count >= 1 is the proof.
+-- =====================================================================================
+--
+-- The owner reports the app is very slow. V582 fixed the chronic load (the realtime WAL
+-- decoder). The remaining structural complaint was that `audit_log_v2` at 646 MB is 2.5x
+-- the entire `shared_buffers` of 256 MB, so the database must stay I/O-bound. The task
+-- was to find how much of that 646 MB is necessary and shrink what is not.
+--
+-- IT IS ALMOST ALL NECESSARY. What was actually wrong was maintenance, not size.
+--
+--
+-- =====================================================================================
+-- THE HEADLINE REFUTATION: RETENTION IS NOT BROKEN, AND TUNING IT BUYS NOTHING
+-- =====================================================================================
+--
+-- The brief's hypothesis was that V288's retention purge had never run, or that
+-- `audit_retention_days` was 0/unset ("keep forever"). Measured, all three parts of that
+-- are false:
+--
+--   * `system_config.audit_retention_days` = **'365'**. Set, valid, not 0, not missing.
+--   * pg_cron job 11 `audit-log-retention` (`15 1 * * *`) is **active = true** and
+--     succeeded on every one of the last 8 daily runs, most recently 2026-08-17 01:15.
+--   * Each run finishes in **~0.25 s**, which is the tell: it deletes nothing.
+--
+-- It deletes nothing because THE WHOLE TABLE IS YOUNGER THAN THE RETENTION WINDOW.
+-- Row ages, counted live over all 503,416 rows:
+--
+--   oldest row .................. 2026-07-03   (the table is 45 days old)
+--   newest row .................. 2026-08-17
+--   older than 365 days .........        0
+--   older than 180 days .........        0
+--   older than  90 days .........        0
+--   older than  60 days .........        0
+--   older than  30 days .........    5,951
+--
+-- So the purge is CORRECT and IRRELEVANT. It has never deleted a row because nothing has
+-- ever been eligible, not because it is misconfigured. Do not "fix" it.
+--
+-- AND THE OBVIOUS FOLLOW-UP IS ALSO WORTHLESS TODAY: dropping the window from 365 days to
+-- 90 would delete **0 rows**. Even an aggressive 30 days would delete 5,951 rows, ~1.2% of
+-- the table. Retention is not a lever on this problem in 2026-08. It becomes the lever in
+-- 2027-07, when the first row finally ages out - see THE TRAJECTORY.
+--
+--
+-- =====================================================================================
+-- THE SECOND REFUTATION: THE 646 MB IS NOT BLOAT
+-- =====================================================================================
+--
+-- Measured with `pgstattuple_approx` (installed for the measurement, dropped afterwards -
+-- it landed in `public` and would otherwise raise an `extension_in_public` advisor):
+--
+--   heap total .......... 591 MB
+--   live tuples ......... 486 MB   82.15%    <-- genuinely live data
+--   dead tuples .........  89 MB   15.05%    (76,686 tuples)
+--   free space ..........  13 MB    2.14%
+--
+-- 82% live. There was no large bloat to reclaim, so the premise that the table could be
+-- substantially shrunk in place was wrong. A `VACUUM FULL` would have returned at most
+-- ~102 MB (dead + free) and takes ACCESS EXCLUSIVE on a 646 MB table, which would freeze
+-- the app. REFUSED, per the brief.
+--
+--
+-- =====================================================================================
+-- WHAT WAS ACTUALLY WRONG, AND IS THE REASON THIS TABLE HURT MORE THAN ITS SIZE
+-- =====================================================================================
+--
+-- `audit_log_v2` had a HALF-EMPTY VISIBILITY MAP, and it was the only large table that
+-- did. `relallvisible` vs `relpages` before:
+--
+--   audit_log_v2 ........... 34,560 / 63,284 = **54.61%**   <-- the outlier
+--   parts_consumption ...... 12,504 / 15,847 =   78.90%
+--   work_orders ............ 15,323 / 15,376 =   99.66%
+--   production_logs ........ 14,565 / 14,565 =  100.00%
+--   domain_events .......... 10,017 / 10,017 =  100.00%
+--
+-- 45% of the pages of the biggest table on the database were not marked all-visible. A
+-- page that is not all-visible cannot be served by an index-only scan, so every index
+-- scan on this table had to visit the heap for visibility - against a 591 MB heap and a
+-- 256 MB cache. That is read amplification on top of an already oversized table.
+--
+-- WHY IT WAS NEVER CLEANED, and it is not a misconfiguration either:
+--   `autovacuum` is on, `autovacuum_vacuum_scale_factor` = 0.2, threshold 50. So autovacuum
+--   fires on this table at 50 + 0.2 x 503,416 = **~100,733 dead tuples**. It was sitting at
+--   76,686 - below the line. It had genuinely never run (`vacuum_count` 0,
+--   `autovacuum_count` 0, `last_autovacuum` NULL), and `analyze_count` was **0** as well,
+--   so this 503,416-row table had never been ANALYZEd at all.
+--   `age(relfrozenxid)` was 1,905,068 against `autovacuum_freeze_max_age` 200,000,000, so
+--   there was no wraparound pressure - but the table was on course to cross the dead-tuple
+--   line and trigger its first-ever autovacuum of a 646 MB heap at an arbitrary busy
+--   moment, which the owner would have felt as another unexplained slowdown.
+--
+--
+-- =====================================================================================
+-- APPLIED - three statements, no DDL, no row deleted
+-- =====================================================================================
+--
+--   vacuum (analyze) public.audit_log_v2;
+--   vacuum (analyze) public.parts_consumption;
+--   vacuum (analyze) public.production_logs;
+--
+-- Plain VACUUM, never VACUUM FULL. It takes SHARE UPDATE EXCLUSIVE, which does not block
+-- SELECT / INSERT / UPDATE / DELETE, so the app kept serving throughout. ANALYZE was
+-- included because all three had stale-or-absent planner statistics.
+--
+-- RESULT ON audit_log_v2 - and it returned space to the OS despite not being VACUUM FULL:
+--
+--                        BEFORE        AFTER
+--   total size ......... 646 MB   ->   557 MB     (-89 MB, returned to the filesystem)
+--   heap ............... 591 MB   ->   503 MB     (-88 MB)
+--   indexes ............  42 MB   ->    42 MB     (untouched - indexes are V584's remit)
+--   toast ..............  13 MB   ->    13 MB
+--   dead tuples ........  76,686  ->        0
+--   dead bytes .........  89 MB   ->   0 bytes
+--   all-visible pages .. 54.61%   ->  100.00%     <-- the real win
+--   vacuum_count .......       0  ->        1
+--   analyze_count ......       0  ->        1     (first ANALYZE this table has ever had)
+--
+-- WHY PLAIN VACUUM RECOVERED 89 MB when it normally only marks space reusable: VACUUM can
+-- truncate empty pages off the *tail* of the heap, and here the dead tuples were
+-- concentrated at the tail. That is consistent with the timed-out ~120,000-row UPDATE that
+-- was attempted against this table earlier the same day and rolled back - an aborted
+-- update leaves its new row versions dead at the end of the heap, which is exactly the
+-- shape VACUUM can truncate. So the 89 MB was that rolled-back attempt's residue.
+--
+-- THE OTHER TWO, both non-blocking, both on tables that had never been vacuumed:
+--   parts_consumption (180 MB, the financial ledger every cost RPC reads):
+--     all-visible 78.90% -> 99.86%, dead 26,910 -> 0
+--   production_logs (150 MB, the cost-per-m3 denominator):
+--     all-visible 100% -> 100%, dead 40,331 -> 0
+--   Their total size did not change (dead space became reusable rather than truncatable),
+--   which is the normal VACUUM outcome and caps their growth.
+--
+-- Scope was kept to these three deliberately. The brief warns that heavy probing is itself
+-- load the owner feels, so this is not a sweep: three named large tables with measured
+-- dead tuples or a measured visibility-map hole, verified one at a time.
+--
+--
+-- =====================================================================================
+-- VERIFICATION - counted as a PRIVILEGED READER, in the same transaction, then rolled back
+-- =====================================================================================
+--
+-- A count taken inside an impersonated session counts what is READABLE, not what exists,
+-- so every figure below was taken after `reset role`:
+--
+--   audit_log_v2 rows ............ 503,416   IDENTICAL before and after
+--   ... of which work_orders ..... 442,952   IDENTICAL before and after
+--   ... date range ............... 2026-07-03 .. 2026-08-17   unchanged
+--   parts_consumption rows ....... 209,509
+--   parts_consumption line_cost .. 138,531,460.38  (blended, 3 currencies - not a quantity)
+--   production_logs rows ......... 212,567
+--   production_logs approved_m3 .. **2,193,569.9**
+--
+-- That last figure is the strongest check available: PROJECT_MEMORY records KSA approved m3
+-- as exactly 2,193,569.9 at V524. It is unchanged to the decimal, so no quantity moved.
+-- VACUUM cannot delete a live row, and this proves it did not.
+--
+--
+-- =====================================================================================
+-- THE TRAJECTORY - the finding the owner actually needs, which no VACUUM fixes
+-- =====================================================================================
+--
+-- 503,416 rows in 45 days. But the arrival is not steady, it is bursty, and the bursts are
+-- ERP bulk imports:
+--
+--   days with any rows ....................... 41
+--   days with >= 10,000 rows ..................  8
+--   rows written on those 8 days ............. 475,497  = **94.5% of the entire table**
+--   average rows on a normal day ..............    846
+--
+-- Three of those days alone: 2026-08-05 (31,422), 08-06 (30,125), 08-09 (32,410).
+--
+-- BY SOURCE TABLE, which confirms it:
+--   work_orders ......... 442,952 rows (88.0%), 156 MB of jsonb payload, avg 613 B/row
+--   tyre_records .........  52,369 rows (10.4%), avg  78 B/row
+--   vehicle_fleet ........   6,527 rows
+--   inspections ..........     876 rows
+--   everything else ...... < 400 rows each
+--
+-- So real human activity on this system generates ~846 audit rows a day. At that rate the
+-- table would hold ~35,000 rows, not 503,416. **94.5% of the largest table on the database
+-- is bulk-import audit noise**, and under a 365-day window not one row of it expires until
+-- 2027-07. Every future ERP import adds roughly 30,000 rows and ~20 MB that nothing will
+-- age out for a year.
+--
+-- CORROBORATES AND UPDATES V499, which measured the same concentration as 440,257 of
+-- ~441,632 rows. It is now 442,952 of 503,416 - the work_orders count barely moved, and the
+-- share fell from 99.7% to 88.0% only because `tyre_records` auditing has since grown.
+--
+--
+-- =====================================================================================
+-- CORRECTION TO V499 - the per-row profiles lookup is NOT the bulk-import cost
+-- =====================================================================================
+--
+-- V499 records that `trg_audit_row_change` "runs `select email, role from profiles where
+-- id = auth.uid()` PER ROW". The function is unchanged and still does read `profiles`
+-- (verified: `prosecdef` = true, source still contains the lookup), so the trigger was NOT
+-- silently altered. But the live source shows the lookup is GUARDED:
+--
+--     v_uid := auth.uid();
+--     IF v_uid IS NOT NULL THEN
+--       SELECT email, role INTO v_email, v_role FROM public.profiles WHERE id = v_uid;
+--       ...
+--     ELSE
+--       -- No signed-in identity. Say which kind of no-identity ...
+--
+-- On an ERP bulk import `auth.uid()` IS NULL - that is precisely why V499 found 97% of
+-- audit rows unattributed. So the `profiles` lookup is **SKIPPED on exactly the write path
+-- that produces 94.5% of this table**. It costs one lookup per user-driven write only.
+--
+-- CONSEQUENCE: do not "optimise" that lookup expecting a bulk-import speedup. There is
+-- none to win. The bulk-import cost is the audit ROW ITSELF plus its 613-byte jsonb diff.
+-- The only real lever is not writing those rows, which is an audit-contract change and
+-- needs the owner's sign-off (V499 already sketched the `app.bulk_import` guard). NOT DONE
+-- HERE, and the brief forbids touching the trigger.
+--
+--
+-- =====================================================================================
+-- REFUSED, WITH REASONS
+-- =====================================================================================
+--
+-- 1. `VACUUM FULL public.audit_log_v2` - would have returned ~102 MB but takes ACCESS
+--    EXCLUSIVE for the whole rewrite of a 646 MB heap, freezing every reader and writer.
+--    Explicitly out of bounds, and plain VACUUM got 89 MB of it anyway for free.
+--
+-- 2. `pg_repack` - AVAILABLE as an extension (`pg_available_extensions` shows 1.5.2,
+--    `installed_version` NULL) but **NOT USABLE FROM HERE**. pg_repack is not SQL-only; it
+--    needs the `pg_repack` client binary run against the database, and this session has no
+--    shell on a host that can reach it. So an online heap rewrite is a maintenance-window
+--    job, not something to improvise. SQL for that window is at the bottom of this file.
+--
+-- 3. Changing `audit_retention_days` from 365. It would delete **0 rows today** (measured
+--    above), and an audit-retention window is a compliance decision the owner set
+--    deliberately. Recommending it is honest; changing it unilaterally for no measurable
+--    gain is not. SQL provided below for when the owner decides.
+--
+-- 4. Any index change on any table, including `audit_log_v2` - V584's remit. Its 42 MB of
+--    indexes are untouched here; VACUUM only cleaned them in place, it created, dropped and
+--    altered nothing.
+--
+-- 5. Touching the audit trigger or the client INSERT grant on `audit_log_v2` - V581 records
+--    that `src/lib/auditLogger.js` inserts as the signed-in user and that revoking the
+--    grant breaks login history.
+--
+-- 6. Deleting or altering any business record. `data_retention_months` is '24' and stays
+--    deliberately unenforced for business data; that decision stands.
+--
+--
+-- =====================================================================================
+-- WHAT THE OWNER SHOULD DECIDE (not applied - each needs a human)
+-- =====================================================================================
+--
+-- (a) STOP AUDITING BULK IMPORTS. This is the only change that addresses the 94.5%. It
+--     alters the audit contract, so it needs sign-off. V499's suggested shape:
+--       a `WHEN (current_setting('app.bulk_import', true) IS DISTINCT FROM 'on')` clause on
+--       the audit trigger, plus `SET LOCAL app.bulk_import = 'on'` in the import path.
+--
+-- (b) SHORTEN THE AUDIT WINDOW so imports age out in months rather than a year. Removes 0
+--     rows today; bounds the table going forward:
+--       update public.system_config set value = '90'
+--        where key = 'audit_retention_days';
+--     The existing V288 cron then enforces it with no further work.
+--
+-- (c) RAISE `shared_buffers` above 256 MB (a Supabase compute-tier change). With
+--     `audit_log_v2` alone at 557 MB the working set cannot fit, whatever is done in SQL.
+--
+-- (d) SCHEDULE REGULAR MAINTENANCE. This table reached 76,686 dead tuples and a 45%
+--     visibility-map hole without autovacuum ever firing, because the 0.2 scale factor puts
+--     its trigger point at ~100,733 dead tuples. A per-table override would keep it clean
+--     without a manual VACUUM, at the cost of more frequent background work:
+--       alter table public.audit_log_v2
+--         set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
+--     NOT APPLIED - it changes background load on a database the owner already finds slow,
+--     and that trade-off is theirs to make.
+--
+--
+-- =====================================================================================
+-- ROLLBACK
+-- =====================================================================================
+--
+-- NONE IS POSSIBLE OR NEEDED, and that is a property of what was applied, not an omission.
+-- VACUUM and ANALYZE are pure maintenance: no schema, grant, policy, function or row was
+-- changed, and 503,416 / 209,509 / 212,567 rows were verified identical afterwards. There
+-- is no state to restore - "undoing" a VACUUM would mean re-creating dead tuples, which is
+-- meaningless.
+--
+-- The two reversible side effects, for completeness:
+--   * `pgstattuple` was installed for measurement and has been DROPPED again
+--     (verified: 0 rows in pg_extension). To re-measure bloat later:
+--         create extension if not exists pgstattuple;
+--         select * from pgstattuple_approx('public.audit_log_v2');
+--         drop extension pgstattuple;
+--   * Planner statistics were refreshed by ANALYZE. If a plan ever needs to be re-derived,
+--     `analyze public.audit_log_v2;` is the forward fix; there is no "old statistics" to
+--     put back.
+--
+--
+-- =====================================================================================
+-- FOR THE MAINTENANCE WINDOW - the full heap rewrite, if it is ever wanted
+-- =====================================================================================
+--
+-- Only worth doing AFTER (a) or (b) above have actually reduced what the table holds;
+-- rewriting 489 MB of live rows to reclaim 14 MB of free space is not worth an outage.
+--
+--   -- Option 1, in-place, TAKES ACCESS EXCLUSIVE - the app is down for the duration:
+--   vacuum full public.audit_log_v2;
+--   analyze public.audit_log_v2;
+--
+--   -- Option 2, online, needs the pg_repack CLIENT BINARY on a host that can reach the DB:
+--   create extension if not exists pg_repack;
+--   -- then, from that host, NOT from SQL:
+--   --   pg_repack -h <host> -U postgres -d postgres -t public.audit_log_v2 --no-superuser-check
+--   drop extension pg_repack;
+--
+-- Re-verify the row count as a privileged reader afterwards either way. PROJECT_MEMORY
+-- records that on this database a timed-out statement has previously COMMITTED
+-- server-side, so never trust a client timeout as proof that nothing happened.
+-- =====================================================================================
+
+
+-- -------------------------------------------------------------------------------------
+-- WHAT WAS RUN (idempotent, safe to re-run; each takes SHARE UPDATE EXCLUSIVE only)
+-- -------------------------------------------------------------------------------------
+
+vacuum (analyze) public.audit_log_v2;
+vacuum (analyze) public.parts_consumption;
+vacuum (analyze) public.production_logs;
+
+
+-- -------------------------------------------------------------------------------------
+-- VERIFY (expect: pct_all_visible ~100, n_dead_tup 0, audit_log_v2 total ~557 MB)
+-- -------------------------------------------------------------------------------------
+--
+-- select c.relname,
+--        pg_size_pretty(pg_total_relation_size(c.oid))                       as total,
+--        round(100.0*c.relallvisible/nullif(c.relpages,0),2)                 as pct_all_visible,
+--        s.n_dead_tup, s.vacuum_count, s.analyze_count
+--   from pg_class c
+--   join pg_namespace n on n.oid = c.relnamespace
+--   left join pg_stat_user_tables s on s.relid = c.oid
+--  where n.nspname = 'public'
+--    and c.relname in ('audit_log_v2','parts_consumption','production_logs')
+--  order by 1;
+--
+-- Retention is working and has nothing to delete - confirm rather than re-investigating:
+--
+-- select (select value from public.system_config where key='audit_retention_days') as keep_days,
+--        (select count(*) from public.audit_log_v2)                                as rows,
+--        (select min(created_at)::date from public.audit_log_v2)                    as oldest,
+--        (select count(*) from public.audit_log_v2
+--          where created_at < now() - interval '365 days')                          as purgeable_now;
+-- =====================================================================================

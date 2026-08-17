@@ -1,0 +1,116 @@
+-- =====================================================================================
+-- V574 - SIX TABLES HAD A COUNTRY COLUMN AND NO COUNTRY POLICY
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v574_base_table_country_isolation`.
+-- =====================================================================================
+--
+-- THIS REFUTES A CLAIM THIS PROJECT'S OWN MEMORY REPEATS, and that is the point of the
+-- migration. The standing line is:
+--
+--     "RLS ITSELF WAS NEVER AT FAULT. On every probe the same user's DIRECT table read
+--      returned 0 rows. The wall held everywhere except inside the functions."
+--
+-- That was only ever tested on tyre_records, parts_consumption, work_orders and
+-- vehicle_fleet. It does not generalise. Six tables carry a `country` column, are
+-- SELECT-able by `authenticated`, have RLS enabled, and had ZERO country-scoping
+-- policies - so a KSA-only user read other countries' rows with NO function involved at
+-- all. V501 previously dismissed this group as "org-walled", which conflates the ORG
+-- wall with the COUNTRY wall; they are different boundaries.
+--
+--
+-- MEASURED as the real approved KSA-only Manager 34793423, foreign rows directly
+-- readable BEFORE:
+--
+--   classification_feedback   12,720 of 22,163   (UAE 9,321 + Egypt 3,399)
+--   material_master           12,719 of 22,162   item codes, names, categories
+--   tyre_price_backfill_log      972 of  2,989   SERIALS, ASSET NUMBERS, PER-TYRE PRICES
+--   sites                         23 of     68   site names
+--   parts_cost_fill_log            2 of  1,068
+--   tyre_life_targets              1 of      8
+--
+-- tyre_price_backfill_log is the one that matters most - it is not counts, it is content:
+-- `Egypt / WL027 / serial 25072120501 / new_cost 65,789.47`.
+--
+-- ENUMERATION: 126 tables match the shape (country column, RLS on, authenticated SELECT,
+-- no country policy). Only these six actually hold foreign rows today; the rest are
+-- empty. The empty ones were deliberately NOT given a policy in this migration - see
+-- OPEN below, because "empty today" is a data fact and not a rule.
+--
+--
+-- THE POLICY was COPIED, not composed. The expression is read out of the live
+-- `tyre_records_country_isolation` with pg_get_expr and applied verbatim - V542's method,
+-- and the reason it is the method: a hand-written predicate is where the asymmetries bite.
+--
+--   ((country IS NULL)
+--    OR (SELECT is_super_admin())
+--    OR (SELECT app_sees_all_countries())
+--    OR (lower(btrim(country)) = ANY (COALESCE((SELECT app_country_scope()), '{}'::text[]))))
+--
+--   * RESTRICTIVE, FOR ALL, expression in BOTH USING and WITH CHECK, so the read rule and
+--     the write rule can never disagree (V542's lesson - a SELECT-only policy says
+--     nothing about a row being WRITTEN, which is how a KSA Manager once inserted a UAE
+--     tyre_records row).
+--   * is_super_admin() IS LOAD-BEARING. The owner's profiles.country is NULL, so
+--     app_sees_all_countries() is false and app_country_scope() is '{}' for every one of
+--     the 38 live users. A predicate built from the two scope readers alone - the obvious
+--     shape - returns ZERO ROWS to the platform owner.
+--   * lower(), because app_country_scope() returns lower-cased values. The SITE helper is
+--     the opposite and needs UPPER. That asymmetry is real and is why the expression is
+--     copied rather than typed.
+--   * `country IS NULL` keeps the standing null-dimension convention. MEASURED: all six
+--     tables have ZERO null-country rows, so that term changes nothing here and is kept
+--     only for consistency with the other 78.
+--
+--
+-- ONE DATA FIX, AND IT HAD TO COME FIRST
+--
+-- `sites` held a row whose country reads 'Saudi Arabia' rather than 'KSA'. No scope
+-- matches that string, so a country policy would have SILENTLY HIDDEN a site from every
+-- scoped user - a policy quietly breaking the site register is worse than the leak it
+-- closes. It was checked before being touched: RIY-MET already exists under 'KSA' with
+-- the same organisation, so the 'Saudi Arabia' row is a genuine duplicate and removing
+-- it costs no site. The project memory had already flagged this row as a stray.
+-- Snapshotted to `_bak.sites_country_dup_v574`; the migration ABORTS unless exactly one
+-- such row is found.
+--
+--
+-- VERIFICATION (live, impersonated, rolled back)
+--
+-- AFTER, same KSA-only Manager: foreign rows are 0 on ALL SIX
+--   material_master 0 · classification_feedback 0 · tyre_price_backfill_log 0 ·
+--   parts_cost_fill_log 0 · tyre_life_targets 0 · sites 0
+-- and they still read their OWN data: material_master 9,443, sites 45 (unchanged - the
+-- one KSA site they could not see is in another organisation, before and after).
+--
+-- SUPER ADMIN NOT BLACKED OUT - the check that would have failed had is_super_admin()
+-- been left out: material_master 22,162, classification_feedback 22,163,
+-- tyre_price_backfill_log 2,989, sites 68, 3 distinct countries. All unchanged.
+--
+-- Structural assertions abort unless each of the six carries exactly one RESTRICTIVE
+-- FOR ALL policy with app_country_scope in both USING and WITH CHECK and is_super_admin
+-- in USING.
+--
+--
+-- OPEN, stated rather than left silent
+--
+-- 1. The other ~120 tables of this shape are EMPTY TODAY and were not given a policy.
+--    That is a data fact, not a rule - each arms the moment a second country's rows land
+--    in it. The honest fix is a policy per table, applied deliberately; the risky fix is
+--    a loop over 120 tables nobody has measured.
+-- 2. `audit_log_v2` (503,284 rows) shows 0 foreign rows only because its country is NULL
+--    on essentially every row, and the null-visible-to-all convention then shows them to
+--    everyone. It has old_values/new_values JSONB and NO organisation_id column, so
+--    whether those payloads carry other countries' or other tenants' field values is
+--    UNMEASURED. Not guarded here because a wrong policy on the audit trail is its own
+--    hazard.
+-- 3. `profiles` is deliberately untouched: the org wall there holds (a KSA Manager cannot
+--    see the Egypt Director), and a country policy would break broadcast audience
+--    resolution, silently dropping colleagues from safety broadcasts.
+--
+-- ROLLBACK:
+--   drop policy material_master_country_isolation_v574 on public.material_master;
+--   ... (one per table) ...
+--   insert into public.sites select * from _bak.sites_country_dup_v574;
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above; it reads the canonical
+--  expression from the live tyre_records policy and installs it on the six tables.)

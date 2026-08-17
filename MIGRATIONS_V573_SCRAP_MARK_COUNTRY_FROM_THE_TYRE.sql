@@ -1,0 +1,91 @@
+-- =====================================================================================
+-- V573 - THE SCRAP MARK TOOK ITS COUNTRY FROM THE CALLER, NOT FROM THE TYRE
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v573_scrap_mark_country_from_the_tyre`.
+-- =====================================================================================
+--
+-- THIS CORRECTS TWO EARLIER MIGRATIONS OF MINE. Neither was wrong about what it fixed;
+-- both were incomplete, and the second was defeated by the gap the first left.
+--
+--   V550 scoped the `tyre_records` UPDATE inside scrap_tyre_by_serial. It did NOT scope
+--        the `tyre_status_marks` INSERT beside it.
+--   V562 added `and (country is null or app_write_country_ok(country))` to
+--        set_scrap_reason - and that guard was DEFEATED by the V550 gap, because the
+--        mark this function inserts stamped its country from `p_country`, which is NULL
+--        when the argument is omitted, and a NULL country SATISFIES the `country is
+--        null` term. The convention that a null-dimension row is visible to every scope
+--        is correct for READS and wrong for a value an attacker controls.
+--
+-- Found by an adversarial audit, then re-reproduced here before being touched.
+--
+--
+-- REPRODUCTION - the real approved KSA-only Manager 34793423 against the REAL UAE tyre
+-- YMA55857 (asset TM448), privileged recount after `reset role` in the same transaction:
+--
+--   scrap_tyre_by_serial('YMA55857','initial','UAE')   -> {"ok":false,"reason":"forbidden"}
+--   scrap_tyre_by_serial('YMA55857','initial', null)   -> {"ok":true,"updated":0}   <-- !
+--   privileged recount   tyre still Active, BUT A scrap MARK LANDED ON THE UAE TYRE
+--   set_scrap_reason('YMA55857','REWRITTEN BY KSA-ONLY MANAGER') -> {"ok":true}
+--
+-- So naming the country was refused and OMITTING it succeeded - the V550 shape exactly.
+--
+--
+-- THREE DISTINCT PROBLEMS, all three closed
+--
+-- 1. THE WRITE CROSSED THE WALL. The mark's country now comes from the TYRE
+--    (`coalesce(v_ctry, ...)` where v_ctry is `min(t.country)` over that serial's own
+--    rows), never from the argument. The function resolves the serial FIRST and refuses
+--    before writing anything:
+--      v_tot = 0            -> {"ok":false,"reason":"not_found"}
+--      v_ok  = 0            -> {"ok":false,"reason":"forbidden"}
+--    `v_ok` counts the serial's rows the caller may actually write.
+--
+-- 2. IT REPORTED SUCCESS WHILE DOING NOTHING. `{"ok":true,"updated":0}` told the caller
+--    the tyre was scrapped when no row was touched. A refusal must refuse; this
+--    codebase's standing rule is never a success shape on a failure and never a
+--    populated row of zeros. `v_n = 0` now returns ok:false.
+--
+-- 3. `on conflict (serial, mark_type) do update set reason, created_by` could OVERWRITE
+--    an existing foreign mark, destroying the attribution V383 was built to keep. Closed
+--    by (1): a foreign serial never reaches the INSERT.
+--
+--
+-- NO BACKFILL WAS NEEDED, and that was measured rather than assumed: all 201 live scrap
+-- marks already carry a non-null country, so V562's guard on set_scrap_reason is
+-- effective for every existing mark. The only hole was the NEW mark. Had any mark
+-- carried a NULL country, it would have needed stamping from its tyre first.
+--
+--
+-- VERIFICATION (live, impersonated, rolled back)
+--
+-- ATTACK REFUSED BOTH WAYS and nothing was written:
+--   omitted argument -> {"ok":false,"reason":"forbidden"}
+--   named 'UAE'      -> {"ok":false,"reason":"forbidden"}
+--   privileged recount: marks on YMA55857 = 0   (before this migration: 1)
+--
+-- CONTROL PASSES - the caller's own country still works, which is the half that proves
+-- this is a fix and not a breakage. Same user, a real KSA active tyre:
+--   {"ok":true,"serial":"12253G1113","updated":1}
+--   mark country stamped = KSA   <- derived from the tyre, with the argument omitted
+--   rows scrapped (privileged) = 1
+--
+-- Structural assertions in the migration abort unless the mark country is derived from
+-- the tyre, the not_found path exists, SECURITY DEFINER and the pinned search_path
+-- survived, and anon still cannot execute.
+--
+-- ANCHORS: four, each asserted to occur EXACTLY once before any replacement. Nothing was
+-- retyped - the live body is read with pg_get_functiondef.
+--
+-- STILL OPEN, recorded not silently left: `unscrap_tyre_by_serial` is admin-only and its
+-- country boundary is therefore unexercisable by any real user today (both admins are
+-- super admins with a NULL country). That is a coverage gap in the TEST, not a known
+-- hole.
+--
+-- ROLLBACK:
+--   do $$ declare d text; begin
+--     select def_before into d from _bak.rpc_defs_v573
+--      where proc = 'public.scrap_tyre_by_serial(text,text,text)';
+--     execute d; end $$;
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above; it reads the live
+--  definition and inserts the four guards by anchored replace with exact-count aborts.)

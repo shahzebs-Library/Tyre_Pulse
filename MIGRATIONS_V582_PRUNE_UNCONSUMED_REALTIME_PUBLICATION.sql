@@ -1,0 +1,110 @@
+-- =====================================================================================
+-- V582 - THE APP-WIDE SLOWNESS WAS THE REALTIME WAL DECODER, NOT ANY QUERY
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v582_prune_unconsumed_realtime_publication`. Publication 19 tables -> 13.
+-- Paired with a CLIENT change in the same commit (see THE OTHER HALF below).
+-- =====================================================================================
+--
+-- THE OWNER REPORTED "app speed become worst very slow". Measured rather than guessed,
+-- and the first suspect was exonerated with evidence before anything else was touched.
+--
+--
+-- WHAT IT IS NOT
+--
+-- V578 added 102 RESTRICTIVE country policies the same day, so it was the obvious
+-- candidate. It is not the cause: of the 19 tables in the `supabase_realtime`
+-- publication, exactly ONE (`stock`) gained a V578 policy, and `stock` is 16 kB with 0
+-- writes. Every other realtime table already carried its country policy from V226/V269.
+-- Nor is it a stuck replication slot - the classic Supabase cause of sudden app-wide
+-- slowness - both slots are `active`, `reserved`, 16 MB retained, 0 bytes unconsumed.
+--
+--
+-- WHAT IT IS - the top of pg_stat_statements, six days of history:
+--
+--   SELECT wal->>$5 as type, wal->>$6 as schema, wal->>$7 as table, ...
+--     calls 454,844 | total_exec_time 5,417,723 ms | mean 12 ms
+--     shared blocks 1,192,124,940
+--
+-- That is Supabase Realtime's WAL decoder, and it is **~15x the total time of the next
+-- statement**. 1.19 BILLION buffer accesses against a `shared_buffers` of 32,768 blocks =
+-- **256 MB**. So the busiest thing on this database is continuously sweeping the entire
+-- buffer cache, which is exactly why the symptom is "the whole app is slow" and not "this
+-- screen is slow": every other query loses its cached pages.
+--
+-- Realtime decodes changes for every PUBLISHED table whether or not any client is
+-- listening, and runs `realtime.apply_rls()` per change PER SUBSCRIBER. So there are two
+-- independent wastes: publishing a table nobody subscribes to, and subscribing to a table
+-- whose payload nobody consumes. This migration fixes the first; the client commit fixes
+-- the second, which is the larger of the two.
+--
+--
+-- THE SIX REMOVED, enumerated by reading every postgres_changes / useRealtime call site in
+-- BOTH src/ and mobile/ - never by guessing, and mobile matters because its list screens
+-- subscribe page-by-page (stock_records, rca_records, work_orders, inspections,
+-- corrective_actions, accidents, profiles, alerts, tyre_records):
+--
+--   vehicle_fleet     5,358 writes - the SECOND busiest published table, no subscriber
+--   stock_movements   (mobile subscribes to stock_records, never stock_movements)
+--   budgets
+--   gate_passes
+--   stock             16 kB, 0 writes
+--   purchase_orders
+--
+-- The migration drops each only if it is still present, so a re-run is a clean no-op, and
+-- then ABORTS if any of the 13 CONSUMED tables is missing - the check that would catch a
+-- typo removing a live feature's channel instead of a dead one.
+--
+-- SURVIVING 13, each with a real subscriber that acts on the payload: accidents, alerts,
+-- corrective_actions, inspections, module_permissions, notifications, pending_uploads,
+-- profiles, rca_records, stock_records, tyre_records, user_access_grants, work_orders.
+--
+--
+-- THE OTHER HALF, and it is the bigger one: `useRealtimeSync` is no longer mounted.
+--
+-- It opened **12** postgres_changes subscriptions inside `Layout` - so on every page load,
+-- for every signed-in user - and every one of them did nothing but invalidate a TanStack
+-- Query key. Measured across src/: 231 pages, and exactly TWO files call `useQuery`
+-- (`useBilling.js`, and `useSupabaseQuery.js` which is imported nowhere). So ['tyres'],
+-- ['dashboard'], ['work-orders'], ['stock'] and the rest had NO READER. The only other
+-- references are two further WRITERS and `sourceTables: ['inspections']` metadata in the
+-- KPI registry, which is unrelated. Twelve subscriptions per tab, per user, driving the
+-- most expensive statement on the database, for zero benefit.
+-- Pinned by `src/test/realtimeSubscriptionCost.test.js` (mutation-tested: re-adding the
+-- call makes it fail).
+--
+--
+-- STATED RATHER THAN QUIETLY "FIXED": SEVEN SUBSCRIPTIONS RECEIVE NOTHING TODAY
+--
+-- These tables are subscribed to by real code but are NOT in the publication, so those
+-- channels have always been silent: `system_config` (SettingsContext live refresh),
+-- `system_logs` (ConsoleSystemHealth), `tech_activity_events`, `wo_assignments`,
+-- `wo_tasks` (WorkshopLive's live board), `pm_programs`, `pm_service_records`.
+--
+-- They were deliberately NOT added. Adding a table to the publication ADDS decode load to
+-- the very thing that is already the largest cost here, and the affected surfaces already
+-- degrade honestly: WorkshopLive polls every 60 s and ConsoleSystemHealth every 60 s. If
+-- someone wants those genuinely live, add them ONE AT A TIME and re-measure the decoder,
+-- rather than assuming a subscription is free because the code compiles.
+--
+--
+-- WHAT WAS ALSO HAPPENING TODAY, in fairness to the report
+--
+-- Nearly every statement first seen in the last six hours is my own and the V578/V579/V580
+-- agents' measurement work on this LIVE instance: impersonation probes, EXPLAIN ANALYZEs,
+-- a rolled-back FORCE ROW LEVEL SECURITY experiment that took ACCESS EXCLUSIVE locks on 8
+-- tables, and a 120,000-row UPDATE attempt against the 646 MB `audit_log_v2` that timed
+-- out and rolled back. On a 256 MB instance that competes directly with the app for
+-- buffers and locks. That load is finished. **RULE: heavy measurement against production
+-- is itself a load the owner will feel - say so when reporting a slowdown, and prefer
+-- narrow probes over sweeps across 8 live tables.**
+--
+-- ROLLBACK:
+--   alter publication supabase_realtime add table public.vehicle_fleet;
+--   alter publication supabase_realtime add table public.stock_movements;
+--   alter publication supabase_realtime add table public.budgets;
+--   alter publication supabase_realtime add table public.gate_passes;
+--   alter publication supabase_realtime add table public.stock;
+--   alter publication supabase_realtime add table public.purchase_orders;
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above: a per-table conditional
+--  DROP plus an abort if any consumed table is absent.)

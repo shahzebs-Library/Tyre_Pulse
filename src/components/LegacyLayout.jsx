@@ -81,7 +81,6 @@ import { supabase } from '../lib/supabase'
 import { detectAlertBadgeCount } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
-import { useRealtimeSync } from '../hooks/useRealtime'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
 import TpLogo from '../assets/logo.svg'
 import { getCompanyLogo } from '../lib/api/brandLogo'
@@ -695,7 +694,9 @@ const SIDEBAR_EXPANDED = 240
 const SIDEBAR_COLLAPSED = 54
 
 export default function LegacyLayout({ children }) {
-  useRealtimeSync()
+  // useRealtimeSync() REMOVED - see the note in Layout.jsx. Twelve postgres_changes
+  // subscriptions per tab, every one invalidating a query key no page reads, against a
+  // WAL decoder that is this instance's single largest cost.
 
   const { profile, signOut, hasPermission, grantedModules, isSuperAdmin } = useAuth()
   const { t }                               = useLanguage()

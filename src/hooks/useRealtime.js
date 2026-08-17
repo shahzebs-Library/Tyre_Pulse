@@ -1,10 +1,35 @@
 /**
  * useRealtime - Supabase postgres_changes subscriptions that auto-invalidate
- * TanStack Query caches. Zero polling. Instant UI updates on any data change.
+ * TanStack Query caches.
  *
- * Usage: call useRealtimeSync() once inside Layout.jsx (always-mounted).
- * It subscribes to the core tables and invalidates the matching query keys
- * so every page using those queries refreshes automatically.
+ * **`useRealtimeSync` IS DEAD AND IS NO LONGER MOUNTED. DO NOT RE-MOUNT IT.**
+ *
+ * The docstring below described the intent, and the intent never became true: the
+ * TanStack Query layer it invalidates has no readers. Measured across src/: 231 pages,
+ * and exactly two files call `useQuery` - `useBilling.js` and this hook's sibling
+ * `useSupabaseQuery.js`, which is itself imported nowhere. So every key in
+ * TABLE_QUERY_MAP (['tyres'], ['dashboard'], ['work-orders'], ['stock'] ...) is written
+ * to and read by nobody. The only other references are two more *writers*
+ * (TyreRecords.jsx `invalidate(['tyres'])`) and `sourceTables: ['inspections']` metadata
+ * in the KPI registry, which is unrelated.
+ *
+ * It was not free. Supabase Realtime decodes WAL and runs `realtime.apply_rls()` per
+ * change PER SUBSCRIBER, and these 12 channels opened on every page load for every
+ * signed-in user. On this instance that WAL decoder is the largest single database
+ * consumer by roughly 15x - 454,844 calls, ~90 minutes of CPU and 1.19 BILLION buffer
+ * accesses over six days, against a 256 MB shared_buffers. That is continuous cache
+ * thrash for zero benefit, and it is why the app felt slow everywhere at once rather
+ * than on one screen.
+ *
+ * `useTableRealtime` below has the same defect for the same reason and is also unused.
+ *
+ * IF YOU NEED LIVE DATA: subscribe in the page that needs it and CONSUME the payload
+ * (re-run its loader), the way useRealtimeAlerts, AuthContext, SettingsContext,
+ * WorkshopLive, UploadApprovals and ConsoleSystemHealth already do. A global
+ * subscribe-to-everything hook cannot know whether anything is listening.
+ *
+ * Kept rather than deleted so the reasoning survives with the code; wiring either export
+ * back into a layout re-creates the load.
  */
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'

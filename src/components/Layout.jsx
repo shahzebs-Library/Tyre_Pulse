@@ -66,7 +66,6 @@ import { supabase } from '../lib/supabase'
 import { detectAlertBadgeCount } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount, getFailedCount, getFailedInspections, retryFailedInspection } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
-import { useRealtimeSync } from '../hooks/useRealtime'
 import { useFeatureFlags } from '../hooks/useFeatureFlags'
 import TpLogo from '../assets/logo.svg'
 import { getCompanyLogo } from '../lib/api/brandLogo'
@@ -770,7 +769,20 @@ const SIDEBAR_COLLAPSED = 70
 const MOBILE_DRAWER_MAX = 360
 
 export default function Layout({ children }) {
-  useRealtimeSync()
+  // useRealtimeSync() REMOVED - it opened 12 postgres_changes subscriptions per open
+  // tab and every one of them invalidated a TanStack Query key that NOTHING READS.
+  // Measured: 231 pages, 0 call useQuery (only useBilling.js and the dead
+  // useSupabaseQuery.js do), so ['tyres'], ['dashboard'], ['work-orders'] and the rest
+  // have no reader. The cost was not free: Supabase Realtime decodes WAL and runs
+  // realtime.apply_rls() per change PER SUBSCRIBER, and on this instance that WAL
+  // decoder is the single largest database consumer by a factor of ~15 - 454,844 calls
+  // and 1.19 BILLION buffer accesses over six days against a 256 MB shared_buffers.
+  // The live features that genuinely need realtime keep their own subscriptions:
+  // useRealtimeAlerts (alerts/notifications/tyre_records), AuthContext (profiles,
+  // user_access_grants, module_permissions - the V227 live access refresh),
+  // SettingsContext (system_config), WorkshopLive, UploadApprovals, ConsoleSystemHealth.
+  // DO NOT re-add a global subscribe-to-everything hook. If a page needs live data,
+  // subscribe in that page to that table and consume the payload.
 
   const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
   const { t }                               = useLanguage()

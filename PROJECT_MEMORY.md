@@ -3,7 +3,7 @@
 Durable, committed project knowledge so any session has full context. Keep this
 current. Read it before adding/changing modules. Governing spec: `Tyre pulse enterprise.md`
 
-## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. SUPERSEDED: next free is **V582** (see part 2 below).
+## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. SUPERSEDED: next free is **V585** (see part 3 below).
 Branch `claude/accident-builder-report-ui-2bkwb5`, merged to main. Full suite green. Migrations V555-V576 all
 applied live on `jhssdmeruxtrlqnwfksc` and verified; every header carries its own reproduction + rollback.
 
@@ -269,6 +269,32 @@ Unchanged and deliberately so: WorkOrders 26, ExpenseReport ~18, Analytics 7, In
   Vercel deployment is `target: production`, state READY, on the exact sha. Also **`git status` showing dirty files
   while a subagent runs is NOT something to commit** - wait for the completion notification, not for file quiet,
   and stage by explicit path.
+- **THE STOP-HOOK "unpushed commits" LOOP, AGAIN, and the cause is benign.** The hook checks
+  `origin/<branch>..HEAD`. The owner asked for pushes straight to main, so `git push HEAD:main` keeps `origin/main`
+  current and leaves `origin/<branch>` behind its own remote. **The fix is to push the BRANCH ref too, never to
+  rewrite anything** - here it fast-forwarded, no force needed. **CHECK `vercel.json` -> `git.deploymentEnabled`
+  FIRST**: this branch is listed `false`, so the branch push raises no preview build. That matters, because stray
+  previews once exhausted the free plan's 100 deploys/day and four merged PRs' PRODUCTION builds were refused,
+  leaving main live on an older commit while the work was reported as shipped.
+
+### OPEN AT THE END OF PART 3
+- **NOT MEASURED YET: the realtime improvement.** V582 + the client change are deployed (production READY on the
+  exact sha) but the decoder was still running at ~1.7 calls/s and ~31 MB/s of buffer traffic immediately after,
+  i.e. NOT below its 6-day average of 0.86 calls/s and ~18 MB/s. That is expected, not a failure: it is a
+  prompt-mode PWA with `skipWaiting:false`, so every already-open tab keeps the old bundle AND its 12
+  subscriptions until it is closed or the update prompt is accepted. **Re-measure after clients have reloaded
+  before claiming a win.**
+- **REAL CORRECTNESS BUG, deliberately left:** TyreRecords' `listSiteOptions` / `listBrandOptions` are unpaged bare
+  selects, so capped at 1000 of 11,193 rows and the filter dropdowns may be **silently incomplete**. Every
+  zero-migration fix either changes which sites appear or makes it slower; the honest fix is a distinct-values RPC.
+- **`shared_buffers` 256 MB vs `audit_log_v2` 557 MB is not a SQL problem.** ~135 MB of pressure was removed
+  (89 MB audit heap + 46 MB indexes) and the visibility map restored, but a database whose largest table is twice
+  its cache stays I/O-bound. The remaining lever is the compute tier, not more query tuning.
+- Owner decisions carried into part 3: whether to stop auditing bulk imports (94.5% of `audit_log_v2`, changes the
+  audit contract); the V579 audit-log country attribution (hides 39,979 rows from a KSA-scoped admin); shortening
+  `audit_retention_days` from 365 to 90 (0 rows today, bounds it going forward).
+- Still carried from part 2, unchanged: re-verify V568's accident `x <> any(...)` accept/refuse proof; the Egypt
+  Director's org membership; the `get_email_by_identifier` anon email oracle.
 
 ## SESSION 2026-08-17 (part 2) — V577-V581: THE ~1.7 s RESIDUE WAS EXPRESSION DUPLICATION, NOT THE BASELINE. SUPERSEDED: next free is **V585** (see part 3 above).
 Same branch. V577 + V578 APPLIED live; V579 + V580 are MEASURED REFUSALS with nothing applied. Suite 525 files /

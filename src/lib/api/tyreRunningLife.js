@@ -59,26 +59,70 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0, asset = null, 
       // while the server had answered in 814 ms. Each page is about 600 kB.
       // The rows are ordered server-side inside the slice, so page 2 is the
       // next rows and not an arbitrary set.
+      //
+      // THE PAGES ARE FETCHED CONCURRENTLY, and that is the point. Paging fixed
+      // the dropped payload and made the WALL CLOCK four times worse, because
+      // this RPC costs the same for one row as for a thousand - measured flat at
+      // ~7.5 s for limit 1 and limit 1000 alike, since the expensive part is the
+      // fleet baseline it builds before slicing (V576 halved that to ~3.8 s, and
+      // the remaining cost is still per CALL, not per row). Four sequential
+      // calls is therefore four times the cost of one, for no benefit; past a
+      // gateway timeout it is not slow, it is an error.
+      //
+      // Page 0 goes first ALONE, because its `total` is what says how many more
+      // there are - guessing would either miss rows or fire requests for pages
+      // that do not exist. The rest go in one bounded batch, and the results are
+      // reassembled BY OFFSET so the server's ordering survives regardless of
+      // which response lands first.
       const PAGE = 1000
       const MAX_ROWS = 8000 // a stop, not an expectation: KSA is 3,595
-      let out = null
-      for (let offset = 0; offset < MAX_ROWS; offset += PAGE) {
-        // eslint-disable-next-line no-await-in-loop
+      const MAX_CONCURRENT = 4 // matches fetchAllPages; a bound, not a target
+
+      const fetchPage = async (offset) => {
         const { data, error } = await supabase.rpc('get_tyre_running_life', {
           p_country, p_limit: PAGE, p_offset: offset, p_asset, p_due_only,
         })
-        if (error) return { ok: false, reason: toUserMessage(error) }
-        if (!data) return { ok: false, reason: 'The running-life service returned nothing.' }
-        if (data.ok === false) return { ok: false, reason: data.reason || 'The running-life service could not build this view.' }
-        const page = Array.isArray(data.rows) ? data.rows : []
-        if (!out) out = { ...data, rows: page }
-        else out.rows = out.rows.concat(page)
-        const total = Number(data.total)
-        // Stop on the server's own count when it gives one, else on a short page.
-        if (Number.isFinite(total) ? out.rows.length >= total : page.length < PAGE) break
-        if (!page.length) break
+        if (error) return { err: toUserMessage(error) }
+        if (!data) return { err: 'The running-life service returned nothing.' }
+        if (data.ok === false) {
+          return { err: data.reason || 'The running-life service could not build this view.' }
+        }
+        return { data, rows: Array.isArray(data.rows) ? data.rows : [] }
       }
-      return out || { ok: false, reason: 'The running-life service returned nothing.' }
+
+      const first = await fetchPage(0)
+      if (first.err) return { ok: false, reason: first.err }
+      const out = { ...first.data, rows: first.rows }
+
+      const total = Number(first.data.total)
+      // Without a server count, fall back to the old rule: a short page is the
+      // last one. That path stays sequential because there is nothing to predict.
+      if (!Number.isFinite(total)) {
+        if (first.rows.length === PAGE) {
+          for (let offset = PAGE; offset < MAX_ROWS; offset += PAGE) {
+            // eslint-disable-next-line no-await-in-loop
+            const p = await fetchPage(offset)
+            if (p.err) return { ok: false, reason: p.err }
+            out.rows = out.rows.concat(p.rows)
+            if (p.rows.length < PAGE) break
+          }
+        }
+        return out
+      }
+
+      const offsets = []
+      for (let offset = PAGE; offset < Math.min(total, MAX_ROWS); offset += PAGE) offsets.push(offset)
+
+      for (let i = 0; i < offsets.length; i += MAX_CONCURRENT) {
+        const window = offsets.slice(i, i + MAX_CONCURRENT)
+        const settled = await Promise.all(window.map((o) => fetchPage(o)))
+        const failed = settled.find((p) => p.err)
+        // One bad page invalidates the set: a partial list rendered as a whole
+        // one is silently wrong, which is worse than an honest failure.
+        if (failed) return { ok: false, reason: failed.err }
+        for (const p of settled) out.rows = out.rows.concat(p.rows)
+      }
+      return out
     } catch (e) {
       return { ok: false, reason: toUserMessage(e) }
     }

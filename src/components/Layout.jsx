@@ -207,7 +207,7 @@ const NAV_GROUPS = [
       { to: '/anomalies',           label: 'Anomaly Scan', parent: 'Findings',       icon: AnomalyScanIc, adminOnly: A },
       { to: '/compliance',             label: 'Compliance Dashboard', parent: 'Compliance', icon: Shield, adminOnly: A },
       { to: '/safety-compliance',      label: 'Safety & Compliance', parent: 'Compliance', icon: ShieldCheck, adminOnly: A },
-      { to: '/certifications',         label: 'Certifications', parent: 'Compliance',      icon: BadgeCheck },
+      { to: '/certifications',         label: 'Certifications', parent: 'Compliance',      icon: BadgeCheck, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/policies',               label: 'Policy Management', parent: 'Compliance',    icon: ScrollText, adminOnly: A },
       { to: '/emissions',              label: 'Emissions Tests', parent: 'Compliance',     icon: Leaf, adminOnly: A },
       { to: '/hours-of-service',       label: 'Hours of Service', parent: 'Compliance',    icon: Clock, adminOnly: A },
@@ -260,16 +260,16 @@ const NAV_GROUPS = [
     label: 'Inventory & Procurement',
     items: [
       { to: '/stock',               label: 'Stock', parent: 'Stock',               icon: StockBoxIc },
-      { to: '/stock-replenishment', label: 'Stock Replenishment', parent: 'Stock', icon: PackagePlus },
-      { to: '/parts-catalog',       label: 'Parts Catalog', parent: 'Stock',       icon: Boxes },
+      { to: '/stock-replenishment', label: 'Stock Replenishment', parent: 'Stock', icon: PackagePlus, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/parts-catalog',       label: 'Parts Catalog', parent: 'Stock',       icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/materials',           label: 'Materials', parent: 'Stock',           icon: Layers, adminOnly: A },
-      { to: '/goods-receipt',       label: 'Goods Receipt', parent: 'Stock',       icon: PackageCheck },
+      { to: '/goods-receipt',       label: 'Goods Receipt', parent: 'Stock',       icon: PackageCheck, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/procurement',         label: 'Procurement', parent: 'Purchasing',         icon: PurchaseOrderIc, adminOnly: A },
-      { to: '/requisitions',        label: 'Requisitions', parent: 'Purchasing',        icon: ClipboardList },
+      { to: '/requisitions',        label: 'Requisitions', parent: 'Purchasing',        icon: ClipboardList, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/suppliers',           label: 'Supplier Management', parent: 'Purchasing', icon: SupplierTruckIc, adminOnly: A },
       { to: '/vendor-intelligence', label: 'Vendor Intelligence', parent: 'Purchasing', icon: Trophy, adminOnly: A },
       { to: '/marketplace',         label: 'Supplier Marketplace', parent: 'Purchasing', icon: Store, adminOnly: A },
-      { to: '/contracts',           label: 'Contracts', parent: 'Purchasing',           icon: FileText },
+      { to: '/contracts',           label: 'Contracts', parent: 'Purchasing',           icon: FileText, roles: ['Admin', 'Manager', 'Director'] },
     ],
   },
   {
@@ -277,9 +277,9 @@ const NAV_GROUPS = [
     items: [
       { to: '/accidents',      label: 'Accidents',       icon: AlertOctagon },
       { to: '/accident-cases', label: 'Accident Cases',  icon: Layers, roles: ANALYTICS_ROLES },
-      { to: '/incidents',        label: 'Incident Reports', icon: FileWarning },
-      { to: '/claims-summary', label: 'Claims Summary',  icon: BarChart2 },
-      { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert },
+      { to: '/incidents',        label: 'Incident Reports', icon: FileWarning, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/claims-summary', label: 'Claims Summary',  icon: BarChart2, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/insurance-policies', label: 'Insurance Policies', icon: Shield, adminOnly: A },
       { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
       { to: '/accident-workflow-settings', label: 'Accident Workflow', icon: GitBranch, roles: ANALYTICS_ROLES },
@@ -332,7 +332,7 @@ const NAV_GROUPS = [
       { to: '/reports',           label: 'Reports', parent: 'Reporting',           icon: FileText },
       { to: '/report-center',     label: 'Report Center', parent: 'Reporting',     icon: ScrollText, roles: ANALYTICS_ROLES },
       { to: '/report-sharing',    label: 'Report Sharing', parent: 'Reporting',    icon: Share2, adminOnly: true },
-      { to: '/scheduled-reports', label: 'Scheduled Reports', parent: 'Reporting', icon: CalendarCheck2 },
+      { to: '/scheduled-reports', label: 'Scheduled Reports', parent: 'Reporting', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/dashboard-builder', label: 'Dashboard Builder', parent: 'Reporting', icon: LayoutGrid, adminOnly: true },
       { to: '/display',           label: 'TV Display Mode', parent: 'Reporting',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'Smart Analytics (AI)', parent: 'AI', icon: Sparkles, adminOnly: A },
@@ -354,7 +354,7 @@ const NAV_GROUPS = [
   {
     label: 'Administration',
     items: [
-      { to: '/data-intake',      label: 'Data Intake Center', parent: 'Data', icon: Database },
+      { to: '/data-intake',      label: 'Data Intake Center', parent: 'Data', icon: Database, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/erp-import',       label: 'ERP Data Import', parent: 'Data',    icon: Upload, roles: ANALYTICS_ROLES },
       { to: '/erp-intake',       label: 'Data Intake (ERP)', parent: 'Data', icon: Layers, roles: ANALYTICS_ROLES },
       { to: '/expense-import',   label: 'Expense Import', parent: 'Data',     icon: Receipt, roles: ANALYTICS_ROLES },
@@ -364,7 +364,7 @@ const NAV_GROUPS = [
       { to: '/custom-data',      label: 'Custom Data', parent: 'Data',        icon: Database },
       { to: '/erp-sync',            label: 'ERP Sync', parent: 'Data',           icon: Database, roles: ERP_ROLES },
       { to: '/ocr-scanner',      label: 'OCR Scanner', parent: 'Data',        icon: ScanLine, adminOnly: A },
-      { to: '/advanced-search',  label: 'Advanced Search', parent: 'Data',    icon: Search },
+      { to: '/advanced-search',  label: 'Advanced Search', parent: 'Data',    icon: Search, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/brand-assets',     label: 'Brand Assets', parent: 'Organisation',       icon: Palette, adminOnly: true },
       { to: '/onboarding-wizard', label: 'Onboarding Wizard', parent: 'Organisation', icon: Rocket, adminOnly: true },
       { to: '/audit',            label: 'Audit Trail', parent: 'System',        icon: ClipboardList, roles: AUDIT_ROLES },
@@ -877,7 +877,7 @@ export default function Layout({ children }) {
     return Boolean(
       shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry),
     )
-  }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin])
+  }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry])
 
   const favoriteItems = useMemo(
     () => visibleFavorites(favorites, navIndex, canSeeRoute)

@@ -619,7 +619,7 @@ function MainApp() {
                       <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
                       <Route path="/accidents/:id" element={<Safe><FlagRoute flag="accidents_module"><AccidentDetail /></FlagRoute></Safe>} />
                       <Route path="/accident-cases" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentCases /></RoleRoute></Safe>} />
-                      <Route path="/claims-summary" element={<Safe><FlagRoute flag="accidents_module"><ClaimsSummary /></FlagRoute></Safe>} />
+                      <Route path="/claims-summary" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="accidents_module"><ClaimsSummary /></FlagRoute></RoleRoute></Safe>} />
                       <Route path="/insurance-policies" element={<Safe><RoleRoute allowed={['Admin']}><InsurancePolicies /></RoleRoute></Safe>} />
                       <Route path="/accident-workflow-settings" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentWorkflowSettings /></RoleRoute></Safe>} />
                       <Route path="/approval-matrix" element={<Safe><RoleRoute allowed={['Admin']}><ApprovalMatrix /></RoleRoute></Safe>} />
@@ -632,7 +632,7 @@ function MainApp() {
                       <Route path="/vehicle/:assetNo"     element={<Safe><FlagRoute flag="vehicle_360"><Vehicle360 /></FlagRoute></Safe>} />
                       <Route path="/reports"              element={<Safe><ModuleRoute moduleKey="reports"><Reports /></ModuleRoute></Safe>} />
                       <Route path="/report-center"       element={<Safe><ModuleRoute moduleKey="reports"><ReportCenter /></ModuleRoute></Safe>} />
-                      <Route path="/scheduled-reports"   element={<Safe><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></Safe>} />
+                      <Route path="/scheduled-reports"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></RoleRoute></Safe>} />
                       <Route path="/knowledge-base"       element={<Safe><FlagRoute flag="ai_tools"><KnowledgeBase /></FlagRoute></Safe>} />
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
                       <Route path="/ai-administration"    element={<Navigate to="/console/ai-admin" replace />} />
@@ -654,7 +654,7 @@ function MainApp() {
                       <Route path="/warranty"             element={<Safe><WarrantyTracker /></Safe>} />
                       <Route path="/tyre-exchange"        element={<Safe><RoleRoute allowed={['Admin']}><TyreExchange /></RoleRoute></Safe>} />
                       <Route path="/scrap"                element={<Safe><TyreScrapManagement /></Safe>} />
-                      <Route path="/stock-replenishment"  element={<Safe><StockReplenishment /></Safe>} />
+                      <Route path="/stock-replenishment"  element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><StockReplenishment /></RoleRoute></Safe>} />
                       <Route path="/live-fleet"           element={<Safe><RoleRoute allowed={['Admin']}><LiveFleetStatus /></RoleRoute></Safe>} />
                       <Route path="/compliance"           element={<Safe><RoleRoute allowed={['Admin']}><ComplianceDashboard /></RoleRoute></Safe>} />
                       <Route path="/retread"              element={<Safe><RoleRoute allowed={['Admin']}><RetreadManagement /></RoleRoute></Safe>} />
@@ -716,8 +716,8 @@ function MainApp() {
                       <Route path="/users"       element={<Navigate to="/console/users" replace />} />
                       {/* ── Universal ── */}
                       <Route path="/upload"      element={<Safe><FlagRoute flag="data_intake"><UploadData /></FlagRoute></Safe>} />
-                      <Route path="/data-intake" element={<Safe><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></Safe>} />
-                      <Route path="/data-intake/history" element={<Safe><FlagRoute flag="data_intake"><DataIntakeHistory /></FlagRoute></Safe>} />
+                      <Route path="/data-intake" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></RoleRoute></Safe>} />
+                      <Route path="/data-intake/history" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="data_intake"><DataIntakeHistory /></FlagRoute></RoleRoute></Safe>} />
                       <Route path="/checklists" element={<Safe><Checklists /></Safe>} />
                       <Route path="/checklists/:templateId/run" element={<Safe><ChecklistRun /></Safe>} />
                       <Route path="/checklists/submission/:id" element={<Safe><ChecklistSubmission /></Safe>} />
@@ -744,18 +744,18 @@ function MainApp() {
                       <Route path="/cost-scenario-planner" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CostScenarioPlanner /></RoleRoute></Safe>} />
                       <Route path="/carbon-tracker"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><CarbonTracker /></RoleRoute></Safe>} />
                       <Route path="/tpms"                  element={<Safe><RoleRoute allowed={['Admin']}><Tpms /></RoleRoute></Safe>} />
-                      <Route path="/contracts"             element={<Safe><Contracts /></Safe>} />
+                      <Route path="/contracts"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><Contracts /></RoleRoute></Safe>} />
                       <Route path="/rfid"                  element={<Safe><RoleRoute allowed={['Admin']}><Rfid /></RoleRoute></Safe>} />
                       <Route path="/geofencing"            element={<Safe><RoleRoute allowed={['Admin']}><Geofencing /></RoleRoute></Safe>} />
                       <Route path="/insurance-claims"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><InsuranceClaims /></RoleRoute></Safe>} />
                       <Route path="/fuel-cards"            element={<Safe><RoleRoute allowed={['Admin']}><FuelCards /></RoleRoute></Safe>} />
-                      <Route path="/certifications"        element={<Safe><Certifications /></Safe>} />
+                      <Route path="/certifications"        element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><Certifications /></RoleRoute></Safe>} />
                       <Route path="/policies"              element={<Safe><RoleRoute allowed={['Admin']}><PolicyManagement /></RoleRoute></Safe>} />
                       <Route path="/incidents"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><IncidentReports /></RoleRoute></Safe>} />
                       <Route path="/journeys"              element={<Safe><RoleRoute allowed={['Admin']}><JourneyLog /></RoleRoute></Safe>} />
                       <Route path="/digital-twin"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
                       <Route path="/digital-twin/:assetNo" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><DigitalTwin /></RoleRoute></Safe>} />
-                      <Route path="/parts-catalog"         element={<Safe><PartsCatalog /></Safe>} />
+                      <Route path="/parts-catalog"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><PartsCatalog /></RoleRoute></Safe>} />
                       <Route path="/combinations"          element={<Safe><RoleRoute allowed={['Admin']}><Combinations /></RoleRoute></Safe>} />
                       <Route path="/dispatch"              element={<Safe><RoleRoute allowed={['Admin']}><Dispatch /></RoleRoute></Safe>} />
                       <Route path="/cold-chain"            element={<Safe><RoleRoute allowed={['Admin']}><ColdChain /></RoleRoute></Safe>} />
@@ -771,8 +771,8 @@ function MainApp() {
                       <Route path="/speed-limiter"         element={<Safe><RoleRoute allowed={['Admin']}><SpeedLimiter /></RoleRoute></Safe>} />
                       <Route path="/driver-documents"      element={<Safe><RoleRoute allowed={['Admin']}><DriverDocuments /></RoleRoute></Safe>} />
                       <Route path="/dvir"                  element={<Safe><RoleRoute allowed={['Admin']}><Dvir /></RoleRoute></Safe>} />
-                      <Route path="/requisitions"          element={<Safe><Requisitions /></Safe>} />
-                      <Route path="/goods-receipt"         element={<Safe><GoodsReceipt /></Safe>} />
+                      <Route path="/requisitions"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><Requisitions /></RoleRoute></Safe>} />
+                      <Route path="/goods-receipt"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><GoodsReceipt /></RoleRoute></Safe>} />
                       <Route path="/customers"             element={<Safe><RoleRoute allowed={['Admin']}><Customers /></RoleRoute></Safe>} />
                       <Route path="/fleet-renewal"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetRenewal /></RoleRoute></Safe>} />
                       <Route path="/dtc"                   element={<Safe><RoleRoute allowed={['Admin']}><DtcDiagnostics /></RoleRoute></Safe>} />
@@ -815,7 +815,7 @@ function MainApp() {
                       <Route path="/taas"                  element={<Safe><RoleRoute allowed={['Admin']}><Taas /></RoleRoute></Safe>} />
                       <Route path="/marketplace"           element={<Safe><RoleRoute allowed={['Admin']}><SupplierMarketplace /></RoleRoute></Safe>} />
                       <Route path="/ocr-scanner"           element={<Safe><RoleRoute allowed={['Admin']}><OcrScanner /></RoleRoute></Safe>} />
-                      <Route path="/advanced-search"       element={<Safe><AdvancedSearch /></Safe>} />
+                      <Route path="/advanced-search"       element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AdvancedSearch /></RoleRoute></Safe>} />
                       <Route path="/onboarding-wizard"     element={<Safe><RoleRoute allowed={['Admin']}><OnboardingWizard /></RoleRoute></Safe>} />
                       <Route path="/sso-configuration"     element={<Navigate to="/console/security" replace />} />
                       <Route path="/admin"                 element={<Navigate to="/console" replace />} />

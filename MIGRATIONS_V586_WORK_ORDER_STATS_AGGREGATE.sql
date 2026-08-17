@@ -1,0 +1,101 @@
+-- =============================================================================
+-- V586 - WORK ORDERS: CANONICAL STATUS MIRROR + SERVER-SIDE STATS AGGREGATE
+-- STATUS: APPLIED live on jhssdmeruxtrlqnwfksc. Verify against the live object.
+-- Pairs with V587 (the paged table read). Neither is useful without the other:
+-- the page fetched everything to feed BOTH the tiles and the grid, so fixing
+-- only one half leaves the full fetch in place.
+-- =============================================================================
+--
+-- THE DEFECT (measured)
+-- ---------------------
+-- src/pages/WorkOrders.jsx fetched EVERY job card in the window via
+-- listWorkOrdersForPage(), then filtered, sorted and sliced 20 rows client-side.
+--
+--   All / year-to-date (the default window)   22,478 rows / 23 round trips
+--   KSA / year-to-date                        15,933 rows / 16 round trips
+--   after "Show all" clears the dates (KSA)   62,412 rows / 63 round trips
+--   after "Show all" clears the dates (All)   89,913 rows / 90 round trips
+--
+-- WHY IT COULD NOT SIMPLY BE PAGED
+-- --------------------------------
+-- The full set fed four things: the table, the KPI tiles, the work-type chart
+-- and the status chart. The tiles are FULL-WINDOW figures (open, overdue,
+-- completed today, total cost, average days open). Adding server paging without
+-- moving the aggregates would have silently turned every headline into a
+-- per-page number - a mount-cost fix that quietly corrupts the numbers, which is
+-- worse than the slow page it replaced. So the aggregate moves server-side and
+-- keeps its whole-window scope.
+--
+-- THE STATUS MIRROR IS THE LOAD-BEARING PART
+-- ------------------------------------------
+-- work_orders.status has NO CHECK constraint and still stores LEGACY tokens.
+-- Measured across all 89,913 rows there are exactly five values:
+--
+--     Closed 57,228 · Completed 32,550 · Open 73 · In Progress 61 · Cancelled 1
+--
+-- The client folds these on read with normalizeWoStatus() - 'Closed' becomes
+-- 'Completed', 'Open' becomes 'New'. Any server-side count or status filter that
+-- read the RAW column would therefore disagree with the grid about what
+-- "Completed" means, and would miss 57,228 of 89,913 rows.
+--
+-- wo_status_canonical() is a byte-mirror of normalizeWoStatus(), including the
+-- unknown-value passthrough (an unrecognised status returns TRIMMED, never
+-- NULL - values are never dropped).
+--
+-- **CHANGE BOTH TOGETHER.** src/test/workOrdersPaging.test.js pins the mapping
+-- table; every pair in it was executed against this function and returned the
+-- asserted value, so it is a real cross-check rather than a restatement of the
+-- JS. 19/19 matched at the time of writing, including '' , whitespace,
+-- separator and case variants, and unknown passthrough.
+--
+-- SECURITY INVOKER, DELIBERATELY
+-- ------------------------------
+-- These replace a direct RLS-governed table read, so the caller must see exactly
+-- what they could already see. A SECURITY DEFINER function runs as its owner and
+-- RLS never runs inside one - the entire V545-V576 defect class. INVOKER adds no
+-- new surface. Do NOT convert.
+--
+-- VERIFIED LIVE (as the real KSA-only Manager 34793423, rolled back)
+-- -----------------------------------------------------------------
+--   get_work_order_stats('KSA','2026-01-01','2026-08-17')
+--     total 14,398 · open 30 · in_progress 31 · waiting_parts 0 · overdue 30
+--     completed_today 16 · total_cost 1,887,520.39 · avg_days_open 16
+--     by_status Completed 14,337 / In Progress 31 / New 30  (sums to total)
+--
+--   CONSISTENCY CHECK: a raw count of KSA rows opened since 2026-01-01 is
+--   15,933, i.e. 1,535 MORE. That gap is exactly the known future-dated rows
+--   (max opened_at is 2026-12-05) which the p_to bound correctly excludes, and
+--   it matches the ~1,535 figure already recorded in PROJECT_MEMORY. The two
+--   numbers agreeing is what confirms the window bound behaves as intended.
+--
+--   waiting_parts is 0 because the DB never accepted that vocabulary (V497) -
+--   an honest zero, not a broken count.
+--
+-- ROLLBACK
+-- --------
+--   drop function if exists public.get_work_order_stats(text,text,text);
+--   drop function if exists public.wo_status_canonical(text);
+--   -- and revert WorkOrders.jsx to deriving stats/charts from the full fetch.
+-- =============================================================================
+
+-- Body as applied: see the live definitions via
+--   select pg_get_functiondef(oid) from pg_proc
+--   where proname in ('wo_status_canonical','get_work_order_stats');
+--
+-- wo_status_canonical(text)  IMMUTABLE  - mirror of normalizeWoStatus()
+-- get_work_order_stats(p_country text, p_from text, p_to text) -> jsonb
+--   STABLE, SECURITY INVOKER, search_path=public
+--   returns { total, open, in_progress, waiting_parts, overdue,
+--             completed_today, total_cost, avg_days_open,
+--             by_type[{label,n}] (top 8), by_status[{label,n}] }
+--
+-- Filter semantics mirror the client reads they replace EXACTLY:
+--   country : strict equality (NOT the null-inclusive applyCountry helper) -
+--             listWorkOrdersPage uses .eq('country', x) and V394 backfilled
+--             every NULL country, so there are no null-country rows to include.
+--   from    : opened_at >= p_from
+--   to      : opened_at <= p_to || 'T23:59:59.999Z'   (matches the client's
+--             literal UTC upper bound, future-dated rows excluded with it)
+--
+-- Grant order is load-bearing (V500): grant the roles that need it, then revoke
+-- PUBLIC, then revoke anon BY NAME.

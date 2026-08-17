@@ -1,0 +1,91 @@
+-- =============================================================================
+-- V587 - WORK ORDERS: SERVER-SIDE FILTERED / SORTED / PAGED TABLE READ
+-- STATUS: APPLIED live on jhssdmeruxtrlqnwfksc. Verify against the live object.
+-- Pairs with V586 (the stats aggregate + the canonical status mirror).
+-- =============================================================================
+--
+-- WHAT THIS REPLACES
+-- ------------------
+-- The Work Orders table fetched the whole window and did search / status /
+-- priority / type filtering, sorting and 20-row slicing in the browser. See the
+-- V586 header for the measured mount cost (22,478 rows / 23 round trips on the
+-- default view, 89,913 / 90 with the dates cleared).
+--
+-- get_work_orders_page() returns ONE page plus the exact total for the current
+-- filter set, so the grid reads 20 rows regardless of how large the window is.
+--
+-- WHY AN RPC AND NOT POSTGREST FILTERS
+-- ------------------------------------
+-- The status filter has to match the CANONICAL value, and the column stores
+-- legacy tokens ('Closed' 57,228 rows folds to 'Completed'; 'Open' 73 folds to
+-- 'New'). PostgREST cannot call wo_status_canonical() in a filter, so a
+-- .eq('status', 'Completed') would have missed the 57,228 'Closed' rows outright.
+--
+-- Two alternatives were considered and rejected:
+--   * a GENERATED STORED status_canonical column - correct, but it rewrites a
+--     ~90k-row / 181 MB table under ACCESS EXCLUSIVE on a live database for a
+--     read-path convenience. Not worth the lock.
+--   * inverting the JS token map client-side into an .in('status', [...]) list -
+--     fragile, because it has to guess every stored case/spacing variant.
+--
+-- THE id TIEBREAK IS NOT TIDINESS
+-- -------------------------------
+-- opened_at is NOT unique (89,628 rows over 61,767 distinct timestamps, tie
+-- groups up to 175 rows). Without a stable final sort key, a page boundary
+-- landing inside a tie group DROPS or REPEATS rows between pages.
+-- VERIFIED: 10 consecutive pages of 20 = 200 rows, 200 distinct, 0 overlaps.
+--
+-- SORTING IS NOW TYPE-CORRECT - A DELIBERATE, STATED BEHAVIOUR CHANGE
+-- ------------------------------------------------------------------
+-- The client sorted EVERY column with String(a).localeCompare(String(b)),
+-- including numeric ones, so Total Cost sorted lexicographically: "9" ranked
+-- above "100". This function sorts total_cost numerically and the timestamps
+-- chronologically. Text columns are unchanged, and ISO timestamps compare
+-- identically either way, so the only visible difference is that Total Cost now
+-- sorts correctly. Recorded here rather than slipped in silently.
+--
+-- SAFETY
+-- ------
+-- * SECURITY INVOKER - RLS scopes the caller exactly as the table read did.
+--   Do NOT convert to DEFINER (the V545-V576 class).
+-- * The sort column is whitelisted against a fixed set and the direction is
+--   folded to asc/desc, so neither can inject; nothing is built by string
+--   concatenation.
+-- * p_limit is clamped to 1..200 so a caller cannot ask for the whole table
+--   through the "paged" entry point.
+--
+-- VERIFIED LIVE (as the real KSA-only Manager 34793423, rolled back)
+-- -----------------------------------------------------------------
+--   default page           total 14,398 · 20 rows returned
+--   status 'Completed'     14,337   } identical to V586's by_status buckets,
+--   status 'New'                30   } which is the cross-check that the two
+--   status 'In Progress'        31   } functions fold status the same way
+--   search 'zzz_no_match'        0
+--   paging integrity       200 ids over 10 pages, 200 distinct, 0 overlaps
+--
+-- ROLLBACK
+-- --------
+--   drop function if exists public.get_work_orders_page(
+--     text,text,text,text,text,text,text,text,text,int,int);
+--   -- and revert WorkOrders.jsx to listWorkOrdersForPage() + client filtering.
+--   -- NOTE: listWorkOrdersForPage() is retained and still used by Board
+--   -- Overview, whose executive KPIs are deliberately all-time.
+-- =============================================================================
+
+-- Body as applied: see the live definition via
+--   select pg_get_functiondef(oid) from pg_proc
+--   where proname = 'get_work_orders_page';
+--
+-- get_work_orders_page(
+--   p_country text, p_from text, p_to text,
+--   p_search text, p_status text, p_priority text, p_type text,
+--   p_sort text default 'opened_at', p_dir text default 'desc',
+--   p_limit int default 20, p_offset int default 0
+-- ) -> jsonb { total, rows[] }   STABLE, SECURITY INVOKER, search_path=public
+--
+-- search matches the same five columns the client did, case-insensitively:
+--   work_order_no, asset_no, tyre_serial, description, technician_name
+--
+-- sortable whitelist: work_order_no, asset_no, work_type, priority, status
+--   (folded to canonical), technician_name, opened_at, target_completion,
+--   total_cost. Anything else falls back to opened_at.

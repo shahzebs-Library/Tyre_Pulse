@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V586**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V588**)
 Live-verified state: main == branch == `9729ef59`, tree clean, production deploy READY on that sha,
 lint 0 errors, build clean, suite **527 files / 8,005 tests** green. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
@@ -66,8 +66,37 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    (`_accident_rpc_context`), never reaching the validation guard, which reads as a pass but proves nothing.
    Impersonate a user who genuinely has scope on that accident, and note a temp probe table needs an explicit
    `grant insert on <tbl> to authenticated` once `set local role authenticated` is in force.
-8. **`WorkOrders` pages 22,478 job cards on mount (26 round trips)** because it filters and sorts client-side.
-   Server-side paging is a real refactor, not a tweak - measured and deliberately not attempted.
+8. **~~`WorkOrders` pages 22,478 job cards on mount~~ FIXED by V586+V587 (2026-08-17).** Re-measured first:
+   **All/YTD 22,478 rows / 23 round trips · KSA/YTD 15,933 / 16 · and pressing "Show all" clears the dates ->
+   62,412 / 63 (KSA) or 89,913 / 90 (All)** - that escape hatch was the worse path and is now bounded too.
+   **WHY IT COULD NOT SIMPLY BE PAGED, and the trap to avoid if this is ever revisited:** the full set fed the
+   table AND the KPI tiles AND both charts. The tiles are FULL-WINDOW figures, so adding paging alone would have
+   silently turned every headline into a per-page number - a mount-cost fix that corrupts the numbers is worse
+   than the slow page. So V586 moves the aggregate server-side (keeping whole-window scope) and V587 pages the
+   table. **Neither half is useful alone.**
+   **THE LOAD-BEARING PIECE IS `wo_status_canonical()`, a byte-mirror of `normalizeWoStatus()` - CHANGE BOTH
+   TOGETHER** (pinned by `src/test/workOrdersPaging.test.js`, whose case table was executed against the live
+   function, 19/19). `work_orders.status` has NO CHECK and still stores legacy tokens: measured across 89,913
+   rows there are exactly FIVE values - **Closed 57,228 · Completed 32,550 · Open 73 · In Progress 61 ·
+   Cancelled 1**. A server-side status filter on the RAW column would miss 57,228 of 89,913 rows. Unknown values
+   pass through TRIMMED on both sides, never dropped.
+   **REJECTED, with reasons:** a GENERATED `status_canonical` column (correct, but rewrites a 181 MB table under
+   ACCESS EXCLUSIVE on a live DB for a read convenience) and inverting the token map client-side into
+   `.in('status',[...])` (fragile - it must guess every stored case/spacing variant). Hence an RPC.
+   **THE EXPORT WAS THE NEAR-MISS:** `exportExcel` mapped over the client-filtered array. Repointing it at the
+   now-20-row page would have shipped a 20-row file that looks complete - so it pages the same RPC via
+   `getAllWorkOrdersMatching` and REPORTS truncation past 50k instead of clipping silently.
+   **STATED BEHAVIOUR CHANGE:** sorting is now type-correct. The client sorted every column with
+   `String(a).localeCompare(...)`, so Total Cost sorted lexicographically ("9" above "100"); it now sorts
+   numerically. Text and ISO-timestamp columns are unaffected.
+   Verified live as the real KSA Manager, rolled back: the two RPCs agree exactly (total 14,398; Completed
+   14,337 / New 30 / In Progress 31), and **10 pages x 20 = 200 ids, 200 distinct, 0 overlaps** (the `id`
+   tiebreak is required - `opened_at` is not unique, tie groups up to 175 rows).
+   **CONSISTENCY NOTE worth keeping:** the RPC's 14,398 vs a raw 15,933 count differs by exactly the **1,535
+   future-dated rows** (max `opened_at` 2026-12-05) that the upper bound excludes - the same figure already
+   recorded in this file, which is what confirms the bound behaves as intended.
+   NOT changed: `listWorkOrdersForPage()` is retained - Board Overview's executive KPIs are deliberately
+   all-time.
 
 ### THE CEILING THAT IS NOT A SQL PROBLEM
 9. **`shared_buffers` is 256 MB; `audit_log_v2` is 557 MB.** This session removed ~135 MB of pressure (89 MB audit

@@ -137,6 +137,92 @@ export async function listWorkOrdersForPage({ country, countries, max = 200000, 
   return data
 }
 
+/**
+ * Work Orders page KPI tiles + type/status chart counts, aggregated server-side.
+ *
+ * The page used to derive these from EVERY job card in the window, which is why
+ * it paged 22,478 rows over 23 round trips just to open (62,412 / 63 trips once
+ * a user cleared the dates via "Show all"). Counts are computed over the whole
+ * window, so the tiles keep their full-scope meaning while the table below reads
+ * only its own page.
+ *
+ * Status counts are folded through the DB mirror of `normalizeWoStatus`, so the
+ * tiles and the grid cannot disagree about what "Completed" means.
+ *
+ * @param {{country?:string, openedFrom?:string, openedTo?:string}} [opts]
+ * @returns {Promise<object>} kpis + by_type/by_status buckets
+ */
+export async function getWorkOrderStats({ country, openedFrom, openedTo } = {}) {
+  return unwrap(await supabase.rpc('get_work_order_stats', {
+    p_country: country && country !== 'All' ? country : null,
+    p_from: openedFrom || null,
+    p_to: openedTo || null,
+  }))
+}
+
+/**
+ * ONE filtered + sorted page of work orders, plus the exact total.
+ *
+ * Filtering, sorting and slicing all happen server-side. Status is matched on
+ * the CANONICAL value (`wo_status_canonical`), because the column still stores
+ * legacy tokens - 'Closed' folds to 'Completed', 'Open' to 'New' - so a filter
+ * on the raw column would miss the overwhelming majority of rows.
+ *
+ * Results carry a stable `id` tiebreak: `opened_at` is not unique (tie groups up
+ * to 175 rows), so without it a page boundary inside a tie group drops or
+ * repeats rows.
+ *
+ * @param {{country?:string, openedFrom?:string, openedTo?:string, search?:string,
+ *   status?:string, priority?:string, type?:string, sortField?:string,
+ *   sortDir?:string, page?:number, pageSize?:number}} [opts]
+ * @returns {Promise<{rows:any[], total:number}>}
+ */
+export async function getWorkOrdersPage({
+  country, openedFrom, openedTo, search, status, priority, type,
+  sortField = 'opened_at', sortDir = 'desc', page = 1, pageSize = 20,
+} = {}) {
+  const data = await unwrap(await supabase.rpc('get_work_orders_page', {
+    p_country: country && country !== 'All' ? country : null,
+    p_from: openedFrom || null,
+    p_to: openedTo || null,
+    p_search: search?.trim() || null,
+    p_status: status && status !== 'All' ? status : null,
+    p_priority: priority && priority !== 'All' ? priority : null,
+    p_type: type && type !== 'All' ? type : null,
+    p_sort: sortField,
+    p_dir: sortDir,
+    p_limit: pageSize,
+    p_offset: Math.max(0, (page - 1) * pageSize),
+  }))
+  return { rows: data?.rows ?? [], total: data?.total ?? 0 }
+}
+
+/**
+ * EVERY work order matching the current filters, for the Excel export.
+ *
+ * The export must cover the whole filtered set, not the page on screen - the
+ * table reads 20 rows, so exporting those would silently ship a 20-row file
+ * that looks complete. Pages the same RPC the grid uses, so the export and the
+ * grid can never disagree about what matches.
+ *
+ * Bounded: resolves `truncated` when the set exceeds `max`, so the caller can
+ * say so rather than presenting a clipped file as the full answer.
+ *
+ * @returns {Promise<{rows:any[], total:number, truncated:boolean}>}
+ */
+export async function getAllWorkOrdersMatching(opts = {}, { max = 50000, pageSize = 1000 } = {}) {
+  const rows = []
+  let total = 0
+  for (let page = 1; rows.length < max; page += 1) {
+    const res = await getWorkOrdersPage({ ...opts, page, pageSize })
+    total = res.total
+    if (!res.rows.length) break
+    rows.push(...res.rows)
+    if (rows.length >= total) break
+  }
+  return { rows: rows.slice(0, max), total, truncated: total > max }
+}
+
 /** Insert a work order (page mutation - no row returned). */
 export async function insertWorkOrder(values) {
   return unwrap(await supabase.from('work_orders').insert(values))

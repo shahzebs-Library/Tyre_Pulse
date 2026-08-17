@@ -157,6 +157,7 @@ export default function WorkOrders() {
 
   // Filters
   const [search, setSearch]         = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatus]   = useState('All')
   const [priorityFilter, setPriority] = useState('All')
   const [typeFilter, setType]       = useState('All')
@@ -171,6 +172,10 @@ export default function WorkOrders() {
   const [sortField, setSortField]   = useState('opened_at')
   const [sortDir, setSortDir]       = useState('desc')
   const [page, setPage]             = useState(1)
+  // Server-reported total for the CURRENT filter set (not the rows on screen).
+  const [total, setTotal]           = useState(0)
+  // Full-window aggregate behind the KPI tiles + charts.
+  const [statsData, setStatsData]   = useState(null)
   const PAGE_SIZE = 20
 
   // Modals
@@ -189,28 +194,64 @@ export default function WorkOrders() {
   // job cards under the new filters.
   const latestLoad = useLatestRequest()
 
+  // Two bounded server reads instead of the whole window.
+  //
+  // This page used to fetch EVERY job card in the window and then filter, sort
+  // and slice 20 rows in the browser: 22,478 rows over 23 round trips to open
+  // the All year-to-date view, and 62,412 over 63 once a user pressed "Show
+  // all". The table now asks for its own page, and the KPI tiles + charts come
+  // from a server aggregate so they keep their FULL-window meaning - they are
+  // deliberately NOT derived from the 20 rows on screen.
   const load = useCallback(async () => {
     const stale = latestLoad.begin()
     setLoading(true)
     setError(null)
     try {
-      const data = await workOrders.listWorkOrdersForPage({
+      const opts = {
         country: activeCountry,
         openedFrom: dateFrom || undefined,
         openedTo: dateTo || undefined,
-      })
-      // Normalise status to the shared canonical vocabulary on read so filters,
-      // badges and stats agree with the Workshop Live dashboard.
+      }
+      const [pageRes, statsRes] = await Promise.all([
+        workOrders.getWorkOrdersPage({
+          ...opts,
+          search: debouncedSearch,
+          status: statusFilter,
+          priority: priorityFilter,
+          type: typeFilter,
+          sortField, sortDir, page, pageSize: PAGE_SIZE,
+        }),
+        workOrders.getWorkOrderStats(opts),
+      ])
       if (stale()) return
-      setOrders((data || []).map((o) => ({ ...o, status: normalizeWoStatus(o.status) })))
+      // Status is folded to the canonical vocabulary server-side by
+      // wo_status_canonical; normalising again here is a no-op that keeps the
+      // page correct if a row ever arrives from another path.
+      setOrders((pageRes.rows || []).map((o) => ({ ...o, status: normalizeWoStatus(o.status) })))
+      setTotal(pageRes.total || 0)
+      setStatsData(statsRes || null)
     } catch (e) {
       if (!stale()) setError(toUserMessage(e))
     } finally {
       if (!stale()) setLoading(false)
     }
-  }, [activeCountry, dateFrom, dateTo, latestLoad])
+  }, [activeCountry, dateFrom, dateTo, debouncedSearch, statusFilter, priorityFilter,
+      typeFilter, sortField, sortDir, page, latestLoad])
 
   useEffect(() => { load() }, [load])
+
+  // Debounce the search box. Filtering moved to the server, so an undebounced
+  // input would fire one filtered+counted query PER KEYSTROKE against 90k rows.
+  useEffect(() => {
+    if (search === debouncedSearch) return
+    const timer = setTimeout(() => { setDebouncedSearch(search); setPage(1) }, 300)
+    return () => clearTimeout(timer)
+  }, [search, debouncedSearch])
+
+  // Any filter/sort change invalidates the current offset: staying on page 7 of
+  // a result set that now has two pages shows an empty table.
+  useEffect(() => { setPage(1) },
+    [statusFilter, priorityFilter, typeFilter, dateFrom, dateTo, sortField, sortDir, activeCountry])
 
   // If no job card was opened this month, fall back to the last month that has
   // one and say so - an empty current month otherwise reads as a broken page.
@@ -230,56 +271,26 @@ export default function WorkOrders() {
   useEffect(() => { setWfLocked(false) }, [viewOrder?.id])
 
   // ── Computed ──────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    let list = [...orders]
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(o =>
-        o.work_order_no?.toLowerCase().includes(q) ||
-        o.asset_no?.toLowerCase().includes(q) ||
-        o.tyre_serial?.toLowerCase().includes(q) ||
-        o.description?.toLowerCase().includes(q) ||
-        o.technician_name?.toLowerCase().includes(q)
-      )
-    }
-    if (statusFilter !== 'All') list = list.filter(o => o.status === statusFilter)
-    if (priorityFilter !== 'All') list = list.filter(o => o.priority === priorityFilter)
-    if (typeFilter !== 'All') list = list.filter(o => o.work_type === typeFilter)
-    if (dateFrom) list = list.filter(o => o.opened_at >= dateFrom)
-    if (dateTo)   list = list.filter(o => o.opened_at <= dateTo + 'T23:59:59')
-    list.sort((a, b) => {
-      const av = a[sortField] ?? '', bv = b[sortField] ?? ''
-      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-    })
-    return list
-  }, [orders, search, statusFilter, priorityFilter, typeFilter, dateFrom, dateTo, sortField, sortDir])
+  // The server already returned exactly this page, filtered and sorted.
+  const paginated = orders
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-  const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return filtered.slice(start, start + PAGE_SIZE)
-  }, [filtered, page])
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-
-  const stats = useMemo(() => {
-    const open        = orders.filter(o => o.status === 'New').length
-    const inProgress  = orders.filter(o => o.status === 'In Progress').length
-    const awaitParts  = orders.filter(o => o.status === 'Waiting for Parts').length
-    const overdue     = orders.filter(o => isOverdue(o)).length
-    const today       = new Date().toISOString().slice(0, 10)
-    const completedToday = orders.filter(o => o.completed_at?.startsWith(today)).length
-    const totalCost   = orders.reduce((s, o) => s + (parseFloat(o.total_cost) || 0), 0)
-    const avgDaysOpen = orders.length
-      ? Math.round(orders.filter(o => !isClosedWoStatus(o.status))
-          .reduce((s, o) => s + daysOpen(o), 0) / Math.max(1, orders.filter(o => !isClosedWoStatus(o.status)).length))
-      : 0
-    return { open, inProgress, awaitParts, overdue, completedToday, totalCost, avgDaysOpen }
-  }, [orders])
+  // KPI tiles read the FULL-window aggregate, never the 20 rows on screen -
+  // deriving them from the page would silently turn every headline into a
+  // per-page number.
+  const stats = useMemo(() => ({
+    open:           statsData?.open ?? 0,
+    inProgress:     statsData?.in_progress ?? 0,
+    awaitParts:     statsData?.waiting_parts ?? 0,
+    overdue:        statsData?.overdue ?? 0,
+    completedToday: statsData?.completed_today ?? 0,
+    totalCost:      Number(statsData?.total_cost ?? 0),
+    avgDaysOpen:    Number(statsData?.avg_days_open ?? 0),
+  }), [statsData])
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const typeChartData = useMemo(() => {
-    const counts = {}
-    orders.forEach(o => { counts[o.work_type] = (counts[o.work_type] || 0) + 1 })
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    const entries = (statsData?.by_type ?? []).map(b => [b.label, b.n])
     return {
       labels: entries.map(([k]) => k),
       datasets: [{
@@ -288,7 +299,7 @@ export default function WorkOrders() {
         backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316'],
       }],
     }
-  }, [orders])
+  }, [statsData])
 
   const statusChartData = useMemo(() => {
     const colors = {
@@ -296,9 +307,8 @@ export default function WorkOrders() {
       'In Progress': '#f59e0b', 'Waiting for Parts': '#f97316', 'Waiting for Approval': '#eab308',
       'Quality Inspection': '#8b5cf6', 'Completed': '#10b981', 'Cancelled': '#ef4444', 'On Hold': '#6b7280',
     }
-    const counts = {}
-    orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
-    const entries = Object.entries(counts)
+    // Already folded to the canonical vocabulary server-side.
+    const entries = (statsData?.by_status ?? []).map(b => [b.label, b.n])
     return {
       labels: entries.map(([k]) => k),
       datasets: [{
@@ -308,7 +318,7 @@ export default function WorkOrders() {
         borderWidth: 2,
       }],
     }
-  }, [orders])
+  }, [statsData])
 
   // ── Sort helper ───────────────────────────────────────────────────────────
   function handleSort(field) {
@@ -551,7 +561,21 @@ export default function WorkOrders() {
   // ── Excel export ──────────────────────────────────────────────────────────
   async function exportExcel() {
     const XLSX = await import('xlsx')
-    const rows = filtered.map(o => ({
+    // Export the whole FILTERED set, not the page on screen: the grid now holds
+    // only 20 rows, so mapping those would ship a file that looks complete and
+    // is not.
+    const { rows: matching, truncated } = await workOrders.getAllWorkOrdersMatching({
+      country: activeCountry,
+      openedFrom: dateFrom || undefined,
+      openedTo: dateTo || undefined,
+      search: debouncedSearch,
+      status: statusFilter,
+      priority: priorityFilter,
+      type: typeFilter,
+      sortField, sortDir,
+    })
+    if (truncated) setError(t('workorders.exportTruncated', { defaultValue: 'The export was capped; narrow the filters for the full set.' }))
+    const rows = matching.map(o => ({
       'Work Order No': o.work_order_no,
       'Asset No': o.asset_no,
       'Tyre Serial': o.tyre_serial || '',
@@ -709,7 +733,7 @@ export default function WorkOrders() {
               {t('workorders.filters.clear')}
             </button>
           )}
-          <span className="ml-auto self-center text-[var(--text-secondary)] text-sm">{t('workorders.filters.results', { count: filtered.length })}</span>
+          <span className="ml-auto self-center text-[var(--text-secondary)] text-sm">{t('workorders.filters.results', { count: total })}</span>
         </div>
       </div>
 
@@ -827,7 +851,7 @@ export default function WorkOrders() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-dim)]">
-            <span className="text-[var(--text-secondary)] text-sm">{t('workorders.pagination.summary', { page, totalPages, count: filtered.length })}</span>
+            <span className="text-[var(--text-secondary)] text-sm">{t('workorders.pagination.summary', { page, totalPages, count: total })}</span>
             <div className="flex gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
                 className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('workorders.pagination.prev')}</button>

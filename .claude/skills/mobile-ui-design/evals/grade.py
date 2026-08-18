@@ -51,7 +51,14 @@ def strip_comments(src):
 
 
 def changed_tsx(run_mobile):
-    """Every .tsx that differs from the pristine sandbox."""
+    """
+    Files the run CREATED, not merely touched.
+
+    A run that adds a screen must also edit _layout.tsx / index.tsx / the
+    permissions registry to wire it up. Those files are large and pre-existing,
+    so grading them whole would score the fixture's own legacy state as this
+    run's work - the same unfairness the locale checks already correct for.
+    """
     out = []
     for root, _, files in os.walk(run_mobile):
         if "node_modules" in root:
@@ -61,7 +68,7 @@ def changed_tsx(run_mobile):
                 continue
             p = os.path.join(root, fn)
             rel = os.path.relpath(p, run_mobile)
-            if read(p) != read(os.path.join(PRISTINE, rel)):
+            if not os.path.exists(os.path.join(PRISTINE, rel)):
                 out.append(rel)
     return sorted(out)
 
@@ -168,8 +175,11 @@ def grade(run_dir, target):
     ))
 
     # 10 - every Ionicons glyph is real
-    glyphs = set(re.findall(r"""name=[{\s]*['"]([a-z0-9-]+)['"]""", raw_all))
-    glyphs |= set(re.findall(r"""ionicon:\s*['"]([a-z0-9-]+)['"]""", raw_all))
+    # Anchored to an actual icon element. A bare name= also matches
+    # <Tabs.Screen name="tyres-due">, which is a ROUTE, not a glyph.
+    glyphs = set(re.findall(
+        r"""<Ionicons[^>]*?\bname=[{\s]*['"]([a-z0-9-]+)['"]""", raw_all, flags=re.S))
+    glyphs |= set(re.findall(r"""\b(?:icon|ionicon)\s*[:=]\s*[{\s]*['"]([a-z0-9-]+)['"]""", raw_all))
     try:
         valid = set(json.loads(read(GLYPHMAP)).keys())
         bad = sorted(g for g in glyphs if g not in valid and "-" in g)
@@ -194,7 +204,10 @@ def grade(run_dir, target):
         return out
 
     en_k, ar_k = flat(en), flat(ar)
-    used = set(re.findall(r"""t\(\s*['"]([a-zA-Z0-9_.]+)['"]""", raw_all))
+    # Real keys are always dotted. A bare word is another t-suffixed call
+    # (e.g. `format(`), and a trailing _ is a template-literal prefix.
+    used = {k for k in re.findall(r"""\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]""", raw_all)
+            if "." in k and not k.endswith("_")}
     missing = sorted(k for k in used if k not in en_k or k not in ar_k)
     results.append(check(
         "every t() key exists in BOTH en.json and ar.json (mobile shows the raw key otherwise)",
@@ -263,22 +276,30 @@ def grade(run_dir, target):
     # Scoped to comments that reason about a DESIGN decision. A file can be
     # heavily commented about business logic and still explain nothing about why
     # it looks the way it does, which is the habit being measured.
-    design_lines = [
-        ln for ln in comments.splitlines()
-        if re.search(r"\b(colour|color|tint|neutral|hierarchy|spacing|contrast|"
-                     r"radius|token|sun|glare|RTL|touch target|density|layout|"
-                     r"surface|typography|legib)\w*\b", ln, flags=re.I)
-    ]
-    reasoned = [
-        ln for ln in design_lines
-        if re.search(r"\b(because|so that|reads as|rather than|deliberately|"
-                     r"on purpose|instead of|the reason|which is why|"
-                     r"would|means)\b", ln, flags=re.I)
-    ]
+    # Evaluated per comment BLOCK, not per line. A rationale is normally written
+    # across several lines - the design noun on one, the "because" on the next -
+    # so a same-line match scores real explanations as absent.
+    blocks, cur = [], []
+    for ln in comments.splitlines():
+        if ln.strip().startswith("//") or ln.strip().startswith("*") or "/*" in ln:
+            cur.append(ln)
+        elif cur:
+            blocks.append("\n".join(cur)); cur = []
+    if cur:
+        blocks.append("\n".join(cur))
+    blocks += re.findall(r"/\*.*?\*/", raw_all, flags=re.S)
+
+    DESIGN = (r"\b(colour|color|tint|neutral|hierarchy|spacing|contrast|radius|"
+              r"token|sun|glare|RTL|touch target|density|layout|surface|"
+              r"typography|legib|scan|weight|grid|chip)\w*\b")
+    WHY = (r"\b(because|so that|reads as|rather than|deliberately|on purpose|"
+           r"instead of|the reason|which is why|would|means|otherwise)\b")
+    design_lines = [b for b in blocks if re.search(DESIGN, b, flags=re.I)]
+    reasoned = [b for b in design_lines if re.search(WHY, b, flags=re.I)]
     results.append(check(
         "design decisions are explained in a comment (why it looks this way, not just what it does)",
         len(reasoned) >= 2,
-        f"{len(reasoned)} reasoned design comments of {len(design_lines)} design-related",
+        f"{len(reasoned)} reasoned design comment blocks of {len(design_lines)} design-related",
     ))
 
     # 15 / 16 - it actually builds and the suite still passes

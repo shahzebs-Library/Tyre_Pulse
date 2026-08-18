@@ -127,6 +127,19 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    `btrim()` does not, so the JS is order-insensitive - confirmed by mutation (swapping the JS order left all 26
    cases green). The guard for the ordering is the assertion block inside V588 itself.
 
+11. **MOBILE: THE NEW SECURESTORAGE FORMAT IS FORWARD-COMPATIBLE BUT *NOT* ROLLBACK-SAFE. DO NOT ROLL BACK
+   THAT BUILD - HALT THE ROLLOUT AND SHIP FORWARD INSTEAD.** The staged-write fix (commit `e7008e78`) writes
+   chunks at `${key}_g${gen}_chunk_${i}` with metadata `{chunks, gen}`; the OLD adapter reads `${key}_chunk_${i}`
+   and ignores `gen`. Upgrading is safe - `chunkKey` falls back to the legacy key when `gen` is absent, so
+   existing sessions and queued work survive (verified by reading both versions). **Downgrading is not**: the old
+   code would parse the new metadata, look for legacy chunk keys the new code never wrote, get null, and both
+   queue readers turn null into `[]` - so a rolled-back device silently signs the user out AND reads a full
+   offline queue as empty, then overwrites it. Field workers with unsynced inspections lose them.
+   **DELIBERATELY NOT MITIGATED**: writing both key formats would double Keystore writes, and those are binder
+   IPCs on the startup path that already caused the permanent-spinner bug this project fixed once. Paying that
+   on every write to insure against a rollback that may never happen is the wrong trade. If a rollback ever
+   genuinely must happen, ship a forward build that re-writes values into the legacy format first.
+
 ### THE CEILING THAT IS NOT A SQL PROBLEM
 9. **`shared_buffers` is 256 MB; `audit_log_v2` is 557 MB.** This session removed ~135 MB of pressure (89 MB audit
    heap via plain VACUUM + 46 MB of indexes) and restored the visibility map from 54.61% to 100%, which is real -

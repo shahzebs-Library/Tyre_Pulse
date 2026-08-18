@@ -182,8 +182,22 @@ function fmtKm(v, validCount) {
   return `${Math.round(v).toLocaleString()} km`
 }
 
+// A KPI with no measurable input is legitimately null (e.g. pressure compliance
+// with no recorded PSI). Dereferencing it threw `null.toFixed` and took the whole
+// page down behind the error boundary, so null/non-finite reads N/A. Any real
+// number, 0 included, formats exactly as it did before.
 function fmtPct(v) {
-  return `${v.toFixed(1)}%`
+  if (!isMeasured(v)) return 'N/A'
+  return `${Number(v).toFixed(1)}%`
+}
+
+// A nullable KPI rendered as a bare number (exports print the unit in the label).
+function pctOrNA(v, decimals = 1) {
+  return isMeasured(v) ? Number(v).toFixed(decimals) : 'N/A'
+}
+
+function isMeasured(v) {
+  return v != null && Number.isFinite(Number(v))
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -558,7 +572,11 @@ export default function EngineeringKpi() {
 
     // KPI 8: Pressure Compliance
     const pressPct = pressureCompliance.compliancePct
-    const pressStatus = pressPct > 85 ? 'good' : pressPct > 60 ? 'warning' : 'critical'
+    // null means nothing was measurable; `null > 60` is false, which would have
+    // painted an unmeasured metric critical. Neutral is the honest reading.
+    const pressMeasured = pressPct != null
+    const pressStatus = !pressMeasured ? 'neutral'
+      : pressPct > 85 ? 'good' : pressPct > 60 ? 'warning' : 'critical'
 
     // KPI 9: Inspection Compliance
     const inspPct = inspectionCompliance.compliancePct
@@ -672,11 +690,13 @@ export default function EngineeringKpi() {
       {
         title: 'Pressure Compliance %',
         value: inspections.length === 0 ? 'N/A (no inspections)' : fmtPct(pressPct),
-        subValue: `${pressureCompliance.compliantCount} of ${pressureCompliance.totalCount} inspections compliant`,
-        description: 'Based on inspection completion & findings quality',
-        status: inspections.length === 0 ? 'neutral' : pressStatus,
-        trend: pressPct > 85 ? 'up' : 'down',
-        trendLabel: pressPct > 85 ? 'Target achieved' : 'Below 85% target',
+        subValue: pressMeasured
+          ? `${pressureCompliance.compliantCount} of ${pressureCompliance.totalCount} readings within tolerance`
+          : 'No pressure readings recorded',
+        description: pressureCompliance.basis,
+        status: inspections.length === 0 || !pressMeasured ? 'neutral' : pressStatus,
+        trend: pressMeasured ? (pressPct > 85 ? 'up' : 'down') : null,
+        trendLabel: pressMeasured ? (pressPct > 85 ? 'Target achieved' : 'Below 85% target') : null,
       },
       // 9. Inspection Compliance
       {
@@ -1359,7 +1379,7 @@ function buildKpiSummaryRows(kpis, currency) {
     { kpi: 'Tyre Removal Rate (per 1000 km)', value: removalRate.estimatedFleetKm > 0 ? removalRate.removalPer1000Km.toFixed(4) : 'N/A', status: 'Informational', description: `${removalRate.totalRemovals} removals / ${Math.round(removalRate.estimatedFleetKm).toLocaleString()} km` },
     { kpi: 'Tyre Failure Rate (%)',            value: (failureRate.failureRate * 100).toFixed(2),                                status: failureRate.failureRate > 0.30 ? 'Critical' : failureRate.failureRate > 0.15 ? 'Warning' : 'Good', description: `${failureRate.failureCount} failures (Critical: ${Math.round(failureRate.criticalRate * 100)}%, High: ${Math.round(failureRate.highRate * 100)}%)` },
     { kpi: 'Tyre Replacement Rate (per veh/mo)', value: replacementRate.avgPerVehiclePerMonth.toFixed(3),                       status: replacementRate.avgPerVehiclePerMonth < 0.5 ? 'Good' : 'Warning', description: `${replacementRate.totalReplacements} total / ${replacementRate.activeVehicles} vehicles` },
-    { kpi: 'Pressure Compliance (%)',          value: pressureCompliance.compliancePct.toFixed(1),                              status: pressureCompliance.compliancePct > 85 ? 'Good' : pressureCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: `${pressureCompliance.compliantCount}/${pressureCompliance.totalCount}` },
+    { kpi: 'Pressure Compliance (%)',          value: pctOrNA(pressureCompliance.compliancePct), status: pressureCompliance.compliancePct == null ? 'Not measured' : pressureCompliance.compliancePct > 85 ? 'Good' : pressureCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: pressureCompliance.basis },
     { kpi: 'Inspection Compliance (%)',        value: inspectionCompliance.compliancePct.toFixed(1),                            status: inspectionCompliance.compliancePct > 85 ? 'Good' : inspectionCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: `On-time: ${inspectionCompliance.onTimeCount}, Overdue: ${inspectionCompliance.overdueCount}` },
     { kpi: 'Retread Performance',              value: retreadPerformance ? `${retreadPerformance.savingsPct.toFixed(1)}% savings` : 'Insufficient data', status: retreadPerformance && retreadPerformance.savingsPct > 0 ? 'Good' : 'Neutral', description: retreadPerformance ? `Retread CPK: ${retreadPerformance.retreadCpk.toFixed(4)} vs New: ${retreadPerformance.newCpk.toFixed(4)}` : '' },
     { kpi: 'Scrap Rate (%)',                   value: (scrapRate.scrapRate * 100).toFixed(1),                                   status: scrapRate.scrapRate > 0.20 ? 'Critical' : scrapRate.scrapRate > 0.10 ? 'Warning' : 'Good', description: `${scrapRate.scrapCount} scrapped | Est. cost: ${currency} ${scrapRate.estimatedScrapCost.toLocaleString()}` },

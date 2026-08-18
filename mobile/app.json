@@ -20,8 +20,8 @@
       }
     },
     "android": {
-            "googleServicesFile": "./google-services.json",
-"edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json",
+      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -73,7 +73,9 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 24
+            "minSdkVersion": 24,
+            "enableProguardInReleaseBuilds": true,
+            "extraProguardRules": "# ---- Tyre Pulse rules, appended by expo-build-properties from app.json ----\n#\n# React Native, expo-modules-core and react-native-svg already ship consumer\n# rules that R8 applies automatically: DoNotStrip on facebook/jni/yoga, every\n# NativeModule and JavaScriptModule, @ReactProp methods, native <methods>,\n# the whole Expo Kotlin module system, and com.horcrux.svg. Those files were\n# READ from node_modules before this was written, so nothing below duplicates\n# them. This is only what the app needs on top.\n\n# 1. CRASH REPORTS MUST STAY READABLE. The load-bearing rule.\n#    R8 strips SourceFile and LineNumberTable by default, and without them a\n#    Java/Kotlin frame reaching Sentry loses its file and line, so a crash on\n#    a field handset becomes undiagnosable. This project has already had to\n#    diagnose exactly that kind of crash from Sentry.\n#    renamesourcefileattribute hides the real file names while keeping the\n#    line numbers usable, so readability costs no real obfuscation.\n-keepattributes SourceFile,LineNumberTable\n-renamesourcefileattribute SourceFile\n\n# 2. Attributes Kotlin reflection and the Expo module system read at runtime.\n#    Expo resolves module definitions and coerces argument types reflectively,\n#    so a stripped Signature or annotation shows up as a module that simply\n#    fails to load, in RELEASE builds only.\n-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,Exceptions\n\n# 3. Sentry. @sentry/react-native 7.x ships no consumer rules; its bridge is a\n#    NativeModule (covered by RN) but the SDK beneath it is reached natively\n#    and reflectively. Keeping it protects the one tool that reports failures\n#    in the very build configuration this change introduces.\n-keep class io.sentry.** { *; }\n-dontwarn io.sentry.**\n\n# 4. OkHttp is RN's HTTP stack. okio is already covered by RN's own rules;\n#    okhttp3 is not, and its optional TLS providers warn loudly.\n-dontwarn okhttp3.**\n-dontwarn org.conscrypt.**\n-dontwarn org.bouncycastle.**\n-dontwarn org.openjsse.**\n\n# 5. Enum valueOf/values are called reflectively by RN and Expo when\n#    marshalling a JS string into a Kotlin enum.\n-keepclassmembers enum * {\n    public static **[] values();\n    public static ** valueOf(java.lang.String);\n}\n\n# 6. Parcelable CREATOR is looked up BY NAME by the framework and never\n#    referenced from code, so R8 cannot see that it is used.\n-keepclassmembers class * implements android.os.Parcelable {\n    public static final ** CREATOR;\n}"
           }
         }
       ],

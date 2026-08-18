@@ -4,7 +4,7 @@
  * explicit columns; every method throws on error.
  */
 import { supabase } from '../supabase'
-import { ServiceError, unwrap } from './_client'
+import { ServiceError, unwrap, fetchAllPages } from './_client'
 import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
 import { naturalKey } from '../import/validate'
 
@@ -567,15 +567,48 @@ export async function enrichBatch(batchId, { chunkSize = ENRICH_CHUNK_ROWS, onPr
  * @param {{ module: 'fleet'|'tyre'|'stock', country?: string }} params
  * @returns {Promise<Set<string>>}
  */
+/**
+ * PAGED, and this one is data integrity rather than cosmetics.
+ *
+ * `import_existing_keys` returns SETOF text - ONE ROW PER KEY - so PostgREST
+ * caps it at 1,000 exactly as it caps a table read. The Data Intake Center gates
+ * its live-duplicate check on `liveKeys.has(key)`, so every key that existed but
+ * fell outside that first 1,000 was classified as NOT a duplicate and staged as
+ * a fresh INSERT. `existingRecords()` cannot rescue it, because that is only
+ * consulted inside the same gate.
+ *
+ * Measured scale using this project's own recorded counts: the tyre module has
+ * 8,432 keys, so 7,432 were invisible; the workorder module is global and
+ * unbounded at ~89,913. That is the precise mechanism behind the 8,248
+ * duplicate expense rows this codebase has already had to delete once, and for
+ * work orders it is worse than duplication - `work_order_no` carries a GLOBAL
+ * unique constraint, so the batch aborts on 23505 instead.
+ *
+ * `MAX_IMPORT_KEYS` is a real ceiling rather than Infinity: an import comparing
+ * against more than 200k live keys should be doing it server-side, and a silent
+ * unbounded read of that size is its own problem. `truncated` is surfaced so the
+ * caller can refuse to guess rather than quietly under-detecting duplicates.
+ *
+ * @param {{ module: 'fleet'|'tyre'|'stock', country?: string }} params
+ * @returns {Promise<Set<string>>}
+ */
+export const MAX_IMPORT_KEYS = 200000
+
 export async function existingKeys({ module, country }) {
-  const { data, error } = await supabase.rpc('import_existing_keys', {
-    p_module: module,
-    p_country: country ?? null,
-  })
+  const { data, error, truncated } = await fetchAllPages((from, to) =>
+    supabase.rpc('import_existing_keys', {
+      p_module: module,
+      p_country: country ?? null,
+    }).range(from, to),
+  { max: MAX_IMPORT_KEYS })
   if (error) throw new ServiceError(error.message, error.code, error)
   // RPC returns SETOF text → array of strings (rows) or array of { import_existing_keys }.
   const keys = (data || []).map((r) => (typeof r === 'string' ? r : r?.import_existing_keys)).filter(Boolean)
-  return new Set(keys)
+  const set = new Set(keys)
+  // An INCOMPLETE key set silently under-detects duplicates, which is the whole
+  // bug. Say so on the object rather than letting the caller assume it is whole.
+  set.truncated = !!truncated
+  return set
 }
 
 const LIVE_PROBE_FIELD = {

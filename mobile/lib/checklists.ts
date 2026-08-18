@@ -10,6 +10,7 @@ import { uploadModulePhoto } from './photoUpload'
 import { safeUuid } from './ids'
 import type { ChecklistField } from './checklistFields'
 import { filterTemplatesForRole, filterAssignmentsForRole } from './checklistRoles'
+import { fetchAllRows } from './fetchAllRows'
 
 export interface ChecklistTemplate {
   id: string
@@ -139,23 +140,47 @@ export async function listSiteOptions(country?: string | null): Promise<string[]
     const { data, error } = await q.limit(1000)
     if (!error && data && data.length) return uniqSorted(data.map((r: any) => r.name))
   } catch { /* fall through to fleet fallback */ }
-  const { data } = await supabase.from('vehicle_fleet').select('site').limit(2000)
-  return uniqSorted((data ?? []).map((r: any) => r.site))
+  // Last-resort fallback over the fleet: 1,617 rows, so `.limit(2000)` returned
+  // 1,000 and quietly lost every site that only appears on a later row.
+  const rows = await fetchAllRows<any>(
+    (from, to) => supabase.from('vehicle_fleet').select('site').order('site').order('id').range(from, to),
+    { max: 20000 },
+  ).catch(() => [] as any[])
+  return uniqSorted(rows.map((r: any) => r.site))
 }
 
-/** Distinct asset numbers from LIVE operational data (RPC v129), with fallback. */
+/**
+ * Distinct asset numbers from LIVE operational data (RPC v129), with a fallback.
+ *
+ * BOTH PATHS ARE PAGED, and both had to be. `reference_asset_options` is a
+ * SET-RETURNING function, so PostgREST applies the same 1,000-row cap to it as
+ * to a table read - measured live as a real KSA-only Manager it returns 1,033
+ * asset numbers, so the picker was already dropping 33 of that user's own
+ * assets with no error and nothing on screen to show it. The fallback's
+ * `.limit(3000)` was the same illusion: a limit above the cap returns 1,000.
+ * `vehicle_fleet` now holds 1,617 rows (KSA 1,030 / UAE 452 / Egypt 135).
+ *
+ * The symptom is the confusing one: a field user types a real asset number,
+ * the client-side filter finds nothing in the truncated array, and the asset
+ * looks like it is missing from the system.
+ */
 export async function listAssetOptions(country?: string | null): Promise<string[]> {
+  const scoped = country && country !== 'All' ? country : null
   try {
-    const { data, error } = await supabase.rpc('reference_asset_options', {
-      p_country: country && country !== 'All' ? country : null,
-    })
-    if (!error && Array.isArray(data) && data.length) return uniqSorted(data.map((r: any) => r.asset_no))
-  } catch { /* fall through */ }
-  let q = supabase.from('vehicle_fleet').select('asset_no')
-  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-  const { data, error } = await q.limit(3000)
-  if (error) throw error
-  return uniqSorted((data ?? []).map((r: any) => r.asset_no))
+    const rows = await fetchAllRows<any>(
+      (from, to) => supabase.rpc('reference_asset_options', { p_country: scoped }).range(from, to),
+      { max: 20000 },
+    )
+    if (rows.length) return uniqSorted(rows.map((r: any) => r.asset_no))
+  } catch { /* fall through to the fleet-master fallback */ }
+  // asset_no is unique per COUNTRY, not globally, so the id tiebreak is what
+  // stops a row falling between two pages.
+  const rows = await fetchAllRows<any>((from, to) => {
+    let q = supabase.from('vehicle_fleet').select('asset_no').order('asset_no').order('id')
+    if (scoped) q = q.or(`country.eq.${scoped},country.is.null`)
+    return q.range(from, to)
+  }, { max: 20000 })
+  return uniqSorted(rows.map((r: any) => r.asset_no))
 }
 
 /** Org users as display names (full_name || username). */

@@ -55,7 +55,10 @@ async function loadOptions(source, country) {
       const opts = await listDataAssetOptions(country)
       if (opts.length) return uniqSorted(opts)
     } catch { /* fall through to fleet-master */ }
-    const rows = await listAssets({ country: scope, limit: 1000 })
+    // No limit: listAssets pages past the PostgREST 1,000-row cap. Passing
+    // 1000 here used to LOOK like a generous ceiling while being exactly the
+    // cap, so the picker lost every asset past the first thousand.
+    const rows = await listAssets({ country: scope })
     return uniqSorted((Array.isArray(rows) ? rows : []).map((r) => r?.asset_no))
   }
   if (source === 'site') {

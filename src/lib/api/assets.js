@@ -2,7 +2,7 @@
  * Assets service - fleet master data (vehicle_fleet). Explicit column lists
  * (no SELECT *) so new/sensitive columns are never exposed by accident.
  */
-import { supabase, unwrap, applyCountry, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages } from './_client'
 
 const COLS =
   // ops_status is the OPERATIONAL state from the owner's monthly asset sheet
@@ -16,18 +16,42 @@ const COLS =
 /**
  * List fleet assets, newest first. Country-scoped (null-safe) and optionally
  * filtered by site/status.
+ *
+ * PAGED, because a `.limit()` above 1,000 is a lie: PostgREST caps EVERY
+ * response at its db-max-rows (1,000 here) whatever the limit says, and
+ * `vehicle_fleet` now holds 1,617 rows (KSA 1,030 / UAE 452 / Egypt 135). The
+ * old default of 100 was worse still - any caller that did not pass a limit saw
+ * the newest hundred assets and nothing else. Only `.range()` paging gets past
+ * the cap, and a truncated list is invisible in the UI: the user types a real
+ * asset number, gets "no results", and concludes the asset is missing.
+ *
+ * `limit` is still honoured as a genuine ceiling for callers that only want a
+ * few rows; `MAX_ASSET_ROWS` bounds the unbounded case so a future 50,000-asset
+ * fleet cannot pull the whole table into a picker.
+ *
  * @param {{country?:string, site?:string, status?:string, limit?:number}} [opts]
  */
-export async function listAssets({ country, site, status, limit = 100 } = {}) {
-  let q = supabase
-    .from('vehicle_fleet')
-    .select(COLS)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  q = applyCountry(q, country)
-  if (site) q = q.eq('site', site)
-  if (status) q = q.eq('status', status)
-  return unwrap(await q)
+export const MAX_ASSET_ROWS = 20000
+
+export async function listAssets({ country, site, status, limit } = {}) {
+  const ceiling = Number.isFinite(limit) && limit > 0 ? limit : MAX_ASSET_ROWS
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase
+      .from('vehicle_fleet')
+      .select(COLS)
+      // `created_at` is NOT unique, so ordering on it alone lets a row sit in
+      // two pages or in neither at a page boundary. The id tiebreak is what
+      // makes the paging safe.
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+    q = applyCountry(q, country)
+    if (site) q = q.eq('site', site)
+    if (status) q = q.eq('status', status)
+    return q
+  }, { max: ceiling })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
 }
 
 /**
@@ -37,9 +61,18 @@ export async function listAssets({ country, site, status, limit = 100 } = {}) {
  * fleet-master table. Returns a sorted string list; empty on any RPC error.
  */
 export async function listDataAssetOptions(country) {
-  const { data, error } = await supabase.rpc('reference_asset_options', {
-    p_country: country && country !== 'All' ? country : null,
-  })
+  // PAGED. This RPC is set-returning, so PostgREST applies the SAME 1,000-row
+  // cap to it as to a table read. Measured live as a real KSA-only Manager it
+  // returns 1,033 asset numbers, so the un-paged call was already dropping 33
+  // of that one country's assets - silently, with no error and no visible
+  // marker. On an all-countries view the tail is far longer.
+  const { data, error } = await fetchAllPages((from, to) =>
+    supabase
+      .rpc('reference_asset_options', {
+        p_country: country && country !== 'All' ? country : null,
+      })
+      .range(from, to),
+  { max: MAX_ASSET_ROWS })
   if (error) throw new ServiceError(error.message, error.code, error)
   return (Array.isArray(data) ? data : []).map((r) => r?.asset_no).filter(Boolean)
 }

@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V591**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V593**)
 Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
 V585-V590 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
@@ -216,6 +216,166 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
   preview build).
 
 ---
+
+## SESSION 2026-08-18 (part 2) — CHECKLISTS ON MOBILE: ROLE TARGETING (V591/V592), REAL ICONS, ENGINE PARITY, BACK NAVIGATION. Next free **V593**.
+Owner: "the checklist which we have in the web ... wants to add in mobile applications also, wants to fixed some
+logics also there again, filters screen fixed going back without this, we needs to add icons based more correctly
+... which will be assigned to mechanics and electricians like technician roles, and one checklist is for driver
+will be on driver roles there." **NO EAS BUILD was created - explicitly deferred by the owner.**
+
+### **V591 - BOTH HALVES OF THE ASK WERE IMPOSSIBLE BEFORE IT, and that was measured, not assumed**
+1. **`checklist_templates` had NO role column at all.** The only role field in the entire checklist schema is
+   `checklist_schedules.assignee_role` (singular) and `checklist_assignments.assignee_role` - and
+   **`checklist_schedules` holds ZERO rows**, so it has never been used. Mobile `listTemplates()` returned every
+   published template to every signed-in user, and `listAssignments()` did not read `assignee_role` AT ALL.
+2. **THERE WAS NO MECHANIC AND NO ELECTRICIAN ROLE ANYWHERE.** Counted live: profiles.role held Admin 2 /
+   Director 1 / Inspector 2 / Manager 2 / PMV Manager 1 / Reporter 2 / Tire Planning Engineer 1 / Tyre Data
+   Collector 9 / Tyre Man 17 / Workshop Maintenance Area Manager 1, and custom_roles held 7 names, none a trade.
+   `mobile/lib/permissions.ts` said so itself in a comment on the `workshop` module.
+- **`assignee_roles text[]`, NULLABLE, and NULL MEANS EVERYONE.** A narrowing column that defaulted to hiding
+  would have taken the 3 published checklists away from the 17 Tyre Men who use them the moment it shipped.
+  Verified after apply: **0 templates narrowed**. It is `text[]` not `text` because the owner's own example needs
+  it - a workshop sheet is for mechanics AND electricians while the daily check is for drivers alone; the
+  singular `checklist_schedules.assignee_role` is part of why that column was never usable.
+- **ROUND TRIP PROVEN ON THE REAL COLUMN** (3 probe rows inserted, asserted, deleted in the same session,
+  templates back to 6): `{Mechanic,Electrician}` -> mechanic sees, driver does NOT · `{Driver}` -> the reverse ·
+  NULL -> both. That is the owner's scenario exactly.
+- **TARGETING, NOT A SECURITY BOUNDARY - say it that way.** The filter lives in the READERS, not in RLS, because
+  templates are already org+country walled, a published template is a list of questions with no PII, and a
+  RESTRICTIVE policy would ALSO hide the template from the Admin authoring it. Do not describe it as preventing
+  anyone from reading a template they have the id for.
+- **THE VOCABULARY IS `profiles.role` Title Case**, matching `module_permissions.role` and
+  `checklist_schedules.assignee_role`. Mobile normalises BOTH sides (lowercase + underscore) at the comparison
+  point, because the DB says 'Tyre Man' and mobile's UserRole is 'tyre_man' - a raw compare matches NOBODY, which
+  is how a targeting rule silently reaches no one.
+- Roles are made real by a `custom_roles` row: `normalize_profiles_role()` (V282) accepts a built-in OR any
+  custom_roles name, checked **org-agnostically and WITHOUT checking `active`**. `organisation_id` must be set
+  EXPLICITLY (its default `app_current_org()` is NULL outside a session = an invisible row; the V395 `sites` trap).
+
+### **V592 - THREE ROLES THE WEB OFFERS COULD NEVER BE SAVED. FOUND BY PROBING, NOT BY GREP.**
+**THE METHOD IS THE REUSABLE PART: attach the REAL `normalize_profiles_role()` to a THROWAWAY TEMP TABLE and feed
+it role names.** No guard disabled, `profiles` never touched, and it sidesteps `trg_guard_profile_privileged`
+entirely (that trigger blocks a role UPDATE from an MCP session because `get_my_role()` is NULL there).
+- Silently rewritten to **Reporter** on save: **Maintenance Supervisor · Data Monitor Officer · Store Keeper**.
+  In neither the built-in array nor custom_roles. The save reported success and stored Reporter.
+- **MAINTENANCE SUPERVISOR IS THE ONE THAT MATTERS**: `src/lib/checklistAccess.js` makes it the CHECKLIST-ONLY
+  role and lists it in CHECKLIST_AUTHOR_ROLES, and it is **fully wired** - Layout + LegacyLayout nav filter,
+  App.jsx route guard + redirect, and the `/checklist-insights` author gate all consume it. So a complete,
+  enforced feature could never be given to a human being.
+- Safe by construction: adding a name to custom_roles only WIDENS what the trigger accepts; it cannot change a
+  stored row and grants nothing (a custom role is deny-by-default in the access matrix). **Verified after: all 16
+  role names round-trip unchanged, and 'Nonsense Role' still correctly falls back to Reporter.**
+
+### **THE DRIVER HAD NO `checklists` MODULE AT ALL** - the DB half would have been useless alone
+`mobile/lib/permissions.ts` MODULES gave `checklists` to manager/director/inspector/tyre_man only, so a
+driver-targeted checklist was unreachable on the phone whatever `assignee_roles` said. Added driver + the two
+trades to checklists, and the trades to scan/serial/meter/reportIssue/vehicles/workshop.
+- **`src/lib/mobileModules.js` (the web mirror) HAD ALREADY DRIFTED** - `serial` listed tyre_data_collector on the
+  phone and not on the web, so the Access Manager reasoned about a different default from the one the device
+  applies. NEW drift guard in `src/test/mobileModules.test.js` PARSES `mobile/lib/permissions.ts` and compares
+  role sets per module. **Mutation-tested: reverting the mirror produces the exact expected failure.** It also
+  asserts the parse actually found >=25 modules, so a future shape change cannot make it vacuously pass.
+
+### **ICONS: THE REPORTED BUG WAS REAL AND WORSE THAN COSMETIC - 4 OF 6 TEMPLATES DREW A BLANK SQUARE**
+`checklist_templates.icon` is free text holding THREE incompatible kinds of value at once, measured live: an
+emoji (`🔧`, `📋` - what the web builder's picker writes), a lucide component name (`ClipboardCheck` - the seeded
+templates), or NULL. Mobile did `<Ionicons name={(tpl.icon as any) || 'checkbox-outline'}>`, and neither an emoji
+nor a lucide name is an Ionicons glyph. The web preview had the MIRROR bug - `{draft.icon}` as text, so a
+lucide-named template literally printed the words "ClipboardCheck".
+- **THE FIX IS A TOKEN, NOT A GLYPH**: `src/lib/checklist/checklistIcons.js` <-> `mobile/lib/checklistIcons.ts`,
+  16 tokens, mapped to lucide on the web and Ionicons on the phone. Storing a library-specific name is what
+  caused this - a name valid in one library is meaningless to the other.
+- **NOTHING WAS MIGRATED.** An emoji still renders AS an emoji (universal, needs no map), the legacy lucide and
+  Ionicons names resolve as ALIASES, then category, then the template name, then the generic clipboard. All 6
+  live templates get a sensible icon with no data change.
+- **CAUGHT BY ITS OWN TEST: the generic keywords shadowed every specific one.** `clipboard` is first in the
+  catalogue and owns 'check'/'daily'/'general', so "Daily tyre pressure round" resolved to the generic clipboard.
+  **A GENERIC WORD MUST NEVER OUTRANK A SPECIFIC ONE** - the default token is now tried only after everything else.
+- **RULE: verify every glyph against the INSTALLED map, never from memory** - `node -e` against
+  `@expo/vector-icons/.../glyphmaps/Ionicons.json` (1,357 glyphs) and `'Name' in require('lucide-react')`. The
+  test asserts it too, so a future token cannot ship an invented glyph.
+- The last fallback stays GENERIC on purpose: an unknown sheet showing a lightning bolt would assert it is
+  electrical work.
+
+### **NINE CONFIRMED FILL-SCREEN BUGS, from a traced audit against the web engine**
+1. **Every signature field shared ONE global slot.** A workshop sheet is signed by three trades as three separate
+   `signature` fields: signing the second OVERWROTE the first, only the last reached the DB, and
+   `isFieldAnswered` returned true for EVERY signature field once any one was signed - progress read "3 of 3" with
+   one signature captured. Now a `{fieldId: dataUrl}` map, plus a separate `primarySignature`. `SignaturePad`
+   gained a `value` prop so a signed field re-hydrates instead of showing a blank pad whose Clear wiped the others.
+2. **`require_signature` WAS UNSATISFIABLE and permanently blocked submit.** The flag is on the TEMPLATE but the
+   only way to capture a signature was a signature FIELD, so a template with the flag and no such field could be
+   filled completely and NEVER submitted - the footer hint pointed at a control that did not exist and the work
+   was lost on back-out. Now a template-level pad, satisfied by that pad OR any signed field
+   (`primarySignatureSatisfied`).
+3. **Required signature FIELDS were never validated** - `validateSignatures` ported so a missing one names WHICH.
+4. **A realtime `profiles` UPDATE mid-fill SILENTLY WIPED EVERY ANSWER.** `load` depended on the profile OBJECT
+   and AuthContext calls `setProfile({...updated})` - a new identity every time - so an admin editing the user's
+   role, the language-preference write or the push-token write re-seeded the answers. `setLoading(true)` was not
+   on that path, so there was no spinner: tiles just reverted to "Tap to record" while photos and signatures
+   stayed, leaving a mixed state. Fixed by primitive deps PLUS a dirty guard that can only merge NEW fields.
+   **RULE: never put a context object in a load callback's dep array.**
+5. **The per-line Remarks box (`allow_note`) did not exist on mobile** - a failed check was recorded with no
+   reason and rendered as an empty Remarks column in the web viewer, indistinguishable from "nothing to report".
+6. **Shared option sets (`options_ref`) were ignored.** The builder itself says the field's own `options` are kept
+   only "as a fallback if that list is ever removed", i.e. the shared list is the live source and the copy is
+   EXPECTED to drift - so once an admin edited the legend, web users answered with the new vocabulary and phone
+   users answered and were VALIDATED against the old one. **INVARIANT PRESERVED: the stored answer is ALWAYS the
+   English value, never the translated label.**
+7. **No i18n at all** - the Arabic/Hindi/Urdu readers the feature was built for read the sheet in English on the
+   one device they fill it on. `mobile/lib/checklistI18n.ts` mirrors the web resolver; the language switcher is
+   offered ONLY for languages the template actually carries.
+8. **`signatures` and `notes` are real columns since V212 that mobile NEVER WROTE** - and `recordQueue`'s field
+   allow-list would have stripped them even if SubmitInput had carried them, so adding them in one place alone
+   would have changed nothing.
+9. multiselect answers were not validated against the option set.
+- **CLEARED, and this CLOSES a standing PROJECT_MEMORY item: the checklist photo queue bug is FIXED.**
+  `persistPayloadPhotos` / `resolveCommandPhotos` / `sweepOrphanQueuedPhotos` all go through shape-agnostic
+  `readPhotoBag`/`writePhotoBag` now; no `Array.isArray(ph)` guard remains on any of those paths. Keyed checklist
+  photos are persisted durably at enqueue and correctly marked as referenced by the sweep.
+
+### **BACK NAVIGATION: TEN SCREENS HAD NO WAY BACK, AND 33 CALL SITES WERE NO-OPS**
+The owner's "filters screen ... going back" is `records/index.tsx` - it carries the Filters button and sheet and
+had **no back control at all**. Nine others the same (reports, workorders, analytics, history, notifications, ai,
+admin/index, admin/access). All are Home-hub destinations, not tabs. Separately, 33 sites called a bare
+`router.back()`, which is a **NO-OP with no history** - a deep link or a notification tap left the user stuck.
+- One shared `backTo(router, fallback)` (`mobile/lib/goBack.ts`) that can never be a no-op, + `useGoBack` +
+  a shared RTL-aware `BackButton`. Fallbacks read from the REAL parent in the Home/admin hub, not guessed.
+- **`accident/dashboard.tsx` was correctly SKIPPED** - it is `primary: true` in TAB_BAR, i.e. a real tab with no
+  parent; a back button there would be wrong. It was the only one of the ten that turned out to be a tab.
+- Mutation-tested three ways (fallback branch no-op'd -> 4 failures; caller's fallback ignored -> 2; canGoBack
+  check removed -> 5), each restored and the file confirmed byte-identical.
+
+### WEB BUILDER
+"Who is this checklist for?" multi-select over the trade shortlist then the LIVE assignable roles (built-ins +
+custom_roles, which is how Mechanic/Electrician appear); best-effort fetch degrading to the static lists.
+**`normaliseAssigneeRoles()` returns null, NEVER `[]`** - that is the back-compat contract, since a stray `[]`
+reads as "targeted at nobody" and would hide the checklist from the whole fleet. **`updateTemplate` normalises
+ONLY when the caller sent the key**, so `publishTemplate`/`archiveTemplate` cannot blank targeting on the way
+past. A 16-cell visual icon grid storing the TOKEN, with the emoji route kept behind "Use an emoji instead".
+**Opening a legacy template and saving leaves its stored icon byte-identical** - mutation-tested by injecting a
+rewrite at the load site, which fails with the exact expected diff.
+- `ChecklistSchedules.jsx` needed NO change - it already reads `listAssignableRoles()`, which picks the new roles
+  up from custom_roles automatically.
+- `MyChecklists` listed assignments ONLY, and since no schedule exists it was empty for everyone; it now also
+  lists the published checklists for the reader's trade as a fill-on-demand shortcut, **deliberately NOT counted
+  as due** (the KPI tiles and the table both come from the role-filtered assignments).
+
+### THE CHAIN IS CLOSED END TO END
+`generate_checklist_assignments()` exists, is on an ACTIVE cron job, and **does carry `assignee_role` from the
+schedule onto the assignment** (verified). The break was only ever the last step - mobile read the column and
+never filtered on it. **OPEN, and it is CONFIGURATION not code: there are ZERO `checklist_schedules` rows, so the
+"Due" list stays empty until somebody creates a schedule.**
+
+### OPEN / FLAGGED
+- **NO EAS BUILD - the owner deferred it.** Everything mobile here needs one before a tester can see it.
+- **`SignaturePad`'s new `value` prop is not passed by its 4 OTHER call sites** (meter-logs, inspection/new, both
+  approval screens), so the "reopen shows a blank pad, Clear erases it" hazard still exists there.
+- Hindi is in CHECKLIST_LANGS but the app ships no `hi` UI locale, so a Hindi template renders Hindi content
+  inside English/Arabic chrome. Deliberate content-vs-UI split, but it looks mixed.
+- Carried unchanged: the `tyre_records.serial_no` partial-scrap bug (43 tyres); `failureRate` printing 0.0% when
+  nothing is rated; 820 UAE rows carrying a brand in `removal_reason`; the realtime re-measure.
+
 
 ## SESSION 2026-08-17 — V555-V576: THE SWEEP FINISHED BY POPULATION, NOT BY ARGUMENT NAME + NAV/ROUTE PARITY + THE RUNNING-LIFE SLOWDOWN. SUPERSEDED: next free is **V585** (see part 3 below).
 Branch `claude/accident-builder-report-ui-2bkwb5`, merged to main. Full suite green. Migrations V555-V576 all

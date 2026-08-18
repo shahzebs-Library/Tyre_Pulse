@@ -8,6 +8,7 @@ import {
   MapPin, Plus, Smartphone, Monitor,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { fetchAllPages } from '../../lib/fetchAll'
 import { sanitizeSearchTerm } from '../../lib/searchFilter'
 import { toUserMessage } from '../../lib/safeError'
 import { useConsoleAuth } from '../ConsoleAuthContext'
@@ -157,12 +158,18 @@ export default function ConsoleUsers() {
         try {
           names = await listDataSiteOptions(null)
         } catch {
-          const { data, error: err } = await supabase
-            .from('vehicle_fleet')
-            .select('site')
-            .not('site', 'is', null)
-            .order('site')
-            .limit(2000)
+          // Paged: `.limit(2000)` returned 1000 of the 1,617 fleet rows, and
+          // because this read is ordered by site the fallback picker lost every
+          // site late in the alphabet. `id` is the paging tiebreak.
+          const { data, error: err } = await fetchAllPages(
+            (from, to) => supabase
+              .from('vehicle_fleet')
+              .select('site')
+              .not('site', 'is', null)
+              .order('site').order('id')
+              .range(from, to),
+            { max: 20000 },
+          )
           if (err) throw err
           names = [...new Set((data ?? []).map(r => String(r.site ?? '').trim()).filter(Boolean))]
         }

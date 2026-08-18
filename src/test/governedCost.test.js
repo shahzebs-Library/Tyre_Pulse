@@ -417,7 +417,17 @@ const h = vi.hoisted(() => {
     supabase: {
       rpc: (name, args) => {
         state.calls.push({ name, args })
-        return Promise.resolve(state.rpc[name] || { data: null, error: null })
+        const res = state.rpc[name] || { data: null, error: null }
+        // A set-returning RPC is capped at 1,000 rows per response like any
+        // table read, so `get_tyre_cost_by_asset` is PAGED. The mock serves
+        // `.range()` windows AND stays thenable, so both call shapes work.
+        const p = Promise.resolve(res)
+        p.range = (from, to) => Promise.resolve(
+          res.error || !Array.isArray(res.data)
+            ? res
+            : { data: res.data.slice(from, to + 1), error: null },
+        )
+        return p
       },
       from: () => ({ select: () => ({ then: (r) => Promise.resolve({ data: [], error: null }).then(r) }) }),
     },

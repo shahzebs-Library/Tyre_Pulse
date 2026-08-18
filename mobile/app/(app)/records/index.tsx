@@ -19,6 +19,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
+import { fetchAllRows } from '../../../lib/fetchAllRows'
 import { orIlike } from '../../../lib/queryFilters'
 import { isAdminOrAbove } from '../../../lib/types'
 import {
@@ -29,6 +30,11 @@ import {
 } from '../../../components/ui'
 
 const PAGE = 30
+
+// Ceiling on the distinct-site scan. It sits above the live tyre_records count
+// (~11,132) so the chip list is complete today, and bounds the read if the
+// table keeps growing.
+const TYRE_SITE_SCAN_CAP = 40000
 
 /** Map an operational risk band to a design-system status kind. */
 const RISK_KIND: Record<string, StatusKind> = {
@@ -110,12 +116,21 @@ function RecordsScreen() {
 
   useEffect(() => { reset() }, [debouncedSearch, siteFilter, riskFilter])
 
+  // PAGED and ORDERED. This read had neither: tyre_records is past 11,000 rows
+  // and the server returns at most 1000, so the chips were built from 9% of the
+  // table - and with no ORDER BY the server is free to return a DIFFERENT 1000
+  // each time, so the site filter list changed between loads. `id` is the
+  // paging tiebreak (site repeats heavily).
   async function loadSites() {
     try {
-      let q = supabase.from('tyre_records').select('site').not('site', 'is', null)
-      if (!elevated && profile?.site) q = q.eq('site', profile.site)
-      const { data } = await q
-      if (data) setSites([...new Set(data.map((r: any) => r.site as string))].sort())
+      const rows = await fetchAllRows<{ site: string | null }>((from, to) => {
+        let q = supabase.from('tyre_records').select('site').not('site', 'is', null)
+        if (!elevated && profile?.site) q = q.eq('site', profile.site)
+        return q.order('site').order('id').range(from, to)
+      }, { max: TYRE_SITE_SCAN_CAP })
+      const seen = new Set<string>()
+      for (const r of rows) { const v = r.site?.trim(); if (v) seen.add(v) }
+      setSites([...seen].sort())
     } catch (e: any) {
       if (__DEV__) console.warn('[records] loadSites failed:', e?.message)
     }

@@ -4,6 +4,7 @@ import {
   Copy, Search, LayoutTemplate, Layers, Activity, X,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { fetchAllPages } from '../../lib/fetchAll'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
@@ -23,6 +24,10 @@ const CUSTOM_TYPE = '__custom__'
 
 // Deterministic sample pattern for the preview-only status simulation:
 // a realistic mix of good / warning / critical wheels.
+// Ceiling on the distinct-vehicle-type scan. Above the live fleet size
+// (~1,617 assets) so today's read is complete.
+const FLEET_TYPE_SCAN_CAP = 20000
+
 const SIM_PATTERN = ['good', 'good', 'warning', 'good', 'critical', 'good', 'warning', 'good']
 
 function freshDraft() {
@@ -86,11 +91,21 @@ export default function ConsoleVehicleDesigner() {
     let alive = true
     ;(async () => {
       try {
-        const { data, error } = await supabase
-          .from('vehicle_fleet')
-          .select('vehicle_type')
-          .not('vehicle_type', 'is', null)
-          .limit(3000)
+        // PAGED with an explicit order. The old `.limit(3000)` returned 1000
+        // rows (the server caps every response at 1000) and carried no ORDER
+        // BY, so which 1000 came back was arbitrary: a vehicle type used only
+        // by assets outside that slice was absent from the picker, and the
+        // "types with no design" coverage panel below claimed completeness
+        // while being wrong. `id` is the paging tiebreak.
+        const { data, error } = await fetchAllPages(
+          (from, to) => supabase
+            .from('vehicle_fleet')
+            .select('vehicle_type')
+            .not('vehicle_type', 'is', null)
+            .order('vehicle_type').order('id')
+            .range(from, to),
+          { max: FLEET_TYPE_SCAN_CAP },
+        )
         if (error || !alive) return
         const set = new Set()
         for (const r of data || []) {

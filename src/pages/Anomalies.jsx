@@ -5,6 +5,7 @@ import {
   Search, X, Wrench, CalendarClock, TrendingUp,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -24,6 +25,13 @@ import {
   ANOMALY_TYPE_LABELS,
   ANOMALY_TYPE_DESC,
 } from '../lib/anomalyEngine'
+
+// Ceilings on the two paged scans. Both sit above the live table sizes
+// (tyre_records ~11,132; work_orders ~89,913 is bounded by the date window the
+// page applies server-side). If either is hit the page SAYS the scan is
+// partial rather than presenting a partial sweep as a clean bill of health.
+const TYRE_SCAN_CAP = 40000
+const WORK_ORDER_SCAN_CAP = 40000
 
 // ── Data Quality (missing data) — supplementary group the engine does NOT cover ──
 const DATA_QUALITY = 'DATA_QUALITY'
@@ -104,6 +112,7 @@ export default function Anomalies() {
   const [visitStats, setVisitStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [partialScan, setPartialScan] = useState(false)
   const [activeType, setActiveType] = useState('ALL')
   const [view, setView] = useState('anomalies') // 'anomalies' | 'visits'
   const [search, setSearch] = useState('')
@@ -122,15 +131,23 @@ export default function Anomalies() {
     const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id, issue_date, brand, serial_no, asset_no, site, category, risk_level, cost_per_tyre, qty, country')
-        .order('issue_date', { ascending: false, nullsFirst: false })
-        .limit(5000)
-      if (activeCountry !== 'All' && activeCountry) q = q.eq('country', activeCountry)
-      if (fromDate) q = q.gte('issue_date', fromDate)
-      if (toDate) q = q.lte('issue_date', toDate)
-      const { data, error: err } = await q
+      // PAGED. The old `.limit(5000)` returned 1000 rows - the server caps
+      // every response at 1000 whatever a limit says - so detection ran over
+      // 9% of tyre_records (KSA alone is past 8,000) and reported as complete.
+      // `id` is the paging tiebreak; issue_date is very much not unique.
+      const buildTyres = (from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id, issue_date, brand, serial_no, asset_no, site, category, risk_level, cost_per_tyre, qty, country')
+          .order('issue_date', { ascending: false, nullsFirst: false })
+          .order('id')
+          .range(from, to)
+        if (activeCountry !== 'All' && activeCountry) q = q.eq('country', activeCountry)
+        if (fromDate) q = q.gte('issue_date', fromDate)
+        if (toDate) q = q.lte('issue_date', toDate)
+        return q
+      }
+      const { data, error: err, truncated: tyreTruncated } = await fetchAllPages(buildTyres, { max: TYRE_SCAN_CAP })
       if (err) throw err
       const rows = data || []
 
@@ -138,17 +155,24 @@ export default function Anomalies() {
       // present). The work_orders read is best-effort so an empty/blocked table
       // never breaks the page.
       let workOrders = []
+      let partial = !!tyreTruncated
       try {
-        let wq = supabase
-          .from('work_orders')
-          .select('id, asset_no, tyre_serial, work_type, site, country, opened_at, total_cost')
-          .not('opened_at', 'is', null)
-          .limit(5000)
-        if (activeCountry !== 'All' && activeCountry) wq = wq.eq('country', activeCountry)
-        if (fromDate) wq = wq.gte('opened_at', fromDate)
-        if (toDate) wq = wq.lte('opened_at', `${toDate}T23:59:59`)
-        const { data: wo } = await wq
+        const buildWo = (from, to) => {
+          let wq = supabase
+            .from('work_orders')
+            .select('id, asset_no, tyre_serial, work_type, site, country, opened_at, total_cost')
+            .not('opened_at', 'is', null)
+            .order('opened_at', { ascending: false })
+            .order('id')
+            .range(from, to)
+          if (activeCountry !== 'All' && activeCountry) wq = wq.eq('country', activeCountry)
+          if (fromDate) wq = wq.gte('opened_at', fromDate)
+          if (toDate) wq = wq.lte('opened_at', `${toDate}T23:59:59`)
+          return wq
+        }
+        const { data: wo, truncated: woTruncated } = await fetchAllPages(buildWo, { max: WORK_ORDER_SCAN_CAP })
         workOrders = wo || []
+        partial = partial || !!woTruncated
       } catch { /* best-effort */ }
 
       const engine = detectAnomalies(rows)
@@ -157,6 +181,7 @@ export default function Anomalies() {
       if (stale()) return
       setAnomalies([...freq, ...engine, ...dq])
       setVisitStats(computeVisitStats(rows, { workOrders }))
+      setPartialScan(partial)
     } catch (e) {
       // A superseded load must not raise a banner over data that loaded fine.
       if (!stale()) setError(toUserMessage(e, 'Failed to load anomalies'))
@@ -372,6 +397,13 @@ export default function Anomalies() {
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
           <AlertTriangle className="w-4 h-4" /> {error}
           <button onClick={load} className="ml-auto text-xs underline">Retry</button>
+        </div>
+      )}
+
+      {partialScan && !error && (
+        <div className="flex items-start gap-2 text-amber-300 text-sm bg-amber-400/10 border border-amber-400/20 rounded-xl px-4 py-3">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>Partial scan: the row ceiling was reached, so anomalies outside the rows read are not listed. Narrow the date range for a complete sweep.</span>
         </div>
       )}
 

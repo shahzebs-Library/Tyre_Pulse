@@ -36,9 +36,19 @@ export function listFleetTyreRecords({ country, from: fromDate, to: toDate } = {
   }, { max: 200000 })
 }
 
-/** Full vehicle_fleet master table for the per-asset fleet-record lookup. */
+/**
+ * Full vehicle_fleet master table for the per-asset fleet-record lookup. PAGED:
+ * the register is 1,617 rows and an unbounded read returns 1,000, so under the
+ * All-countries scope roughly 600 assets silently lacked fleet-master
+ * enrichment. asset_no is unique per COUNTRY, not globally, so `id` is the
+ * tiebreak.
+ */
 export function getVehicleFleet() {
-  return supabase.from('vehicle_fleet').select('*')
+  return fetchAllPages(
+    (from, to) => supabase.from('vehicle_fleet').select('*')
+      .order('asset_no').order('id').range(from, to),
+    { max: 20000 },
+  )
 }
 
 /**

@@ -4,7 +4,8 @@
   "toast": {
     "success": "Report generated and downloaded.",
     "errorPrefix": "Could not generate report: {message}",
-    "unexpectedError": "unexpected error"
+    "unexpectedError": "unexpected error",
+    "successTruncated": "Report downloaded, but it covers only the first rows read - narrow the date range for a complete file."
   },
   "errors": {
     "noRecordsInRange": "No tyre records in the selected range.",

@@ -303,12 +303,16 @@ function NewInspectionScreen() {
         .order('country')
         .order('name')
 
-      // Fallback: distinct sites from vehicle_fleet
-      const { data: fleetData } = await supabase
+      // Fallback: distinct sites from vehicle_fleet. PAGED - the asset picker
+      // below was fixed for the 1000-row cap and this sibling read was missed:
+      // the fleet is past 1,600 rows and the read is ordered by site, so every
+      // site late in the alphabet fell off the end of the picker.
+      const fleetData = await fetchAllRows<any>((from, to) => supabase
         .from('vehicle_fleet')
         .select('site, country')
         .not('site', 'is', null)
-        .order('site')
+        .order('site').order('id')
+        .range(from, to), { max: 5000 })
 
       const fromSitesTable: { name: string; country: string }[] =
         (sitesData ?? []).map((s: any) => ({ name: s.name, country: s.country ?? '' }))

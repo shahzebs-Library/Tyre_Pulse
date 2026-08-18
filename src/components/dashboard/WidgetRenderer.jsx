@@ -153,11 +153,16 @@ const SOURCE_FETCHERS = {
   },
   inspections: async ({ site, country } = {}) => {
     const todayStr = new Date().toISOString().slice(0, 10)
-    let q = supabase.from('inspections').select('scheduled_date,status')
-      .gte('scheduled_date', todayStr)
-    q = withSite(q, site)
-    q = applyCountry(q, country)
-    const { data, error } = await q.limit(2000)
+    // Paged, matching the sibling fetcher above: `.limit(2000)` was never a
+    // bound (the server caps at 1000), so the widget's own count would go
+    // silently wrong the moment the schedule passed a thousand rows.
+    const { data, error } = await fetchAllPages((from, to) => {
+      let q = supabase.from('inspections').select('scheduled_date,status')
+        .gte('scheduled_date', todayStr)
+      q = withSite(q, site)
+      q = applyCountry(q, country)
+      return q.order('scheduled_date').order('id').range(from, to)
+    }, { max: 20000 })
     if (error) throw error
     return data ?? []
   },

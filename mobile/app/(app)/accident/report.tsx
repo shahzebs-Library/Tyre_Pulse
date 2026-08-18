@@ -338,9 +338,15 @@ function AccidentReportScreen() {
         setSites(sitesData.map((s: any) => s.name as string))
         return
       }
-      let fleetQ = supabase.from('vehicle_fleet').select('site').not('site', 'is', null).order('site').limit(FLEET_SEARCH_CAP)
-      if (profile?.country) fleetQ = fleetQ.or(`country.eq.${profile.country},country.is.null`)
-      const { data: fleetData } = await fleetQ
+      // Paged like the asset picker below. `.limit(FLEET_SEARCH_CAP)` was never
+      // a bound - the server caps every response at 1000 - and because this read
+      // is ordered by site, the sites late in the alphabet fell off the end.
+      const fleetData = await fetchAllRows<any>((from, to) => {
+        let fleetQ = supabase.from('vehicle_fleet').select('site')
+          .not('site', 'is', null).order('site').order('id').range(from, to)
+        if (profile?.country) fleetQ = fleetQ.or(`country.eq.${profile.country},country.is.null`)
+        return fleetQ
+      }, { max: FLEET_SEARCH_CAP })
       if (fleetData && fleetData.length > 0) {
         setSites([...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[])
         return

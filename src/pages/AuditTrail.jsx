@@ -2,6 +2,11 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import useLatestRequest from '../lib/useLatestRequest'
 import { fetchAllPages } from '../lib/fetchAll'
+
+// Ceiling on the paged audit-log export. audit_log_v2 is ~503,000 rows, so this
+// export is deliberately a bounded newest-first slice rather than the whole
+// table - it is now the 5,000 rows the old .limit(5000) always claimed.
+const AUDIT_EXPORT_CAP = 5000
 import { exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
@@ -242,11 +247,18 @@ export default function AuditTrail() {
   useEffect(() => { if (activeTab === 'upload') loadUploadHistory() }, [loadUploadHistory, activeTab])
 
   async function exportAuditLog() {
-    const { data } = await supabase
-      .from('audit_log_v2')
-      .select('*, profiles(full_name, username)')
-      .order('created_at', { ascending: false })
-      .limit(5000)
+    // Paged. The old `.limit(5000)` shipped 1,000 rows - the server caps every
+    // response at 1000 whatever a limit says - as a file that reads like the
+    // complete audit log of a ~503,000-row table. `id` is the paging tiebreak;
+    // created_at is not unique.
+    const { data } = await fetchAllPages(
+      (from, to) => supabase
+        .from('audit_log_v2')
+        .select('*, profiles(full_name, username)')
+        .order('created_at', { ascending: false }).order('id')
+        .range(from, to),
+      { max: AUDIT_EXPORT_CAP },
+    )
 
     const rows = (data ?? []).map(r => ({
       timestamp:  r.created_at ? formatDateTime(r.created_at) : '',

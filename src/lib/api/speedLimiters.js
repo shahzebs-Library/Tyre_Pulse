@@ -11,7 +11,7 @@
  * page can surface an "apply MIGRATIONS_V153_SPEED_LIMITERS.sql" hint instead
  * of throwing.
  */
-import { supabase, unwrap, applyCountry, isMissingRelation } from './_client'
+import { supabase, unwrap, applyCountry, isMissingRelation, fetchAllPages } from './_client'
 
 export const COLS =
   'id,organisation_id,country,asset_no,limit_kph,device_id,last_verified_at,' +
@@ -94,14 +94,24 @@ export async function deleteSpeedLimiter(id) {
  * speed-limiter coverage vs the fleet on the registry page. Country-scoped and
  * null-safe. Degrades to [] when vehicle_fleet is unavailable so the page can
  * fall back to a limiter-only view (honest: coverage ratios become null when
- * there is no fleet denominator). Capped high enough to cover a full fleet.
- * @param {{ country?:string, limit?:number }} [opts]
+ * there is no fleet denominator).
+ *
+ * PAGED, and that is the whole point: this is the coverage DENOMINATOR. The old
+ * `.limit(5000)` returned 1000 rows, because PostgREST caps every response at
+ * 1000 whatever a limit says - so a 1,617-asset fleet was measured as 1,000 and
+ * speed-limiter coverage was reported HIGHER than it really is. asset_no is
+ * unique per COUNTRY, not globally, so `id` carries the paging tiebreak.
+ * @param {{ country?:string, limit?:number }} [opts] `limit` is the row ceiling.
  */
-export async function listFleetForCoverage({ country, limit = 5000 } = {}) {
+export async function listFleetForCoverage({ country, limit = 20000 } = {}) {
   try {
-    let q = supabase.from('vehicle_fleet').select('asset_no,site,is_active')
-    q = applyCountry(q, country)
-    const rows = unwrap(await q.limit(limit)) || []
+    const rows = unwrap(await fetchAllPages(
+      (from, to) => applyCountry(
+        supabase.from('vehicle_fleet').select('asset_no,site,is_active'),
+        country,
+      ).order('asset_no').order('id').range(from, to),
+      { max: limit },
+    )) || []
     // Governed-fleet denominator = assets that are still in service. Rows with a
     // null is_active are treated as active (legacy data), never dropped silently.
     return rows.filter((r) => r && r.is_active !== false)

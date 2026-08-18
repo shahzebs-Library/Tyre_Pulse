@@ -55,10 +55,16 @@ export function listComplianceTyreRecords({ country, from: fromDate, to: toDate 
  * absent in some deployments).
  */
 export function getFleetMaster() {
-  return supabase
-    .from('fleet_master')
-    .select('id, asset_no, vehicle_type, make, model, site, country')
-    .catch(() => ({ data: null }))
+  // Paged: fleet_master is a full asset register, so an unbounded read stops at
+  // the server's 1000-row cap and the compliance tab measures against a partial
+  // fleet. `id` is the paging tiebreak.
+  return fetchAllPages(
+    (from, to) => supabase
+      .from('fleet_master')
+      .select('id, asset_no, vehicle_type, make, model, site, country')
+      .order('asset_no').order('id').range(from, to),
+    { max: 20000 },
+  ).catch(() => ({ data: null }))
 }
 
 /** Generate the next work-order number via the `generate_work_order_no` RPC. */

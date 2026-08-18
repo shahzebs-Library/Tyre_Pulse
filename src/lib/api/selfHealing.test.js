@@ -22,16 +22,30 @@ vi.mock('../anomalyEngine', () => h.anomaly)
 vi.mock('./_client', () => ({
   supabase: h.supabase,
   applyCountry: (q) => q, // identity in tests (no country scope applied)
+  // The real helper; the builder below serves .range() windows so these tests
+  // exercise the paging the service now relies on rather than mocking it away.
+  fetchAllPages: fetchAllPagesReal,
 }))
 
+const { fetchAllPages: fetchAllPagesReal } = await import('../fetchAll')
 const svc = await import('./selfHealing')
 
-// A terminal-resolving query builder whose final .limit() yields { data, error }.
+/**
+ * A terminal-resolving query builder whose final `.range(from, to)` yields the
+ * requested window of `result.data`. The scans are PAGED now (they used to
+ * `.limit(5000)`, which the server truncates to 1000), so a mock that resolved
+ * on `.limit()` would silently stop exercising the real read shape.
+ */
 function builder(result) {
   const b = {
     select: () => b,
     order: () => b,
     limit: () => Promise.resolve(result),
+    range: (from, to) => Promise.resolve(
+      result.error
+        ? result
+        : { data: (result.data ?? []).slice(from, to + 1), error: null },
+    ),
   }
   return b
 }

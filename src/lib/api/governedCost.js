@@ -25,7 +25,7 @@
  * different vocabularies (the store->site map exists precisely because of
  * this). loadGovernedCost uses the `site` column via get_cost_cpk_overview.
  */
-import { supabase } from './_client'
+import { supabase, fetchAllRpcPages } from './_client'
 import {
   money,
   byCountry as pureByCountry,
@@ -373,11 +373,21 @@ export async function loadGovernedTyreByAsset({ country, from, to } = {}) {
   }
   const cur = currencyForCountry(country)
   try {
-    const { data, error } = await supabase.rpc('get_tyre_cost_by_asset', {
-      p_country: scope(country),
-      p_from: from || null,
-      p_to: to || null,
-    })
+    // PAGED. `get_tyre_cost_by_asset` is SET-RETURNING, and PostgREST caps an
+    // RPC response at 1000 rows exactly as it caps a table read - one row per
+    // asset with tyre spend, against ~1,377 distinct asset codes, so the
+    // per-asset money map was losing its tail on the All-countries scope.
+    // Keyed on asset_code: its ORDER BY is on a sum and therefore not unique,
+    // so identity paging is what makes the page boundaries safe.
+    const { data, error } = await fetchAllRpcPages(
+      (pgFrom, pgTo) => supabase.rpc('get_tyre_cost_by_asset', {
+        p_country: scope(country),
+        p_from: from || null,
+        p_to: to || null,
+      }).range(pgFrom, pgTo),
+      (r) => (r && r.asset_code != null ? String(r.asset_code) : null),
+      { max: 20000 },
+    )
     if (error || !Array.isArray(data)) return { ok: false, map: new Map(), currency: cur }
     const map = new Map()
     let total = 0

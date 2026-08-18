@@ -15,6 +15,7 @@
  */
 import { supabase } from './supabase'
 import { saveCommand } from './recordQueue'
+import { fetchAllRows } from './fetchAllRows'
 
 function statusFor(qty: number, min: number | null, crit: number | null): string {
   if (crit != null && qty <= crit) return 'Critical'
@@ -217,18 +218,24 @@ export async function createStockRecord(input: NewStockInput): Promise<NewStockR
  * for the add-stock location picker. RLS scopes rows to the caller's org and
  * country. Deduped + sorted, capped at 100 options. Returns [] on any failure
  * so the picker degrades honestly to free-text entry.
+ *
+ * PAGED. The old `.limit(2000)` returned 1000 rows - the server caps every
+ * response at 1000 whatever a limit says - and because the read is ordered by
+ * site, the sites late in the alphabet simply never reached the picker. The
+ * caller only falls back to free text on a THROWN error, never on a partial
+ * read, so a truncated list looked exactly like a complete one. `id` is the
+ * paging tiebreak (site is very much not unique).
  */
 export async function listStockSites(): Promise<string[]> {
   try {
-    const { data, error } = await supabase
+    const data = await fetchAllRows<{ site: string | null }>((from, to) => supabase
       .from('vehicle_fleet')
       .select('site')
       .not('site', 'is', null)
-      .order('site')
-      .limit(2000)
-    if (error) throw error
+      .order('site').order('id')
+      .range(from, to), { max: 5000 })
     const seen = new Set<string>()
-    for (const r of (data ?? []) as { site: string | null }[]) {
+    for (const r of data) {
       const v = r.site?.trim()
       if (v) seen.add(v)
     }

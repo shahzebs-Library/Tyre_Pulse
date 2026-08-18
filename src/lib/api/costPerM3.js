@@ -281,20 +281,26 @@ export async function listProduction({ country, from, to, limit = 20000 } = {}) 
  * Rejected production loads only (server-filtered, bounded) so the rejections
  * report can show row-level Reason + Remarks without pulling the whole table.
  */
-export async function listRejectedProduction({ country, from, to, reason, limit = 1000 } = {}) {
+export async function listRejectedProduction({ country, from, to, reason, limit = 5000 } = {}) {
   try {
-    let q = supabase.from('production_logs')
-      .select(PROD_COLS)
-      .eq('rejected', true)
-      .order('period_date', { ascending: false }).order('id')
-    if (country && country !== 'All') q = q.eq('country', country)
-    if (from) q = q.gte('period_date', from)
-    if (to) q = q.lte('period_date', to)
-    // The picker offers '(none)' for a load with no reason recorded, which is a
-    // real answer and not the same as "any reason".
-    if (reason === NO_REASON) q = q.or('reason.is.null,reason.eq.')
-    else if (reason) q = q.eq('reason', reason)
-    const { data, error } = await q.limit(limit)
+    // Paged. The old `.limit(limit)` defaulted to exactly 1000 - the server's
+    // own cap - over a ~297,000-row table, so the rejections report could never
+    // show more than one page and there was no way to tell a full page from a
+    // truncated one. `id` is already the tiebreak on the order.
+    const { data, error } = await fetchAllPages((pgFrom, pgTo) => {
+      let q = supabase.from('production_logs')
+        .select(PROD_COLS)
+        .eq('rejected', true)
+        .order('period_date', { ascending: false }).order('id')
+      if (country && country !== 'All') q = q.eq('country', country)
+      if (from) q = q.gte('period_date', from)
+      if (to) q = q.lte('period_date', to)
+      // The picker offers '(none)' for a load with no reason recorded, which is
+      // a real answer and not the same as "any reason".
+      if (reason === NO_REASON) q = q.or('reason.is.null,reason.eq.')
+      else if (reason) q = q.eq('reason', reason)
+      return q.range(pgFrom, pgTo)
+    }, { max: limit })
     if (error) return []
     return Array.isArray(data) ? data : []
   } catch { return [] }

@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertTriangle, X, RefreshCw, Download, Clock, Mail, ArrowRight,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/countryFilter'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -20,6 +21,11 @@ import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
 import { Illustration } from '../components/illustrations'
 import { toUserMessage } from '../lib/safeError'
+
+// Ceiling on the paged tyre export. Above the live tyre_records count (~11,132)
+// so a normal export is complete; if it is ever hit the toast SAYS the file is
+// partial rather than handing over a short spreadsheet that looks whole.
+const TYRE_EXPORT_CAP = 40000
 
 /**
  * ReportCenter — one place to generate the fleet's branded reports on demand and
@@ -94,14 +100,21 @@ export default function ReportCenter() {
     return { s, actions }
   }
 
+  // PAGED. The old `.limit(5000)` returned 1000 rows - the server caps every
+  // response at 1000 whatever a limit says - so the Excel export below shipped
+  // a 1,000-row spreadsheet that looked like the complete range (KSA alone is
+  // past 8,000 tyre rows). `id` is the paging tiebreak; issue_date repeats.
   async function fetchTyreRows() {
-    const { data, error } = await applyCountry(
-      supabase.from('tyre_records').select('issue_date,asset_no,brand,site,category,risk_level,cost_per_tyre'),
-      activeCountry,
-    ).gte('issue_date', dateFrom || '1900-01-01').lte('issue_date', dateTo || '2999-12-31')
-      .order('issue_date', { ascending: false }).limit(5000)
+    const { data, error, truncated } = await fetchAllPages(
+      (from, to) => applyCountry(
+        supabase.from('tyre_records').select('id,issue_date,asset_no,brand,site,category,risk_level,cost_per_tyre'),
+        activeCountry,
+      ).gte('issue_date', dateFrom || '1900-01-01').lte('issue_date', dateTo || '2999-12-31')
+        .order('issue_date', { ascending: false }).order('id').range(from, to),
+      { max: TYRE_EXPORT_CAP },
+    )
     if (error) throw error
-    return data ?? []
+    return { rows: data ?? [], truncated: !!truncated }
   }
 
   // ── On-demand generation ───────────────────────────────────────────────────
@@ -109,6 +122,7 @@ export default function ReportCenter() {
     if (generating) return
     setGenerating(id); setToast(null)
     const stamp = new Date().toISOString().slice(0, 10)
+    let partialExport = false
     try {
       if (id === 'pptx' || id === 'daily') {
         const { s, actions } = await fetchExecData()
@@ -170,7 +184,8 @@ export default function ReportCenter() {
           }, `${reportCompany.replace(/\s+/g, '_')}_Daily_${stamp}`)
         }
       } else if (id === 'excel') {
-        const rows = await fetchTyreRows()
+        const { rows, truncated } = await fetchTyreRows()
+        partialExport = truncated
         if (!rows.length) throw new Error(t('reportcenter.errors.noRecordsInRange'))
         await exportToExcel(
           rows.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
@@ -178,7 +193,8 @@ export default function ReportCenter() {
           ['Date', 'Asset No', 'Brand', 'Site', 'Category', 'Risk Level', `Cost (${activeCurrency})`],
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'Tyre Records', { company: reportCompany })
       } else if (id === 'pdf') {
-        const rows = await fetchTyreRows()
+        const { rows, truncated } = await fetchTyreRows()
+        partialExport = truncated
         if (!rows.length) throw new Error(t('reportcenter.errors.noRecordsInRange'))
         await exportToPdf(
           rows.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
@@ -186,7 +202,12 @@ export default function ReportCenter() {
           `${reportCompany}: Tyre Records · ${formatDate(now, activeCountry)}`,
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'landscape', reportCompany)
       }
-      setToast({ text: t('reportcenter.toast.success'), type: 'ok' })
+      setToast({
+        text: partialExport
+          ? t('reportcenter.toast.successTruncated')
+          : t('reportcenter.toast.success'),
+        type: partialExport ? 'err' : 'ok',
+      })
     } catch (e) {
       console.error(`[ReportCenter] ${id} failed:`, e)
       setToast({ text: t('reportcenter.toast.errorPrefix', { message: toUserMessage(e, t('reportcenter.toast.unexpectedError')) }), type: 'err' })

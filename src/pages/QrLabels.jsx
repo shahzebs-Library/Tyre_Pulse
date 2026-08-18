@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -15,6 +16,13 @@ const LABEL_SIZES = {
   md: { label: 'Medium', dim: 180, desc: '55 mm' },
   lg: { label: 'Large',  dim: 220, desc: '70 mm' },
 }
+
+// Ceilings on the paged reads. Both sit well above the live table sizes
+// (fleet ~1,617 assets, tyre_records ~11,132) so a normal load is complete; if
+// either is ever exceeded the page SAYS SO rather than silently printing a
+// partial label run.
+const FLEET_ROW_CAP = 20000
+const TYRE_ROW_CAP  = 40000
 
 const PRINT_LABEL_W  = 60   // mm
 const PRINT_LABEL_H  = 68   // mm
@@ -42,6 +50,7 @@ export default function QrLabels() {
   const [filterSite, setFilterSite] = useState('all')
   const [labelSize,  setLabelSize]  = useState('md')
   const [qrImages,   setQrImages]   = useState({})       // { id → dataURL }
+  const [truncated,  setTruncated]  = useState(false)
   const [generating, setGenerating] = useState(false)
   const [exporting,  setExporting]  = useState(false)
   const printAreaRef = useRef(null)
@@ -51,6 +60,7 @@ export default function QrLabels() {
     setQrImages({})
     setSearch('')
     setFilterSite('all')
+    setTruncated(false)
     loadData()
   }, [mode])
 
@@ -59,33 +69,51 @@ export default function QrLabels() {
     setError(null)
     try {
       if (mode === 'tyres') {
-        const { data: rows, error: qErr } = await supabase
-          .from('tyre_records')
-          // serial_number is a DEAD legacy column - empty on all 7,504 tyre
-          // rows; serial_no is the canonical one. Reading the dead name meant
-          // every printed QR label encoded an empty string while the caption
-          // beside it still looked right. Aliased rather than renamed so the
-          // rest of this file keeps working unchanged.
-          .select('id, serial_number:serial_no, brand, site, asset_no, risk_level')
-          .order('asset_no')
-          .limit(1000)
+        // serial_number is a DEAD legacy column - empty on all tyre rows;
+        // serial_no is the canonical one. Reading the dead name meant every
+        // printed QR label encoded an empty string while the caption beside it
+        // still looked right. Aliased rather than renamed so the rest of this
+        // file keeps working unchanged.
+        //
+        // Paged: the server caps EVERY response at 1000 rows whatever a
+        // .limit() says, and tyre_records is past 11,000 - the old .limit(1000)
+        // meant the search box below could not find a tyre outside the first
+        // page and "Select All (1000)" read as the whole fleet. `id` is the
+        // unique paging tiebreak (asset_no repeats across a vehicle's tyres).
+        const { data: rows, error: qErr, truncated } = await fetchAllPages(
+          (from, to) => supabase
+            .from('tyre_records')
+            .select('id, serial_number:serial_no, brand, site, asset_no, risk_level')
+            .order('asset_no').order('id')
+            .range(from, to),
+          { max: TYRE_ROW_CAP },
+        )
         if (qErr) throw qErr
         setData(rows || [])
+        setTruncated(truncated)
         setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
       } else {
-        const { data: rows, error: qErr } = await supabase
-          .from('vehicle_fleet')
-          .select('id, asset_no, vehicle_type, site')
-          .not('asset_no', 'is', null)
-          .order('asset_no')
-          .limit(1000)
+        // Paged for the same reason: the fleet is past 1,600 assets, so the
+        // old .limit(1000) left ~600 vehicles with no printable label AND
+        // unreachable from this page's own search box. asset_no is unique per
+        // COUNTRY, not globally, so `id` is the tiebreak.
+        const { data: rows, error: qErr, truncated } = await fetchAllPages(
+          (from, to) => supabase
+            .from('vehicle_fleet')
+            .select('id, asset_no, vehicle_type, site')
+            .not('asset_no', 'is', null)
+            .order('asset_no').order('id')
+            .range(from, to),
+          { max: FLEET_ROW_CAP },
+        )
         if (qErr) throw qErr
         setData(rows || [])
+        setTruncated(truncated)
         setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
       }
     } catch (err) {
       setError(toUserMessage(err, 'Could not load records.'))
-      setData([]); setSites([])
+      setData([]); setSites([]); setTruncated(false)
     } finally {
       setLoading(false)
     }
@@ -397,6 +425,17 @@ export default function QrLabels() {
             {selected.size === filtered.length && filtered.length > 0 ? 'Deselect All' : `Select All (${filtered.length})`}
           </button>
         </div>
+
+        {/* A partial read must never masquerade as the whole register - the
+            count on Select All is otherwise indistinguishable from a total. */}
+        {truncated && (
+          <div className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            <AlertCircle size={13} className="shrink-0 mt-0.5" />
+            <span>
+              Showing the first {data.length.toLocaleString()} records only. Narrow by site or search to reach the rest.
+            </span>
+          </div>
+        )}
 
         {/* ── Generated QR preview grid ─────────────────────────────────────────── */}
         <AnimatePresence>

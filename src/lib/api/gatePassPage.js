@@ -10,9 +10,18 @@
  */
 import { supabase, fetchAllPages } from './_client'
 
-/** Distinct-site source list for the site filter (non-null sites only). */
+/**
+ * Distinct-site source list for the site filter (non-null sites only). PAGED:
+ * an unbounded read returns at most 1000 of the 1,617 fleet rows, so sites
+ * belonging only to assets outside that page never reached the filter. `id` is
+ * the paging tiebreak - site repeats heavily.
+ */
 export function listGatePassSites() {
-  return supabase.from('vehicle_fleet').select('site').not('site', 'is', null)
+  return fetchAllPages(
+    (from, to) => supabase.from('vehicle_fleet').select('site')
+      .not('site', 'is', null).order('site').order('id').range(from, to),
+    { max: 20000 },
+  )
 }
 
 /**

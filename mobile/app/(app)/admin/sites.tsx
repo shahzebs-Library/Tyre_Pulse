@@ -21,6 +21,15 @@ import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 import { backTo } from '../../../lib/goBack'
+import { fetchAllRows } from '../../../lib/fetchAllRows'
+
+// Ceilings on the paged reads. Both sit above the live table sizes (fleet
+// ~1,617 assets across all countries, ~62 governed sites) so a normal load is
+// complete. Without paging the server caps EVERY response at 1000 rows, which
+// under-counted the fleet, under-counted every site rollup, and dropped every
+// site late in the alphabet (the read is ordered by site).
+const FLEET_ROW_CAP = 10000
+const SITE_ROW_CAP = 5000
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -84,14 +93,22 @@ export default function SitesManagementScreen() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [sitesRes, vehiclesRes] = await Promise.all([
-        supabase.from('sites').select('*').order('country').order('name'),
-        supabase.from('vehicle_fleet').select('id,asset_no,vehicle_type,make,model,site,country,status,is_active').order('site').order('asset_no'),
+      // `id` is the paging tiebreak on both reads: site/asset_no and
+      // country/name are not unique, and a page boundary inside a run of equal
+      // sort keys drops or repeats rows.
+      const [siteRows, vehicleRows] = await Promise.all([
+        fetchAllRows<Site>((from, to) => supabase
+          .from('sites').select('*')
+          .order('country').order('name').order('id')
+          .range(from, to), { max: SITE_ROW_CAP }),
+        fetchAllRows<Vehicle>((from, to) => supabase
+          .from('vehicle_fleet')
+          .select('id,asset_no,vehicle_type,make,model,site,country,status,is_active')
+          .order('site').order('asset_no').order('id')
+          .range(from, to), { max: FLEET_ROW_CAP }),
       ])
-      if (sitesRes.error) throw sitesRes.error
-      if (vehiclesRes.error) throw vehiclesRes.error
-      setSites((sitesRes.data ?? []) as Site[])
-      setVehicles((vehiclesRes.data ?? []) as Vehicle[])
+      setSites(siteRows)
+      setVehicles(vehicleRows)
       setError(null)
     } catch (e: any) {
       if (__DEV__) console.warn('[sites] load failed', e)

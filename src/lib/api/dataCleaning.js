@@ -47,14 +47,23 @@ export function countTyreRecords({ country, cleaned } = {}) {
   return scope(q, country)
 }
 
-/** Distinct non-null sites among pending (uncleaned) records, strict country-scoped. */
+/**
+ * Distinct non-null sites among pending (uncleaned) records, strict
+ * country-scoped. PAGED through the same `pageAll` helper every other scan on
+ * this page uses: an unbounded read returns at most 1000 of the 11,132 tyre
+ * records, so the site filter simply omitted sites whose pending rows fell
+ * outside that slice. Returns the same `{ data, error }` shape the caller
+ * already destructures.
+ */
 export function listUncleanedSites({ country } = {}) {
-  const q = supabase
-    .from('tyre_records')
-    .select('site')
-    .not('site', 'is', null)
-    .eq('cleaned', false)
-  return scope(q, country)
+  return pageAll(() => scope(
+    supabase
+      .from('tyre_records')
+      .select('site')
+      .not('site', 'is', null)
+      .eq('cleaned', false),
+    country,
+  ))
 }
 
 // ── Pending / cleaned tabs ────────────────────────────────────────────────────

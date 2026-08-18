@@ -33,7 +33,9 @@ export default function AssetMasterSection() {
       // ownership degrades to an empty payload on its own, so a missing V376 RPC
       // leaves the master table fully usable without an ownership column
       const [master, own] = await Promise.all([
-        getAssetMaster({ limit: 2000 }),
+        // No hand-picked limit: the service pages the set-returning RPC to its
+        // own ceiling, so the count rendered beside the table is the real one.
+        getAssetMaster(),
         getAssetOwnership({ limit: 5000 }),
       ])
       setRows(master)

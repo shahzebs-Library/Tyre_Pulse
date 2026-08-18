@@ -13,7 +13,7 @@
  * a read error contributes 0 rather than throwing, so one absent table never
  * sinks the whole split.
  */
-import { supabase, applyCountry, fetchAllPages } from './_client'
+import { supabase, applyCountry, fetchAllPages, fetchAllRpcPages } from './_client'
 
 /** True when a Supabase error means the table/relation is not deployed yet. */
 function isMissingRelation(err) {
@@ -257,11 +257,21 @@ export async function loadCostSplit({ country, now, from, to, site } = {}) {
  */
 export async function loadGridTyreByAsset({ country, from, to } = {}) {
   try {
-    const { data, error } = await supabase.rpc('get_tyre_cost_by_asset', {
-      p_country: country && country !== 'All' ? country : null,
-      p_from: from || null,
-      p_to: to || null,
-    })
+    // PAGED. `get_tyre_cost_by_asset` is SET-RETURNING, and PostgREST caps an
+    // RPC response at 1000 rows exactly as it caps a table read - one row per
+    // asset with tyre spend, against ~1,377 distinct asset codes, so the
+    // per-asset money map was losing its tail on the All-countries scope.
+    // Keyed on asset_code: its ORDER BY is on a sum and therefore not unique,
+    // so identity paging is what makes the page boundaries safe.
+    const { data, error } = await fetchAllRpcPages(
+      (pgFrom, pgTo) => supabase.rpc('get_tyre_cost_by_asset', {
+        p_country: country && country !== 'All' ? country : null,
+        p_from: from || null,
+        p_to: to || null,
+      }).range(pgFrom, pgTo),
+      (r) => (r && r.asset_code != null ? String(r.asset_code) : null),
+      { max: 20000 },
+    )
     if (error) return null
     if (!Array.isArray(data) || data.length === 0) return null
     const map = new Map()

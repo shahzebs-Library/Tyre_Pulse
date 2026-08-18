@@ -229,13 +229,17 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
         .range(from, to),
       country
     ), { max: 5000 }),
-    withCountry(
+    // Paged to the 2,000 rows this read always claimed: `.limit(2000)` returned
+    // 1,000 (the server caps every response at 1000), so half the intended
+    // recent-tyre window never reached the alert rules. `id` is the tiebreak -
+    // issue_date is a date, not a unique key.
+    fetchAllPages((from, to) => withCountry(
       supabase.from('tyre_records')
         .select(badgeOnly ? TYRE_BADGE_COLS : TYRE_COLS)
-        .order('issue_date', { ascending: false })
-        .limit(2000),
+        .order('issue_date', { ascending: false }).order('id')
+        .range(from, to),
       country
-    ),
+    ), { max: 2000 }),
   ])
 
   const stockRecords = rowsOf(stockRes)

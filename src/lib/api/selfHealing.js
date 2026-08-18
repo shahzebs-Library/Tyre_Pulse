@@ -18,7 +18,7 @@
  *
  * Nothing here decides to delete or overwrite data on its own.
  */
-import { supabase, applyCountry } from './_client'
+import { supabase, applyCountry, fetchAllPages } from './_client'
 import {
   listOrphanAssets, listDuplicateTyres, listSerialConflicts,
   backfillAsset, backfillAllOrphanAssets, mergeDuplicate,
@@ -29,8 +29,19 @@ import { detectAnomalies } from '../anomalyEngine'
 /** Tables scanned for site-level staleness. */
 const STALE_TABLES = ['tyre_records', 'accidents', 'inspections']
 
-/** Cap on rows pulled per table for the staleness scan (head-light). */
-const STALE_ROW_CAP = 5000
+/**
+ * Row ceiling per PAGED scan.
+ *
+ * This used to be a `.limit(5000)`, which returns 1000 rows because PostgREST
+ * caps every response at 1000 whatever a limit says. Both scans below were
+ * therefore reading roughly 9% of tyre_records (11,132 rows) - and a
+ * data-quality tool that inspects a slice reports the data as CLEANER than it
+ * is, which is the worst direction for it to be wrong in. The staleness scan
+ * was worse still: ordered newest-first, the 1000-row slice held only the most
+ * RECENT activity, so a site whose last activity is old - the exact site the
+ * scan exists to surface - never appeared at all.
+ */
+const STALE_ROW_CAP = 40000
 
 /**
  * Latest activity per site across the operational tables, as
@@ -46,12 +57,15 @@ async function queryStaleRows({ country } = {}) {
   const latest = new Map() // site -> { t, created_at }
   for (const table of STALE_TABLES) {
     try {
-      let q = supabase.from(table)
-        .select('site,created_at')
-        .order('created_at', { ascending: false })
-        .limit(STALE_ROW_CAP)
-      q = applyCountry(q, country)
-      const { data, error } = await q
+      // `id` is the paging tiebreak - created_at is not unique, and a page
+      // boundary inside a run of equal timestamps drops or repeats rows.
+      const { data, error } = await fetchAllPages(
+        (from, to) => applyCountry(
+          supabase.from(table).select('site,created_at'),
+          country,
+        ).order('created_at', { ascending: false }).order('id').range(from, to),
+        { max: STALE_ROW_CAP },
+      )
       if (error) continue
       for (const r of Array.isArray(data) ? data : []) {
         const site = r?.site
@@ -104,11 +118,17 @@ export async function runScans({ country } = {}) {
  */
 export async function scanAnomalies({ country } = {}) {
   try {
-    let q = supabase.from('tyre_records')
-      .select('id,asset_no,serial_no,site,issue_date,cost_per_tyre,risk_level,brand,qty,created_at')
-      .limit(STALE_ROW_CAP)
-    q = applyCountry(q, country)
-    const { data, error } = await q
+    // Paged AND ordered: the previous read had neither a real bound nor an
+    // ORDER BY, so the server returned an arbitrary 1000 of 11,132 rows and a
+    // different arbitrary 1000 on the next run.
+    const { data, error } = await fetchAllPages(
+      (from, to) => applyCountry(
+        supabase.from('tyre_records')
+          .select('id,asset_no,serial_no,site,issue_date,cost_per_tyre,risk_level,brand,qty,created_at'),
+        country,
+      ).order('id').range(from, to),
+      { max: STALE_ROW_CAP },
+    )
     if (error) return []
     const rows = Array.isArray(data) ? data : []
     if (rows.length === 0) return []

@@ -4,11 +4,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // which re-exports the singleton from '../supabase'. loadGridTyreByAsset only
 // touches supabase.rpc('get_tyre_cost_by_asset', ...), so a thin rpc mock is
 // sufficient - the from()/fetchAllPages paths are not reached by this function.
+//
+// `get_tyre_cost_by_asset` is SET-RETURNING and therefore capped at 1,000 rows
+// per response like any table read, so the service PAGES it: the mock serves
+// `.range()` windows out of `state.rpc.data` and records them, which is what
+// lets these tests prove the read is paged rather than truncated.
 const h = vi.hoisted(() => {
-  const state = { rpc: { data: null, error: null }, lastRpc: null }
+  const state = { rpc: { data: null, error: null }, lastRpc: null, ranges: [] }
   function rpc(name, args) {
     state.lastRpc = { name, args }
-    return Promise.resolve(state.rpc)
+    return {
+      range(from, to) {
+        state.ranges.push([from, to])
+        const { data, error } = state.rpc
+        if (error) return Promise.resolve({ data: null, error })
+        return Promise.resolve({
+          data: Array.isArray(data) ? data.slice(from, to + 1) : data,
+          error: null,
+        })
+      },
+    }
   }
   return { state, supabase: { rpc, from: () => { throw new Error('from() should not be called') } } }
 })
@@ -20,6 +35,7 @@ const { loadGridTyreByAsset } = await import('../lib/api/costSummary')
 beforeEach(() => {
   h.state.rpc = { data: null, error: null }
   h.state.lastRpc = null
+  h.state.ranges = []
 })
 
 describe('service layer - loadGridTyreByAsset', () => {
@@ -75,5 +91,22 @@ describe('service layer - loadGridTyreByAsset', () => {
   it('returns null when data is null', async () => {
     h.state.rpc = { data: null, error: null }
     expect(await loadGridTyreByAsset()).toBeNull()
+  })
+
+  // THE REGRESSION THIS GUARDS. get_tyre_cost_by_asset returns one row per
+  // asset with tyre spend against ~1,377 distinct asset codes, and PostgREST
+  // caps a set-returning RPC response at 1,000 rows exactly as it caps a table
+  // read - so an unpaged call silently dropped the tail of a per-asset MONEY
+  // map, and the total computed from it was short by whatever fell off.
+  it('pages past the 1000-row response cap, so the per-asset money map is complete', async () => {
+    h.state.rpc = {
+      data: Array.from({ length: 1377 }, (_, i) => ({ asset_code: `A${i}`, tyre_cost: 1 })),
+      error: null,
+    }
+    const out = await loadGridTyreByAsset({ country: 'KSA' })
+    expect(out.map.size).toBe(1377)
+    expect(out.total).toBe(1377)
+    expect(h.state.ranges.length).toBeGreaterThan(1)
+    expect(h.state.ranges[0]).toEqual([0, 999])
   })
 })

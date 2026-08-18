@@ -18,6 +18,27 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
+import { fetchAllRows } from '../../../lib/fetchAllRows'
+
+// Ceiling on every AI-context scan below. These reads feed the numbers the
+// assistant then STATES AS FACT (total spend, record counts, per-site and
+// per-brand rollups), so a silent 1000-row truncation does not just shorten a
+// list - it makes the assistant confidently wrong. PostgREST caps every
+// response at 1000 whatever a limit says, and tyre_records is past 11,000, so
+// each of these has to be paged. `id` is the paging tiebreak.
+const AI_SCAN_CAP = 20000
+
+function pageTyres<T = any>(cols: string, since: string): Promise<T[]> {
+  // `cols` is dynamic, so supabase-js cannot infer the row type here - the
+  // caller declares it via the type parameter instead.
+  return fetchAllRows<T>((from, to) => supabase
+    .from('tyre_records')
+    .select(cols)
+    .gte('issue_date', since)
+    .order('id')
+    .range(from, to) as any, { max: AI_SCAN_CAP })
+}
+
 import { useAuth } from '../../../contexts/AuthContext'
 import { canUseAI } from '../../../lib/permissions'
 import { BackButton } from '../../../components/ui'
@@ -89,12 +110,14 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
   switch (intent) {
     case 'fleet_overview': {
       const [recs, vehs, acts, accs] = await Promise.all([
-        supabase.from('tyre_records').select('cost_per_tyre,risk_level').gte('issue_date', s90),
+        pageTyres<{ cost_per_tyre: number | null; risk_level: string | null }>(
+          'cost_per_tyre,risk_level', s90,
+        ),
         supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }),
         supabase.from('corrective_actions').select('status', { count: 'exact' }).eq('status', 'Open'),
         supabase.from('accidents').select('id', { count: 'exact', head: true }).gte('incident_date', s30),
       ])
-      const records = (recs.data ?? []) as { cost_per_tyre: number | null; risk_level: string | null }[]
+      const records = recs
       const totalCost = records.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
       const riskCounts: Record<string, number> = {}
       records.forEach(r => { const k = r.risk_level ?? 'Unknown'; riskCounts[k] = (riskCounts[k] ?? 0) + 1 })
@@ -142,10 +165,9 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     }
 
     case 'cost_analysis': {
-      const res = await supabase.from('tyre_records')
-        .select('site,brand,cost_per_tyre,issue_date,risk_level')
-        .gte('issue_date', s90)
-      const records = (res.data ?? []) as { site: string | null; brand: string | null; cost_per_tyre: number | null; risk_level: string | null }[]
+      const records = await pageTyres<{ site: string | null; brand: string | null; cost_per_tyre: number | null; risk_level: string | null }>(
+        'id,site,brand,cost_per_tyre,issue_date,risk_level', s90,
+      )
       const bySite: Record<string, { cost: number; count: number }> = {}
       const byBrand: Record<string, { cost: number; count: number }> = {}
       records.forEach(r => {
@@ -199,10 +221,9 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     }
 
     case 'tyre_analysis': {
-      const res = await supabase.from('tyre_records')
-        .select('brand,condition,cost_per_tyre,risk_level')
-        .gte('issue_date', s90)
-      const records = (res.data ?? []) as { brand: string | null; condition: string | null; cost_per_tyre: number | null; risk_level: string | null }[]
+      const records = await pageTyres<{ brand: string | null; condition: string | null; cost_per_tyre: number | null; risk_level: string | null }>(
+        'id,brand,condition,cost_per_tyre,risk_level', s90,
+      )
       const byBrand: Record<string, { count: number; cost: number; critical: number }> = {}
       const byCondition: Record<string, number> = {}
       records.forEach(r => {
@@ -224,10 +245,9 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     }
 
     case 'site_analysis': {
-      const res = await supabase.from('tyre_records')
-        .select('site,risk_level,cost_per_tyre')
-        .gte('issue_date', s90)
-      const records = (res.data ?? []) as { site: string | null; risk_level: string | null; cost_per_tyre: number | null }[]
+      const records = await pageTyres<{ site: string | null; risk_level: string | null; cost_per_tyre: number | null }>(
+        'id,site,risk_level,cost_per_tyre', s90,
+      )
       const bySite: Record<string, { count: number; cost: number; critical: number; high: number }> = {}
       records.forEach(r => {
         const s = r.site ?? 'Unknown'
@@ -250,10 +270,11 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
     case 'vehicle_query': {
       const [vehs, byType] = await Promise.all([
         supabase.from('vehicle_fleet').select('id,asset_type,site', { count: 'exact' }),
-        supabase.from('vehicle_fleet').select('asset_type'),
+        fetchAllRows<any>((from, to) => supabase.from('vehicle_fleet')
+          .select('asset_type').order('id').range(from, to), { max: AI_SCAN_CAP }),
       ])
       const typeCounts: Record<string, number> = {}
-      ;(byType.data ?? []).forEach((r: any) => {
+      ;byType.forEach((r: any) => {
         const t = r.asset_type ?? 'Unknown'; typeCounts[t] = (typeCounts[t] ?? 0) + 1
       })
       return {

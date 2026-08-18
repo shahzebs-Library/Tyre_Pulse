@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V594**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V599**)
 Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
 V585-V590 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
@@ -216,6 +216,166 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
   preview build).
 
 ---
+
+## SESSION 2026-08-18 (part 4) — WORKSHOP DAILY CHECKLIST REBUILT + TWO-STAGE APPROVAL + STAY-SIGNED-IN + FILTER SCOPING (V594-V598). Next free **V599**.
+Owner, in one message: approvals lose their place and bounce Home after signing; "both their area manager to
+approved it"; inspection stage not required; asset code in ONE place, remove job card no; date locks; company
+details picked up automatically read-only; km + hour meter; icon-based marking WITH MEANING; "no one is allowed
+to closed untill all done and corrected"; document number as the title reference; every 10 days a vehicle has to
+come; name it "workshop daily checklist"; same for the Fleet Transit Mixer; language selector; bump both
+versions, web AND mobile. Then: mobile users must not be logged out ("they dont know their names"); the
+inspection KPI tiles must obey the page filters; a signature to sign in approvals AND inspections; and a tyre
+checklist must not close while wheels are unfilled. **NO EAS BUILD — still deferred by the owner.**
+
+### **V594 — ONE PERSON COULD CLOSE A SHEET AND THE TABLE COULD NOT EXPRESS ANYTHING ELSE**
+`approval_status` was a 4-value CHECK with ONE approver triple, so a supervisor signature and a final approval
+were literally the same event. Added `pending_area_manager`, supervisor name/signature/by/at, and a BEFORE
+UPDATE trigger that refuses a skipped rung.
+- **THE AREA MANAGER IS A REAL ROLE, NOT AN INVENTION** — `custom_roles` holds BOTH `Workshop Maintenance Area
+  Manager` (1 real profile) and `Workshop Area Manager` (0 yet). **Admin + Director are accepted at the final
+  rung DELIBERATELY**: exactly ONE person holds an area-manager role and a queue only they can clear jams the
+  moment they take leave.
+- **DOCUMENT NUMBERS minted server-side on INSERT** from a per (org, prefix, asset, year) counter:
+  `WDC-TM514-2026-0001`. On INSERT, not at fill time, so an abandoned fill never burns a number and a row
+  replayed from the offline queue days later still gets one. **The counter keys on the NORMALISED asset** —
+  proven: a second sheet written `' TM514 '` became `-0002`, not a parallel series.
+
+### **V595 — THE TWO SHEETS REBUILT BY PATCHING, NOT RETYPING**
+Every field object read from the LIVE template and patched by id, so 51 labels and their ar/hi/ur carry across
+untouched; the migration ABORTS unless it finds the exact shape it measured. Workshop 51 -> **49 fields**
+(Inspection stage + Job card No deleted), renamed **Workshop Daily Checklist**, WDC, two-stage, 10-day interval,
+roles {Mechanic,Electrician,Maintenance Supervisor}. Mixer 16 -> **20** (location, registration/fleet, km, hour
+meter added after the asset), FTM, {Driver}. Both version 2.
+- **Legend 6 -> 8 marks: Adjusted and Lubricated APPENDED, nothing renamed or reordered**, so every answer
+  already recorded still reads correctly. Each mark carries an icon token, a tone and a plain-English MEANING.
+- **"NO ONE CLOSES UNTIL CORRECTED" IS ENFORCED IN THE DATABASE**: the approval trigger refuses `approved` while
+  any answer carries a blocking mark. Proven end to end — supervisor signs off WITH a Not OK present (ACCEPTED,
+  because a fault found on the last item of the day must still be recordable), area manager tries to close
+  (REFUSED 22023 naming the mark), item re-marked Repaired, closed (ACCEPTED). **Checked at APPROVAL, never at
+  submit.**
+
+### **READ-ONLY IS CONDITIONAL, AND THE MEASUREMENT IS THE WHOLE POINT**
+`fleet_number` is populated on **398 of 1,030 KSA assets and ZERO of the 452 UAE and 135 Egypt**; chassis
+389/0/0; site 1,602 of 1,617. An unconditionally read-only field would be permanently BLANK and unfillable for
+most of the fleet, so `isFieldLocked()` locks only once the register actually supplied a value. **KM IS
+DELIBERATELY NOT PREFILLED** — `current_km` is set on 248 of 1,030, and prefilling a stale figure invites
+submitting last month's reading; `compareTo` WARNS on a lower reading, never blocks (a meter can be replaced).
+- **km + hour meter are ONE `group_require_one` group**: 98 of 227 KSA transit mixers carry no odometer while
+  every one has engine hours. **Zero IS a reading.**
+
+### **V596 — I AUDITED MY OWN WORK AND FOUND A CROSS-ORG WRITE**
+All six new functions arrived anon-executable (Supabase grants EXECUTE to PUBLIC at CREATE time). Five leaked
+nothing, but **`next_checklist_document_no` is DEFINER and takes `p_org`, so any signed-in user could increment
+ANOTHER tenant's counter** — the V378 shape again. Revoking it does NOT break minting, and that was measured:
+the trigger is DEFINER owned by postgres and reaches it through OWNERSHIP. **Grant order is load-bearing (V500,
+twice): a revoke from anon is a no-op against a PUBLIC grant, and a revoke from PUBLIC also strips
+`authenticated`.**
+
+### **V597 — A REGRESSION I INTRODUCED IN V594 AND CAUGHT BEFORE SHIPPING**
+`decide_checklist_approval`, the RPC the WEB approvals surface calls, could not express the supervisor rung, so
+it (a) wrote `approved` straight from `pending` and hit the new trigger with a raw 22023, (b) required
+`approval_status='pending'` in its WHERE so a supervisor-signed sheet was INVISIBLE and could never be closed
+from the web, and (c) had a role gate that EXCLUDED the only account holding an area-manager role. API
+unchanged; the rung is resolved from the template + the row's own status. Verified end to end with plain
+sentences at every refusal. **V598** then fixed the descriptions V595 had made false (the Workshop card still
+advertised the Inspection stage field).
+
+### **THE INSPECTION APPROVAL HAD FOUR DEFECTS, FOUND BY GOING THROUGH THE RPC**
+Mobile was doing a direct table UPDATE instead of `decide_inspection_approval`. Routing through it closed:
+two supervisors could both approve and silently overwrite each other; the approver's identity came from the
+CLIENT (a person's name written into `approver_email`); the write was enforced by `role_update_inspections`,
+which is PERMISSIVE and admits **inspector**, so only the screen's own gate stopped an inspector approving their
+own inspection; and **Directors were refused by RLS** despite being allowed by the RPC. So the mobile gate was
+LOOSER than the server on one axis and TIGHTER on another. The same four apply to the web path and it was moved
+onto the RPC too. `trg_lock_inspection_content` already auto-locks on `status='Done'`, so the explicit
+`locked:true` was redundant.
+
+### **MOBILE: WHY FIELD WORKERS WERE BEING SIGNED OUT OF AN APP THEY CANNOT LOG BACK INTO**
+Two causes, both real. **(1) THE LOCKOUT:** `getSession()` returning null was treated as "signed out". The
+chunked Keystore adapter can only answer `string | null`, so ONE refused binder call arrived at supabase-js as
+"there is no session" and dropped a signed-in tyre man on a login screen he cannot pass while his session sat
+intact on the device. `readItem` now reports WHY a read was empty (ok/absent/unreadable/torn) and an empty
+session is believed only when nothing failed. **(2) THE SELF-LOGOUT: there was NO `AppState` wiring at all.**
+supabase-js refreshes from a `setInterval` and RN suspends that when backgrounded, so a phone left overnight
+woke with a token expired hours earlier. `startAutoRefresh`/`stopAutoRefresh` now follow AppState.
+- Nothing loosened; two things TIGHTENED (a lock now also drops the offline profile cache; foregrounding
+  re-reads the profile). Offline profile cache 14 -> 90 days: a fortnight cut off anyone on leave, including
+  from their own queued work.
+- **A DATA-LOSS PATH FOUND AND CLOSED: `getQueue()`/`getRecordQueue()` return `[]` for BOTH "nothing queued" and
+  "the Keystore refused", and TEN callers then SAVE what they read.** One bad read replaced a worker's unsynced
+  inspections and accident reports with an empty list, silently, with the only copy on that device. Every
+  read-modify-write now refuses unless the read genuinely succeeded. **The trade is deliberate: risk failing to
+  save ONE new item rather than silently destroying ALL of them.** Two test mocks had to learn `readItem`
+  exists — they stubbed the module with only `secureStorage`, so the code called `undefined` and the MOCK failed
+  rather than the code.
+
+### **THE INSPECTION TILES ANSWERED A DIFFERENT QUESTION FROM THE FILTERS ABOVE THEM**
+With CENTRAL selected the table said "195 of 407 shown" while the cards read 407/189/372/24 and the tyre flags
+counted the whole fleet. Every figure is now computed over the same filtered set, and the card STATES what it
+covers. Pinned by test: a filter that matches nothing reads as ZERO never as the unfiltered total; a site the
+register cannot place is EXCLUDED while a region is selected rather than swept into it; a region asked for with
+no resolver matches nothing rather than everything.
+
+### **TYRE COMPLETENESS: THE RULE I BRIEFED WOULD HAVE CAUGHT NOTHING**
+Measured: TR-MIXER records 10 to 13 positions where 12 is normal and **39 of 320 recorded FEWER than the machine
+has**. But "a position is recorded when it has a condition" is inert, because **BOTH capture forms pre-seed every
+wheel with `condition: 'Good'`** — a seeded Good and a deliberate Good are byte identical. Tread depth has NEVER
+been captured (0 of 4,782) and serial on 7, so requiring either makes every inspection unsubmittable.
+- Two rules: **missing** (no entry at all) BLOCKS; **blank** (an entry with no evidence) blocks only with
+  `requireEvidence`. Measured before choosing: **711 of 4,782 entries are blank across 97 of 401 inspections**,
+  so blocking blank naively refuses ONE INSPECTION IN FOUR.
+- **THE FIX THAT MAKES THE GATE FAIR IS A MARKER THAT DID NOT EXIST.** An inspector who checks a tyre, finds it
+  fine and has no gauge had no way to say so. `handleTyreUpdate` is the SINGLE write path for a tyre edit, so it
+  now stamps `checked: true` — every deliberate interaction, including tapping the Good chip. Only an explicit
+  true counts (the seed writes false). A checked wheel with no pressure is still ADVISORY: it counts as attended
+  to, it does not pretend a reading was taken. `position` was checked as a possible marker and REJECTED — it is
+  set on all 4,818 entries including every blank one.
+- Unknown vehicle type blocks NOTHING (the layout resolver silently answers 4-wheel Pickup for anything it does
+  not know); tyreless equipment reports Not applicable, never "0 of 0"; a spare is extra and can never be
+  missing, which is what the 13-position mixers are. The engine also caught a real bug in itself: a pressure of
+  0, a flat tyre, was thrown away by truthiness.
+
+### **OWNER ACTION — THE SHEETS CURRENTLY REACH ONLY 5 PEOPLE, AND THAT IS CONFIGURATION NOT CODE**
+Measured live: **0 profiles hold Mechanic, Electrician, Driver or Maintenance Supervisor.** Role targeting works
+(V591, proven), but nobody has been given those roles, so on the phone only the 5 oversight users (2 Admin /
+2 Manager / 1 Director, who always pass) see the two sheets. Assign the trades in Console -> Users and they
+appear immediately. Also still **0 `checklist_schedules` rows**, so the "Due" list stays empty until somebody
+creates a schedule — `min_interval_days` only powers the warning.
+
+### METHOD NOTES WORTH KEEPING
+- **A MISSING i18n KEY DOES NOT FALL BACK TO ENGLISH ON MOBILE.** `LanguageContext.resolve` falls back to
+  English only when the key exists in `en.json`; absent there too it renders the RAW KEY PATH. Verified in
+  source. A full audit of every static `t('...')` against en.json is now the release check.
+- **`t()` ON MOBILE TAKES NO INTERPOLATION VARS**, unlike the web's. A `{{count}}` placeholder renders
+  literally; compose by concatenation. tsc catches the arity.
+- **WHEN A GUARD DOES NOT FIRE, CHECK THE MUTATION BEFORE BLAMING THE GUARD** — twice this session. A literal
+  `sed` that never matched a line, and a test using `op: 'eq'` where this codebase uses `'='` (an unknown
+  operator deliberately fails open).
+- **A HIDDEN CONDITIONAL FIELD MUST NOT DEMAND THE IMPOSSIBLE, BUT MUST STILL BLOCK.** `missingNotes`/
+  `unsatisfiedGroups` now respect `visibleWhen`; `blockingAnswers` deliberately does NOT, because the trigger
+  scans the whole answers object and knows nothing about visibility — disagreeing with the database would have
+  the screen say "closable" and the server refuse with a raw 22023.
+- **SIX PARALLEL AGENTS EXHAUSTED THE SHARED ACCOUNT SESSION LIMIT** and three died mid-run (their work was
+  recoverable and green). Stagger them.
+
+### VERSIONS
+Template versions 1 -> 2 on both sheets. App versions: mobile **1.3.2 -> 1.4.0**, web **2.0.0 -> 2.1.0**.
+**`system_config.mobile_min_version` and `mobile_latest_version` DELIBERATELY NOT TOUCHED** — a minimum above
+what is actually released locks every phone out with nothing to update to, and latest must only move when a
+build really ships.
+
+### OPEN / FLAGGED
+- **NO EAS BUILD.** Everything mobile here needs one, and nothing in this session ran on a device.
+- The tyre-completeness gate is wired on the MOBILE inspection only; the web `src/pages/Inspections.jsx`
+  checklist tab has the engine available but no gate (its agent was cut off before that step).
+- `PhotoCapture.tsx` hard-codes its menu strings in English, so gallery picking exists in every language but
+  reads English.
+- `fetchProfile` with `data === null` leaves `profile` null with no error and the tabs still render. Pre-existing;
+  signing out there would be a NEW lockout for a fresh signup not yet provisioned.
+- `profileStale` is exposed but nothing renders the "working offline" hint.
+- Carried unchanged: the `tyre_records.serial_no` partial-scrap bug (43 tyres); `failureRate` printing 0.0% when
+  nothing is rated; 820 UAE rows carrying a brand in `removal_reason`; the realtime re-measure; and the owner
+  decisions at the top of this file.
 
 ## SESSION 2026-08-18 (part 3) — R8, THE 1,000-ROW CAP AS A CLASS, AND THE PUMP DIAGRAM (V593). Next free **V594**.
 Owner: "r8 optimization ... many assets are not showing in the assets list ... pump svg has extra lines which is

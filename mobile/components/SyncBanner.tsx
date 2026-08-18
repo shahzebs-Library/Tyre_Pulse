@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { getPendingCount, syncQueue, retryFailed } from '../lib/offlineQueue'
@@ -15,7 +15,12 @@ export default function SyncBanner() {
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [online, setOnline] = useState(true)
-  const pulse = new Animated.Value(1)
+  // useRef, NOT a bare `new Animated.Value()`. A value created in the render body
+  // allocates a NEW native animated node on EVERY render, so a loop started on an
+  // earlier render keeps animating a node React has already dropped - which is exactly
+  // `startAnimatingNode: Animated node [N] does not exist`, a FATAL
+  // JSApplicationIllegalArgumentException seen in production.
+  const pulse = useRef(new Animated.Value(1)).current
 
   const refresh = useCallback(async () => {
     // Count BOTH offline queues: inspections and the typed record queue
@@ -48,15 +53,25 @@ export default function SyncBanner() {
   }, [])
 
   useEffect(() => {
-    if (pending > 0) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.15, duration: 700, useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
-        ])
-      ).start()
+    if (pending <= 0) return
+    // The handle MUST be captured and stopped. This effect re-runs whenever `pending`
+    // changes - which is on every sync - and the component returns null once the queue
+    // drains, unmounting the Animated.View and dropping its native node. Without this
+    // cleanup each change left another loop running against a node that is about to go
+    // away, and the next frame crashed the app.
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.15, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    )
+    anim.start()
+    return () => {
+      anim.stop()
+      // Reset, or the icon is frozen mid-scale the next time the banner appears.
+      pulse.setValue(1)
     }
-  }, [pending])
+  }, [pending, pulse])
 
   if (pending === 0 && online) return null
 

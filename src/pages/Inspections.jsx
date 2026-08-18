@@ -30,7 +30,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
@@ -81,19 +81,48 @@ const SEV_CONFIG = {
 
 // --- Tyre-change flag UI (additive) -----------------------------------------
 // Muted slide-style overview card: big numbers, subtle borders, app tokens.
-function OverviewSlide({ title, items, footer = null }) {
+/**
+ * A tile is a drill-down when it carries a focus key, and plain text when it does not.
+ *
+ * A count you cannot act on is just a number - clicking one filters the register to the
+ * inspections behind it. The predicate lives in inspectionTyreFlags (focusMatches) and is
+ * the SAME one inspectionOverview counts with, so the tile and the table cannot drift.
+ *
+ * A tile with a zero or N/A value is NOT clickable: offering a drill-down that lands on an
+ * empty table teaches nothing, and an unreadable value is not a measurement to filter on.
+ */
+function OverviewSlide({ title, items, footer = null, activeFocus = 'all', onFocus = null }) {
   return (
     <div className="card flex-1 min-w-[260px]">
       <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{title}</p>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-        {items.map(([label, value, accent]) => (
-          <div key={label}>
-            <div className="text-2xl font-bold tabular-nums" style={{ color: accent && Number(value) > 0 ? '#b91c1c' : 'var(--text-primary)' }}>
-              {value == null ? 'N/A' : value}
-            </div>
-            <div className="text-xs text-[var(--text-secondary)]">{label}</div>
-          </div>
-        ))}
+        {items.map(([label, value, accent, focusKey]) => {
+          const tone = accent && Number(value) > 0 ? '#b91c1c' : 'var(--text-primary)'
+          const body = (
+            <>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: tone }}>
+                {value == null ? 'N/A' : value}
+              </div>
+              <div className="text-xs text-[var(--text-secondary)]">{label}</div>
+            </>
+          )
+          const canFocus = !!(focusKey && onFocus && value != null && Number(value) > 0)
+          if (!canFocus) return <div key={label}>{body}</div>
+          const on = activeFocus === focusKey
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => onFocus(on ? 'all' : focusKey)}
+              aria-pressed={on}
+              title={on ? 'Show all inspections again' : `Show only the inspections behind ${label}`}
+              className={`text-left rounded-lg -mx-1.5 -my-1 px-1.5 py-1 transition-all ${on ? 'ring-2' : 'hover:bg-[var(--surface-2)]'}`}
+              style={on ? { boxShadow: `0 0 0 2px ${tone}`, background: 'var(--surface-2)' } : undefined}
+            >
+              {body}
+            </button>
+          )
+        })}
       </div>
       {footer && <div className="mt-3 pt-3 border-t border-[var(--border-subtle)]">{footer}</div>}
     </div>
@@ -690,6 +719,9 @@ export default function Inspections() {
   const [filters, setFilter, , , setFilters] = useFilterState({
     search: '', status: 'all', site: 'all', region: 'all', inspector: 'all',
     from: '', to: '',
+    // Which overview tile the register is drilled into ('all' = none). URL-borne with
+    // the rest, so a focused view survives Back from the tracking page and can be shared.
+    focus: 'all',
   })
   const filterStatus = filters.status
   const filterSite = filters.site
@@ -697,6 +729,8 @@ export default function Inspections() {
   // register, so it stays recorded in one place. See siteRegionMap.
   const filterRegion = filters.region
   const filterInspector = filters.inspector
+  // Which overview tile the register is drilled into, if any.
+  const filterFocus = filters.focus
   const [siteRows, setSiteRows]         = useState([])
   // The advanced filters collapse behind one toggle, the same as the accident
   // register: a row of eight controls above a table is read as clutter, and the
@@ -1084,8 +1118,11 @@ export default function Inspections() {
         x.attendees?.toLowerCase().includes(q)
       )
     }
+    // The overview drill-down runs LAST, over the rows the other filters left, so a
+    // focused tile narrows what is on screen rather than replacing it.
+    if (filterFocus && filterFocus !== 'all') r = r.filter(x => focusMatches(x, filterFocus, flagMap || {}))
     return r
-  }, [tabFiltered, filterStatus, filterSite, filterRegion, filterInspector, regionMap, filterFrom, filterTo, search])
+  }, [tabFiltered, filterStatus, filterSite, filterRegion, filterInspector, regionMap, filterFrom, filterTo, search, filterFocus, flagMap])
 
   // Vehicles with tyres due ACROSS THE COUNTRY (the flag map is not limited to
   // the inspections on screen). Lets the card tell "nothing is due anywhere"
@@ -1096,6 +1133,16 @@ export default function Inspections() {
   const overview = useMemo(
     () => inspectionOverview(tabFiltered, flagMap || {}, { from: filterFrom, to: filterTo }),
     [tabFiltered, flagMap, filterFrom, filterTo]
+  )
+
+  // What the focused view is showing, in the TILE'S OWN UNIT. Three of the tiles count
+  // tyres or vehicles rather than inspections, so the row count is legitimately smaller
+  // than the tile and the banner says so instead of leaving it looking like lost rows.
+  const focusInfo = useMemo(
+    () => (filterFocus && filterFocus !== 'all'
+      ? focusSummary(filtered, filterFocus, flagMap || {})
+      : null),
+    [filtered, filterFocus, flagMap]
   )
 
   const counts = useMemo(() => {
@@ -2615,11 +2662,15 @@ export default function Inspections() {
         <div className="flex flex-wrap gap-4">
           <OverviewSlide
             title="Inspections"
+            activeFocus={filterFocus}
+            onFocus={(k) => setFilter('focus', k)}
             items={[
+              // No focus key on these two: "inspections done" IS the unfocused view, and
+              // "vehicles inspected" is a distinct count with no row subset behind it.
               ['Inspections done', overview.inspectionsDone],
               ['Vehicles inspected', overview.vehiclesInspected],
-              ['Approved', overview.approved],
-              ['Pending approval', overview.pendingApproval],
+              ['Approved', overview.approved, false, 'approved'],
+              ['Pending approval', overview.pendingApproval, false, 'pending'],
             ]}
           />
           {flagStatus === 'loading' ? (
@@ -2671,11 +2722,13 @@ export default function Inspections() {
           ) : (
             <OverviewSlide
               title="Tyre change flags"
+              activeFocus={filterFocus}
+              onFocus={(k) => setFilter('focus', k)}
               items={[
-                ['Vehicles with tyres due', overview.vehiclesWithTyresDue, true],
-                ['Tyres past life', overview.tyresOverdue, true],
-                ['Tyres due soon', overview.tyresDueSoon, true],
-                ['Damaged found', overview.damagedFound, true],
+                ['Vehicles with tyres due', overview.vehiclesWithTyresDue, true, 'tyres_due'],
+                ['Tyres past life', overview.tyresOverdue, true, 'overdue'],
+                ['Tyres due soon', overview.tyresDueSoon, true, 'due_soon'],
+                ['Damaged found', overview.damagedFound, true, 'damaged'],
               ]}
               /* A count you cannot act on is just a number. This opens the
                  tracked list: which tyre, on which vehicle, and whether the
@@ -2751,7 +2804,12 @@ export default function Inspections() {
           filterSite !== 'all', filterRegion !== 'all', filterInspector !== 'all',
           !!filterFrom, !!filterTo,
         ].filter(Boolean).length
-        const anyActive = advanced > 0 || !!search
+        // The tile drill-down counts as active too, so Clear reaches it. A filter the
+        // user cannot see and cannot clear is the worst kind - it just looks like
+        // missing data. It is deliberately NOT in the `advanced` tally, because it is
+        // set from the tiles rather than from inside the Filters panel.
+        const focusActive = !!filterFocus && filterFocus !== 'all'
+        const anyActive = advanced > 0 || !!search || focusActive
         return (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -2775,7 +2833,7 @@ export default function Inspections() {
                   onClick={() => {
                     setFilters({
                       search: '', site: 'all', region: 'all',
-                      inspector: 'all', from: '', to: '',
+                      inspector: 'all', from: '', to: '', focus: 'all',
                     })
                   }}
                   className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
@@ -2787,6 +2845,37 @@ export default function Inspections() {
                 {filtered.length}{filtered.length !== tabFiltered.length ? ` of ${tabFiltered.length}` : ''} shown
               </span>
             </div>
+
+            {/* Drilled into a tile: say WHAT is on screen, in the tile's own unit.
+                Three of the tiles count tyres or vehicles rather than inspections, so
+                the row count is legitimately smaller than the number that was clicked -
+                stating the relationship stops that reading as lost rows. */}
+            {focusInfo && (
+              <div
+                className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+                style={{ borderColor: 'var(--border-subtle)', background: 'var(--surface-2)' }}
+                role="status"
+              >
+                <span style={{ color: 'var(--text-primary)' }}>
+                  Showing <strong>{focusInfo.rows}</strong> {focusInfo.rows === 1 ? 'inspection' : 'inspections'}
+                  {focusInfo.units != null && (
+                    <> covering <strong>{focusInfo.units}</strong>{' '}
+                      {focusInfo.measures === 'vehicles'
+                        ? (focusInfo.units === 1 ? 'vehicle' : 'vehicles')
+                        : (focusInfo.units === 1 ? 'tyre' : 'tyres')}</>
+                  )}
+                  {' '}&middot; {focusInfo.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFilter('focus', 'all')}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md border"
+                  style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
+                >
+                  <X size={12} /> Show all inspections
+                </button>
+              </div>
+            )}
 
             {showFilters && (
               <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">

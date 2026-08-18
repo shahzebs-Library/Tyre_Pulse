@@ -387,3 +387,99 @@ export function inspectionOverview(inspections = [], flagMap = {}, { from = '', 
     damagedFound,
   }
 }
+
+/**
+ * The overview tiles are drill-downs, and these are the predicates behind them.
+ *
+ * THE POINT OF PUTTING THEM HERE: `inspectionOverview` above counts the tiles, and the
+ * register filters the table. If those two used separate rules they would drift, and a
+ * tile reading 7 that filters to 5 rows is worse than a tile you cannot click. Both sides
+ * now read the SAME predicate.
+ *
+ * `measures` is load-bearing and is NOT decoration. Three of these tiles count TYRES or
+ * VEHICLES, not inspection rows:
+ *
+ *   approved / pending      count INSPECTIONS  -> tile number == filtered row count
+ *   tyres_due               counts VEHICLES    -> one vehicle can hold several inspections
+ *   overdue / due_soon      count TYRES        -> one inspection can carry several
+ *   damaged                 counts POSITIONS   -> likewise
+ *
+ * So for the last four the filtered row count is legitimately SMALLER than the tile, and
+ * the screen has to say so rather than let the reader assume the filter lost rows.
+ */
+export const OVERVIEW_FOCUS = {
+  approved:  { label: 'Approved',                 measures: 'inspections' },
+  pending:   { label: 'Pending approval',         measures: 'inspections' },
+  tyres_due: { label: 'Vehicles with tyres due',  measures: 'vehicles' },
+  overdue:   { label: 'Tyres past life',          measures: 'tyres' },
+  due_soon:  { label: 'Tyres due soon',           measures: 'tyres' },
+  damaged:   { label: 'Damaged found',            measures: 'tyres' },
+}
+
+export const FOCUS_KEYS = Object.keys(OVERVIEW_FOCUS)
+
+/**
+ * Does this inspection contribute to that tile?
+ *
+ * An unknown key matches EVERYTHING rather than nothing - a stale URL carrying a focus
+ * this build no longer has must show the full register, never an empty one that reads as
+ * "there are no inspections".
+ */
+export function focusMatches(inspection, key, flagMap = {}) {
+  if (!key || key === 'all' || !OVERVIEW_FOCUS[key]) return true
+  const r = inspection || {}
+  const fm = flagMap && typeof flagMap === 'object' ? flagMap : {}
+  const entry = r.asset_no ? fm[r.asset_no] : null
+  switch (key) {
+    // Mirrors inspectionOverview's own test, including the legacy 'pending' token.
+    case 'approved':  return r.approval_status === 'approved'
+    case 'pending':   return r.approval_status === 'pending_approval' || r.approval_status === 'pending'
+    case 'tyres_due': return !!(entry && entry.count)
+    case 'overdue':   return !!(entry && (entry.overdue || []).length)
+    case 'due_soon':  return !!(entry && (entry.dueSoon || []).length)
+    case 'damaged':   return damagedPositions(r).length > 0
+    default:          return true
+  }
+}
+
+/**
+ * What the focused view is actually showing, in the tile's own unit.
+ *
+ * Returns `{ key, label, measures, rows, units }` where `rows` is how many inspections
+ * are on screen and `units` is how many of the thing the tile counts they cover - so the
+ * screen can say "5 inspections covering 12 tyres past life" instead of leaving the
+ * reader to wonder why 12 became 5. `units` is null when the tile already counts
+ * inspections, because repeating the same number twice explains nothing.
+ */
+export function focusSummary(inspections = [], key, flagMap = {}) {
+  const meta = OVERVIEW_FOCUS[key]
+  if (!meta) return null
+  const list = (Array.isArray(inspections) ? inspections : []).filter(Boolean)
+  const fm = flagMap && typeof flagMap === 'object' ? flagMap : {}
+  const rows = list.length
+  if (meta.measures === 'inspections') return { key, ...meta, rows, units: null }
+
+  if (meta.measures === 'vehicles') {
+    const assets = new Set()
+    for (const r of list) if (r.asset_no) assets.add(r.asset_no)
+    return { key, ...meta, rows, units: assets.size }
+  }
+  // tyres: count per DISTINCT vehicle for the flag-derived tiles, or per inspection for
+  // damage, exactly as inspectionOverview does - two inspections on one vehicle must not
+  // double-count the same overdue tyre.
+  if (key === 'damaged') {
+    let units = 0
+    for (const r of list) units += damagedPositions(r).length
+    return { key, ...meta, rows, units }
+  }
+  const seen = new Set()
+  let units = 0
+  for (const r of list) {
+    if (!r.asset_no || seen.has(r.asset_no)) continue
+    seen.add(r.asset_no)
+    const entry = fm[r.asset_no]
+    if (!entry) continue
+    units += ((key === 'overdue' ? entry.overdue : entry.dueSoon) || []).length
+  }
+  return { key, ...meta, rows, units }
+}

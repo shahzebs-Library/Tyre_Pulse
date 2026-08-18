@@ -75,22 +75,68 @@ export async function markAllRead(userId: string): Promise<void> {
 
 /**
  * Map a notification to an in-app route (or null when there is nowhere sensible
- * to go - the row is still marked read on tap). Only routes that exist under
- * app/(app) are returned.
+ * to go - the row is still marked read on tap).
+ *
+ * THIS IS THE ONE TAP MAPPING. The in-app notifications list AND the push-tap
+ * handler in app/_layout.tsx both call it. They used to disagree: the list
+ * covered every kind while the root layout hardcoded three, so an approval,
+ * an assignment, a parts request or an accident push tapped from the shade did
+ * nothing at all. A second copy of a routing rule always drifts from the first.
+ *
+ * EVERY ROUTE RETURNED HERE MUST RESOLVE UNDER app/. Two of them did not:
+ * `/(app)/inspection` and `/(app)/accident` are DIRECTORIES with no index file
+ * ([id].tsx / new.tsx / approvals/ and [id].tsx / case.tsx / dashboard.tsx /
+ * report.tsx respectively), and expo-router only addresses a folder by its
+ * folder path when that folder has an `index`. Tapping an inspection or an
+ * accident notification therefore landed the user on expo-router's raw
+ * "Unmatched Route" developer screen. __tests__/notificationRoutes.test.ts now
+ * resolves every route this function can return against the real route table
+ * read off the filesystem, so a folder path can never ship again.
  */
 export function notificationRoute(n: Pick<AppNotification, 'type' | 'entity_type'>): string | null {
   const t = String(n.type || '').toLowerCase()
   const k = String(n.entity_type || n.type || '').toLowerCase()
-  // A decision on YOUR OWN submission goes to your own-work history, not the
-  // generic hub; a checklist decision goes to the checklists hub.
+
+  // 1. LOCAL device notifications (lib/notifications.ts). Matched on the EXACT
+  //    type and matched FIRST, because their wording overlaps the entity
+  //    buckets below - 'inspection_reminder' contains "inspection" but must
+  //    open a NEW inspection, not somebody else's approval queue.
+  if (t === 'inspection_reminder') return '/(app)/inspection/new'
+  if (t === 'sync_success' || t === 'sync_failure' || t === 'photo_failure') {
+    // Profile carries the offline queue: sync, retry and clear all live there.
+    return '/(app)/profile'
+  }
+  if (t === 'wash_due') return '/(app)/washing'
+
+  // 2. A decision on YOUR OWN submission goes to your own-work history, not the
+  //    generic hub; a checklist decision goes to the checklists hub.
   if (t === 'approval_decision') {
     return k.includes('checklist') ? '/(app)/checklists' : '/(app)/history'
   }
+
+  // 3. Checklist first: it is more specific than the workshop bucket below,
+  //    which would otherwise swallow a 'checklist_assignment' on `assign`.
+  if (k.includes('checklist')) return '/(app)/checklists/approvals'
+
+  // 4. Workshop work. Kept AHEAD of the inspection test on purpose: a
+  //    "Quality Inspection" job card is workshop work, not a tyre inspection.
   if (k.includes('assign') || k.includes('work_order') || k.includes('workorder') || k.includes('job') || k.includes('parts') || k.includes('qc') || k.includes('workshop')) {
     return '/(app)/workshop'
   }
-  if (k.includes('inspection')) return '/(app)/inspection'
-  if (k.includes('accident') || k.includes('incident') || k.includes('claim')) return '/(app)/accident'
+
+  // 5. An inspection notification that is not a decision on your own work is a
+  //    request to SIGN somebody else's (V267 targets the approver roles), so
+  //    the approval queue is the screen that can act on it. There is no
+  //    inspection index to send them to and inventing one would just be a menu.
+  if (k.includes('inspection')) return '/(app)/inspection/approvals'
+
+  // 6. The accident register. `case`/`report`/`[id]` all need a specific id we
+  //    are not given here, and the dashboard is the list that leads to any of
+  //    them - so it is right for an accident, an incident and a claim alike.
+  if (k.includes('accident') || k.includes('incident') || k.includes('claim')) {
+    return '/(app)/accident/dashboard'
+  }
+
   if (k.includes('alert')) return '/(app)/alerts'
   return null
 }

@@ -2,7 +2,7 @@ import 'react-native-url-polyfill/auto'
 // Import for its side effect: initialises Sentry (guarded by DSN) before the
 // app renders, so early crashes are captured.
 import '../lib/sentry'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Stack, useRouter, usePathname } from 'expo-router'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -16,7 +16,9 @@ import { ErrorBoundary } from '../components/ErrorBoundary'
 import {
   setupNotificationChannels,
   addNotificationTapHandler,
+  consumePendingNotificationTap,
 } from '../lib/notifications'
+import { notificationRoute } from '../lib/notificationsInbox'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -40,6 +42,11 @@ function RootLayout() {
   const [timedOut, setTimedOut] = useState(false)
   const router = useRouter()
   const notifSubRef = useRef<any>(null)
+  // A tap can arrive before the <Stack> is mounted (cold start, fonts still
+  // loading). Navigating then throws "Attempted to navigate before mounting the
+  // Root Layout", so the target is parked here and flushed once we render.
+  const navReadyRef = useRef(false)
+  const queuedRouteRef = useRef<string | null>(null)
 
   useEffect(() => {
     const id = setTimeout(() => setTimedOut(true), 3000)
@@ -52,21 +59,62 @@ function RootLayout() {
     if (ready) SplashScreen.hideAsync().catch(() => {})
   }, [ready])
 
-  // Set up Android notification channels once on boot.
+  /** Navigate to a tapped notification's screen, deferring until the router is
+   *  mounted. A blank or unknown target STAYS PUT rather than pushing nowhere -
+   *  pushing an href with no route is what renders the raw "Unmatched Route"
+   *  screen instead of the app. */
+  const openRoute = useCallback((route: string | null) => {
+    if (typeof route !== 'string' || !route.trim()) return
+    if (!navReadyRef.current) {
+      queuedRouteRef.current = route
+      return
+    }
+    try {
+      router.push(route as never)
+    } catch {
+      // A tap must never be able to crash the app on launch.
+    }
+  }, [router])
+
+  // Set up Android notification channels once on boot, and wire notification
+  // taps to a screen.
   useEffect(() => {
     setupNotificationChannels()
 
-    // Route notification taps to the relevant screen.
-    notifSubRef.current = addNotificationTapHandler((type) => {
-      if (type === 'sync_failure' || type === 'sync_success') {
-        router.push('/(app)/profile')
-      } else if (type === 'inspection_reminder') {
-        router.push('/(app)/inspection/new')
-      }
-    })
+    /**
+     * ONE mapping for every tap: `notificationRoute` is the same function the
+     * in-app notifications list uses. This handler used to carry its own copy
+     * covering exactly three local types, so every SERVER push - approval
+     * requested, job assigned, parts request, QC failed, upload gap, accident -
+     * did nothing at all when tapped. Two copies of a routing rule drift; there
+     * is now one.
+     */
+    const onTap = (type: string, data: Record<string, any> = {}) => {
+      openRoute(notificationRoute({
+        type: type || (data.type as string) || null,
+        entity_type: (data.entity_type as string) ?? (data.entityType as string) ?? null,
+      }))
+    }
+
+    // COLD START: a tap that launched the app is stored natively before any
+    // listener exists, so the live listener alone never sees it and the app
+    // just opened on Home. Read it first, then listen for warm taps.
+    const pending = consumePendingNotificationTap()
+    if (pending) onTap(pending.type, pending.data)
+
+    notifSubRef.current = addNotificationTapHandler(onTap)
 
     return () => notifSubRef.current?.remove()
-  }, [])
+  }, [openRoute])
+
+  // Flush a tap that arrived before the navigator existed.
+  useEffect(() => {
+    if (!ready) return
+    navReadyRef.current = true
+    const queued = queuedRouteRef.current
+    queuedRouteRef.current = null
+    if (queued) openRoute(queued)
+  }, [ready, openRoute])
 
   if (!ready) return null
 

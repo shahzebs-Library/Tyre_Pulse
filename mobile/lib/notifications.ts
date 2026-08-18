@@ -307,8 +307,74 @@ export function addNotificationTapHandler(
   onTap: (type: string, data: Record<string, any>) => void,
 ): Notifications.EventSubscription {
   return Notifications.addNotificationResponseReceivedListener(response => {
-    const data = (response.notification.request.content.data ?? {}) as Record<string, any>
-    const type = (data.type as string) ?? 'unknown'
-    onTap(type, data)
+    // The native module stores the last response and replays it to a listener
+    // added afterwards. On a COLD start we have already consumed and acted on
+    // that response (consumePendingNotificationTap below), so replaying it here
+    // would navigate a second time and stack a duplicate screen. Skip exactly
+    // that one response, once.
+    const key = responseKey(response)
+    if (consumedResponseKey !== null && key === consumedResponseKey) {
+      consumedResponseKey = null
+      return
+    }
+    const payload = payloadOf(response)
+    onTap(payload.type, payload.data)
   })
+}
+
+// ── Cold-start taps ───────────────────────────────────────────────────────────
+// A tap while the app is KILLED does not reach the response listener the way a
+// warm tap does: Android delivers it to the native module before any JS
+// listener exists, and the app simply launched with nothing happening. Reading
+// the stored response on boot is the documented way to pick it up.
+
+/** What a notification tap carries: its `type` plus the whole data payload. */
+export interface NotificationTapPayload {
+  type: string
+  data: Record<string, any>
+}
+
+/** Identity of one delivered response, so the cold-start read and the listener
+ *  replay of the SAME response can be told apart from two genuine taps on a
+ *  local notification that reuses a fixed identifier (e.g. 'sync_failure'). */
+let consumedResponseKey: string | null = null
+
+function responseKey(response: Notifications.NotificationResponse): string {
+  const n: any = response?.notification
+  return [
+    n?.request?.identifier ?? '',
+    n?.date ?? '',
+    (response as any)?.actionIdentifier ?? '',
+  ].join('|')
+}
+
+function payloadOf(response: Notifications.NotificationResponse): NotificationTapPayload {
+  const data = (response.notification.request.content.data ?? {}) as Record<string, any>
+  return { type: (data.type as string) ?? 'unknown', data }
+}
+
+/**
+ * Read (and clear) the notification tap that launched the app, if any.
+ *
+ * Call it ONCE on boot, before adding the tap handler. Returns null when the
+ * app was opened normally, when the stored response has already been consumed,
+ * or on any platform/native error - a tap must never be able to crash startup.
+ */
+export function consumePendingNotificationTap(): NotificationTapPayload | null {
+  let response: Notifications.NotificationResponse | null = null
+  try {
+    response = Notifications.getLastNotificationResponse()
+  } catch {
+    return null
+  }
+  if (!response) return null
+
+  consumedResponseKey = responseKey(response)
+  // Stops the stored response being re-selected on a later boot.
+  try {
+    Notifications.clearLastNotificationResponse()
+  } catch {
+    // Not available on every platform; the key guard above still de-dupes.
+  }
+  return payloadOf(response)
 }

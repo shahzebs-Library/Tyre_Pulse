@@ -87,7 +87,7 @@ import {
   requiresPrimarySignature, primarySignatureSatisfied,
 } from '../../../lib/checklistFields'
 import {
-  autoFillAnswers, blockingAnswers, fieldOptionSet, isFieldLocked, markMeta,
+  autoFillAnswers, blockingAnswers, fieldOptionSet, isFieldLocked, markMeta, MARK_ICONS,
   FieldLike as MarkField, MarkInfo, MarkTone, missingNotes, noteRequiredMarks,
   recurrenceNotice, TemplateLike, unsatisfiedGroups,
 } from '../../../lib/checklistMarks'
@@ -167,6 +167,17 @@ function toneColor(c: Theme['color'], tone: MarkTone): { fg: string; bg: string 
     case 'fixed': return { fg: c.info.base, bg: c.info.soft }
     default:      return { fg: c.textMuted, bg: c.surfaceAlt }
   }
+}
+
+/**
+ * The real Ionicons glyph for a mark. MarkInfo.icon is a TOKEN from the shared
+ * vocabulary, never a glyph name - resolving it here is what keeps the phone
+ * and the web drawing the same legend from one source.
+ */
+function markGlyph(info: MarkInfo | undefined): IconName {
+  const key = info?.icon
+  const hit = key ? MARK_ICONS[key] : undefined
+  return (hit ? hit.ionicon : 'remove-circle-outline') as IconName
 }
 
 /** How a row is drawn. Everything except `tile` is recorded in place. */
@@ -315,10 +326,19 @@ const ItemRow = memo(function ItemRow(p: ItemRowProps) {
               accessibilityState={{ selected: active }}
               activeOpacity={0.8}
             >
+              {/* MARK_ICONS[token].ionicon, NOT the token. `info.icon` is a
+                  vocabulary key ('ok', 'repair', 'topup'); handing that
+                  straight to Ionicons made every button on the sheet render a
+                  "?" - and the `as IconName` cast is what stopped the
+                  typechecker saying so.
+                  The icon carries its tone ALWAYS - a green tick, a red
+                  warning - so the operator can read the row at a glance
+                  instead of only after tapping. Selection is shown by the
+                  filled background and border. */}
               <Ionicons
-                name={(info ? info.icon : 'remove-circle-outline') as IconName}
+                name={markGlyph(info)}
                 size={24}
-                color={active ? tone.fg : c.textSecondary}
+                color={tone.fg}
               />
               <Text
                 style={[styles.markText, { color: active ? tone.fg : c.textSecondary }]}

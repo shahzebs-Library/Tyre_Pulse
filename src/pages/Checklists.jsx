@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  ClipboardList, Plus, Search, Filter, FileText, PenLine, ShieldCheck,
+  ClipboardList, Plus, Search, Filter, PenLine, ShieldCheck,
   Play, Pencil, RefreshCw, AlertTriangle, ChevronRight, ListChecks,
-  Layers, Inbox, CalendarDays, Download, Loader2,
+  Layers, Inbox, CalendarDays, Download, Loader2, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -11,6 +11,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { listTemplates, listSubmissions, getSubmission } from '../lib/api/checklists'
 import { isValueField } from '../lib/checklist/fieldTypes'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
+import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
+import { roleTargetLabel } from '../lib/checklist/checklistRoles'
 import { gridFields } from '../lib/checklistMonthly'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { toUserMessage } from '../lib/safeError'
@@ -43,6 +45,21 @@ function prettyStatus(s) {
 function fieldCount(tpl) {
   return (Array.isArray(tpl?.fields) ? tpl.fields : []).filter((f) => isValueField(f?.type)).length
 }
+/**
+ * Render the template's icon. Resolved, never printed raw: `icon` holds an
+ * emoji on some rows and a lucide component name on others, and the raw string
+ * used to be rendered as text - which is why a card showed the literal word
+ * "ClipboardCheck".
+ */
+function TemplateIcon({ template }) {
+  const res = resolveChecklistIcon(template)
+  if (res.kind === 'emoji') {
+    return <span className="text-xl leading-none" role="img" aria-label="Checklist icon">{res.emoji}</span>
+  }
+  const Icon = checklistIconComponent(res.token)
+  return <Icon size={18} className="text-brand-bright" aria-hidden="true" />
+}
+
 function fmtDate(v) {
   if (!v) return '-'
   const d = new Date(v)
@@ -328,7 +345,7 @@ export default function Checklists() {
               <div key={tpl.id} className="card flex flex-col group">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl bg-brand-subtle border border-[rgba(22,163,74,0.2)] flex items-center justify-center shrink-0">
-                    <FileText size={18} className="text-brand-bright" />
+                    <TemplateIcon template={tpl} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-[var(--text-primary)] font-semibold truncate">{tpl.name || 'Untitled checklist'}</h3>
@@ -354,6 +371,16 @@ export default function Checklists() {
                   {tpl.require_approval && (
                     <span className="badge text-xs bg-purple-900/40 text-purple-300 border border-purple-700/50 inline-flex items-center gap-1">
                       <ShieldCheck size={11} /> Approval
+                    </span>
+                  )}
+                  {/* Renders NOTHING for an untargeted checklist: a chip reading
+                      "Everyone" on every card is noise, not information. */}
+                  {roleTargetLabel(tpl) && (
+                    <span
+                      className="badge text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 inline-flex items-center gap-1"
+                      title={`Written for ${roleTargetLabel(tpl)}`}
+                    >
+                      <Users size={11} /> For: {roleTargetLabel(tpl)}
                     </span>
                   )}
                 </div>

@@ -2,12 +2,31 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, Play, SkipForward, Eye, RefreshCw, AlertTriangle,
-  CheckCircle2, Clock, CalendarClock, ListChecks, Zap, MapPin, Boxes,
+  CheckCircle2, Clock, CalendarClock, ListChecks, Zap, MapPin, Boxes, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
+import { useAuth } from '../contexts/AuthContext'
 import { listAssignments, skipAssignment, generateNow } from '../lib/api/checklistSchedules'
+import { listTemplates } from '../lib/api/checklists'
+import {
+  filterTemplatesForRole, filterAssignmentsForRole, roleTargetLabel, isOversightRole,
+} from '../lib/checklist/checklistRoles'
+import { resolveChecklistIcon, checklistIconComponent } from '../lib/checklist/checklistIcons'
 import { toUserMessage } from '../lib/safeError'
+
+/**
+ * The template's icon, resolved rather than printed raw - `icon` holds an emoji
+ * on some rows and a lucide component name on others.
+ */
+function TemplateIcon({ template }) {
+  const res = resolveChecklistIcon(template)
+  if (res.kind === 'emoji') {
+    return <span className="text-xl leading-none" role="img" aria-label="Checklist icon">{res.emoji}</span>
+  }
+  const Icon = checklistIconComponent(res.token)
+  return <Icon size={18} className="text-brand-bright" aria-hidden="true" />
+}
 
 // "Tables not deployed yet" heuristic — mirrors Billing.jsx / Checklists.jsx.
 function isMissingRelation(err) {
@@ -100,8 +119,13 @@ const TABS = [
 export default function MyChecklists() {
   const navigate = useNavigate()
   const { activeCountry } = useSettings()
+  const { profile, isSuperAdmin } = useAuth()
+  const role = profile?.role || ''
+  const roleOpts = useMemo(() => ({ isSuperAdmin: !!isSuperAdmin }), [isSuperAdmin])
+  const seesEverything = isOversightRole(role, roleOpts)
 
   const [assignments, setAssignments] = useState([])
+  const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [missing, setMissing] = useState(false)
@@ -121,8 +145,16 @@ export default function MyChecklists() {
   const load = useCallback(async () => {
     setLoading(true); setError(''); setMissing(false)
     try {
-      const rows = await listAssignments({ country: activeCountry })
+      // The published templates ride along so a person can see the checklists
+      // WRITTEN for their trade even before a schedule has generated anything -
+      // which is the whole state today, because no schedule exists yet. It is
+      // best-effort: a failed template read must not empty the to-do list.
+      const [rows, tpls] = await Promise.all([
+        listAssignments({ country: activeCountry }),
+        listTemplates({ status: 'published', country: activeCountry }).catch(() => []),
+      ])
       setAssignments(Array.isArray(rows) ? rows : [])
+      setTemplates(Array.isArray(tpls) ? tpls : [])
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setMissing(true)
@@ -137,7 +169,11 @@ export default function MyChecklists() {
   // Decorate with derived status + sort once, reuse everywhere.
   const decorated = useMemo(() => {
     const rank = { overdue: 0, pending: 1, completed: 2, skipped: 3 }
-    return (assignments || [])
+    // An assignment aimed at another trade is not this person's work. A row with
+    // no assignee_role stays visible to everyone (that is what NULL means), and
+    // oversight roles keep seeing all of them. Filtering here rather than in the
+    // render keeps the KPI counts and the table describing the same set.
+    return filterAssignmentsForRole(assignments, role, roleOpts)
       .map((a) => ({ ...a, _status: effectiveStatus(a) }))
       .sort((x, y) => {
         const r = (rank[x._status] ?? 9) - (rank[y._status] ?? 9)
@@ -147,7 +183,21 @@ export default function MyChecklists() {
         const dy = y.due_date ? new Date(y.due_date).getTime() : Infinity
         return dx - dy
       })
-  }, [assignments])
+  }, [assignments, role, roleOpts])
+
+  // The published checklists written for this person's trade. Untargeted
+  // templates are everyone's; oversight roles see the lot.
+  const myTemplates = useMemo(
+    () => filterTemplatesForRole(templates, role, roleOpts),
+    [templates, role, roleOpts],
+  )
+  // template_id -> template, so an assignment row can show the same icon and
+  // the same "For:" chip as the card it came from.
+  const templateById = useMemo(() => {
+    const m = new Map()
+    for (const t of templates) if (t?.id != null) m.set(String(t.id), t)
+    return m
+  }, [templates])
 
   const kpis = useMemo(() => {
     let overdue = 0, pending = 0, completed = 0
@@ -403,10 +453,22 @@ export default function MyChecklists() {
                 return (
                   <tr key={a.id} className="border-t border-[var(--border-dim)] align-top">
                     <td className="table-cell">
-                      <div className="font-medium text-[var(--text-primary)]">{a.template_name || 'Checklist'}</div>
-                      {a.assignee_role && (
-                        <div className="text-xs text-[var(--text-muted)] mt-0.5">Role: {a.assignee_role}</div>
-                      )}
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 shrink-0">
+                          <TemplateIcon template={templateById.get(String(a.template_id)) || { name: a.template_name }} />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="font-medium text-[var(--text-primary)]">{a.template_name || 'Checklist'}</div>
+                          {a.assignee_role && (
+                            <div className="text-xs text-[var(--text-muted)] mt-0.5">Role: {a.assignee_role}</div>
+                          )}
+                          {roleTargetLabel(templateById.get(String(a.template_id))) && (
+                            <div className="text-xs text-amber-400 mt-0.5 inline-flex items-center gap-1">
+                              <Users size={11} /> For: {roleTargetLabel(templateById.get(String(a.template_id)))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="table-cell">
                       <div className="flex flex-col gap-0.5 text-xs">
@@ -484,6 +546,67 @@ export default function MyChecklists() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* ── Checklists written for this trade ──
+          Assignments only exist once a schedule generates them. This section
+          answers the question the owner actually asked - "which checklists are
+          mine?" - straight from the published templates, filtered to the roles
+          each one names. It is a shortcut to fill one on demand, not a to-do
+          list, so nothing here is counted as due. */}
+      {!loading && !missing && !error && myTemplates.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <ListChecks size={15} className="text-green-400" />
+              {seesEverything ? 'Published checklists' : 'Checklists for your role'}
+            </h2>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              {seesEverything
+                ? 'Every published checklist. Fill one on demand without waiting for a schedule.'
+                : `Written for ${role || 'your role'}, plus the ones written for everyone. Fill one on demand.`}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {myTemplates.map((tpl) => (
+              <div key={tpl.id} className="card flex flex-col">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-subtle border border-[rgba(22,163,74,0.2)] flex items-center justify-center shrink-0">
+                    <TemplateIcon template={tpl} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[var(--text-primary)] font-semibold truncate">{tpl.name || 'Untitled checklist'}</h3>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{tpl.category || 'General'}</p>
+                  </div>
+                </div>
+                {/* Nothing rendered for an untargeted checklist - an "Everyone"
+                    chip on every card is noise, not information. */}
+                {roleTargetLabel(tpl) && (
+                  <span className="badge text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 inline-flex items-center gap-1 mt-3 self-start">
+                    <Users size={11} /> For: {roleTargetLabel(tpl)}
+                  </span>
+                )}
+                <button
+                  onClick={() => navigate(`/checklists/${tpl.id}/run`)}
+                  className="btn-primary text-sm inline-flex items-center gap-2 justify-center mt-4"
+                >
+                  <Play size={15} /> Fill
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* An honest note when the register is published but none of it is aimed
+          at this person - "nothing for you" is a real answer, and it is not the
+          same as "nothing exists". */}
+      {!loading && !missing && !error && templates.length > 0 && myTemplates.length === 0 && (
+        <p className="text-xs text-[var(--text-muted)]">
+          None of the published checklists is written for {role || 'your role'} yet.{' '}
+          <Link to="/checklists" className="text-green-400 hover:underline">Browse all checklists</Link>
+        </p>
       )}
     </div>
   )

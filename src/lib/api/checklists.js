@@ -12,7 +12,12 @@ import { supabase, unwrap, applyCountry } from './_client'
 // Urdu, and option_sets holds the shared answer legend a whole sheet points at.
 const TEMPLATE_COLS =
   'id,organisation_id,country,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,created_by,created_at,updated_at,'
-  + 'name_i18n,description_i18n,option_sets'
+  + 'name_i18n,description_i18n,option_sets,'
+  // Who the checklist is FOR (V591, text[] of profiles.role Title Case values).
+  // NULL or empty = every role, which is what all pre-V591 templates carry, so a
+  // reader that omitted this column would render every checklist as untargeted.
+  // This is TARGETING, not a security boundary - see src/lib/checklist/checklistRoles.js.
+  + 'assignee_roles'
 // Approval columns (V212) are part of the row a reader needs: a checklist that
 // was rejected, or is still waiting for a signature, reads very differently from
 // one that was accepted, and leaving them out made every submission look final.
@@ -88,6 +93,30 @@ export async function getTemplate(id) {
   return unwrap(await supabase.from('checklist_templates').select(TEMPLATE_COLS).eq('id', id).maybeSingle())
 }
 
+/**
+ * Normalise a role-target selection for storage.
+ *
+ * Trims, drops blanks, de-duplicates case-insensitively (a list holding both
+ * 'Mechanic' and 'mechanic' targets one role twice and reads as two), and
+ * returns NULL - never [] - when nothing survives. NULL and [] behave the same
+ * to every reader, but only NULL says the template was never narrowed, and that
+ * is the state all six pre-V591 templates are in.
+ */
+export function normaliseAssigneeRoles(value) {
+  if (!Array.isArray(value)) return null
+  const seen = new Set()
+  const out = []
+  for (const raw of value) {
+    const name = String(raw ?? '').trim()
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+  }
+  return out.length ? out : null
+}
+
 /** Create a template. `fields` is the embedded field array. Returns the new row. */
 export async function createTemplate(values) {
   const payload = {
@@ -96,6 +125,9 @@ export async function createTemplate(values) {
     category: values.category ?? null,
     icon: values.icon ?? null,
     country: values.country ?? null,
+    // An empty selection is written as NULL, never [], so the column keeps saying
+    // honestly "this was never narrowed" rather than "narrowed to nobody".
+    assignee_roles: normaliseAssigneeRoles(values.assignee_roles),
     status: values.status ?? 'draft',
     require_signature: !!values.require_signature,
     require_approval: !!values.require_approval,
@@ -113,6 +145,9 @@ export async function createTemplate(values) {
 export async function updateTemplate(id, patch) {
   const clean = { ...patch }
   delete clean.id; delete clean.created_at; delete clean.organisation_id
+  // Only normalise when the caller actually sent the key: a patch that does not
+  // mention targeting (publish, archive) must leave the stored value alone.
+  if ('assignee_roles' in clean) clean.assignee_roles = normaliseAssigneeRoles(clean.assignee_roles)
   return unwrap(await supabase.from('checklist_templates').update(clean).eq('id', id).select(TEMPLATE_COLS).single())
 }
 
@@ -133,6 +168,9 @@ export async function duplicateTemplate(id) {
     category: src.category,
     icon: src.icon,
     country: src.country,
+    // A copy that quietly loses its role targeting is not a copy of the
+    // checklist anyone approved - same reasoning as the translations below.
+    assignee_roles: src.assignee_roles ?? null,
     status: 'draft',
     require_signature: src.require_signature,
     require_approval: src.require_approval,

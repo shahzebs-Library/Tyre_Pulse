@@ -6,6 +6,7 @@ import {
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
   Truck, MapPin, User, Sparkles, Link2, Lock, FileSpreadsheet, Languages,
+  Users, Smile,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -19,8 +20,15 @@ import {
   missingTranslations, translationCoverage,
 } from '../lib/checklist/checklistI18n'
 import {
+  CHECKLIST_ICONS, DEFAULT_CHECKLIST_ICON,
+  resolveChecklistIcon, checklistIconComponent, checklistIconLabel, isEmojiIcon,
+} from '../lib/checklist/checklistIcons'
+import { CHECKLIST_TRADE_ROLES, roleTargetLabel } from '../lib/checklist/checklistRoles'
+import {
   getTemplate, createTemplate, updateTemplate, publishTemplate,
 } from '../lib/api/checklists'
+import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
+import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { buildTemplateFromRows } from '../lib/checklist/importChecklist'
 import { toUserMessage } from '../lib/safeError'
 
@@ -33,7 +41,42 @@ const CATEGORIES = [
   'Workshop', 'Compliance', 'Handover', 'Gate Pass', 'Quality', 'General',
 ]
 
+// The emoji option is kept as a SECONDARY choice, not the primary one. It is no
+// longer the way to pick an icon (the token grid is), but a template that
+// already carries an emoji must keep rendering it, and some people genuinely
+// prefer one - dropping it would silently rewrite their choice.
 const ICON_PRESETS = ['📋', '🚚', '🛞', '🔧', '🛡️', '⚠️', '✅', '📝', '🚦', '🏁', '🧰', '📷']
+
+/**
+ * Every role a checklist can be targeted at, trades first.
+ *
+ * The trade shortlist leads because it is what a checklist is normally written
+ * for; the rest is whatever this database will actually accept as somebody's
+ * role - the live `custom_roles` table plus the built-ins. A hardcoded list
+ * cannot keep up with a table, which is exactly how 'Mechanic' and
+ * 'Electrician' were impossible to pick before V591.
+ */
+export function mergeTargetRoles(...lists) {
+  const seen = new Set()
+  const out = []
+  for (const list of lists) {
+    for (const raw of Array.isArray(list) ? list : []) {
+      const name = String(raw ?? '').trim()
+      if (!name) continue
+      const key = name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(name)
+    }
+  }
+  return out
+}
+
+// Used until the live role list lands, and kept as the fallback if it cannot be
+// read - a picker with the standard roles is usable, an empty one is not.
+const FALLBACK_TARGET_ROLES = mergeTargetRoles(
+  CHECKLIST_TRADE_ROLES, ASSIGNABLE_BUILTIN_ROLES, ACCESS_ROLES,
+)
 
 // Field-type → icon, for the field row + preview accent.
 const TYPE_ICON = {
@@ -1324,6 +1367,169 @@ function PreviewField({ field, allFields, scored }) {
   )
 }
 
+// ─── Icon + role-target controls ──────────────────────────────────────────────
+
+/**
+ * Render whatever a template carries as a real icon.
+ *
+ * The old preview printed `{draft.icon}` as text, so the two seeded templates
+ * that store the lucide name 'ClipboardCheck' literally showed the word. Every
+ * surface goes through `resolveChecklistIcon`, so an emoji renders as an emoji
+ * and a token (or a legacy name) renders as its icon.
+ */
+function TemplateIcon({ template, className = 'w-5 h-5' }) {
+  const res = resolveChecklistIcon(template)
+  if (res.kind === 'emoji') {
+    return <span className="text-2xl leading-none" role="img" aria-label="Checklist icon">{res.emoji}</span>
+  }
+  const Icon = checklistIconComponent(res.token)
+  return <Icon className={`${className} text-[var(--brand-bright)]`} aria-hidden="true" />
+}
+
+/** The icon picker: a visual grid over the shared token vocabulary. */
+function IconPicker({ value, draft, onChange }) {
+  const [showEmoji, setShowEmoji] = useState(() => isEmojiIcon(value))
+  const resolved = resolveChecklistIcon(draft)
+  const activeToken = resolved.kind === 'icon' ? resolved.token : null
+  const usingEmoji = resolved.kind === 'emoji'
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <label className={LABEL_CLS}>Icon</label>
+        <button
+          type="button"
+          onClick={() => setShowEmoji((v) => !v)}
+          className="text-[11px] text-[var(--text-muted)] hover:text-[var(--brand-bright)] inline-flex items-center gap-1 mb-1.5"
+        >
+          <Smile className="w-3 h-3" /> {showEmoji ? 'Hide emoji' : 'Use an emoji instead'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-8 gap-1.5">
+        {CHECKLIST_ICONS.map(({ token, label, Icon }) => {
+          const selected = !usingEmoji && activeToken === token
+          return (
+            <button
+              key={token}
+              type="button"
+              onClick={() => onChange(token)}
+              title={label}
+              aria-pressed={selected}
+              aria-label={label}
+              className={`h-9 rounded-lg flex items-center justify-center border transition-all ${
+                selected
+                  ? 'border-[var(--brand-bright)] bg-brand-subtle text-[var(--brand-bright)]'
+                  : 'border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-muted)] hover:border-[var(--brand-bright)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          )
+        })}
+      </div>
+
+      <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+        {usingEmoji
+          ? 'Using an emoji. Pick an icon above to switch.'
+          : `Showing ${checklistIconLabel(activeToken)}${value ? '' : ' (chosen from the name and category)'}.`}
+      </p>
+
+      {showEmoji && (
+        <div className="mt-2 pt-2 border-t border-[var(--border-dim)]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {ICON_PRESETS.map((emo) => (
+              <button
+                key={emo}
+                type="button"
+                onClick={() => onChange(emo)}
+                className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center border transition-all ${
+                  value === emo
+                    ? 'border-[var(--brand-bright)] bg-brand-subtle'
+                    : 'border-[var(--border-dim)] bg-[var(--surface-2)] hover:border-[var(--brand-bright)]'
+                }`}
+                title={`Use ${emo}`}
+              >
+                {emo}
+              </button>
+            ))}
+            <input
+              type="text"
+              value={isEmojiIcon(value) ? value : ''}
+              onChange={(e) => onChange(e.target.value.slice(0, 4))}
+              placeholder="🙂"
+              className="w-16 bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg px-2 py-2 text-center text-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-bright)]"
+              aria-label="Custom emoji"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Who is this checklist for?
+ *
+ * Nothing selected reads "Everyone", because that is what it means and it is
+ * the default. The wording says who the checklist is FOR, never that it is
+ * hidden from anyone: templates are already walled by the org + country
+ * policies, so this decides what a person is OFFERED, not what they may read.
+ */
+function RoleTargetPicker({ value, options, onChange }) {
+  const selected = Array.isArray(value) ? value : []
+  const has = (role) => selected.some((r) => r.toLowerCase() === role.toLowerCase())
+  const toggle = (role) => {
+    onChange(has(role) ? selected.filter((r) => r.toLowerCase() !== role.toLowerCase()) : [...selected, role])
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <label className={`${LABEL_CLS} flex items-center gap-1.5`}>
+          <Users className="w-3 h-3" /> Who is this checklist for?
+        </label>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="text-[11px] text-[var(--text-muted)] hover:text-[var(--brand-bright)] mb-1.5"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((role) => {
+          const on = has(role)
+          return (
+            <button
+              key={role}
+              type="button"
+              onClick={() => toggle(role)}
+              aria-pressed={on}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                on
+                  ? 'border-[var(--brand-bright)] bg-brand-subtle text-[var(--brand-bright)]'
+                  : 'border-[var(--border-dim)] bg-[var(--surface-2)] text-[var(--text-muted)] hover:border-[var(--brand-bright)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {role}
+            </button>
+          )
+        })}
+      </div>
+
+      <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+        {selected.length === 0
+          ? 'Everyone. Pick one or more roles to offer this checklist to those trades only.'
+          : `Offered to ${roleTargetLabel({ assignee_roles: selected })}. Admins, Managers and Directors always see it.`}
+      </p>
+    </div>
+  )
+}
+
 // ─── Draft helpers ────────────────────────────────────────────────────────────
 
 function blankDraft(country) {
@@ -1331,7 +1537,12 @@ function blankDraft(country) {
     name: '',
     description: '',
     category: '',
-    icon: '📋',
+    // A token, not an emoji: the stored value has to mean the same thing to the
+    // web (lucide) and the phone (Ionicons), and a library-specific name does not.
+    icon: DEFAULT_CHECKLIST_ICON,
+    // Empty = for everyone. That is the pre-V591 behaviour and the safe default:
+    // a new checklist that defaults to narrow would be invisible to the crews.
+    assignee_roles: [],
     country: country && country !== 'All' ? country : null,
     status: 'draft',
     require_signature: false,
@@ -1354,7 +1565,13 @@ function toDraft(row, country) {
     name: row.name || '',
     description: row.description || '',
     category: row.category || '',
-    icon: row.icon || '📋',
+    // Stored verbatim: an emoji stays an emoji and a legacy lucide name stays a
+    // legacy name until the author picks something else, so opening a template
+    // and pressing Save never silently rewrites their icon.
+    icon: row.icon || '',
+    assignee_roles: Array.isArray(row.assignee_roles)
+      ? row.assignee_roles.map((r) => String(r ?? '').trim()).filter(Boolean)
+      : [],
     country: row.country || (country && country !== 'All' ? country : null),
     status: row.status || 'draft',
     require_signature: !!row.require_signature,
@@ -1391,6 +1608,22 @@ export default function ChecklistBuilder() {
   const [saveError, setSaveError] = useState(null)
   const [savedNote, setSavedNote] = useState(null)
   const [dirty, setDirty] = useState(false)
+
+  // ── Roles a checklist can be targeted at ──
+  // Best-effort: the picker must never block the builder, so a failed read
+  // degrades to the static trade + built-in lists rather than an empty control.
+  const [roleOptions, setRoleOptions] = useState(FALLBACK_TARGET_ROLES)
+  useEffect(() => {
+    let alive = true
+    listAssignableRoles()
+      .then((live) => {
+        if (!alive) return
+        const merged = mergeTargetRoles(CHECKLIST_TRADE_ROLES, live, ACCESS_ROLES)
+        if (merged.length) setRoleOptions(merged)
+      })
+      .catch(() => { /* keep the fallback list */ })
+    return () => { alive = false }
+  }, [])
 
   // ── One-time spreadsheet import (Excel / CSV → checklist template) ──
   const importInputRef = useRef(null)
@@ -1672,6 +1905,8 @@ export default function ChecklistBuilder() {
       description: String(draft.description || '').trim() || null,
       category: draft.category || null,
       icon: draft.icon || null,
+      // NULL, never [], when nothing is selected - see normaliseAssigneeRoles.
+      assignee_roles: (draft.assignee_roles || []).length ? [...draft.assignee_roles] : null,
       country: draft.country || (activeCountry !== 'All' ? activeCountry : null),
       status,
       require_signature: !!draft.require_signature,
@@ -1922,34 +2157,15 @@ export default function ChecklistBuilder() {
               </div>
             </div>
 
-            <div>
-              <label className={LABEL_CLS}>Icon</label>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {ICON_PRESETS.map((emo) => (
-                  <button
-                    key={emo}
-                    type="button"
-                    onClick={() => set('icon', emo)}
-                    className={`w-9 h-9 rounded-lg text-lg flex items-center justify-center border transition-all ${
-                      draft.icon === emo
-                        ? 'border-[var(--brand-bright)] bg-brand-subtle'
-                        : 'border-[var(--border-dim)] bg-[var(--surface-2)] hover:border-[var(--brand-bright)]'
-                    }`}
-                    title={`Use ${emo}`}
-                  >
-                    {emo}
-                  </button>
-                ))}
-                <input
-                  type="text"
-                  value={draft.icon || ''}
-                  onChange={(e) => set('icon', e.target.value.slice(0, 4))}
-                  placeholder="🙂"
-                  className="w-16 bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg px-2 py-2 text-center text-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-bright)]"
-                  aria-label="Custom emoji"
-                />
-              </div>
-            </div>
+            {/* Who the checklist is for. Empty = everyone (the default). */}
+            <RoleTargetPicker
+              value={draft.assignee_roles || []}
+              options={roleOptions}
+              onChange={(next) => set('assignee_roles', next)}
+            />
+
+            {/* Icon: a token from the shared vocabulary, or an emoji. */}
+            <IconPicker value={draft.icon} draft={draft} onChange={(v) => set('icon', v)} />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)]">
@@ -2160,7 +2376,9 @@ export default function ChecklistBuilder() {
 
             <div className="rounded-xl border border-[var(--border-dim)] bg-[var(--surface-2)] p-4">
               <div className="flex items-start gap-3 pb-4 mb-4 border-b border-[var(--border-dim)]">
-                <span className="text-2xl leading-none">{draft.icon || '📋'}</span>
+                {/* Resolved, never raw: a lucide name rendered as text is how a
+                    card came to print the words "ClipboardCheck". */}
+                <TemplateIcon template={draft} className="w-7 h-7" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-[var(--text-primary)] truncate">
                     {String(draft.name || '').trim() || <span className="text-[var(--text-muted)] italic">Untitled checklist</span>}

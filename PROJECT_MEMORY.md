@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V599**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V601**)
 Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
 V585-V590 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
@@ -216,6 +216,139 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
   preview build).
 
 ---
+
+## SESSION 2026-08-18 (part 5) — WHO SIGNS, THE ROUTE-GUARD CLASS, RESUME + HISTORY (V599/V600). Next free **V601**.
+Owner, across several messages: the duplicate asset block on the checklist; "stock I feel is spinner but in
+actual no access"; a notification tap landing on Unmatched Route; add a Workshop Supervisor; "admin should be
+admin, manager should be manager, no leakage"; "tighten it, area manager will do it or PMV manager will sign
+it"; resumable checklists everywhere + checklist history for the trades. **STILL NO EAS BUILD.**
+
+### **THE "SPINNER" WAS A REDIRECT, AND THE THIRD CAUSE IS THE ONE THAT EXPLAINS "sometimes it works"**
+Every guarded screen carried its OWN hardcoded role list while Home and the tab bar gate on the registry, so the
+tile showed, the tap redirected, and it read as a hang. Measured: **stock bounced INSPECTORS** (the report),
+**meter-logs bounced DRIVERS off their own primary tab**, report-issue bounced reporter/driver/mechanic/
+electrician, vehicles bounced mechanic+electrician, calendar bounced reporter, **serial-search bounced ADMINS**
+(it read a module's roles list, which structurally cannot contain admin).
+- **`isAdminOrAbove` was imported and never used**, so a super-admin whose role is not the literal 'admin' was
+  redirected off everything. And the hook **ignored per-user grants entirely**, silently breaking mobile grants.
+- **THE REAL ONE: the hook waited only on `loading`, which AuthContext clears BEFORE it awaits fetchProfile**
+  (profileLoading covers that window). On a cold start or deep link the guard ran against a NULL profile and
+  bounced EVERY role including admin. Role-independent, timing-dependent.
+- `useModuleGuard` now resolves through `resolveGuardedAccess`, the SAME function the outer ModuleGuard uses, so
+  inner and outer can never contradict. `admin/approvals.tsx` deliberately NOT converted (it is admin-only while
+  the approvals module admits more; converting would LOOSEN an admin gate) - recorded as a test exemption.
+
+### **A REFUSAL THAT LOOKED LIKE LOADING FOREVER**
+Four admin screens wrote `if (guardLoading || !allowed) return <spinner/>`. **`allowed` never becomes true for
+someone denied, so that spinner ran forever** - the owner's exact words. `admin/sites.tsx` in the same folder
+already did it right. `NoAccess` is now exported and reused. **THE TEST IS SCOPED AND THAT IS THE HONEST PART:**
+five more screens carry the same fused shape but are wrapped in `withModuleGuard`, so the outer guard renders
+NoAccess first and their branch is unreachable dead code - flagging them would be a false alarm. The guard checks
+UNWRAPPED screens only, so removing a wrapper starts failing it.
+
+### **NOTIFICATIONS: TWO ROUTES THAT DO NOT EXIST, AND A DEVELOPER SCREEN IN PRODUCTION**
+`notificationRoute()` returned `/(app)/inspection` and `/(app)/accident`; **neither folder has an index file**, so
+expo-router had nowhere to go. **A grep for route literals finds nothing - both were COMPUTED and returned**, which
+is why they survived. There was also **no `+not-found.tsx`**, so the built-in Unmatched view shipped, rendering the
+bare scheme as the URL and offering a **Sitemap link listing every route in the app**.
+- Inspection -> the approvals queue (the notification is a request to sign). Accident -> the register, because
+  [id]/case/report all need an id the mapping is never given and `claim` lands in the same branch, where a claim
+  id is not an accident id. **No index screen was invented to satisfy a link.**
+- Cold start covered separately: a tap on a KILLED app is stored natively before any JS listener exists. Read once
+  on boot, de-duplicated by identifier, navigation queued until the stack mounts (pushing earlier throws
+  "Attempted to navigate before mounting the Root Layout").
+- Found while sweeping: **checklist notifications went nowhere at all** (the checklist test only ran inside the
+  approval_decision branch). Web equivalent checked and CLEAN; pinned by a test that reads the targets out of the
+  function body, because a literal sweep would not have caught the mobile bug either.
+
+### **V599 WORKSHOP SUPERVISOR - AND THE SIDEBAR ORDERING THAT WOULD HAVE LEFT THEM BLANK**
+Three things had to be true. (1) **The role must exist in `custom_roles` before it can be assigned** -
+`normalize_profiles_role()` silently rewrites anything else to Reporter, so the save reports success and stores
+Reporter (the V592 class). (2) First rung only; promoting them to the closing rung collapses the ladder.
+(3) **`shouldShowNavItem` tests `isCustomNavRole` BEFORE `isChecklistOnlyRole`, and the custom branch is
+deny-by-default** - a checklist-only role that is not in BUILTIN_NAV_ROLES is swallowed there and its sidebar rule
+never runs, so the person signs in to an EMPTY APP. That is why the set already had two hand-added names; it is
+now DERIVED from CHECKLIST_ONLY_ROLES in both layouts.
+- `/approvals` joined the checklist-only path list or the role could be held and never reach its own queue.
+  Deliberately NOT in CHECKLIST_AUTHOR_ROLES - they sign, they do not author.
+- Targeting: Workshop Daily now reaches Tyre Man + Workshop Supervisor; FTM reaches Workshop Supervisor.
+  **Every write APPENDS to a non-empty array** - a stray `{}` reads as "targeted at nobody".
+
+### **V600 WHO SIGNS - AND THE DEFECT THAT WOULD HAVE MADE IT REACH NOBODY**
+**mobile `normaliseRole` silently turns any unlisted role into 'reporter', and EVERY supervisory role was
+missing.** So the PMV Manager and the Workshop Maintenance Area Manager - two real people - were seen as
+reporters, and V599's Workshop Supervisor could not have opened a checklist. Naming them as signers while the
+phone could not tell them from a reporter would have shipped a rule that reached no one.
+- **Adding a role to UserRole makes it deny-by-default and can TAKE ACCESS AWAY.** All five are therefore listed
+  on the field modules a reporter already had (serial, meter, reportIssue, calendar, vehicles) + checklists.
+- **inspections**: PMV Manager / Workshop Area Manager / Workshop Maintenance Area Manager / Admin.
+  **checklist 1st rung**: the trades' supervisors + area/PMV. **checklist FINAL rung UNCHANGED - Director stays
+  deliberately**: exactly one person holds an area-manager role and a closing rung nobody else can reach jams the
+  moment they take leave. **The migration ABORTS if Director is removed from it.**
+- **MEASURED FIRST: 372 inspections approved, EVERY ONE by an Admin.** No Manager or Director has ever signed one.
+  33 pending, all KSA; **all 416 inspections ever recorded are KSA.**
+- **PROVEN LIVE, rolled back:** Manager REFUSED · Director REFUSED · Tyre Man REFUSED · **PMV Manager ACCEPTED**;
+  the area manager returned "already approved" (it passed the gate, the row was decided earlier in the same
+  transaction). Then as **VINAY KUMAR T** himself: reads all 33, signs ACCEPTED, both checklist rungs true.
+- **The approvals module lists its roles LITERALLY, not via a spread** - the web mirror guard parses the registry
+  as TEXT and a spread reads as the characters `...SUPERVISOR_ROLES`.
+- **TWO TESTS CHANGED CONTRACT and say so.** One asserted "a Manager signs off"; now the opposite, with the
+  reason. The approvals dashboard fixture was a Manager throughout, which no longer exercises the checklist rungs
+  - the role is now per test, because V600 splits WHO SIGNS from who administers.
+
+### **ADMIN IS ADMIN ONLY**
+The Admin Console admitted Manager and Director while User Management, admin approvals and the Access Manager
+gated on isAdmin INSIDE it, and Analytics/Reports are admin-only modules - a room of locked doors. Tightened to
+`[]`. **Measured cost: 2 Managers + 1 Director lose the tile and NOTHING they could use** (the Accident Dashboard,
+the one thing they use, is reached straight from Home). The console's own tiles are now gated on the module their
+destination guards on, so a per-user `admin` grant cannot put a link to a refusal in front of anyone.
+
+### **DUPLICATE ASSET ENTRY - DERIVED FROM THE TEMPLATE, NOT A NAME**
+Every PUBLISHED template already carries its own asset AND site field, so the header block was 100% duplicate;
+Title too, since V594 mints the document number. Removed on BOTH stacks, derived from the template's fields so the
+three empty drafts keep the inputs as a fallback. The web screen also never received the V595 rules and now reads
+the same engine. **`chassis_no`/`serial_no` added to the assets column list** - chassis auto-fill had never worked
+on web because the service did not select them (389 and 513 of 1,617 populated).
+
+### **RESUME + HISTORY**
+**A draft must NOT be an INSERT into `checklist_submissions`** - V594 mints the document number on INSERT so an
+abandoned fill never burns one; a draft row would gap the register permanently. So drafts are on-device.
+**Photos go in their OWN folder**: the obvious store is `queued-photos/`, which `sweepOrphanQueuedPhotos` empties
+after every sync of anything no QUEUE entry references - a draft is not a queue entry, so the next sync would have
+deleted the operator's photos (a trap a previous attempt fell into). Keyed per (user, template, asset); key
+migrates AFTER the new one is stored; cleared on submit INCLUDING an offline submit; pruned by count never by age.
+- History leads with the document number and NAMES THE RUNG instead of "pending". Default scope is your own work;
+  the Team toggle is a VIEW filter and says so. Paged with an `id` tiebreak because `submitted_at` is a server
+  default and offline sheets synced together share a timestamp.
+- **That agent's mutation test found a WEAK TEST, not a bug**: dropping the submitted_by filter from the paged
+  read left the suite green because the head COUNT query's filter satisfied the assertion. Page and count are now
+  asserted separately - they must agree or "showing 12 of 400" quotes the whole workshop's total.
+
+### METHOD NOTES
+- **A temp probe table needs `grant insert ... to authenticated` once `set local role authenticated` is in force**
+  (bit again).
+- **`lastIndexOf('function public.<fn>()')` matches the ROLLBACK COMMENT** `drop function public.<fn>()` at the end
+  of these migration files, then reads the next array it finds - which belongs to a different function. Anchor on
+  `create or replace function`.
+- **A mirror test that pins ONE migration goes stale the moment a later one replaces the function.** Read the
+  migrations in order and keep the LAST definition.
+- Editing a module's role array by MATCHING ITS CONTENTS is unsafe - `vehicles` and `meter` carry identical
+  literals. Edit by key.
+- Five agents ran; all five landed. Staggering worked where six in parallel had exhausted the session limit.
+
+### OPEN / FLAGGED
+- **NO EAS BUILD.** Nothing in parts 2-5 has run on a device. `store-assets/RELEASE_NOTES.md` carries the Play
+  "What's new" text (en + ar, inside the 500-char cap) and the full changelog.
+- **After the build ships: set `mobile_latest_version` to 1.5.0** (still 1.3.2). Do NOT raise `mobile_min_version`
+  until a tester confirms 1.5.0 on a real phone.
+- **Neither approver has a push token**, so nothing pings them when a sheet needs signing. Resolves when they sign
+  into a build (the standing 0-push-tokens item).
+- **One signer per country**: VINAY (KSA) and Abdallah (UAE). Egypt has nobody but Admin - theoretical today, since
+  all 416 inspections ever recorded are KSA.
+- Play screenshots still outstanding; reviewers need a working test login.
+- Carried: `PhotoCapture.tsx` menu strings hard-coded English; `profileStale` exposed but not rendered; the
+  `tyre_records.serial_no` partial-scrap bug (43 tyres); `failureRate` printing 0.0%; 820 UAE rows with a brand in
+  `removal_reason`; the realtime re-measure.
 
 ## SESSION 2026-08-18 (part 4) — WORKSHOP DAILY CHECKLIST REBUILT + TWO-STAGE APPROVAL + STAY-SIGNED-IN + FILTER SCOPING (V594-V598). Next free **V599**.
 Owner, in one message: approvals lose their place and bounce Home after signing; "both their area manager to

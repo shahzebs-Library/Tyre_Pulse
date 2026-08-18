@@ -17,17 +17,17 @@ ar (the app ships Arabic, so it is worth filling in).
 ### English (en-US)
 
 ```
-Workshop Daily Checklist rebuilt: two-stage sign-off (supervisor, then area
-manager), automatic document numbers, and details that fill themselves from the
-asset. Nothing closes while a fault is still open.
+Workshop Daily Checklist rebuilt: two-stage sign-off, automatic document
+numbers, and details that fill themselves from the asset. Nothing closes while
+a fault is still open, and an unfinished sheet now waits for you instead of
+being lost.
 
-Fixed: screens that bounced you back to the home page instead of opening. Stock,
-Meter Log and Vehicles now open for everyone who can see them.
+Your own checklist history is here.
 
-You stay signed in. Photos, checklists and inspections queued offline can no
-longer be lost.
+Fixed: screens that bounced you back to Home instead of opening, notifications
+that led nowhere, and being signed out for no reason.
 ```
-(445 characters, Play allows 500)
+(410 characters, Play allows 500)
 
 ### Arabic (ar)
 
@@ -80,6 +80,19 @@ records and to hand to anyone who asks what changed.
   language it was filled in.
 * Photos can be added from the gallery, not only the camera. A signature can be
   opened and viewed, with the signer's name.
+
+### Who signs, and who sees what
+
+* **A Workshop Supervisor role now exists** and signs the first rung of the
+  workshop sheets. It did not exist before, which meant it could not be assigned
+  at all.
+* **The area maintenance manager or the PMV manager signs an inspection.** A
+  Manager no longer can. Nothing was lost in practice: every inspection ever
+  approved was approved by an admin.
+* **The Admin Console is admin only.** It used to be offered to Managers and
+  Directors, whose own entries inside it then refused them.
+* Screens you cannot open are no longer offered to you at all, and if you do
+  reach one it says so plainly instead of showing a spinner that never ends.
 
 ### Approvals
 

@@ -3,14 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, AlertTriangle, AlertOctagon,
   Star, PenLine, RefreshCw, CheckCircle2, XCircle, Download, Loader2, Gauge,
-  Truck, MapPin, User,
+  Truck, MapPin, User, Hash, ShieldCheck,
 } from 'lucide-react'
 import { getSubmission } from '../lib/api/checklists'
 import { isReferenceField, referenceSource } from '../lib/checklist/fieldTypes'
 import {
   submissionRows, displayValue as sharedDisplayValue, submissionSignatures,
-  templateFromSubmission,
+  templateFromSubmission, documentNo, submissionAnswers,
 } from '../lib/checklistView'
+import MarkChip from '../components/checklist/MarkChip'
+import SignatureView from '../components/checklist/SignatureView'
+import ChecklistApprovalLadder from '../components/checklist/ChecklistApprovalLadder'
+import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
 
@@ -85,17 +89,22 @@ export default function ChecklistSubmission() {
 
   useEffect(() => { load() }, [load])
 
-  // The row list itself comes from the shared reader, so what this page shows and
-  // what an approver sees in the queue cannot drift apart.
-  const rows = useMemo(() => submissionRows(sub), [sub])
-
   // The template travels with the submission (fields, shared option sets and
   // the translated names), so nothing here needs a second fetch.
   const template = useMemo(() => (sub ? templateFromSubmission(sub) : null), [sub])
+
+  // The row list itself comes from the shared reader, so what this page shows and
+  // what an approver sees in the queue cannot drift apart. The template has to be
+  // handed to it: without the shared option set a legend answer resolves to no
+  // mark at all and prints as a bare word with no icon and no meaning.
+  const rows = useMemo(() => submissionRows(sub, { template }), [sub, template])
   const signatures = useMemo(
     () => (sub ? submissionSignatures(sub, { template }) : []),
     [sub, template],
   )
+  // The sheet's own reference. Null when this template mints no document number,
+  // in which case nothing is drawn rather than a placeholder somebody would quote.
+  const docNo = sub ? documentNo(sub) : null
 
   const downloadPdf = useCallback(async () => {
     if (!sub || exporting) return
@@ -181,7 +190,9 @@ export default function ChecklistSubmission() {
             <ArrowLeft size={13} /> Checklists
           </button>
           <ChevronRight size={12} />
-          <span className="text-[var(--text-dim)] truncate max-w-[50vw]">{label} · #{String(sub.id).slice(0, 8).toUpperCase()}</span>
+          <span className="text-[var(--text-dim)] truncate max-w-[50vw]">
+            {label} · {docNo || `#${String(sub.id).slice(0, 8).toUpperCase()}`}
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {exportError && <span className="text-xs text-red-400">{exportError}</span>}
@@ -214,7 +225,16 @@ export default function ChecklistSubmission() {
               <ClipboardCheck size={18} className="text-brand-bright" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-[var(--text-primary)] truncate">{label}</h1>
+              {/* THE DOCUMENT NUMBER IS THE SHEET'S REFERENCE, so it is the
+                  headline - it is what gets quoted, filed and asked for. When
+                  the template mints none, nothing is drawn here: an invented
+                  reference is worse than an absent one. */}
+              {docNo && (
+                <p className="inline-flex items-center gap-1.5 font-mono text-lg font-bold text-brand-bright tracking-wide">
+                  <Hash size={16} className="opacity-70" />{docNo}
+                </p>
+              )}
+              <h1 className={`text-xl font-bold text-[var(--text-primary)] truncate ${docNo ? 'mt-0.5' : ''}`}>{label}</h1>
               <p className="text-sm text-[var(--text-muted)] mt-0.5">
                 {sub.template_name || 'Checklist'}{sub.template_version ? ` · v${sub.template_version}` : ''}
               </p>
@@ -252,6 +272,11 @@ export default function ChecklistSubmission() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Answers */}
         <div className="lg:col-span-2 space-y-4">
+          {/* What is still outstanding, named line by line. The database refuses
+              a close either way; this is so nobody discovers that only after
+              signing. */}
+          <BlockingMarksNotice template={template} answers={submissionAnswers(sub)} />
+
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Responses</h2>
             {rows.length === 0 ? (
@@ -279,6 +304,16 @@ export default function ChecklistSubmission() {
                           </p>
                         )
                       })()
+                    ) : r.marks?.length ? (
+                      // A legend answer is a MARK, not a word: it carries an
+                      // icon, a tone and a plain-English meaning, and it may be
+                      // the thing stopping the sheet being closed. Printing the
+                      // bare word threw all of that away.
+                      <div className="flex flex-wrap items-start gap-2 mt-1.5">
+                        {r.marks.map((m, i) => (
+                          <MarkChip key={`${r.id}-m${i}`} mark={m} showMeaning size="lg" />
+                        ))}
+                      </div>
                     ) : r.type === 'boolean' || typeof r.value === 'boolean' ? (
                       <p className="mt-1">
                         {r.value === true || r.value === 'true'
@@ -326,23 +361,7 @@ export default function ChecklistSubmission() {
               </div>
               <div className="flex flex-wrap gap-4">
                 {signatures.map((s) => (
-                  <div key={s.id} className="min-w-[160px]">
-                    {s.data ? (
-                      <img
-                        src={safeImageSrc(s.data) || undefined}
-                        alt={s.label}
-                        className="h-24 rounded-lg border border-[var(--border-dim)] bg-white"
-                      />
-                    ) : (
-                      <div className="h-24 rounded-lg border border-dashed border-[var(--border-dim)] flex items-center justify-center text-xs text-[var(--text-dim)]">
-                        Not signed
-                      </div>
-                    )}
-                    <p className="text-xs text-[var(--text-muted)] mt-1.5">{s.label}</p>
-                    <p className="text-sm text-[var(--text-primary)]">
-                      {s.printedName || <span className="text-[var(--text-dim)]">Name not recorded</span>}
-                    </p>
-                  </div>
+                  <SignatureView key={s.id} value={s.data} label={s.label} name={s.printedName} height={96} />
                 ))}
               </div>
             </div>
@@ -352,6 +371,17 @@ export default function ChecklistSubmission() {
         {/* Approval rail */}
         <div className="lg:col-span-1">
           <div className="lg:sticky lg:top-4 space-y-4">
+            {/* Who signed this sheet off, in the order the rules require. On a
+                two-stage template that is a supervisor THEN an area manager, and
+                each rung shows the name, the date and the signature itself. */}
+            <div className="card space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-brand-bright" />
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Sign-off</h2>
+              </div>
+              <ChecklistApprovalLadder template={template} submission={sub} />
+            </div>
+
             <EntityApprovalPanel
               entityType="checklist_submission"
               entityId={sub.id}

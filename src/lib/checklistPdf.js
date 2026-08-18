@@ -25,7 +25,7 @@ import {
   resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName,
 } from './exportUtils'
 import {
-  submissionSections, submissionSignatures, legendOptions, templateTitle,
+  submissionSections, submissionSignatures, legendOptions, templateTitle, documentNo,
   templateFieldsOf, templateFromSubmission,
 } from './checklistView'
 import { gridFields, monthlySummary, cellText, isNotOk } from './checklistMonthly'
@@ -185,6 +185,11 @@ export async function renderChecklistPdf({
       meta.push([pick(r.label, r.englishLabel, state), pick(r.text, r.text, state) || 'Not recorded'])
     }
   }
+  // The document number leads the identification block: it is the reference the
+  // filed sheet is known by. Absent when the template mints none, in which case
+  // nothing is printed rather than a placeholder somebody would go on to quote.
+  const docRef = documentNo(sub)
+  if (docRef) meta.unshift(['Document no', docRef])
   meta.push(['Submitted', fmtDateTime(sub.submitted_at || sub.created_at)])
   if (sub.site) meta.push(['Site', String(sub.site)])
   if (sub.country) meta.push(['Country', String(sub.country)])

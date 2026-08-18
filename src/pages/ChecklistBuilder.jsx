@@ -6,7 +6,7 @@ import {
   Type, AlignLeft, Hash, List, ListChecks, ToggleRight, Calendar, Star,
   Camera, PenLine, Heading, Eye, Copy, X, Info, Filter, Scale, Target,
   Truck, MapPin, User, Sparkles, Link2, Lock, FileSpreadsheet, Languages,
-  Users, Smile,
+  Users, Smile, CalendarClock, ImagePlus, Gauge,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -19,6 +19,7 @@ import {
   TRANSLATABLE_LANGS, langMeta, optionSetNames,
   missingTranslations, translationCoverage,
 } from '../lib/checklist/checklistI18n'
+import { AUTO_FILL_SOURCES, fieldOptionSet } from '../lib/checklist/checklistMarks'
 import {
   CHECKLIST_ICONS, DEFAULT_CHECKLIST_ICON,
   resolveChecklistIcon, checklistIconComponent, checklistIconLabel, isEmojiIcon,
@@ -102,6 +103,26 @@ const REFERENCE_META = {
   site:  { Icon: MapPin, noun: 'Sites', placeholder: 'Select a site…' },
   user:  { Icon: User,  noun: 'Users', placeholder: 'Select a user…' },
 }
+
+/**
+ * What each auto-fill source is called on screen.
+ *
+ * The KEYS come from AUTO_FILL_SOURCES rather than being listed again here, so a
+ * source added to the engine appears in this picker automatically. One without a
+ * friendly name falls back to its token, which is ugly and true - far better
+ * than being silently unofferable.
+ */
+const AUTO_FILL_LABELS = {
+  'asset.site': 'Site the asset belongs to',
+  'asset.fleet_no': 'Registration / fleet number',
+  'asset.registration': 'Registration number',
+  'asset.chassis_no': 'Chassis / serial number',
+  'asset.current_km': 'Current odometer reading',
+  'asset.vehicle_type': 'Vehicle type',
+  'asset.make': 'Make',
+  'asset.model': 'Model',
+}
+const AUTO_FILL_KEYS = Object.keys(AUTO_FILL_SOURCES)
 
 function referenceMeta(type) {
   const src = referenceSource(type)
@@ -1040,6 +1061,137 @@ function FieldRow({ field, index, total, expanded, error, allFields, scored, tem
             </div>
           )}
 
+          {/* How the line behaves when the sheet is filled: what fills it, what
+              locks it, and what it demands before it can be signed off. All of
+              this was settable only in SQL before now. */}
+          {!layout && (
+            <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)] space-y-3">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold">
+                On the filled sheet
+              </p>
+
+              {!isMedia && (
+                <div>
+                  <label className={`${LABEL_CLS} flex items-center gap-1.5`}>
+                    <Link2 className="w-3 h-3" /> Fill from the asset
+                  </label>
+                  <select
+                    value={field.autoFrom || ''}
+                    onChange={(e) => set('autoFrom', e.target.value || null)}
+                    className={INPUT_CLS}
+                  >
+                    <option value="">Nothing - the person types it</option>
+                    {AUTO_FILL_KEYS.map((k) => (
+                      <option key={k} value={k}>{AUTO_FILL_LABELS[k] || k}</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Taken from the asset the sheet is about, once one is picked.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {!isMedia && (
+                  <div className="p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)]">
+                    <Toggle
+                      checked={!!field.readOnly}
+                      onChange={(v) => set('readOnly', v)}
+                      disabled={!field.autoFrom}
+                      label="Read-only once filled"
+                      hint="Locked only when the register actually supplied a value"
+                    />
+                    {!field.autoFrom && (
+                      <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                        Pick a source above first. A line locked with nothing to fill it would be
+                        permanently blank and unfillable.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!isMedia && (
+                  <div className="p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)]">
+                    <Toggle
+                      checked={!!field.locked}
+                      onChange={(v) => set('locked', v)}
+                      label="Always locked"
+                      hint="Shown but never editable, whatever it holds"
+                    />
+                  </div>
+                )}
+                {(field.allow_photo || field.type === 'photo') && (
+                  <div className="p-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)]">
+                    <Toggle
+                      checked={!!field.allow_gallery}
+                      onChange={(v) => set('allow_gallery', v)}
+                      label="Allow a photo from the gallery"
+                      hint="As well as the camera"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {!isMedia && (
+                <div>
+                  <label className={`${LABEL_CLS} flex items-center gap-1.5`}>
+                    <Gauge className="w-3 h-3" /> Pair with other lines (at least one required)
+                  </label>
+                  <input
+                    type="text"
+                    value={field.group_require_one || ''}
+                    onChange={(e) => set('group_require_one', e.target.value)}
+                    placeholder="e.g. meter"
+                    className={INPUT_CLS}
+                  />
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Give two or more lines the same name and the sheet asks for at least one of them,
+                    not all. The kilometre and hour-meter readings work this way: many machines carry
+                    only one of the two, and demanding both would make the sheet unfillable for them.
+                  </p>
+                </div>
+              )}
+
+              {/* Which marks oblige a remark. Read from the answer list this line
+                  actually uses, so a shared legend and its lines cannot disagree. */}
+              {(() => {
+                const opts = fieldOptionSet(template, field)?.options
+                if (!Array.isArray(opts) || !opts.length) return null
+                const picked = Array.isArray(field.require_note_when) ? field.require_note_when.map(String) : []
+                return (
+                  <div>
+                    <label className={LABEL_CLS}>Marks that must carry a remark</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {opts.map((o) => {
+                        const on = picked.includes(String(o))
+                        return (
+                          <button
+                            key={String(o)}
+                            type="button"
+                            onClick={() => set(
+                              'require_note_when',
+                              on ? picked.filter((x) => x !== String(o)) : [...picked, String(o)],
+                            )}
+                            className={`px-2 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              on
+                                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                                : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-dim)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            {String(o)}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                      Marking a fault and saying nothing about it records no information. Needs the
+                      remarks box above to be on.
+                    </p>
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
           {/* Auto-fill + lock — only for user / date reference fields. */}
           {(field.type === 'user' || field.type === 'date') && (
             <div className="p-2.5 rounded-lg bg-[var(--surface-1)] border border-[var(--border-dim)]">
@@ -1547,6 +1699,12 @@ function blankDraft(country) {
     status: 'draft',
     require_signature: false,
     require_approval: false,
+    // A supervisor sign-off is the end unless this is on (V594).
+    require_area_manager: false,
+    // No document number and no recurrence rule until somebody sets one. NULL is
+    // the honest state: four of the six live templates carry neither.
+    doc_prefix: '',
+    min_interval_days: null,
     scored: false,
     pass_threshold: null,
     fields: [],
@@ -1576,6 +1734,12 @@ function toDraft(row, country) {
     status: row.status || 'draft',
     require_signature: !!row.require_signature,
     require_approval: !!row.require_approval,
+    require_area_manager: !!row.require_area_manager,
+    doc_prefix: row.doc_prefix || '',
+    min_interval_days:
+      row.min_interval_days == null || row.min_interval_days === ''
+        ? null
+        : Math.max(1, Math.trunc(Number(row.min_interval_days))),
     scored: !!row.scored,
     pass_threshold:
       row.pass_threshold == null || row.pass_threshold === ''
@@ -1911,6 +2075,12 @@ export default function ChecklistBuilder() {
       status,
       require_signature: !!draft.require_signature,
       require_approval: !!draft.require_approval,
+      require_area_manager: !!draft.require_area_manager,
+      // The service normalises both of these; blank and zero become NULL there,
+      // because "no rule was set" and "a rule that is always satisfied" are two
+      // different statements and must not share a stored value.
+      doc_prefix: draft.doc_prefix || null,
+      min_interval_days: draft.min_interval_days ?? null,
       scored,
       pass_threshold: scored ? passThreshold : null,
       // Translations are part of the template. This builder rebuilds every
@@ -1955,6 +2125,24 @@ export default function ChecklistBuilder() {
           visibleWhen: sanitizeVisibleWhen(f, list),
           weight,
           passValues,
+          // EVERY V594/V595 field setting has to be named here. This builder
+          // rebuilds each field from an explicit key list, so anything left out
+          // is DROPPED on save - opening the Workshop Daily Checklist and
+          // pressing Save would silently have wiped its locked date, its
+          // auto-filled site and plate, its meter pairing and its remark rule.
+          // Same trap the i18n comment above records.
+          locked: !!f.locked,
+          autoFrom: f.autoFrom ? String(f.autoFrom) : null,
+          readOnly: !!f.readOnly,
+          allow_gallery: !!f.allow_gallery,
+          group_require_one: String(f.group_require_one || '').trim() || null,
+          require_note_when: Array.isArray(f.require_note_when)
+            ? f.require_note_when.map((v) => String(v)).filter(Boolean)
+            : [],
+          // Not exposed in this editor, and carried through precisely because of
+          // that: a setting nobody can see here is the easiest one to destroy.
+          compareTo: f.compareTo ? String(f.compareTo) : null,
+          unit: f.unit ? String(f.unit) : null,
         }
       }),
     }
@@ -2183,6 +2371,66 @@ export default function ChecklistBuilder() {
                   label="Require approval"
                   hint="Route through the approval engine"
                 />
+              </div>
+            </div>
+
+            {/* Two-stage sign-off, the document number and the recurrence rule.
+                All three were settable only in SQL before this. */}
+            <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border-dim)] space-y-3">
+              <Toggle
+                checked={!!draft.require_area_manager}
+                onChange={(v) => set('require_area_manager', v)}
+                disabled={!draft.require_approval}
+                label="Needs an area manager to close"
+                hint="A supervisor sign-off is not the end: the sheet then waits for an area manager"
+              />
+              {!draft.require_approval && (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Turn on Require approval first. Without it nothing enters the sign-off queue, so a
+                  second rung would never be reached.
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--border-dim)]">
+                <div>
+                  <label className={`${LABEL_CLS} mt-2 flex items-center gap-1.5`}>
+                    <Hash className="w-3 h-3" /> Document number prefix
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.doc_prefix || ''}
+                    onChange={(e) => set('doc_prefix', e.target.value.toUpperCase())}
+                    placeholder="e.g. WDC"
+                    maxLength={12}
+                    className={INPUT_CLS}
+                  />
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                    Each sheet is numbered as PREFIX-ASSET-YEAR-0001 when it is submitted. Leave blank
+                    and it carries no document number at all.
+                  </p>
+                </div>
+                <div>
+                  <label className={`${LABEL_CLS} mt-2 flex items-center gap-1.5`}>
+                    <CalendarClock className="w-3 h-3" /> Expected days between visits
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={draft.min_interval_days ?? ''}
+                    onChange={(e) =>
+                      set(
+                        'min_interval_days',
+                        e.target.value === '' ? null : Math.max(1, Math.trunc(Number(e.target.value))),
+                      )
+                    }
+                    placeholder="e.g. 10"
+                    className={INPUT_CLS}
+                  />
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                    Warns when the same asset is checked again sooner than this. It only warns; an early
+                    check after a breakdown must still be recordable.
+                  </p>
+                </div>
               </div>
             </div>
 

@@ -90,6 +90,28 @@ const CHECKLIST = {
   id: 'cl-1', title: 'Daily Safety Check', template_name: 'Safety', asset_no: 'TRK-02',
   site: 'Jeddah', country: 'KSA', submitted_at: '2026-07-03T08:00:00Z', submitted_by: 'u-9',
   score_pct: 88, score_passed: true, approval_status: 'pending',
+  document_no: 'WDC-TRK-02-2026-0001', require_area_manager: false,
+}
+
+const INSPECTION = {
+  id: 'insp-1', title: 'Tyre inspection', inspection_type: 'Tyre', asset_no: 'TRK-03',
+  inspector: 'Ali', severity: 'Medium', site: 'Jeddah', country: 'KSA',
+  created_at: '2026-07-03T09:00:00Z', approval_status: 'pending_approval',
+}
+
+/**
+ * Draw on the signature pad. A sign-off IS a signature, and the server refuses an
+ * approval without one, so every approve path here has to go through this.
+ */
+function sign() {
+  // Queried from `screen`, not from a captured dialog: the framer-motion stub
+  // returns a fresh component identity on every access, so the drawer's whole
+  // subtree is replaced on each re-render and a node captured earlier is stale.
+  const pad = screen.getByTestId('signature-capture')
+
+  fireEvent.mouseDown(pad, { clientX: 10, clientY: 12 })
+  fireEvent.mouseMove(pad, { clientX: 60, clientY: 40 })
+  fireEvent.mouseUp(pad, { clientX: 60, clientY: 40 })
 }
 
 beforeEach(() => {
@@ -104,7 +126,7 @@ beforeEach(() => {
   queue.countDataIntakePending.mockResolvedValue(2)
   queue.approveAccidentClosure.mockResolvedValue(undefined)
   queue.rejectAccidentClosure.mockResolvedValue(undefined)
-  queue.decideChecklist.mockResolvedValue({ id: 'cl-1', approval_status: 'approved' })
+  queue.decideChecklist.mockResolvedValue({ ok: true, decision: 'approved', status: 'approved' })
   queue.listChecklistSignoffGaps.mockResolvedValue([])
   queue.listInspectionApprovals.mockResolvedValue([])
   queue.decideInspection.mockResolvedValue({ ok: true })
@@ -186,15 +208,60 @@ describe('Unified approval dashboard', () => {
     await waitFor(() => expect(queue.approveAccidentClosure).toHaveBeenCalledWith('acc-1'))
   })
 
-  it('decides a checklist submission (approve locks it)', async () => {
+  it('will not sign off a checklist until a signature is drawn, then does', async () => {
+    // The server refuses an approval that carries no signature (V597). Offering
+    // the button anyway would mean somebody presses it and is told afterwards.
     renderPage()
     await waitFor(() => expect(screen.getByText('Daily Safety Check')).toBeInTheDocument())
 
     fireEvent.click(screen.getByText('Daily Safety Check'))
-    const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: /Approve/i }))
+    await screen.findByRole('dialog')
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    expect(queue.decideChecklist).not.toHaveBeenCalled()
 
-    await waitFor(() => expect(queue.decideChecklist).toHaveBeenCalledWith('cl-1', expect.objectContaining({ approved: true })))
+    sign()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+
+    await waitFor(() => expect(queue.decideChecklist).toHaveBeenCalledWith('cl-1', expect.objectContaining({
+      approved: true,
+      signature: expect.stringContaining('<svg'),
+    })))
+  })
+
+  it('shows a supervisor rung as a hand-up, not a close, on a two-stage sheet', async () => {
+    // The owner's rule is two sign-offs. A supervisor pressing approve does NOT
+    // close the sheet, and the screen has to say so before they press it.
+    queue.listChecklistApprovals.mockResolvedValue([{ ...CHECKLIST, require_area_manager: true }])
+    queue.decideChecklist.mockResolvedValue({ ok: true, decision: 'approved', status: 'pending_area_manager' })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Daily Safety Check')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Daily Safety Check'))
+    await screen.findByRole('dialog')
+    expect(screen.getByText(/passes this sheet to the area manager/i)).toBeInTheDocument()
+
+    sign()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign off' })).not.toBeDisabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Sign off' }))
+    await waitFor(() => expect(screen.getByText(/goes to the area manager for final approval/i)).toBeInTheDocument())
+  })
+
+  it('keeps a supervisor-signed sheet in the queue and names who is holding it', async () => {
+    // Reading only 'pending' made this row vanish: the work was done and the last
+    // approval could never be asked for.
+    queue.listChecklistApprovals.mockResolvedValue([{
+      ...CHECKLIST, require_area_manager: true, approval_status: 'pending_area_manager',
+      supervisor_name: 'Mona Manager', supervisor_at: '2026-07-03T09:00:00Z',
+    }])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Daily Safety Check')).toBeInTheDocument())
+    expect(screen.getAllByText(/Waiting for the area manager/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows the document number, which is the reference the sheet is known by', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/WDC-TRK-02-2026-0001/)).toBeInTheDocument())
   })
 
   it('filters the list by search term with an honest empty state', async () => {
@@ -247,11 +314,26 @@ describe('Unified approval dashboard', () => {
     expect(screen.queryByText(/Select all/)).not.toBeInTheDocument()
   })
 
+  it('will not bulk-approve checklists, because a sign-off is a signature', async () => {
+    // A signature is given by a named person against ONE sheet, and whether a
+    // sheet may be closed depends on answers the queue row does not carry.
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Select all 2')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Select all 2'))
+    expect(screen.getByText('Approve selected').closest('button')).toBeDisabled()
+    // Returning several for correction needs no signature, so it stays available.
+    expect(screen.getByText('Return selected').closest('button')).not.toBeDisabled()
+  })
+
   it('reports a PARTIAL bulk result honestly rather than claiming success', async () => {
     // Each approval is separately permissioned and separately stateful, so some
     // succeeding and some failing is the normal case, not an edge case.
+    // Checklists are excluded from bulk approval, so this drives the two sources
+    // that can be.
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
     queue.bulkDecide.mockResolvedValue({
-      ok: [{ source: 'checklist', id: 'cl-1', title: 'Brake check' }],
+      ok: [{ source: 'inspection', id: 'insp-1', title: 'Tyre inspection' }],
       failed: [{ item: { source: 'accident_closure', id: 'ac-1', title: 'TM704 closure' }, error: 'already decided' }],
     })
     renderPage()

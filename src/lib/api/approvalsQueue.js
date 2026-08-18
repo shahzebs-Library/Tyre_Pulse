@@ -100,12 +100,32 @@ export async function rejectAccidentClosure(accidentId, reason = null) {
 // ─── Checklist sign-off approvals ───────────────────────────────────────────────
 
 const CHECKLIST_COLS =
-  'id,title,template_name,asset_no,site,country,submitted_at,submitted_by,' +
-  'score_pct,score_passed,approval_status'
+  'id,title,template_name,template_id,asset_no,site,country,submitted_at,submitted_by,' +
+  'score_pct,score_passed,approval_status,' +
+  // V594. `document_no` is the reference the sheet is known by, and the
+  // supervisor pair says whether the first rung is already behind it - without
+  // them a queue row cannot say WHO it is waiting for.
+  'document_no,supervisor_name,supervisor_at'
+
+/** The waiting states. BOTH of them - see listChecklistApprovals. */
+export const CHECKLIST_WAITING_STATUSES = ['pending', 'pending_area_manager']
 
 /**
- * Checklist submissions from `require_approval` templates still awaiting sign-off
- * (V212), oldest first. Country-scoped, RLS-scoped, degrades to [] pre-migration.
+ * Checklist submissions still awaiting sign-off, oldest first.
+ *
+ * BOTH WAITING STATES, and that is the whole point. V594 split the sign-off into
+ * a supervisor rung and an area-manager rung, so a sheet a supervisor has already
+ * signed sits at 'pending_area_manager'. Reading only 'pending' made that sheet
+ * VANISH from the queue with nobody able to close it - the work had been done and
+ * the last approval could never be asked for.
+ *
+ * The template's two-stage flag is attached from a second cheap query rather than
+ * an embedded join: the template list is tiny, and naming a PostgREST
+ * relationship is a guess that breaks silently when a constraint is renamed. A
+ * template we cannot read leaves the flag false, i.e. the single-stage default,
+ * which is what every pre-V594 template genuinely is.
+ *
+ * Country-scoped, RLS-scoped, degrades to [] pre-migration.
  * @param {{ country?: string }} [opts]
  * @returns {Promise<Array<object>>}
  */
@@ -114,11 +134,12 @@ export async function listChecklistApprovals({ country } = {}) {
     let q = supabase
       .from('checklist_submissions')
       .select(CHECKLIST_COLS)
-      .eq('approval_status', 'pending')
+      .in('approval_status', CHECKLIST_WAITING_STATUSES)
       .order('submitted_at', { ascending: true })
       .limit(500)
     q = applyCountry(q, country)
-    return unwrap(await q) || []
+    const rows = unwrap(await q) || []
+    return attachTemplateRules(rows)
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err
@@ -126,34 +147,94 @@ export async function listChecklistApprovals({ country } = {}) {
 }
 
 /**
- * Decide a checklist submission. RLS restricts UPDATE on `checklist_submissions`
- * to elevated roles (V212), so this is the client convenience over an
- * authorised write — the same shape the mobile CHECKLIST_APPROVAL command uses.
- * Approving locks the submission; rejecting requires a review note.
- * @param {string} id
- * @param {{ approved:boolean, approverName?:string|null, approverId?:string|null,
- *   reviewNote?:string|null }} decision
+ * Attach each row's `require_area_manager` so the queue can say which rung it is
+ * waiting on. Best-effort: a failure leaves the rows exactly as they arrived
+ * rather than emptying a queue over a decoration.
  */
-export async function decideChecklist(id, { approved, approverName = null, approverId = null, reviewNote = null } = {}) {
+async function attachTemplateRules(rows) {
+  const ids = Array.from(new Set(rows.map((r) => r.template_id).filter(Boolean)))
+  if (!ids.length) return rows
+  try {
+    const tpl = unwrap(await supabase
+      .from('checklist_templates')
+      .select('id,name,require_area_manager')
+      .in('id', ids)
+      .limit(500)) || []
+    const byId = new Map(tpl.map((t) => [t.id, t]))
+    return rows.map((r) => {
+      const t = byId.get(r.template_id)
+      return {
+        ...r,
+        template_name: r.template_name || t?.name || null,
+        require_area_manager: !!t?.require_area_manager,
+      }
+    })
+  } catch {
+    return rows
+  }
+}
+
+/**
+ * Decide a checklist submission through the guarded server RPC (V320, taught the
+ * second rung by V597).
+ *
+ * THE RUNG IS RESOLVED SERVER-SIDE, and it has to be. The caller says only
+ * 'approved' or 'rejected'; the function reads the template's
+ * require_area_manager and the row's own current status and decides whether that
+ * means a SUPERVISOR sign-off (-> 'pending_area_manager', writing the supervisor
+ * columns) or a FINAL approval (-> 'approved', writing the approver columns and
+ * locking the row). Hand-rolling those column writes from here is exactly what
+ * V597 had to undo: it wrote 'approved' straight from 'pending' and hit the
+ * stage trigger with a raw 22023 that nobody could act on.
+ *
+ * The response carries the status it actually reached, so a caller must use
+ * `res.status` rather than assuming a sign-off closed the sheet.
+ *
+ * A SIGNATURE IS MANDATORY on any approval - the function refuses without one.
+ * Its refusals are plain sentences ("Only an area manager can give final
+ * approval on this checklist."), so surface them as they are.
+ *
+ * A submission recorded 'not_required' never entered the queue at all (the
+ * missed-sign-off case). The RPC only moves a row that is waiting, so such a row
+ * is first enrolled into 'pending' and then decided. If the decision is then
+ * refused - a blocking mark, the wrong role - the sheet is left in the queue
+ * where it belongs rather than back in the silence it came from.
+ *
+ * @param {string} id
+ * @param {{ approved:boolean, reviewNote?:string|null, signature?:string|null,
+ *   currentStatus?:string|null }} decision
+ * @returns {Promise<{ok:boolean, decision:string, status:string}>}
+ */
+export async function decideChecklist(id, {
+  approved, reviewNote = null, signature = null, currentStatus = null,
+} = {}) {
   if (!approved && !(reviewNote && String(reviewNote).trim())) {
     throw new Error('A note is required when returning a checklist for correction.')
   }
-  const patch = {
-    approval_status: approved ? 'approved' : 'rejected',
-    approver_name: approverName ? String(approverName).slice(0, 200) : null,
-    approved_by: approverId || null,
-    approved_at: new Date().toISOString(),
-    review_note: approved ? null : String(reviewNote).trim().slice(0, 8000),
-    locked: !!approved,
+  if (approved && !String(signature ?? '').trim()) {
+    throw new Error('A signature is required to sign off this checklist.')
   }
-  return unwrap(
-    await supabase
+
+  if (currentStatus && !CHECKLIST_WAITING_STATUSES.includes(String(currentStatus))) {
+    // Put it in the queue first, so the sign-off that was skipped is now being
+    // ASKED for and then answered, through the one guarded path.
+    unwrap(await supabase
       .from('checklist_submissions')
-      .update(patch)
+      .update({ approval_status: 'pending' })
       .eq('id', id)
-      .select('id,approval_status')
-      .single(),
-  )
+      .select('id')
+      .single())
+  }
+
+  const res = unwrap(await supabase.rpc('decide_checklist_approval', {
+    p_submission_id: id,
+    p_decision: approved ? 'approved' : 'rejected',
+    p_note: reviewNote && String(reviewNote).trim() ? String(reviewNote).trim().slice(0, 8000) : null,
+    p_signature: signature ? String(signature) : null,
+  }))
+  return res && typeof res === 'object'
+    ? res
+    : { ok: true, decision: approved ? 'approved' : 'rejected', status: approved ? 'approved' : 'rejected' }
 }
 
 // ─── Inspection sign-off approvals ──────────────────────────────────────────────
@@ -286,7 +367,7 @@ export async function listChecklistSignoffGaps({ country } = {}) {
     const nameById = new Map(templates.map((t) => [t.id, t.name]))
     let q = supabase
       .from('checklist_submissions')
-      .select(CHECKLIST_COLS + ',template_id')
+      .select(CHECKLIST_COLS)
       .in('template_id', ids)
       .eq('approval_status', 'not_required')
       .order('submitted_at', { ascending: false })
@@ -318,7 +399,7 @@ export async function listChecklistSignoffGaps({ country } = {}) {
  *
  * @param {Array<object>} items  approval items carrying { id, source }
  * @param {'approve'|'reject'} action
- * @param {{ reason?:string, approverName?:string, approverId?:string }} [opts]
+ * @param {{ reason?:string, signature?:string }} [opts]
  * @returns {Promise<{ ok:Array, failed:Array<{item:object, error:string}> }>}
  */
 export async function bulkDecide(items, action, opts = {}) {
@@ -338,9 +419,13 @@ export async function bulkDecide(items, action, opts = {}) {
       } else if (item.source === 'checklist') {
         await decideChecklist(item.id, {
           approved: approve,
-          approverName: opts.approverName || null,
-          approverId: opts.approverId || null,
           reviewNote: approve ? null : (opts.reason || null),
+          // One signature drawn once and applied to the batch is the same person
+          // signing each sheet, which is what a batch sign-off IS. Without one
+          // the server refuses every row, so a caller that cannot supply it must
+          // not offer bulk approval.
+          signature: approve ? (opts.signature || null) : null,
+          currentStatus: item.raw?.approval_status || null,
         })
       } else {
         throw new Error('This approval type cannot be decided in bulk.')

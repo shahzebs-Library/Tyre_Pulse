@@ -18,7 +18,15 @@ import ApprovalStatusBadge from '../components/workflow/ApprovalStatusBadge'
 import ApprovalAction from '../components/workflow/ApprovalAction'
 import ApprovalTrail from '../components/workflow/ApprovalTrail'
 import ChecklistAnswers from '../components/checklist/ChecklistAnswers'
+import SignatureCapture from '../components/checklist/SignatureCapture'
+import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
+import ChecklistApprovalLadder from '../components/checklist/ChecklistApprovalLadder'
 import { stepRequirements } from '../lib/workflow/stepRequirements'
+import {
+  canDecide, stageFor, stageLabel, statusSummary, isTwoStage, STAGE_SUPERVISOR,
+} from '../lib/checklist/checklistApproval'
+import { canClose } from '../lib/checklist/checklistMarks'
+import { templateFromSubmission, submissionAnswers } from '../lib/checklistView'
 
 // ─── Source taxonomy ────────────────────────────────────────────────────────────
 // The unified queue merges the V95 workflow engine with the other real
@@ -156,6 +164,9 @@ function toSignoffGapItem(c) {
   return {
     source: SOURCE.signoff_gap,
     id: c.id,
+    documentNo: c.document_no || null,
+    stage: null,
+    twoStage: isTwoStage(templateRulesOf(c)),
     title: c.title || c.template_name || 'Checklist submission',
     subtitle: `${c.template_name || 'Template requires sign-off'} - submitted without approval`
       + (c.asset_no ? ` - ${c.asset_no}` : ''),
@@ -166,13 +177,29 @@ function toSignoffGapItem(c) {
   }
 }
 
+/**
+ * The approval RULES for a queue row, in the shape the shared helpers read.
+ *
+ * `require_area_manager` is the template's, carried onto the row by the service.
+ * Absent it resolves false - the single-stage default, which is what every
+ * template built before V594 genuinely is - so a row we could not read the
+ * template for is never wrongly described as needing a second signature.
+ */
+function templateRulesOf(raw) {
+  return { require_area_manager: !!raw?.require_area_manager }
+}
+
 function toChecklistItem(c) {
   const title = c.title || c.template_name || 'Checklist submission'
+  const stage = stageFor(templateRulesOf(c), c)
   return {
     source: SOURCE.checklist,
     id: c.id,
     title,
     subtitle: [
+      // The document number is the reference the sheet is known by, so it leads
+      // the line. A template that mints none contributes nothing here.
+      c.document_no || null,
       c.template_name && c.template_name !== title ? c.template_name : null,
       c.asset_no && `Asset ${c.asset_no}`,
       c.score_pct != null ? `Score ${c.score_pct}%` : null,
@@ -181,7 +208,12 @@ function toChecklistItem(c) {
     site: c.site || null,
     country: c.country || null,
     created_at: c.submitted_at || null,
-    status: 'pending',
+    status: c.approval_status || 'pending',
+    // Which rung this row is waiting on, and how that reads to a person.
+    stage,
+    stageSummary: statusSummary(templateRulesOf(c), c),
+    twoStage: isTwoStage(templateRulesOf(c)),
+    documentNo: c.document_no || null,
     raw: c,
     scorePassed: c.score_passed,
   }
@@ -354,8 +386,11 @@ function GenericRow({ item, onOpen, selectable = false, picked = false, onToggle
           <AlertOctagon className="w-3 h-3" /> Never asked
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30">
-          <Clock className="w-3 h-3" /> Pending
+        // "Pending" told the reader nothing about WHO is holding it. A checklist
+        // says which rung it is waiting on, which is the whole point of the
+        // second stage existing.
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold bg-amber-500/15 text-amber-300 border-amber-500/30 whitespace-nowrap">
+          <Clock className="w-3 h-3" /> {item.stageSummary?.text || 'Pending'}
         </span>
       )}
       <ChevronRight className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
@@ -461,14 +496,71 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const { profile } = useAuth()
+  // The full submission, once the answers panel below has loaded it. Everything
+  // about a checklist decision - which rung, whether it can be closed at all -
+  // is read from the record itself rather than guessed from the queue row.
+  const [loadedSub, setLoadedSub] = useState(null)
+  const [signature, setSignature] = useState(null)
+  // A checklist decision leaves the drawer OPEN and swaps the buttons for what
+  // happened. On a two-stage sheet "approved" does not mean closed, and a drawer
+  // that simply vanishes lets a supervisor believe it did.
+  const [decided, setDecided] = useState(false)
+
+  const isChecklistish = item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap
 
   // A checklist return requires a note (the service enforces it), and a
   // retrospective sign-off is the same writer, so the same rule applies.
-  const rejectNeedsReason = item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap
+  const rejectNeedsReason = isChecklistish
+
+  // The template's approval rules: from the loaded record when it is here, from
+  // the queue row until then. Both resolve to the single-stage default when the
+  // template is unreadable, so nobody is offered a rung that does not exist.
+  const template = useMemo(
+    () => (loadedSub ? templateFromSubmission(loadedSub) : null) || templateRulesOf(item.raw),
+    [loadedSub, item.raw],
+  )
+  const subject = loadedSub || item.raw
+
+  // A missed sign-off never entered the queue, so it has no stage of its own: it
+  // is enrolled at the FIRST rung and decided there.
+  const stage = (isChecklistish && (stageFor(template, subject) || STAGE_SUPERVISOR)) || null
+
+  // Would approving CLOSE the sheet, or only pass it up? Only a close is barred
+  // by an outstanding fault, and only a close needs an area manager.
+  const wouldClose = isChecklistish && !(stage === STAGE_SUPERVISOR && isTwoStage(template))
+
+  const closeCheck = useMemo(
+    () => (loadedSub ? canClose(template, submissionAnswers(loadedSub)) : { ok: true, blocking: [] }),
+    [loadedSub, template],
+  )
+
+  // Show the button only to somebody the server would actually let act. The RPC
+  // refuses either way; this is so a refusal is not the first anyone hears of it.
+  const mayDecideChecklist = isChecklistish && canDecide(
+    template,
+    { ...subject, approval_status: stageFor(template, subject) ? subject?.approval_status : 'pending' },
+    profile?.role,
+    { isSuperAdmin: !!profile?.is_super_admin },
+  )
+  const mayAct = isChecklistish ? mayDecideChecklist : canAct
+
+  // Everything that stops the approve button, said in one place.
+  const approveBlockedReason = !isChecklistish ? null
+    : (wouldClose && !closeCheck.ok)
+      ? 'This sheet still has items marked as a fault, so it cannot be closed yet.'
+      : !signature
+        ? 'Draw a signature to sign this off.'
+        : null
 
   async function act(approved) {
     if (!approved && rejectNeedsReason && !reason.trim()) {
       setFeedback({ kind: 'error', text: 'A note is required when returning this for correction.' })
+      return
+    }
+    // The database refuses both of these too; refusing here means nobody signs
+    // first and finds out afterwards.
+    if (approved && approveBlockedReason) {
+      setFeedback({ kind: 'error', text: approveBlockedReason })
       return
     }
     setBusy(true)
@@ -481,17 +573,33 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
         // Guarded server RPC: approver identity + timestamp derived server-side,
         // optimistic "already decided" protection, approve locks the record.
         await queue.decideInspection(item.id, { approved, reviewNote: reason })
-      } else if (item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap) {
-        // A gap goes through the SAME writer: recording the decision now moves it
-        // out of not_required and stamps who signed it. There is no second path,
-        // so a retrospective sign-off is indistinguishable from a timely one in
-        // the record except by its submitted date, which is the honest outcome.
-        await queue.decideChecklist(item.id, {
+      } else if (isChecklistish) {
+        // A gap goes through the SAME writer: recording the decision now enrols
+        // it into the queue and answers it. There is no second path, so a
+        // retrospective sign-off is indistinguishable from a timely one in the
+        // record except by its submitted date, which is the honest outcome.
+        //
+        // The server decides WHICH rung this is and returns the status it
+        // actually reached, so the message below reports what happened rather
+        // than assuming the sheet is closed.
+        const res = await queue.decideChecklist(item.id, {
           approved,
-          approverName: profile?.full_name || profile?.username || null,
-          approverId: profile?.id || null,
           reviewNote: reason,
+          signature: approved ? signature : null,
+          currentStatus: subject?.approval_status || null,
         })
+        const reached = String(res?.status || (approved ? 'approved' : 'rejected'))
+        setFeedback({
+          kind: 'success',
+          text: reached === 'pending_area_manager'
+            ? 'Signed off. It now goes to the area manager for final approval.'
+            : reached === 'approved'
+              ? 'Approved and closed.'
+              : 'Sent back for correction.',
+        })
+        setDecided(true)
+        onActed?.({ keepOpen: true })
+        return
       }
       setFeedback({ kind: 'success', text: approved ? 'Approved successfully.' : 'Returned / rejected successfully.' })
       onActed?.()
@@ -527,8 +635,13 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
         ['Submitted', relTime(item.created_at)],
       ]
     : [
+        // The document number is the sheet's reference. Absent when the template
+        // mints none, in which case the row is simply not shown.
+        ['Document no', item.documentNo],
         ['Template', item.raw.template_name],
         ['Asset', item.raw.asset_no],
+        ['Waiting on', isChecklistish && stage ? stageLabel(stage) : null],
+        ['Supervisor', item.raw.supervisor_name],
         ['Score', item.raw.score_pct != null ? `${item.raw.score_pct}%` : null],
         ['Result', item.scorePassed == null ? null : (item.scorePassed ? 'Passed' : 'Failed')],
         ['Site', item.site],
@@ -567,20 +680,59 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
           name and a score and nothing else - to read the answers they had to
           leave the queue or download the PDF, so in practice the sign-off was
           made on a number. The answers now sit above the decision buttons. */}
-      {(item.source === SOURCE.checklist || item.source === SOURCE.signoff_gap) && (
+      {isChecklistish && (
         <section>
           <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">
             What was recorded
           </h3>
-          <ChecklistAnswers submissionId={item.id} showSummary={false} />
+          {/* onLoaded hands the full record up, which is what makes the decision
+              below honest: the outstanding faults and the rung are read from the
+              submission, not guessed from the queue row. */}
+          <ChecklistAnswers
+            submissionId={item.id}
+            showSummary={false}
+            onLoaded={setLoadedSub}
+            /* The ladder and the outstanding-fault notice are rendered once, in
+               the Sign-off section beside the buttons they govern. */
+            showApproval={false}
+          />
         </section>
       )}
 
-      {canAct ? (
+      {/* How far this sheet has got, and what is still stopping it closing. */}
+      {isChecklistish && (
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+            <ClipboardCheck className="w-3.5 h-3.5" /> Sign-off
+          </h3>
+          <ChecklistApprovalLadder template={template} submission={subject} compact />
+          {loadedSub && wouldClose && (
+            <BlockingMarksNotice template={template} answers={submissionAnswers(loadedSub)} />
+          )}
+        </section>
+      )}
+
+      {decided ? (
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+          >
+            Close
+          </button>
+        </div>
+      ) : mayAct ? (
         <section>
           <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
             <ClipboardList className="w-3.5 h-3.5" /> Decision
           </h3>
+          {isChecklistish && stage && (
+            <p className="text-xs text-[var(--text-muted)] mb-2">
+              {wouldClose
+                ? 'Approving CLOSES this sheet. Nothing further is asked for.'
+                : 'Approving passes this sheet to the area manager for final approval. It is not closed yet.'}
+            </p>
+          )}
           <textarea
             value={reason}
             onChange={e => setReason(e.target.value)}
@@ -592,6 +744,25 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
             }
             className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
           />
+
+          {/* A sign-off IS a signature. The server refuses an approval without
+              one, so it is captured here rather than surfaced as a refusal after
+              the fact. Returning a sheet for correction needs only the note. */}
+          {isChecklistish && (
+            <div className="mt-3">
+              <SignatureCapture
+                label={wouldClose ? 'Final approval signature' : 'Supervisor signature'}
+                onChange={setSignature}
+              />
+            </div>
+          )}
+
+          {isChecklistish && approveBlockedReason && (
+            <p className="text-xs text-amber-400 mt-2 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {approveBlockedReason}
+            </p>
+          )}
+
           <div className="flex gap-2 mt-3">
             <button
               onClick={() => act(false)}
@@ -603,18 +774,21 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
             </button>
             <button
               onClick={() => act(true)}
-              disabled={busy}
+              disabled={busy || !!approveBlockedReason}
+              title={approveBlockedReason || undefined}
               className="flex-[2] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-[var(--text-primary)] bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-900/30 disabled:opacity-50 transition-all"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              Approve
+              {isChecklistish && !wouldClose ? 'Sign off' : 'Approve'}
             </button>
           </div>
         </section>
       ) : (
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--input-border)] text-sm text-[var(--text-secondary)]">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-          You need an Admin, Manager or Director role to action this item.
+          {isChecklistish && stage
+            ? `This sheet is waiting for ${stageLabel(stage).toLowerCase()}, which your role cannot give.`
+            : 'You need an Admin, Manager or Director role to action this item.'}
         </div>
       )}
     </DrawerShell>
@@ -904,6 +1078,20 @@ export default function Approvals() {
   )
   const allPicked = bulkableList.length > 0 && pickedItems.length === bulkableList.length
 
+  // A CHECKLIST CANNOT BE APPROVED IN BULK, and this is a rule rather than a
+  // limitation. A sign-off is a signature given by a named person against one
+  // sheet, and the server refuses an approval that carries no signature. Worse,
+  // whether a sheet may be closed at all depends on its own answers - a single
+  // item still marked as a fault blocks it - and the queue row does not carry
+  // them, so a bulk approve could not warn about the one thing that matters. It
+  // would simply fail on every row it should have failed on, and silently close
+  // the rest. Returning several for correction is different: it needs one shared
+  // reason and no signature, so it stays.
+  const pickedChecklists = useMemo(
+    () => pickedItems.filter(i => i.source === SOURCE.checklist),
+    [pickedItems],
+  )
+
   const togglePick = useCallback((item) => {
     setBulk(b => ({ ...b, result: null }))
     setPicked(prev => {
@@ -933,11 +1121,11 @@ export default function Approvals() {
     }
     setBulk({ busy: true, result: null })
     try {
-      const res = await queue.bulkDecide(pickedItems, action, {
-        reason,
-        approverName: profile?.full_name || profile?.email || null,
-        approverId: profile?.id || null,
-      })
+      // No signature is passed, and none is needed: checklists cannot be
+      // approved in bulk (see pickedChecklists), and returning one for
+      // correction asks only for the shared reason. The approver's identity is
+      // taken server-side from the session, never from the client.
+      const res = await queue.bulkDecide(pickedItems, action, { reason })
       setBulk({ busy: false, result: { ...res, action } })
       setPicked(new Set())
       await load()
@@ -1138,10 +1326,19 @@ export default function Approvals() {
                       individually
                     </span>
                   )}
+                  {pickedChecklists.length > 0 && (
+                    <span className="text-[11px] text-amber-400">
+                      A checklist sign-off needs a signature, so open each one to approve it. They can
+                      still be returned together.
+                    </span>
+                  )}
                   <div className="ml-auto flex items-center gap-2">
                     <button
                       onClick={() => runBulk('approve')}
-                      disabled={!pickedItems.length || bulk.busy}
+                      disabled={!pickedItems.length || bulk.busy || pickedChecklists.length > 0}
+                      title={pickedChecklists.length > 0
+                        ? 'A checklist sign-off needs a signature against that sheet, so open each one to approve it.'
+                        : undefined}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-300 border border-green-500/30 hover:bg-green-500/25 disabled:opacity-40"
                     >
                       {bulk.busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -1219,7 +1416,7 @@ export default function Approvals() {
             item={selectedGeneric}
             canAct={canActNonWorkflow}
             onClose={() => setSelectedGeneric(null)}
-            onActed={() => { setSelectedGeneric(null); load() }}
+            onActed={(opts) => { if (!opts?.keepOpen) setSelectedGeneric(null); load() }}
           />
         )}
       </AnimatePresence>

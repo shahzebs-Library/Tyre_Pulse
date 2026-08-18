@@ -15,6 +15,7 @@
 
 import { isLayoutField } from './checklist/fieldTypes'
 import { fieldLabel, optionLabel, templateName } from './checklist/checklistI18n'
+import { fieldOptionSet, markMeta, blockingMarks } from './checklist/checklistMarks'
 
 /**
  * True when a field is page furniture and carries no answer of its own.
@@ -103,6 +104,24 @@ export function templateFieldsOf(sub, template) {
   return null
 }
 
+/**
+ * The sheet's own reference, or null.
+ *
+ * `document_no` is minted server-side at insert from the template's prefix, so a
+ * template that carries no prefix has no number and must render NOTHING rather
+ * than a placeholder - a blank reference invented on screen is worse than an
+ * absent one, because somebody will quote it.
+ */
+export function documentNo(sub) {
+  const s = String(sub?.document_no ?? '').trim()
+  return s || null
+}
+
+/** The answers map, keyed by field id. Always an object, never null. */
+export function submissionAnswers(sub) {
+  return sub?.answers && typeof sub.answers === 'object' && !Array.isArray(sub.answers) ? sub.answers : {}
+}
+
 /** The per-line remarks map. Always an object, never null. */
 export function submissionNotes(sub) {
   return sub?.notes && typeof sub.notes === 'object' && !Array.isArray(sub.notes) ? sub.notes : {}
@@ -119,9 +138,7 @@ function photosOf(sub) {
   return sub?.photos && typeof sub.photos === 'object' && !Array.isArray(sub.photos) ? sub.photos : {}
 }
 
-function answersOf(sub) {
-  return sub?.answers && typeof sub.answers === 'object' && !Array.isArray(sub.answers) ? sub.answers : {}
-}
+const answersOf = submissionAnswers
 
 /**
  * True when the field carries something a reader must see.
@@ -171,6 +188,35 @@ export function labelOf(field, lang = 'en') {
 }
 
 /**
+ * What the marks on one line MEAN.
+ *
+ * A checklist answer is not free text - it is a mark from the sheet's own legend,
+ * and since V595 that legend carries an icon, a tone and a plain-English meaning
+ * per mark. Rendering the bare word "Not OK" throws all three away, and throws
+ * away the one fact that matters most: that this mark BLOCKS the sheet being
+ * closed.
+ *
+ * Returns one entry per selected value (a multiselect answers with several), so a
+ * caller never has to guess whether it is holding a value or a list. An empty
+ * array means this line answers no legend at all - a meter reading, a name, a
+ * date - and must render as plain text.
+ */
+export function rowMarks(field, value, template) {
+  const set = fieldOptionSet(template, field)
+  // A plain list of choices is NOT a legend of marks. Only a set that declares
+  // mark semantics - a meaning per option, or an option that blocks a close -
+  // gets drawn with an icon and a tone. Treating every dropdown as a legend
+  // would stamp a grey "not applicable" icon on ordinary answers and assert a
+  // meaning the template never gave them.
+  if (!set || (!Array.isArray(set.meta) && !Array.isArray(set.blocking))) return []
+  const blocking = blockingMarks(set)
+  const values = Array.isArray(value) ? value : [value]
+  return values
+    .filter((v) => v != null && String(v).trim() !== '')
+    .map((v) => ({ ...markMeta(set, v), blocking: blocking.includes(String(v)) }))
+}
+
+/**
  * The submission as the paper sheet reads: an ordered list of sections, each
  * holding its lines.
  *
@@ -197,6 +243,9 @@ export function submissionSections(sub, {
     photos: Array.isArray(photos[field.id]) ? photos[field.id] : [],
     note: typeof notes[field.id] === 'string' && notes[field.id].trim() ? notes[field.id].trim() : null,
     answered: fieldHasContent(field, answers, photos, notes),
+    // Empty for any line that is not answered from a legend, so a reader can
+    // simply ask "does this row have marks?" rather than inspecting the type.
+    marks: rowMarks(field, answers[field.id], template),
     line: index,
   })
 
@@ -328,7 +377,10 @@ export function templateTitle(template, sub, lang = 'en') {
 export function templateFromSubmission(sub) {
   const fields = templateFieldsOf(sub, null)
   const i18n = sub?.template_i18n && typeof sub.template_i18n === 'object' ? sub.template_i18n : {}
-  if (!fields && !Object.keys(i18n).length) return null
+  const settings = sub?.template_settings && typeof sub.template_settings === 'object'
+    ? sub.template_settings
+    : {}
+  if (!fields && !Object.keys(i18n).length && !Object.keys(settings).length) return null
   return {
     id: sub?.template_id ?? null,
     name: sub?.template_name ?? null,
@@ -336,5 +388,12 @@ export function templateFromSubmission(sub) {
     option_sets: i18n.option_sets || {},
     name_i18n: i18n.name_i18n || {},
     description_i18n: i18n.description_i18n || {},
+    // The approval rules, so isTwoStage() / approvalProgress() read the same
+    // ladder here as they do from a freshly fetched template. Absent settings
+    // resolve to the single-stage default, which is what every template built
+    // before V594 genuinely is.
+    require_area_manager: !!settings.require_area_manager,
+    doc_prefix: settings.doc_prefix ?? null,
+    min_interval_days: settings.min_interval_days ?? null,
   }
 }

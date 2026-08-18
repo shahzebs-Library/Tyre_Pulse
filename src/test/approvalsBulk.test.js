@@ -39,34 +39,48 @@ beforeEach(() => { rpc.mockReset(); from.mockReset() })
 
 describe('bulkDecide', () => {
   it('approves each item through its own authorised path', async () => {
-    rpc.mockResolvedValue({ data: null, error: null })
-    const updates = []
+    rpc.mockResolvedValue({ data: { ok: true, status: 'approved' }, error: null })
     from.mockImplementation(() => builder({ data: { id: 'x', approval_status: 'approved' }, error: null }))
 
     const res = await queue.bulkDecide([
       { source: 'accident_closure', id: 'ac-1' },
-      { source: 'checklist', id: 'cl-1' },
-    ], 'approve', { approverName: 'Mona', approverId: 'u-1' })
+      { source: 'checklist', id: 'cl-1', raw: { approval_status: 'pending' } },
+    ], 'approve', { signature: '<svg/>' })
 
     expect(res.ok).toHaveLength(2)
     expect(res.failed).toHaveLength(0)
-    // The closure goes through the SECURITY DEFINER RPC, which enforces the role
-    // server-side. A client-side role check would not be a boundary.
+    // Both go through a SECURITY DEFINER RPC, which enforces the role server-side.
+    // A client-side role check would not be a boundary. The checklist one also
+    // resolves WHICH rung the decision means, which the client must not guess.
     expect(rpc).toHaveBeenCalledWith('approve_accident_closure', { p_accident_id: 'ac-1' })
-    void updates
+    expect(rpc).toHaveBeenCalledWith('decide_checklist_approval', expect.objectContaining({
+      p_submission_id: 'cl-1', p_decision: 'approved', p_signature: '<svg/>',
+    }))
+  })
+
+  it('refuses a checklist sign-off that carries no signature', async () => {
+    // The server refuses it too. Refusing here means the batch does not report a
+    // sign-off that never happened.
+    rpc.mockResolvedValue({ data: { ok: true, status: 'approved' }, error: null })
+    const res = await queue.bulkDecide([{ source: 'checklist', id: 'cl-1' }], 'approve')
+    expect(res.ok).toHaveLength(0)
+    expect(res.failed[0].error).toMatch(/signature is required/i)
+    expect(rpc).not.toHaveBeenCalledWith('decide_checklist_approval', expect.anything())
   })
 
   it('keeps going after one item fails, and reports which', async () => {
     // THE CONTRACT. Approvals are individually stateful: one may have been decided
     // by someone else a second ago. Aborting the batch would throw away eleven
     // legitimate decisions because of one; claiming success would be a lie.
-    rpc.mockRejectedValue(Object.assign(new Error('already decided'), { code: 'P0001' }))
+    rpc.mockImplementation((name) => (name === 'approve_accident_closure'
+      ? Promise.reject(Object.assign(new Error('already decided'), { code: 'P0001' }))
+      : Promise.resolve({ data: { ok: true, status: 'approved' }, error: null })))
     from.mockImplementation(() => builder({ data: { id: 'cl-1' }, error: null }))
 
     const res = await queue.bulkDecide([
       { source: 'accident_closure', id: 'ac-1', title: 'TM704' },
-      { source: 'checklist', id: 'cl-1', title: 'Brake check' },
-    ], 'approve')
+      { source: 'checklist', id: 'cl-1', title: 'Brake check', raw: { approval_status: 'pending' } },
+    ], 'approve', { signature: '<svg/>' })
 
     expect(res.ok.map((i) => i.id)).toEqual(['cl-1'])
     expect(res.failed).toHaveLength(1)
@@ -83,6 +97,7 @@ describe('bulkDecide', () => {
   })
 
   it('requires a reason before returning a checklist, per item', async () => {
+    rpc.mockResolvedValue({ data: { ok: true, status: 'rejected' }, error: null })
     from.mockImplementation(() => builder({ data: null, error: null }))
     const res = await queue.bulkDecide([{ source: 'checklist', id: 'cl-1' }], 'reject')
     expect(res.ok).toHaveLength(0)

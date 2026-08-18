@@ -17,7 +17,12 @@ const TEMPLATE_COLS =
   // NULL or empty = every role, which is what all pre-V591 templates carry, so a
   // reader that omitted this column would render every checklist as untargeted.
   // This is TARGETING, not a security boundary - see src/lib/checklist/checklistRoles.js.
-  + 'assignee_roles'
+  + 'assignee_roles,'
+  // V594. require_area_manager says a supervisor sign-off is NOT the end;
+  // doc_prefix mints the sheet's document number at insert; min_interval_days is
+  // the advisory recurrence rule. Omitting them made every template read as
+  // single-stage and un-numbered, which is the opposite of what two of them are.
+  + 'require_area_manager,doc_prefix,min_interval_days'
 // Approval columns (V212) are part of the row a reader needs: a checklist that
 // was rejected, or is still waiting for a signature, reads very differently from
 // one that was accepted, and leaving them out made every submission look final.
@@ -30,7 +35,15 @@ const SUBMISSION_COLS =
   // per-line remark. Both sit beside `answers` rather than inside it, because
   // `answers` is rendered as a table in the viewer, the PDF and Excel, where a
   // base64 image prints as a wall of characters.
-  + 'signatures,notes'
+  + 'signatures,notes,'
+  // The FINAL approver's drawn signature. It has existed since V212 and was
+  // never selected, so every approval rendered as unsigned - a sign-off that
+  // looks like it was never given.
+  + 'approver_signature,'
+  // V594 two-stage sign-off. `document_no` is the sheet's reference, minted
+  // server-side at insert; the supervisor_* group is the FIRST rung, and
+  // approver_* is now the FINAL one (the area manager on a two-stage sheet).
+  + 'document_no,supervisor_name,supervisor_signature,supervisor_by,supervisor_at'
 
 const PHOTO_BUCKET = 'tyre-photos' // shared media bucket (private — served via signed URLs)
 const SIGNED_URL_TTL_SECONDS = 60 * 60
@@ -117,6 +130,30 @@ export function normaliseAssigneeRoles(value) {
   return out.length ? out : null
 }
 
+/**
+ * A document-number prefix as it is stored: upper case, no spaces or punctuation
+ * beyond a hyphen, blank -> NULL. NULL is meaningful - it says this template does
+ * not carry a document number at all, which is the state four of the six live
+ * templates are in.
+ */
+export function normaliseDocPrefix(value) {
+  const s = String(value ?? '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '')
+  return s ? s.slice(0, 12) : null
+}
+
+/**
+ * The recurrence rule in whole days, or NULL when there is none.
+ *
+ * Zero and a negative are NULL rather than 0, because `min_interval_days = 0`
+ * would read as a rule that is always satisfied while meaning "no rule was set" -
+ * two different statements that must not share a stored value.
+ */
+export function normaliseMinIntervalDays(value) {
+  if (value == null || value === '') return null
+  const n = Math.trunc(Number(value))
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 3650) : null
+}
+
 /** Create a template. `fields` is the embedded field array. Returns the new row. */
 export async function createTemplate(values) {
   const payload = {
@@ -133,6 +170,12 @@ export async function createTemplate(values) {
     require_approval: !!values.require_approval,
     scored: !!values.scored,
     pass_threshold: values.pass_threshold ?? null,
+    // Two-stage sign-off, the document-number prefix and the recurrence rule.
+    // Each default matches the column default exactly, so a caller that says
+    // nothing about them creates the same template it did before V594.
+    require_area_manager: !!values.require_area_manager,
+    doc_prefix: normaliseDocPrefix(values.doc_prefix),
+    min_interval_days: normaliseMinIntervalDays(values.min_interval_days),
     fields: Array.isArray(values.fields) ? values.fields : [],
     name_i18n: values.name_i18n ?? {},
     description_i18n: values.description_i18n ?? {},
@@ -148,6 +191,12 @@ export async function updateTemplate(id, patch) {
   // Only normalise when the caller actually sent the key: a patch that does not
   // mention targeting (publish, archive) must leave the stored value alone.
   if ('assignee_roles' in clean) clean.assignee_roles = normaliseAssigneeRoles(clean.assignee_roles)
+  // Same rule for the V594 settings: normalise ONLY what the caller sent, so
+  // publishTemplate / archiveTemplate cannot blank a prefix or a recurrence rule
+  // on their way past.
+  if ('require_area_manager' in clean) clean.require_area_manager = !!clean.require_area_manager
+  if ('doc_prefix' in clean) clean.doc_prefix = normaliseDocPrefix(clean.doc_prefix)
+  if ('min_interval_days' in clean) clean.min_interval_days = normaliseMinIntervalDays(clean.min_interval_days)
   return unwrap(await supabase.from('checklist_templates').update(clean).eq('id', id).select(TEMPLATE_COLS).single())
 }
 
@@ -176,6 +225,14 @@ export async function duplicateTemplate(id) {
     require_approval: src.require_approval,
     scored: src.scored,
     pass_threshold: src.pass_threshold,
+    require_area_manager: !!src.require_area_manager,
+    min_interval_days: src.min_interval_days ?? null,
+    // The PREFIX is deliberately NOT copied. Document numbers are counted per
+    // (prefix, asset, year), so a copy sharing its parent's prefix would file
+    // two different forms into one reference series and nobody reading
+    // WDC-TM514-2026-0007 could tell which sheet it is. The copy is a draft; its
+    // owner gives it a prefix of its own.
+    doc_prefix: null,
     fields: src.fields || [],
     // Carry the translations across: a copy that silently loses its Arabic,
     // Hindi and Urdu is not a copy of the checklist anyone approved.
@@ -223,8 +280,18 @@ export async function getSubmission(id) {
   if (row && row.template_id) {
     try {
       const tpl = unwrap(await supabase.from('checklist_templates')
-        .select('fields,option_sets,name_i18n,description_i18n').eq('id', row.template_id).maybeSingle())
+        .select('fields,option_sets,name_i18n,description_i18n,require_area_manager,doc_prefix,min_interval_days')
+        .eq('id', row.template_id).maybeSingle())
       if (tpl && Array.isArray(tpl.fields)) row.template_fields = tpl.fields
+      // The approval RULES travel with the submission too. Without them a reader
+      // cannot tell a two-stage sheet from a one-stage one, so a supervisor
+      // signature and a final approval would render as the same event - exactly
+      // the confusion V594 exists to remove.
+      if (tpl) row.template_settings = {
+        require_area_manager: !!tpl.require_area_manager,
+        doc_prefix: tpl.doc_prefix ?? null,
+        min_interval_days: tpl.min_interval_days ?? null,
+      }
       // The shared option sets + template translations travel with the fields so
       // a reader can render the stored (English) answers in the reader's own
       // language without a second fetch.

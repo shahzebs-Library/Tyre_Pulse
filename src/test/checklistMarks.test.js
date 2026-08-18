@@ -202,6 +202,44 @@ describe('the 10-day rule', () => {
   })
 })
 
+describe('a hidden line must not demand the impossible, but must still block', () => {
+  // A conditional sheet - the Predictive Maintenance template already uses
+  // visibleWhen on 197 fields, so this is not hypothetical.
+  const COND = {
+    option_sets: { legend: LEGEND },
+    fields: [
+      { id: 'interval', type: 'select', label: 'Interval', options: ['250h', '500h'] },
+      { id: 'c500', type: 'select', label: '500h only check', options_ref: 'legend',
+        require_note_when: ['Not OK'], visibleWhen: { field: 'interval', op: '=', value: '500h' } },
+      { id: 'km500', type: 'number', label: 'Km', group_require_one: 'meter',
+        visibleWhen: { field: 'interval', op: '=', value: '500h' } },
+    ],
+  }
+
+  it('does not demand a remark on a line the operator cannot see', () => {
+    // The stale 'Not OK' is left over from when 500h was selected. Demanding a
+    // remark for it now is a demand nobody can satisfy: the row is not on screen.
+    const answers = { interval: '250h', c500: 'Not OK' }
+    expect(missingNotes(COND, answers, {})).toEqual([])
+    // ...and it IS demanded once the line is visible again.
+    expect(missingNotes(COND, { interval: '500h', c500: 'Not OK' }, {}).map((x) => x.id)).toEqual(['c500'])
+  })
+
+  it('does not demand a meter reading from a hidden group', () => {
+    expect(unsatisfiedGroups(COND, { interval: '250h' })).toEqual([])
+    expect(unsatisfiedGroups(COND, { interval: '500h' })).toHaveLength(1)
+  })
+
+  it('BUT a hidden answer still blocks the close, because the database says so', () => {
+    // guard_checklist_approval_stages scans the whole answers object and knows
+    // nothing about visibility. If this side skipped the hidden line, the screen
+    // would say "closable" and the server would refuse with a raw 22023 the
+    // approver cannot act on. Agreeing with the database beats being clever.
+    expect(canClose(COND, { interval: '250h', c500: 'Not OK' }).ok).toBe(false)
+    expect(blockingAnswers(COND, { interval: '250h', c500: 'Not OK' }).map((x) => x.id)).toEqual(['c500'])
+  })
+})
+
 describe('the mobile mirror does not drift', () => {
   const web = readFileSync(resolve(__dirname, '../lib/checklist/checklistMarks.js'), 'utf8')
   const mob = readFileSync(resolve(__dirname, '../../mobile/lib/checklistMarks.ts'), 'utf8')

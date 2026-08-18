@@ -1,3 +1,5 @@
+import { isFieldVisible } from './checklistFields'
+
 /**
  * checklistMarks - MOBILE MIRROR of src/lib/checklist/checklistMarks.js.
  *
@@ -135,6 +137,27 @@ function answerableFields(template?: TemplateLike | null): FieldLike[] {
 }
 
 /**
+ * The same list, minus fields a `visibleWhen` rule is currently hiding.
+ *
+ * WHY THIS IS NOT USED EVERYWHERE, and the distinction is load-bearing:
+ *
+ *   REQUIREMENTS use it. Demanding a remark, or a meter reading, on a line the
+ *   operator cannot see is a demand they can never satisfy - the sheet simply
+ *   refuses to submit and nothing on screen explains why.
+ *
+ *   THE BLOCKING CHECK DELIBERATELY DOES NOT. guard_checklist_approval_stages
+ *   scans the whole answers object and knows nothing about visibility, so if
+ *   this side skipped a hidden field carrying a stale "Not OK" the screen would
+ *   say the sheet is closable and the server would then refuse it with a raw
+ *   22023 the approver cannot act on. Agreeing with the database matters more
+ *   here than being clever, and a stale answer on a hidden line is a reason to
+ *   clear it at the point it is hidden, not to hide it from the gate.
+ */
+function visibleAnswerableFields(template: TemplateLike, answers: Record<string, any>): FieldLike[] {
+  return answerableFields(template).filter((f) => isFieldVisible(f as any, answers as any))
+}
+
+/**
  * Which answers still block a close. Returns the FIELDS, not just a boolean,
  * because "this sheet cannot be closed" is useless without saying which line.
  */
@@ -162,7 +185,7 @@ export function blockingAnswers(template: TemplateLike, answers: Record<string, 
  */
 export function missingNotes(template: TemplateLike, answers: Record<string, any> = {}, notes: Record<string, any> = {}): Array<{ id: string; label: string }> {
   const out: Array<{ id: string; label: string }> = []
-  for (const field of answerableFields(template)) {
+  for (const field of visibleAnswerableFields(template, answers)) {
     if (field.allow_note === false) continue
     const set = fieldOptionSet(template, field)
     const needs = new Set([
@@ -185,9 +208,9 @@ export function missingNotes(template: TemplateLike, answers: Record<string, any
  * reading at all while every one of them has engine hours - requiring km would
  * make the sheet unfillable for them, and requiring neither loses the reading.
  */
-export function meterGroups(template: TemplateLike): Map<string, FieldLike[]> {
+export function meterGroups(template: TemplateLike, answers: Record<string, any> = {}): Map<string, FieldLike[]> {
   const groups = new Map<string, FieldLike[]>()
-  for (const field of answerableFields(template)) {
+  for (const field of visibleAnswerableFields(template, answers)) {
     const g = field.group_require_one
     if (!g) continue
     if (!groups.has(g)) groups.set(g, [])
@@ -198,7 +221,7 @@ export function meterGroups(template: TemplateLike): Map<string, FieldLike[]> {
 
 export function unsatisfiedGroups(template: TemplateLike, answers: Record<string, any> = {}): Array<{ group: string; fields: Array<{ id: string; label: string }> }> {
   const out: Array<{ group: string; fields: Array<{ id: string; label: string }> }> = []
-  for (const [name, fields] of meterGroups(template)) {
+  for (const [name, fields] of meterGroups(template, answers)) {
     const any = fields.some((f) => {
       const v = answers?.[f.id]
       return v != null && String(v).trim() !== ''

@@ -1688,5 +1688,11 @@
     "approverSignature": "Approver signature",
     "noApproverSignature": "No signature recorded",
     "signingAs": "Signing as"
+  },
+  "session": {
+    "restoreTitle": "Taking longer than usual",
+    "restoreBody": "We could not open your saved sign in on this device. You are still signed in and your work is safe. Try again, or sign in to continue.",
+    "tryAgain": "Try again",
+    "signIn": "Sign in"
   }
 }

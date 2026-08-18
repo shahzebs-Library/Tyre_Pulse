@@ -15,9 +15,13 @@ import {
 import { clearPushToken, cancelDailyInspectionReminder, registerPushToken } from '../lib/notifications'
 import { setSentryUser } from '../lib/sentry'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { AppState, AppStateStatus } from 'react-native'
+import { storageReadFailureCount } from '../lib/secureStorage'
+import {
+  shouldRunAutoRefresh, classifyRestore, isCachedProfileUsable,
+  shouldRevalidateOnForeground,
+} from '../lib/authLifecycle'
 
-/** Last server-verified profile, so a cold start with no signal is not a lockout.
- *  Written ONLY from a successful fetch of a non-locked, approved account. */
 /** How long we are willing to wait for the stored session to come back out of
  *  the Android Keystore before we stop blocking the UI. Generous enough that a
  *  merely slow device still restores silently, short enough that a stalled one
@@ -37,10 +41,11 @@ function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
   })
 }
 
+/** The last server-verified profile, so a cold start with no signal is not a
+ *  lockout. How long it stays usable is bounded by PROFILE_CACHE_MAX_AGE_MS in
+ *  lib/authLifecycle.ts, which also records why that bound is 90 days and why
+ *  extending it grants no data access. */
 const PROFILE_CACHE_KEY = 'tp_profile_cache_v1'
-/** Beyond this the cached profile is refused and the app fails closed again, so a
- *  revoked account cannot stay usable indefinitely by staying offline. */
-const PROFILE_CACHE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
 
 async function cacheProfile(userId: string, profile: Profile) {
   try {
@@ -57,11 +62,16 @@ async function readCachedProfile(userId: string): Promise<Profile | null> {
     const raw = await AsyncStorage.getItem(PROFILE_CACHE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { userId?: string; at?: number; profile?: Profile }
-    if (!parsed?.profile || parsed.userId !== userId) return null
-    if (!parsed.at || Date.now() - parsed.at > PROFILE_CACHE_MAX_AGE_MS) return null
-    // Defence in depth: never resurrect an account that was locked/unapproved.
-    if (parsed.profile.locked === true || parsed.profile.approved === false) return null
-    return parsed.profile
+    if (!parsed?.profile) return null
+    const usable = isCachedProfileUsable({
+      cachedForUserId: parsed.userId,
+      wantUserId: userId,
+      cachedAt: parsed.at,
+      now: Date.now(),
+      locked: parsed.profile.locked,
+      approved: parsed.profile.approved,
+    })
+    return usable ? parsed.profile : null
   } catch {
     return null
   }
@@ -153,6 +163,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** User id we have already registered a push token for this app session, so a
    *  repeated profile fetch does not re-run device registration. */
   const pushRegisteredForRef  = useRef<string | null>(null)
+  /** When the account was last read from the server, so bringing the app
+   *  forward re-checks it without turning app switching into a request storm. */
+  const lastForegroundCheckRef = useRef<number | null>(null)
   const profileChannelRef     = useRef<RealtimeChannel | null>(null)
   const grantsChannelRef      = useRef<RealtimeChannel | null>(null)
   const roleMatrixChannelRef  = useRef<RealtimeChannel | null>(null)
@@ -256,12 +269,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
         (payload) => {
           const updated = payload.new as Record<string, any>
-          // Enforce lockout/approval changes applied by admins in real time
+          // A DEFINITIVE SERVER ANSWER. This is one of the few things that may
+          // still end a session outright, and it must: an admin has revoked this
+          // account. Drop the offline profile cache with it so the device cannot
+          // reopen on a snapshot taken before the lock.
           if (updated.locked === true || updated.approved === false) {
-            supabase.auth.signOut()
+            clearCachedProfile().finally(() => { supabase.auth.signOut() })
             return
           }
-          setProfile({ ...updated, role: normaliseRole(updated.role), country: normaliseCountry(updated.country) } as Profile)
+          // MERGE rather than replace. A realtime payload can arrive without
+          // every column (RLS filtering, replica identity), and overwriting the
+          // whole profile with a partial row would blank fields the gate reads -
+          // which is a lockout caused by an unrelated admin edit.
+          setProfile(prev => {
+            const merged = {
+              ...(prev ?? {}),
+              ...updated,
+              role: normaliseRole(updated.role ?? prev?.role),
+              country: normaliseCountry(updated.country ?? prev?.country),
+            } as Profile
+            // Keep the offline snapshot current, so a role change made today is
+            // what the device sees the next time it opens with no signal.
+            cacheProfile(userId, merged).catch(() => {})
+            return merged
+          })
         }
       )
       .subscribe()
@@ -318,19 +349,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     }, SESSION_RESTORE_TIMEOUT_MS)
 
+    // AN EMPTY SESSION IS NOT PROOF OF A SIGNED-OUT USER.
+    //
+    // getSession() reads through our chunked SecureStore adapter, whose only
+    // possible answers are the value or null - so a Keystore call that refuses
+    // arrives here as "no session" and would bounce a field worker onto a login
+    // screen they cannot pass, while their session sat on the device untouched.
+    // Snapshotting the adapter's failure counter across the read is what tells
+    // the two apart: an empty session is only believed when nothing failed.
+    const failuresBefore = storageReadFailureCount()
+
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         if (!mounted || settled) return
         settled = true
         clearTimeout(timeoutId)
-        setUser(session?.user ?? null)
-        if (session?.user) {
+
+        const outcome = classifyRestore({
+          hasSession: !!session?.user,
+          storageReadFailed: storageReadFailureCount() > failuresBefore,
+        })
+
+        if (outcome === 'signed-in' && session?.user) {
+          setUser(session.user)
           setLoading(false)          // auth session resolved
           await bootstrapSession(session.user.id)
-        } else {
-          setProfileLoading(false)
-          setLoading(false)
+          return
         }
+
+        setUser(null)
+        setProfileLoading(false)
+        setLoading(false)
+        // Could not READ the stored session. Offer a retry, never a login screen:
+        // this grants nothing (no user is set, no protected route renders) and
+        // only changes which screen the person is looking at.
+        if (outcome === 'restore-failed') setSessionTimedOut(true)
       })
       .catch(() => {
         if (!mounted || settled) return
@@ -338,6 +391,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearTimeout(timeoutId)
         setProfileLoading(false)
         setLoading(false)
+        // getSession itself threw. That is never evidence of a signed-out user,
+        // so it lands on the same recoverable screen.
+        setSessionTimedOut(true)
       })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -374,9 +430,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unsubscribeFromProfile()
         unsubscribeFromGrants()
         unsubscribeFromRoleMatrix()
+        setProfileStale(false)
         // On any sign-out (manual OR forced lockout) clear only SYNCED local
         // queue rows; unsynced field work is preserved (see clearLocalUserState).
         clearLocalUserState().catch(() => {})
+        // Every sign-out path ends here, including a refresh token the server
+        // definitively rejected, so this is the one place that reliably retires
+        // the offline profile snapshot for the account that just left.
+        clearCachedProfile().catch(() => {})
       }
     }
 
@@ -390,19 +451,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // KEEP THE ACCESS TOKEN ALIVE ACROSS BACKGROUND / FOREGROUND.
+  //
+  // supabase-js renews the access token from a `setInterval` ticker. React
+  // Native suspends JS timers as soon as the OS backgrounds or freezes the
+  // process, so a phone left in a pocket overnight wakes with a ticker that has
+  // not run for hours and a token that expired long ago; until the next tick
+  // happens to land, every request goes out with a dead JWT. For a queue
+  // flushing at that moment, that is failed uploads; for the profile read, it is
+  // an error the app then has to absorb. This is the documented React Native fix
+  // and it is the single most likely cause of "it signed me out by itself".
+  //
+  // startAutoRefresh() also runs one tick IMMEDIATELY, so the token is renewed
+  // as the app comes forward rather than up to a full tick period later.
+  //
+  // Coming forward is also the right moment to re-read the account, so a lock
+  // applied while the phone slept takes effect promptly. That tightens security
+  // at the same time as it keeps the session alive; the re-read is silent and,
+  // by design, can never take away access on a failure to reach the server.
+  const userIdForRefresh = user?.id ?? null
+  useEffect(() => {
+    let cancelled = false
+
+    function apply(state: AppStateStatus) {
+      if (cancelled) return
+      if (shouldRunAutoRefresh(state)) {
+        // Never allowed to reject into the app: a refresh we could not start is
+        // a token that stays as it is, not a reason to disturb the user.
+        supabase.auth.startAutoRefresh().catch(() => {})
+        if (
+          userIdForRefresh &&
+          shouldRevalidateOnForeground({ lastCheckedAt: lastForegroundCheckRef.current, now: Date.now() })
+        ) {
+          lastForegroundCheckRef.current = Date.now()
+          fetchProfile(userIdForRefresh, { silent: true }).catch(() => {})
+        }
+      } else {
+        supabase.auth.stopAutoRefresh().catch(() => {})
+      }
+    }
+
+    // Start from whatever state we are actually in, so the ticker is running
+    // before the first AppState transition ever arrives.
+    apply(AppState.currentState)
+    const sub = AppState.addEventListener('change', apply)
+    return () => {
+      cancelled = true
+      sub.remove()
+    }
+  }, [userIdForRefresh])
+
   /** Re-attempt session restore after the bounded wait gave up. Used by the
    *  "taking longer than usual" screen so a slow Keystore is a retry, never a
    *  dead end. */
   async function retrySession() {
     setSessionTimedOut(false)
     setLoading(true)
+    const failuresBefore = storageReadFailureCount()
     try {
       const { data: { session } } = await withTimeout(
         supabase.auth.getSession(), SESSION_RESTORE_TIMEOUT_MS,
       )
-      setUser(session?.user ?? null)
+      const outcome = classifyRestore({
+        hasSession: !!session?.user,
+        storageReadFailed: storageReadFailureCount() > failuresBefore,
+      })
       setLoading(false)
-      if (session?.user) {
+      if (outcome === 'signed-in' && session?.user) {
+        setUser(session.user)
         setProfileLoading(true)
         subscribeToProfile(session.user.id)
         subscribeToGrants(session.user.id)
@@ -411,7 +527,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchRoleMatrix()
         await fetchProfile(session.user.id)
       } else {
+        setUser(null)
         setProfileLoading(false)
+        // Still could not read it. Back to the recoverable screen, which also
+        // offers Sign in, so the user is never trapped and never bounced.
+        if (outcome === 'restore-failed') setSessionTimedOut(true)
       }
     } catch {
       // Still stalled: return to the recoverable screen rather than spin.
@@ -421,8 +541,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function fetchProfile(userId: string) {
-    setProfileLoading(true)
+  /**
+   * @param opts.silent A background re-check (app brought forward) rather than a
+   *   boot/gate fetch. It must be invisible and it must never TAKE AWAY access
+   *   the user already has: it does not raise the loading gate, and a failure to
+   *   reach the server leaves the current profile exactly where it was. Only a
+   *   definitive server answer - locked, or not approved - still signs them out.
+   */
+  async function fetchProfile(userId: string, opts?: { silent?: boolean }) {
+    const silent = opts?.silent === true
+    // Any read of the profile counts as the account having just been checked, so
+    // the foreground re-check does not immediately repeat a fetch that boot or a
+    // retry has already done.
+    lastForegroundCheckRef.current = Date.now()
+    if (!silent) setProfileLoading(true)
     try {
       const { data, error } = await supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,is_super_admin,created_at').eq('id', userId).maybeSingle()
       if (error) throw error
@@ -465,7 +597,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null)
         setProfileError(false)
       }
-      setProfileLoading(false)
+      if (!silent) setProfileLoading(false)
     } catch (e) {
       // The fetch failed. This is normally a DEAD NETWORK, which is the everyday
       // case for this app: an inspector opens it in a yard with no bars. Failing
@@ -488,11 +620,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSentryUser({ id: cached.id, username: cached.username })
         setProfileError(false)
         setProfileStale(true)
+      } else if (silent) {
+        // A background re-check that could not reach the server. The user was
+        // already working; taking the app away from them now would be a
+        // sign-out caused by nothing more than a lost signal. Keep what we have
+        // and just mark it unverified.
+        setProfileStale(true)
       } else {
         // No verified cache for this user: FAIL CLOSED exactly as before.
         setProfileError(true)
       }
-      setProfileLoading(false)
+      if (!silent) setProfileLoading(false)
     }
   }
 

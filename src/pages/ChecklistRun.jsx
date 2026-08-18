@@ -3,10 +3,15 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, Loader2, AlertTriangle, AlertOctagon,
   Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge, Lock, Languages,
-  Hash, Clock, Info,
+  Hash, Clock, Info, RotateCcw,
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatDate } from '../lib/formatters'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  draftKey, isWorthSaving, buildDraft, isUsableDraft, draftSummary,
+  saveDraft, readDraft, clearDraft, promoteDraftKey,
+} from '../lib/checklist/checklistDraft'
 import { useLanguage } from '../contexts/LanguageContext'
 import { getTemplate, createSubmission, uploadChecklistPhoto, listSubmissions } from '../lib/api/checklists'
 import { blankAnswer, validateSubmission, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
@@ -144,6 +149,19 @@ export default function ChecklistRun() {
   const inspectorName = profile?.full_name || profile?.username || ''
   const employeeId = profile?.employee_id || profile?.id || ''
 
+  /* ── Resumable fill ────────────────────────────────────────────────────
+   * A part-filled sheet survives a closed tab, a refresh or a flat battery.
+   * The draft is LOCAL by design: V594 mints the document number on insert so
+   * an abandoned fill never burns one, and a server-side draft row would gap
+   * the numbered register permanently. See src/lib/checklist/checklistDraft.js.
+   */
+  const userId = profile?.id || ''
+  const [resumeOffer, setResumeOffer] = useState(null)   // draft awaiting Continue / Start new
+  const [resumed, setResumed] = useState(false)
+  const draftCheckedRef = useRef(false)
+  const lastDraftKeyRef = useRef(null)
+  const currentDraftKey = draftKey({ userId, templateId, assetNo: header.asset_no })
+
   const load = useCallback(async () => {
     setLoading(true); setLoadError('')
     try {
@@ -174,6 +192,62 @@ export default function ChecklistRun() {
   }, [templateId, inspectorName, appLanguage])
 
   useEffect(() => { load() }, [load])
+
+  // Offer a resume ONCE the template is loaded, and only once per visit. The
+  // seed in `load` overwrites answers, so this must run after it or the restore
+  // would be wiped by the blank seed a moment later.
+  useEffect(() => {
+    if (!template || !userId || draftCheckedRef.current) return
+    draftCheckedRef.current = true
+    const key = draftKey({ userId, templateId, assetNo: '' })
+    const { status, draft } = readDraft(key)
+    // 'torn' and 'unreadable' are NOT 'absent'. We do not offer a resume we
+    // cannot honour, and just as important we never delete on a failed read.
+    if (status !== 'ok' || !isUsableDraft(draft, { userId, templateId })) return
+    setResumeOffer({ key, draft })
+  }, [template, userId, templateId])
+
+  const acceptResume = useCallback(() => {
+    const d = resumeOffer?.draft
+    if (!d) return
+    setHeader(d.header || { title: '', asset_no: '', site: '' })
+    setAnswers(d.answers || {})
+    setNotes(d.notes || {})
+    setPhotos(d.photos || {})
+    setSignatures(d.signatures || {})
+    setPrimarySignature(d.primarySignature || null)
+    if (d.lang) setLang(d.lang)
+    setResumed(true)
+    setResumeOffer(null)
+  }, [resumeOffer])
+
+  // Discarding is destructive, so it is only ever reached from an explicit
+  // confirm in the prompt - never automatically, and never silently.
+  const discardResume = useCallback(() => {
+    if (resumeOffer?.key) clearDraft(resumeOffer.key)
+    setResumeOffer(null)
+  }, [resumeOffer])
+
+  // Autosave, debounced. An untouched sheet never becomes a draft, or every
+  // template anyone merely opened would come back offering to resume nothing.
+  useEffect(() => {
+    if (!template || !userId || !currentDraftKey || resumeOffer) return
+    const state = {
+      userId, templateId, templateName: template?.name || '',
+      header, answers, notes, photos, signatures, primarySignature, lang,
+    }
+    if (!isWorthSaving(state)) return
+    const id = setTimeout(() => {
+      // Picking the asset moves the sheet onto that vehicle's slot; the copy
+      // refuses to overwrite a sheet already part filled for it.
+      const prev = lastDraftKeyRef.current
+      if (prev && prev !== currentDraftKey) promoteDraftKey(prev, currentDraftKey)
+      lastDraftKeyRef.current = currentDraftKey
+      saveDraft(currentDraftKey, buildDraft(state, Date.now()))
+    }, 800)
+    return () => clearTimeout(id)
+  }, [template, userId, templateId, currentDraftKey, resumeOffer,
+      header, answers, notes, photos, signatures, primarySignature, lang])
 
   const fields = useMemo(() => (Array.isArray(template?.fields) ? template.fields : []), [template])
   const readLang = normalizeLang(lang)
@@ -443,6 +517,10 @@ export default function ChecklistRun() {
             setSubmitError(`Submission saved, but the assignment could not be marked complete: ${toUserMessage(err, 'unknown error')}`)
           }
         }
+        // The work now belongs to the submission. Keeping the draft would let
+        // the same sheet be filled and submitted a second time.
+        clearDraft(currentDraftKey)
+        clearDraft(draftKey({ userId, templateId, assetNo: '' }))
         navigate(`/checklists/submission/${created.id}`)
       } else { setSubmitError('Submission saved but no id was returned.'); setSubmitting(false) }
     } catch (err) {
@@ -647,6 +725,47 @@ export default function ChecklistRun() {
               {recurrence.dueInDays === 1 ? ' day' : ' days'}. You can still record this check.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Unfinished work. Continue or start fresh - never resumed silently,
+          never discarded silently. */}
+      {resumeOffer && (() => {
+        const sum = draftSummary(resumeOffer.draft)
+        return (
+          <div className="card" style={{ borderColor: '#fde047', background: 'rgba(250,204,21,0.06)' }}>
+            <div className="flex items-start gap-3">
+              <RotateCcw size={18} className="shrink-0 mt-0.5" style={{ color: '#facc15' }} />
+              <div className="flex-1 space-y-2">
+                <p className="font-semibold">You have an unfinished checklist</p>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {sum.assetNo ? `For ${sum.assetNo}. ` : ''}
+                  {sum.answered > 0 ? `${sum.answered} answer${sum.answered === 1 ? '' : 's'} recorded. ` : ''}
+                  {sum.savedAt ? `Last saved ${formatDate(sum.savedAt)}.` : ''}
+                </p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Saved on this device only, so it will not appear on another computer or phone.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button type="button" className="btn-primary" onClick={acceptResume}>Continue it</button>
+                  <button
+                    type="button" className="btn-secondary"
+                    onClick={() => {
+                      if (window.confirm('Start a new checklist and discard the unfinished one? This cannot be undone.')) discardResume()
+                    }}
+                  >
+                    Start new
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {resumed && (
+        <div className="text-xs text-[var(--text-muted)] px-0.5">
+          Continued from your unfinished checklist.
         </div>
       )}
 

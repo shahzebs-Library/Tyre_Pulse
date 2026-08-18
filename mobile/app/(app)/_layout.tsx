@@ -240,6 +240,7 @@ export default function AppLayout() {
       <Tabs.Screen name="serial-search"   options={{ href: null }} />
       <Tabs.Screen name="checklists/index"                        options={{ href: null }} />
       <Tabs.Screen name="checklists/[templateId]"                 options={{ href: null }} />
+      <Tabs.Screen name="checklists/history"                      options={{ href: null }} />
       <Tabs.Screen name="checklists/approvals/index"              options={{ href: null }} />
       <Tabs.Screen name="checklists/approvals/[submissionId]"     options={{ href: null }} />
     </Tabs>

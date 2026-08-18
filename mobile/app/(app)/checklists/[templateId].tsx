@@ -62,6 +62,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef, memo } from 'react'
 import {
   View, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Text,
+  AppState, AppStateStatus,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -95,6 +96,10 @@ import {
   fieldOptionValues, langDir, optionLabel, templateLangs, templateName,
 } from '../../../lib/checklistI18n'
 import { resolveChecklistIcon } from '../../../lib/checklistIcons'
+import {
+  ChecklistDraft, DraftInput, discardDraft, draftAge, draftKey, getDraft,
+  resumeCandidates, saveDraft, loadDrafts,
+} from '../../../lib/checklistDraft'
 
 type IconName = keyof typeof Ionicons.glyphMap
 
@@ -507,6 +512,10 @@ function ChecklistFillScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{
     templateId?: string; assignment?: string; site?: string; asset_no?: string
+    /** Draft key. Present only when the operator tapped Continue on an
+     *  unfinished sheet, which is an explicit choice - so that sheet is
+     *  restored straight away instead of being offered again. */
+    resume?: string
   }>()
   const templateId = String(params.templateId ?? '')
   const assignmentId = params.assignment ? String(params.assignment) : null
@@ -1012,6 +1021,235 @@ function ChecklistFillScreen() {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
   const remaining = Math.max(0, total - done)
 
+  /* ── Resume: a sheet left half-filled is waiting when you come back ────────
+   *
+   * WHY THIS EXISTS. Everything recorded above lived only in React state, so a
+   * backgrounded app reclaimed by Android, a flat battery or a crash took the
+   * lot - 49 fields of work, with nothing left to show the operator had ever
+   * started. The draft store is the memory that survives that.
+   *
+   * IT IS A DEVICE DRAFT, NEVER A ROW. Inserting a placeholder submission would
+   * burn a document number on every abandoned fill (V594 mints it on INSERT
+   * precisely so it cannot be burned at fill time) and leave permanent holes in
+   * a numbered register. Nothing here touches the server.
+   *
+   * RESUMING IS OFFERED, NEVER FORCED, AND STARTING FRESH IS ALWAYS ONE TAP.
+   */
+  const userId = profile?.id ?? ''
+  /** Unfinished sheets this operator could continue here. Empty = nothing to
+   *  offer, which is a different thing from having not looked yet. */
+  const [resumeOffer, setResumeOffer] = useState<ChecklistDraft[]>([])
+  /** How many photos a restore could not bring back. Stated, never hidden: a
+   *  dead path carried on would be submitted and reported as success. */
+  const [restoredNotice, setRestoredNotice] = useState<{ dropped: number } | null>(null)
+  /** Set once this sheet is submitted or deliberately started fresh; from then
+   *  on autosave must not resurrect the draft it just cleared. */
+  const draftClosedRef = useRef(false)
+  /** The offer is answered ONCE per asset. Without this, dismissing it and then
+   *  typing would put it straight back on screen. */
+  const offerAnsweredRef = useRef<Set<string>>(new Set())
+  const restoreStampRef = useRef('')
+  /**
+   * The key this sheet was last saved under.
+   *
+   * A draft is keyed by (user, template, ASSET), and the asset is very often
+   * picked AFTER the operator has started recording - so the sheet legitimately
+   * changes key mid-fill. Without this the earlier key would be left behind as
+   * a second, permanently orphaned "unfinished sheet" for the same work.
+   */
+  const savedKeyRef = useRef('')
+
+  /**
+   * Everything worth restoring, in one object, so the autosave timer and the
+   * backgrounding flush always write the CURRENT sheet rather than whatever was
+   * current when their closure was created.
+   *
+   * Assigned during RENDER rather than in an effect on purpose: backgrounding
+   * can arrive before an effect has run, and a flush that wrote the previous
+   * render's state would quietly lose the last thing the operator recorded -
+   * which is the exact moment this feature exists for.
+   */
+  const snapshotRef = useRef<DraftInput | null>(null)
+  snapshotRef.current = {
+    userId,
+    templateId,
+    templateName: template?.name ?? '',
+    assetNo,
+    assignmentId,
+    site,
+    title,
+    readLang,
+    answers, photos, notes, signatures, primarySignature,
+    printedName,
+    filled: done,
+    total,
+  }
+
+  /** Restore a draft into the sheet. The asset lookup is deliberately left to
+   *  re-run afterwards: it re-attaches the register row a meter reading is
+   *  judged against, and autoFillAnswers only ever rewrites fields the register
+   *  itself owns, so restored work is never overwritten. */
+  const applyDraft = useCallback(async (key: string) => {
+    let found: { draft: ChecklistDraft; droppedPhotos: number } | null = null
+    try {
+      found = await getDraft(key)
+    } catch {
+      /* a store we could not read is not a sheet we may overwrite - carry on
+         with a blank fill and leave the draft exactly where it is */
+    }
+    if (!found) return false
+    const d = found.draft
+    // Dirty FIRST: a later load() retry must merge new fields in, never re-seed
+    // over what was just restored.
+    markDirty()
+    setAnswers(prev => ({ ...prev, ...(d.answers ?? {}) }))
+    setPhotos(d.photos ?? {})
+    setNotes(d.notes ?? {})
+    setSignatures(d.signatures ?? {})
+    setPrimarySignature(d.primarySignature ?? null)
+    setPrintedName(d.printedName ?? '')
+    if (d.title) setTitle(d.title)
+    if (d.site) setSite(d.site)
+    if (d.readLang) { langInitRef.current = `${templateId}|restored`; setReadLang(d.readLang) }
+    if (d.assetNo) setAssetNo(d.assetNo)
+    setResumeOffer([])
+    offerAnsweredRef.current.add(d.assetNo || '')
+    setRestoredNotice({ dropped: found.droppedPhotos })
+    savedKeyRef.current = d.key
+    return true
+  }, [markDirty, templateId])
+
+  /**
+   * Look for something to continue. Runs once the template is loaded and again
+   * when the asset changes, because scanning the machine is exactly how an
+   * operator finds the sheet they had already started on it.
+   */
+  useEffect(() => {
+    if (!template || !userId || draftClosedRef.current) return
+    const asset = assetNo.trim().toUpperCase()
+    const stamp = `${templateId}|${asset}`
+    if (restoreStampRef.current === stamp) return
+    restoreStampRef.current = stamp
+    let cancelled = false
+    ;(async () => {
+      // An explicit Continue from the list carries the key: restore it, do not
+      // ask again.
+      const wanted = params.resume ? String(params.resume) : ''
+      if (wanted && !offerAnsweredRef.current.has(asset)) {
+        const ok = await applyDraft(wanted)
+        if (ok || cancelled) return
+      }
+      if (offerAnsweredRef.current.has(asset)) return
+      const load = await loadDrafts()
+      if (cancelled || !load.ok) return   // could not look: say nothing
+      const found = resumeCandidates(load.drafts, { userId, templateId, assetNo: asset })
+      // Never offer to resume a sheet the operator has already started typing
+      // into: that would invite replacing live work with older work.
+      if (dirtyRef.current && found.length) return
+      if (found.length) setResumeOffer(found)
+    })()
+    return () => { cancelled = true }
+  }, [template, userId, templateId, assetNo, params.resume, applyDraft])
+
+  /** Start fresh. Destructive, so it is confirmed - and it clears the stored
+   *  sheet outright rather than leaving a ghost that reappears tomorrow. */
+  const startFresh = useCallback((d: ChecklistDraft) => {
+    Alert.alert(
+      t('modules.checklistDraft.startNewTitle'),
+      t('modules.checklistDraft.startNewMsg'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('modules.checklistDraft.startNewConfirm'),
+          style: 'destructive',
+          onPress: () => {
+            offerAnsweredRef.current.add(d.assetNo || '')
+            setResumeOffer(prev => prev.filter(x => x.key !== d.key))
+            discardDraft(d.key).catch(() => {
+              // A store we could not read keeps its draft. Better a sheet that
+              // is offered once more than one deleted on a failed read.
+            })
+          },
+        },
+      ],
+    )
+  }, [t])
+
+  /** "3 of 31 recorded". Concatenated, because mobile `t()` takes no variables. */
+  const draftProgressLine = useCallback(
+    (d: ChecklistDraft) => `${d.filled} ${t('modules.checklistFill.of')} ${d.total} ${t('modules.checklistFill.doneWord')}`,
+    [t],
+  )
+
+  /** "2 h ago". An unparseable timestamp says nothing rather than "just now". */
+  const draftAgeLine = useCallback((d: ChecklistDraft) => {
+    const age = draftAge(d)
+    if (age.unit === 'unknown') return ''
+    if (age.unit === 'now') return t('modules.checklistDraft.justNow')
+    if (age.unit === 'minutes') return `${age.value} ${t('modules.checklistDraft.minutesAgo')}`
+    if (age.unit === 'hours') return `${age.value} ${t('modules.checklistDraft.hoursAgo')}`
+    return `${age.value} ${t('modules.checklistDraft.daysAgo')}`
+  }, [t])
+
+  const dismissOffer = useCallback(() => {
+    offerAnsweredRef.current.add(assetNo.trim().toUpperCase())
+    setResumeOffer([])
+  }, [assetNo])
+
+  /**
+   * Autosave.
+   *
+   * Debounced because every write goes to the Android Keystore over binder IPC
+   * and hammering it on each keystroke is what caused the permanent-spinner
+   * ANR this app has already been reported for. Nothing is written until the
+   * operator has actually recorded something (dirtyRef), and a failure is
+   * swallowed: a missed tick is a nuisance, an interrupted fill is not.
+   */
+  const flushDraft = useCallback(async () => {
+    if (draftClosedRef.current) return
+    if (!dirtyRef.current) return
+    const snap = snapshotRef.current
+    if (!snap?.userId || !snap?.templateId) return
+    const key = draftKey(snap.userId, snap.templateId, snap.assetNo)
+    try {
+      await saveDraft(snap)
+      // The sheet moved to a different key (the machine was picked, or
+      // changed). Retire the old one AFTER the new one is safely stored, so an
+      // interrupted migration leaves a duplicate rather than nothing.
+      const previousKey = savedKeyRef.current
+      savedKeyRef.current = key
+      if (previousKey && previousKey !== key) {
+        await discardDraft(previousKey).catch(() => {})
+      }
+    } catch {
+      /* DraftStoreUnreadableError included: we do NOT write over a store we
+         could not read. The sheet on screen is untouched and the next tick
+         tries again. */
+    }
+  }, [])
+
+  useEffect(() => {
+    if (loading || submitting || draftClosedRef.current) return
+    if (!dirtyRef.current) return
+    const h = setTimeout(() => { void flushDraft() }, 1200)
+    return () => clearTimeout(h)
+  }, [answers, photos, notes, signatures, primarySignature, printedName,
+      assetNo, site, title, readLang, loading, submitting, flushDraft])
+
+  /** A phone killed from the recents list gives no other warning, so the sheet
+   *  is written the moment the app goes to the background - not on a timer that
+   *  may never fire. Unmounting is flushed for the same reason. */
+  useEffect(() => {
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') void flushDraft()
+    }
+    const sub = AppState.addEventListener('change', onChange)
+    return () => {
+      sub.remove()
+      void flushDraft()
+    }
+  }, [flushDraft])
+
   const activeField = useMemo(
     () => visibleFields.find(f => f.id === activeFieldId) ?? null,
     [visibleFields, activeFieldId],
@@ -1132,6 +1370,24 @@ function ChecklistFillScreen() {
         score_passed,
       }
       const res = await submitChecklist(payload)
+
+      // THE DRAFT IS CLEARED FOR AN OFFLINE SUBMIT TOO. The work now belongs to
+      // the record queue, which took its own durable copy of every photo at
+      // enqueue; a draft left behind would let the same sheet be filled in and
+      // submitted a second time. Only a submit that THREW keeps its draft.
+      draftClosedRef.current = true
+      try {
+        const current = draftKey(userId, templateId, assetNo)
+        await discardDraft(current)
+        // The sheet may still be stored under an earlier key if the machine was
+        // picked after work began and the migration had not run yet.
+        if (savedKeyRef.current && savedKeyRef.current !== current) {
+          await discardDraft(savedKeyRef.current)
+        }
+      } catch {
+        /* A store we could not read keeps the draft. Harmless: the queue
+           already owns the submission, and the operator is told below. */
+      }
 
       if (res.offline) {
         Alert.alert(t('modules.checklistFill.savedOnDevice'), t('modules.checklistFill.savedOnDeviceMsg'), [
@@ -1338,6 +1594,94 @@ function ChecklistFillScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Unfinished sheet ──────────────────────────────────────────────
+            Offered, never forced. Continue restores everything that was
+            recorded; Start new discards it and is confirmed first, because
+            throwing away somebody's half-finished work is destructive. */}
+        {resumeOffer.length > 0 && (
+          <View style={[styles.noticeCard, { backgroundColor: c.info.soft, borderColor: c.info.base }]}>
+            <View style={[styles.noticeHead, isRTL && styles.rowR]}>
+              <Ionicons name="refresh-circle-outline" size={18} color={c.info.base} />
+              <AppText variant="label" style={{ color: c.info.on, flex: 1, textAlign }}>
+                {t('modules.checklistDraft.unfinishedTitle')}
+              </AppText>
+              <TouchableOpacity onPress={dismissOffer} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={18} color={c.info.on} />
+              </TouchableOpacity>
+            </View>
+            <AppText variant="caption" style={{ color: c.info.on, textAlign, marginTop: 4 }}>
+              {t('modules.checklistDraft.unfinishedMsg')}
+            </AppText>
+            {resumeOffer.map(d => (
+              <View key={d.key} style={styles.resumeRow}>
+                <View style={{ flex: 1 }}>
+                  <AppText style={[typography.bodyStrong, { textAlign }]} numberOfLines={1}>
+                    {d.assetNo || t('modules.checklistDraft.noAsset')}
+                  </AppText>
+                  <AppText variant="caption" color="muted" style={{ textAlign }}>
+                    {draftProgressLine(d)}{'  '}{draftAgeLine(d)}
+                  </AppText>
+                </View>
+                <TouchableOpacity
+                  style={[styles.resumeBtn, { backgroundColor: c.primary }]}
+                  onPress={() => { void applyDraft(d.key) }}
+                  accessibilityRole="button"
+                >
+                  <AppText variant="label" style={{ color: c.onPrimary }}>
+                    {t('modules.checklistDraft.continue')}
+                  </AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.resumeBtnGhost}
+                  onPress={() => startFresh(d)}
+                  accessibilityRole="button"
+                >
+                  <AppText variant="label" style={{ color: c.textSecondary }}>
+                    {t('modules.checklistDraft.startNew')}
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* What a restore could NOT bring back. An OS cache purge can take a
+            photo before the operator returns; carried on silently it would be
+            submitted as a dead path and the sheet would report success. */}
+        {!!restoredNotice && (
+          <View
+            style={[
+              styles.noticeCard,
+              restoredNotice.dropped > 0
+                ? { backgroundColor: c.warning.soft, borderColor: c.warning.base }
+                : { backgroundColor: c.success.soft, borderColor: c.success.base },
+            ]}
+          >
+            <View style={[styles.noticeHead, isRTL && styles.rowR]}>
+              <Ionicons
+                name={restoredNotice.dropped > 0 ? 'alert-circle-outline' : 'checkmark-circle-outline'}
+                size={18}
+                color={restoredNotice.dropped > 0 ? c.warning.base : c.success.base}
+              />
+              <AppText
+                variant="label"
+                style={{ flex: 1, textAlign, color: restoredNotice.dropped > 0 ? c.warning.on : c.success.on }}
+              >
+                {restoredNotice.dropped > 0
+                  ? `${t('modules.checklistDraft.restoredPartial')} ${restoredNotice.dropped} ${t('modules.checklistDraft.photosLost')}`
+                  : t('modules.checklistDraft.restoredOk')}
+              </AppText>
+              <TouchableOpacity onPress={() => setRestoredNotice(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons
+                  name="close"
+                  size={18}
+                  color={restoredNotice.dropped > 0 ? c.warning.on : c.success.on}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Reading language. Only languages this template really carries. */}
         {offeredLangs.length > 1 && (
           <View style={styles.card}>
@@ -1809,6 +2153,18 @@ function makeStyles(theme: Theme) {
     // Advisory / fault banners
     noticeCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md },
     noticeHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+    // Unfinished-sheet offer
+    resumeRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      marginTop: spacing.sm, paddingTop: spacing.sm,
+      borderTopWidth: 1, borderTopColor: c.border,
+    },
+    resumeBtn: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md },
+    resumeBtnGhost: {
+      paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.md,
+      borderWidth: 1, borderColor: c.border,
+    },
 
     // One checklist item
     itemCard: {

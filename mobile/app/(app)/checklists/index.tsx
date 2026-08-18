@@ -12,9 +12,9 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, FlatList, StyleSheet, TouchableOpacity, RefreshControl,
-  TextInput, ActivityIndicator,
+  TextInput, ActivityIndicator, Alert,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
@@ -35,6 +35,9 @@ import { toUserMessage } from '../../../lib/safeError'
 import { canApproveChecklists } from '../../../lib/permissions'
 import { lookupAssetByCode } from '../../../lib/assetLookup'
 import { backTo } from '../../../lib/goBack'
+import {
+  ChecklistDraft, discardDraft, draftAge, listUserDrafts,
+} from '../../../lib/checklistDraft'
 
 /**
  * Route entry. A TYRE MAN gets a search-first single-asset flow (find one asset,
@@ -83,6 +86,154 @@ function looksLikeMissingTable(msg: string): boolean {
   return m.includes('does not exist') || m.includes('relation') || m.includes('schema cache')
 }
 
+/**
+ * Unfinished sheets - "continue by own history".
+ *
+ * A checklist left half-filled is kept on the device (see lib/checklistDraft.ts;
+ * it is deliberately NOT a server row, so an abandoned fill never burns a
+ * document number). This is where the operator finds it again: one row per
+ * unfinished sheet, saying which machine it is for and when it was last worked
+ * on, opening straight back into it.
+ *
+ * IT RENDERS NOTHING WHEN THERE IS NOTHING TO CONTINUE, so the hub is unchanged
+ * for anyone who never leaves a sheet part-filled. A read that FAILED is not
+ * the same statement as "you have no unfinished work" and says so instead.
+ */
+function UnfinishedSheets({ userId, refreshKey }: { userId: string; refreshKey: number }) {
+  const { t, isRTL } = useLanguage()
+  const { theme } = useTheme()
+  const styles = useMemo(() => makeStyles(theme), [theme])
+  const router = useRouter()
+  const [drafts, setDrafts] = useState<ChecklistDraft[]>([])
+  const [unreadable, setUnreadable] = useState(false)
+  const textAlign = isRTL ? 'right' : 'left'
+
+  const reload = useCallback(async () => {
+    if (!userId) { setDrafts([]); setUnreadable(false); return }
+    const load = await listUserDrafts(userId)
+    if (!load.ok) { setUnreadable(true); setDrafts([]); return }
+    setUnreadable(false)
+    setDrafts(load.drafts)
+  }, [userId])
+
+  useEffect(() => { void reload() }, [reload, refreshKey])
+  // Re-read on focus: a sheet submitted on the fill screen must be gone from
+  // this list the moment the operator comes back, not on the next cold start.
+  useFocusEffect(useCallback(() => { void reload() }, [reload]))
+
+  const ageLine = useCallback((d: ChecklistDraft) => {
+    const age = draftAge(d)
+    if (age.unit === 'unknown') return ''
+    if (age.unit === 'now') return t('modules.checklistDraft.justNow')
+    if (age.unit === 'minutes') return `${age.value} ${t('modules.checklistDraft.minutesAgo')}`
+    if (age.unit === 'hours') return `${age.value} ${t('modules.checklistDraft.hoursAgo')}`
+    return `${age.value} ${t('modules.checklistDraft.daysAgo')}`
+  }, [t])
+
+  function resume(d: ChecklistDraft) {
+    router.push({
+      pathname: '/(app)/checklists/[templateId]',
+      params: {
+        templateId: d.templateId,
+        asset_no: d.assetNo,
+        site: d.site ?? '',
+        assignment: d.assignmentId ?? '',
+        // The explicit choice. The fill screen restores this sheet straight
+        // away rather than offering it again.
+        resume: d.key,
+      },
+    })
+  }
+
+  function remove(d: ChecklistDraft) {
+    Alert.alert(
+      t('modules.checklistDraft.discardTitle'),
+      t('modules.checklistDraft.discardMsg'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('modules.checklistDraft.discardConfirm'),
+          style: 'destructive',
+          onPress: () => {
+            discardDraft(d.key)
+              .then(reload)
+              // A store we could not read keeps its sheet: better to leave work
+              // listed than to delete it on a failed read.
+              .catch(() => {})
+          },
+        },
+      ],
+    )
+  }
+
+  if (unreadable) {
+    return (
+      <View style={{ gap: spacing.md }}>
+        <View style={styles.sectionHead}>
+          <AppText style={typography.h3}>{t('modules.checklistDraft.sectionTitle')}</AppText>
+        </View>
+        <View style={styles.inlineEmpty}>
+          <Ionicons name="help-circle-outline" size={22} color={theme.color.textMuted} />
+          <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted }]}>
+            {t('modules.checklistDraft.couldNotCheck')}
+          </AppText>
+        </View>
+      </View>
+    )
+  }
+
+  if (!drafts.length) return null
+
+  return (
+    <View style={{ gap: spacing.md }}>
+      <View style={styles.sectionHead}>
+        <AppText style={typography.h3}>{t('modules.checklistDraft.sectionTitle')}</AppText>
+        <View style={styles.countPill}>
+          <AppText style={[typography.micro, { color: theme.color.danger.on }]}>{drafts.length}</AppText>
+        </View>
+      </View>
+      <View style={{ gap: 10 }}>
+        {drafts.map(d => (
+          <TouchableOpacity
+            key={d.key}
+            style={[styles.draftCard, isRTL && styles.rowR]}
+            activeOpacity={0.75}
+            onPress={() => resume(d)}
+          >
+            <View style={styles.draftIcon}>
+              <Ionicons name="create-outline" size={20} color={theme.color.info.base} />
+            </View>
+            <View style={{ flex: 1, gap: 3 }}>
+              <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
+                {d.templateName || t('modules.checklists.checklistFallback')}
+              </AppText>
+              <View style={[styles.metaRow, isRTL && styles.rowR]}>
+                <Ionicons name="car-outline" size={12} color={theme.color.textMuted} />
+                <AppText style={styles.metaText} numberOfLines={1}>
+                  {d.assetNo || t('modules.checklistDraft.noAsset')}
+                </AppText>
+                <AppText style={styles.metaDot}>·</AppText>
+                <AppText style={styles.metaText}>
+                  {d.filled} {t('modules.checklistFill.of')} {d.total}
+                </AppText>
+              </View>
+              <AppText style={styles.metaText}>{ageLine(d)}</AppText>
+            </View>
+            <TouchableOpacity
+              onPress={() => remove(d)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel={t('modules.checklistDraft.discardConfirm')}
+            >
+              <Ionicons name="close" size={18} color={theme.color.textMuted} />
+            </TouchableOpacity>
+            <Badge kind="info">{t('modules.checklistDraft.continue')}</Badge>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  )
+}
+
 function ChecklistsScreen() {
   const { profile, isSuperAdmin } = useAuth()
   const { t, isRTL, language: lang } = useLanguage()
@@ -97,6 +248,9 @@ function ChecklistsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notEnabled, setNotEnabled] = useState(false)
+  /** Bumped by pull-to-refresh so the unfinished list re-reads with everything
+   *  else. Focus already covers returning from a fill. */
+  const [draftRefresh, setDraftRefresh] = useState(0)
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
@@ -143,6 +297,7 @@ function ChecklistsScreen() {
 
   async function onRefresh() {
     setRefreshing(true)
+    setDraftRefresh(n => n + 1)
     await load()
     setRefreshing(false)
   }
@@ -187,6 +342,11 @@ function ChecklistsScreen() {
   // only the unbounded templates list below is virtualized via FlatList.
   const listHeader = (
     <View style={{ gap: spacing.md }}>
+      {/* Unfinished work first: a sheet somebody is part-way through is more
+          urgent than anything they have not started. Renders nothing when
+          there is none. */}
+      <UnfinishedSheets userId={profile?.id ?? ''} refreshKey={draftRefresh} />
+
       {/* Approver entry (elevated roles) */}
       {canApprove && (
         <TouchableOpacity
@@ -524,8 +684,11 @@ function TyreManChecklistFlow() {
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : !selectedAsset ? (
-        // Step 1 - search one asset
+        // Step 1 - search one asset. An unfinished sheet comes FIRST: a tyre man
+        // who was part-way through one should not have to find the machine
+        // again to get back to it.
         <View style={styles.body}>
+          <UnfinishedSheets userId={profile?.id ?? ''} refreshKey={0} />
           <View style={[styles.searchBox, isRTL && styles.rowR]}>
             <Ionicons name="search-outline" size={18} color={theme.color.textMuted} />
             <TextInput
@@ -753,6 +916,17 @@ function makeStyles(theme: Theme) {
       flexDirection: 'row', alignItems: 'center', gap: spacing.md,
       backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
       borderWidth: 1, borderColor: c.border,
+    },
+    // Unfinished (part-filled) sheet
+    draftCard: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.info.base,
+    },
+    draftIcon: {
+      width: 40, height: 40, borderRadius: radius.md,
+      backgroundColor: c.info.soft,
+      alignItems: 'center', justifyContent: 'center',
     },
     dueIcon: {
       width: 40, height: 40, borderRadius: radius.md,

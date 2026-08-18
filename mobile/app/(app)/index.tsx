@@ -82,6 +82,14 @@ interface QuickAction {
   sublabel: string
   route: string
   tint: TintKey
+  /**
+   * Identity of the TILE, when it differs from the module gating it. Two tiles
+   * can share a module key - filling a checklist and reading back the ones you
+   * filled are the same permission and deliberately so - but they are two
+   * destinations, so they need two React keys and two locale entries. Defaults
+   * to `module`, so every existing tile is untouched.
+   */
+  id?: string
 }
 
 // The `inspect` action is deliberately surfaced as the big primary CTA (not in
@@ -95,6 +103,10 @@ const QUICK_ACTIONS: QuickAction[] = [
   { module: 'serial',      section: 'Field', icon: 'barcode-outline',         label: 'Serial Search', sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue'   },
   { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',   sublabel: 'Record a change',      route: '/(app)/tyre-change',        tint: 'teal'   },
   { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists',   tint: 'green'  },
+  // Same module key as the tile above ON PURPOSE: whoever may fill a checklist
+  // may read back the ones they filled, and sharing the key makes that true by
+  // construction instead of by two role lists agreeing today.
+  { module: 'checklists',  section: 'Field', icon: 'time-outline',            label: 'Checklist History', sublabel: 'Sheets I have filled', route: '/(app)/checklists/history', tint: 'slate', id: 'checklistHistory' },
   { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',     sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue'   },
   { module: 'washing',     section: 'Field', icon: 'water-outline',           label: 'Vehicle Washing', sublabel: 'Log a wash',         route: '/(app)/washing',            tint: 'teal'   },
   { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',  sublabel: 'Flag a problem',       route: '/(app)/report-issue',       tint: 'amber'  },
@@ -400,7 +412,7 @@ export default function HomeScreen() {
             <SectionLabel s={s} theme={theme}>{t(`modules.home.sections.${sec.key}`)}</SectionLabel>
             <View style={s.quickGrid}>
               {sec.items.map(a => (
-                <QuickActionCard key={a.module} action={a} s={s} theme={theme} t={t} onPress={() => router.push(a.route as any)} />
+                <QuickActionCard key={a.id ?? a.module} action={a} s={s} theme={theme} t={t} onPress={() => router.push(a.route as any)} />
               ))}
             </View>
           </View>
@@ -511,8 +523,9 @@ function QuickActionCard({ action, onPress, s, theme, t }: { action: QuickAction
   // t() returns the raw key when a translation is missing (e.g. a module added
   // before its locale entries land, like 'pm') - fall back to the registry's
   // English strings so a tile never renders a dotted key path.
-  const labelKey = `modules.home.qa.${action.module}.label`
-  const subKey = `modules.home.qa.${action.module}.sub`
+  const id = action.id ?? action.module
+  const labelKey = `modules.home.qa.${id}.label`
+  const subKey = `modules.home.qa.${id}.sub`
   const labelTr = t(labelKey)
   const subTr = t(subKey)
   const label = labelTr === labelKey ? action.label : labelTr

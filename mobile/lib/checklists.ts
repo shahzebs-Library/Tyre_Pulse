@@ -361,6 +361,13 @@ export interface ChecklistSubmission {
   status: string | null
   answers: Record<string, any> | null
   photos: Record<string, string[]> | null
+  /** Per-line remarks keyed by field id (V212). Selected but never typed until now. */
+  notes?: Record<string, any> | null
+  /**
+   * EVERY captured signature keyed by field id (V212). A workshop sheet is
+   * signed by three trades, so reading only `signature_data` shows one of three.
+   */
+  signatures?: Record<string, string> | null
   signature_data: string | null
   printed_name: string | null
   submitted_by: string | null
@@ -384,7 +391,7 @@ export interface ChecklistSubmission {
 }
 
 const SUBMISSION_COLS =
-  'id,template_id,template_name,template_version,title,site,asset_no,status,answers,photos,notes,signature_data,printed_name,' +
+  'id,template_id,template_name,template_version,title,site,asset_no,status,answers,photos,notes,signatures,signature_data,printed_name,' +
   'submitted_by,submitted_at,score_pct,score_passed,approval_status,document_no,approver_name,' +
   'approver_signature,approved_at,supervisor_name,supervisor_signature,supervisor_at,review_note,locked'
 
@@ -498,4 +505,232 @@ export async function getLastSubmission(
   } catch {
     return null
   }
+}
+
+// ── History: the sheets a person has already filled ─────────────────────────
+//
+// A tradesman could FILL a checklist and had no way to see the ones they had
+// already done - no history screen existed at all. This is the read behind it.
+//
+// SCOPE IS A VIEW, NOT A BOUNDARY, and that has to be said plainly. The live
+// SELECT policy on checklist_submissions is `auth.uid() IS NOT NULL` plus the
+// RESTRICTIVE org + country policies, so every signed-in user in the tenant can
+// already read every submission their country scope allows. `submittedBy`
+// therefore narrows what is SHOWN; it is not what stops anyone reading a
+// colleague's sheet. RLS is that, and it is the same wall the approvals queue
+// stands behind.
+
+/**
+ * Lean columns for the LIST. Deliberately WITHOUT answers / photos / notes /
+ * signatures: those are per-sheet jsonb blobs, and pulling 300 of them onto a
+ * 2 GB handset to render a date and a status is the same mistake that made
+ * mobile Analytics an out-of-memory crash. The detail view calls getSubmission
+ * for the one row the reader actually opened.
+ */
+const HISTORY_COLS =
+  'id,template_id,template_name,title,site,asset_no,status,submitted_by,submitted_at,' +
+  'score_pct,score_passed,approval_status,document_no,approver_name,approved_at,' +
+  'supervisor_name,supervisor_at,review_note,locked'
+
+/** One row of the history list. A strict subset of the full submission. */
+export type ChecklistHistoryRow = Pick<
+  ChecklistSubmission,
+  'id' | 'template_id' | 'template_name' | 'title' | 'site' | 'asset_no' | 'status'
+  | 'submitted_by' | 'submitted_at' | 'score_pct' | 'score_passed' | 'approval_status'
+  | 'document_no' | 'approver_name' | 'approved_at' | 'supervisor_name' | 'supervisor_at'
+  | 'review_note' | 'locked'
+>
+
+/**
+ * How many sheets one read returns. PostgREST caps EVERY response at 1,000 rows
+ * whatever `.limit()` says, so this is paged with `.range()`; the ceiling exists
+ * so a phone never pulls an unbounded register, and the screen SAYS when it has
+ * been reached rather than truncating in silence.
+ */
+export const HISTORY_MAX = 300
+
+export interface SubmissionHistory {
+  rows: ChecklistHistoryRow[]
+  /**
+   * Exact server count for the SAME filter, or null when the count could not be
+   * read. Null means "we do not know", never zero - the two are opposite claims.
+   */
+  total: number | null
+  /** True when there are older sheets this read did not return. */
+  bounded: boolean
+  max: number
+}
+
+export type HistoryScope = 'mine' | 'team'
+
+/**
+ * Turn a chosen scope into the filter to send.
+ *
+ * THE ONE RULE: 'mine' with no known user id must NOT fall back to everybody.
+ * Silently widening a personal history into the whole team's is exactly the kind
+ * of quiet mis-scope that reads as a feature until someone notices their name on
+ * a sheet they never filled.
+ */
+export function historyScopeQuery(
+  scope: HistoryScope,
+  userId: string | null | undefined,
+): { ok: true; submittedBy: string | null } | { ok: false; reason: 'unknown_user' } {
+  if (scope === 'team') return { ok: true, submittedBy: null }
+  const id = String(userId ?? '').trim()
+  if (!id) return { ok: false, reason: 'unknown_user' }
+  return { ok: true, submittedBy: id }
+}
+
+/**
+ * Submitted checklists, newest first.
+ *
+ * `submittedBy` null = every submission this reader's org + country scope can
+ * see (the supervisor view). Ordering carries an `id` tiebreak on purpose:
+ * `submitted_at` is a server DEFAULT, so a batch of offline sheets synced in one
+ * go can share a timestamp, and an order that is not total drops or repeats a
+ * row at a page boundary.
+ */
+export async function listSubmissionHistory(opts: {
+  country?: string | null
+  submittedBy?: string | null
+  max?: number
+} = {}): Promise<SubmissionHistory> {
+  const max = Math.max(1, Math.min(HISTORY_MAX, opts.max ?? HISTORY_MAX))
+
+  const rows = await fetchAllRows<any>((from, to) => {
+    let q = supabase.from('checklist_submissions').select(HISTORY_COLS)
+    if (opts.submittedBy) q = q.eq('submitted_by', opts.submittedBy)
+    q = scopeCountry(q, opts.country)
+    return q
+      .order('submitted_at', { ascending: false, nullsFirst: false })
+      .order('id')
+      .range(from, to)
+  }, { pageSize: 100, max })
+
+  // The exact size of the same filtered set, so the screen can say "300 of 812"
+  // instead of implying 300 is all there is. Best-effort: a count we could not
+  // read stays null and the screen says so.
+  let total: number | null = null
+  try {
+    let cq = supabase.from('checklist_submissions').select('id', { count: 'exact', head: true })
+    if (opts.submittedBy) cq = cq.eq('submitted_by', opts.submittedBy)
+    cq = scopeCountry(cq, opts.country)
+    const { count, error } = await cq
+    if (!error && typeof count === 'number') total = count
+  } catch { /* unknown, not zero */ }
+
+  const list = (rows ?? []) as unknown as ChecklistHistoryRow[]
+  return {
+    rows: list,
+    total,
+    bounded: total == null ? list.length >= max : total > list.length,
+    max,
+  }
+}
+
+/**
+ * Display names for the people who submitted the visible rows, keyed by user id.
+ *
+ * Only needed for the team view - in "mine" every row is the reader. Bounded by
+ * the ids actually on screen and best-effort: a name we cannot read leaves the
+ * row saying so rather than blocking the list.
+ */
+export async function listSubmitterNames(ids: (string | null | undefined)[]): Promise<Record<string, string>> {
+  const unique = Array.from(new Set(ids.filter((v): v is string => !!v && !!v.trim()))).slice(0, 200)
+  if (!unique.length) return {}
+  try {
+    const { data, error } = await supabase
+      .from('profiles').select('id,full_name,username').in('id', unique)
+    if (error) return {}
+    const out: Record<string, string> = {}
+    for (const r of (data ?? []) as any[]) {
+      const name = String(r?.full_name ?? '').trim() || String(r?.username ?? '').trim()
+      if (r?.id && name) out[String(r.id)] = name
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/* ---------------------------------------------------------- pure filtering */
+
+/**
+ * The buckets a reader filters by. Deliberately coarser than approval_status:
+ * both waiting states are "waiting" here, and the ROW still names which rung it
+ * is waiting on, because "waiting" is the useful filter while "waiting on whom"
+ * is the useful label.
+ */
+export type HistoryState = 'waiting' | 'closed' | 'sent_back' | 'no_approval'
+
+export function historyStateOf(s: { approval_status?: string | null } | null | undefined): HistoryState {
+  const st = String(s?.approval_status ?? '')
+  if (st === 'approved') return 'closed'
+  if (st === 'rejected') return 'sent_back'
+  if (st === 'pending' || st === 'pending_area_manager') return 'waiting'
+  return 'no_approval'
+}
+
+/** Counts per bucket plus the total, for the filter chips. */
+export function historyCounts(rows: ChecklistHistoryRow[]): Record<HistoryState | 'all', number> {
+  const out: Record<HistoryState | 'all', number> = {
+    all: rows.length, waiting: 0, closed: 0, sent_back: 0, no_approval: 0,
+  }
+  for (const r of rows) out[historyStateOf(r)] += 1
+  return out
+}
+
+/**
+ * Templates to offer in the picker, DERIVED FROM THE ROWS ON SCREEN. Offering a
+ * template the reader has never filled is a filter choice that returns nothing.
+ */
+export function historyTemplateOptions(
+  rows: ChecklistHistoryRow[],
+): Array<{ id: string; name: string; count: number }> {
+  const by = new Map<string, { id: string; name: string; count: number }>()
+  for (const r of rows) {
+    const id = String(r.template_id ?? '').trim()
+    if (!id) continue
+    const name = String(r.template_name ?? '').trim() || id
+    const hit = by.get(id)
+    if (hit) hit.count += 1
+    else by.set(id, { id, name, count: 1 })
+  }
+  return Array.from(by.values()).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * The sheet's reference. `document_no` is minted server-side at INSERT (V594),
+ * so every sheet filled before that carries none - measured live, all three
+ * existing submissions have a NULL document_no. Returning null lets the screen
+ * say "not numbered" instead of rendering a blank where an identity should be.
+ */
+export function submissionReference(s: { document_no?: string | null } | null | undefined): string | null {
+  const v = String(s?.document_no ?? '').trim()
+  return v || null
+}
+
+/** Case-insensitive match over the fields a row actually shows. */
+export function matchesHistorySearch(r: ChecklistHistoryRow, term: string): boolean {
+  const q = String(term ?? '').trim().toLowerCase()
+  if (!q) return true
+  return [r.document_no, r.template_name, r.title, r.asset_no, r.site]
+    .some((v) => String(v ?? '').toLowerCase().includes(q))
+}
+
+export interface HistoryFilter {
+  state?: HistoryState | 'all'
+  templateId?: string | null
+  search?: string
+}
+
+/** Apply the on-screen filters. Pure: same rows in, same rows out. */
+export function filterHistory(rows: ChecklistHistoryRow[], f: HistoryFilter = {}): ChecklistHistoryRow[] {
+  const state = f.state ?? 'all'
+  const tpl = String(f.templateId ?? '').trim()
+  return rows.filter((r) => {
+    if (state !== 'all' && historyStateOf(r) !== state) return false
+    if (tpl && String(r.template_id ?? '') !== tpl) return false
+    return matchesHistorySearch(r, f.search ?? '')
+  })
 }

@@ -37,7 +37,7 @@ export default withModuleGuard(InspectionApprovalReviewScreen, 'approvals')
 
 function InspectionApprovalReviewScreen() {
   const { profile, canAccess } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
@@ -50,7 +50,10 @@ function InspectionApprovalReviewScreen() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [approverSig, setApproverSig] = useState<string | null>(null)
-  const [approverName, setApproverName] = useState(profile?.full_name || profile?.username || '')
+  // Who signs is NOT typed any more - `decide_inspection_approval` derives the
+  // approver from the caller's own session, so an editable name box would have
+  // promised something the server ignores. This is display only.
+  const approverName = profile?.full_name || profile?.username || ''
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState<null | 'approve' | 'reject'>(null)
 
@@ -97,10 +100,8 @@ function InspectionApprovalReviewScreen() {
 
   async function decide(approved: boolean) {
     if (!insp || busy) return
-    const name = approverName.trim()
     if (approved) {
       if (!approverSig) { Alert.alert('Signature required', 'Sign in the approver box to approve this inspection.'); return }
-      if (!name) { Alert.alert('Name required', 'Enter your name to record who approved.'); return }
     } else if (!note.trim()) {
       Alert.alert('Reason required', 'Add a short note so the inspector knows what to fix.'); return
     }
@@ -110,9 +111,8 @@ function InspectionApprovalReviewScreen() {
       await decideInspection({
         id: insp.id,
         approved,
-        approverName: name || (profile?.full_name ?? ''),
         approverSignature: approverSig,
-        approverId: profile?.id ?? null,
+        approverName,
         reviewNote: note.trim() || null,
         existingNotes: insp.notes,
       })
@@ -199,6 +199,12 @@ function InspectionApprovalReviewScreen() {
   }
 
   const decided = insp.approval_status !== 'pending_approval'
+  const wasApproved = insp.approval_status === 'approved'
+  const decidedWhen = insp.approved_at
+    ? new Date(insp.approved_at).toLocaleString(dateLocale, {
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+    : ''
   const when = insp.created_at
     ? new Date(insp.created_at).toLocaleString(dateLocale, {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -296,31 +302,56 @@ function InspectionApprovalReviewScreen() {
 
           {/* Decision */}
           {decided ? (
-            <View style={[styles.card, styles.decidedCard]}>
-              <Ionicons
-                name={insp.approval_status === 'approved' ? 'checkmark-circle' : 'close-circle'}
-                size={20}
-                color={insp.approval_status === 'approved' ? c.success.base : c.danger.base}
-              />
-              <Text style={[styles.decidedText, { textAlign }]}>Already {insp.approval_status}.</Text>
-            </View>
+            /* A decided inspection SHOWS what was signed rather than offering the
+               pad again. Re-opening a signed record used to present an empty
+               approver box, which invites a second signature over a decision that
+               is already final. */
+            <>
+              <Text style={[styles.sectionTitle, { textAlign }]}>{t('inspectionApproval.decisionTitle')}</Text>
+              <View style={styles.card}>
+                <View style={[styles.decidedCard, isRTL && styles.rowR]}>
+                  <Ionicons
+                    name={wasApproved ? 'checkmark-circle' : 'close-circle'}
+                    size={20}
+                    color={wasApproved ? c.success.base : c.danger.base}
+                  />
+                  <Text style={[styles.decidedText, { textAlign }]}>
+                    {wasApproved ? t('inspectionApproval.decisionApproved') : t('inspectionApproval.decisionReturned')}
+                  </Text>
+                </View>
+                {!!insp.approver_email && (
+                  <Text style={[styles.decidedMeta, { textAlign }]}>
+                    {(wasApproved ? t('inspectionApproval.approvedBy') : t('inspectionApproval.returnedBy')) + ': ' + insp.approver_email}
+                  </Text>
+                )}
+                {!!decidedWhen && <Text style={[styles.decidedMeta, { textAlign }]}>{decidedWhen}</Text>}
+                <View style={{ marginTop: 10 }}>
+                  <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspectionApproval.approverSignature')}</Text>
+                  {insp.approver_signature ? (
+                    <SignatureView value={insp.approver_signature} height={110} />
+                  ) : (
+                    <Text style={[styles.help, { textAlign }]}>{t('inspectionApproval.noApproverSignature')}</Text>
+                  )}
+                </View>
+              </View>
+            </>
           ) : (
             <>
               <Text style={[styles.sectionTitle, { textAlign }]}>Your decision</Text>
               <View style={styles.card}>
-                <Text style={[styles.fieldLabel, { textAlign }]}>Approver signature</Text>
-                <SignaturePad onChange={setApproverSig} height={170} penColor={c.text} />
-                <View style={{ marginTop: 12 }}>
-                  <Text style={[styles.fieldLabel, { textAlign }]}>Approver name</Text>
-                  <TextInput
-                    style={[styles.input, { textAlign }]}
-                    value={approverName}
-                    onChangeText={setApproverName}
-                    placeholder="Your full name"
-                    placeholderTextColor={c.textMuted}
-                    autoCapitalize="words"
-                  />
-                </View>
+                <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspectionApproval.approverSignature')}</Text>
+                {/* `value` is load-bearing: this pad is inside a scroll view that
+                    remounts on reload, and without it a captured signature came
+                    back blank and Clear then erased it. */}
+                <SignaturePad value={approverSig} onChange={setApproverSig} height={170} penColor={c.text} />
+                {!!approverName && (
+                  <View style={[styles.signingAs, isRTL && styles.rowR]}>
+                    <Ionicons name="person-circle-outline" size={16} color={c.textMuted} />
+                    <Text style={[styles.signingAsText, { textAlign }]} numberOfLines={1}>
+                      {t('inspectionApproval.signingAs') + ': ' + approverName}
+                    </Text>
+                  </View>
+                )}
                 <View style={{ marginTop: 12 }}>
                   <Text style={[styles.fieldLabel, { textAlign }]}>Note (required to return)</Text>
                   <TextInput
@@ -395,7 +426,10 @@ function makeStyles(theme: Theme) {
     },
     textArea: { minHeight: 76, textAlignVertical: 'top' },
     decidedCard: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    decidedText: { flex: 1, fontSize: 13, fontWeight: '700', color: c.textSecondary },
+    decidedText: { flex: 1, fontSize: 14, fontWeight: '800', color: c.text },
+    decidedMeta: { fontSize: 12, fontWeight: '600', color: c.textSecondary, marginTop: 6 },
+    signingAs: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+    signingAsText: { flex: 1, fontSize: 12, fontWeight: '700', color: c.textSecondary },
     actions: { flexDirection: 'row', gap: 12, marginTop: 4 },
     rejectBtn: {
       flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

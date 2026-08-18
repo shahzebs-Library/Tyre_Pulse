@@ -1238,7 +1238,11 @@ function NewInspectionScreen() {
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.inspectorSignatureLabel')}</Text>
               <View style={styles.sigCard}>
-                <SignaturePad onChange={setInspectorSig} height={180} penColor={theme.color.text} />
+                {/* `value` is load-bearing: this pad lives on one step of a
+                    wizard, so stepping back and forward unmounts it. Without it
+                    the inspector returned to a blank pad over a signature they
+                    had already given, and Clear erased the stored one. */}
+                <SignaturePad value={inspectorSig} onChange={setInspectorSig} height={180} penColor={theme.color.text} />
               </View>
             </View>
 

@@ -1678,5 +1678,15 @@
   },
   "signature": {
     "signHere": "Sign here"
+  },
+  "inspectionApproval": {
+    "decisionTitle": "Decision",
+    "decisionApproved": "Approved",
+    "decisionReturned": "Returned to the field",
+    "approvedBy": "Approved by",
+    "returnedBy": "Returned by",
+    "approverSignature": "Approver signature",
+    "noApproverSignature": "No signature recorded",
+    "signingAs": "Signing as"
   }
 }

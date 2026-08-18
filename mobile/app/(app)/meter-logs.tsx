@@ -438,7 +438,11 @@ function MeterLogScreen() {
             <Text style={[styles.label, { textAlign }]}>Signature <Text style={styles.optional}>{t('modules.common.optional')}</Text></Text>
             {signPad ? (
               <>
-                <SignaturePad onChange={setSignature} penColor={theme.color.text} />
+                {/* `value` is load-bearing: "Redo" remounts this pad over an
+                    already-captured signature. Without it the pad reopened blank
+                    and its Clear emitted null, erasing the stored signature the
+                    driver had only come back to check. */}
+                <SignaturePad value={signature} onChange={setSignature} penColor={theme.color.text} />
                 <TouchableOpacity
                   onPress={() => setSignPad(false)}
                   style={[styles.sigDone, signature ? null : styles.sigDoneDim]}

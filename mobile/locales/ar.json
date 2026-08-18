@@ -1679,5 +1679,15 @@
   },
   "signature": {
     "signHere": "وقع هنا"
+  },
+  "inspectionApproval": {
+    "decisionTitle": "القرار",
+    "decisionApproved": "تمت الموافقة",
+    "decisionReturned": "أعيد إلى الميدان",
+    "approvedBy": "اعتمدها",
+    "returnedBy": "أعادها",
+    "approverSignature": "توقيع المعتمد",
+    "noApproverSignature": "لم يتم تسجيل توقيع",
+    "signingAs": "التوقيع باسم"
   }
 }

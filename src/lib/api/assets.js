@@ -2,7 +2,7 @@
  * Assets service - fleet master data (vehicle_fleet). Explicit column lists
  * (no SELECT *) so new/sensitive columns are never exposed by accident.
  */
-import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRpcPages } from './_client'
 
 const COLS =
   // ops_status is the OPERATIONAL state from the owner's monthly asset sheet
@@ -66,13 +66,19 @@ export async function listDataAssetOptions(country) {
   // returns 1,033 asset numbers, so the un-paged call was already dropping 33
   // of that one country's assets - silently, with no error and no visible
   // marker. On an all-countries view the tail is far longer.
-  const { data, error } = await fetchAllPages((from, to) =>
-    supabase
+  // fetchAllRpcPages, not fetchAllPages: an RPC that ignored the range would
+  // otherwise return the same first 1,000 rows on every page and be asked
+  // thousands of times. Paging by identity stops on the first page that adds
+  // nothing new, and guarantees no duplicate reaches the picker.
+  const { data, error } = await fetchAllRpcPages(
+    (from, to) => supabase
       .rpc('reference_asset_options', {
         p_country: country && country !== 'All' ? country : null,
       })
       .range(from, to),
-  { max: MAX_ASSET_ROWS })
+    (r) => (typeof r?.asset_no === 'string' && r.asset_no ? r.asset_no : null),
+    { max: MAX_ASSET_ROWS },
+  )
   if (error) throw new ServiceError(error.message, error.code, error)
   return (Array.isArray(data) ? data : []).map((r) => r?.asset_no).filter(Boolean)
 }

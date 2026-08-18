@@ -10,7 +10,7 @@ import { uploadModulePhoto } from './photoUpload'
 import { safeUuid } from './ids'
 import type { ChecklistField } from './checklistFields'
 import { filterTemplatesForRole, filterAssignmentsForRole } from './checklistRoles'
-import { fetchAllRows } from './fetchAllRows'
+import { fetchAllRows, fetchAllRpcRows } from './fetchAllRows'
 
 export interface ChecklistTemplate {
   id: string
@@ -167,8 +167,11 @@ export async function listSiteOptions(country?: string | null): Promise<string[]
 export async function listAssetOptions(country?: string | null): Promise<string[]> {
   const scoped = country && country !== 'All' ? country : null
   try {
-    const rows = await fetchAllRows<any>(
+    // Identity-paged: an RPC that ignored the range would otherwise be asked 20
+    // times for the same first 1,000 rows while a field user waits.
+    const rows = await fetchAllRpcRows<any>(
       (from, to) => supabase.rpc('reference_asset_options', { p_country: scoped }).range(from, to),
+      (r) => (typeof r?.asset_no === 'string' && r.asset_no ? r.asset_no : null),
       { max: 20000 },
     )
     if (rows.length) return uniqSorted(rows.map((r: any) => r.asset_no))

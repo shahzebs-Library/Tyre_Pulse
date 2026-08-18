@@ -8,10 +8,10 @@
  * null-safe country scoping, consistent error handling, and a seam for tests.
  */
 import { supabase } from '../supabase'
-import { fetchAllPages } from '../fetchAll'
+import { fetchAllPages, fetchAllRpcPages } from '../fetchAll'
 import { toUserMessage } from '../safeError'
 
-export { supabase, fetchAllPages }
+export { supabase, fetchAllPages, fetchAllRpcPages }
 
 /** Typed error thrown by every service method on a Supabase failure. */
 export class ServiceError extends Error {

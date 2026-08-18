@@ -23,6 +23,7 @@ const state = {
   rpcRanges: [],   // [from, to] of every rpc read
   error: null,
   lastOrder: [],
+  ignoreRange: false,
 }
 
 function pageOf(from, to) {
@@ -38,10 +39,11 @@ function makeBuilder(sink) {
     order: (col) => { state.lastOrder.push(col); return b },
     range: (from, to) => {
       sink.push([from, to])
-      const result = state.error
-        ? { data: null, error: state.error }
-        : { data: pageOf(from, to), error: null }
-      return Promise.resolve(result)
+      if (state.error) return Promise.resolve({ data: null, error: state.error })
+      // `ignoreRange` simulates a server that returns the same first page for
+      // every request, which is what an unranged RPC would do.
+      const rows = state.ignoreRange ? pageOf(0, 999) : pageOf(from, to)
+      return Promise.resolve({ data: rows, error: null })
     },
     then: (res) => res({ data: pageOf(0, 999), error: state.error }),
   }
@@ -49,13 +51,14 @@ function makeBuilder(sink) {
 }
 
 vi.mock('../lib/api/_client', async () => {
-  const { fetchAllPages } = await vi.importActual('../lib/fetchAll')
+  const { fetchAllPages, fetchAllRpcPages } = await vi.importActual('../lib/fetchAll')
   class ServiceError extends Error {
     constructor(message, code, cause) { super(message); this.code = code; this.cause = cause }
   }
   return {
     ServiceError,
     fetchAllPages,
+    fetchAllRpcPages,
     unwrap: (r) => { if (r?.error) throw new ServiceError(r.error.message, r.error.code); return r?.data },
     applyCountry: (q) => q,
     supabase: {
@@ -73,6 +76,7 @@ beforeEach(() => {
   state.rpcRanges = []
   state.error = null
   state.lastOrder = []
+  state.ignoreRange = false
 })
 
 describe('listAssets pages past the PostgREST cap', () => {
@@ -129,6 +133,20 @@ describe('listDataAssetOptions pages the set-returning RPC', () => {
     // The 33 past the cap are the ones the field user could not find.
     expect(opts).toContain('A-1032')
     expect(state.rpcRanges.length).toBeGreaterThan(1)
+  })
+
+  it('does NOT loop when the server ignores the range on an RPC', async () => {
+    // The dangerous failure mode. If every page returned the same first 1,000
+    // rows, offset-based paging would keep asking until it hit its ceiling -
+    // thousands of pointless round trips returning the same rows. Paging by
+    // identity stops on the first page that adds nothing new.
+    state.rows = Array.from({ length: 1033 }, (_, i) => ({ asset_no: `A-${i}` }))
+    state.ignoreRange = true
+    const opts = await listDataAssetOptions('KSA')
+    // Two requests at most: the first page, then one that proves it repeated.
+    expect(state.rpcRanges.length).toBeLessThanOrEqual(2)
+    // And no duplicates reach the caller.
+    expect(new Set(opts).size).toBe(opts.length)
   })
 
   it('drops blank asset numbers without dropping real ones', async () => {

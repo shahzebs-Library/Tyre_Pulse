@@ -4,7 +4,7 @@
  * explicit columns; every method throws on error.
  */
 import { supabase } from '../supabase'
-import { ServiceError, unwrap, fetchAllPages } from './_client'
+import { ServiceError, unwrap, fetchAllRpcPages } from './_client'
 import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
 import { naturalKey } from '../import/validate'
 
@@ -595,12 +595,20 @@ export async function enrichBatch(batchId, { chunkSize = ENRICH_CHUNK_ROWS, onPr
 export const MAX_IMPORT_KEYS = 200000
 
 export async function existingKeys({ module, country }) {
-  const { data, error, truncated } = await fetchAllPages((from, to) =>
-    supabase.rpc('import_existing_keys', {
+  // Identity-paged: the rows ARE the keys, so a page that adds no new key means
+  // the set is complete (or the range was ignored) and asking again is pointless.
+  const keyOfRow = (r) => {
+    const v = typeof r === 'string' ? r : r?.import_existing_keys
+    return typeof v === 'string' && v ? v : null
+  }
+  const { data, error, truncated } = await fetchAllRpcPages(
+    (from, to) => supabase.rpc('import_existing_keys', {
       p_module: module,
       p_country: country ?? null,
     }).range(from, to),
-  { max: MAX_IMPORT_KEYS })
+    keyOfRow,
+    { max: MAX_IMPORT_KEYS },
+  )
   if (error) throw new ServiceError(error.message, error.code, error)
   // RPC returns SETOF text → array of strings (rows) or array of { import_existing_keys }.
   const keys = (data || []).map((r) => (typeof r === 'string' ? r : r?.import_existing_keys)).filter(Boolean)

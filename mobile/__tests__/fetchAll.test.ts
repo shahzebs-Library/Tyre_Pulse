@@ -119,3 +119,50 @@ describe('fetchAllPages', () => {
     expect(calls[0]).toEqual([0, 999]) // fell back to the default page size
   })
 })
+
+describe('fetchAllRpcRows - paging a set-returning RPC', () => {
+  const { fetchAllRpcRows } = require('../lib/fetchAllRows')
+  const idOf = (r: any) => (r?.asset_no ?? null)
+
+  it('collects every page when the range is honoured', async () => {
+    const all = Array.from({ length: 1033 }, (_, i) => ({ asset_no: `A-${i}` }))
+    const calls: number[][] = []
+    const rows = await fetchAllRpcRows(
+      (from: number, to: number) => {
+        calls.push([from, to])
+        return Promise.resolve({ data: all.slice(from, to + 1), error: null })
+      }, idOf,
+    )
+    expect(rows).toHaveLength(1033)
+    expect(calls.length).toBeGreaterThan(1)
+  })
+
+  it('stops immediately when the server ignores the range', async () => {
+    // The failure this exists to prevent: the same first page forever, asked
+    // for 20 times on a phone the user is waiting on.
+    const all = Array.from({ length: 1033 }, (_, i) => ({ asset_no: `A-${i}` }))
+    let calls = 0
+    const rows = await fetchAllRpcRows(
+      () => { calls += 1; return Promise.resolve({ data: all.slice(0, 1000), error: null }) },
+      idOf,
+    )
+    expect(calls).toBeLessThanOrEqual(2)
+    expect(new Set(rows.map(idOf)).size).toBe(rows.length)
+  })
+
+  it('a short first page is a single round trip', async () => {
+    let calls = 0
+    const rows = await fetchAllRpcRows(
+      () => { calls += 1; return Promise.resolve({ data: [{ asset_no: 'A-1' }], error: null }) },
+      idOf,
+    )
+    expect(calls).toBe(1)
+    expect(rows).toHaveLength(1)
+  })
+
+  it('propagates an error instead of returning a short list', async () => {
+    await expect(fetchAllRpcRows(
+      () => Promise.resolve({ data: null, error: { message: 'boom' } }), idOf,
+    )).rejects.toMatchObject({ message: 'boom' })
+  })
+})

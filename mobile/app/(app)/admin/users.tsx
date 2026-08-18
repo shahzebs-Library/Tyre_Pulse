@@ -28,6 +28,7 @@ import { toUserMessage } from '../../../lib/safeError'
 import { normaliseRole, COUNTRIES } from '../../../lib/types'
 import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { backTo } from '../../../lib/goBack'
+import { NoAccess } from '../../../components/ModuleGuard'
 
 interface UserProfile {
   id: string
@@ -318,7 +319,8 @@ export default function UserManagementScreen() {
 
   const pendingCount = users.filter(u => !u.approved).length
 
-  if (guardLoading || !allowed || loading) {
+  if (!allowed && !guardLoading) return <NoAccess />
+  if (guardLoading || loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" />

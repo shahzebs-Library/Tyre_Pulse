@@ -52,6 +52,7 @@ import { fieldLabel, optionLabel, normalizeLang } from '../../../lib/checklistI1
 import { resolveStorageUrls } from '../../../lib/storageRefs'
 import { safeImageSrc } from '../../../lib/safeUrl'
 import { toUserMessage } from '../../../lib/safeError'
+import { NoAccess } from '../../../components/ModuleGuard'
 
 /** statusSummary speaks in tones; Badge speaks in status kinds. */
 const TONE_KIND: Record<string, StatusKind> = {
@@ -377,7 +378,7 @@ export default function ChecklistHistoryScreen() {
 
   // The guard redirects when the module is denied; render nothing meanwhile so
   // protected content never flashes.
-  if (!allowed) return null
+  if (!allowed) return <NoAccess />
 
   return (
     <Screen>

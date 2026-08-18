@@ -20,6 +20,7 @@ import { supabase } from '../../../lib/supabase'
 import { SEVERITY_COLORS, STATUS_COLORS, isAdminOrAbove, isAdmin } from '../../../lib/types'
 import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { BackButton } from '../../../components/ui'
+import { NoAccess } from '../../../components/ModuleGuard'
 
 interface Stats {
   totalVehicles:    number
@@ -133,7 +134,8 @@ export default function AdminDashboardScreen() {
     setRefreshing(false)
   }
 
-  if (guardLoading || !allowed) {
+  if (!allowed && !guardLoading) return <NoAccess />
+  if (guardLoading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" />

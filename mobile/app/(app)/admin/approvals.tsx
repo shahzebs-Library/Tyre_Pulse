@@ -36,6 +36,7 @@ import { useAdminGuard } from '../../../hooks/useRoleGuard'
 import { COUNTRIES } from '../../../lib/types'
 import { canApproveChecklists } from '../../../lib/permissions'
 import { backTo } from '../../../lib/goBack'
+import { NoAccess } from '../../../components/ModuleGuard'
 
 interface PendingUpload {
   id: string
@@ -335,7 +336,8 @@ export default function AdminApprovalsScreen() {
 
   const canChecklists = canApproveChecklists(profile?.role)
 
-  if (guardLoading || !allowed || (loading && closuresLoading)) {
+  if (!allowed && !guardLoading) return <NoAccess />
+  if (guardLoading || (loading && closuresLoading)) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" />

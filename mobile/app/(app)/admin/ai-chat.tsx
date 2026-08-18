@@ -20,6 +20,7 @@ import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { backTo } from '../../../lib/goBack'
+import { NoAccess } from '../../../components/ModuleGuard'
 
 // ── Agent definitions ─────────────────────────────────────────────────────────
 
@@ -124,7 +125,8 @@ export default function AiChatScreen() {
     buildContext()
   }, [allowed, profile?.full_name, profile?.role])
 
-  if (guardLoading || !allowed) {
+  if (!allowed && !guardLoading) return <NoAccess />
+  if (guardLoading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" />

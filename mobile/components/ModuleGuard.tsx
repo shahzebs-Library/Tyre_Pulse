@@ -79,8 +79,16 @@ export function withModuleGuard<P extends object>(
   return Guarded
 }
 
-// Denied view — Daylight styled, honest message, Back action.
-function NoAccess() {
+/**
+ * Denied view - Daylight styled, honest message, Back action.
+ *
+ * EXPORTED because several screens carry their own gate and used to render
+ * `guardLoading || !allowed` as ONE branch: a spinner. `allowed` never becomes
+ * true for somebody who is denied, so that spinner ran forever and a permission
+ * refusal was indistinguishable from a slow network. Reuse this instead of
+ * writing a third denial screen.
+ */
+export function NoAccess() {
   const { theme } = useTheme()
   const router = useRouter()
   const goBack = () => {

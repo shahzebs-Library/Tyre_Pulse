@@ -6,8 +6,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 ---
 
 # ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V588**)
-Live-verified state: main == branch == `9729ef59`, tree clean, production deploy READY on that sha,
-lint 0 errors, build clean, suite **527 files / 8,005 tests** green. Nothing is half-applied.
+Live-verified state: main == branch == `125f5e95`, tree clean, production deploy running on that sha,
+lint 0 errors, build clean, suite **528 files / 8,034 tests** green. V585/V586/V587 confirmed present in
+`supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
 
 ### ~~NEEDS A MEASUREMENT~~ — DONE 2026-08-17 18:00 UTC. THE REALTIME FIX IS CONFIRMED.
@@ -97,6 +98,14 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    recorded in this file, which is what confirms the bound behaves as intended.
    NOT changed: `listWorkOrdersForPage()` is retained - Board Overview's executive KPIs are deliberately
    all-time.
+
+10. **NEW, found while fixing item 6, NOT fixed: `tyre_records.brand` splits by CASE.** `Longmarch` vs
+   `LONGMARCH` (**910 rows**) and `Hankook` vs `HANKOOK` (60) are each offered as TWO dropdown options, and
+   picking one MISSES the other's rows - so the filter still under-reports even after V585. This is the
+   V245/V246 class exactly. **The fix is normalise + backfill + a guard trigger ON THE COLUMN**, as V245 did for
+   `vehicle_type` and V246 for `site`. **Do NOT merge them in the dropdown instead** - the grid filters with an
+   exact `.eq()`, so a merged option would drop rows and swap one silent-truncation bug for another. Needs its
+   own migration.
 
 ### THE CEILING THAT IS NOT A SQL PROBLEM
 9. **`shared_buffers` is 256 MB; `audit_log_v2` is 557 MB.** This session removed ~135 MB of pressure (89 MB audit

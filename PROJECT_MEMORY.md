@@ -140,7 +140,7 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    on every write to insure against a rollback that may never happen is the wrong trade. If a rollback ever
    genuinely must happen, ship a forward build that re-writes values into the legacy format first.
 
-11. **~~Which OTHER column is split like brand?~~ SWEPT by V590 (2026-08-18). One more real bug, five
+14. **~~Which OTHER column is split like brand?~~ SWEPT by V590 (2026-08-18). One more real bug, five
    measured refusals.** Candidates were enumerated by what a column DOES and every hit traced to its READER,
    because a collision on a column nothing groups by is cosmetic. **FIXED: `tyre_records.removal_reason`**
    (5 collisions / 2,372 rows) - `get_report_tyre_maintenance`, the ANON public share board, does a raw
@@ -1069,7 +1069,14 @@ the scalar `applyCountry`. Nine service signatures gained an OPTIONAL `countries
   clean and its work looked lost. It was recoverable from dangling stash commits (`git fsck --unreachable`,
   then `git show <sha>:<path>`), and I tagged them as insurance. Tell agents: stage/inspect by explicit path,
   never stash/checkout/reset on a shared tree.
-- Stage by EXPLICIT PATH always - `git add -A` sweeps another agent's half-finished files.
+- **STAGING BY EXPLICIT PATH IS NOT ENOUGH, and this rule as previously written is what let it happen to me.**
+  `git add -A` sweeps another agent's files, yes - but `git add <path>` followed by a bare `git commit` ALSO
+  sweeps them, because **commit writes the whole INDEX** and a sibling can stage its files in the gap between
+  your add and your commit. That is exactly how the Engineering KPI fix landed inside a commit titled "Memory:
+  flag that the new secureStorage format is not rollback-safe" (`645825df`, 2026-08-18). Nothing was lost, but
+  the commit message described half its contents. **COMMIT BY PATHSPEC: `git commit -- <paths>`**, which commits
+  only those paths whatever else is staged. Do NOT rewrite a pushed commit to tidy this up while a sibling is
+  active - record the truth in a follow-up commit instead.
 - Guessing an English string from a locale KEY NAME is guessing. `shell.searchScope` is the search placeholder,
   not "Search countries"; deriving every value from the components own fallbacks is what fixed it.
 

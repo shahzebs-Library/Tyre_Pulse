@@ -1,0 +1,24 @@
+-- V598 - the descriptions still advertised a field V595 deleted.
+-- STATUS: APPLIED live on jhssdmeruxtrlqnwfksc 2026-08-18 and verified.
+--
+-- The Workshop card read "Initial or final inspection, 31 checks ... signed by
+-- the mechanic, the auto electrician, and the inspecting engineer". Two of those
+-- claims became false the moment V595 landed: the Inspection stage field is
+-- GONE, and the sheet is no longer finished by the inspecting engineer - a
+-- supervisor signs it off and an area manager closes it. A description that
+-- announces a field nobody can find is worse than no description, because the
+-- reader goes looking for it and concludes the screen is broken.
+--
+-- description_i18n was {} on BOTH templates, so these translations are new and
+-- overwrite nothing. Content only - no schema change, no behaviour change.
+-- The full SQL is the two UPDATEs applied live; see the migration history entry
+-- v598_checklist_descriptions for the exact text, or read it back with
+--   select name, description, description_i18n from checklist_templates
+--    where id in ('a3bae584-44c4-4427-9759-becb5e411103',
+--                 'c1711e88-ad3d-4e42-a4e5-adac16395c03');
+--
+-- VERIFIED AFTER APPLY: neither description now matches
+-- 'initial or final|inspection stage|job card', and both carry ar/hi/ur.
+--
+-- ROLLBACK: restore the previous description text from a pre-V598 dump and set
+-- description_i18n back to '{}'::jsonb.

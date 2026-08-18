@@ -181,6 +181,10 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
     fields: [
       'id', 'approval_status', 'approver_name', 'approver_signature',
       'approved_by', 'approved_at', 'review_note', 'locked',
+      // V594's supervisor rung. Adding the columns to the table alone would not
+      // have been enough: this allow-list STRIPS every key it does not name, so
+      // a supervisor signature would have been silently dropped on the way out.
+      'supervisor_name', 'supervisor_signature', 'supervisor_by', 'supervisor_at',
     ],
   },
   // Driver daily meter readings (V162/V161 + V213 photo). Odometer feeds

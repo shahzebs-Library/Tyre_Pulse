@@ -5,6 +5,7 @@
  * Reads use supabase directly; the only WRITE goes through recordQueue.
  */
 import { supabase } from './supabase'
+import { nextStatusFor, stageFor, type ApprovalSubmissionLike, type ApprovalTemplateLike } from './checklistApproval'
 import { saveCommand } from './recordQueue'
 import { uploadModulePhoto } from './photoUpload'
 import { safeUuid } from './ids'
@@ -22,6 +23,15 @@ export interface ChecklistTemplate {
   version: number
   require_signature: boolean
   require_approval: boolean
+  /**
+   * V594. true = a supervisor sign-off is NOT the end: the sheet moves to
+   * pending_area_manager and only an area manager can close it.
+   */
+  require_area_manager?: boolean | null
+  /** Document-number prefix, e.g. WDC. The number itself is minted server-side. */
+  doc_prefix?: string | null
+  /** Expected days between visits for the same machine. Advisory - it warns. */
+  min_interval_days?: number | null
   scored?: boolean
   pass_threshold?: number | null
   fields: ChecklistField[]
@@ -54,7 +64,9 @@ export interface ChecklistAssignment {
 // ONE STRING LITERAL, NOT A CONCATENATION: supabase-js infers the row type from
 // the literal select text, and a `+` join degrades it to `string`, which makes
 // every read come back as GenericStringError[] and fails the build.
-const TEMPLATE_COLS = 'id,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,country,assignee_roles,name_i18n,description_i18n,option_sets'
+// ONE string literal on purpose: splitting it across a concatenation breaks
+// supabase-js row-type inference and every read comes back as GenericStringError[].
+const TEMPLATE_COLS = 'id,name,description,category,icon,status,version,require_signature,require_approval,require_area_manager,doc_prefix,min_interval_days,scored,pass_threshold,fields,country,assignee_roles,name_i18n,description_i18n,option_sets'
 const ASSIGN_COLS =
   'id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id'
 
@@ -355,22 +367,34 @@ export interface ChecklistSubmission {
   submitted_at: string | null
   score_pct: number | null
   score_passed: boolean | null
-  approval_status: 'not_required' | 'pending' | 'approved' | 'rejected'
+  approval_status: 'not_required' | 'pending' | 'pending_area_manager' | 'approved' | 'rejected'
+  /** Minted server-side at INSERT, e.g. WDC-TM514-2026-0001. */
+  document_no: string | null
+  /** The FINAL approver. On a two-stage sheet this is the AREA MANAGER. */
   approver_name: string | null
   approver_signature: string | null
   approved_at: string | null
+  /** The first rung: the supervisor who signed it off (V594). */
+  supervisor_name: string | null
+  supervisor_signature: string | null
+  supervisor_at: string | null
   review_note: string | null
   locked: boolean | null
+  template_version?: number | null
 }
 
 const SUBMISSION_COLS =
-  'id,template_id,template_name,title,site,asset_no,status,answers,photos,signature_data,printed_name,' +
-  'submitted_by,submitted_at,score_pct,score_passed,approval_status,approver_name,' +
-  'approver_signature,approved_at,review_note,locked'
+  'id,template_id,template_name,template_version,title,site,asset_no,status,answers,photos,notes,signature_data,printed_name,' +
+  'submitted_by,submitted_at,score_pct,score_passed,approval_status,document_no,approver_name,' +
+  'approver_signature,approved_at,supervisor_name,supervisor_signature,supervisor_at,review_note,locked'
 
 /** Submissions awaiting approval (require_approval templates), newest first. */
 export async function listPendingApprovals(country?: string | null): Promise<ChecklistSubmission[]> {
-  let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS).eq('approval_status', 'pending')
+  // BOTH waiting states, not just 'pending' - a sheet a supervisor has already
+  // signed off sits at pending_area_manager, and reading only 'pending' would
+  // make it vanish from every queue with nobody able to close it.
+  let q = supabase.from('checklist_submissions').select(SUBMISSION_COLS)
+    .in('approval_status', ['pending', 'pending_area_manager'])
   q = scopeCountry(q, country)
   const { data, error } = await q.order('submitted_at', { ascending: false, nullsFirst: false }).limit(200)
   if (error) throw error
@@ -389,6 +413,23 @@ export async function getSubmission(id: string): Promise<ChecklistSubmission | n
  * Approve or reject a submission (elevated-role RLS enforces who can). Routes
  * through the typed, offline-safe command queue like every other write.
  */
+/**
+ * Sign off or send back a submission.
+ *
+ * WHICH RUNG this is depends on the template and the submission's CURRENT
+ * status, resolved by the shared engine so the phone and the database agree:
+ *   two-stage, pending              -> supervisor signs   -> pending_area_manager
+ *   two-stage, pending_area_manager -> area manager signs -> approved (closed)
+ *   single-stage, pending           -> one approval       -> approved (closed)
+ * The DB trigger guard_checklist_approval_stages refuses a rung that is skipped
+ * or signed by the wrong role, so this can never widen what is allowed - it only
+ * makes the phone ask for the right thing.
+ *
+ * Routes through the offline-safe command queue like every other write. The
+ * dedupe key carries the target status, so a supervisor sign-off queued offline
+ * and a later area-manager approval are two DIFFERENT commands rather than one
+ * overwriting the other.
+ */
 export async function decideApproval(input: {
   id: string
   approved: boolean
@@ -396,16 +437,65 @@ export async function decideApproval(input: {
   approverSignature?: string | null
   reviewNote?: string | null
   approverId?: string | null
-}): Promise<{ offline: boolean }> {
+  /** The template + submission, so the rung can be resolved. */
+  template?: ApprovalTemplateLike | null
+  submission?: ApprovalSubmissionLike | null
+}): Promise<{ offline: boolean; status: string }> {
+  const status = input.submission
+    ? nextStatusFor(input.template ?? null, input.submission, input.approved)
+    : (input.approved ? 'approved' : 'rejected')
+
+  const stage = stageFor(input.template ?? null, input.submission ?? null)
+  const signature = input.approved ? (input.approverSignature ?? null) : null
+  const now = new Date().toISOString()
+
+  // A supervisor rung writes the supervisor columns; the final rung writes the
+  // approver columns. Writing both would make one person look like two.
+  const stageFields = status === 'pending_area_manager'
+    ? {
+        supervisor_name: input.approverName || null,
+        supervisor_signature: signature,
+        supervisor_by: input.approverId ?? null,
+        supervisor_at: now,
+      }
+    : {
+        approver_name: input.approverName || null,
+        approver_signature: signature,
+        approved_by: input.approverId ?? null,
+        approved_at: now,
+      }
+
   const res = await saveCommand('CHECKLIST_APPROVAL', {
     id: input.id,
-    approval_status: input.approved ? 'approved' : 'rejected',
-    approver_name: input.approverName || null,
-    approver_signature: input.approved ? (input.approverSignature ?? null) : null,
-    approved_by: input.approverId ?? null,
-    approved_at: new Date().toISOString(),
+    approval_status: status,
+    ...stageFields,
     review_note: input.approved ? null : (input.reviewNote ?? null),
-    locked: input.approved,
-  }, `approve_${input.id}`)
-  return { offline: !!res.offline }
+    // Only a CLOSED sheet locks. A supervisor sign-off must leave it editable,
+    // because the area manager may send it back.
+    locked: status === 'approved',
+  }, `approve_${input.id}_${status}`)
+  return { offline: !!res.offline, status }
+}
+
+/**
+ * The previous visit for this machine on this sheet, for the "it is not due
+ * yet" warning. ADVISORY and best-effort: a failure resolves to null, because
+ * "we could not look" is not the same as "it is not due", and the phone may be
+ * offline when it asks.
+ */
+export async function getLastSubmission(
+  templateId: string,
+  assetNo: string,
+): Promise<{ found: boolean; days_ago?: number; document_no?: string | null; submitted_at?: string } | null> {
+  if (!templateId || !String(assetNo ?? '').trim()) return null
+  try {
+    const { data, error } = await supabase.rpc('checklist_last_submission' as any, {
+      p_template_id: templateId,
+      p_asset_no: assetNo,
+    })
+    if (error) return null
+    return (data as any) ?? null
+  } catch {
+    return null
+  }
 }

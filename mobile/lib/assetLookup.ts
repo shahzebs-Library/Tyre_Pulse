@@ -23,9 +23,16 @@ export interface AssetLookupRecord {
   make?: string | null
   model?: string | null
   fleet_number?: string | null
+  registration_no?: string | null
+  chassis_no?: string | null
+  current_km?: number | null
 }
 
-const ASSET_COLS = 'id, site, asset_no, vehicle_type, make, model, fleet_number'
+// registration_no / chassis_no / current_km are here for checklist auto-fill
+// (V595). They are sparse - fleet_number is set on 398 of 1,030 KSA assets and
+// on NONE of the 452 UAE or 135 Egypt ones - which is exactly why the fields
+// they feed lock only once a value actually arrives.
+const ASSET_COLS = 'id, site, asset_no, vehicle_type, make, model, fleet_number, registration_no, chassis_no, current_km'
 
 /** PostgREST filters break on commas/parens — strip them and cap length. */
 function sanitize(code: string): string {

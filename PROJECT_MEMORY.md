@@ -5,9 +5,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V590**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V591**)
 Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
-V585-V589 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
+V585-V590 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
 
 ### ~~NEEDS A MEASUREMENT~~ — DONE 2026-08-17 18:00 UTC. THE REALTIME FIX IS CONFIRMED.
@@ -139,6 +139,58 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    IPCs on the startup path that already caused the permanent-spinner bug this project fixed once. Paying that
    on every write to insure against a rollback that may never happen is the wrong trade. If a rollback ever
    genuinely must happen, ship a forward build that re-writes values into the legacy format first.
+
+11. **~~Which OTHER column is split like brand?~~ SWEPT by V590 (2026-08-18). One more real bug, five
+   measured refusals.** Candidates were enumerated by what a column DOES and every hit traced to its READER,
+   because a collision on a column nothing groups by is cosmetic. **FIXED: `tyre_records.removal_reason`**
+   (5 collisions / 2,372 rows) - `get_report_tyre_maintenance`, the ANON public share board, does a raw
+   `GROUP BY removal_reason ... LIMIT 12`, so **WORN OUT, the fleet's #1 removal reason at 769, could never be
+   shown as such** (split 363/288/118 across ranks 4, 5 and 8) and PUNCTURE's third variant sat at rank 13,
+   outside the LIMIT. The pad here is SPACES (a 100-char fixed-width pad), so plain `btrim()` would have caught
+   it - nobody had ever run the analysis on this column.
+   **THIS ONE WAS NOT A NO-OP, UNLIKE V588: `km_fit_zero` = 63**, and `tyre_records_master_process_tg` NULLS
+   km_at_fitment when it is 0, so a plain UPDATE would have destroyed 63 owner-approved factory-fitment zeros
+   while reporting success. That one trigger is disabled for the statement and the migration ABORTS unless km is
+   byte-identical after AND `tgenabled` is back to 'O'. **ALWAYS re-measure km_fit_zero before any tyre_records
+   backfill; do not carry V588's zero forward.**
+   `trg_zz_normalize_removal_reason` is plain `BEFORE INSERT OR UPDATE`, deliberately NOT
+   `UPDATE OF removal_reason` - **a column set by an earlier BEFORE trigger is not in the statement's column
+   list**, so `UPDATE OF` would fail to fire on exactly the `trg_apply_tyre_learned_facts` write it guards
+   (the V398b defect). STATED: reasons now render UPPER on the board/widget/exports, like brand and site.
+   **REFUSED, each measured - do NOT re-raise these as unfixed:** `parts_consumption.asset_type` is the LARGEST
+   collision set in the database (15 groups / **203,807 of 217k rows**, an ERP 30-char pad; for MOT-VEH and
+   TRAILER the PADDED variant is the majority) **and is INERT** - `_cost_dim`/`_cost_var_dim`, its only readers,
+   both group by `btrim(...)`, and backfilling would re-run `trg_classify_parts_consumption` over 203,807 rows
+   of the financial ledger on a 256 MB instance to fix a reader that is already right. `parts_consumption.item_code`
+   (49 groups, 85 rows, SAR 344,179.66) looked like money in the wrong bucket because material_master holds 0
+   lowercase rows and 84 reviewed uppercase ones - but `classify_parts_consumption` looks up
+   `upper(btrim(NEW.item_code))`, and all 85 lines verifiably land in the bucket the reviewed master gives.
+   `tyre_records."position"` (166 padded rows - **the 2026-08-05 cleanup did `tyre_position` and `serial_no` and
+   MISSED this sibling column**) is absorbed by `parsePosition()`'s `.trim().toUpperCase()`.
+   `vehicle_fleet.make` (**SANY is 294 'Sany' + 159 'SANY'**) has no reader that groups on it. The verbatim
+   import landing zones and `insurance_policy_assets` MUST stay as delivered. `work_orders` is CLEAN on all
+   7 text columns.
+
+12. **REAL, PROVEN, AND DELIBERATELY NOT FIXED: `tyre_records.serial_no` case split causes a PARTIAL SCRAP on
+   43 tyres.** 48 collision groups; 45 are the same asset AND the same wheel with sequential dates = one tyre
+   whose life is recorded half under `k507B403590` and half under `K507B403590`. `scrap_tyre_by_serial` matches
+   `t.serial_no = v_s` EXACTLY. **Proven live as the super admin, rolled back, on TM662 LHRO: scrapping
+   `K507B403590` set the 2025 row to Scrapped and left the 2026 row Active** - the tyre reads Scrapped in the
+   register while still fitted in the pool. **DO NOT FIX THIS BY NORMALISING THE COLUMN.** Both lookups are
+   case-sensitive `.eq()` - `tyreExchange.findTyreBySerial` (feeds Scrap) and **mobile `lookupTyreBySerial`
+   (BARCODE SCAN)** - so uppercasing the column turns a split-history bug into a can't-find-the-tyre bug in the
+   field. **Readers first, column second.** The cheap first move needing NO client change: make
+   `scrap_tyre_by_serial` / `unscrap_tyre_by_serial` / `list_scrapped_tyres`' join match case-insensitively.
+   Already checked for whoever does it: `tyre_status_marks` is 100% canonical (0 of 201) so nothing is orphaned,
+   and `apply_tyre_learned_facts` already compares `upper(btrim())` on both sides. Residue:
+   tyre_price_backfill_log 6 rows, tyre_learned_facts 2.
+
+13. **CONFIRMS AND QUANTIFIES STANDING ITEM 5 - a tyre BRAND is the #3 "removal reason" on a customer-facing
+   public board.** 820 rows carry a catalog brand in `removal_reason` (ROADX 693 · FIREMAX 63 · LONGMARCH 53 ·
+   TRIANGLE 9 · ALLROUND 1 · BLACKHAWK 1), **all UAE, all with `brand` already populated**, plus ROCK HOLDER and
+   VGLORY which the `brain_tokens` catalog does not carry - so the contamination is WIDER than a catalog join
+   detects. Owner decision; nothing to recover into `brand` because `brand` is already correct on all 820. V590
+   left it untouched (clearing a column is a semantic decision, not a whitespace fix).
 
 ### THE CEILING THAT IS NOT A SQL PROBLEM
 9. **`shared_buffers` is 256 MB; `audit_log_v2` is 557 MB.** This session removed ~135 MB of pressure (89 MB audit

@@ -16,7 +16,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
-import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { spacing, radius, statusColor, StatusKind } from '../../../lib/theme'
 import {
   Screen, Card, AppText, Button, Badge, StatTile, EmptyState, ErrorState, Loading,
@@ -60,7 +60,7 @@ import { withModuleGuard } from '../../../components/ModuleGuard'
 export default withModuleGuard(AccidentDashboardScreen, 'accidents')
 
 function AccidentDashboardScreen() {
-  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
+  const { allowed, loading: guardLoading } = useModuleGuard('accidents')
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

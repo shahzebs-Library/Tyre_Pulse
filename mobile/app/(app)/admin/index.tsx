@@ -18,7 +18,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { SEVERITY_COLORS, STATUS_COLORS, isAdminOrAbove, isAdmin } from '../../../lib/types'
-import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { BackButton } from '../../../components/ui'
 
 interface Stats {
@@ -61,7 +61,7 @@ const GREETING = () => {
 }
 
 export default function AdminDashboardScreen() {
-  const { allowed, loading: guardLoading } = useElevatedGuard()
+  const { allowed, loading: guardLoading } = useModuleGuard('admin')
   const { profile, isSuperAdmin } = useAuth()
   const { t } = useLanguage()
   const router = useRouter()

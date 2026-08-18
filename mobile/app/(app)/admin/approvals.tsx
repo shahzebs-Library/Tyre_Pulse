@@ -95,6 +95,13 @@ const CLOSURE_COLS =
   'estimated_damage_cost,close_request_note,close_requested_at'
 
 export default function AdminApprovalsScreen() {
+  // DELIBERATELY the strict role guard, NOT the module guard. This screen
+  // approves accident CLOSURES and pending uploads and has always been
+  // admin-only, while the registry's approvals module admits manager + director
+  // (they use the checklist and inspection approval queues). Moving this screen
+  // onto that module key would LOOSEN an admin gate, so the stricter guard
+  // stays; __tests__/routeGuardRegistry.test.ts carries it as a documented
+  // exemption, and the exemption goes stale-detected if this ever changes.
   const { allowed, loading: guardLoading } = useAdminGuard()
   const { profile } = useAuth()
   const router = useRouter()

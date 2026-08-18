@@ -31,7 +31,7 @@ import { fetchAllRows } from '../../../lib/fetchAllRows'
 import { toUserMessage } from '../../../lib/safeError'
 import { saveCommand } from '../../../lib/recordQueue'
 import { safeUuid } from '../../../lib/ids'
-import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { extractScanCode, lookupAssetByCode } from '../../../lib/assetLookup'
 import AccidentPhotoGrid, { AccidentPhotoEntry } from '../../../components/AccidentPhotoGrid'
 import { backTo } from '../../../lib/goBack'
@@ -263,7 +263,7 @@ import { withModuleGuard } from '../../../components/ModuleGuard'
 export default withModuleGuard(AccidentReportScreen, 'reportAccident')
 
 function AccidentReportScreen() {
-  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector', 'tyre_man'])
+  const { allowed, loading: guardLoading } = useModuleGuard('reportAccident')
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

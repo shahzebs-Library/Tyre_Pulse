@@ -8,8 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
-import { UserRole } from '../../lib/types'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import {
   Theme, StatusKind, spacing, radius, typography, statusColor, elevation,
 } from '../../lib/theme'
@@ -17,7 +16,6 @@ import {
   Screen, Card, AppText, StatTile, SectionHeader, Loading, ErrorState, EmptyState,
 } from '../../components/ui'
 
-const ROLES: UserRole[] = ['admin', 'manager', 'director']
 const FETCH_PAGE = 1000
 
 type TintKey = keyof Theme['tint']
@@ -84,7 +82,7 @@ function OverviewScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const s = useMemo(() => makeStyles(theme), [theme])
-  const { allowed } = useRoleGuard(ROLES)
+  const { allowed } = useModuleGuard('overview')
 
   const [rows, setRows] = useState<TyreRow[]>([])
   const [loading, setLoading] = useState(true)

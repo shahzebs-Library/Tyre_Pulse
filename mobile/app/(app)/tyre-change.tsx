@@ -10,12 +10,10 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography } from '../../lib/theme'
 import { Screen, Button } from '../../components/ui'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { saveCommand } from '../../lib/recordQueue'
 import PhotoCapture from '../../components/PhotoCapture'
-import { UserRole } from '../../lib/types'
 
-const ROLES: UserRole[] = ['tyre_man', 'inspector', 'admin', 'manager', 'director']
 const POSITIONS = ['FL', 'FR', 'RL', 'RR', 'RLO', 'RLI', 'RRO', 'RRI', 'Spare']
 
 import { withModuleGuard } from '../../components/ModuleGuard'
@@ -30,7 +28,7 @@ function TyreChangeScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string; position?: string }>()
-  const { allowed } = useRoleGuard(ROLES)
+  const { allowed } = useModuleGuard('tyreChange')
 
   const [assetNo, setAssetNo] = useState(params.asset ?? '')
   const [site, setSite] = useState(params.site ?? profile?.site ?? '')

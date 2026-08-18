@@ -8,12 +8,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { saveCommand } from '../../lib/recordQueue'
 import PhotoCapture from '../../components/PhotoCapture'
-import { UserRole } from '../../lib/types'
 
-const ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 'director']
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const
 const PRI_COLOR: Record<string, string> = { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }
 const DUE_PRESETS = [
@@ -39,7 +37,7 @@ function ReportIssueScreen() {
   const { t, isRTL } = useLanguage()
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string; serial?: string }>()
-  const { allowed } = useRoleGuard(ROLES)
+  const { allowed } = useModuleGuard('reportIssue')
 
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<typeof PRIORITIES[number]>('Medium')

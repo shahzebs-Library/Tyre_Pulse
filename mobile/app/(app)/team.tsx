@@ -10,16 +10,14 @@ import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { useRealtime } from '../../hooks/useRealtime'
 import { canManageUsers } from '../../lib/permissions'
-import { UserRole } from '../../lib/types'
 import { Theme, spacing, radius, elevation } from '../../lib/theme'
 import {
   Screen, Card, AppText, Badge, StatTile, Loading, EmptyState, ErrorState,
 } from '../../components/ui'
 
-const VIEW_ROLES: UserRole[] = ['admin', 'manager', 'director']
 
 interface Member {
   id: string
@@ -59,7 +57,7 @@ function TeamScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const s = useMemo(() => makeStyles(theme), [theme])
-  const { allowed } = useRoleGuard(VIEW_ROLES)
+  const { allowed } = useModuleGuard('team')
   const [rows, setRows] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

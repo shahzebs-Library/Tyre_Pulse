@@ -24,7 +24,7 @@ import { useTheme } from '../../../contexts/ThemeContext'
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { safeImageSrc } from '../../../lib/safeUrl'
-import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { Theme, radius, spacing, statusColor, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Badge } from '../../../components/ui'
 import AccidentClaimsPanel from '../../../components/AccidentClaimsPanel'
@@ -69,7 +69,7 @@ export default withModuleGuard(AccidentDetailScreen, 'accidents')
 
 function AccidentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
+  const { allowed, loading: guardLoading } = useModuleGuard('accidents')
   const { profile, isSuperAdmin } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

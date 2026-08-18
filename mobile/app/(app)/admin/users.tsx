@@ -26,7 +26,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { normaliseRole, COUNTRIES } from '../../../lib/types'
-import { useAdminGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { backTo } from '../../../lib/goBack'
 
 interface UserProfile {
@@ -78,7 +78,7 @@ const EMPTY_REASON_MODAL: ReasonModalState = {
 }
 
 export default function UserManagementScreen() {
-  const { allowed, loading: guardLoading } = useAdminGuard()   // admin only
+  const { allowed, loading: guardLoading } = useModuleGuard('users')   // admin only
   const { profile, isSuperAdmin } = useAuth()
   const router = useRouter()
 

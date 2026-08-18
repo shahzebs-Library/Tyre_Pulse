@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
-import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { withModuleGuard } from '../../../components/ModuleGuard'
 import { Theme, spacing, StatusKind } from '../../../lib/theme'
 import { Screen, Card, AppText, Badge, Loading, ErrorState, EmptyState } from '../../../components/ui'
@@ -56,7 +56,7 @@ export default withModuleGuard(AccidentCaseScreen, 'accidents')
 
 function AccidentCaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
+  const { allowed, loading: guardLoading } = useModuleGuard('accidents')
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()

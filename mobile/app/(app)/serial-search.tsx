@@ -19,8 +19,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
-import { MODULES } from '../../lib/permissions'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { lookupTyreBySerial, sanitizeSerial, TyreLookupRecord } from '../../lib/tyreLookup'
 import { extractScanCode } from '../../lib/assetLookup'
 import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, canScrapTyre, canUnscrapTyre, ScrapMark } from '../../lib/tyreScrap'
@@ -37,12 +36,10 @@ function SerialSearchScreen() {
   const router = useRouter()
   const { t, isRTL } = useLanguage()
   const { profile, isSuperAdmin } = useAuth()
-  // Guard from the module registry rather than a second hardcoded list: the two
-  // had already drifted, with `serial` allowing reporter and driver while this
-  // screen turned them away.
-  const { allowed } = useRoleGuard(
-    MODULES.find((m) => m.key === 'serial')?.roles ?? ['inspector', 'tyre_man', 'admin', 'manager', 'director'],
-  )
+  // Registry-backed guard: reading MODULES.roles directly had two gaps - it
+  // omitted admin (a module's `roles` list never includes it) and it could not
+  // see a per-user grant, so both were turned away by this screen.
+  const { allowed } = useModuleGuard('serial')
   // Both rights are answered by the SERVER, because the phone cannot tell:
   // normaliseRole collapses unknown custom roles to 'reporter', and per-user
   // capability grants are invisible here. Asking the same functions the RPCs

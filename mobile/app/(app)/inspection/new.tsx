@@ -23,16 +23,15 @@ import TyrePositionCard from '../../../components/TyrePositionCard'
 import TyreDetailModal from '../../../components/TyreDetailModal'
 import VehicleTyreDiagram, { diagramPositions } from '../../../components/VehicleTyreDiagram'
 import SignaturePad from '../../../components/SignaturePad'
-import { useRoleGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { spacing, radius, elevation, Theme } from '../../../lib/theme'
 import {
-  VehicleFleet, TyrePositionData, UserRole, GpsFix,
+  VehicleFleet, TyrePositionData, GpsFix,
   emptyTyrePosition,
 } from '../../../lib/types'
 
 // Roles permitted to record inspections (mirrors permissions.canInspect)
-const INSPECT_ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 'director']
 
 type Step = 'header' | 'tyres' | 'review' | 'submit'
 
@@ -98,7 +97,7 @@ function NewInspectionScreen() {
 
   // RBAC: only inspection-capable roles may open this screen (defends against
   // deep-links / programmatic navigation; the tab is already role-hidden).
-  const { allowed } = useRoleGuard(INSPECT_ROLES)
+  const { allowed } = useModuleGuard('inspect')
 
   const [step, setStep] = useState<Step>('header')
   const [sites, setSites] = useState<{ name: string; country: string }[]>([])

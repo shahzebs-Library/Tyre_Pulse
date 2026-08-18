@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { canDoRca } from '../../lib/permissions'
 import { spacing, radius, typography, Theme } from '../../lib/theme'
 import { Screen, AppText, EmptyState, Loading } from '../../components/ui'
@@ -66,7 +66,7 @@ function RcaScreen() {
   const [photos, setPhotos] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
-  const { allowed } = useRoleGuard(['inspector', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('rca')
   const textAlign = isRTL ? 'right' : 'left'
   const mayCreate = canDoRca(profile?.role)
 

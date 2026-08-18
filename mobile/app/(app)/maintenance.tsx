@@ -24,7 +24,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography, StatusKind } from '../../lib/theme'
 import { supabase } from '../../lib/supabase'
 import { toUserMessage } from '../../lib/safeError'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import {
   Screen, Card, AppText, Badge, Button, StatTile, EmptyState, ErrorState, Loading,
 } from '../../components/ui'
@@ -111,7 +111,7 @@ function MaintenanceScreen() {
   const router = useRouter()
 
   // RPC re-checks Admin/Manager/Director server-side; mirror that gate here.
-  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director'])
+  const { allowed, loading: guardLoading } = useModuleGuard('pm')
 
   const [plans, setPlans] = useState<PmPlan[]>([])
   const [loading, setLoading] = useState(true)

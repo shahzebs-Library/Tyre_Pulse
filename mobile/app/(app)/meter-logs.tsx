@@ -26,7 +26,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography } from '../../lib/theme'
 import { toUserMessage } from '../../lib/safeError'
 import { Screen, Button } from '../../components/ui'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import PhotoCapture from '../../components/PhotoCapture'
 import ChecklistReferencePicker from '../../components/ChecklistReferencePicker'
 import SignaturePad from '../../components/SignaturePad'
@@ -54,7 +54,7 @@ function MeterLogScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string }>()
 
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'reporter', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('meter')
 
   const [assetNo, setAssetNo] = useState(params.asset ? String(params.asset) : '')
   const [site, setSite] = useState(params.site ? String(params.site) : (profile?.site ?? ''))

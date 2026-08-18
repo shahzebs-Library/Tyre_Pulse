@@ -19,7 +19,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { Theme, spacing, radius, typography } from '../../lib/theme'
 import {
   Screen, AppText, Badge, StatTile, ListRow,
@@ -65,7 +65,7 @@ function CalendarScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
 
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('calendar')
   const textAlign = isRTL ? 'right' : 'left'
 
   const [items, setItems] = useState<ScheduleItem[]>([])

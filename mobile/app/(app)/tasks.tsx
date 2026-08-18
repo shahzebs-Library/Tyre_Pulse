@@ -11,7 +11,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { canInspect } from '../../lib/permissions'
 
 type FilterKey = 'open' | 'mine' | 'all'
@@ -54,7 +54,7 @@ function TasksScreen() {
   const [filter, setFilter] = useState<FilterKey>('open')
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('tasks')
   const textAlign = isRTL ? 'right' : 'left'
   const canResolve = canInspect(profile?.role)
   const myName = profile?.full_name ?? profile?.username ?? ''

@@ -14,7 +14,7 @@ import { useTheme } from '../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography, elevation, statusColor, StatusKind } from '../../lib/theme'
 import { Screen, AppText, Button, Badge, Loading, EmptyState } from '../../components/ui'
 import { useRealtime } from '../../hooks/useRealtime'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { canManageWorkOrders } from '../../lib/permissions'
 
 interface WorkOrder {
@@ -65,7 +65,7 @@ function WorkOrdersScreen() {
   const [desc, setDesc] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const { allowed } = useRoleGuard(['inspector', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('workorders')
   const textAlign = isRTL ? 'right' : 'left'
   const mayEdit = canManageWorkOrders(profile?.role)
 

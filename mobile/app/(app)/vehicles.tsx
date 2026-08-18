@@ -12,7 +12,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { canInspect } from '../../lib/permissions'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import {
   Theme, StatusKind, spacing, radius, elevation,
 } from '../../lib/theme'
@@ -76,7 +76,7 @@ function VehiclesScreen() {
 
   // Must match the `vehicles` entry in lib/permissions.ts, or a role that sees
   // the tile on Home taps into a blank screen.
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director', 'reporter', 'driver'])
+  const { allowed } = useModuleGuard('vehicles')
   const textAlign = isRTL ? 'right' : 'left'
   const mayInspect = canInspect(profile?.role)
 

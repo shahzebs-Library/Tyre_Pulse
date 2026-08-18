@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
-import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { backTo } from '../../../lib/goBack'
 
 // ── Agent definitions ─────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ interface Message {
 }
 
 export default function AiChatScreen() {
-  const { allowed, loading: guardLoading } = useElevatedGuard()
+  const { allowed, loading: guardLoading } = useModuleGuard('admin')
   const { profile } = useAuth()
   const router = useRouter()
 

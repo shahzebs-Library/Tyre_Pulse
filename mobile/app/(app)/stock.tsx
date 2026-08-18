@@ -11,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { canCountStock } from '../../lib/permissions'
 import { isAdmin } from '../../lib/types'
 import { setStockCount, adjustStock, statusFor, createStockRecord, listStockSites } from '../../lib/stock'
@@ -133,7 +133,7 @@ function StockScreen() {
   const [fleetSites, setFleetSites] = useState<string[]>([])
   const [fleetSitesLoaded, setFleetSitesLoaded] = useState(false)
 
-  const { allowed } = useRoleGuard(['tyre_man', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('stock')
   const textAlign = isRTL ? 'right' : 'left'
   const mayAdjust = canCountStock(profile?.role)
   // Reorder thresholds (min/critical) are admin-only: role admin or super-admin.

@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
-import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../../hooks/useRoleGuard'
 import { backTo } from '../../../lib/goBack'
 import { fetchAllRows } from '../../../lib/fetchAllRows'
 
@@ -60,7 +60,7 @@ const COUNTRIES = ['Saudi Arabia', 'UAE', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function SitesManagementScreen() {
-  const { allowed, loading: guardLoading } = useElevatedGuard()
+  const { allowed, loading: guardLoading } = useModuleGuard('admin')
   const { profile } = useAuth()
   const router = useRouter()
 

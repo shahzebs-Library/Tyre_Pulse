@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
 import {
   Screen, Card, AppText, Badge, StatTile, Loading, EmptyState, ErrorState,
@@ -54,7 +54,7 @@ function AlertsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [ackingId, setAckingId] = useState<string | null>(null)
 
-  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
+  const { allowed } = useModuleGuard('alerts')
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {

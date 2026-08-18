@@ -27,11 +27,15 @@ import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+// The role set that already reaches the app's Approvals surface (mirrored from
+// Layout.jsx nav + the /approvals route). Reused so inspection sign-off does not
+// introduce a second, drifting idea of who may approve.
+import { ANALYTICS_ROLES } from '../lib/commandSearch'
 import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
@@ -92,10 +96,13 @@ const SEV_CONFIG = {
  * A tile with a zero or N/A value is NOT clickable: offering a drill-down that lands on an
  * empty table teaches nothing, and an unreadable value is not a measurement to filter on.
  */
-function OverviewSlide({ title, items, footer = null, activeFocus = 'all', onFocus = null }) {
+function OverviewSlide({ title, items, footer = null, activeFocus = 'all', onFocus = null, caption = null }) {
   return (
     <div className="card flex-1 min-w-[260px]">
-      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{title}</p>
+      <p className={`text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] ${caption ? 'mb-1' : 'mb-3'}`}>{title}</p>
+      {/* What the numbers cover. Rendered ABOVE them on purpose: a reader has to know
+          a figure is scoped before reading it, not after. */}
+      {caption && <p className="text-[11px] leading-snug text-[var(--text-dim)] mb-3">{caption}</p>}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {items.map(([label, value, accent, focusKey]) => {
           const tone = accent && Number(value) > 0 ? '#b91c1c' : 'var(--text-primary)'
@@ -669,7 +676,7 @@ function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hour
 }
 
 export default function Inspections() {
-  const { profile, loading: authLoading } = useAuth()
+  const { profile, loading: authLoading, isSuperAdmin, hasCapability } = useAuth()
   const { activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
@@ -677,6 +684,33 @@ export default function Inspections() {
   const [searchParams, setSearchParams] = useSearchParams()
   const isTyreMan = profile?.role === 'Tyre Man'
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  /**
+   * WHO MAY SIGN OFF AN INSPECTION.
+   *
+   * The page had NO gate at all: anyone who could open the approval modal could sign
+   * and approve. This one MIRRORS the server's rule rather than inventing a second
+   * idea of who may approve - `decide_inspection_approval` refuses anyone outside
+   * Admin / Manager / Director / Maintenance Supervisor, and that RPC is now the only
+   * write path, so it is the real boundary.
+   *
+   * The set is deliberately the SAME shape on both sides: a screen that refuses
+   * someone the server allows is just as broken as one that offers a control the
+   * server will reject. ANALYTICS_ROLES is reused (it is the app's existing
+   * Admin/Manager/Director set, mirrored from Layout.jsx nav and the /approvals
+   * route) plus the checklist-only Maintenance Supervisor the RPC also admits.
+   *
+   * Super admin passes as everywhere, and an explicit per-user 'approve' grant on the
+   * inspections module still opens it - the documented way an admin extends an action
+   * to one person. NOTE that a grant only changes what this SCREEN offers: if the RPC
+   * does not recognise that person's role it will still refuse, and the refusal is
+   * shown rather than swallowed.
+   */
+  const APPROVER_ROLES = [...ANALYTICS_ROLES, 'Maintenance Supervisor']
+  const canApproveInspection = Boolean(
+    isSuperAdmin
+    || APPROVER_ROLES.includes(profile?.role)
+    || hasCapability?.('inspections', 'approve'),
+  )
   const [rows, setRows]         = useState([])
   // Multi-select bulk delete (Admin only)
   const [selectedIds, setSelectedIds]     = useState(() => new Set())
@@ -685,6 +719,10 @@ export default function Inspections() {
   const [bulkError, setBulkError]         = useState('')
   const [bulkBusy, setBulkBusy]           = useState(false)
   const [loading, setLoading]   = useState(true)
+  // A read that FAILED and a register that is genuinely empty are opposite facts.
+  // fetchAllPages' error used to be discarded, so a permission or network failure
+  // rendered as 0 inspections with every tile confidently reading 0.
+  const [loadError, setLoadError] = useState(null)
   const [form, setForm]         = useState(null)
   // Approval-engine lock for the record open in the edit modal. Set from
   // <EntityApprovalPanel/> onStateChange; while true the record is mid-approval
@@ -809,6 +847,9 @@ export default function Inspections() {
   const [showApproverPad, setShowApproverPad]   = useState(false)
   const [approveSubmitting, setApproveSubmitting] = useState(false)
   const [approveMsg, setApproveMsg]             = useState(null)
+  // Reason for returning an inspection. The RPC files it in inspection_audit_log,
+  // which this screen does not read, so it is also echoed onto the record itself.
+  const [approveNote, setApproveNote]           = useState('')
   // Mobile PDF preview
   const [pdfBlobUrl, setPdfBlobUrl]   = useState(null)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
@@ -984,8 +1025,9 @@ export default function Inspections() {
 
   async function load() {
     setLoading(true)
+    setLoadError(null)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
-    const { data } = await fetchAllPages((from, to) =>
+    const { data, error } = await fetchAllPages((from, to) =>
       inspectionsApi.listInspectionsForPage({
         from,
         to,
@@ -1002,6 +1044,9 @@ export default function Inspections() {
         ? 'Overdue' : r.status,
     }))
     setRows(enriched)
+    // Partial data is still shown - it is real - but the page must say the count
+    // is not the whole picture rather than presenting a short read as a measurement.
+    setLoadError(error ? toUserMessage(error, 'Could not load every inspection.') : null)
     setLoading(false)
   }
 
@@ -1068,52 +1113,68 @@ export default function Inspections() {
     return rows
   }, [rows, activeTab])
 
+  /**
+   * THE ROWS EVERY FILTER EXCEPT THE STATUS PILLS AND THE TILE DRILL-DOWN LEAVES.
+   *
+   * Split out because each of the three surfaces above the table has to hold its OWN
+   * dimension out, or it reports a number nobody can act on:
+   *   - the status pills must count as if their own status were not applied, else
+   *     picking "Done" prints (0) on every other pill and there is no way back;
+   *   - the overview tiles must not apply the drill-down they themselves set, else
+   *     clicking "Approved" zeroes "Pending approval" and the tiles stop being a
+   *     summary the moment you use them.
+   * Everything else - region, site, inspector, dates, search - narrows all three.
+   */
+  const filteredBase = useMemo(
+    () => scopeInspections(
+      tabFiltered,
+      { site: filterSite, region: filterRegion, inspector: filterInspector, from: filterFrom, to: filterTo, search },
+      // Region lives on the site register, not on the inspection, so the resolver is
+      // injected and the rule itself stays a pure, tested function.
+      { regionOf: (site) => regionForSite(regionMap, site) },
+    ),
+    [tabFiltered, filterSite, filterRegion, filterInspector, regionMap, filterFrom, filterTo, search],
+  )
+
+  /**
+   * WHAT THE OVERVIEW TILES COUNT: every filter the table applies except the tile
+   * drill-down. Before this the tiles were computed over `tabFiltered` with only the
+   * date window, so a register showing "195 of 407 shown" for one region still printed
+   * 407 inspections done above it - two numbers answering different questions in the
+   * same viewport, which is the confusion being fixed.
+   */
+  const scoped = useMemo(
+    () => (filterStatus === 'all' ? filteredBase : filteredBase.filter(x => x.status === filterStatus)),
+    [filteredBase, filterStatus],
+  )
+
   const filtered = useMemo(() => {
-    let r = tabFiltered
-    if (filterStatus !== 'all') r = r.filter(x => x.status === filterStatus)
-    if (filterSite !== 'all')   r = r.filter(x => x.site === filterSite)
-    // A site the register does not place in a region is EXCLUDED while a region
-    // is selected, rather than quietly falling into whichever region is chosen.
-    if (filterRegion !== 'all') r = r.filter(x => regionForSite(regionMap, x.site) === filterRegion)
-    if (filterInspector !== 'all') r = r.filter(x => x.inspector === filterInspector)
-    if (filterFrom || filterTo) {
-      // String-safe 'YYYY-MM-DD' prefix comparison (never new Date(string)).
-      // A row with no usable date is excluded while a range is active.
-      r = r.filter(x => {
-        const raw = x.scheduled_date || x.completed_date || x.created_at
-        const d = raw ? String(raw).slice(0, 10) : ''
-        if (!d) return false
-        if (filterFrom && d < filterFrom) return false
-        if (filterTo && d > filterTo) return false
-        return true
-      })
-    }
-    if (search) {
-      const q = search.toLowerCase()
-      r = r.filter(x =>
-        x.title?.toLowerCase().includes(q) ||
-        x.site?.toLowerCase().includes(q) ||
-        x.asset_no?.toLowerCase().includes(q) ||
-        x.tyre_serial?.toLowerCase().includes(q) ||
-        x.inspector?.toLowerCase().includes(q) ||
-        x.attendees?.toLowerCase().includes(q)
-      )
-    }
+    let r = scoped
     // The overview drill-down runs LAST, over the rows the other filters left, so a
     // focused tile narrows what is on screen rather than replacing it.
     if (filterFocus && filterFocus !== 'all') r = r.filter(x => focusMatches(x, filterFocus, flagMap || {}))
     return r
-  }, [tabFiltered, filterStatus, filterSite, filterRegion, filterInspector, regionMap, filterFrom, filterTo, search, filterFocus, flagMap])
+  }, [scoped, filterFocus, flagMap])
 
   // Vehicles with tyres due ACROSS THE COUNTRY (the flag map is not limited to
   // the inspections on screen). Lets the card tell "nothing is due anywhere"
   // apart from "nothing is due on the vehicles you are looking at".
   const dueAssetCount = useMemo(() => (flagMap ? Object.keys(flagMap).length : 0), [flagMap])
 
-  // Slide numbers: follow the same date window as the list (from/to only).
+  /**
+   * Is the register showing a NARROWED set? Drives the "these figures cover N of M"
+   * caption on the tiles. The tile drill-down is excluded on purpose: it is set FROM
+   * the tiles and already has its own banner under the search box.
+   */
+  const scopeActive = filterStatus !== 'all' || filterSite !== 'all' || filterRegion !== 'all'
+    || filterInspector !== 'all' || !!filterFrom || !!filterTo || !!search
+
+  // Tile numbers over the SAME rows the table is showing (minus the drill-down).
+  // `scoped` has already had the date window applied by the register's own rule, so
+  // no second window is passed - one date test, one answer.
   const overview = useMemo(
-    () => inspectionOverview(tabFiltered, flagMap || {}, { from: filterFrom, to: filterTo }),
-    [tabFiltered, flagMap, filterFrom, filterTo]
+    () => inspectionOverview(scoped, flagMap || {}),
+    [scoped, flagMap]
   )
 
   // What the focused view is showing, in the TILE'S OWN UNIT. Three of the tiles count
@@ -1136,11 +1197,20 @@ export default function Inspections() {
     return c
   }, [rows])
 
+  /**
+   * Status pill counts, over every OTHER filter (including the tile drill-down) but
+   * NOT the status filter itself - so each pill states exactly how many rows clicking
+   * it would show. Counting these over the already-status-filtered list made every
+   * pill except the selected one read (0), which reads as "there is nothing there".
+   */
   const statusCounts = useMemo(() => {
-    const c = { all: filtered.length, Scheduled: 0, 'In Progress': 0, Done: 0, Overdue: 0, Cancelled: 0 }
-    filtered.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
+    const base = (filterFocus && filterFocus !== 'all')
+      ? filteredBase.filter(x => focusMatches(x, filterFocus, flagMap || {}))
+      : filteredBase
+    const c = { all: base.length, Scheduled: 0, 'In Progress': 0, Done: 0, Overdue: 0, Cancelled: 0 }
+    base.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
     return c
-  }, [filtered])
+  }, [filteredBase, filterFocus, flagMap])
 
   // Virtualizer for the inspections table
   const rowVirtualizer = useVirtualizer({
@@ -1166,6 +1236,29 @@ export default function Inspections() {
   // Reset the approval lock whenever a different record is opened in the modal;
   // <EntityApprovalPanel/> re-reports the true state via onStateChange on mount.
   useEffect(() => { setWfLocked(false) }, [form?.id])
+
+  // A note and a drawn signature belong to ONE decision. Carrying either across to the
+  // next record would attach one person's signature to another inspection.
+  useEffect(() => {
+    setApproveNote('')
+    setApproverSig(null)
+    setApproveMsg(null)
+  }, [approveTarget?.id])
+
+  /**
+   * Re-read the decided inspection from the server instead of echoing what we hoped was
+   * written. The RPC derives the approver, the timestamp and the lock, so the only
+   * honest way to show them is to ask. `optimistic` is a fallback for the case where the
+   * re-read itself fails - the decision is already committed, and showing the previous
+   * state would be a lie in the other direction.
+   */
+  const refreshApproveTarget = useCallback(async (optimistic = null) => {
+    try {
+      const fresh = await inspectionsApi.getInspectionForPage(approveTarget?.id)
+      if (fresh) { setApproveTarget(fresh); return }
+    } catch { /* fall through to the optimistic shape below */ }
+    if (optimistic) setApproveTarget(prev => (prev ? { ...prev, ...optimistic } : prev))
+  }, [approveTarget?.id])
 
   async function save() {
     if (wfLocked) return
@@ -2500,7 +2593,42 @@ export default function Inspections() {
               </div>
             )}
 
-            {/* Approver signature */}
+            {/* Approver signature.
+
+                Three distinct states, and they must not be collapsed:
+                  - ALREADY APPROVED  -> show the signature that was stored and when.
+                    Offering a blank pad on a signed-off record invites a second
+                    signature over a decision that is already made.
+                  - MAY SIGN          -> the pad, required before Approve enables.
+                  - MAY NOT SIGN      -> say who can, rather than a dead control. */}
+            {approveTarget.approval_status === 'approved' ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.approverSignature')}</div>
+                {approveTarget.approver_signature ? (
+                  <img src={approveTarget.approver_signature} alt="Approver signature"
+                    style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
+                ) : (
+                  /* Approved before a signature was required. Stated, never implied. */
+                  <div style={{ fontSize: 12, color: 'var(--panel-ink-3)' }}>No signature was recorded with this approval.</div>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--panel-ink-3)', marginTop: 6 }}>
+                  {approveTarget.approved_at
+                    ? `Signed off on ${formatDate(approveTarget.approved_at)}`
+                    : 'Sign-off date not recorded'}
+                  {approveTarget.approved_by && profile?.id && approveTarget.approved_by === profile.id ? ' by you' : ''}
+                </div>
+              </div>
+            ) : !canApproveInspection ? (
+              <div style={{
+                marginBottom: 16, padding: '12px 14px', borderRadius: 10,
+                background: 'var(--panel-2)', border: '1px solid var(--hairline)',
+                fontSize: 12, color: 'var(--panel-ink-3)',
+              }}>
+                You can read this inspection, but signing it off is limited to Admin, Manager,
+                Director and Maintenance Supervisor. Ask one of them to sign it, or ask an admin
+                to grant you approve access to Inspections.
+              </div>
+            ) : (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.yourSignature')}</div>
               {approverSig ? (
@@ -2525,7 +2653,30 @@ export default function Inspections() {
                   <span>✍</span> {t('inspections.approve.tapToSign')}
                 </button>
               )}
+              {/* Read-only, because the server derives the approver from the session.
+                  An editable name box here would promise something the write ignores. */}
+              <p style={{ fontSize: 11, color: 'var(--panel-ink-4)', marginTop: 8 }}>
+                Signing as <strong style={{ color: 'var(--panel-ink-3)' }}>{profile?.full_name || profile?.username || 'your account'}</strong>.
+                A signature is required to approve. It is stored on the inspection record.
+              </p>
+              <label style={{ display: 'block', marginTop: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase' }}>
+                  Reason (required to return, optional to approve)
+                </span>
+                <textarea
+                  value={approveNote}
+                  onChange={e => setApproveNote(e.target.value)}
+                  rows={2}
+                  placeholder="Why is this being returned, or anything the record should carry"
+                  style={{
+                    width: '100%', marginTop: 6, padding: '8px 10px', borderRadius: 8,
+                    background: 'var(--panel-2)', border: '1px solid var(--hairline)',
+                    color: 'var(--panel-ink-2)', fontSize: 12, resize: 'vertical',
+                  }}
+                />
+              </label>
             </div>
+            )}
 
             {/* Status message */}
             {approveMsg && (
@@ -2539,27 +2690,50 @@ export default function Inspections() {
               </div>
             )}
 
-            {/* Actions */}
-            {approveTarget.approval_status !== 'approved' && (
+            {/* Actions.
+
+                Only offered to someone who may sign (see canApproveInspection). Both
+                writes now REPORT A FAILURE instead of swallowing it: telling an approver
+                a record is approved when the update was refused is worse than the missing
+                signature this whole change is about. */}
+            {approveTarget.approval_status !== 'approved' && canApproveInspection && (
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={async () => {
                     setApproveSubmitting(true)
                     try {
-                      await inspectionsApi.patchInspection(approveTarget.id, {
-                        approval_status: 'rejected',
-                        approved_at: new Date().toISOString(),
-                        approved_by: profile?.id,
+                      await inspectionsApi.decideInspectionApproval(approveTarget.id, {
+                        approved: false,
+                        note: approveNote,
                       })
-                    } catch { /* mirror prior fire-and-forget: surface result regardless */ }
-                    setApproveMsg({ type: 'err', text: t('inspections.approve.msgRejected') })
+                      setApproveMsg({ type: 'err', text: t('inspections.approve.msgRejected') })
+                      await refreshApproveTarget({ approval_status: 'rejected' })
+                      // Best-effort ONLY: the RPC files the reason in the audit log, which
+                      // this screen does not read, so the inspector gets a visible reason
+                      // on the record itself. The decision is already committed, so a
+                      // failure here must never be reported as a failed rejection.
+                      if (approveNote.trim()) {
+                        inspectionsApi.patchInspection(approveTarget.id, {
+                          notes: [approveTarget.notes, `Returned for rework: ${approveNote.trim()}`]
+                            .filter(Boolean).join('\n'),
+                        }).catch(() => {})
+                      }
+                      load()
+                    } catch (err) {
+                      if (err?.alreadyDecided) await refreshApproveTarget()
+                      setApproveMsg({ type: 'err', text: toUserMessage(err, 'Could not record the rejection. Nothing was saved.') })
+                    }
                     setApproveSubmitting(false)
                   }}
-                  disabled={approveSubmitting}
+                  disabled={approveSubmitting || !approveNote.trim()}
+                  title={approveNote.trim() ? undefined : 'Give a reason before returning this inspection'}
                   style={{
                     flex: 1, padding: '11px', borderRadius: 10,
-                    border: '1.5px solid #ef4444', background: 'transparent',
-                    color: '#dc2626', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    border: `1.5px solid ${approveNote.trim() ? '#ef4444' : 'var(--hairline)'}`,
+                    background: 'transparent',
+                    color: approveNote.trim() ? '#dc2626' : 'var(--panel-ink-4)',
+                    fontSize: 13, fontWeight: 600,
+                    cursor: approveNote.trim() ? 'pointer' : 'not-allowed',
                   }}
                 >
                   {t('inspections.approve.reject')}
@@ -2569,16 +2743,24 @@ export default function Inspections() {
                     if (!approverSig) { setApproveMsg({ type: 'err', text: t('inspections.approve.msgNeedSignature') }); return }
                     setApproveSubmitting(true)
                     try {
-                      await inspectionsApi.patchInspection(approveTarget.id, {
-                        approval_status: 'approved',
-                        approver_signature: approverSig,
-                        approved_at: new Date().toISOString(),
-                        approved_by: profile?.id,
+                      // The approver, the timestamp and the lock are all derived
+                      // SERVER-side; the only thing this screen supplies is the drawn
+                      // signature and an optional note.
+                      await inspectionsApi.decideInspectionApproval(approveTarget.id, {
+                        approved: true,
+                        signature: approverSig,
+                        note: approveNote,
                       })
-                    } catch { /* mirror prior fire-and-forget: surface result regardless */ }
-                    setApproveMsg({ type: 'ok', text: t('inspections.approve.msgApproved') })
+                      setApproveMsg({ type: 'ok', text: t('inspections.approve.msgApproved') })
+                      // Re-read rather than echo a guess: what was stored is what the
+                      // server decided, including who it attributed the sign-off to.
+                      await refreshApproveTarget({ approval_status: 'approved', approver_signature: approverSig })
+                      load()
+                    } catch (err) {
+                      if (err?.alreadyDecided) await refreshApproveTarget()
+                      setApproveMsg({ type: 'err', text: toUserMessage(err, 'Could not save the approval. The inspection is unchanged.') })
+                    }
                     setApproveSubmitting(false)
-                    setApproveTarget(prev => ({ ...prev, approval_status: 'approved', approver_signature: approverSig }))
                   }}
                   disabled={approveSubmitting || !approverSig}
                   style={{
@@ -2600,8 +2782,9 @@ export default function Inspections() {
         </div>
       )}
 
-      {/* Approver Signature Pad */}
-      {showApproverPad && (
+      {/* Approver Signature Pad. Gated as well as its button: a pad that opens for
+          someone who cannot approve would collect a signature nothing can store. */}
+      {showApproverPad && canApproveInspection && (
         <SignaturePad
           label={t('inspections.approve.approverSignature')}
           inspectorName={profile?.full_name || ''}
@@ -2652,20 +2835,35 @@ export default function Inspections() {
 
       {/* Status filter pills, search, and table - hidden in checklist mode */}
       {activeTab !== 'checklist' && <>
-      {/* Overview slides: two compact cards with the big clear numbers */}
-      {activeTab === 'all' && (
+      {/* Overview slides: two compact cards with the big clear numbers.
+
+          EVERY figure here is computed over `scoped` - the same rows the table below is
+          showing, minus the tile drill-down. The caption states that in words, because a
+          scoped number sitting next to an unscoped one is unreadable either way round. */}
+      {activeTab === 'all' && (() => {
+        // "We could not look" is not "there is nothing". While the read has failed the
+        // tiles refuse to state a count at all rather than print a confident 0.
+        const unreadable = !!loadError
+        const num = (v) => (unreadable ? null : v)
+        const scopeCaption = unreadable
+          ? 'Could not read the inspections, so these figures are not a count.'
+          : scopeActive
+            ? `Covers the ${scoped.length} ${scoped.length === 1 ? 'inspection' : 'inspections'} matching your filters, of ${tabFiltered.length} in total.`
+            : null
+        return (
         <div className="flex flex-wrap gap-4">
           <OverviewSlide
             title="Inspections"
+            caption={scopeCaption}
             activeFocus={filterFocus}
             onFocus={(k) => setFilter('focus', k)}
             items={[
               // No focus key on these two: "inspections done" IS the unfocused view, and
               // "vehicles inspected" is a distinct count with no row subset behind it.
-              ['Inspections done', overview.inspectionsDone],
-              ['Vehicles inspected', overview.vehiclesInspected],
-              ['Approved', overview.approved, false, 'approved'],
-              ['Pending approval', overview.pendingApproval, false, 'pending'],
+              ['Inspections done', num(overview.inspectionsDone)],
+              ['Vehicles inspected', num(overview.vehiclesInspected)],
+              ['Approved', num(overview.approved), false, 'approved'],
+              ['Pending approval', num(overview.pendingApproval), false, 'pending'],
             ]}
           />
           {flagStatus === 'loading' ? (
@@ -2688,6 +2886,13 @@ export default function Inspections() {
                 Retry
               </button>
             </div>
+          ) : unreadable ? (
+            /* The flag feed loaded, but the inspections it is joined to did not, so
+               there is no honest set of vehicles to report against. */
+            <div className="card flex-1 min-w-[260px]">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
+              <p className="text-sm text-[var(--text-secondary)]">Could not read the inspections, so no vehicle can be counted here.</p>
+            </div>
           ) : !overview.vehiclesWithTyresDue ? (
             /* We looked, and nothing is flagged HERE. The two reasons for that
                are different facts, so they are said differently: no tyre is due
@@ -2698,7 +2903,7 @@ export default function Inspections() {
               <p className="text-sm text-[var(--text-secondary)]">
                 {dueAssetCount === 0
                   ? `No tyre is currently due${activeCountry && activeCountry !== 'All' ? ` in ${activeCountry}` : ''}. Nothing is past its expected life or close to it.`
-                  : `No tyre is due on the vehicles in these inspections. ${dueAssetCount} other ${dueAssetCount === 1 ? 'vehicle has' : 'vehicles have'} tyres due.`}
+                  : `No tyre is due on the vehicles in the ${scopeActive ? 'filtered ' : ''}inspections on screen. ${dueAssetCount} ${dueAssetCount === 1 ? 'vehicle in this country has' : 'vehicles in this country have'} tyres due.`}
               </p>
               <p className="mt-2 text-xs text-[var(--text-dim)]">
                 Damaged found in these inspections: {overview.damagedFound}
@@ -2717,6 +2922,15 @@ export default function Inspections() {
           ) : (
             <OverviewSlide
               title="Tyre change flags"
+              /* These four narrow with the filters, but not in the same UNIT as the
+                 filters: they count tyres on the VEHICLES the filtered inspections
+                 cover. A tyre is flagged by its life today, so the date range picks
+                 which inspections (and therefore which vehicles) are looked at - it
+                 does not put a date on the flag itself. Said plainly rather than left
+                 for the reader to assume either way. */
+              caption={scopeActive
+                ? `Tyres flagged on the ${overview.vehiclesInspected} ${overview.vehiclesInspected === 1 ? 'vehicle' : 'vehicles'} in the filtered inspections. A flag is the tyre's state today, not an event in the date range.`
+                : "Tyres flagged on the vehicles in these inspections. A flag is the tyre's state today, not an event in the date range."}
               activeFocus={filterFocus}
               onFocus={(k) => setFilter('focus', k)}
               items={[
@@ -2749,7 +2963,8 @@ export default function Inspections() {
             <Share2 size={13} /> Share summary
           </button>
         </div>
-      )}
+        )
+      })()}
       {summaryOpen && (
         <InspectionSummaryModal
           rows={rows}

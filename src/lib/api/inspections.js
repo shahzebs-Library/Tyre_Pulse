@@ -122,6 +122,62 @@ export async function patchInspection(id, patch) {
   return unwrap(await supabase.from('inspections').update(patch).eq('id', id))
 }
 
+/**
+ * DECIDE AN INSPECTION SIGN-OFF THROUGH THE GUARDED SERVER RPC.
+ *
+ * The register used to approve with a plain `patchInspection`, and a direct table
+ * update cannot answer any of the four questions that matter here:
+ *
+ *  1. ALREADY DECIDED. Two supervisors could both approve, the second silently
+ *     overwriting the first's signature and timestamp. The RPC transitions only a row
+ *     still in 'pending_approval' and refuses otherwise.
+ *  2. WHO IS SIGNING. `approved_by` came from the client. The RPC derives the approver
+ *     and the timestamp from the session, so the record cannot be attributed to someone
+ *     who did not sign it.
+ *  3. WHO MAY APPROVE. `role_update_inspections` is PERMISSIVE and admits
+ *     admin/manager/INSPECTOR, so a direct write never checked that the caller may
+ *     APPROVE at all - only the screen's own gate stood between an inspector and
+ *     approving their own inspection. The RPC refuses anyone outside
+ *     Admin / Manager / Director / Maintenance Supervisor. This is the security half.
+ *  4. DIRECTORS. That same policy does not list `director`, so a Director the RPC
+ *     allows was refused by RLS on a direct write. Going through the RPC fixes it.
+ *
+ * `locked` is deliberately NOT sent: `trg_lock_inspection_content` locks the record on
+ * the transition to status Done, which the RPC performs.
+ *
+ * @param {string} id
+ * @param {{approved:boolean, signature?:string|null, note?:string|null}} decision
+ */
+export async function decideInspectionApproval(id, { approved, signature = null, note = null } = {}) {
+  try {
+    return unwrap(
+      await supabase.rpc('decide_inspection_approval', {
+        p_inspection_id: id,
+        p_decision: approved ? 'approved' : 'rejected',
+        p_note: note && String(note).trim() ? String(note).trim().slice(0, 8000) : null,
+        p_signature: signature || null,
+      }),
+    )
+  } catch (err) {
+    // The RPC's own refusal names the person who already decided. That message is a
+    // database message and must never be echoed verbatim, so it is only INSPECTED (on
+    // the untouched original preserved at `.cause`) to pick one of our own fixed
+    // strings. The caller reloads the row so the real decision is shown rather than
+    // described.
+    const raw = String(err?.cause?.message || err?.message || '')
+    if (/already\s+(approved|rejected|decided|signed)/i.test(raw)) {
+      const e = new ServiceError(
+        'This inspection was already decided by someone else. The current decision is shown below.',
+        err?.code,
+        err?.cause || err,
+      )
+      e.alreadyDecided = true
+      throw e
+    }
+    throw err
+  }
+}
+
 /** Insert an inspection (no returning row). */
 export async function insertInspection(values) {
   return unwrap(await supabase.from('inspections').insert(values))

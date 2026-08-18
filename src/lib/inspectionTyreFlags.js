@@ -329,6 +329,73 @@ export function defectsForAction(inspection, flagMap = {}) {
 }
 
 /**
+ * THE REGISTER'S FILTER RULE, IN ONE PLACE.
+ *
+ * Extracted from the page because three surfaces have to agree about which rows are
+ * "on screen": the table, the overview tiles above it and the status pills. They used
+ * to disagree - the tiles were computed over the whole loaded list with only the date
+ * window applied, so a register showing 195 of 407 rows for one region still printed
+ * 407 inspections done directly above the table.
+ *
+ * `status` and the tile drill-down are deliberately NOT handled here. Each of those is
+ * held out by the surface that owns it (a status pill must count as if its own status
+ * were not applied, or every unselected pill reads zero), so the page composes them on
+ * top of this shared base.
+ *
+ * `regionOf` is INJECTED rather than imported: region lives on the site register, not on
+ * the inspection, and this module must stay free of I/O. With no resolver supplied a
+ * region filter matches nothing rather than everything - guessing would sweep every
+ * unplaced site into whichever region was picked.
+ *
+ * The date test is a 'YYYY-MM-DD' string prefix compare, never new Date(string), and a
+ * row with no usable date is EXCLUDED while a range is active. Note this reads
+ * scheduled -> completed -> created; `inWindow` above (used by the share summary) also
+ * consults inspection_date. Both are honest, they answer slightly different questions,
+ * and the register now applies exactly one of them to everything it draws.
+ */
+export function registerWindowDate(row) {
+  const raw = row ? (row.scheduled_date || row.completed_date || row.created_at) : null
+  return raw ? String(raw).slice(0, 10) : ''
+}
+
+const SEARCH_FIELDS = ['title', 'site', 'asset_no', 'tyre_serial', 'inspector', 'attendees']
+
+/** Does one inspection survive the register's site/region/inspector/date/search filters? */
+export function inspectionMatchesFilters(row, filters = {}, { regionOf = null } = {}) {
+  if (!row) return false
+  const { site = 'all', region = 'all', inspector = 'all', from = '', to = '', search = '' } = filters || {}
+
+  if (site !== 'all' && row.site !== site) return false
+  if (region !== 'all') {
+    // No resolver means we cannot place ANY site, so nothing matches. An unplaced
+    // site is excluded for the same reason: it is not known to be in this region.
+    if (typeof regionOf !== 'function') return false
+    if (regionOf(row.site) !== region) return false
+  }
+  if (inspector !== 'all' && row.inspector !== inspector) return false
+  if (from || to) {
+    const d = registerWindowDate(row)
+    if (!d) return false
+    if (from && d < from) return false
+    if (to && d > to) return false
+  }
+  if (search) {
+    const q = String(search).toLowerCase()
+    const hit = SEARCH_FIELDS.some((f) => {
+      const v = row[f]
+      return typeof v === 'string' && v.toLowerCase().includes(q)
+    })
+    if (!hit) return false
+  }
+  return true
+}
+
+/** The rows the register is showing, before status and before the tile drill-down. */
+export function scopeInspections(rows = [], filters = {}, opts = {}) {
+  return (Array.isArray(rows) ? rows : []).filter((r) => inspectionMatchesFilters(r, filters, opts))
+}
+
+/**
  * Build the corrective_actions rows for an inspection's defects. Pure - the
  * caller does the insert, so this stays testable and has no I/O.
  * `existingKeys` are the source_detail values already raised and still open;

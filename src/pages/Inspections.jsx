@@ -38,6 +38,7 @@ import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLif
 import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
+import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
 import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
 import { loadTyreChangeTracking } from '../lib/api/tyreChangeTracking'
@@ -1410,8 +1411,45 @@ export default function Inspections() {
     setClLookingUp(false)
   }
 
+  /**
+   * Which wheels are still outstanding on the checklist tab.
+   *
+   * This form has ALWAYS demanded a pressure on every seeded position, and that
+   * rule stays as the floor - it is stricter than the engine's default and
+   * relaxing it here would be a regression. The engine is layered ON TOP of it,
+   * never in place of it, so it can only ever find MORE outstanding wheels: a
+   * position the layout says the machine carries but that never made it into
+   * the seeded array at all. That is the case the pressure rule cannot see,
+   * because a slot that is absent has no pressure to be missing.
+   *
+   * `requirePressure` is on because on this surface a pressure IS the evidence.
+   */
+  const clCompleteness = useMemo(
+    () => tyreCompleteness(
+      clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset),
+      clAsset,
+      clPositions,
+      { requirePressure: true },
+    ),
+    [clFleetInfo?.vehicle_type, clAsset, clPositions],
+  )
+  // The floor: every seeded position needs a pressure. Kept verbatim so an
+  // unknown vehicle type - where the engine honestly declines to judge - can
+  // never make this form easier to submit than it was before.
+  const clMissingPressure = clPositions.filter((p) => !p.pressure)
+  const clPendingNames = pendingCodes(clCompleteness)
+  const clTyresIncomplete = clMissingPressure.length > 0 || !clCompleteness.ok
+
   async function saveChecklist() {
     if (!clAsset.trim() || clPositions.length === 0) return
+    if (clTyresIncomplete) {
+      setClError(
+        clPendingNames.length > 0
+          ? `${clCompleteness.summary} Still to record: ${clPendingNames.join(', ')}.`
+          : t('inspections.form.psiWarning', { count: clMissingPressure.length }),
+      )
+      return
+    }
     setClSaving(true)
     setClError(null)
     setClOffline(false)
@@ -2498,18 +2536,21 @@ export default function Inspections() {
                   {clError}
                 </div>
               )}
-              {clPositions.length > 0 && clPositions.some(p => !p.pressure) && (
-                <div className="p-3 rounded-xl flex items-center gap-2 text-sm"
+              {clPositions.length > 0 && clTyresIncomplete && (
+                <div className="p-3 rounded-xl flex items-start gap-2 text-sm"
                   style={{ background: '#fefce8', border: '1px solid #fde047', color: '#854d0e' }}>
                   <span>⚠️</span>
                   <span>
-                    {t('inspections.form.psiWarning', { count: clPositions.filter(p => !p.pressure).length })}
+                    {t('inspections.form.psiWarning', { count: clMissingPressure.length })}
+                    {clPendingNames.length > 0 && (
+                      <> {t('inspections.form.tyresPending')}: {clPendingNames.join(', ')}</>
+                    )}
                   </span>
                 </div>
               )}
               <button
                 onClick={saveChecklist}
-                disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clPositions.some(p => !p.pressure)}
+                disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clTyresIncomplete}
                 className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {clSaving ? t('common.saving') : CHECKLIST_LABELS[lang].save}

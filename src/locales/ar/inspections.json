@@ -70,7 +70,8 @@
     "clearSignature": "مسح التوقيع",
     "tapToSign": "اضغط للتوقيع",
     "notesPlaceholder": "ملاحظات عامة...",
-    "psiWarning": "{count} إطار ما زال يحتاج ضغط PSI - اضغط عليها في المخطط للتعبئة."
+    "psiWarning": "{count} إطار ما زال يحتاج ضغط PSI - اضغط عليها في المخطط للتعبئة.",
+    "tyresPending": "ما زال يلزم تسجيل"
   },
   "approve": {
     "approverSignature": "توقيع المعتمِد",

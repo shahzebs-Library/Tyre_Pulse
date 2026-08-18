@@ -70,7 +70,8 @@
     "clearSignature": "Clear signature",
     "tapToSign": "Tap to Sign",
     "notesPlaceholder": "General observations...",
-    "psiWarning": "{count} tyre(s) still need PSI - tap them on the diagram to fill."
+    "psiWarning": "{count} tyre(s) still need PSI - tap them on the diagram to fill.",
+    "tyresPending": "Still to record"
   },
   "approve": {
     "approverSignature": "Approver Signature",

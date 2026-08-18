@@ -19,6 +19,14 @@
  * 2. THE ASSET FILLS THE SHEET. Picking (or arriving with) an asset resolves
  *    the full vehicle_fleet row and applies checklistMarks.autoFillAnswers, so
  *    location and registration / fleet number arrive by themselves.
+ *    EVERY QUESTION IS ASKED ONCE. The context card used to carry a Title box
+ *    and a Site box on top of the sheet's own fields, so the operator answered
+ *    Location twice and was asked to name a sheet whose reference the server
+ *    mints anyway. Both are now DERIVED FROM THE TEMPLATE, never from a name:
+ *    a template that carries a `site` field owns that question (the header
+ *    writes the register's site through to it) and a template with a
+ *    `doc_prefix` owns its own reference. A template with neither keeps the
+ *    box, because then there is nowhere else to record it.
  *    READ-ONLY IS CONDITIONAL AND THAT IS DELIBERATE: fleet_number is populated
  *    on 398 of 1,030 KSA assets and on NONE of the 452 UAE or 135 Egypt ones,
  *    so a field that locked whatever the register held would be permanently
@@ -898,6 +906,56 @@ function ChecklistFillScreen() {
     if (assetNo) markDirty()
   }, [template, assetNo, markDirty])
 
+  /**
+   * SITE IS ASKED ONCE TOO, AND THE TEMPLATE DECIDES WHERE.
+   *
+   * Every published sheet carries its own site field - the workshop and mixer
+   * sheets label it "Location" - while this screen also had a Site box in the
+   * context card, so the same question was answered twice. The sheet's own
+   * field is now the single control whenever the template has one, and the box
+   * above is not rendered at all in that case.
+   *
+   * IT ONLY EVER FILLS A BLANK. A read-only site field is already owned by
+   * autoFillAnswers (the register IS its source of truth); an editable one
+   * belongs to whoever typed in it, and a site seeded from a link or an
+   * assignment must never overwrite a correction made on the sheet itself.
+   */
+  const siteFieldIds = useMemo(
+    () => (template?.fields ?? []).filter(f => f?.type === 'site').map(f => f.id),
+    [template],
+  )
+  /** True when the sheet asks for the site itself, so the header must not. */
+  const templateOwnsSite = siteFieldIds.length > 0
+
+  useEffect(() => {
+    if (!siteFieldIds.length) return
+    const value = site.trim()
+    if (!value) return
+    setAnswers(prev => {
+      let next = prev
+      for (const id of siteFieldIds) {
+        if (String(prev[id] ?? '').trim()) continue
+        if (next === prev) next = { ...prev }
+        next[id] = value
+      }
+      return next
+    })
+    markDirty()
+  }, [siteFieldIds, site, markDirty])
+
+  /**
+   * The site actually recorded on the submission. When the sheet owns the
+   * question its own answer is the truth - otherwise a site corrected on the
+   * sheet would be filed under the stale header value.
+   */
+  const effectiveSite = useMemo(() => {
+    for (const id of siteFieldIds) {
+      const v = String(answers[id] ?? '').trim()
+      if (v) return v
+    }
+    return site.trim()
+  }, [siteFieldIds, answers, site])
+
   const clearAsset = useCallback(() => {
     assetApplyStamp.current += 1
     seededAssetRef.current = ''
@@ -1065,7 +1123,7 @@ function ChecklistFillScreen() {
         signatures: signatureMap,
         printed_name: name || null,
         signature_data: primary,
-        site: site.trim() || null,
+        site: effectiveSite || null,
         asset_no: assetNo.trim() || null,
         title: title.trim() || template.name,
         country: userCountry,
@@ -1407,31 +1465,43 @@ function ChecklistFillScreen() {
             </View>
           )}
 
-          <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.titleLabel')}</AppText>
-          <TextInput
-            style={[styles.input, { textAlign }]}
-            value={title}
-            onChangeText={setTitle}
-            placeholder={template.name}
-            placeholderTextColor={c.textMuted}
-          />
-          {/* The document number is minted server-side on insert, so the screen
-              shows the prefix and says when the reference appears. It never
-              invents one. */}
-          {!!template.doc_prefix && (
-            <AppText variant="caption" color="muted" style={{ marginTop: 6, textAlign }}>
+          {/* THE DOCUMENT NUMBER IS THE TITLE. It is minted server-side on
+              insert, so a sheet that has a prefix already has its reference and
+              a Title box beside it only invites a second, conflicting name for
+              the same sheet. A template with no prefix keeps the box, because
+              then there is nothing else the sheet can be called. */}
+          {template.doc_prefix ? (
+            <AppText variant="caption" color="muted" style={{ marginTop: spacing.md, textAlign }}>
               {t('modules.checklistFill.referenceLabel')}: {template.doc_prefix} - {t('modules.checklistFill.referenceHelp')}
             </AppText>
+          ) : (
+            <>
+              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.titleLabel')}</AppText>
+              <TextInput
+                style={[styles.input, { textAlign }]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder={template.name}
+                placeholderTextColor={c.textMuted}
+              />
+            </>
           )}
 
-          <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.site')}</AppText>
-          <TextInput
-            style={[styles.input, { textAlign }]}
-            value={site}
-            onChangeText={setSite}
-            placeholder={t('modules.checklistFill.site')}
-            placeholderTextColor={c.textMuted}
-          />
+          {/* Site: only when the sheet does not ask for it itself. When it does,
+              the question lives on its own line further down and this box would
+              be the duplicate the owner reported. */}
+          {!templateOwnsSite && (
+            <>
+              <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.site')}</AppText>
+              <TextInput
+                style={[styles.input, { textAlign }]}
+                value={site}
+                onChangeText={setSite}
+                placeholder={t('modules.checklistFill.site')}
+                placeholderTextColor={c.textMuted}
+              />
+            </>
+          )}
         </View>
 
         {/* The 10-day rule. Advisory: it warns, it never refuses. */}

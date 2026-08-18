@@ -290,7 +290,7 @@ export default function SitesManagementScreen() {
     <SafeAreaView style={s.safe}>
       <View style={s.center}>
         <Ionicons name="lock-closed-outline" size={48} color="#94a3b8" />
-        <Text style={s.accessDenied}>Admin or Manager access required</Text>
+        <Text style={s.accessDenied}>Admin access required</Text>
       </View>
     </SafeAreaView>
   )

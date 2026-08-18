@@ -68,7 +68,8 @@ export const MOBILE_MODULES = [
   { key: 'team',           label: 'Team',             group: 'Management',  roles: [] },
   // Admin ---------------------------------------------------------------------
   { key: 'approvals',      label: 'Approvals',        group: 'Admin',       roles: ['manager', 'director'] },
-  { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: ['manager', 'director'] },
+  // ADMIN ONLY - no leakage. Mirrors mobile/lib/permissions.ts; change both.
+  { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: [] },
   { key: 'users',          label: 'User Management',  group: 'Admin',       roles: [] },
 ]
 

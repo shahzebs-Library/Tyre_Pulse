@@ -63,7 +63,7 @@ const GREETING = () => {
 
 export default function AdminDashboardScreen() {
   const { allowed, loading: guardLoading } = useModuleGuard('admin')
-  const { profile, isSuperAdmin } = useAuth()
+  const { profile, isSuperAdmin, canAccess } = useAuth()
   const { t } = useLanguage()
   const router = useRouter()
 
@@ -244,32 +244,42 @@ export default function AdminDashboardScreen() {
           />
         </View>
 
-        {/* ── Quick actions row 2: fleet management ─────────────────────── */}
+        {/* ── Quick actions row 2: fleet management ───────────────────────
+            Each tile is gated on the SAME module the destination screen guards
+            on, so the console can never offer a door that refuses the person
+            who opens it. Without this, a per-user grant of `admin` alone would
+            show links to analytics and reports, both admin-only modules. */}
         <View style={styles.quickRow}>
-          <QuickAction
-            icon="location-outline"
-            label="Sites & Fleet"
-            sublabel="Add vehicles & sites"
-            color="#0284c7"
-            bg="#f0f9ff"
-            onPress={() => router.push('/(app)/admin/sites')}
-          />
-          <QuickAction
-            icon="bar-chart-outline"
-            label="Analytics"
-            sublabel="Fleet insights"
-            color="#059669"
-            bg="#f0fdf4"
-            onPress={() => router.push('/(app)/analytics')}
-          />
-          <QuickAction
-            icon="document-text-outline"
-            label="Reports"
-            sublabel="Export & review"
-            color="#b45309"
-            bg="#fffbeb"
-            onPress={() => router.push('/(app)/reports')}
-          />
+          {canAccess('admin') && (
+            <QuickAction
+              icon="location-outline"
+              label="Sites & Fleet"
+              sublabel="Add vehicles & sites"
+              color="#0284c7"
+              bg="#f0f9ff"
+              onPress={() => router.push('/(app)/admin/sites')}
+            />
+          )}
+          {canAccess('analytics') && (
+            <QuickAction
+              icon="bar-chart-outline"
+              label="Analytics"
+              sublabel="Fleet insights"
+              color="#059669"
+              bg="#f0fdf4"
+              onPress={() => router.push('/(app)/analytics')}
+            />
+          )}
+          {canAccess('reports') && (
+            <QuickAction
+              icon="document-text-outline"
+              label="Reports"
+              sublabel="Export & review"
+              color="#b45309"
+              bg="#fffbeb"
+              onPress={() => router.push('/(app)/reports')}
+            />
+          )}
         </View>
 
         {/* ── Super-admin: access control ──────────────────────────────── */}

@@ -128,7 +128,13 @@ export const MODULES: ModuleDef[] = [
   M('team',           'Team',              'people-outline',         'Management', []),
   // Admin ---------------------------------------------------------------------
   M('approvals',      'Approvals',         'checkmark-done-outline', 'Admin',      ['manager', 'director']),
-  M('admin',          'Admin Console',     'shield-outline',         'Admin',      ['manager', 'director']),
+  // ADMIN ONLY - no leakage. This console links straight to User Management,
+  // the Access Manager and admin approvals, and its other destinations
+  // (analytics, reports) are admin-only modules in their own right - so a
+  // Manager who reached it saw a menu where most entries refused them.
+  // Manager and Director keep the Accident Dashboard, which they reach
+  // directly from Home; nothing they can actually use is lost here.
+  M('admin',          'Admin Console',     'shield-outline',         'Admin',      []),
   M('users',          'User Management',   'person-add-outline',     'Admin',      []),
 ]
 export const MODULE_BY_KEY: Record<ModuleKey, ModuleDef> =

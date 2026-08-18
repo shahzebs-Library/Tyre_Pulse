@@ -25,6 +25,7 @@ import { supabase } from '../lib/supabase'
 import { storageRef } from '../lib/storageRefs'
 import { prepareForUpload } from '../lib/photoUpload'
 import { safeImageSrc } from '../lib/safeUrl'
+import { classifyEntry } from '../lib/tyreCompleteness'
 
 type UploadState = 'idle' | 'uploading' | 'done' | 'error'
 type LookupState = 'idle' | 'searching' | 'found' | 'none'
@@ -124,8 +125,25 @@ export default function TyreEditor({ data, onChange }: Props) {
 
   const displayUri = data.photo_uri
 
+  // Is this wheel still counted as unfilled? Read through the SAME engine the
+  // submit gate uses (lib/tyreCompleteness.ts), so the strip here and the gate
+  // can never disagree about whether this tyre is done. A freshly opened
+  // position carries the seeded default (condition Good, everything else
+  // empty), which is indistinguishable from an untouched wheel, so the strip
+  // tells the inspector that before they close the sheet believing it is done.
+  const stillBlank = classifyEntry(data as unknown as Record<string, unknown>).state === 'blank'
+
   return (
     <View style={styles.body}>
+      {/* Reuses an already translated string rather than inventing an
+          untranslated one: the Arabic and Hindi readers this app is built for
+          must not meet an English-only warning. */}
+      {stillBlank && (
+        <View style={styles.pendingStrip}>
+          <Ionicons name="alert-circle" size={16} color={theme.color.warning.base} />
+          <Text style={styles.pendingStripText}>{t('inspection.validationRecordTyre')}</Text>
+        </View>
+      )}
       {/* Serial Number + lookup */}
       <View style={styles.field}>
         <Text style={styles.label}>{t('tyre.serialNumber')}</Text>
@@ -314,6 +332,21 @@ function makeStyles(theme: Theme) {
   const c = theme.color
   return StyleSheet.create({
     body: { gap: spacing.lg },
+    pendingStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: c.warning.soft,
+      borderRadius: radius.md,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    pendingStripText: {
+      ...typography.caption,
+      color: c.warning.on,
+      flex: 1,
+      fontWeight: '700',
+    },
     field: { gap: spacing.sm - 2 },
     labelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     label: {

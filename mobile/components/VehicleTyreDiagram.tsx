@@ -32,6 +32,30 @@ import {
   resolveVehicleType, isTyrelessEquipment, diagramPositions,
   matchPositionsToLayout,
 } from '../lib/tyreDiagramLayouts'
+import { slotStateMap, TyreCompletenessResult } from '../lib/tyreCompleteness'
+
+/** Position key comparison form, shared with lib/tyreCompleteness.ts. */
+const posKey = (v: unknown): string => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+/**
+ * Wheels that still need details, however the caller holds them: a
+ * tyreCompleteness() result, an array of position ids, or a Set.
+ */
+export type PendingInput = TyreCompletenessResult | string[] | Set<string> | null | undefined
+
+function resolvePendingKeys(pending: PendingInput): Set<string> {
+  const set = new Set<string>()
+  if (!pending) return set
+  if (Array.isArray(pending) || pending instanceof Set) {
+    for (const p of pending) set.add(posKey(p))
+  } else if (typeof pending === 'object') {
+    for (const [k, state] of Object.entries(slotStateMap(pending))) {
+      if (state !== 'complete') set.add(posKey(k))
+    }
+  }
+  set.delete('')
+  return set
+}
 
 // Re-export the pure helpers so callers can source positions/tyreless-state
 // from the same layout the diagram renders.
@@ -88,9 +112,11 @@ interface TyreProps {
   x: number; y: number; w: number; h: number
   id: string; risk: RiskKey; label: string
   selected: boolean; recorded?: boolean
+  /** Nobody has filled this wheel in yet. */
+  outstanding?: boolean
 }
 
-function Tyre({ x, y, w, h, id, risk, label, selected, recorded }: TyreProps) {
+function Tyre({ x, y, w, h, id, risk, label, selected, recorded, outstanding }: TyreProps) {
   const col = RISK[risk]
   const cx  = x + w / 2
   const cy  = y + h / 2
@@ -178,6 +204,17 @@ function Tyre({ x, y, w, h, id, risk, label, selected, recorded }: TyreProps) {
       {/* Recorded badge (RN addition) */}
       {recorded && !selected && (
         <Circle cx={x + w} cy={y} r={Math.max(2.5, w * 0.16)} fill="#16a34a" stroke="#fff" strokeWidth={0.5} />
+      )}
+
+      {/* Still needs details. A SEPARATE visual channel from risk: the rim
+          colour keeps saying how the tyre is, a dashed outline says nobody has
+          filled this wheel in yet. Never red - red is reserved for a tyre
+          reported as a blowout risk, and reusing it would make red mean two
+          different things on one picture. */}
+      {outstanding && !selected && (
+        <Rect x={x - 2.5} y={y - 2.5} width={w + 5} height={h + 5}
+          rx={w * 0.3 + 1} fill="none" stroke="#e2e8f0" strokeWidth={1.2}
+          strokeDasharray="2.6 2" opacity={0.95} />
       )}
 
       {/* Selected ring (RN addition) */}
@@ -1200,10 +1237,14 @@ interface Props {
   selectedPosition?: string | null
   onPositionPress?: (position: string) => void
   width?: number
+  /** Wheels that still need details. Purely additive: omit it and nothing
+   *  changes. Accepts a tyreCompleteness() result, an array or a Set. */
+  pending?: PendingInput
 }
 
 export default function VehicleTyreDiagram({
   vehicleType, assetNo, positions, tyreData, selectedPosition, onPositionPress, width = 320,
+  pending,
 }: Props) {
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
@@ -1218,6 +1259,13 @@ export default function VehicleTyreDiagram({
   // vocabulary (getPositionsForVehicle); both are mapped onto layout slots.
   // Unmatched positions (Spare, foreign ids) never render as ghost slots.
   const tyres = useMemo(() => matchPositionsToLayout(layout, positions), [layout, positions])
+
+  // Wheels the inspector has not filled in yet.
+  const pendingKeys = useMemo(() => resolvePendingKeys(pending), [pending])
+  const pendingOnScreen = useMemo(
+    () => tyres.filter(t => pendingKeys.has(posKey(t.positionId)) || pendingKeys.has(posKey(t.id))),
+    [tyres, pendingKeys],
+  )
 
   // SVG viewBox: minX -10, width 220, minY -5, height viewH + 10.
   const SVG_COORD_W = 220
@@ -1293,6 +1341,15 @@ export default function VehicleTyreDiagram({
       {/* Tap hint */}
       <Text style={styles.tapHint}>Tap a tyre to record its condition</Text>
 
+      {/* Which wheels are still outstanding, by name. A count alone tells the
+          man on the floor that something is missing but not where to go. */}
+      {pendingOnScreen.length > 0 && (
+        <Text style={styles.pendingHint}>
+          {pendingOnScreen.length} {pendingOnScreen.length === 1 ? 'tyre' : 'tyres'} still need details:{' '}
+          {pendingOnScreen.map(t => t.label || t.positionId).join(', ')}
+        </Text>
+      )}
+
       {/* SVG diagram - purely visual, no touch handlers */}
       <View style={{ width, height: svgHeight }}>
         <Svg
@@ -1319,6 +1376,7 @@ export default function VehicleTyreDiagram({
               id={t.positionId} label={t.label}
               risk={riskMap[t.positionId] ?? 'none'}
               recorded={recordedMap[t.positionId]}
+              outstanding={pendingKeys.has(posKey(t.positionId)) || pendingKeys.has(posKey(t.id))}
               selected={selectedPosition === t.positionId}
             />
           ))}
@@ -1401,6 +1459,15 @@ function makeStyles(theme: Theme) {
       color: c.textSecondary,
       marginBottom: spacing.sm,
       textAlign: 'center',
+    },
+    pendingHint: {
+      ...typography.caption,
+      color: c.warning.base,
+      fontWeight: '700',
+      marginTop: -spacing.xs,
+      marginBottom: spacing.sm,
+      textAlign: 'center',
+      paddingHorizontal: spacing.md,
     },
     emptyTitle: { ...typography.title, color: c.text, marginTop: spacing.sm },
     emptyText: { ...typography.caption, color: c.textMuted, marginTop: 2, textAlign: 'center' },

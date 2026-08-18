@@ -5,6 +5,7 @@ import { vehicleArt } from '../lib/brand/vehicleArt';
 import CustomBody from './VehicleDiagramCustomBody';
 import { getCustomLayoutMap, canonVehicleTypeKey } from '../lib/api/vehicleDiagrams';
 import { resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout';
+import { slotStateMap } from '../lib/tyreCompleteness';
 
 // The vehicle-type -> layout-key mapping lives in src/lib/vehicleTyreLayout.js
 // (THE single resolver, mirrored from mobile). It used to be inlined here and
@@ -22,8 +23,32 @@ const RISK = {
 };
 function rc(risk) { return RISK[risk] ?? RISK.none; }
 
+/** Position key comparison form, shared with src/lib/tyreCompleteness.js. */
+const posKey = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/**
+ * Normalise the optional `pending` prop into a Set of comparable position keys.
+ * Accepts a tyreCompleteness() result, an array of ids, or a Set, so a caller
+ * can pass whichever it already holds.
+ */
+function resolvePendingKeys(pending) {
+  const set = new Set();
+  if (!pending) return set;
+  if (Array.isArray(pending) || pending instanceof Set) {
+    for (const p of pending) {
+      set.add(posKey(typeof p === 'string' ? p : (p?.slot ?? p?.code ?? p?.position)));
+    }
+  } else if (typeof pending === 'object') {
+    for (const [k, state] of Object.entries(slotStateMap(pending))) {
+      if (state !== 'complete') set.add(posKey(k));
+    }
+  }
+  set.delete('');
+  return set;
+}
+
 // ── Realistic 3D Tyre ──────────────────────────────────────────────────────────
-function Tyre({ x, y, w, h, id, risk = 'none', onClick, label, sub }) {
+function Tyre({ x, y, w, h, id, risk = 'none', onClick, label, sub, pending = false }) {
   const col  = rc(risk);
   const cx   = x + w / 2;
   const cy   = y + h / 2;
@@ -124,6 +149,17 @@ function Tyre({ x, y, w, h, id, risk = 'none', onClick, label, sub }) {
           filter="url(#textShadow)">
           {sub}
         </text>
+      )}
+
+      {/* Still needs details. This is a SEPARATE visual channel from risk: the
+          rim colour keeps saying how the tyre is, a dashed outline says nobody
+          has filled this wheel in yet. It must never be red - red is reserved
+          for a tyre reported as a blowout risk, and reusing it here would make
+          red mean two different things on one picture. */}
+      {pending && (
+        <rect x={x - 2.2} y={y - 2.2} width={w + 4.4} height={h + 4.4} rx={(w + 4.4) * 0.3}
+          fill="none" stroke="#e2e8f0" strokeWidth="1" strokeDasharray="2.4 1.8"
+          opacity="0.95" />
       )}
     </g>
   );
@@ -1448,7 +1484,12 @@ const LEVEL_TO_RISK = {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240, subLabels }) {
+export default function VehicleTyreDiagram({
+  vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240, subLabels,
+  /** Wheels that still need details. A tyreCompleteness() result, an array of
+   *  position ids, or a Set. Purely additive: omit it and nothing changes. */
+  pending,
+}) {
   const resolved = resolveLayoutKey(vehicleType)
 
   // Custom layouts designed in the console Vehicle Designer (V268). Loaded
@@ -1512,6 +1553,17 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
     })
   }
 
+  // Wheels still needing details. Accepts a tyreCompleteness() result, a plain
+  // array or a Set, so a caller can pass whichever it already holds. Keys are
+  // compared case and punctuation insensitively because a stored position may
+  // be a slot id (R1Lo) or its canonical code (LHCO).
+  // Deliberately NOT a useMemo: this sits below the tyreless early return, and
+  // a hook after a conditional return breaks the rules of hooks. The work is a
+  // handful of string comparisons.
+  const pendingKeys = resolvePendingKeys(pending)
+
+  const pendingOnScreen = tyres.filter((t) => pendingKeys.has(posKey(t.id)))
+
   // Support both prop-naming conventions; wrap so both receive { position } shape
   const handleClick = onPositionClick
     ? (id) => onPositionClick({ position: id })
@@ -1533,6 +1585,17 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
         <span>{displayName}</span>
         <span className="text-gray-500 font-normal text-xs">· {tyres.length} tyres</span>
       </div>
+
+      {/* Which wheels are still outstanding, by name. A count alone tells the
+          man on the floor that something is missing but not where to go. */}
+      {pendingOnScreen.length > 0 && (
+        <div className="text-xs text-center max-w-[280px]" style={{ color: 'var(--text-secondary)' }}>
+          <span className="font-semibold">
+            {pendingOnScreen.length} {pendingOnScreen.length === 1 ? 'tyre' : 'tyres'} still need details:
+          </span>{' '}
+          {pendingOnScreen.map((t) => legacyPositionCode(resolved, t.id)).join(', ')}
+        </div>
+      )}
 
       {/* SVG (data-tyre-map marks THE map for PDF capture - the Illustration
           above is also an svg, so a bare querySelector('svg') grabs the wrong one) */}
@@ -1559,6 +1622,7 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
             key={t.id}
             {...t}
             risk={riskMap[t.id] ?? 'none'}
+            pending={pendingKeys.has(posKey(t.id))}
             sub={subLabels?.[t.id] || null}
             onClick={handleClick}
           />

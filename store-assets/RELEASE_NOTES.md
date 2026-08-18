@@ -163,20 +163,24 @@ Access Manager now works on the phone as well; before this it was ignored.
 
 ---
 
-## 3. Play Console checklist for this release
+## 3. Shipping this release
 
-- [ ] Build and upload the AAB. **This has not been built yet** - no EAS build
-      was created in this session, by request.
-- [ ] Paste the "What's new" text above (en-US, and ar if you fill Arabic).
-- [ ] Screenshots: still outstanding. Play needs 2 to 8 phone screenshots taken
-      from the real running app.
-- [ ] App access: Play reviewers need a working test login, because the app
-      requires sign-in. Give them an approved account.
-- [x] Privacy policy URL - https://tyrepulse.app/privacy
-- [x] Data deletion URL - https://tyrepulse.app/data-deletion
-- [x] Data safety answers - unchanged, see PLAY_STORE_LISTING.md
+**The app is already live in Production and the store listing is complete and
+approved** - screenshots, data safety, content rating, App access, privacy
+policy. None of that needs redoing.
 
----
+1. The AAB is built and already submitted to **Closed testing** (run 32184166231,
+   commit 4b7f4df9, versionName 1.5.0).
+2. Play Console -> Testing -> Closed testing -> open the release ->
+   **Promote release -> Production** -> roll out. Same AAB, no rebuild, no new
+   listing review.
+3. Paste the "What's new" text from section 1.
+
+**Worth one day in Closed testing first, and this is the only reason:** this is
+the first release with R8 shrinking enabled. R8 fails in ways that are invisible
+until a real device runs the app. Have one person open an inspection with photos,
+the scanner, and a checklist. If something that used to work is broken, R8 is the
+first suspect and it is a minutes-long change to disable.
 
 ## 4. After the build is live - two settings, in this order
 

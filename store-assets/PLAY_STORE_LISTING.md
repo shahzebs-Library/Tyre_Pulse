@@ -9,18 +9,31 @@ All graphics here are built from the real Tyre Pulse brand mark (brand green #16
 | `feature_graphic_1024x500.png` | 1024 x 500 | Store listing > Feature graphic |
 | `splash_2048.png` | 2048 x 2048 | Reference of the in-app splash (already set in the app) |
 
-## Required Play Store listing assets (checklist)
-- [x] App icon 512 x 512 PNG (32-bit, provided)
-- [x] Feature graphic 1024 x 500 PNG/JPG (provided)
-- [ ] Phone screenshots: 2 to 8, PNG/JPG, 16:9 or 9:16, each side 320 to 3840 px.
-      These must be captured from the real running app (Dashboard, Inspection,
-      Accident report, Tyre Bay, Washing, Reports). Capture on a device/emulator
-      from the Play internal build, then upload.
-- [ ] (Optional) 7-inch and 10-inch tablet screenshots
-- [x] Short description (<= 80 chars) - draft below
-- [x] Full description (<= 4000 chars) - draft below
-- [ ] Privacy policy URL: https://tyrepulse.app/privacy (already live)
-- [ ] Data deletion URL: https://tyrepulse.app/data-deletion (already live)
+## Store listing status - LIVE, do not re-do
+
+**The app is already published in Production with the listing complete and
+approved.** Screenshots, data safety, content rating, target audience, App
+access and the privacy policy are all done in Play Console.
+
+The checklist that used to sit here was written in August and listed those as
+outstanding. It was stale, and reading it instead of Play Console led to the
+owner being told to redo work already finished. **Play Console is the source of
+truth for listing state - this file is only a copy of the text and the graphics.**
+
+What still lives here and is genuinely useful:
+| File | Use |
+|---|---|
+| `RELEASE_NOTES.md` | The "What's new" text for each release, English + Arabic |
+| `play_store_icon_512.png` | The 512 icon, if the listing ever needs re-uploading |
+| `feature_graphic_1024x500.png` | The feature graphic, same |
+| `splash_2048.png` | Reference of the in-app splash |
+
+### Shipping a new version
+1. Run the "Release to Google Play (Closed testing)" workflow on `main`.
+2. Play Console -> Testing -> Closed testing -> open the release -> **Promote
+   release -> Production** -> roll out. Same AAB, no rebuild.
+3. Paste that version's "What's new" from `RELEASE_NOTES.md`.
+4. Set `system_config.mobile_latest_version` to the new version AFTER it is live.
 
 ## Short description (80 char max)
 Fleet tyre, inspection, maintenance and accident intelligence for your whole fleet.

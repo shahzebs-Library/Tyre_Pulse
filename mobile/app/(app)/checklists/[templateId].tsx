@@ -1,51 +1,57 @@
 /**
- * Checklist fill & submit (visual, tap-to-record)
+ * Checklist fill & submit - workshop sheet (V594 / V595)
  *
- * Every checklist item is a big, iconic tile showing its live state (Pass /
- * Fail / a value or "Tap to record"). Tapping a tile opens ChecklistItemSheet -
- * a bottom sheet with large icon buttons - so a non-technical operator records
- * one item at a time with gloves in the sun. A sticky progress bar shows
- * "X of Y done". Fields whose `visibleWhen` condition isn't met are hidden and
- * recomputed live as answers change.
+ * This is the screen a mechanic, an auto electrician or a driver actually fills
+ * standing next to the machine, with gloves on, in the sun. The workshop sheet
+ * is 49 fields of which 31 are checks, so everything here is judged on one
+ * question: how many taps does it cost to record an honest answer.
  *
- * FIVE REAL DEFECTS THIS SCREEN CARRIED, all now fixed here:
+ * WHAT THE SHEET DOES NOW, and why each piece is the way it is:
  *
- * 1. ONE SIGNATURE SLOT FOR EVERY SIGNATURE FIELD. The screen held a single
- *    `signatureData`, so a workshop sheet signed off by three trades kept only
- *    the last signature, every signature tile flipped to "done" the moment any
- *    one of them was signed, and the progress bar lied. Signatures are now a
- *    MAP keyed by field id (`signatures`), which is also what the helpers take.
+ * 1. MARKS ARE ICONS, RECORDED IN PLACE. The 8-mark legend (OK, Not OK, Not
+ *    applicable, Changed, Repaired, Added / Top-Up, Adjusted, Lubricated) is
+ *    drawn as a row of big icon buttons ON the item, not behind a popup, so a
+ *    check costs one tap instead of three. Each mark carries its MEANING from
+ *    the legend and the chosen one shows it, because a mark nobody can explain
+ *    is a mark that gets picked at random. Glyph and tone come from
+ *    checklistMarks.markMeta - never invented here.
  *
- * 2. `require_signature` WAS UNSATISFIABLE. The flag lives on the TEMPLATE but
- *    the only control that could set `signatureData` was a signature FIELD, so
- *    a template with the flag and no such field could be filled completely and
- *    never submitted - the footer hint pointed at a control that did not exist
- *    and the work was lost on back-out. There is now a template-level sign-off
- *    pad (`primarySignature`), rendered only when the template needs one, and
- *    the requirement is judged by `primarySignatureSatisfied` (that pad OR any
- *    signed signature field), exactly as the web does it.
+ * 2. THE ASSET FILLS THE SHEET. Picking (or arriving with) an asset resolves
+ *    the full vehicle_fleet row and applies checklistMarks.autoFillAnswers, so
+ *    location and registration / fleet number arrive by themselves.
+ *    READ-ONLY IS CONDITIONAL AND THAT IS DELIBERATE: fleet_number is populated
+ *    on 398 of 1,030 KSA assets and on NONE of the 452 UAE or 135 Egypt ones,
+ *    so a field that locked whatever the register held would be permanently
+ *    blank and unfillable for most of the fleet. isFieldLocked locks a field
+ *    only once a value actually arrived; otherwise the man on the floor can
+ *    still type what is stamped on the machine. The date is locked outright.
  *
- * 3. REQUIRED SIGNATURE FIELDS WERE NEVER VALIDATED. `validateSubmission` now
- *    receives the map, so a missing one names WHICH signature is missing.
+ * 3. KM AND HOUR METER ARE A PAIR. Either satisfies the sheet, neither may be
+ *    skipped: 98 of 227 KSA transit mixers carry no odometer at all while every
+ *    one of them has engine hours. A reading LOWER than the register's warns
+ *    and never blocks, because a meter really can be replaced.
  *
- * 4. ANY `profiles` UPDATE MID-FILL WIPED EVERY ANSWER. `load` depended on the
- *    whole `profile` OBJECT, and AuthContext replaces that object on every
- *    realtime update of the user's own row (an admin editing their role or
- *    site, the language-preference write, the push-token write). A new object
- *    identity re-created `load`, re-fired the effect and re-seeded `answers`
- *    with blanks - with no spinner, because that path never set `loading`, and
- *    with photos/signatures left behind, so the operator was staring at a
- *    half-erased sheet. `load` now depends only on the primitives it reads, and
- *    a reload can never clobber answers already entered.
+ * 4. SUBMIT vs CLOSE ARE DIFFERENT GATES. Submit is blocked by a missing
+ *    required answer, an unanswered meter pair and a fault with no remark.
+ *    A fault ITSELF never blocks submit - a fault found on the last item of the
+ *    day must still be recordable - it blocks CLOSING, which is what the
+ *    approval trigger enforces server-side. The banner says exactly that.
  *
- * 5. NO CONTENT TRANSLATION AND NO SHARED OPTION SETS. Labels and choices were
- *    rendered raw, and `options_ref` (the template's shared, live option list)
- *    was ignored in favour of the field's stale copy. Both now go through
- *    checklistI18n, and the operator can switch the reading language - but only
- *    to a language this template actually carries. THE STORED ANSWER IS ALWAYS
- *    THE ENGLISH OPTION VALUE, whatever language it was read in.
+ * 5. THE 10-DAY RULE IS ADVISORY. An early visit warns and is never refused,
+ *    and a lookup that fails says NOTHING, because "we could not look" is not
+ *    "it is not due".
+ *
+ * 6. THE DOCUMENT NUMBER IS MINTED SERVER-SIDE. The screen shows the prefix and
+ *    says the reference is assigned on submit. It never invents one.
+ *
+ * INHERITED FIXES THAT MUST NOT REGRESS: signatures are a MAP keyed by field id
+ * (one shared slot let three trades overwrite each other); `require_signature`
+ * is satisfiable through a template-level pad; `load` depends only on the
+ * primitives it reads, so an unrelated profiles write can no longer wipe the
+ * answers mid-fill; content goes through checklistI18n and THE STORED ANSWER IS
+ * ALWAYS THE ENGLISH VALUE, whatever language it was read in.
  */
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, memo } from 'react'
 import {
   View, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Text,
 } from 'react-native'
@@ -56,25 +62,45 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { Theme, spacing, radius, typography } from '../../../lib/theme'
 import { AppText, Screen, Badge, EmptyState, ErrorState, Loading } from '../../../components/ui'
-import ChecklistItemSheet, { optionTone } from '../../../components/ChecklistItemSheet'
+import ChecklistItemSheet from '../../../components/ChecklistItemSheet'
 import SignaturePad from '../../../components/SignaturePad'
-import { getTemplate, submitChecklist, ChecklistTemplate } from '../../../lib/checklists'
+import PhotoCapture from '../../../components/PhotoCapture'
+import { withModuleGuard } from '../../../components/ModuleGuard'
+import { getTemplate, submitChecklist, getLastSubmission, ChecklistTemplate } from '../../../lib/checklists'
+import { lookupAssetByCode, AssetLookupRecord } from '../../../lib/assetLookup'
 import { supabase } from '../../../lib/supabase'
 import { escapeLike, orIlike } from '../../../lib/queryFilters'
 import { toUserMessage } from '../../../lib/safeError'
 import {
   ChecklistField, Signatures, blankAnswer, isValueField, visibleChecklistFields,
   validateSubmission, computeScore, isAutoField, resolveAutoValue,
-  isFieldAnswered, fieldSummaryText, signatureFields,
+  isFieldAnswered, fieldSummaryText, signatureFields, meterRegression,
   requiresPrimarySignature, primarySignatureSatisfied,
 } from '../../../lib/checklistFields'
 import {
-  CHECKLIST_LANGS, DEFAULT_LANG, fieldLabel, fieldOptionValues, langDir,
-  optionLabel, templateLangs, templateName,
+  autoFillAnswers, blockingAnswers, fieldOptionSet, isFieldLocked, markMeta,
+  FieldLike as MarkField, MarkInfo, MarkTone, missingNotes, noteRequiredMarks,
+  recurrenceNotice, TemplateLike, unsatisfiedGroups,
+} from '../../../lib/checklistMarks'
+import {
+  CHECKLIST_LANGS, DEFAULT_LANG, FieldOption, fieldLabel, fieldOptions,
+  fieldOptionValues, langDir, optionLabel, templateLangs, templateName,
 } from '../../../lib/checklistI18n'
 import { resolveChecklistIcon } from '../../../lib/checklistIcons'
 
 type IconName = keyof typeof Ionicons.glyphMap
+
+/** Shared empty array so a row's `photos` prop keeps a stable identity and the
+ *  memoised row does not re-render on every keystroke elsewhere on the sheet. */
+const NO_PHOTOS: string[] = []
+
+/**
+ * The marks engine models a field structurally and types `options_ref` as
+ * `string | undefined`, while the template's own type allows an explicit null.
+ * The two describe the same object; this is the one place that says so, rather
+ * than an `as any` scattered across every call.
+ */
+const asMarkField = (f: ChecklistField): MarkField => f as unknown as MarkField
 
 function looksLikeMissingTable(msg: string): boolean {
   const m = (msg || '').toLowerCase()
@@ -91,13 +117,13 @@ interface AssetSearchRow {
   fleet_number: string | null
 }
 
-// PostgREST or() filters break on commas/parens and ilike on unescaped %/_ —
+// PostgREST or() filters break on commas/parens and ilike on unescaped %/_ -
 // escapeLike strips them so a typed query is always a safe literal.
 function sanitizeAssetQuery(raw: string): string {
   return escapeLike(raw ?? '').slice(0, 40)
 }
 
-// A friendly icon per field type for the tile.
+// A friendly icon per field type, for the items that still open the sheet.
 function fieldIcon(f: ChecklistField): IconName {
   switch (f.type) {
     case 'boolean': return 'checkmark-done-circle-outline'
@@ -116,7 +142,351 @@ function fieldIcon(f: ChecklistField): IconName {
   }
 }
 
-import { withModuleGuard } from '../../../components/ModuleGuard'
+/**
+ * Mark tone -> theme colour. The legend's tone token is the meaning ("this is
+ * a fault", "this was put right"); the palette is the app's, so the marks stay
+ * legible in dark mode and in direct sun instead of carrying frozen hexes.
+ */
+function toneColor(c: Theme['color'], tone: MarkTone): { fg: string; bg: string } {
+  switch (tone) {
+    case 'good':  return { fg: c.success.base, bg: c.success.soft }
+    case 'bad':   return { fg: c.danger.base, bg: c.danger.soft }
+    case 'fixed': return { fg: c.info.base, bg: c.info.soft }
+    default:      return { fg: c.textMuted, bg: c.surfaceAlt }
+  }
+}
+
+/** How a row is drawn. Everything except `tile` is recorded in place. */
+type RowKind = 'marks' | 'choices' | 'text' | 'number' | 'tile'
+
+/**
+ * Everything about a row that depends only on the TEMPLATE and the reading
+ * language, computed once. Keeping it out of the render path is what lets the
+ * 31 check rows stay memoised while answers change.
+ */
+interface RowMeta {
+  kind: RowKind
+  label: string
+  help: string
+  options: FieldOption[]
+  /** Mark info per ENGLISH option value (icon, tone, meaning). */
+  marks: Record<string, MarkInfo>
+  /** Marks that oblige a remark. */
+  noteRequired: string[]
+  /** Labels of the other fields that satisfy the same either-or group. */
+  groupPeers: string[]
+  unit: string
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * One checklist row.
+ *
+ * MEMOISED ON PURPOSE. The workshop sheet renders 49 rows at once; without this
+ * every keystroke in one remarks box would re-render all of them. The props are
+ * primitives plus stable callbacks and a per-template `meta`, so only the row
+ * whose own answer, remark, photos or error changed does any work.
+ * ────────────────────────────────────────────────────────────────────────── */
+interface ItemRowProps {
+  field: ChecklistField
+  meta: RowMeta
+  value: any
+  note: string
+  photos: string[]
+  error?: string
+  answered: boolean
+  /** Locked = the register (or the clock) owns this value; show, do not edit. */
+  locked: boolean
+  lockReason: 'register' | 'auto' | 'picked' | ''
+  /** readOnly field that the register could not fill, so it stays typeable. */
+  registerBlank: boolean
+  /** The register's previous meter reading, '' when there is none. */
+  previousMeter: string
+  meterWarn: boolean
+  align: 'left' | 'right'
+  rowReverse: boolean
+  styles: ReturnType<typeof makeStyles>
+  c: Theme['color']
+  t: (k: string) => string
+  onValue: (id: string, v: any) => void
+  onPick: (id: string, v: any) => void
+  onNote: (id: string, v: string) => void
+  onPhotos: (id: string, urls: string[]) => void
+  onOpenSheet: (id: string) => void
+  onLayoutY: (id: string, y: number) => void
+  summary: string
+}
+
+const ItemRow = memo(function ItemRow(p: ItemRowProps) {
+  const { field, meta, styles, c, t, align, rowReverse } = p
+  const stored = p.value == null ? '' : String(p.value)
+  const chosen = meta.marks[stored]
+  const noteIsRequired = !!stored && meta.noteRequired.includes(stored)
+  const noteMissing = noteIsRequired && !String(p.note ?? '').trim()
+  // Details (remark + photos) appear once there is something to say about the
+  // line. Showing 31 empty photo grids at once is noise, not helpfulness.
+  const showDetails =
+    (field.allow_note || field.allow_photo) &&
+    (p.answered || noteIsRequired || !!String(p.note ?? '').trim() || p.photos.length > 0)
+
+  const title = (
+    <AppText style={[typography.title, { textAlign: align }]} numberOfLines={3}>
+      {meta.label || t('modules.checklistFill.itemFallback')}
+      {field.required ? <AppText style={{ color: c.danger.base }}> *</AppText> : null}
+    </AppText>
+  )
+
+  // ── Locked: the value is shown, never edited ───────────────────────────────
+  if (p.locked) {
+    return (
+      <View
+        style={[styles.lockedRow, rowReverse && styles.rowR]}
+        onLayout={e => p.onLayoutY(field.id, e.nativeEvent.layout.y)}
+      >
+        <Ionicons name="lock-closed" size={16} color={c.textMuted} />
+        <View style={{ flex: 1 }}>
+          <AppText variant="label" color="secondary" style={{ textAlign: align }} numberOfLines={2}>
+            {meta.label}
+          </AppText>
+          <AppText style={[typography.bodyStrong, { textAlign: align }]} numberOfLines={2}>
+            {stored || '-'}
+          </AppText>
+          <AppText variant="caption" color="muted" style={{ textAlign: align, marginTop: 2 }}>
+            {p.lockReason === 'picked'
+              ? t('modules.checklistFill.fromAssetAbove')
+              : p.lockReason === 'register'
+                ? t('modules.checklistFill.fromRegister')
+                : t('modules.checklistFill.setAutomatically')}
+          </AppText>
+        </View>
+      </View>
+    )
+  }
+
+  const body: React.ReactNode[] = []
+
+  // ── Marks: the 8-icon legend, recorded in one tap ──────────────────────────
+  if (meta.kind === 'marks' || meta.kind === 'choices') {
+    body.push(
+      <View key="opts" style={[styles.markRow, rowReverse && styles.rowWrapR]}>
+        {meta.options.map(opt => {
+          const info = meta.marks[opt.value]
+          const active = stored === opt.value
+          const tone = toneColor(c, info ? info.tone : 'muted')
+          if (meta.kind === 'choices') {
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.choicePill, active && { backgroundColor: tone.bg, borderColor: tone.fg }]}
+                onPress={() => p.onPick(field.id, active ? '' : opt.value)}
+                accessibilityRole="button"
+                accessibilityLabel={opt.label}
+                accessibilityState={{ selected: active }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.choicePillText, active && { color: tone.fg }]} numberOfLines={1}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            )
+          }
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={[
+                styles.markBtn,
+                { backgroundColor: active ? tone.bg : c.surfaceAlt, borderColor: active ? tone.fg : c.border },
+              ]}
+              onPress={() => p.onPick(field.id, active ? '' : opt.value)}
+              accessibilityRole="button"
+              accessibilityLabel={opt.label}
+              accessibilityState={{ selected: active }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={(info ? info.icon : 'remove-circle-outline') as IconName}
+                size={24}
+                color={active ? tone.fg : c.textSecondary}
+              />
+              <Text
+                style={[styles.markText, { color: active ? tone.fg : c.textSecondary }]}
+                numberOfLines={2}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>,
+    )
+    // The meaning of the mark that was actually chosen. It comes from the
+    // legend, so it is the same sentence the office sees on the web.
+    if (chosen && chosen.meaning) {
+      body.push(
+        <View key="meaning" style={[styles.meaningRow, rowReverse && styles.rowR]}>
+          <Ionicons name="information-circle-outline" size={14} color={c.textMuted} />
+          <AppText variant="caption" color="secondary" style={{ flex: 1, textAlign: align }}>
+            {chosen.meaning}
+          </AppText>
+        </View>,
+      )
+    }
+  }
+
+  // ── Typed answers, entered right here ──────────────────────────────────────
+  if (meta.kind === 'text') {
+    body.push(
+      <TextInput
+        key="text"
+        style={[styles.input, meta.help ? null : { marginTop: 2 }, { textAlign: align },
+          field.type === 'textarea' && styles.inputMultiline]}
+        value={stored}
+        onChangeText={v => p.onValue(field.id, v)}
+        placeholder={p.registerBlank
+          ? t('modules.checklistFill.typeFromMachine')
+          : t('modules.checklistFill.enterText')}
+        placeholderTextColor={c.textMuted}
+        multiline={field.type === 'textarea'}
+      />,
+    )
+  }
+
+  if (meta.kind === 'number') {
+    body.push(
+      <View key="num" style={[styles.numRow, rowReverse && styles.rowR]}>
+        <TextInput
+          style={[styles.input, { flex: 1, textAlign: align }]}
+          value={stored}
+          onChangeText={v => p.onValue(field.id, v)}
+          placeholder={t('modules.checklistFill.enterReading')}
+          placeholderTextColor={c.textMuted}
+          keyboardType="numeric"
+        />
+        {!!meta.unit && (
+          <View style={styles.unitChip}>
+            <AppText variant="caption" color="secondary">{meta.unit}</AppText>
+          </View>
+        )}
+      </View>,
+    )
+    if (p.previousMeter) {
+      body.push(
+        <AppText key="prev" variant="caption" color="muted" style={{ textAlign: align, marginTop: 4 }}>
+          {t('modules.checklistFill.lastRecorded')} {p.previousMeter}{meta.unit ? ` ${meta.unit}` : ''}
+        </AppText>,
+      )
+    }
+    // A meter can genuinely be replaced, so this warns and never refuses.
+    if (p.meterWarn) {
+      body.push(
+        <View key="warn" style={[styles.warnRow, rowReverse && styles.rowR]}>
+          <Ionicons name="alert-circle-outline" size={14} color={c.warning.base} />
+          <AppText variant="caption" style={{ flex: 1, color: c.warning.on, textAlign: align }}>
+            {t('modules.checklistFill.meterLower')}
+          </AppText>
+        </View>,
+      )
+    }
+  }
+
+  // ── Everything else keeps the tap-to-record sheet ──────────────────────────
+  if (meta.kind === 'tile') {
+    body.push(
+      <TouchableOpacity
+        key="tile"
+        style={[styles.tileBtn, rowReverse && styles.rowR]}
+        onPress={() => p.onOpenSheet(field.id)}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+      >
+        <Ionicons name={fieldIcon(field)} size={20} color={p.answered ? c.primary : c.textMuted} />
+        <AppText
+          variant="body"
+          color={p.answered ? 'text' : 'muted'}
+          style={{ flex: 1, textAlign: align }}
+          numberOfLines={2}
+        >
+          {p.summary || t('modules.checklistFill.tapToRecord')}
+        </AppText>
+        <Ionicons name={rowReverse ? 'chevron-back' : 'chevron-forward'} size={18} color={c.textMuted} />
+      </TouchableOpacity>,
+    )
+  }
+
+  return (
+    <View
+      style={[
+        styles.itemCard,
+        p.answered && { borderColor: c.borderStrong },
+        (!!p.error || noteMissing) && { borderColor: c.danger.base },
+      ]}
+      onLayout={e => p.onLayoutY(field.id, e.nativeEvent.layout.y)}
+    >
+      <View style={[styles.itemHead, rowReverse && styles.rowR]}>
+        <View style={{ flex: 1 }}>
+          {title}
+          {!!meta.help && (
+            <AppText variant="caption" color="muted" style={{ textAlign: align, marginTop: 2 }} numberOfLines={2}>
+              {meta.help}
+            </AppText>
+          )}
+          {meta.groupPeers.length > 0 && (
+            <AppText variant="caption" color="muted" style={{ textAlign: align, marginTop: 2 }}>
+              {t('modules.checklistFill.eitherOr')} {meta.groupPeers.join(' / ')}
+            </AppText>
+          )}
+        </View>
+        {p.answered && <Ionicons name="checkmark-circle" size={20} color={c.success.base} />}
+      </View>
+
+      {body}
+
+      {!!p.error && (
+        <AppText variant="caption" style={{ color: c.danger.base, fontWeight: '700', textAlign: align, marginTop: 6 }}>
+          {p.error}
+        </AppText>
+      )}
+
+      {showDetails && (
+        <View style={styles.detailBlock}>
+          {field.allow_note && (
+            <>
+              <AppText
+                variant="label"
+                style={{ color: noteMissing ? c.danger.base : c.textSecondary, textAlign: align, marginBottom: 4 }}
+              >
+                {t('modules.checklistFill.remarks')}
+                {noteIsRequired ? <AppText style={{ color: c.danger.base }}> *</AppText> : null}
+              </AppText>
+              <TextInput
+                style={[styles.input, styles.inputMultiline, { textAlign: align },
+                  noteMissing && { borderColor: c.danger.base }]}
+                value={p.note}
+                onChangeText={v => p.onNote(field.id, v)}
+                placeholder={noteIsRequired
+                  ? t('modules.checklistFill.remarkRequiredPh')
+                  : t('modules.checklistFill.remarksPlaceholder')}
+                placeholderTextColor={c.textMuted}
+                multiline
+              />
+            </>
+          )}
+          {field.allow_photo && (
+            <View style={{ marginTop: field.allow_note ? spacing.sm : 0 }}>
+              <PhotoCapture
+                value={p.photos}
+                onChange={urls => p.onPhotos(field.id, urls)}
+                module="checklist"
+                tint={c.primary}
+                max={4}
+                label={t('modules.checklistFill.addPhoto')}
+              />
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  )
+})
 
 export default withModuleGuard(ChecklistFillScreen, 'checklists')
 
@@ -141,11 +511,20 @@ function ChecklistFillScreen() {
   const [title, setTitle] = useState('')
   const [site, setSite] = useState(params.site ? String(params.site) : '')
   const [assetNo, setAssetNo] = useState(params.asset_no ? String(params.asset_no) : '')
-  const [assetMeta, setAssetMeta] = useState<{ site?: string | null; vehicle_type?: string | null } | null>(null)
+  /** The full register row behind the chosen asset. It is what fills the sheet
+   *  and what a meter reading is compared against. */
+  const [asset, setAsset] = useState<AssetLookupRecord | null>(null)
+  const [assetLoading, setAssetLoading] = useState(false)
   const [assetQuery, setAssetQuery] = useState('')
   const [assetResults, setAssetResults] = useState<AssetSearchRow[]>([])
   const [assetSearching, setAssetSearching] = useState(false)
   const assetSearchStamp = useRef(0)
+  /** Guards a late asset lookup landing under a different machine. */
+  const assetApplyStamp = useRef(0)
+  /** The asset whose register row has already been applied to this sheet. */
+  const seededAssetRef = useRef('')
+  const [recurrence, setRecurrence] = useState<ReturnType<typeof recurrenceNotice>>(null)
+
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [photos, setPhotos] = useState<Record<string, string[]>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -173,6 +552,11 @@ function ChecklistFillScreen() {
   const dirtyRef = useRef(false)
   const markDirty = useCallback(() => { dirtyRef.current = true }, [])
   useEffect(() => { dirtyRef.current = false }, [templateId])
+
+  // Scroll plumbing for "go to the next unanswered item".
+  const scrollRef = useRef<ScrollView | null>(null)
+  const rowY = useRef<Record<string, number>>({})
+  const onLayoutY = useCallback((id: string, y: number) => { rowY.current[id] = y }, [])
 
   // Back = previous screen when there is history, else the checklists list.
   const goBack = useCallback(() => {
@@ -241,8 +625,11 @@ function ChecklistFillScreen() {
     setReadLang(offeredLangCodes.includes(language) ? language : DEFAULT_LANG)
   }, [templateId, offeredKey, language, offeredLangCodes])
 
-  const contentAlign = langDir(readLang) === 'rtl' ? 'right' : 'left'
+  const contentAlign: 'left' | 'right' = langDir(readLang) === 'rtl' ? 'right' : 'left'
   const contentRowReverse = langDir(readLang) === 'rtl'
+
+  /** The template as the marks engine sees it (its option_sets may be null). */
+  const markTemplate = template as unknown as TemplateLike
 
   // Translated label / resolved English option values, threaded into validation
   // so a message names the line as the reader sees it and a valid answer is
@@ -255,6 +642,65 @@ function ChecklistFillScreen() {
     (f: ChecklistField) => fieldOptionValues(f, template),
     [template],
   )
+
+  /**
+   * Per-row presentation, computed once per template + reading language. This
+   * is what keeps 49 memoised rows cheap: nothing in here changes when an
+   * answer does.
+   */
+  const rowMeta = useMemo(() => {
+    const map = new Map<string, RowMeta>()
+    const fields = template?.fields ?? []
+    // Labels of every field in each either-or group, so a row can name its peer.
+    const groups = new Map<string, ChecklistField[]>()
+    for (const f of fields) {
+      if (f?.group_require_one) {
+        const g = groups.get(f.group_require_one) ?? []
+        g.push(f)
+        groups.set(f.group_require_one, g)
+      }
+    }
+    for (const f of fields) {
+      if (!f || f.type === 'section') continue
+      const opts = fieldOptions(f, template, readLang)
+      const set = fieldOptionSet(markTemplate, asMarkField(f))
+      const marks: Record<string, MarkInfo> = {}
+      let anyKnown = false
+      for (const o of opts) {
+        const info = markMeta(set, o.value)
+        marks[o.value] = info
+        if (info.known) anyKnown = true
+      }
+      let kind: RowKind = 'tile'
+      if ((f.type === 'select' || f.type === 'multiselect') && opts.length) {
+        // multiselect keeps the sheet: a single tap here would replace, not add.
+        kind = f.type === 'select' ? (anyKnown ? 'marks' : 'choices') : 'tile'
+      } else if (f.type === 'number') kind = 'number'
+      else if (f.type === 'text' || f.type === 'textarea') kind = 'text'
+
+      const peers = f.group_require_one
+        ? (groups.get(f.group_require_one) ?? [])
+            .filter(x => x.id !== f.id)
+            .map(x => fieldLabel(x, readLang) || String(x.label ?? x.id))
+        : []
+
+      map.set(f.id, {
+        kind,
+        label: fieldLabel(f, readLang) || String(f.label ?? ''),
+        help: String(f.help ?? ''),
+        options: opts,
+        marks,
+        noteRequired: Array.from(new Set([
+          ...noteRequiredMarks(set),
+          ...(Array.isArray(f.require_note_when) ? f.require_note_when.map(String) : []),
+        ])),
+        groupPeers: peers,
+        unit: String(f.unit ?? ''),
+      })
+    }
+    return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, readLang])
 
   const clearError = useCallback((id: string) => {
     setErrors(prev => (prev[id] ? { ...prev, [id]: '' } : prev))
@@ -275,7 +721,8 @@ function ChecklistFillScreen() {
   const setFieldNote = useCallback((id: string, text: string) => {
     markDirty()
     setNotes(prev => ({ ...prev, [id]: text }))
-  }, [markDirty])
+    clearError(id)
+  }, [markDirty, clearError])
 
   // A field signature lands under ITS OWN id; clearing removes the key so
   // "signed" and "not signed" stay distinguishable.
@@ -296,7 +743,172 @@ function ChecklistFillScreen() {
     setPrimarySignature(svg)
   }, [markDirty])
 
-  // Debounced fleet search — runs only while no asset is selected and at least
+  // Only currently-visible fields are rendered / validated / scored.
+  const visibleFields = useMemo(
+    () => visibleChecklistFields(template?.fields, answers),
+    [template, answers],
+  )
+
+  const recordable = useMemo(
+    () => visibleFields.filter(f => f.type !== 'section'),
+    [visibleFields],
+  )
+
+  /**
+   * Latest render state for the "move to the next unanswered item" jump.
+   * Read from an event handler one tick after setState, so it is deliberately
+   * one render behind - which is correct, because the jump always starts AFTER
+   * the field just answered and no other field changed.
+   */
+  const jumpRef = useRef({ recordable, answers, photos, signatures })
+  useEffect(() => {
+    jumpRef.current = { recordable, answers, photos, signatures }
+  }, [recordable, answers, photos, signatures])
+
+  const scrollToField = useCallback((id: string) => {
+    const y = rowY.current[id]
+    if (typeof y !== 'number') return
+    // A short delay lets a newly-revealed remarks box settle before we measure.
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true })
+    }, 60)
+  }, [])
+
+  const firstUnansweredId = useCallback((afterId?: string) => {
+    const s = jumpRef.current
+    const start = afterId ? s.recordable.findIndex(f => f.id === afterId) + 1 : 0
+    const hunt = (from: number, to: number) => {
+      for (let i = from; i < to; i += 1) {
+        const f = s.recordable[i]
+        if (!f) continue
+        if (f.id === afterId) continue
+        if (isFieldLocked(asMarkField(f), s.answers[f.id])) continue
+        if (!isFieldAnswered(f, s.answers, s.photos, s.signatures)) return f.id
+      }
+      return null
+    }
+    return hunt(start, s.recordable.length) ?? hunt(0, start)
+  }, [])
+
+  /**
+   * A discrete choice (a mark). Records it and moves on, EXCEPT when the mark
+   * obliges a remark - then the sheet stays put so the reason gets typed, which
+   * is the whole point of the "Not OK" rule.
+   */
+  const pickAnswer = useCallback((id: string, value: any) => {
+    setAnswer(id, value)
+    const meta = rowMeta.get(id)
+    const needsNote = !!value && !!meta && meta.noteRequired.includes(String(value))
+    if (needsNote) { scrollToField(id); return }
+    if (!value) return
+    const next = firstUnansweredId(id)
+    if (next) scrollToField(next)
+  }, [setAnswer, rowMeta, scrollToField, firstUnansweredId])
+
+  const goToNextUnanswered = useCallback(() => {
+    const next = firstUnansweredId()
+    if (next) scrollToField(next)
+  }, [firstUnansweredId, scrollToField])
+
+  const openSheet = useCallback((id: string) => setActiveFieldId(id), [])
+
+  /**
+   * Commit an asset: the register row fills the sheet, and the 10-day rule is
+   * consulted. Both halves are best effort - an offline phone still fills the
+   * sheet by hand, and a lookup that fails says NOTHING about the 10 days.
+   */
+  const applyAsset = useCallback(async (code: string, seedSite?: string | null) => {
+    const clean = String(code ?? '').trim()
+    if (!clean) return
+    // Claim the guard here, not only in the effect: without this a pick from the
+    // search list set assetNo, the effect saw an unseeded asset and ran the
+    // whole lookup a second time.
+    seededAssetRef.current = clean
+    const stamp = ++assetApplyStamp.current
+    setAssetNo(clean)
+    setAssetQuery('')
+    setAssetResults([])
+    setRecurrence(null)
+    if (seedSite) setSite(prev => (prev.trim() ? prev : seedSite))
+    setAssetLoading(true)
+    try {
+      const row = await lookupAssetByCode(clean)
+      if (assetApplyStamp.current !== stamp) return
+      setAsset(row)
+      if (row) {
+        setSite(prev => (prev.trim() ? prev : (row.site ?? prev)))
+        const tpl = template
+        if (tpl) {
+          markDirty()
+          setAnswers(prev => {
+            const patch = autoFillAnswers(tpl as unknown as TemplateLike, row, prev)
+            return Object.keys(patch).length ? { ...prev, ...patch } : prev
+          })
+        }
+      }
+    } catch {
+      if (assetApplyStamp.current === stamp) setAsset(null)
+    } finally {
+      if (assetApplyStamp.current === stamp) setAssetLoading(false)
+    }
+
+    // The 10-day rule. Advisory: it warns, it never refuses, and a null result
+    // (including a failed lookup) says nothing at all.
+    try {
+      const last = await getLastSubmission(templateId, clean)
+      if (assetApplyStamp.current !== stamp) return
+      setRecurrence(recurrenceNotice(last, template?.min_interval_days))
+    } catch {
+      /* silence is correct: "we could not look" is not "it is not due" */
+    }
+  }, [template, templateId, markDirty])
+
+  // An asset carried in from a scan, a link or an assignment fills the sheet
+  // exactly as a picked one does.
+  useEffect(() => {
+    if (!template || !assetNo) return
+    if (seededAssetRef.current === assetNo) return
+    void applyAsset(assetNo)
+  }, [template, assetNo, applyAsset])
+
+  /**
+   * THE ASSET IS PICKED IN ONE PLACE.
+   *
+   * The workshop sheet carries its own `asset` field AND this screen has a
+   * picker in the header, so the operator saw the same question twice - which
+   * is exactly what the owner asked to be removed. Worse, that field is
+   * REQUIRED: a sheet filled entirely from the header picker failed validation
+   * on a line the operator could see was already answered, with no way to tell
+   * why. The header picker is now the single control and it writes through to
+   * every asset field, which then renders locked.
+   */
+  useEffect(() => {
+    if (!template) return
+    const ids = (template.fields ?? []).filter(f => f?.type === 'asset').map(f => f.id)
+    if (!ids.length) return
+    setAnswers(prev => {
+      let next = prev
+      for (const id of ids) {
+        if (String(prev[id] ?? '') === assetNo) continue
+        if (next === prev) next = { ...prev }
+        next[id] = assetNo
+      }
+      return next
+    })
+    if (assetNo) markDirty()
+  }, [template, assetNo, markDirty])
+
+  const clearAsset = useCallback(() => {
+    assetApplyStamp.current += 1
+    seededAssetRef.current = ''
+    setAssetNo('')
+    setAsset(null)
+    setAssetQuery('')
+    setAssetResults([])
+    setRecurrence(null)
+  }, [])
+
+  // Debounced fleet search - runs only while no asset is selected and at least
   // 2 characters are typed. A stamp guards against stale responses landing late.
   useEffect(() => {
     if (assetNo) return
@@ -333,37 +945,14 @@ function ChecklistFillScreen() {
     return () => clearTimeout(h)
   }, [assetQuery, assetNo])
 
-  // Tap a result: commit the asset, remember its meta for the chip, and fill
-  // the site only when the operator has not typed one (never overwrites).
-  const selectAsset = useCallback((row: AssetSearchRow) => {
-    setAssetNo(row.asset_no)
-    setAssetMeta({ site: row.site, vehicle_type: row.vehicle_type })
-    setSite(prev => (prev.trim() ? prev : (row.site ?? prev)))
-    setAssetQuery('')
-    setAssetResults([])
-  }, [])
-
-  const clearAsset = useCallback(() => {
-    setAssetNo('')
-    setAssetMeta(null)
-    setAssetQuery('')
-    setAssetResults([])
-  }, [])
-
-  // Only currently-visible fields are rendered / validated / scored.
-  const visibleFields = useMemo(
-    () => visibleChecklistFields(template?.fields, answers),
-    [template, answers],
-  )
-
   // Progress across recordable (non-section) visible items.
   const { total, done } = useMemo(() => {
-    const items = visibleFields.filter(f => f.type !== 'section')
-    const d = items.filter(f => isFieldAnswered(f, answers, photos, signatures)).length
-    return { total: items.length, done: d }
-  }, [visibleFields, answers, photos, signatures])
+    const d = recordable.filter(f => isFieldAnswered(f, answers, photos, signatures)).length
+    return { total: recordable.length, done: d }
+  }, [recordable, answers, photos, signatures])
 
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
+  const remaining = Math.max(0, total - done)
 
   const activeField = useMemo(
     () => visibleFields.find(f => f.id === activeFieldId) ?? null,
@@ -381,13 +970,38 @@ function ChecklistFillScreen() {
   }, [needsPrimary, primarySignature, template, signatures, readLang])
 
   /**
-   * Tile summary in the reader's language.
-   *
-   * fieldSummaryText is the shared helper, but it can only return the RAW
-   * stored value and a few English words - and the stored value of a choice is
-   * deliberately English. So the cases that carry vocabulary are localised here
-   * and the helper is used for the plain text / number / date case it handles
-   * correctly.
+   * The close gates, live. `blocking` does NOT stop a submission - it stops the
+   * sheet being CLOSED, which is exactly what the approval trigger enforces. The
+   * other two DO stop a submission, because a sheet with no meter reading and a
+   * fault with no reason records nothing anyone can act on.
+   */
+  const blocking = useMemo(
+    () => (template ? blockingAnswers(markTemplate, answers) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [template, answers],
+  )
+  const openGroups = useMemo(
+    () => (template ? unsatisfiedGroups(markTemplate, answers) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [template, answers],
+  )
+  const openNotes = useMemo(
+    () => (template ? missingNotes(markTemplate, answers, notes) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [template, answers, notes],
+  )
+
+  /** A blocking mark named in the reader's language, for the banner. */
+  const blockingLines = useMemo(
+    () => blocking.map(b => rowMeta.get(b.id)?.label || b.label),
+    [blocking, rowMeta],
+  )
+
+  /**
+   * Tile summary in the reader's language, for the items that still open the
+   * sheet. fieldSummaryText can only return the RAW stored value and a few
+   * English words - and the stored value of a choice is deliberately English -
+   * so the cases carrying vocabulary are localised here.
    */
   const summaryFor = useCallback((f: ChecklistField): string => {
     if (f.type === 'photo') {
@@ -406,41 +1020,14 @@ function ChecklistFillScreen() {
     return fieldSummaryText(f, answers, photos, signatures)
   }, [answers, photos, signatures, template, readLang, t])
 
-  async function handleSubmit() {
-    if (!template || submitting) return
+  async function doSubmit() {
+    if (!template) return
+    const name = printedName.trim() || (profile?.full_name ?? '')
 
-    // Signatures are validated with everything else now, so a missing required
-    // signature names WHICH one instead of failing at the generic gate below.
-    const { valid, errors: errs } = validateSubmission(template.fields, answers, {
-      signatures, labelFor, optionsFor,
-    })
-    if (!valid) {
-      setErrors(errs)
-      const first = Object.values(errs)[0]
-      Alert.alert(t('modules.checklistFill.reviewTitle'), first || t('modules.checklistFill.reviewMsg'))
-      return
-    }
-    setErrors({})
-
-    // The template-level requirement is met by the sign-off pad OR by any
-    // signature field: a sheet already carrying three trade signatures must not
-    // demand a fourth.
     const firstFieldSignature = signatureFields(template.fields)
       .map(f => signatures[f.id])
       .find(s => typeof s === 'string' && s) || null
     const primary = primarySignature || firstFieldSignature
-
-    const name = printedName.trim() || (profile?.full_name ?? '')
-    if (requiresPrimarySignature(template)) {
-      if (!primarySignatureSatisfied(template, signatures, primarySignature)) {
-        Alert.alert(t('modules.checklistFill.signatureRequired'), t('modules.checklistFill.signatureRequiredMsg'))
-        return
-      }
-      if (!name) {
-        Alert.alert(t('modules.checklistFill.nameRequired'), t('modules.checklistFill.nameRequiredMsg'))
-        return
-      }
-    }
 
     let score_pct: number | null = null
     let score_passed: boolean | null = null
@@ -476,7 +1063,7 @@ function ChecklistFillScreen() {
         // meaning as the single primary sign-off, so every existing reader,
         // export and PDF is unchanged.
         signatures: signatureMap,
-        printed_name: printedName.trim() || (profile?.full_name ?? null),
+        printed_name: name || null,
         signature_data: primary,
         site: site.trim() || null,
         asset_no: assetNo.trim() || null,
@@ -505,6 +1092,80 @@ function ChecklistFillScreen() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  function handleSubmit() {
+    if (!template || submitting) return
+
+    // 1. Required answers, ranges and required signatures. A missing required
+    //    signature names WHICH one instead of failing at a generic gate.
+    const { valid, errors: errs } = validateSubmission(template.fields, answers, {
+      signatures, labelFor, optionsFor,
+    })
+    if (!valid) {
+      setErrors(errs)
+      const firstId = Object.keys(errs)[0]
+      if (firstId) scrollToField(firstId)
+      Alert.alert(t('modules.checklistFill.reviewTitle'), errs[firstId] || t('modules.checklistFill.reviewMsg'))
+      return
+    }
+
+    // 2. The meter pair. Either reading satisfies it; neither may be skipped.
+    if (openGroups.length) {
+      const names = openGroups
+        .flatMap(g => g.fields.map(f => rowMeta.get(f.id)?.label || f.label))
+        .join(' / ')
+      const firstId = openGroups[0]?.fields?.[0]?.id
+      if (firstId) scrollToField(firstId)
+      setErrors({})
+      Alert.alert(t('modules.checklistFill.meterNeededTitle'), `${t('modules.checklistFill.meterNeededMsg')} ${names}`)
+      return
+    }
+
+    // 3. A fault with no reason records nothing anyone can act on.
+    if (openNotes.length) {
+      const errs2: Record<string, string> = {}
+      for (const n of openNotes) {
+        errs2[n.id] = t('modules.checklistFill.remarkRequiredErr')
+      }
+      setErrors(errs2)
+      scrollToField(openNotes[0].id)
+      const names = openNotes.map(n => rowMeta.get(n.id)?.label || n.label).join(', ')
+      Alert.alert(t('modules.checklistFill.remarkNeededTitle'), `${t('modules.checklistFill.remarkNeededMsg')} ${names}`)
+      return
+    }
+
+    setErrors({})
+
+    // The template-level requirement is met by the sign-off pad OR by any
+    // signature field: a sheet already carrying three trade signatures must not
+    // demand a fourth.
+    if (requiresPrimarySignature(template)) {
+      if (!primarySignatureSatisfied(template, signatures, primarySignature)) {
+        Alert.alert(t('modules.checklistFill.signatureRequired'), t('modules.checklistFill.signatureRequiredMsg'))
+        return
+      }
+      if (!(printedName.trim() || (profile?.full_name ?? ''))) {
+        Alert.alert(t('modules.checklistFill.nameRequired'), t('modules.checklistFill.nameRequiredMsg'))
+        return
+      }
+    }
+
+    // 4. Faults are recordable but not closeable. Confirmed, never refused: a
+    //    fault found on the last item of the day must still reach the office.
+    if (blocking.length) {
+      Alert.alert(
+        t('modules.checklistFill.faultsTitle'),
+        `${t('modules.checklistFill.faultsSubmitMsg')}\n\n${blockingLines.join('\n')}`,
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('modules.checklistFill.submitAnyway'), onPress: () => { void doSubmit() } },
+        ],
+      )
+      return
+    }
+
+    void doSubmit()
   }
 
   // ── Header (shared) ─────────────────────────────────────────────────────────
@@ -577,7 +1238,7 @@ function ChecklistFillScreen() {
     <Screen>
       {header}
 
-      {/* Sticky progress */}
+      {/* Sticky progress + the jump to the next unrecorded item. */}
       <View style={styles.progressBar}>
         <View style={[styles.progressHead, isRTL && styles.rowR]}>
           <AppText variant="label" color="secondary">
@@ -590,9 +1251,30 @@ function ChecklistFillScreen() {
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${pct}%`, backgroundColor: pct === 100 ? c.success.base : c.primary }]} />
         </View>
+        {remaining > 0 ? (
+          <TouchableOpacity
+            style={[styles.nextBtn, isRTL && styles.rowR]}
+            onPress={goToNextUnanswered}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <Ionicons name="arrow-down-circle-outline" size={16} color={c.primaryDark} />
+            <AppText variant="label" style={{ color: c.primaryDark }}>
+              {t('modules.checklistFill.nextItem')} ({remaining})
+            </AppText>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.nextBtnDone, isRTL && styles.rowR]}>
+            <Ionicons name="checkmark-circle" size={16} color={c.success.base} />
+            <AppText variant="label" style={{ color: c.success.base }}>
+              {t('modules.checklistFill.allRecorded')}
+            </AppText>
+          </View>
+        )}
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -628,28 +1310,20 @@ function ChecklistFillScreen() {
           </View>
         )}
 
-        {/* Context: title / asset / site */}
+        {/* Context: asset first (it fills the sheet), then title and site. */}
         <View style={styles.card}>
-          <AppText variant="label" color="secondary" style={{ marginBottom: 6 }}>{t('modules.checklistFill.titleLabel')}</AppText>
-          <TextInput
-            style={[styles.input, { textAlign }]}
-            value={title}
-            onChangeText={setTitle}
-            placeholder={template.name}
-            placeholderTextColor={c.textMuted}
-          />
-          {/* Asset - compact search-first picker (no tiles, no icons in rows) */}
-          <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.assetNo')}</AppText>
+          <AppText variant="label" color="secondary" style={{ marginBottom: 6 }}>{t('modules.checklistFill.assetNo')}</AppText>
           {assetNo ? (
             <View style={[styles.assetChip, isRTL && styles.rowR]}>
               <View style={{ flex: 1 }}>
                 <AppText style={[typography.bodyStrong, { textAlign }]} numberOfLines={1}>{assetNo}</AppText>
-                {!!(assetMeta?.site || assetMeta?.vehicle_type) && (
+                {!!(asset?.site || asset?.vehicle_type) && (
                   <AppText variant="caption" color="muted" style={{ textAlign, marginTop: 1 }} numberOfLines={1}>
-                    {[assetMeta?.site, assetMeta?.vehicle_type].filter(Boolean).join(' · ')}
+                    {[asset?.site, asset?.vehicle_type].filter(Boolean).join(' - ')}
                   </AppText>
                 )}
               </View>
+              {assetLoading && <ActivityIndicator size="small" color={c.primary} />}
               <TouchableOpacity
                 onPress={clearAsset}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -660,6 +1334,9 @@ function ChecklistFillScreen() {
             </View>
           ) : (
             <View style={{ gap: spacing.sm }}>
+              <AppText variant="caption" color="muted" style={{ textAlign }}>
+                {t('modules.checklistFill.assetFirst')}
+              </AppText>
               <View style={[styles.assetSearchBox, isRTL && styles.rowR]}>
                 <Ionicons name="search-outline" size={16} color={c.textMuted} />
                 <TextInput
@@ -698,12 +1375,12 @@ function ChecklistFillScreen() {
                         key={row.id}
                         style={[styles.assetRow, isRTL && styles.rowR]}
                         activeOpacity={0.7}
-                        onPress={() => selectAsset(row)}
+                        onPress={() => { void applyAsset(row.asset_no, row.site) }}
                       >
                         <AppText style={[typography.bodyStrong, { textAlign }]} numberOfLines={1}>{row.asset_no}</AppText>
                         {!!(row.site || row.vehicle_type) && (
                           <AppText variant="caption" color="muted" style={{ flexShrink: 1 }} numberOfLines={1}>
-                            {[row.site, row.vehicle_type].filter(Boolean).join(' · ')}
+                            {[row.site, row.vehicle_type].filter(Boolean).join(' - ')}
                           </AppText>
                         )}
                       </TouchableOpacity>
@@ -717,7 +1394,7 @@ function ChecklistFillScreen() {
                       <TouchableOpacity
                         style={[styles.assetRow, isRTL && styles.rowR]}
                         activeOpacity={0.7}
-                        onPress={() => { setAssetNo(typed); setAssetMeta(null); setAssetQuery(''); setAssetResults([]) }}
+                        onPress={() => { void applyAsset(typed) }}
                       >
                         <AppText variant="caption" style={{ color: c.primaryDark, fontWeight: '700', textAlign }} numberOfLines={1}>
                           {t('checklists.useTypedAsset')} "{typed}"
@@ -730,7 +1407,23 @@ function ChecklistFillScreen() {
             </View>
           )}
 
-          {/* Site */}
+          <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.titleLabel')}</AppText>
+          <TextInput
+            style={[styles.input, { textAlign }]}
+            value={title}
+            onChangeText={setTitle}
+            placeholder={template.name}
+            placeholderTextColor={c.textMuted}
+          />
+          {/* The document number is minted server-side on insert, so the screen
+              shows the prefix and says when the reference appears. It never
+              invents one. */}
+          {!!template.doc_prefix && (
+            <AppText variant="caption" color="muted" style={{ marginTop: 6, textAlign }}>
+              {t('modules.checklistFill.referenceLabel')}: {template.doc_prefix} - {t('modules.checklistFill.referenceHelp')}
+            </AppText>
+          )}
+
           <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>{t('modules.checklistFill.site')}</AppText>
           <TextInput
             style={[styles.input, { textAlign }]}
@@ -741,7 +1434,27 @@ function ChecklistFillScreen() {
           />
         </View>
 
-        {/* Item tiles + section headings */}
+        {/* The 10-day rule. Advisory: it warns, it never refuses. */}
+        {!!recurrence && (
+          <View style={[styles.noticeCard, { backgroundColor: c.warning.soft, borderColor: c.warning.base }]}>
+            <View style={[styles.noticeHead, isRTL && styles.rowR]}>
+              <Ionicons name="time-outline" size={18} color={c.warning.base} />
+              <AppText variant="label" style={{ color: c.warning.on, flex: 1, textAlign }}>
+                {t('modules.checklistFill.notDueTitle')}
+              </AppText>
+            </View>
+            <AppText variant="caption" style={{ color: c.warning.on, textAlign, marginTop: 4 }}>
+              {t('modules.checklistFill.lastChecked')} {recurrence.daysAgo} {t('modules.checklistFill.daysWord')}
+              {recurrence.documentNo ? ` (${recurrence.documentNo})` : ''}
+              {'. '}
+              {t('modules.checklistFill.notDueFor')} {recurrence.dueInDays} {t('modules.checklistFill.daysWord2')}
+              {'. '}
+              {t('modules.checklistFill.notDueStillAllowed')}
+            </AppText>
+          </View>
+        )}
+
+        {/* Items */}
         {visibleFields.map(field => {
           if (field.type === 'section') {
             return (
@@ -756,81 +1469,58 @@ function ChecklistFillScreen() {
             )
           }
 
-          const answered = isFieldAnswered(field, answers, photos, signatures)
-          const summary = summaryFor(field)
-          const locked = isAutoField(field)
-          const err = errors[field.id]
-          const noteText = String(notes[field.id] ?? '').trim()
-
-          // Tile status pill tone: pass/fail from option semantics where
-          // possible. Toned from the stored ENGLISH value, never a translation.
-          let pillKind: 'success' | 'danger' | 'neutral' | 'info' = answered ? 'info' : 'neutral'
-          if (answered) {
-            if (field.type === 'boolean') pillKind = answers[field.id] === true ? 'success' : 'danger'
-            else if (field.type === 'select') {
-              const tone = optionTone(String(answers[field.id] ?? ''))
-              pillKind = tone === 'pass' ? 'success' : tone === 'fail' ? 'danger' : tone === 'na' ? 'neutral' : 'info'
-            }
-          }
-          const iconTint =
-            pillKind === 'success' ? c.success.base
-            : pillKind === 'danger' ? c.danger.base
-            : answered ? c.primary : c.textMuted
+          const meta = rowMeta.get(field.id)
+          if (!meta) return null
+          const value = answers[field.id]
+          // An auto field (inspector name, today's date) locks too, but ONLY
+          // once it actually resolved to something: locking an empty box is the
+          // very failure this screen exists to avoid.
+          const locked = isFieldLocked(asMarkField(field), value)
+            || (isAutoField(field) && String(value ?? '').trim() !== '')
+            || (field.type === 'asset' && String(value ?? '').trim() !== '')
+          // The register owns a value iff the field says where it came from;
+          // everything else that locks was set by the app (the sheet date).
+          const lockReason: 'auto' | 'register' | 'picked' =
+            field.type === 'asset' ? 'picked' : field.autoFrom ? 'register' : 'auto'
+          // A readOnly field the register could NOT fill stays typeable: outside
+          // KSA the fleet number and chassis are simply not recorded. Only claim
+          // that once an asset was actually looked up - an offline lookup that
+          // returned nothing is not evidence the register is empty.
+          const registerBlank = !!field.readOnly && !locked && !!asset
+          // Only the odometer has a register figure to compare against today.
+          const previousMeter = field.compareTo === 'asset.current_km' && asset?.current_km != null
+            ? String(asset.current_km)
+            : ''
+          const meterWarn = !!previousMeter && meterRegression(value, asset?.current_km)
 
           return (
-            <TouchableOpacity
+            <ItemRow
               key={field.id}
-              style={[
-                styles.tile,
-                contentRowReverse && styles.rowR,
-                answered && { borderColor: c.borderStrong },
-                !!err && { borderColor: c.danger.base, backgroundColor: c.danger.soft },
-              ]}
-              activeOpacity={locked ? 1 : 0.75}
-              onPress={() => setActiveFieldId(field.id)}
-            >
-              <View style={[styles.tileIcon, { backgroundColor: answered ? c.primarySoft : c.surfaceAlt }]}>
-                <Ionicons name={locked ? 'lock-closed-outline' : fieldIcon(field)} size={22} color={iconTint} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppText style={[typography.title, { textAlign: contentAlign }]} numberOfLines={2}>
-                  {fieldLabel(field, readLang) || t('modules.checklistFill.itemFallback')}
-                  {field.required ? <AppText style={{ color: c.danger.base }}> *</AppText> : null}
-                </AppText>
-                {!!err ? (
-                  <AppText variant="caption" style={{ color: c.danger.base, textAlign: contentAlign, marginTop: 2, fontWeight: '700' }} numberOfLines={2}>
-                    {err}
-                  </AppText>
-                ) : summary ? (
-                  <AppText variant="caption" color="secondary" style={{ textAlign: contentAlign, marginTop: 2 }} numberOfLines={2}>
-                    {summary}
-                  </AppText>
-                ) : field.help ? (
-                  <AppText variant="caption" color="muted" style={{ textAlign: contentAlign, marginTop: 2 }} numberOfLines={2}>
-                    {field.help}
-                  </AppText>
-                ) : (
-                  <AppText variant="caption" color="muted" style={{ textAlign: contentAlign, marginTop: 2 }}>
-                    {t('modules.checklistFill.tapToRecord')}
-                  </AppText>
-                )}
-                {/* A recorded remark is the reason a line failed: show it on the
-                    tile so it is not invisible until the sheet is reopened. */}
-                {!!noteText && (
-                  <View style={[styles.noteRow, contentRowReverse && styles.rowR]}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={12} color={c.textMuted} />
-                    <AppText variant="caption" color="muted" style={{ flex: 1, textAlign: contentAlign }} numberOfLines={2}>
-                      {noteText}
-                    </AppText>
-                  </View>
-                )}
-              </View>
-              {answered ? (
-                <Ionicons name="checkmark-circle" size={22} color={iconTint} />
-              ) : (
-                <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color={c.textMuted} />
-              )}
-            </TouchableOpacity>
+              field={field}
+              meta={meta}
+              value={value}
+              note={notes[field.id] ?? ''}
+              photos={photos[field.id] ?? NO_PHOTOS}
+              error={errors[field.id] || undefined}
+              answered={isFieldAnswered(field, answers, photos, signatures)}
+              locked={locked}
+              lockReason={lockReason}
+              registerBlank={registerBlank}
+              previousMeter={previousMeter}
+              meterWarn={meterWarn}
+              align={contentAlign}
+              rowReverse={contentRowReverse}
+              styles={styles}
+              c={c}
+              t={t}
+              onValue={setAnswer}
+              onPick={pickAnswer}
+              onNote={setFieldNote}
+              onPhotos={setFieldPhotos}
+              onOpenSheet={openSheet}
+              onLayoutY={onLayoutY}
+              summary={summaryFor(field)}
+            />
           )
         })}
 
@@ -876,6 +1566,32 @@ function ChecklistFillScreen() {
           </View>
         )}
 
+        {/* Faults recorded. SUBMIT is still allowed; CLOSING is not, and the
+            approval trigger enforces exactly that server-side. */}
+        {blocking.length > 0 && (
+          <View style={[styles.noticeCard, { backgroundColor: c.danger.soft, borderColor: c.danger.base }]}>
+            <View style={[styles.noticeHead, isRTL && styles.rowR]}>
+              <Ionicons name="warning-outline" size={18} color={c.danger.base} />
+              <AppText variant="label" style={{ color: c.danger.on, flex: 1, textAlign }}>
+                {t('modules.checklistFill.faultsTitle')} ({blocking.length})
+              </AppText>
+            </View>
+            <AppText variant="caption" style={{ color: c.danger.on, textAlign, marginTop: 4 }}>
+              {t('modules.checklistFill.faultsBody')}
+            </AppText>
+            {blockingLines.map((line, i) => (
+              <AppText
+                key={`${line}-${i}`}
+                variant="caption"
+                style={{ color: c.danger.on, textAlign, marginTop: 2 }}
+                numberOfLines={2}
+              >
+                {'- '}{line}
+              </AppText>
+            ))}
+          </View>
+        )}
+
         {/* Submit */}
         <View style={{ marginTop: spacing.sm }}>
           <TouchableOpacity
@@ -897,20 +1613,26 @@ function ChecklistFillScreen() {
         </View>
       </ScrollView>
 
-      {/* Tap-to-record popup */}
+      {/* Tap-to-record popup, for the item types that are not recorded in place */}
       <ChecklistItemSheet
         visible={!!activeField}
         field={activeField}
         template={template}
         lang={readLang}
         value={activeField ? answers[activeField.id] : undefined}
-        photos={activeField ? (photos[activeField.id] ?? []) : []}
+        photos={activeField ? (photos[activeField.id] ?? NO_PHOTOS) : NO_PHOTOS}
         printedName={printedName}
         signature={activeField ? (signatures[activeField.id] ?? null) : null}
         note={activeField ? (notes[activeField.id] ?? '') : ''}
         country={userCountry}
         error={activeField ? errors[activeField.id] : undefined}
-        onChange={v => activeField && setAnswer(activeField.id, v)}
+        onChange={v => {
+          if (!activeField) return
+          setAnswer(activeField.id, v)
+          // The only way to reach an asset field is before one is chosen; adopt
+          // it so the submission and the header agree on one machine.
+          if (activeField.type === 'asset' && String(v ?? '').trim()) void applyAsset(String(v))
+        }}
         onPhotos={urls => activeField && setFieldPhotos(activeField.id, urls)}
         onPrintedName={setPrintedName}
         onSignature={svg => activeField && setFieldSignature(activeField.id, svg)}
@@ -949,6 +1671,15 @@ function makeStyles(theme: Theme) {
     progressHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     track: { height: 8, borderRadius: 4, backgroundColor: c.surfaceSunken, overflow: 'hidden' },
     fill: { height: 8, borderRadius: 4 },
+    nextBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      alignSelf: 'stretch', marginTop: 2,
+      backgroundColor: c.primarySoft, borderRadius: radius.md, paddingVertical: 8,
+    },
+    nextBtnDone: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      alignSelf: 'stretch', marginTop: 2, paddingVertical: 8,
+    },
 
     scroll: { flex: 1 },
     content: { padding: spacing.lg, paddingBottom: spacing['4xl'], gap: spacing.md },
@@ -962,6 +1693,7 @@ function makeStyles(theme: Theme) {
       borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: 12,
       ...typography.body, color: c.text,
     },
+    inputMultiline: { minHeight: 64, textAlignVertical: 'top' },
 
     // Reading-language switcher
     langHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.sm },
@@ -1004,17 +1736,60 @@ function makeStyles(theme: Theme) {
 
     section: { marginTop: spacing.sm, paddingBottom: 2 },
 
-    tile: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    // Advisory / fault banners
+    noticeCard: { borderRadius: radius.lg, borderWidth: 1, padding: spacing.md },
+    noticeHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+    // One checklist item
+    itemCard: {
       backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md,
+      borderWidth: 1, borderColor: c.border, gap: spacing.sm,
+    },
+    itemHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+    lockedRow: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.surfaceAlt, borderRadius: radius.md, padding: spacing.md,
       borderWidth: 1, borderColor: c.border,
-      minHeight: 72,
     },
-    tileIcon: {
-      width: 46, height: 46, borderRadius: radius.md,
-      alignItems: 'center', justifyContent: 'center',
+
+    // The mark legend: big, gloved-hand targets.
+    markRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    // Four marks per row on a small phone and four on a large one: a percentage
+    // basis packs the eight-mark legend into exactly two rows at any width,
+    // while minWidth keeps every target a real gloved-hand target.
+    markBtn: {
+      flexBasis: '22%', flexGrow: 1, minWidth: 64, minHeight: 68,
+      borderRadius: radius.md, borderWidth: 1.5,
+      alignItems: 'center', justifyContent: 'center', gap: 3,
+      paddingHorizontal: 3, paddingVertical: 8,
     },
-    noteRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+    markText: { fontSize: 9.5, lineHeight: 12, fontWeight: '700', textAlign: 'center' },
+    meaningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+
+    choicePill: {
+      paddingHorizontal: spacing.md, paddingVertical: 12, borderRadius: radius.md,
+      borderWidth: 1.5, borderColor: c.border, backgroundColor: c.surfaceAlt,
+      minWidth: 96, alignItems: 'center',
+    },
+    choicePillText: { ...typography.bodyStrong, color: c.textSecondary },
+
+    numRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    unitChip: {
+      paddingHorizontal: spacing.md, paddingVertical: 10, borderRadius: radius.md,
+      backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.border,
+    },
+    warnRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+
+    tileBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+      backgroundColor: c.surfaceAlt, borderRadius: radius.md,
+      paddingHorizontal: spacing.md, minHeight: 52,
+    },
+
+    detailBlock: {
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
+      paddingTop: spacing.sm, marginTop: 2,
+    },
 
     submitBtn: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

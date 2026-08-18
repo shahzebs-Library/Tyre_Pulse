@@ -68,6 +68,35 @@ export interface ChecklistField {
   visibleWhen?: VisibleWhen | VisibleWhen[] | null
   weight?: number | null
   passValues?: any[]
+
+  /* ── V595 workshop-sheet properties ─────────────────────────────────────
+   * These live on the LIVE templates (see MIGRATIONS_V595) and are read by
+   * checklistMarks. They are declared here so the fill screen can touch them
+   * without casting every access to `any`, which is how a typo in one of them
+   * would otherwise ship silently.
+   */
+  /** Auto-fill source token, e.g. "asset.site". Resolved by resolveAutoFill. */
+  autoFrom?: string | null
+  /** Read-only ONCE the register supplied a value. See isFieldLocked: the
+   *  register is sparse (fleet_number is set on 398 of 1,030 KSA assets and on
+   *  none outside KSA), so an unconditional lock would leave most of the fleet
+   *  with a blank box nobody can fill. */
+  readOnly?: boolean
+  /** Never editable at all, whatever the value (the sheet date). */
+  locked?: boolean
+  /** Prefill token handled by resolveAutoValue ("today" / "current_user"). */
+  autoValue?: string | null
+  /** At least one field carrying the same group name must be answered. */
+  group_require_one?: string | null
+  /** Register field this reading is sanity-checked against, e.g.
+   *  "asset.current_km". A mismatch WARNS, it never blocks. */
+  compareTo?: string | null
+  /** Unit shown beside a number reading (km / hours). */
+  unit?: string | null
+  /** Marks that oblige a remark, beside the option set's own require_note. */
+  require_note_when?: string[] | null
+  /** Gallery picking is offered as well as the camera. */
+  allow_gallery?: boolean
 }
 
 export type Answers = Record<string, any>
@@ -356,4 +385,21 @@ export function computeScore(fields: ChecklistField[], answers: Answers = {}, pa
   const pct = possible > 0 ? Math.round((earned / possible) * 100) : null
   const passed = pct != null && passThreshold != null ? pct >= Number(passThreshold) : null
   return { scored, earned, possible, pct, passed }
+}
+
+/**
+ * Is a new meter reading LOWER than the one the register already holds?
+ *
+ * WARNING ONLY, never a block, and that is deliberate: a meter really can be
+ * replaced, and vehicle_fleet.current_km is stale (populated on 248 of 1,030
+ * KSA assets), so treating a regression as an error would refuse honest
+ * readings. Returns false whenever either side is not a real number, because
+ * "we have nothing to compare against" is not "the reading is wrong".
+ */
+export function meterRegression(value: unknown, previous: unknown): boolean {
+  const v = Number(value)
+  const p = Number(previous)
+  if (!Number.isFinite(v) || !Number.isFinite(p)) return false
+  if (String(value ?? '').trim() === '' || String(previous ?? '').trim() === '') return false
+  return v < p
 }

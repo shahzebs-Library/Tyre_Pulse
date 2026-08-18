@@ -117,7 +117,7 @@
     "alertRequired": "Required",
     "alertSelectSite": "Please select a site.",
     "alertSelectVehicle": "Please select a vehicle.",
-    "saveIssueTitle": "Saved on device — will retry",
+    "saveIssueTitle": "Saved on device, will retry",
     "saveIssueBody": "Your inspection is saved on this device and will sync automatically. The server reported an issue this time:",
     "siteSelectPlaceholder": "Select a site…",
     "siteSearchPlaceholder": "Search site…",
@@ -126,7 +126,7 @@
     "tyres": "tyres",
     "gpsCapturing": "Capturing location…",
     "gpsCaptured": "Location captured",
-    "gpsUnavailable": "Location unavailable — inspection will submit without it",
+    "gpsUnavailable": "Location unavailable, inspection will submit without it",
     "gpsRetry": "Retry",
     "step1": "1",
     "step2": "2",
@@ -773,116 +773,88 @@
       "workOrdersReview": "work orders open, review recommended",
       "qa": {
         "scan": {
-          "label": "Scan Asset",
-          "sub": "Barcode / QR code"
+          "label": "Scan Asset"
         },
         "serial": {
-          "label": "Serial Search",
-          "sub": "Find tyre by serial"
+          "label": "Serial Search"
         },
         "tyreChange": {
-          "label": "Tyre Change",
-          "sub": "Record a change"
+          "label": "Tyre Change"
         },
         "checklists": {
-          "label": "Checklists",
-          "sub": "Fill & submit checks"
+          "label": "Checklists"
         },
         "meter": {
-          "label": "Meter Log",
-          "sub": "Daily odometer / hrs"
+          "label": "Meter Log"
         },
         "reportIssue": {
-          "label": "Report Issue",
-          "sub": "Flag a problem"
+          "label": "Report Issue"
         },
         "records": {
-          "label": "Tyre Records",
-          "sub": "Browse all records"
+          "label": "Tyre Records"
         },
         "vehicles": {
-          "label": "Vehicles",
-          "sub": "Fleet assets"
+          "label": "Vehicles"
         },
         "history": {
-          "label": "History",
-          "sub": "Recent activity"
+          "label": "Activity History"
         },
         "alerts": {
-          "label": "Alerts",
-          "sub": "Critical tyres"
+          "label": "Alerts"
         },
         "calendar": {
-          "label": "Calendar",
-          "sub": "Scheduled work"
+          "label": "Calendar"
         },
         "accidents": {
-          "label": "Accidents",
-          "sub": "Incident overview"
+          "label": "Accidents"
         },
         "reportAccident": {
-          "label": "File Accident",
-          "sub": "Report an incident"
+          "label": "File Accident"
         },
         "workorders": {
-          "label": "Work Orders",
-          "sub": "Open actions"
+          "label": "Work Orders"
         },
         "rca": {
-          "label": "Root Cause",
-          "sub": "RCA analysis"
+          "label": "Root Cause"
         },
         "tasks": {
-          "label": "Tasks",
-          "sub": "Corrective actions"
+          "label": "Tasks"
         },
         "stock": {
-          "label": "Stock Count",
-          "sub": "Daily stock-take"
+          "label": "Stock Count"
         },
         "overview": {
-          "label": "Overview",
-          "sub": "Fleet snapshot"
+          "label": "Overview"
         },
         "reports": {
-          "label": "Reports",
-          "sub": "Generate PDF"
+          "label": "Reports"
         },
         "analytics": {
-          "label": "Analytics",
-          "sub": "Fleet KPIs"
+          "label": "Analytics"
         },
         "ai": {
-          "label": "Fleet AI",
-          "sub": "Ask anything"
+          "label": "Fleet AI"
         },
         "team": {
-          "label": "Team",
-          "sub": "Members"
+          "label": "Team"
         },
         "admin": {
-          "label": "Admin Console",
-          "sub": "Console & settings"
+          "label": "Admin Console"
         },
         "approvals": {
-          "label": "Approvals",
-          "sub": "Sign off inspections"
+          "label": "Approvals"
         },
         "pm": {
-          "label": "Maintenance Due",
-          "sub": "PM plans + record service"
+          "label": "Maintenance Due"
         },
         "washing": {
-          "label": "Vehicle Washing",
-          "sub": "Log a wash"
+          "label": "Vehicle Washing"
         },
         "workshop": {
-          "label": "My Jobs",
-          "sub": "Record job activity"
+          "label": "My Jobs"
         },
         "checklistHistory": {
-          "label": "Checklist History",
-          "sub": "Sheets I have filled"
+          "label": "Checklist History"
         }
       }
     },

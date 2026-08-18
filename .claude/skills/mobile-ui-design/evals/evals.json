@@ -1,0 +1,27 @@
+{
+  "skill_name": "mobile-ui-design",
+  "notes": "Runs execute against an isolated copy of mobile/ so they never collide with the live repo. Sandbox: .claude/skills/mobile-ui-design-workspace/sandbox/mobile (node_modules symlinked).",
+  "evals": [
+    {
+      "id": 0,
+      "name": "serial-search-messy-complaint",
+      "prompt": "the serial search page on the phone looks old and messy, the colors are all over the place and it doesnt look proffesional like the rest. fix it properly",
+      "expected_output": "Diagnosis of the real defects (60 raw hex values, colour without meaning, kit bypass, archetype-7 failures), then a rebuilt screen using theme tokens and the ui kit. tsc clean.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "tasks-make-professional",
+      "prompt": "make the tasks screen look more professional and easier to scan, my supervisors use it every day",
+      "expected_output": "Hierarchy fix (one primary action, grouped density), semantic colour only, tokens instead of the 30 raw hex values, real loading/empty/error states. tsc clean.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "new-screen-born-consistent",
+      "prompt": "add a new screen for tyre men that lists the tyres due for replacement on an asset they pick, with the worst ones first",
+      "expected_output": "A new screen that is consistent from birth: Screen/Card/Badge/ListRow/EmptyState from the kit, tokens only, archetype-appropriate layout (picker then register), i18n keys in en.json AND ar.json, verified Ionicons glyphs, RTL-safe. tsc clean.",
+      "files": []
+    }
+  ]
+}

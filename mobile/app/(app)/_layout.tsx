@@ -143,6 +143,39 @@ export default function AppLayout() {
 
   return (
     <Tabs
+      /*
+       * THE BACK-NAVIGATION FIX. Read this before changing it.
+       *
+       * Every screen in this app is a TAB route in THIS navigator - the
+       * checklist list, the checklist fill screen, History, the approval
+       * queues, the admin sub-pages, all of them. There is no nested Stack.
+       *
+       * @react-navigation/routers TabRouter defaults `backBehavior` to
+       * 'firstRoute', and its getRouteHistory() then builds a history of
+       * exactly [routes[0], currentRoute]. routes[0] is `index` = HOME. So on
+       * EVERY screen `router.canGoBack()` reported true and `router.back()`
+       * popped straight to Home - the product owner's "it jumps to Home",
+       * reported three times.
+       *
+       * That is also why three previous fixes were partial: each one tuned the
+       * FALLBACK inside backTo(), but the fallback was never reached. canGoBack
+       * was true, so backTo always took the back() branch, and back() always
+       * landed on Home whatever the fallback said.
+       *
+       * 'history' makes the router accumulate REAL visit history (de-duplicated
+       * by route key, so it stays bounded by the screen count) and GO_BACK pops
+       * the screen the user actually came from. Home -> Checklists -> a
+       * checklist -> Back now returns to Checklists.
+       *
+       * NOT 'fullHistory': it also restores route params, but it de-dupes only
+       * the last entry, so an A->B->A->B loop grows the history without bound.
+       * These are single-instance tab routes, so a dynamic screen already holds
+       * its latest params anyway.
+       *
+       * DO NOT remove this prop. Without it back() is hardwired to Home and no
+       * amount of per-screen fallback tuning can fix it.
+       */
+      backBehavior="history"
       // Re-check the pending count on every tab focus change, so returning to
       // any tab after an offline save or a sync refreshes the Home badge.
       screenListeners={{ focus: () => { refreshPendingBadge() } }}

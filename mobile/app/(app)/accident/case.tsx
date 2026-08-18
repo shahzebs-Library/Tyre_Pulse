@@ -68,8 +68,12 @@ function AccidentCaseScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // This screen's REAL parent is the accident it belongs to - it is only ever
+  // opened from accident/[id]. The id is in our own params, so the fallback can
+  // name that screen exactly instead of guessing at the register one level up.
+  // Register only when the id is missing (nothing else is addressable then).
   function goBack() {
-    backTo(router, '/(app)/accident/dashboard')
+    backTo(router, id ? `/(app)/accident/${id}` : '/(app)/accident/dashboard')
   }
 
   const load = useCallback(async () => {

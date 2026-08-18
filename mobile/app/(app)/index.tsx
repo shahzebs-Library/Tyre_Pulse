@@ -10,6 +10,17 @@
  * / Management / Admin); a section renders only when the user can reach at least
  * one of its actions, so the hub stays tidy for every role.
  *
+ * TILE PRESENTATION (owner feedback 2026-08-18: "its messy ... the commetry also
+ * no needs that ... that green icon is ok for inspection but other not correct"):
+ *   - Tiles carry a LABEL ONLY. The old second line of commentary ("Log a wash",
+ *     "Daily odometer / hrs") doubled the height of every tile and told a field
+ *     user nothing the label did not already say.
+ *   - Tile icons are ONE calm neutral treatment by default. Colour is reserved
+ *     for real signal (see TileTone), so a colour on this screen MEANS
+ *     something instead of being six unrelated pastels at once.
+ *   - The grid is a fixed 3-up rhythm on every screen size, so a partial last
+ *     row stays at column width instead of stretching into a ragged block.
+ *
  * Loading strategy: offline queue from AsyncStorage (instant), then DB data in
  * parallel (skeleton while waiting). Visuals: design-system tokens
  * (light-first, sunlight-readable).
@@ -74,14 +85,40 @@ type SectionKey = 'Field' | 'Fleet' | 'Maintenance' | 'Management' | 'Admin'
 
 const SECTION_ORDER: SectionKey[] = ['Field', 'Fleet', 'Maintenance', 'Management', 'Admin']
 
+/**
+ * Icon TONE - the colour system for the quick-action grid.
+ *
+ * Every tile used to be assigned one of seven pastel tints (blue / teal / green
+ * / amber / red / violet / slate) with no rule behind the choice, so a grid of
+ * twenty-seven tiles read as confetti and a red tile meant nothing more than a
+ * violet one. Colour is now spent only where it carries information:
+ *
+ *   default  - the calm neutral chip. Almost every tile.
+ *   alert    - something is wrong or is being reported as wrong (Accidents,
+ *              File Accident, Alerts).
+ *   approve  - work being signed off (Approvals). Same green family as the
+ *              primary Start Inspection CTA, which the owner confirmed is right.
+ *
+ * Both signal tones use the theme's DESIGNED soft/on status pairs, so they are
+ * legible in the light (sunlight) palette and the dark one without a second
+ * lookup table.
+ */
+type TileTone = 'alert' | 'approve'
+
+function tileChip(theme: Theme, tone?: TileTone): { bg: string; fg: string } {
+  if (tone === 'alert') return { bg: theme.color.danger.soft, fg: theme.color.danger.on }
+  if (tone === 'approve') return { bg: theme.color.success.soft, fg: theme.color.success.on }
+  return { bg: theme.color.surfaceAlt, fg: theme.color.textSecondary }
+}
+
 interface QuickAction {
   module: ModuleKey
   section: SectionKey
   icon: string
   label: string
-  sublabel: string
   route: string
-  tint: TintKey
+  /** Reserved signal colour. Omitted = the neutral default chip. */
+  tone?: TileTone
   /**
    * Identity of the TILE, when it differs from the module gating it. Two tiles
    * can share a module key - filling a checklist and reading back the ones you
@@ -94,46 +131,52 @@ interface QuickAction {
 
 // The `inspect` action is deliberately surfaced as the big primary CTA (not in
 // the grid) so it is never duplicated; every other module lives in a section.
+//
+// LABELS MUST STAND ALONE. With the sublabel gone, a label is the only thing a
+// user reads, so two tiles may not share a word without a qualifier: the Fleet
+// tile is "Activity History" (fleet-wide movement) and the Field tile is
+// "Checklist History" (the sheets I filled). Their icons differ for the same
+// reason - a pulse trace against a clock.
 const QUICK_ACTIONS: QuickAction[] = [
   // Field ---------------------------------------------------------------------
   // NOTE: there is deliberately NO 'scan' tile here. Scanning is surfaced once,
   // as the big green Scan shortcut below the grid (gated by canAccess('scan')),
   // so the asset scanner is never offered twice on Home. Serial Search stays
   // because it is a DISTINCT action (find a tyre by serial, not a camera scan).
-  { module: 'serial',      section: 'Field', icon: 'barcode-outline',         label: 'Serial Search', sublabel: 'Find tyre by serial',  route: '/(app)/serial-search',      tint: 'blue'   },
-  { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',   sublabel: 'Record a change',      route: '/(app)/tyre-change',        tint: 'teal'   },
-  { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',    sublabel: 'Fill & submit checks', route: '/(app)/checklists',   tint: 'green'  },
+  { module: 'serial',      section: 'Field', icon: 'barcode-outline',         label: 'Serial Search',     route: '/(app)/serial-search' },
+  { module: 'tyreChange',  section: 'Field', icon: 'swap-horizontal-outline', label: 'Tyre Change',       route: '/(app)/tyre-change' },
+  { module: 'checklists',  section: 'Field', icon: 'checkbox-outline',        label: 'Checklists',        route: '/(app)/checklists' },
   // Same module key as the tile above ON PURPOSE: whoever may fill a checklist
   // may read back the ones they filled, and sharing the key makes that true by
   // construction instead of by two role lists agreeing today.
-  { module: 'checklists',  section: 'Field', icon: 'time-outline',            label: 'Checklist History', sublabel: 'Sheets I have filled', route: '/(app)/checklists/history', tint: 'slate', id: 'checklistHistory' },
-  { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',     sublabel: 'Daily odometer / hrs', route: '/(app)/meter-logs',         tint: 'blue'   },
-  { module: 'washing',     section: 'Field', icon: 'water-outline',           label: 'Vehicle Washing', sublabel: 'Log a wash',         route: '/(app)/washing',            tint: 'teal'   },
-  { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',  sublabel: 'Flag a problem',       route: '/(app)/report-issue',       tint: 'amber'  },
+  { module: 'checklists',  section: 'Field', icon: 'time-outline',            label: 'Checklist History', route: '/(app)/checklists/history', id: 'checklistHistory' },
+  { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',         route: '/(app)/meter-logs' },
+  { module: 'washing',     section: 'Field', icon: 'water-outline',           label: 'Vehicle Washing',   route: '/(app)/washing' },
+  { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',      route: '/(app)/report-issue' },
   // Fleet ---------------------------------------------------------------------
-  { module: 'records',     section: 'Fleet', icon: 'layers-outline',          label: 'Tyre Records',  sublabel: 'Browse all records',   route: '/(app)/records',      tint: 'violet' },
-  { module: 'vehicles',    section: 'Fleet', icon: 'car-outline',             label: 'Vehicles',      sublabel: 'Fleet assets',         route: '/(app)/vehicles',           tint: 'blue'   },
-  { module: 'history',     section: 'Fleet', icon: 'time-outline',            label: 'History',       sublabel: 'Recent activity',      route: '/(app)/history',            tint: 'slate'  },
-  { module: 'alerts',      section: 'Fleet', icon: 'notifications-outline',   label: 'Alerts',        sublabel: 'Critical tyres',       route: '/(app)/alerts',             tint: 'red'    },
-  { module: 'calendar',    section: 'Fleet', icon: 'calendar-outline',        label: 'Calendar',      sublabel: 'Scheduled work',       route: '/(app)/calendar',           tint: 'blue'   },
+  { module: 'records',     section: 'Fleet', icon: 'layers-outline',        label: 'Tyre Records',     route: '/(app)/records' },
+  { module: 'vehicles',    section: 'Fleet', icon: 'car-outline',           label: 'Vehicles',         route: '/(app)/vehicles' },
+  { module: 'history',     section: 'Fleet', icon: 'pulse-outline',         label: 'Activity History', route: '/(app)/history' },
+  { module: 'alerts',      section: 'Fleet', icon: 'notifications-outline', label: 'Alerts',           route: '/(app)/alerts', tone: 'alert' },
+  { module: 'calendar',    section: 'Fleet', icon: 'calendar-outline',      label: 'Calendar',         route: '/(app)/calendar' },
   // Maintenance ---------------------------------------------------------------
-  { module: 'accidents',      section: 'Maintenance', icon: 'warning-outline',      label: 'Accidents',   sublabel: 'Incident overview',   route: '/(app)/accident/dashboard', tint: 'red'    },
-  { module: 'reportAccident', section: 'Maintenance', icon: 'alert-circle-outline', label: 'File Accident', sublabel: 'Report an incident', route: '/(app)/accident/report',   tint: 'red'    },
-  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',    label: 'Work Orders', sublabel: 'Open actions',        route: '/(app)/workorders',   tint: 'amber'  },
-  { module: 'rca',            section: 'Maintenance', icon: 'git-branch-outline',   label: 'Root Cause',  sublabel: 'RCA analysis',        route: '/(app)/rca',                tint: 'violet' },
-  { module: 'tasks',          section: 'Maintenance', icon: 'list-outline',         label: 'Tasks',       sublabel: 'Corrective actions',  route: '/(app)/tasks',              tint: 'amber'  },
-  { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',         label: 'Stock Count', sublabel: 'Daily stock-take',    route: '/(app)/stock',              tint: 'amber'  },
-  { module: 'pm',             section: 'Maintenance', icon: 'build-outline',        label: 'Maintenance Due', sublabel: 'PM plans + record service', route: '/(app)/maintenance',  tint: 'teal'   },
-  { module: 'workshop',       section: 'Maintenance', icon: 'construct-outline',    label: 'My Jobs',     sublabel: 'Record job activity', route: '/(app)/workshop',           tint: 'blue'   },
-  { module: 'approvals',      section: 'Maintenance', icon: 'checkmark-done-outline', label: 'Approvals', sublabel: 'Sign off inspections', route: '/(app)/inspection/approvals', tint: 'green' },
+  { module: 'accidents',      section: 'Maintenance', icon: 'warning-outline',        label: 'Accidents',       route: '/(app)/accident/dashboard', tone: 'alert' },
+  { module: 'reportAccident', section: 'Maintenance', icon: 'alert-circle-outline',   label: 'File Accident',   route: '/(app)/accident/report',    tone: 'alert' },
+  { module: 'workorders',     section: 'Maintenance', icon: 'construct-outline',      label: 'Work Orders',     route: '/(app)/workorders' },
+  { module: 'rca',            section: 'Maintenance', icon: 'git-branch-outline',     label: 'Root Cause',      route: '/(app)/rca' },
+  { module: 'tasks',          section: 'Maintenance', icon: 'list-outline',           label: 'Tasks',           route: '/(app)/tasks' },
+  { module: 'stock',          section: 'Maintenance', icon: 'cube-outline',           label: 'Stock Count',     route: '/(app)/stock' },
+  { module: 'pm',             section: 'Maintenance', icon: 'build-outline',          label: 'Maintenance Due', route: '/(app)/maintenance' },
+  { module: 'workshop',       section: 'Maintenance', icon: 'hammer-outline',         label: 'My Jobs',         route: '/(app)/workshop' },
+  { module: 'approvals',      section: 'Maintenance', icon: 'checkmark-done-outline', label: 'Approvals',       route: '/(app)/inspection/approvals', tone: 'approve' },
   // Management ----------------------------------------------------------------
-  { module: 'overview',    section: 'Management', icon: 'grid-outline',          label: 'Overview',   sublabel: 'Fleet snapshot',  route: '/(app)/overview',        tint: 'blue'   },
-  { module: 'reports',     section: 'Management', icon: 'document-text-outline', label: 'Reports',    sublabel: 'Generate PDF',    route: '/(app)/reports',   tint: 'violet' },
-  { module: 'analytics',   section: 'Management', icon: 'bar-chart-outline',     label: 'Analytics',  sublabel: 'Fleet KPIs',      route: '/(app)/analytics', tint: 'blue'   },
-  { module: 'ai',          section: 'Management', icon: 'sparkles-outline',      label: 'Fleet AI',   sublabel: 'Ask anything',    route: '/(app)/ai',        tint: 'violet' },
-  { module: 'team',        section: 'Management', icon: 'people-outline',        label: 'Team',       sublabel: 'Members',         route: '/(app)/team',            tint: 'teal'   },
+  { module: 'overview',    section: 'Management', icon: 'grid-outline',          label: 'Overview',  route: '/(app)/overview' },
+  { module: 'reports',     section: 'Management', icon: 'document-text-outline', label: 'Reports',   route: '/(app)/reports' },
+  { module: 'analytics',   section: 'Management', icon: 'bar-chart-outline',     label: 'Analytics', route: '/(app)/analytics' },
+  { module: 'ai',          section: 'Management', icon: 'sparkles-outline',      label: 'Fleet AI',  route: '/(app)/ai' },
+  { module: 'team',        section: 'Management', icon: 'people-outline',        label: 'Team',      route: '/(app)/team' },
   // Admin ---------------------------------------------------------------------
-  { module: 'admin',       section: 'Admin', icon: 'shield-outline', label: 'Admin Console', sublabel: 'Console & settings', route: '/(app)/admin', tint: 'slate' },
+  { module: 'admin',       section: 'Admin', icon: 'shield-outline', label: 'Admin Console', route: '/(app)/admin' },
 ]
 
 // ── Main screen ────────────────────────────────────────────────────────────────
@@ -409,7 +452,7 @@ export default function HomeScreen() {
         {/* ── Quick Actions, grouped by section (access-gated) ──────────────── */}
         {sections.map(sec => (
           <View key={sec.key}>
-            <SectionLabel s={s} theme={theme}>{t(`modules.home.sections.${sec.key}`)}</SectionLabel>
+            <SectionLabel s={s} isRTL={isRTL}>{t(`modules.home.sections.${sec.key}`)}</SectionLabel>
             <View style={s.quickGrid}>
               {sec.items.map(a => (
                 <QuickActionCard key={a.id ?? a.module} action={a} s={s} theme={theme} t={t} onPress={() => router.push(a.route as any)} />
@@ -421,7 +464,7 @@ export default function HomeScreen() {
         {/* ── Fleet Health (elevated roles) ─────────────────────────────────── */}
         {elevated && (
           <View>
-            <SectionLabel s={s} theme={theme}>{t('modules.home.fleetHealthWeek')}</SectionLabel>
+            <SectionLabel s={s} isRTL={isRTL}>{t('modules.home.fleetHealthWeek')}</SectionLabel>
             {fleetLoading ? (
               <View style={s.fleetCard}>
                 <View style={s.fleetRow}>
@@ -512,31 +555,43 @@ export default function HomeScreen() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function SectionLabel({ children, s, theme }: { children: string; s: Styles; theme: Theme }) {
+// Section header: a quiet uppercase label with a hairline rule running to the
+// edge. Five bold headings stacked down a long screen read as five competing
+// titles; a rule reads as structure. The rule follows the reading direction so
+// it never sits between the label and the screen edge under RTL.
+function SectionLabel({ children, s, isRTL }: { children: string; s: Styles; isRTL: boolean }) {
   return (
-    <AppText style={[typography.label, s.sectionTitle, { color: theme.color.textMuted }]}>{children}</AppText>
+    <View style={[s.sectionHead, isRTL && s.rowReverse]}>
+      <AppText style={[typography.micro, s.sectionTitle]}>{children}</AppText>
+      <View style={s.sectionRule} />
+    </View>
   )
 }
 
+// ONE line of text per tile: the label. The sublabel is deliberately gone (see
+// the file header) - it is not hidden behind a flag or an empty string, the
+// field and its rendering no longer exist, so it cannot creep back by data.
 function QuickActionCard({ action, onPress, s, theme, t }: { action: QuickAction; onPress: () => void; s: Styles; theme: Theme; t: (k: string) => string }) {
-  const tint = theme.tint[action.tint]
+  const chip = tileChip(theme, action.tone)
   // t() returns the raw key when a translation is missing (e.g. a module added
   // before its locale entries land, like 'pm') - fall back to the registry's
-  // English strings so a tile never renders a dotted key path.
+  // English string so a tile never renders a dotted key path.
   const id = action.id ?? action.module
   const labelKey = `modules.home.qa.${id}.label`
-  const subKey = `modules.home.qa.${id}.sub`
   const labelTr = t(labelKey)
-  const subTr = t(subKey)
   const label = labelTr === labelKey ? action.label : labelTr
-  const sub = subTr === subKey ? action.sublabel : subTr
   return (
-    <TouchableOpacity style={s.qaCard} onPress={onPress} activeOpacity={0.8}>
-      <View style={[s.qaIcon, { backgroundColor: tint.bg }]}>
-        <Ionicons name={action.icon as any} size={22} color={tint.fg} />
+    <TouchableOpacity
+      style={s.qaCard}
+      onPress={onPress}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={[s.qaIcon, { backgroundColor: chip.bg }]}>
+        <Ionicons name={action.icon as any} size={21} color={chip.fg} />
       </View>
       <Text style={s.qaLabel} numberOfLines={2}>{label}</Text>
-      {sub ? <Text style={s.qaSublabel} numberOfLines={2}>{sub}</Text> : null}
     </TouchableOpacity>
   )
 }
@@ -650,23 +705,29 @@ function makeStyles(theme: Theme) {
     ctaSubtitle: { fontSize: 12.5, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: '600' },
 
     // Section labels
-    sectionTitle:     { textTransform: 'uppercase', marginBottom: spacing.xs },
+    sectionHead:      { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+    sectionTitle:     { textTransform: 'uppercase', color: c.textMuted },
+    sectionRule:      { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
     sectionLink:      { fontSize: 13, color: c.primaryDark, fontWeight: '800' },
 
-    // Quick actions. Cards are tall enough for a 2-line label + 2-line
-    // sublabel (no ellipsis); the icon chip is a fixed 42x42 so icons align
-    // across every tile and never clip.
+    // Quick actions - a FIXED 3-up grid at every width.
+    //
+    // `flexBasis` decides how many tiles fit on a row BEFORE any growing, so
+    // 28% wraps at three on a 320dp phone and still wraps at three on a tablet;
+    // `maxWidth: 32%` then stops a lone tile on the last row from stretching
+    // into a full-width slab, which is what made the old grid look ragged.
+    // Height is sized for the icon chip plus a 2-line label - nothing else,
+    // now that the sublabel is gone.
     quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
     qaCard: {
-      flexGrow: 1, flexBasis: '30%', minWidth: 104,
-      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: 5,
-      borderWidth: 1, borderColor: c.border, minHeight: 124,
+      flexGrow: 1, flexBasis: '28%', maxWidth: '32%',
+      backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm,
+      borderWidth: 1, borderColor: c.border, minHeight: 102,
       ...elevation(theme, 1),
     },
-    qaIcon:     { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-    qaLabel:    { fontSize: 13, fontWeight: '800', color: c.text, marginTop: 2, lineHeight: 17 },
-    qaSublabel: { fontSize: 10.5, color: c.textMuted, fontWeight: '600', lineHeight: 14 },
+    qaIcon:     { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    qaLabel:    { fontSize: 12.5, fontWeight: '700', color: c.text, lineHeight: 16 },
 
     // Site stat tile (mirrors components/ui/StatTile visuals, but wraps)
     siteTile: {

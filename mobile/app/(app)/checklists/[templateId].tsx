@@ -80,6 +80,7 @@ import { lookupAssetByCode, AssetLookupRecord } from '../../../lib/assetLookup'
 import { supabase } from '../../../lib/supabase'
 import { escapeLike, orIlike } from '../../../lib/queryFilters'
 import { toUserMessage } from '../../../lib/safeError'
+import { backTo } from '../../../lib/goBack'
 import {
   ChecklistField, Signatures, blankAnswer, isValueField, visibleChecklistFields,
   validateSubmission, computeScore, isAutoField, resolveAutoValue,
@@ -596,9 +597,14 @@ function ChecklistFillScreen() {
   const onLayoutY = useCallback((id: string, y: number) => { rowY.current[id] = y }, [])
 
   // Back = previous screen when there is history, else the checklists list.
+  //
+  // This USED to hand-roll the canGoBack/back/replace triple. It is routed
+  // through the shared `backTo` helper now, because a second copy of the rule
+  // is exactly how the two drift apart - and this screen is the one the owner
+  // reported. `backTo` can never be a no-op, and the fallback names this
+  // screen's REAL parent (the checklists list), not the Home hub.
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)/checklists')
+    backTo(router, '/(app)/checklists')
   }, [router])
 
   const load = useCallback(async () => {

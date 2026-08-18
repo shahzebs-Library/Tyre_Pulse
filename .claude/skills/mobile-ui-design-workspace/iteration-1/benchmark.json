@@ -1,0 +1,42 @@
+{
+  "skill": "mobile-ui-design",
+  "iteration": 1,
+  "configurations": [
+    {
+      "name": "with_skill",
+      "pass_rate": 1.0,
+      "runs": [
+        {
+          "eval": "eval-0-serial-search",
+          "score": "17/17"
+        },
+        {
+          "eval": "eval-1-tasks",
+          "score": "17/17"
+        },
+        {
+          "eval": "eval-2-new-screen",
+          "score": "17/17"
+        }
+      ]
+    },
+    {
+      "name": "without_skill",
+      "pass_rate": 0.922,
+      "runs": [
+        {
+          "eval": "eval-0-serial-search",
+          "score": "16/17"
+        },
+        {
+          "eval": "eval-1-tasks",
+          "score": "17/17"
+        },
+        {
+          "eval": "eval-2-new-screen",
+          "score": "14/17"
+        }
+      ]
+    }
+  ]
+}

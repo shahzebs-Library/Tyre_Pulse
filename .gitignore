@@ -54,3 +54,6 @@ pdftxt.mjs
 # convention so they can never be swept into a commit; a harness worth keeping
 # gets a real name first.
 **/__tmp_*
+
+# Skill eval review artifact (regenerate from the workspace)
+mobile-ui-design-review.html

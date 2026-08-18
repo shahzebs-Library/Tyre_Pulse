@@ -337,8 +337,20 @@ migrates AFTER the new one is stored; cleared on submit INCLUDING an offline sub
 - Five agents ran; all five landed. Staggering worked where six in parallel had exhausted the session limit.
 
 ### OPEN / FLAGGED
-- **NO EAS BUILD.** Nothing in parts 2-5 has run on a device. `store-assets/RELEASE_NOTES.md` carries the Play
-  "What's new" text (en + ar, inside the 500-char cap) and the full changelog.
+- **BUILD SHIPPED (2026-08-18 21:03Z).** Run 32184166231 on `4b7f4df9`, 17 min, SUCCESS, versionName **1.5.0**,
+  auto-submitted to the Play **Closed testing** track (the "build only, no submit" fallback step was SKIPPED,
+  which is what proves the submission actually happened). Owner promotes Closed -> Production themselves.
+  **NOTHING HAS RUN ON A DEVICE YET** - and this is the first release with R8 shrinking on, whose failure modes
+  are invisible until one does. Smoke-test an inspection with photos, the scanner and a checklist before
+  promoting; if something that used to work is broken, R8 is the first suspect.
+- **expo doctor reports 4 packages one PATCH behind** (expo 54.0.36 vs 54.0.37, expo-constants, expo-file-system,
+  expo-updates). It is NON-FATAL - the build ran straight past it. `npx expo install --check` in `mobile/` bumps
+  them; do it between releases, never mid-build.
+- **THE APP IS ALREADY LIVE IN PRODUCTION AND THE STORE LISTING IS COMPLETE AND APPROVED** - screenshots, data
+  safety, content rating, target audience, App access, privacy policy. `store-assets/PLAY_STORE_LISTING.md` used
+  to carry an August checklist marking all of that outstanding; I read it instead of asking and told the owner to
+  redo finished work. Both files are corrected. **RULE: Play Console is the source of truth for listing state;
+  this repo holds only the text and the graphics.**
 - **After the build ships: set `mobile_latest_version` to 1.5.0** (still 1.3.2). Do NOT raise `mobile_min_version`
   until a tester confirms 1.5.0 on a real phone.
 - **Neither approver has a push token**, so nothing pings them when a sheet needs signing. Resolves when they sign

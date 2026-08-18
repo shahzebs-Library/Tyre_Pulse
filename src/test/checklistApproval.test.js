@@ -136,10 +136,21 @@ describe('the mobile mirror does not drift', () => {
   })
 
   it('the role lists match the SQL helpers they mirror', () => {
-    // checklist_is_supervisor / checklist_is_area_manager in V594.
-    const sql = readFileSync(resolve(__dirname, '../../MIGRATIONS_V594_CHECKLIST_TWO_STAGE_APPROVAL.sql'), 'utf8')
+    // checklist_is_supervisor / checklist_is_area_manager. V594 created them;
+    // a later migration may REPLACE one, and the live database runs whichever
+    // ran last - so read the migrations in order and keep the LAST definition
+    // of each. Pinning V594 alone would quietly compare against a body the
+    // database no longer has, which is worse than not checking at all.
+    const sql = ['MIGRATIONS_V594_CHECKLIST_TWO_STAGE_APPROVAL.sql',
+                 'MIGRATIONS_V599_WORKSHOP_SUPERVISOR.sql']
+      .map((f) => readFileSync(resolve(__dirname, '../..', f), 'utf8'))
+      .join('\n')
     const sqlRoles = (fn) => {
-      const body = sql.slice(sql.indexOf(`function public.${fn}()`))
+      // Anchor on the DEFINITION, not the bare name: every one of these files
+      // ends with a rollback comment containing `drop function public.<fn>()`,
+      // and a last-match on the name lands there instead - then reads the next
+      // array it finds, which belongs to a different function entirely.
+      const body = sql.slice(sql.lastIndexOf(`create or replace function public.${fn}()`))
       const open = body.indexOf('array[')
       const arr = body.slice(open + 'array['.length, body.indexOf(']', open))
       return [...arr.matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()

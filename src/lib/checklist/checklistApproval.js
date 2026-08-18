@@ -25,6 +25,7 @@ export const APPROVAL_STAGES = [
     label: 'Supervisor sign-off',
     /** profiles.role values that may act. Compared case/spacing-insensitively. */
     roles: ['Admin', 'Manager', 'Director', 'Maintenance Supervisor', 'Fleet Supervisor',
+            'Workshop Supervisor',
             'PMV Manager', 'Workshop Area Manager', 'Workshop Maintenance Area Manager'],
   },
   {

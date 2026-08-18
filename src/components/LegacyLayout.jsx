@@ -26,7 +26,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { isChecklistOnlyRole, isChecklistPathAllowed } from '../lib/checklistAccess'
+import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_ONLY_ROLES } from '../lib/checklistAccess'
 import { navItemAllowedForCustomRole, NAV_MODULE_KEY, governingModuleKey } from '../lib/navAccess'
 import { ACCESS_ROLES } from '../lib/moduleCatalog'
 import { applyNavLayout } from '../lib/navLayout'
@@ -35,7 +35,14 @@ import { configStr } from '../lib/api/systemConfig'
 
 // Built-in roles have hardcoded sidebar rules below; any other (non-empty) role
 // is an admin-defined CUSTOM role whose sidebar is derived from its module grants.
-const BUILTIN_NAV_ROLES = new Set([...ACCESS_ROLES, 'Maintenance Supervisor', 'Store Keeper'])
+// The two hand-added names are here because the CUSTOM-ROLE branch below runs
+// BEFORE the checklist-only one, and it is deny-by-default. A checklist-only
+// role that is not listed here is swallowed by that branch and its sidebar
+// rule never runs, so it sees nothing at all. CHECKLIST_ONLY_ROLES and this
+// set must stay in step - pinned by src/test/checklistOnlyNav.test.js.
+const BUILTIN_NAV_ROLES = new Set([
+  ...ACCESS_ROLES, ...CHECKLIST_ONLY_ROLES, 'Store Keeper',
+])
 const isCustomNavRole = (role) => !!role && !BUILTIN_NAV_ROLES.has(role)
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import {

@@ -3,12 +3,20 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ClipboardCheck, ArrowLeft, ChevronRight, Loader2, AlertTriangle, AlertOctagon,
   Send, Star, ImagePlus, X, PenLine, Camera, CheckCircle2, RefreshCw, Gauge, Lock, Languages,
+  Hash, Clock, Info,
 } from 'lucide-react'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { getTemplate, createSubmission, uploadChecklistPhoto } from '../lib/api/checklists'
+import { getTemplate, createSubmission, uploadChecklistPhoto, listSubmissions } from '../lib/api/checklists'
 import { blankAnswer, validateSubmission, isLayoutField, visibleFields, computeScore, isReferenceField, referenceSource, isAutoField, resolveAutoValue, signatureFields } from '../lib/checklist/fieldTypes'
+// The marks / auto-fill / close-gate engine. THIS PAGE OWNS NO COPY OF THESE
+// RULES - every one of them is read from the shared module so the screen, the
+// phone and guard_checklist_approval_stages cannot drift apart.
+import {
+  autoFillAnswers, blockingAnswers, blockingMarks, fieldOptionSet, isFieldLocked,
+  markMeta, missingNotes, recurrenceNotice, unsatisfiedGroups,
+} from '../lib/checklist/checklistMarks'
 import {
   CHECKLIST_LANGS, DEFAULT_LANG, normalizeLang, langDir, isRtlLang,
   fieldLabel, fieldOptions, fieldOptionValues, templateName, templateDescription,
@@ -17,8 +25,64 @@ import {
 import { completeAssignment } from '../lib/api/checklistSchedules'
 import SignaturePad from '../components/SignaturePad'
 import ReferencePicker from '../components/checklist/ReferencePicker'
+import MarkChip from '../components/checklist/MarkChip'
+import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
+import { getAssetByNo } from '../lib/api/assets'
 import { safeHref, safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
+
+/**
+ * THE HEADER MUST NOT ASK WHAT THE SHEET ALREADY ASKS.
+ *
+ * Every published template carries its own asset field and its own site field
+ * (the workshop sheet has `f_ws_asset` / `f_ws_site`, the transit mixer sheet
+ * the same pair), so the old header block asked for both a second time, one
+ * card above the line that asks for them properly. The owner reported exactly
+ * that: "in both places they are showing 2 places for asset to be entered".
+ *
+ * The rule is DERIVED from the template's own fields, never from its name: a
+ * plain template that asks for neither keeps the header input as its only way
+ * of recording them, so nothing regresses for a sheet built without them.
+ */
+export function fieldAsksFor(field, kind) {
+  if (!field || !field.id || isLayoutField(field.type)) return false
+  if (referenceSource(field.type) === kind) return true
+  // A field that is filled FROM the asset register's site is the same question
+  // wearing a different type (the workshop sheet's Location is exactly this).
+  if (kind === 'site' && field.autoFrom === 'asset.site') return true
+  return false
+}
+
+/** Ids of the fields that already ask for `kind` ('asset' | 'site'). */
+export function askingFieldIds(fields, kind) {
+  return (Array.isArray(fields) ? fields : []).filter((f) => fieldAsksFor(f, kind)).map((f) => f.id)
+}
+
+/**
+ * The first real answer among `ids`. Blank-safe rather than truthy-safe: a
+ * meter reading of 0 is a reading, and a site called "0" would be a value too.
+ */
+export function firstAnswer(ids, answers) {
+  for (const id of Array.isArray(ids) ? ids : []) {
+    const v = answers?.[id]
+    if (v != null && String(v).trim() !== '') return String(v).trim()
+  }
+  return ''
+}
+
+/**
+ * A meter reading below the one the register holds. WARNS, never blocks: a
+ * meter really can be replaced, and vehicle_fleet.current_km is stale (set on
+ * 248 of 1,030 KSA assets), so refusing the reading would refuse honest work.
+ * Anything that is not a real number on either side compares as "no opinion".
+ */
+function meterBelowRegister(value, previous) {
+  if (String(value ?? '').trim() === '' || String(previous ?? '').trim() === '') return false
+  const v = Number(value)
+  const p = Number(previous)
+  if (!Number.isFinite(v) || !Number.isFinite(p)) return false
+  return v < p
+}
 
 function isMissingRelation(err) {
   const m = String(err?.message || '').toLowerCase()
@@ -39,7 +103,18 @@ export default function ChecklistRun() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
+  // Fallback header, used ONLY for what this template does not ask for itself.
   const [header, setHeader] = useState({ title: '', asset_no: '', site: '' })
+  // The vehicle_fleet row behind the picked asset. It fills the sheet; it is
+  // never required, because an asset the register does not know must still be
+  // recordable by hand.
+  const [asset, setAsset] = useState(null)
+  // Whether a lookup has actually RUN for the current asset. "We have not
+  // looked" and "the register holds nothing" are different statements, and the
+  // read-only hint below only makes the second one.
+  const [assetLookedUp, setAssetLookedUp] = useState(false)
+  const [recurrence, setRecurrence] = useState(null)
+  const assetStamp = useRef(0)
   const [answers, setAnswers] = useState({})
   const [photos, setPhotos] = useState({})       // { fieldId: [urls] }
   // Every signature FIELD keeps its own capture, keyed by field id, exactly as
@@ -116,10 +191,83 @@ export default function ChecklistRun() {
   const labelFor = useCallback((f) => fieldLabel(f, readLang), [readLang])
   const optionsFor = useCallback((f) => fieldOptionValues(f, template), [template])
 
+  // What this template asks for itself. Everything below is derived from these
+  // two lists, so a template that asks for neither keeps its header inputs.
+  const assetFieldIds = useMemo(() => askingFieldIds(fields, 'asset'), [fields])
+  const siteFieldIds = useMemo(() => askingFieldIds(fields, 'site'), [fields])
+  const asksAsset = assetFieldIds.length > 0
+  const asksSite = siteFieldIds.length > 0
+  // The reference is minted server-side on insert from the template's prefix
+  // (WDC-TM514-2026-0001), so a template that has one is not asked for a title.
+  const mintsReference = Boolean(String(template?.doc_prefix ?? '').trim())
+
+  // The values that reach the submission: the ANSWER when the sheet asks, the
+  // header input when it does not. One question, one place, either way.
+  const effectiveAssetNo = asksAsset ? firstAnswer(assetFieldIds, answers) : header.asset_no.trim()
+  const effectiveSite = asksSite ? firstAnswer(siteFieldIds, answers) : header.site.trim()
+
   const setAnswer = useCallback((id, value) => {
     setAnswers((prev) => ({ ...prev, [id]: value }))
     setErrors((prev) => (prev[id] ? { ...prev, [id]: undefined } : prev))
   }, [])
+
+  /**
+   * Picking the asset fills the sheet.
+   *
+   * The register supplies the site, the registration / fleet number and the
+   * chassis where it has them (checklistMarks.autoFillAnswers decides what
+   * lands where - this page never maps a column to a field itself). Both halves
+   * are BEST EFFORT: a lookup that fails leaves the operator typing by hand
+   * rather than blocking the sheet, and it says nothing at all about the 10-day
+   * rule, because "we could not look" is not "it is not due".
+   */
+  useEffect(() => {
+    const code = effectiveAssetNo
+    const stamp = ++assetStamp.current
+    if (!code || !template) {
+      setAsset(null); setAssetLookedUp(false); setRecurrence(null)
+      return
+    }
+    let cancelled = false
+    setAssetLookedUp(false)
+    ;(async () => {
+      let row = null
+      try {
+        row = await getAssetByNo(code, activeCountry)
+      } catch { row = null }
+      if (cancelled || assetStamp.current !== stamp) return
+      setAsset(row || null)
+      setAssetLookedUp(true)
+      if (row) {
+        setAnswers((prev) => {
+          const patch = autoFillAnswers(template, row, prev)
+          return Object.keys(patch).length ? { ...prev, ...patch } : prev
+        })
+      }
+
+      // The recurrence warning is only asked for when the template states an
+      // interval; a template without one must not pay for the read.
+      const minDays = Number(template.min_interval_days)
+      if (!Number.isFinite(minDays) || minDays <= 0) { setRecurrence(null); return }
+      try {
+        const rows = await listSubmissions({ templateId: template.id, assetNo: code, limit: 1 })
+        if (cancelled || assetStamp.current !== stamp) return
+        const last = Array.isArray(rows) ? rows[0] : null
+        const when = last?.submitted_at || last?.created_at
+        const at = when ? new Date(when).getTime() : NaN
+        if (!last || !Number.isFinite(at)) { setRecurrence(null); return }
+        setRecurrence(recurrenceNotice({
+          found: true,
+          days_ago: Math.floor((Date.now() - at) / 86400000),
+          document_no: last.document_no ?? null,
+        }, minDays))
+      } catch {
+        // Silence is correct here: an unreadable history is not a due date.
+        if (!cancelled && assetStamp.current === stamp) setRecurrence(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [effectiveAssetNo, template, activeCountry])
 
   const setNote = useCallback((id, text) => {
     setNotes((prev) => ({ ...prev, [id]: text }))
@@ -171,6 +319,19 @@ export default function ChecklistRun() {
     setSignTargetField(null)
   }
 
+  /**
+   * THE TWO GATES ARE NOT THE SAME GATE.
+   *
+   * `blocking` (a line marked Not OK) stops the sheet being CLOSED, never being
+   * SUBMITTED - a fault found on the last item of the day must still reach the
+   * office, and guard_checklist_approval_stages is what refuses the approval.
+   * The other two DO stop a submission: a sheet with no meter reading, or a
+   * fault with no reason, records nothing anyone can act on.
+   */
+  const blocking = useMemo(() => (template ? blockingAnswers(template, answers) : []), [template, answers])
+  const openGroups = useMemo(() => (template ? unsatisfiedGroups(template, answers) : []), [template, answers])
+  const openNotes = useMemo(() => (template ? missingNotes(template, answers, notes) : []), [template, answers, notes])
+
   async function handleSubmit() {
     setSubmitError('')
     const { valid, errors: fieldErrors } = validateSubmission(fields, answers, {
@@ -187,6 +348,31 @@ export default function ChecklistRun() {
       }
       return
     }
+    // The meter pair. Either reading satisfies it and neither may be skipped:
+    // 98 of 227 KSA transit mixers carry no odometer at all while every one of
+    // them has engine hours. ZERO IS A READING and counts as answered.
+    if (openGroups.length) {
+      const names = openGroups.flatMap((g) => g.fields.map((f) => labelFor(fields.find((x) => x.id === f.id)) || f.label)).join(' or ')
+      setErrors({})
+      setSubmitError(`Record at least one meter reading: ${names}.`)
+      const firstId = openGroups[0]?.fields?.[0]?.id
+      const el = firstId ? document.getElementById(`field-${firstId}`) : null
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
+    // A fault with no remark records nothing anyone can act on.
+    if (openNotes.length) {
+      const remarkErrors = {}
+      for (const n of openNotes) remarkErrors[n.id] = 'Say what is wrong before submitting.'
+      setErrors(remarkErrors)
+      const names = openNotes.map((n) => labelFor(fields.find((x) => x.id === n.id)) || n.label).join(', ')
+      setSubmitError(`A remark is required on: ${names}.`)
+      const el = document.getElementById(`field-${openNotes[0].id}`)
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+
     // The first signature captured on a signature FIELD, in template order.
     // It backs signature_data when the template has no separate sign-off pad,
     // which is what the single-slot version used to write there.
@@ -223,9 +409,13 @@ export default function ChecklistRun() {
         template_name: template.name,
         template_version: template.version ?? 1,
         country: activeCountry && activeCountry !== 'All' ? activeCountry : (template.country ?? null),
-        site: header.site.trim() || null,
-        asset_no: header.asset_no.trim() || null,
-        title: header.title.trim() || template.name || null,
+        // Taken from the ANSWER when the sheet asks for it itself, and from
+        // the fallback header only when it does not.
+        site: effectiveSite || null,
+        asset_no: effectiveAssetNo || null,
+        // A template with a prefix has its reference minted server-side on
+        // insert, so nothing here invents one.
+        title: (mintsReference ? '' : header.title.trim()) || template.name || null,
         status: 'submitted',
         answers,
         photos,
@@ -391,25 +581,74 @@ export default function ChecklistRun() {
           </div>
         )}
 
-        {/* Optional header block */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 pt-4 border-t border-[var(--border-dim)]">
-          <div>
-            <label className="label">Title / Reference</label>
-            <input className="input" value={header.title} placeholder={template.name || 'e.g. Morning inspection'}
-              onChange={(e) => setHeader((h) => ({ ...h, title: e.target.value }))} />
+        {/* The reference. A template with a prefix has its document number
+            minted server-side on insert, so the screen says what will happen
+            and never invents one. */}
+        {mintsReference && (
+          <p className="mt-4 pt-4 border-t border-[var(--border-dim)] text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+            <Hash size={13} className="shrink-0" />
+            Reference: {String(template.doc_prefix).trim()} - assigned automatically when you submit.
+          </p>
+        )}
+
+        {/* FALLBACK HEADER ONLY. Each input renders only when this template does
+            not already ask the same question on the sheet below - asking twice
+            is what the owner reported, and dropping the field instead would
+            lose it on a plain template that has no asset or site line. */}
+        {(!mintsReference || !asksAsset || !asksSite) && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 pt-4 border-t border-[var(--border-dim)]">
+            {!mintsReference && (
+              <div>
+                <label className="label" htmlFor="header-title">Title / Reference</label>
+                <input id="header-title" className="input" value={header.title} placeholder={template.name || 'e.g. Morning inspection'}
+                  onChange={(e) => setHeader((h) => ({ ...h, title: e.target.value }))} />
+              </div>
+            )}
+            {!asksAsset && (
+              <div>
+                <label className="label" htmlFor="header-asset">Asset No.</label>
+                <input id="header-asset" className="input" value={header.asset_no} placeholder="e.g. TRK-1024"
+                  onChange={(e) => setHeader((h) => ({ ...h, asset_no: e.target.value }))} />
+              </div>
+            )}
+            {!asksSite && (
+              <div>
+                <label className="label" htmlFor="header-site">Site</label>
+                <input id="header-site" className="input" value={header.site} placeholder="e.g. Central Depot"
+                  onChange={(e) => setHeader((h) => ({ ...h, site: e.target.value }))} />
+              </div>
+            )}
           </div>
-          <div>
-            <label className="label">Asset No.</label>
-            <input className="input" value={header.asset_no} placeholder="e.g. TRK-1024"
-              onChange={(e) => setHeader((h) => ({ ...h, asset_no: e.target.value }))} />
-          </div>
-          <div>
-            <label className="label">Site</label>
-            <input className="input" value={header.site} placeholder="e.g. Central Depot"
-              onChange={(e) => setHeader((h) => ({ ...h, site: e.target.value }))} />
+        )}
+
+        {/* What the register knows about the machine on the sheet. Shown only
+            once a lookup has really run, so an unread register never renders as
+            an empty one. */}
+        {asksAsset && effectiveAssetNo && assetLookedUp && (
+          <p className="mt-3 text-xs text-[var(--text-muted)] flex items-start gap-1.5">
+            <Info size={13} className="shrink-0 mt-0.5" />
+            {asset
+              ? `Register: ${[asset.vehicle_type, asset.make, asset.model, asset.site].filter(Boolean).join(' - ') || 'no details recorded'}`
+              : `${effectiveAssetNo} is not in the asset register for this country. The sheet can still be filled by hand.`}
+          </p>
+        )}
+      </div>
+
+      {/* The 10-day rule. ADVISORY: it warns, it never refuses, and it says
+          nothing at all when the history could not be read. */}
+      {recurrence && (
+        <div className="rounded-xl border border-amber-700/50 bg-amber-500/[0.07] p-3 flex items-start gap-2.5">
+          <Clock size={16} className="text-amber-400 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-300">This machine is not due yet.</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Last checked {recurrence.daysAgo} {recurrence.daysAgo === 1 ? 'day' : 'days'} ago
+              {recurrence.documentNo ? ` (${recurrence.documentNo})` : ''}. Next due in {recurrence.dueInDays}
+              {recurrence.dueInDays === 1 ? ' day' : ' days'}. You can still record this check.
+            </p>
           </div>
         </div>
-      </div>
+      )}
 
       {submitError && (
         <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-3 text-red-300 text-sm flex gap-2">
@@ -422,13 +661,31 @@ export default function ChecklistRun() {
         {contentFields.length === 0 && (
           <p className="text-sm text-[var(--text-muted)] text-center py-6">This checklist has no fields to fill.</p>
         )}
-        {contentFields.map((field) => (
+        {contentFields.map((field) => {
+          const value = answers[field.id]
+          // A field locks ONLY once the register really supplied something.
+          // fleet_number is set on 398 of 1,030 KSA assets and on NONE of the
+          // 452 UAE or 135 Egypt ones, so an unconditionally read-only field
+          // would be permanently blank and unfillable for most of the fleet.
+          const locked = isFieldLocked(field, value)
+          // ...and when the register was read and had nothing, say so, so the
+          // operator types what is stamped on the machine instead of assuming
+          // the box is broken. Only claimed once a lookup actually returned a row.
+          const registerBlank = Boolean(field.readOnly) && !locked && assetLookedUp && Boolean(asset)
+          const previousMeter = field.compareTo === 'asset.current_km' && asset?.current_km != null
+            ? String(asset.current_km)
+            : ''
+          return (
           <FieldRenderer
             key={field.id}
             field={field}
-            value={answers[field.id]}
+            value={value}
             error={errors[field.id]}
             country={activeCountry}
+            locked={locked}
+            registerBlank={registerBlank}
+            previousMeter={previousMeter}
+            optionSet={fieldOptionSet(template, field)}
             onChange={(v) => setAnswer(field.id, v)}
             photos={photos[field.id] || []}
             uploading={!!uploading[field.id]}
@@ -442,7 +699,8 @@ export default function ChecklistRun() {
             options={fieldOptions(field, template, readLang)}
             rtl={rtl}
           />
-        ))}
+          )
+        })}
       </div>
 
       {/* Signature block (template-level requirement) */}
@@ -468,6 +726,11 @@ export default function ChecklistRun() {
         </div>
       )}
 
+      {/* What still stops this sheet being CLOSED. It never stops it being
+          submitted; the same decision is enforced by the approval trigger, and
+          this is it made before anyone signs. */}
+      <BlockingMarksNotice template={template} answers={answers} />
+
       {/* Submit bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <button onClick={back} className="btn-secondary text-sm inline-flex items-center gap-2">
@@ -475,7 +738,7 @@ export default function ChecklistRun() {
         </button>
         <button onClick={handleSubmit} disabled={submitting} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
           {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-          {submitting ? 'Submitting…' : 'Submit checklist'}
+          {submitting ? 'Submitting…' : (blocking.length ? 'Submit with faults recorded' : 'Submit checklist')}
         </button>
       </div>
 
@@ -509,6 +772,7 @@ function BackLink({ onClick }) {
 function FieldRenderer({
   field, value, error, onChange, country, photos, uploading, onPickPhoto, onRemovePhoto,
   signature, onOpenSignature, note, onNoteChange, label, options, rtl,
+  locked = false, registerBlank = false, previousMeter = '', optionSet = null,
 }) {
   const fileRef = useRef(null)
   const type = field?.type
@@ -539,25 +803,38 @@ function FieldRenderer({
 
   const allowInlinePhoto = field.allow_photo && type !== 'photo'
   const auto = isAutoField(field)
+  // Two different reasons for the same read-only box, and the box says which:
+  // the app filled it (inspector, today) or the asset register did.
+  const readOnlyBox = auto || locked
+  // The 8-mark legend. A field answers with marks when its option set carries
+  // the meta - icon, tone and plain-English meaning - that V595 added. Anything
+  // else keeps the plain dropdown, so a template with a free option list is
+  // untouched.
+  const marks = optionSet ? blockingMarks(optionSet) : []
+  const useMarks = type === 'select'
+    && choices.length > 0
+    && optionSet != null
+    && choices.some((o) => markMeta(optionSet, o.value).known)
+  const meterWarn = meterBelowRegister(value, previousMeter)
 
   return (
     <div id={`field-${field.id}`} className={`rounded-lg ${error ? 'ring-1 ring-red-500/50 p-3 -m-0.5 bg-red-900/5' : ''}`}>
       {type !== 'signature' && labelEl}
       {field.help && type !== 'section' && <p className="text-xs text-[var(--text-muted)] -mt-1 mb-1.5">{field.help}</p>}
 
-      {auto && (
+      {readOnlyBox && (
         <div>
-          <div className="input flex items-center gap-2 opacity-80 cursor-not-allowed select-none" aria-readonly="true" title="Auto-filled and locked">
-            <span className="flex-1 truncate text-[var(--text-primary)]">{value != null && value !== '' ? String(value) : '—'}</span>
+          <div className="input flex items-center gap-2 opacity-80 cursor-not-allowed select-none" aria-readonly="true" title={auto ? 'Auto-filled and locked' : 'From the asset register'}>
+            <span className="flex-1 truncate text-[var(--text-primary)]">{value != null && value !== '' ? String(value) : 'Not recorded'}</span>
             <Lock size={14} className="shrink-0 text-[var(--text-muted)]" />
           </div>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-center gap-1">
-            <Lock size={11} /> Auto-filled · locked
+            <Lock size={11} /> {auto ? 'Auto-filled · locked' : 'From the asset register · locked'}
           </p>
         </div>
       )}
 
-      {!auto && isReferenceField(type) && (
+      {!readOnlyBox && isReferenceField(type) && (
         <ReferencePicker
           source={referenceSource(type)}
           value={value ?? ''}
@@ -567,34 +844,79 @@ function FieldRenderer({
         />
       )}
 
-      {!auto && type === 'text' && (
+      {!readOnlyBox && type === 'text' && (
         <input className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="Enter value" />
       )}
 
-      {!auto && type === 'textarea' && (
+      {!readOnlyBox && type === 'textarea' && (
         <textarea className="input" rows={3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="Enter notes" />
       )}
 
-      {!auto && type === 'number' && (
-        <input
-          type="number" className="input" value={value ?? ''}
-          min={field.min ?? undefined} max={field.max ?? undefined}
-          onChange={(e) => onChange(e.target.value)} placeholder="0"
-        />
+      {!readOnlyBox && type === 'number' && (
+        <div>
+          <input
+            type="number" className="input" value={value ?? ''}
+            min={field.min ?? undefined} max={field.max ?? undefined}
+            onChange={(e) => onChange(e.target.value)} placeholder="0"
+          />
+          {previousMeter && (
+            <p className="text-[11px] text-[var(--text-muted)] mt-1">Register reading: {previousMeter}</p>
+          )}
+          {/* A lower reading WARNS and is always recorded: a meter really can
+              be replaced, and the register's figure is often stale. */}
+          {meterWarn && (
+            <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1">
+              <AlertTriangle size={11} /> Lower than the register reading. It will still be recorded.
+            </p>
+          )}
+        </div>
       )}
 
-      {!auto && type === 'date' && (
+      {!readOnlyBox && type === 'date' && (
         <input type="date" className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
       )}
 
-      {!auto && type === 'select' && (
+      {/* A legend mark is recorded in place: one click, the icon and tone the
+          legend itself declares, and the plain-English meaning of the mark that
+          was chosen. A mark nobody can explain is a mark picked at random.
+          The glyph and tone come from checklistMarks via MarkChip - never
+          invented here - and the STORED value stays the English token whatever
+          language the label is read in. */}
+      {!readOnlyBox && type === 'select' && useMarks && (
+        <div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={text || 'Mark'}>
+            {choices.map((o) => {
+              const selected = String(value ?? '') === o.value
+              return (
+                <button
+                  key={o.value} type="button"
+                  aria-pressed={selected}
+                  title={o.label}
+                  onClick={() => onChange(selected ? '' : o.value)}
+                  className={`rounded-full transition-shadow ${selected ? 'ring-2 ring-offset-1 ring-offset-transparent ring-[var(--border-bright)]' : 'opacity-70 hover:opacity-100'}`}
+                >
+                  <MarkChip
+                    mark={{ ...markMeta(optionSet, o.value), value: o.label, blocking: marks.includes(o.value) }}
+                    size={selected ? 'lg' : 'sm'}
+                  />
+                </button>
+              )
+            })}
+          </div>
+          {value != null && String(value) !== '' && markMeta(optionSet, value).meaning && (
+            <p className="text-[11px] text-[var(--text-muted)] mt-1.5">{markMeta(optionSet, value).meaning}</p>
+          )}
+        </div>
+      )}
+
+      {!readOnlyBox && type === 'select' && !useMarks && (
         <select className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
           <option value="">Select</option>
           {choices.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       )}
 
-      {!auto && type === 'multiselect' && (
+      {!readOnlyBox && type === 'multiselect' && (
         <div className="flex flex-wrap gap-2">
           {choices.map((o) => {
             const arr = Array.isArray(value) ? value : []
@@ -615,7 +937,7 @@ function FieldRenderer({
         </div>
       )}
 
-      {!auto && type === 'boolean' && (
+      {!readOnlyBox && type === 'boolean' && (
         <div className="flex items-center gap-2">
           {[['Yes', true], ['No', false]].map(([lbl, val]) => (
             <button
@@ -632,7 +954,7 @@ function FieldRenderer({
         </div>
       )}
 
-      {!auto && type === 'rating' && (
+      {!readOnlyBox && type === 'rating' && (
         <div className="flex items-center gap-1.5">
           {[1, 2, 3, 4, 5].map((n) => (
             <button key={n} type="button" onClick={() => onChange(Number(value) === n ? 0 : n)} title={`${n}`}
@@ -668,6 +990,15 @@ function FieldRenderer({
             </button>
           )}
         </div>
+      )}
+
+      {/* The register was read and holds nothing for this machine. Outside KSA
+          the fleet number and chassis are simply not recorded, so the field
+          stays typeable and says why rather than looking broken. */}
+      {registerBlank && (
+        <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-center gap-1">
+          <Info size={11} className="shrink-0" /> The asset register has no value for this machine. Type what is on the machine.
+        </p>
       )}
 
       {/* Per-line remark. Both paper sheets carry a Remarks column beside every

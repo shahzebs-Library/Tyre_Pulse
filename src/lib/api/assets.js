@@ -10,7 +10,12 @@ const COLS =
   // different fact from `status`, which says whether the asset is on the
   // current fleet at all - a machine can be Active in the register and broken
   // down today, and collapsing the two would hide exactly that case.
-  'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,site,country,status,is_active,'
+  // chassis_no + serial_no are here for the checklist auto-fill, which reads
+  // them through AUTO_FILL_SOURCES['asset.chassis_no']. They are populated on
+  // 389 and 513 of 1,617 assets, so the field they feed stays CONDITIONALLY
+  // locked - it fills and locks where the register really has a value and
+  // stays typeable everywhere else, rather than locking blank.
+  'id,asset_no,fleet_number,make,model,vehicle_type,registration_no,chassis_no,serial_no,site,country,status,is_active,'
   + 'current_km,tyre_size,capacity,engine_no,ops_status,ops_status_note,ops_status_at,created_at'
 
 /**

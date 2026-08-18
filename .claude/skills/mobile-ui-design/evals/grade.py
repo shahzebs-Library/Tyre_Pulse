@@ -201,23 +201,87 @@ def grade(run_dir, target):
         not missing,
         f"{len(missing)} missing: {missing[:6]}" if missing else f"{len(used)} keys verified",
     ))
+
+    # The sandbox was snapshotted with two pre-existing defects (a dead ar-only
+    # key, and em dashes in two strings). Penalising a run for a defect it did
+    # not introduce and was not asked to fix measures the fixture, not the work.
+    # These two checks are therefore BASELINE-RELATIVE: they fail only on
+    # regression against the pristine sandbox.
+    base_en = flat(json.loads(read(os.path.join(PRISTINE, "locales/en.json")) or "{}"))
+    base_ar = flat(json.loads(read(os.path.join(PRISTINE, "locales/ar.json")) or "{}"))
+    base_desync = base_en ^ base_ar
+    new_desync = sorted((en_k ^ ar_k) - base_desync)
     results.append(check(
-        "en.json and ar.json stayed in sync (no key added to one only)",
-        en_k == ar_k,
-        f"en-only={len(en_k - ar_k)} ar-only={len(ar_k - en_k)}"
-        + (f" e.g. {sorted(en_k ^ ar_k)[:4]}" if en_k != ar_k else ""),
+        "en.json and ar.json stayed in sync (no key added to one locale only)",
+        not new_desync,
+        f"{len(new_desync)} newly desynced: {new_desync[:6]}" if new_desync
+        else f"no new desync ({len(base_desync)} pre-existing, not this run's)",
     ))
 
-    # 12 - no dashes in user-facing strings
-    dashes = re.findall(r"[–—]", "".join(
-        json.dumps(x, ensure_ascii=False) for x in (en, ar)))
+    def dash_count(*docs):
+        return len(re.findall(r"[–—]", "".join(
+            json.dumps(d, ensure_ascii=False) for d in docs)))
+
+    base_dashes = dash_count(
+        json.loads(read(os.path.join(PRISTINE, "locales/en.json")) or "{}"),
+        json.loads(read(os.path.join(PRISTINE, "locales/ar.json")) or "{}"))
+    now_dashes = dash_count(en, ar)
     results.append(check(
-        "no em/en dashes in user-facing strings",
-        not dashes,
-        f"{len(dashes)} dash characters in locale files" if dashes else "clean",
+        "no NEW em/en dashes in user-facing strings",
+        now_dashes <= base_dashes,
+        f"{now_dashes - base_dashes} added" if now_dashes > base_dashes
+        else f"none added ({base_dashes} pre-existing in the fixture)",
     ))
 
-    # 13 / 14 - it actually builds and the suite still passes
+    # 13 - colour restraint. The craft-floor checks above (tokens, kit, RTL) are
+    # things the model largely gets right unaided, so they cannot show whether
+    # the doctrine landed. This one can: it counts how many distinct colour
+    # families the screen spends. Calm-enterprise means colour appears where it
+    # carries meaning, so a screen reaching for five or six hues is the confetti
+    # failure regardless of whether every hue came from a token.
+    families = set(re.findall(r"theme\.tint\.(\w+)", src_all))
+    families |= set(re.findall(r"(?:color|theme\.color)\.(success|warning|danger|info|critical)\b", src_all))
+    # A fully hardcoded screen matches none of the above and would falsely score
+    # "neutral only", so count raw hex hues too. Greys (R~=G~=B) are surfaces and
+    # text, not colour spend, so they do not count as a family.
+    for h in set(re.findall(r"#([0-9A-Fa-f]{6})\b", src_all)):
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+        if max(r, g, b) - min(r, g, b) > 24:      # chromatic, not a grey
+            families.add(f"hex:{h.lower()}")
+    results.append(check(
+        "colour restraint: at most 4 distinct colour families on one screen",
+        len(families) <= 4,
+        f"{len(families)} families: {sorted(families)[:8]}" if families
+        else "neutral / greyscale only",
+    ))
+
+    # 14 - documented rationale. The audit found that explaining a decision in a
+    # comment is the single highest-signal correlate of quality in this repo:
+    # the best files do it, the worst explain nothing. Soft by nature - it looks
+    # for prose reasoning near a design decision, not a specific phrasing.
+    comments = "\n".join(re.findall(r"^\s*//.*$|/\*.*?\*/", raw_all, flags=re.M | re.S))
+    # Scoped to comments that reason about a DESIGN decision. A file can be
+    # heavily commented about business logic and still explain nothing about why
+    # it looks the way it does, which is the habit being measured.
+    design_lines = [
+        ln for ln in comments.splitlines()
+        if re.search(r"\b(colour|color|tint|neutral|hierarchy|spacing|contrast|"
+                     r"radius|token|sun|glare|RTL|touch target|density|layout|"
+                     r"surface|typography|legib)\w*\b", ln, flags=re.I)
+    ]
+    reasoned = [
+        ln for ln in design_lines
+        if re.search(r"\b(because|so that|reads as|rather than|deliberately|"
+                     r"on purpose|instead of|the reason|which is why|"
+                     r"would|means)\b", ln, flags=re.I)
+    ]
+    results.append(check(
+        "design decisions are explained in a comment (why it looks this way, not just what it does)",
+        len(reasoned) >= 2,
+        f"{len(reasoned)} reasoned design comments of {len(design_lines)} design-related",
+    ))
+
+    # 15 / 16 - it actually builds and the suite still passes
     def run(cmd):
         try:
             p = subprocess.run(cmd, cwd=mobile, shell=True, capture_output=True,

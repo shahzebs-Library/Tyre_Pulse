@@ -663,6 +663,20 @@ export default function DataIntakeCenter() {
       r.liveDuplicate = isLiveDup
       r.liveRecordId = isLiveDup ? liveRecords?.get(naturalKey(r.transformed, module))?.id ?? null : null
       r.liveNeedsUpdate = needsUpdate
+      // An INCOMPLETE live-key set cannot prove a row is new. Saying nothing
+      // here is exactly how a re-imported file inserts duplicates: the row is
+      // classified "not a duplicate" purely because its key was never fetched.
+      // Flag it as a warning so the operator decides, rather than letting the
+      // gap pass as a clean result.
+      if (liveKeys?.truncated && !isLiveDup && !needsUpdate && r.validationStatus !== 'error') {
+        if (r.validationStatus === 'ready') r.validationStatus = 'warning'
+        r.issues = [...(r.issues || []), {
+          field: 'natural_key',
+          severity: 'warning',
+          code: 'LIVE_KEYS_INCOMPLETE',
+          message: 'Duplicate detection could not read every existing record, so this row cannot be confirmed as new. Import a smaller batch or narrow the country to check it properly.',
+        }]
+      }
       if (needsUpdate) {
         if (r.validationStatus === 'ready') r.validationStatus = 'warning'
         r.issues = [...(r.issues || []), {

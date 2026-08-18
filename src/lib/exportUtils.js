@@ -19,6 +19,7 @@ import { bandFor, measureFor } from './tyreRunningLife'
 // the canonical code (LHF1, RHRI) the tyre records use, so an export can never
 // disagree with the screen it came from.
 import { displayPositionCode, inspectionTypeHint } from './tyreBay'
+import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
 
 /**
  * Central export gate (System Configuration). When an admin turns CSV/Excel
@@ -560,6 +561,55 @@ const _TYRE_LAYOUTS = {
       { id: 'R2Ro', x: 166, y: 215, w: 18, h: 32, rx: 3 },
     ],
   },
+  // Tanker (6) / Trailer (8) / heavy 6x4 (10) / line pump (12). Same wheel
+  // arrangements the on-screen diagram draws; see lib/vehicleTyreLayout.
+  ...(function() {
+    const _drive2 = (y1, y2) => ([
+      { id: 'R1Lo', x: 16, y: y1, w: 18, h: 32, rx: 3 },
+      { id: 'R1Li', x: 36, y: y1, w: 18, h: 32, rx: 3 },
+      { id: 'R1Ri', x: 146, y: y1, w: 18, h: 32, rx: 3 },
+      { id: 'R1Ro', x: 166, y: y1, w: 18, h: 32, rx: 3 },
+      { id: 'R2Lo', x: 16, y: y2, w: 18, h: 32, rx: 3 },
+      { id: 'R2Li', x: 36, y: y2, w: 18, h: 32, rx: 3 },
+      { id: 'R2Ri', x: 146, y: y2, w: 18, h: 32, rx: 3 },
+      { id: 'R2Ro', x: 166, y: y2, w: 18, h: 32, rx: 3 },
+    ])
+    return {
+      Tanker: {
+        body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
+        tyres: [
+          { id: 'FL',  x: 35,  y: 45,  w: 22, h: 36, rx: 4 },
+          { id: 'FR',  x: 143, y: 45,  w: 22, h: 36, rx: 4 },
+          { id: 'RLo', x: 22,  y: 175, w: 20, h: 34, rx: 3 },
+          { id: 'RLi', x: 44,  y: 175, w: 20, h: 34, rx: 3 },
+          { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
+          { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
+        ],
+      },
+      Trailer: {
+        body: { x: 60, y: 30, w: 80, h: 220, rx: 8 },
+        tyres: _drive2(90, 175),
+      },
+      'Truck 6x4': {
+        body: { x: 60, y: 30, w: 80, h: 250, rx: 8 },
+        tyres: [
+          { id: 'FL', x: 35,  y: 45, w: 22, h: 36, rx: 4 },
+          { id: 'FR', x: 143, y: 45, w: 22, h: 36, rx: 4 },
+          ..._drive2(170, 215),
+        ],
+      },
+      'Line pump': {
+        body: { x: 55, y: 20, w: 90, h: 290, rx: 8 },
+        tyres: [
+          { id: 'F1L', x: 28, y: 40, w: 22, h: 34, rx: 4 },
+          { id: 'F1R', x: 150, y: 40, w: 22, h: 34, rx: 4 },
+          { id: 'F2L', x: 28, y: 90, w: 22, h: 34, rx: 4 },
+          { id: 'F2R', x: 150, y: 90, w: 22, h: 34, rx: 4 },
+          ..._drive2(215, 260),
+        ],
+      },
+    }
+  }()),
   // MP concrete pump: 3 single-tyre steer axles + 2 dual-tyre drive axles.
   'Concrete pump': {
     body: { x: 55, y: 20, w: 90, h: 310, rx: 8 },
@@ -582,21 +632,15 @@ const _TYRE_LAYOUTS = {
   },
 }
 
+// Resolution comes from lib/vehicleTyreLayout - THE shared resolver the on-screen
+// diagram uses - so the printed report can never draw a different machine from
+// the screen. A machine with no tyres returns null and the caller draws no
+// diagram at all, which is the honest output for a stationary pump or a plant.
 function _resolveLayoutKey(vehicleType) {
   if (!vehicleType) return null
-  if (_TYRE_LAYOUTS[vehicleType]) return vehicleType
-  const lower = vehicleType.toLowerCase()
-  const found = Object.keys(_TYRE_LAYOUTS).find(k => k.toLowerCase() === lower)
-  if (found) return found
-  if (lower.includes('tri') || lower.includes('mixer'))       return 'Tri-mixer'
-  if (lower.includes('concrete') || lower.includes('pump'))  return 'Concrete pump'
-  if (lower.includes('wheel') && lower.includes('load'))     return 'Wheel loader'
-  if (lower.includes('skid'))                                return 'Skid loader'
-  if (lower.includes('canter'))                              return 'Canter'
-  if (lower.includes('bus'))                                 return 'Bus'
-  if (lower.includes('tata'))                                return 'Tata'
-  if (lower.includes('ashok') || lower.includes('leyland'))  return 'Ashok Leyland'
-  return 'Pickup'
+  if (isTyrelessEquipment(vehicleType)) return null
+  const key = resolveLayoutKey(vehicleType)
+  return _TYRE_LAYOUTS[key] ? key : 'Pickup'
 }
 
 // Draw programmatic tyre diagram (used as fallback)
@@ -1464,6 +1508,18 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       })
 
       diagramH = bgH
+    } else {
+      // No layout is not a blank space on a safety record: say which of the two
+      // reasons it is, so the reader is never left wondering whether the tyre
+      // map was simply forgotten.
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
+      doc.text(
+        isTyrelessEquipment(row.vehicle_type)
+          ? 'This machine carries no tyres, so there is no tyre map to print.'
+          : 'No wheel layout is defined for this vehicle type, so the tyre map cannot be drawn.',
+        mx, y + 6,
+      )
+      diagramH = 12
     }
   }
 

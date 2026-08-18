@@ -22,6 +22,7 @@ import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { legacyPositionCode } from '../lib/tyrePositions'
+import { LAYOUT_KEYS, LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout'
 import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
@@ -485,7 +486,9 @@ function TyreDueBanner({ entry, damaged = [], inspection = null }) {
 }
 // ---------------------------------------------------------------------------
 
-const VEHICLE_TYPES = ['Pickup', 'Canter', 'Tri-mixer', 'Concrete pump', 'Wheel loader', 'Skid loader', 'Bus', 'Tata', 'Ashok Leyland']
+// Every wheel layout the diagram can draw, so this picker can never drift from
+// the diagram (it used to omit Line pump / Truck 6x4 / Tanker / Trailer).
+const VEHICLE_TYPES = LAYOUT_KEYS
 const RISK_LEVELS   = ['good', 'warning', 'critical', 'none']
 
 const INSPECTION_TYPES   = ['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip']
@@ -496,33 +499,11 @@ const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
 const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
-// Position IDs must exactly match VehicleTyreDiagram LAYOUTS tyre ids
-const TYRE_POSITIONS = {
-  'pickup':        ['FL', 'FR', 'RL', 'RR'],
-  'wheel loader':  ['FL', 'FR', 'RL', 'RR'],
-  'skid loader':   ['FL', 'FR', 'RL', 'RR'],
-  'canter':        ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
-  'tri-mixer':     ['F1L', 'F1R', 'F2L', 'F2R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
-  'concrete pump': ['F1L', 'F1R', 'F2L', 'F2R', 'F3L', 'F3R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
-  'bus':           ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
-  'tata':          ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
-  'ashok leyland': ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
-}
-const DEFAULT_POSITIONS = ['FL', 'FR', 'RL', 'RR']
-
-// Normalise vehicle type to TYRE_POSITIONS key
-function normVT(vt) {
-  const s = (vt || '').toLowerCase().trim()
-  if (s.includes('tri') || s.includes('mixer'))       return 'tri-mixer'
-  if (s.includes('concrete') || s.includes('pump'))   return 'concrete pump'
-  if (s.includes('wheel') && s.includes('load'))      return 'wheel loader'
-  if (s.includes('skid'))                             return 'skid loader'
-  if (s.includes('canter'))                           return 'canter'
-  if (s.includes('bus'))                              return 'bus'
-  if (s.includes('tata'))                             return 'tata'
-  if (s.includes('ashok') || s.includes('leyland'))   return 'ashok leyland'
-  return 'pickup'
-}
+// Wheel positions come from lib/vehicleTyreLayout - THE shared resolver the
+// diagram itself uses. This page carried its own copy of the keyword chain and
+// its own position map, which is how a spider / line / stationary pump ended up
+// asking an inspector for the concrete pump's 14 wheels.
+const DEFAULT_POSITIONS = LAYOUT_SLOTS.Pickup
 
 // Infer vehicle type from asset number prefix (TM→Tri-mixer, MP→Concrete pump, etc.)
 function inferVehicleTypeFromAsset(assetNo) {
@@ -1323,8 +1304,10 @@ export default function Inspections() {
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
     if (fleetInfo) {
       setClFleetInfo(fleetInfo)
-      const vtKey = normVT(vehicleType)
-      const positions = TYRE_POSITIONS[vtKey] || DEFAULT_POSITIONS
+      const vtKey = resolveLayoutKey(vehicleType)
+      // Tyreless equipment returns [], so the checklist offers no wheels at all
+      // rather than inventing them.
+      const positions = layoutSlotsFor(vehicleType)
       setClPositions(positions.map(pos => ({ position: pos, label: legacyPositionCode(vtKey, pos), pressure: '', condition: 'Good', treadDepth: '' })))
       if (fleetInfo.site && !clSite) setClSite(fleetInfo.site)
     } else {
@@ -2136,11 +2119,23 @@ export default function Inspections() {
                       </button>
                     </div>
                   )}
-                  {(clFleetInfo || (clAsset && inferVehicleTypeFromAsset(clAsset))) && (
-                    <p className="text-xs text-green-400 mt-1">
-                      {clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset)} · {(TYRE_POSITIONS[normVT(clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset))] || DEFAULT_POSITIONS).length} {t('inspections.form.tyres')}
-                    </p>
-                  )}
+                  {(clFleetInfo || (clAsset && inferVehicleTypeFromAsset(clAsset))) && (() => {
+                    const vt = clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset)
+                    // A machine with no wheels says so, instead of quietly
+                    // showing "0 tyres" and an empty checklist.
+                    if (isTyrelessEquipment(vt)) {
+                      return (
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                          {vt} carries no tyres, so there is no wheel checklist to fill.
+                        </p>
+                      )
+                    }
+                    return (
+                      <p className="text-xs text-green-400 mt-1">
+                        {vt} · {layoutSlotsFor(vt).length} {t('inspections.form.tyres')}
+                      </p>
+                    )
+                  })()}
                 </div>
                 <div>
                   <label className="label">{CHECKLIST_LABELS[lang].site}</label>

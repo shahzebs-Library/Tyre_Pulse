@@ -18,6 +18,7 @@
  * vitest / Node.
  */
 import { legacyPositionCode, canonicalCode } from './tyrePositions'
+import { resolveLayoutKey, isTyrelessEquipment, LAYOUT_SLOTS } from './vehicleTyreLayout'
 
 /** Serial across the three storage columns (mirrors tyrePassport.serialOfRecord). */
 export const serialOf = (r) =>
@@ -115,46 +116,14 @@ export function daysFitted(r, now = Date.now()) {
 }
 
 // ── Vehicle type -> built-in diagram layout ────────────────────────────────────
-// Mirrors resolveVehicleType() in src/components/VehicleTyreDiagram.jsx so this
-// pure module can pick the same slot-id set the diagram renders, without importing
-// the React component. Keep in sync if the component's keyword mapping changes.
-const PREFIX_MAP = { TM: 'Tri-mixer', MP: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup' }
-
-export function resolveLayoutKey(vt) {
-  if (!vt) return 'Pickup'
-  if (BUILTIN_LAYOUT_SLOTS[vt]) return vt
-  const s = String(vt).toLowerCase().trim()
-  const prefix = (String(vt).match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
-  if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
-  if (s.includes('tri') || s.includes('mixer') || s.includes('transit')) return 'Tri-mixer'
-  if (s.includes('boom') || s.includes('placing')) return 'Concrete pump'
-  if (s.includes('concrete') || s.includes('pump')) return 'Concrete pump'
-  if (s.includes('skid')) return 'Skid loader'
-  if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
-  if (s.includes('canter')) return 'Canter'
-  if (s.includes('bus') || s.includes('coaster')) return 'Bus'
-  if (s.includes('tata')) return 'Tata'
-  if (s.includes('ashok') || s.includes('leyland')) return 'Ashok Leyland'
-  if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
-  return 'Pickup'
-}
-
-// Slot-id sets for each built-in layout (mirrors the LAYOUTS map in
-// VehicleTyreDiagram.jsx). A vehicle type uses EITHER FL/FR OR F1L/F1R naming,
-// never both, so inverting legacyPositionCode over the correct set is injective.
-const FR4 = ['FL', 'FR', 'RL', 'RR']
-const DUAL_REAR = ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo']
-export const BUILTIN_LAYOUT_SLOTS = {
-  Pickup: FR4,
-  'Wheel loader': FR4,
-  'Skid loader': FR4,
-  Canter: DUAL_REAR,
-  Bus: DUAL_REAR,
-  Tata: DUAL_REAR,
-  'Ashok Leyland': DUAL_REAR,
-  'Tri-mixer': ['F1L', 'F1R', 'F2L', 'F2R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
-  'Concrete pump': ['F1L', 'F1R', 'F2L', 'F2R', 'F3L', 'F3R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
-}
+// Resolution + slot sets come from src/lib/vehicleTyreLayout.js, THE single
+// resolver shared with the diagram component. This module used to carry its own
+// copy of the keyword chain and drifted from it, which is how the pump family
+// ended up on the wrong wheel count in the Tyre Bay and on the inspection
+// diagram model. Re-exported so existing importers keep their entry points.
+export { resolveLayoutKey, isTyrelessEquipment, LAYOUT_SLOTS }
+/** Alias kept for existing importers; the slot sets live in vehicleTyreLayout. */
+export const BUILTIN_LAYOUT_SLOTS = LAYOUT_SLOTS
 
 /**
  * The full set of wheel positions for a vehicle type, as canonical GCC codes

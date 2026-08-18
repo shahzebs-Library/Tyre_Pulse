@@ -4,41 +4,14 @@ import { Illustration } from './illustrations';
 import { vehicleArt } from '../lib/brand/vehicleArt';
 import CustomBody from './VehicleDiagramCustomBody';
 import { getCustomLayoutMap, canonVehicleTypeKey } from '../lib/api/vehicleDiagrams';
+import { resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout';
 
-// ── Vehicle type normaliser - maps any DB/prop value to a LAYOUTS key ──────────
-function resolveVehicleType(vt) {
-  if (!vt) return 'Pickup'
-  if (LAYOUTS[vt]) return vt                                             // exact match
-  const s = vt.toLowerCase().trim()
-
-  // Plate-number prefix detection - first 2 alpha chars of asset_no
-  const prefix = (vt.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
-  const PREFIX_MAP = {
-    TM: 'Tri-mixer',
-    MP: 'Concrete pump',
-    WL: 'Wheel loader',
-    SL: 'Skid loader',
-    PL: 'Pickup',
-  }
-  if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
-
-  // Keyword fallback — covers the real fleet's vehicle_type spellings
-  // (Tr-Mixer, Wheel_Loader, Line/Spider/Stationary Pump, Placing Boom, …).
-  // Non-wheeled / trailer-mounted equipment (generator, chiller, plant, …) has
-  // no standard axle layout, so it maps to the neutral 4-tyre Pickup shape until
-  // a per-type layout is defined.
-  if (s.includes('tri') || s.includes('mixer') || s.includes('transit')) return 'Tri-mixer'
-  if (s.includes('boom') || s.includes('placing'))         return 'Concrete pump'
-  if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
-  if (s.includes('skid'))                                  return 'Skid loader'
-  if (s.includes('wheel') || s.includes('loader') || s.includes('load')) return 'Wheel loader'
-  if (s.includes('canter'))                                return 'Canter'
-  if (s.includes('bus') || s.includes('coaster'))          return 'Bus'
-  if (s.includes('tata'))                                  return 'Tata'
-  if (s.includes('ashok') || s.includes('leyland'))        return 'Ashok Leyland'
-  if (s.includes('pickup') || s.includes('pick up') || s.includes('pick-up')) return 'Pickup'
-  return 'Pickup'
-}
+// The vehicle-type -> layout-key mapping lives in src/lib/vehicleTyreLayout.js
+// (THE single resolver, mirrored from mobile). It used to be inlined here and
+// was copied into three other files, which is how the whole pump family ended
+// up drawn as the 14-tyre truck-mounted concrete pump. Do not re-inline it.
+// `isTyrelessEquipment` is re-exported so existing importers keep working.
+export { isTyrelessEquipment };
 
 // ── Risk colours ───────────────────────────────────────────────────────────────
 const RISK = {
@@ -1357,6 +1330,79 @@ const LAYOUTS = {
       { id: 'RRo', x: 164, y: 178, w: 20, h: 36, label: 'RRo' },
     ],
   },
+  // Diesel / water tanker: 1 single-tyre steer axle + 1 dual-tyre drive axle
+  // = 6 tyres (fleet owner confirmed). Same chassis class as the Canter, whose
+  // geometry and body it reuses.
+  Tanker: {
+    emoji: '🚚', viewH: 310,
+    Body: CanterBody,
+    tyres: [
+      { id: 'FL',  x: 31,  y: 36,  w: 22, h: 40, label: 'FL'  },
+      { id: 'FR',  x: 147, y: 36,  w: 22, h: 40, label: 'FR'  },
+      { id: 'RLo', x: 16,  y: 170, w: 20, h: 38, label: 'RLo' },
+      { id: 'RLi', x: 38,  y: 170, w: 20, h: 38, label: 'RLi' },
+      { id: 'RRi', x: 142, y: 170, w: 20, h: 38, label: 'RRi' },
+      { id: 'RRo', x: 164, y: 170, w: 20, h: 38, label: 'RRo' },
+    ],
+  },
+  // Towed trailer: 2 dual-tyre axles and no steer axle = 8 tyres. A towed unit
+  // has no cab, so it reuses the truck body only because there is no trailer
+  // artwork; the wheel arrangement is the accurate part.
+  Trailer: {
+    emoji: '🚛', viewH: 270,
+    Body: CanterBody,
+    tyres: [
+      { id: 'R1Lo', x: 14,  y: 96,  w: 19, h: 35, label: 'R1Lo' },
+      { id: 'R1Li', x: 35,  y: 96,  w: 19, h: 35, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 96,  w: 19, h: 35, label: 'R1Ri' },
+      { id: 'R1Ro', x: 167, y: 96,  w: 19, h: 35, label: 'R1Ro' },
+      { id: 'R2Lo', x: 14,  y: 168, w: 19, h: 35, label: 'R2Lo' },
+      { id: 'R2Li', x: 35,  y: 168, w: 19, h: 35, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 168, w: 19, h: 35, label: 'R2Ri' },
+      { id: 'R2Ro', x: 167, y: 168, w: 19, h: 35, label: 'R2Ro' },
+    ],
+  },
+  // Heavy 6x4 chassis (spider pump, crane, generic truck, 8/10-wheeler):
+  // 1 steer axle + 2 dual-tyre drive axles = 10 tyres. A spider pump rides this
+  // chassis, so it must NOT borrow the concrete pump's 14 wheels.
+  'Truck 6x4': {
+    emoji: '🚛', viewH: 310,
+    Body: CanterBody,
+    tyres: [
+      { id: 'FL',   x: 31,  y: 36,  w: 22, h: 40, label: 'FL'   },
+      { id: 'FR',   x: 147, y: 36,  w: 22, h: 40, label: 'FR'   },
+      { id: 'R1Lo', x: 14,  y: 170, w: 19, h: 35, label: 'R1Lo' },
+      { id: 'R1Li', x: 35,  y: 170, w: 19, h: 35, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 170, w: 19, h: 35, label: 'R1Ri' },
+      { id: 'R1Ro', x: 167, y: 170, w: 19, h: 35, label: 'R1Ro' },
+      { id: 'R2Lo', x: 14,  y: 218, w: 19, h: 35, label: 'R2Lo' },
+      { id: 'R2Li', x: 35,  y: 218, w: 19, h: 35, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 218, w: 19, h: 35, label: 'R2Ri' },
+      { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
+    ],
+  },
+  // Line pump: 2 single-tyre steer axles + 2 dual-tyre drive axles = 12 tyres
+  // (fleet owner confirmed). It rides a shorter chassis than the truck-mounted
+  // concrete pump, which carries a THIRD steer axle, but it IS a pump and must
+  // read as one, so it keeps the pump body art.
+  'Line pump': {
+    emoji: '🏗️', viewH: 375,
+    Body: ConcretePumpBody,
+    tyres: [
+      { id: 'F1L',  x: 29,  y: 40,  w: 22, h: 38, label: 'F1L'  },
+      { id: 'F1R',  x: 149, y: 40,  w: 22, h: 38, label: 'F1R'  },
+      { id: 'F2L',  x: 29,  y: 84,  w: 22, h: 38, label: 'F2L'  },
+      { id: 'F2R',  x: 149, y: 84,  w: 22, h: 38, label: 'F2R'  },
+      { id: 'R1Lo', x: 13,  y: 258, w: 19, h: 33, label: 'R1Lo' },
+      { id: 'R1Li', x: 34,  y: 258, w: 19, h: 33, label: 'R1Li' },
+      { id: 'R1Ri', x: 147, y: 258, w: 19, h: 33, label: 'R1Ri' },
+      { id: 'R1Ro', x: 168, y: 258, w: 19, h: 33, label: 'R1Ro' },
+      { id: 'R2Lo', x: 13,  y: 300, w: 19, h: 33, label: 'R2Lo' },
+      { id: 'R2Li', x: 34,  y: 300, w: 19, h: 33, label: 'R2Li' },
+      { id: 'R2Ri', x: 147, y: 300, w: 19, h: 33, label: 'R2Ri' },
+      { id: 'R2Ro', x: 168, y: 300, w: 19, h: 33, label: 'R2Ro' },
+    ],
+  },
   // MP concrete pump: 3 single-tyre steer axles up front, then 2 dual-tyre
   // drive axles at the rear (14 tyres total).
   'Concrete pump': {
@@ -1401,16 +1447,9 @@ const LEVEL_TO_RISK = {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-// Stationary / non-wheeled equipment that has NO tyres to inspect.
-const NO_TYRE_EQUIPMENT = ['generator', 'genset', 'chiller', 'ice plant', 'ice-plant', 'bt-plant', 'bt plant', 'batch', 'reclaimer', 'compressor', 'tower light', 'light tower']
-export function isTyrelessEquipment(vt) {
-  if (!vt) return false
-  const s = String(vt).toLowerCase().trim()
-  return NO_TYRE_EQUIPMENT.some((k) => s.includes(k))
-}
 
 export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240, subLabels }) {
-  const resolved = resolveVehicleType(vehicleType)
+  const resolved = resolveLayoutKey(vehicleType)
 
   // Custom layouts designed in the console Vehicle Designer (V268). Loaded
   // once per session (cached promise in the service); {} when none exist or
@@ -1422,23 +1461,40 @@ export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, o
     return () => { alive = false }
   }, [])
 
-  // Equipment without tyres (generator, chiller, ice/batch plant, reclaimer …):
-  // show a clear "no tyres" state instead of a misleading 4-tyre layout.
-  if (isTyrelessEquipment(vehicleType)) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-10 px-6 text-center"
-        style={{ minHeight: 160 }}>
-        <span className="text-3xl">🏭</span>
-        <p className="text-sm font-semibold text-gray-200">{vehicleType || 'Equipment'}</p>
-        <p className="text-xs text-gray-500 max-w-[200px]">Stationary equipment, no tyres to inspect.</p>
-      </div>
-    )
-  }
-
   // A custom ACTIVE layout for this exact vehicle type wins over the built-in
   // resolution; built-ins are untouched when no custom row exists.
   const customKey = canonVehicleTypeKey(vehicleType)
   const customLayout = (customLayouts && customKey && customLayouts[customKey]) || null
+
+  // Equipment without tyres (stationary pump, placing boom, generator, chiller,
+  // any plant, reclaimer ...): no wheels AND no truck body, because a chassis
+  // drawn under a skid-mounted machine is a claim about the machine. Grey "No
+  // Data" wheels would be worse still - they read as "nobody inspected these
+  // 14 tyres" when there are no tyres to inspect.
+  // A layout an admin DESIGNED for this type in the console Vehicle Designer is
+  // an explicit statement about the machine, so it still wins over the keyword.
+  if (!customLayout && isTyrelessEquipment(vehicleType)) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-10 px-6 text-center"
+        style={{ minHeight: 180 }}>
+        <Illustration
+          name="module/workshop"
+          size={110}
+          title={vehicleType || 'Equipment'}
+          desc="Fixed equipment, no wheels"
+          className="opacity-90"
+        />
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          {vehicleType || 'Equipment'}
+        </p>
+        <p className="text-xs max-w-[220px]" style={{ color: 'var(--text-secondary)' }}>
+          Fixed or non-wheeled equipment. This machine carries no tyres, so there is
+          nothing to inspect here.
+        </p>
+      </div>
+    )
+  }
+
   const layout = customLayout || LAYOUTS[resolved] || LAYOUTS['Pickup']
 
   const { emoji, viewH, tyres, Body } = layout;

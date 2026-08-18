@@ -30,7 +30,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useTheme } from '../../../contexts/ThemeContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { isAdminOrAbove } from '../../../lib/types'
-import { Screen, AppText, StatTile } from '../../../components/ui'
+import { Screen, AppText, StatTile, BackButton } from '../../../components/ui'
 import { Theme, spacing, radius } from '../../../lib/theme'
 import {
   fetchReportSnapshot, type SnapshotResult, type ReportSnapshot,
@@ -167,9 +167,12 @@ function ReportsScreen() {
 
   return (
     <Screen edges={['top']}>
-      <View style={styles.header}>
-        <AppText variant="h2">Reports</AppText>
-        <AppText variant="caption" color="secondary">Executive snapshot and operational exports</AppText>
+      <View style={[styles.header, styles.headerRow]}>
+        <BackButton />
+        <View style={{ flex: 1 }}>
+          <AppText variant="h2">Reports</AppText>
+          <AppText variant="caption" color="secondary">Executive snapshot and operational exports</AppText>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -490,6 +493,7 @@ function makeStyles(theme: Theme) {
     header: {
       paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
     },
+    headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing['4xl'] },
     sectionLabel: { marginTop: spacing.md },
     infoBox: {

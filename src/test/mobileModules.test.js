@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   MOBILE_MODULES, MOBILE_MODULE_BY_KEY, MOBILE_MODULES_BY_GROUP,
   mobileModuleDefaultAllows, webRoleToMobileRole, mobileModuleRoles,
@@ -68,5 +70,54 @@ describe('mobileModules catalog', () => {
   it('mobileModuleRoles returns the module role tokens ([] for unknown)', () => {
     expect(mobileModuleRoles('meter')).toContain('driver')
     expect(mobileModuleRoles('nope')).toEqual([])
+  })
+})
+
+/**
+ * DRIFT GUARD. This mirror is hand-maintained, and it HAD already drifted: the
+ * `serial` module listed tyre_data_collector on the phone and not here, so the
+ * web Access Manager was reasoning about a different default from the one the
+ * device applies. Comparing the two sources catches that automatically instead
+ * of relying on somebody remembering to edit both.
+ */
+describe('mirror does not drift from mobile/lib/permissions.ts', () => {
+  const src = readFileSync(resolve(__dirname, '../../mobile/lib/permissions.ts'), 'utf8')
+
+  // Each entry is  M('key', 'Label', 'icon', 'Group', ['role', ...]),  possibly
+  // wrapped across lines.
+  const mobileRoles = Object.fromEntries(
+    [...src.matchAll(/M\(\s*'([a-zA-Z]+)'[^[]*\[([^\]]*)\]\s*\)/g)].map(([, key, roles]) => [
+      key,
+      roles.split(',').map((r) => r.trim().replace(/^'|'$/g, '')).filter(Boolean),
+    ]),
+  )
+
+  it('found the mobile registry to compare against', () => {
+    // If the M(...) shape ever changes this parse silently yields {} and every
+    // assertion below would vacuously pass, so prove it actually read something.
+    expect(Object.keys(mobileRoles).length).toBeGreaterThanOrEqual(25)
+    expect(mobileRoles.checklists).toBeDefined()
+  })
+
+  it('every mirrored module has the same role defaults as the phone', () => {
+    const drift = []
+    for (const m of MOBILE_MODULES) {
+      const theirs = mobileRoles[m.key]
+      if (!theirs) { drift.push(`${m.key}: missing from mobile/lib/permissions.ts`); continue }
+      const a = [...m.roles].sort().join(',')
+      const b = [...theirs].sort().join(',')
+      if (a !== b) drift.push(`${m.key}: web [${a}] vs mobile [${b}]`)
+    }
+    expect(drift).toEqual([])
+  })
+
+  it('the trades and the driver can reach checklists on both sides', () => {
+    // The owner's ask: mechanics and electricians fill workshop checklists, and
+    // the driver has one of their own. Driver had NO checklists module at all
+    // before V591, so a driver-targeted checklist was unreachable on the phone.
+    for (const role of ['mechanic', 'electrician', 'driver']) {
+      expect(mobileRoles.checklists).toContain(role)
+      expect(MOBILE_MODULE_BY_KEY.checklists.roles).toContain(role)
+    }
   })
 })

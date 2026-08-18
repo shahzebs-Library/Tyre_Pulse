@@ -28,9 +28,13 @@ import {
   ChecklistTemplate, ChecklistAssignment,
 } from '../../../lib/checklists'
 import { isValueField } from '../../../lib/checklistFields'
+import { resolveChecklistIcon } from '../../../lib/checklistIcons'
+import { roleTargetLabel } from '../../../lib/checklistRoles'
+import { templateName as i18nTemplateName } from '../../../lib/checklistI18n'
 import { toUserMessage } from '../../../lib/safeError'
 import { canApproveChecklists } from '../../../lib/permissions'
 import { lookupAssetByCode } from '../../../lib/assetLookup'
+import { backTo } from '../../../lib/goBack'
 
 /**
  * Route entry. A TYRE MAN gets a search-first single-asset flow (find one asset,
@@ -80,8 +84,8 @@ function looksLikeMissingTable(msg: string): boolean {
 }
 
 function ChecklistsScreen() {
-  const { profile } = useAuth()
-  const { t, isRTL } = useLanguage()
+  const { profile, isSuperAdmin } = useAuth()
+  const { t, isRTL, language: lang } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const router = useRouter()
@@ -97,14 +101,22 @@ function ChecklistsScreen() {
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const canApprove = canApproveChecklists(profile?.role)
+  // The CARD follows the app UI language. (The fill screen has its own content
+  // language picker, because a checklist can carry Hindi and Urdu that the app
+  // shell does not ship.) A template with no translation falls back to English.
+  const contentLang = lang
 
   const load = useCallback(async () => {
     setError(null)
     setNotEnabled(false)
     try {
+      // Role-scoped (V591): a mechanic is offered the mechanics' checklists, a
+      // driver theirs, and an untargeted checklist stays everyone's. Passing the
+      // role can only ever REMOVE a checklist that explicitly names somebody
+      // else, so nothing a person sees today disappears.
       const [as, ts] = await Promise.all([
-        listAssignments(profile?.country),
-        listTemplates(profile?.country),
+        listAssignments(profile?.country, profile?.role, { isSuperAdmin }),
+        listTemplates(profile?.country, profile?.role, { isSuperAdmin }),
       ])
       setAssignments(as)
       setTemplates(ts)
@@ -122,7 +134,10 @@ function ChecklistsScreen() {
         setPendingApprovals(pend.length)
       } catch { setPendingApprovals(0) }
     }
-  }, [profile?.country, canApprove])
+    // Depends on the PRIMITIVE fields, never the profile object: AuthContext
+    // replaces that object on every realtime profile update, and an object dep
+    // would re-run this load (and reset the screen) on an unrelated change.
+  }, [profile?.country, profile?.role, isSuperAdmin, canApprove])
 
   useEffect(() => { load() }, [load])
 
@@ -276,7 +291,7 @@ function ChecklistsScreen() {
   return (
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -314,7 +329,14 @@ function ChecklistsScreen() {
               <AppText style={[typography.body, { fontWeight: '700', color: theme.color.textMuted }]}>{t('modules.checklists.noPublished')}</AppText>
             </View>
           }
-          renderItem={({ item: tpl }) => (
+          renderItem={({ item: tpl }) => {
+            // `icon` is free text holding an emoji, a lucide name or nothing at
+            // all. Handing it straight to <Ionicons> drew a BLANK SQUARE for
+            // four of the six live templates; the resolver always yields
+            // something renderable.
+            const ico = resolveChecklistIcon(tpl)
+            const forRoles = roleTargetLabel(tpl)
+            return (
             <TouchableOpacity
               style={styles.tplCard}
               activeOpacity={0.75}
@@ -322,10 +344,14 @@ function ChecklistsScreen() {
             >
               <View style={[styles.tplHead, isRTL && styles.rowR]}>
                 <View style={styles.tplIcon}>
-                  <Ionicons name={(tpl.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
+                  {ico.kind === 'emoji'
+                    ? <AppText style={styles.tplEmoji}>{ico.emoji}</AppText>
+                    : <Ionicons name={ico.ionicon as any} size={20} color={theme.color.primary} />}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{tpl.name}</AppText>
+                  <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>
+                    {i18nTemplateName(tpl, contentLang) || tpl.name}
+                  </AppText>
                   {!!tpl.category && (
                     <AppText style={[styles.tplCategory, { textAlign }]} numberOfLines={1}>{tpl.category}</AppText>
                   )}
@@ -334,6 +360,16 @@ function ChecklistsScreen() {
               </View>
 
               <View style={[styles.badgeRow, isRTL && styles.rowR]}>
+                {/* Rendered only when the checklist names roles: a "For:
+                    Everyone" chip on every card is noise. */}
+                {!!forRoles && (
+                  <View style={[styles.badge, styles.badgePurple]}>
+                    <Ionicons name="people-outline" size={12} color={theme.color.textSecondary} />
+                    <AppText style={styles.badgeText} numberOfLines={1}>
+                      {t('modules.checklists.forRoles')} {forRoles}
+                    </AppText>
+                  </View>
+                )}
                 <View style={styles.badge}>
                   <Ionicons name="list-outline" size={12} color={theme.color.textSecondary} />
                   <AppText style={styles.badgeText}>{fieldCount(tpl)} {t('modules.checklists.fields')}</AppText>
@@ -358,7 +394,8 @@ function ChecklistsScreen() {
                 )}
               </View>
             </TouchableOpacity>
-          )}
+            )
+          }}
         />
       )}
     </Screen>
@@ -373,7 +410,7 @@ function ChecklistsScreen() {
  * are fetched once; template open works from cached data).
  */
 function TyreManChecklistFlow() {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
   const { t, isRTL } = useLanguage()
   const { theme } = useTheme()
   const styles = useMemo(() => makeTmStyles(theme), [theme])
@@ -399,7 +436,7 @@ function TyreManChecklistFlow() {
     try {
       const [opts, ts] = await Promise.all([
         listReferenceOptions('asset', profile?.country).catch(() => [] as string[]),
-        listTemplates(profile?.country),
+        listTemplates(profile?.country, profile?.role, { isSuperAdmin }),
       ])
       setAssets(Array.isArray(opts) ? opts : [])
       setTemplates(ts)
@@ -410,7 +447,8 @@ function TyreManChecklistFlow() {
     } finally {
       setLoading(false)
     }
-  }, [profile?.country, t])
+    // Primitive deps only - see the note on the hub's load().
+  }, [profile?.country, profile?.role, isSuperAdmin, t])
 
   useEffect(() => { load() }, [load])
 
@@ -462,7 +500,7 @@ function TyreManChecklistFlow() {
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
         <TouchableOpacity
-          onPress={() => (selectedAsset ? setSelectedAsset(null) : router.back())}
+          onPress={() => (selectedAsset ? setSelectedAsset(null) : backTo(router, '/(app)'))}
           style={styles.backBtn}
         >
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
@@ -571,11 +609,15 @@ function TyreManChecklistFlow() {
                 </AppText>
               </View>
             }
-            renderItem={({ item: tpl }) => (
+            renderItem={({ item: tpl }) => {
+              const ico = resolveChecklistIcon(tpl)
+              return (
               <TouchableOpacity style={styles.tplCard} activeOpacity={0.75} onPress={() => openTemplateForAsset(tpl)}>
                 <View style={[styles.tplHead, isRTL && styles.rowR]}>
                   <View style={styles.tplIcon}>
-                    <Ionicons name={(tpl.icon as any) || 'checkbox-outline'} size={20} color={theme.color.primary} />
+                    {ico.kind === 'emoji'
+                      ? <AppText style={styles.tplEmoji}>{ico.emoji}</AppText>
+                      : <Ionicons name={ico.ionicon as any} size={20} color={theme.color.primary} />}
                   </View>
                   <View style={{ flex: 1 }}>
                     <AppText style={[typography.title, { textAlign }]} numberOfLines={1}>{tpl.name}</AppText>
@@ -598,7 +640,8 @@ function TyreManChecklistFlow() {
                   )}
                 </View>
               </TouchableOpacity>
-            )}
+              )
+            }}
           />
         </View>
       )}
@@ -653,6 +696,7 @@ function makeTmStyles(theme: Theme) {
       alignItems: 'center', justifyContent: 'center',
     },
     tplCategory: { ...typography.caption, color: c.textMuted, marginTop: 2 },
+    tplEmoji: { fontSize: 22, lineHeight: 26 },
     badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
     badge: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
@@ -733,6 +777,9 @@ function makeStyles(theme: Theme) {
       alignItems: 'center', justifyContent: 'center',
     },
     tplCategory: { ...typography.caption, color: c.textMuted, marginTop: 2 },
+    // An emoji is drawn as text, so it needs a size of its own - an <Ionicons>
+    // size prop does nothing for it.
+    tplEmoji: { fontSize: 22, lineHeight: 26 },
     badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
     badge: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
@@ -742,6 +789,7 @@ function makeStyles(theme: Theme) {
     badgeGreen: { backgroundColor: c.primarySoft },
     badgeBlue: { backgroundColor: c.info.soft },
     badgeAmber: { backgroundColor: c.warning.soft },
+    badgePurple: { backgroundColor: c.surfaceAlt, maxWidth: '100%' },
     badgeText: { ...typography.micro, color: c.textSecondary },
   })
 }

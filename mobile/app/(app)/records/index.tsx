@@ -25,7 +25,7 @@ import {
   spacing, radius, typography, statusColor, StatusKind,
 } from '../../../lib/theme'
 import {
-  Screen, Card, AppText, Button, Badge, EmptyState, ErrorState, Loading,
+  Screen, Card, AppText, Button, Badge, BackButton, EmptyState, ErrorState, Loading,
 } from '../../../components/ui'
 
 const PAGE = 30
@@ -199,7 +199,8 @@ function RecordsScreen() {
   return (
     <Screen edges={['top']} style={{ paddingHorizontal: 0 }}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+      <View style={[styles.header, { backgroundColor: c.surface, borderBottomColor: c.border, gap: spacing.md }]}>
+        <BackButton />
         <View style={{ flex: 1 }}>
           <AppText variant="h2">{t('modules.records.title')}</AppText>
           <AppText variant="caption" color="muted" style={{ marginTop: 2 }}>

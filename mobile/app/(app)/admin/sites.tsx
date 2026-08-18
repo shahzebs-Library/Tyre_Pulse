@@ -20,6 +20,7 @@ import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { backTo } from '../../../lib/goBack'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -296,7 +297,7 @@ export default function SitesManagementScreen() {
 
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.back}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)/admin')} style={s.back}>
           <Ionicons name="arrow-back" size={22} color="#0f172a" />
         </TouchableOpacity>
         <Text style={s.title}>Sites & Fleet</Text>

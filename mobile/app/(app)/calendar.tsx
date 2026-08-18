@@ -54,6 +54,7 @@ const closed = (s: string | null | undefined) => {
 }
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(CalendarScreen, 'calendar')
 
@@ -185,7 +186,7 @@ function CalendarScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

@@ -63,6 +63,7 @@ const TYPE_ICONS: Record<string, IconName> = {
 }
 
 import { withModuleGuard } from '../../../components/ModuleGuard'
+import { backTo } from '../../../lib/goBack'
 
 export default withModuleGuard(AccidentDetailScreen, 'accidents')
 
@@ -108,8 +109,7 @@ function AccidentDetailScreen() {
   // Header back must return to the PREVIOUS screen, never Home. Fall back to the
   // accident dashboard when there is no navigation history (deep link / cold open).
   function goBack() {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)/accident/dashboard')
+    backTo(router, '/(app)/accident/dashboard')
   }
 
   const load = useCallback(async () => {

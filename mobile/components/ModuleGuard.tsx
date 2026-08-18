@@ -27,6 +27,7 @@ import { AppText } from './ui/Text'
 import { Button } from './ui/Button'
 import { Loading } from './ui/States'
 import { ModuleKey, resolveGuardedAccess } from '../lib/permissions'
+import { backTo } from '../lib/goBack'
 
 export function ModuleGuard({
   moduleKey, children,
@@ -83,8 +84,7 @@ function NoAccess() {
   const { theme } = useTheme()
   const router = useRouter()
   const goBack = () => {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)')
+    backTo(router, '/(app)')
   }
   return (
     <Screen>

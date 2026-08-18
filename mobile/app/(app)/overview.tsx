@@ -74,6 +74,7 @@ function shortMonth(monthKey: string): string {
 }
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(OverviewScreen, 'overview')
 
@@ -249,7 +250,7 @@ function OverviewScreen() {
 
   const header = (
     <View style={[s.header, isRTL && s.rowReverse]}>
-      <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+      <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
         <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
       </TouchableOpacity>
       <View style={{ flex: 1 }}>

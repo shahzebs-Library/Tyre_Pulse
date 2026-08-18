@@ -30,6 +30,7 @@ interface Inspection {
 }
 
 import { withModuleGuard } from '../../../components/ModuleGuard'
+import { backTo } from '../../../lib/goBack'
 
 export default withModuleGuard(InspectionDetailScreen, 'inspect')
 
@@ -95,7 +96,7 @@ function InspectionDetailScreen() {
         barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
       />
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]} numberOfLines={1}>{t('modules.inspectionDetail.title')}</Text>

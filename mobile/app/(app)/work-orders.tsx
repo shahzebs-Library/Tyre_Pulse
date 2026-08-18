@@ -40,6 +40,7 @@ const WO_STATUS_KIND: Record<string, StatusKind> = {
 const NEXT_STATUS: Record<string, string> = { open: 'In Progress', 'in progress': 'Completed' }
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(WorkOrdersScreen, 'workorders')
 
@@ -138,7 +139,7 @@ function WorkOrdersScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

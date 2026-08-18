@@ -19,6 +19,7 @@ const ROLES: UserRole[] = ['tyre_man', 'inspector', 'admin', 'manager', 'directo
 const POSITIONS = ['FL', 'FR', 'RL', 'RR', 'RLO', 'RLI', 'RRO', 'RRI', 'Spare']
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(TyreChangeScreen, 'tyreChange')
 
@@ -75,7 +76,7 @@ function TyreChangeScreen() {
     setSaving(false)
     Alert.alert(res.offline ? t('modules.common.offlineSaved') : t('modules.tyreChange.savedTitle'), t('modules.tyreChange.savedMsg'), [
       { text: t('modules.tyreChange.addAnother'), onPress: () => { setPosition(''); setSerial(''); setBrand(''); setSize(''); setCost(''); setKmFit(''); setTread(''); setPhotos([]) } },
-      { text: t('modules.common.done'), onPress: () => router.back() },
+      { text: t('modules.common.done'), onPress: () => backTo(router, '/(app)') },
     ])
   }
 
@@ -84,7 +85,7 @@ function TyreChangeScreen() {
   return (
     <Screen padded={false}>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]}>{t('modules.tyreChange.title')}</Text>

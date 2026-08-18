@@ -27,6 +27,7 @@ import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { normaliseRole, COUNTRIES } from '../../../lib/types'
 import { useAdminGuard } from '../../../hooks/useRoleGuard'
+import { backTo } from '../../../lib/goBack'
 
 interface UserProfile {
   id: string
@@ -332,7 +333,7 @@ export default function UserManagementScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

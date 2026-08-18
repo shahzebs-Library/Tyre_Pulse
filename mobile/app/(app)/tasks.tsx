@@ -39,6 +39,7 @@ const FILTERS: { key: FilterKey; labelKey: string }[] = [
 ]
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(TasksScreen, 'tasks')
 
@@ -113,7 +114,7 @@ function TasksScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

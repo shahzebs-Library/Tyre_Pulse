@@ -1,5 +1,10 @@
 export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man'
   | 'tyre_data_collector' | 'reporter' | 'driver'
+  // Workshop trades (V591). Before that migration neither role existed anywhere
+  // in the system - not in profiles.role, not in custom_roles - so a checklist
+  // could not be assigned to "the electricians" even in principle, and
+  // lib/permissions.ts said as much in a comment on the `workshop` module.
+  | 'mechanic' | 'electrician'
 
 /** Countries the platform operates in - mirrors the web SettingsContext list.
  *  A user's country drives data isolation and stamps their mobile-created rows. */
@@ -30,7 +35,7 @@ export function normaliseRole(raw: string | null | undefined): UserRole {
   // while the server correctly saw tyre_data_collector. Any custom role that
   // needs its own mobile permissions has to be listed here.
   const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man',
-    'tyre_data_collector', 'reporter', 'driver']
+    'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician']
   return valid.includes(key as UserRole) ? (key as UserRole) : 'reporter'
 }
 

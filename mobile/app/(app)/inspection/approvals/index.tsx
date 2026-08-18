@@ -22,6 +22,7 @@ import { listPendingInspectionApprovals, InspectionApprovalItem } from '../../..
 import { toUserMessage } from '../../../../lib/safeError'
 
 import { withModuleGuard } from '../../../../components/ModuleGuard'
+import { backTo } from '../../../../lib/goBack'
 
 export default withModuleGuard(InspectionApprovalsScreen, 'approvals')
 
@@ -69,8 +70,7 @@ function InspectionApprovalsScreen() {
   }
 
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)')
+    backTo(router, '/(app)')
   }, [router])
 
   const header = (

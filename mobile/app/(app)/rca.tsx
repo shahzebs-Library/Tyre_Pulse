@@ -37,6 +37,7 @@ const FACTORS = [
 ]
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(RcaScreen, 'rca')
 
@@ -119,7 +120,7 @@ function RcaScreen() {
   return (
     <Screen>
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={c.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

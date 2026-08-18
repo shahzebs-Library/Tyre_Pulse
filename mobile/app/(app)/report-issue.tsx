@@ -30,6 +30,7 @@ const DUE_LABEL_KEY: Record<string, string> = {
 }
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(ReportIssueScreen, 'reportIssue')
 
@@ -82,7 +83,7 @@ function ReportIssueScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <Text style={[styles.title, { textAlign }]}>{t('modules.reportIssue.title')}</Text>

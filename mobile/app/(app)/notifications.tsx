@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { View, FlatList, TouchableOpacity, RefreshControl, StyleSheet, DeviceEventEmitter } from 'react-native'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { Screen, AppText, EmptyState, ErrorState, Loading } from '../../components/ui'
+import { Screen, AppText, BackButton, EmptyState, ErrorState, Loading } from '../../components/ui'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -102,7 +102,8 @@ function NotificationsScreen() {
   return (
     <Screen padded={false}>
       <View style={[styles.header, { borderBottomColor: c.border }]}>
-        <AppText variant="h2">{t('modules.notifications.title')}</AppText>
+        <BackButton />
+        <AppText variant="h2" style={{ flex: 1 }}>{t('modules.notifications.title')}</AppText>
         {unread > 0 ? (
           <TouchableOpacity onPress={onMarkAll} accessibilityLabel={t('modules.notifications.markAll')}>
             <AppText variant="body" color="secondary">{t('modules.notifications.markAll')}</AppText>
@@ -154,7 +155,7 @@ function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   list: { padding: 12, gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

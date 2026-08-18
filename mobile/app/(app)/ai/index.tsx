@@ -20,6 +20,7 @@ import { router } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { canUseAI } from '../../../lib/permissions'
+import { BackButton } from '../../../components/ui'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -488,6 +489,7 @@ function AICommandCenter() {
 
       {/* Header */}
       <View style={ds.header}>
+        <BackButton />
         <View style={ds.headerLeft}>
           <View style={ds.aiIconBg}><Ionicons name="sparkles" size={18} color="#fff" /></View>
           <View>
@@ -612,11 +614,11 @@ const ds = StyleSheet.create({
   accessDenied: { fontSize: 15, color: '#94a3b8', textAlign: 'center', marginTop: 12, lineHeight: 22 },
 
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10,
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   aiIconBg:   { width: 36, height: 36, borderRadius: 10, backgroundColor: '#7c3aed', alignItems: 'center', justifyContent: 'center' },
   title:      { fontSize: 17, fontWeight: '800', color: '#0f172a' },
   subtitle:   { fontSize: 11, color: '#64748b', marginTop: 1 },

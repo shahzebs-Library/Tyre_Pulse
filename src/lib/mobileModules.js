@@ -34,16 +34,16 @@
 export const MOBILE_MODULES = [
   // Field ---------------------------------------------------------------------
   { key: 'inspect',        label: 'New Inspection',   group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man'] },
-  { key: 'scan',           label: 'Scan',             group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man'] },
-  { key: 'serial',         label: 'Serial Search',    group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver'] },
+  { key: 'scan',           label: 'Scan',             group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },
+  { key: 'serial',         label: 'Serial Search',    group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician'] },
   { key: 'tyreChange',     label: 'Tyre Change',      group: 'Field',       roles: ['manager', 'director', 'inspector'] },
-  { key: 'checklists',     label: 'Checklists',       group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man'] },
-  { key: 'meter',          label: 'Meter Log',        group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver'] },
+  { key: 'checklists',     label: 'Checklists',       group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'driver'] },
+  { key: 'meter',          label: 'Meter Log',        group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician'] },
   { key: 'washing',        label: 'Vehicle Washing',  group: 'Field',       roles: ['manager', 'director', 'inspector', 'driver', 'tyre_man'] },
-  { key: 'reportIssue',    label: 'Report Issue',     group: 'Field',       roles: ['manager', 'director', 'reporter', 'driver'] },
+  { key: 'reportIssue',    label: 'Report Issue',     group: 'Field',       roles: ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician'] },
   // Fleet ---------------------------------------------------------------------
   { key: 'records',        label: 'Tyre Records',     group: 'Fleet',       roles: [] },
-  { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver'] },
+  { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician'] },
   { key: 'history',        label: 'History',          group: 'Fleet',       roles: [] },
   { key: 'alerts',         label: 'Alerts',           group: 'Fleet',       roles: ['manager', 'director', 'inspector'] },
   { key: 'calendar',       label: 'Calendar',         group: 'Fleet',       roles: ['manager', 'director', 'tyre_man', 'reporter'] },
@@ -58,7 +58,7 @@ export const MOBILE_MODULES = [
   // The app has no dedicated technician/mechanic/foreman role, so the shop-floor
   // roles for My Jobs are tyre_man + inspector, with supervisors (manager,
   // director) and admin also seeing it. Per-user grants can extend it.
-  { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man'] },
+  { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },
   // Management ----------------------------------------------------------------
   { key: 'overview',       label: 'Overview',         group: 'Management',  roles: [] },
   { key: 'reports',        label: 'Reports',          group: 'Management',  roles: [] },

@@ -23,6 +23,7 @@ import { saveCommand } from '../../../lib/recordQueue'
 import { isAdminOrAbove } from '../../../lib/types'
 import { canUpdateWorkOrders } from '../../../lib/permissions'
 import { toUserMessage } from '../../../lib/safeError'
+import { BackButton } from '../../../components/ui'
 
 type WorkOrderStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed'
 type Priority = 'Critical' | 'High' | 'Medium' | 'Low'
@@ -143,6 +144,7 @@ function WorkOrdersScreen() {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
+        <BackButton />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{t('modules.workOrdersList.title')}</Text>
           <Text style={styles.subtitle}>
@@ -354,7 +356,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   header: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
   },

@@ -9,6 +9,7 @@ import { saveCommand } from './recordQueue'
 import { uploadModulePhoto } from './photoUpload'
 import { safeUuid } from './ids'
 import type { ChecklistField } from './checklistFields'
+import { filterTemplatesForRole, filterAssignmentsForRole } from './checklistRoles'
 
 export interface ChecklistTemplate {
   id: string
@@ -24,6 +25,13 @@ export interface ChecklistTemplate {
   pass_threshold?: number | null
   fields: ChecklistField[]
   country?: string | null
+  /** Roles this checklist is for (V591). NULL/empty = every role. */
+  assignee_roles?: string[] | null
+  /** Content translations (optional jsonb columns). */
+  name_i18n?: Record<string, string> | null
+  description_i18n?: Record<string, string> | null
+  /** Shared answer legends a whole sheet points at via field.options_ref. */
+  option_sets?: Record<string, any> | null
 }
 
 export interface ChecklistAssignment {
@@ -38,8 +46,14 @@ export interface ChecklistAssignment {
   submission_id: string | null
 }
 
-const TEMPLATE_COLS =
-  'id,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,country'
+// assignee_roles drives role targeting (V591). name_i18n/description_i18n/
+// option_sets are what make the checklist readable in Arabic/Hindi/Urdu and let
+// a field resolve its SHARED option list - the phone could do neither while
+// these columns were simply never selected.
+// ONE STRING LITERAL, NOT A CONCATENATION: supabase-js infers the row type from
+// the literal select text, and a `+` join degrades it to `string`, which makes
+// every read come back as GenericStringError[] and fails the build.
+const TEMPLATE_COLS = 'id,name,description,category,icon,status,version,require_signature,require_approval,scored,pass_threshold,fields,country,assignee_roles,name_i18n,description_i18n,option_sets'
 const ASSIGN_COLS =
   'id,template_id,template_name,site,asset_no,assignee_role,due_date,status,submission_id'
 
@@ -48,12 +62,33 @@ function scopeCountry<T extends { or: Function; }>(q: T, country?: string | null
   return q
 }
 
-export async function listTemplates(country?: string | null): Promise<ChecklistTemplate[]> {
+/**
+ * Published templates this operator should be OFFERED.
+ *
+ * `role` narrows the list to the checklists written for that trade (V591). It is
+ * optional so every existing caller keeps its behaviour, and an untargeted
+ * template is for everyone, so passing a role can only ever REMOVE checklists
+ * that explicitly name somebody else.
+ *
+ * The filter runs client-side ON PURPOSE and is TARGETING, not a security
+ * boundary: templates are already walled by the org + country RLS policies and a
+ * published template is a list of questions with no PII. Filtering in SQL would
+ * also need the role vocabulary to match exactly, and it does not - the DB
+ * stores 'Tyre Man' while this app's UserRole is 'tyre_man', which is exactly
+ * the mismatch that would make a naive `.contains()` match nobody.
+ * checklistRoles normalises both sides.
+ */
+export async function listTemplates(
+  country?: string | null,
+  role?: string | null,
+  opts: { isSuperAdmin?: boolean } = {},
+): Promise<ChecklistTemplate[]> {
   let q = supabase.from('checklist_templates').select(TEMPLATE_COLS).eq('status', 'published')
   q = scopeCountry(q, country)
   const { data, error } = await q.order('name', { ascending: true }).limit(200)
   if (error) throw error
-  return (data ?? []) as ChecklistTemplate[]
+  const rows = (data ?? []) as ChecklistTemplate[]
+  return role === undefined ? rows : filterTemplatesForRole(rows, role, opts)
 }
 
 export async function getTemplate(id: string): Promise<ChecklistTemplate | null> {
@@ -62,12 +97,25 @@ export async function getTemplate(id: string): Promise<ChecklistTemplate | null>
   return (data as ChecklistTemplate) ?? null
 }
 
-export async function listAssignments(country?: string | null): Promise<ChecklistAssignment[]> {
+/**
+ * The operator's due assignments.
+ *
+ * `checklist_assignments.assignee_role` has existed since the table was created
+ * and was READ BY NOBODY - every signed-in user was shown every assignment,
+ * including ones raised for another trade. A NULL role means the assignment was
+ * not aimed at anyone in particular, so it stays everyone's to pick up.
+ */
+export async function listAssignments(
+  country?: string | null,
+  role?: string | null,
+  opts: { isSuperAdmin?: boolean } = {},
+): Promise<ChecklistAssignment[]> {
   let q = supabase.from('checklist_assignments').select(ASSIGN_COLS)
   q = scopeCountry(q, country)
   const { data, error } = await q.order('due_date', { ascending: true }).limit(300)
   if (error) throw error
-  return (data ?? []) as ChecklistAssignment[]
+  const rows = (data ?? []) as ChecklistAssignment[]
+  return role === undefined ? rows : filterAssignmentsForRole(rows, role, opts)
 }
 
 // ── Reference-field option sources (live data for asset/site/user pickers) ──
@@ -129,6 +177,21 @@ export interface SubmitInput {
   answers: Record<string, any>
   photos: Record<string, string[]>
   signature_data?: string | null
+  /**
+   * EVERY captured signature, keyed by field id. A workshop sheet is signed off
+   * by three trades as three separate signature fields; `signature_data` stays
+   * the primary sign-off so everything already reading it is unchanged.
+   * The column has existed since V212 and mobile never wrote it, so two of the
+   * three signatures on a paper-derived sheet were simply lost.
+   */
+  signatures?: Record<string, string> | null
+  /**
+   * Per-line remarks, keyed by field id. On a paper-derived sheet this is where
+   * a fitter says WHY a line failed. Also a real column mobile never wrote, so a
+   * phone-filled submission showed an empty Remarks column in the web viewer -
+   * indistinguishable from "nothing to report".
+   */
+  notes?: Record<string, string> | null
   printed_name?: string | null
   site?: string | null
   asset_no?: string | null
@@ -218,6 +281,11 @@ export async function submitChecklist(input: SubmitInput): Promise<{ id: string;
     answers: input.answers ?? {},
     photos,
     signature_data: input.signature_data ?? null,
+    // Sent as {} rather than null when empty: the web viewer renders a missing
+    // key and an empty object identically, and {} keeps the column's shape
+    // consistent with what the web writes.
+    signatures: input.signatures ?? {},
+    notes: input.notes ?? {},
     printed_name: input.printed_name ?? null,
     score_pct: input.score_pct ?? null,
     score_passed: input.score_passed ?? null,

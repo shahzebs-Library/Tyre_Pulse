@@ -17,7 +17,7 @@ import { SkeletonList } from '../../components/SkeletonLoader'
 import { useRealtime } from '../../hooks/useRealtime'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
 import {
-  Screen, Card, AppText, Badge, EmptyState, ErrorState,
+  Screen, Card, AppText, Badge, BackButton, EmptyState, ErrorState,
 } from '../../components/ui'
 
 type SyncStatus = 'synced' | 'pending' | 'failed'
@@ -248,11 +248,14 @@ function HistoryScreen() {
 
   return (
     <Screen edges={['top']}>
-      <View style={s.header}>
-        <AppText variant="h2" style={{ textAlign }}>{t('history.title')}</AppText>
-        <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
-          {filtered.length} {t('common.records')}
-        </AppText>
+      <View style={[s.header, s.headerRow]}>
+        <BackButton />
+        <View style={{ flex: 1 }}>
+          <AppText variant="h2" style={{ textAlign }}>{t('history.title')}</AppText>
+          <AppText variant="caption" color="secondary" style={{ textAlign, marginTop: 2 }}>
+            {filtered.length} {t('common.records')}
+          </AppText>
+        </View>
       </View>
       <SyncBanner />
 
@@ -356,6 +359,7 @@ function makeStyles(theme: Theme) {
     header: {
       paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md,
     },
+    headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     searchWrap: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
       marginHorizontal: spacing.lg, marginTop: spacing.sm,

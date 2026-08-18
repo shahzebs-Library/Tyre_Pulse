@@ -36,6 +36,7 @@ const INSPECT_ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 
 type Step = 'header' | 'tyres' | 'review' | 'submit'
 
 import { withModuleGuard } from '../../../components/ModuleGuard'
+import { backTo } from '../../../lib/goBack'
 
 /**
  * Step track for the inspection wizard.
@@ -571,7 +572,7 @@ function NewInspectionScreen() {
         <StatusBar barStyle={statusBarStyle} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[styles.nav, isRTL && styles.navRTL]}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+            <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
               <Ionicons name={backIcon} size={22} color={theme.color.text} />
             </TouchableOpacity>
             <Text style={styles.navTitle}>{t('inspection.navTitle')}</Text>

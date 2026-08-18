@@ -28,6 +28,7 @@ import { useRoleGuard } from '../../hooks/useRoleGuard'
 import {
   Screen, Card, AppText, Badge, Button, StatTile, EmptyState, ErrorState, Loading,
 } from '../../components/ui'
+import { backTo } from '../../lib/goBack'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -220,7 +221,7 @@ function MaintenanceScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(app)'))}
+          onPress={() => backTo(router, '/(app)')}
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >

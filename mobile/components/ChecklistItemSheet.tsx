@@ -12,6 +12,30 @@
  * date, reference, photo and signature items fall back to their large native
  * controls. All edits flow straight to the parent through onChange; nothing is
  * buffered here.
+ *
+ * THREE THINGS THIS SHEET USED TO GET WRONG.
+ *
+ * 1. SIGNATURES. It took the run screen's single `signatureData` and wrote every
+ *    signature field into it, so a workshop sheet signed by three trades kept
+ *    only the last one. The sheet now takes `signature` - THIS field's own
+ *    signature - and hands it to the pad as its value, so reopening a signed
+ *    item shows that signature instead of a blank pad.
+ *
+ * 2. SHARED OPTION SETS. It read `field.options` directly. A field may instead
+ *    point at a shared list on the template (`options_ref`), which the builder
+ *    treats as the live source while the field's own copy is an expected-to-
+ *    drift fallback - so after an admin edited the shared legend the phone
+ *    offered the OLD choices while the web offered the new ones. Options now
+ *    come from `fieldOptions(field, template, lang)`.
+ *
+ * 3. THE REMARKS BOX. `allow_note` renders a per-line Remarks box on the web
+ *    and rendered nothing here. On a paper-derived sheet that box is where a
+ *    fitter says WHY a line failed; without it the web viewer's Remarks column
+ *    is blank, which reads as "nothing to report".
+ *
+ * THE INVARIANT: a translated option is shown, but the ENGLISH value is what is
+ * stored and compared. `fieldOptions` returns { value, label } precisely so this
+ * cannot be got wrong by accident.
  */
 import { useMemo } from 'react'
 import {
@@ -21,6 +45,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../contexts/ThemeContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { Theme, spacing, radius, typography } from '../lib/theme'
 import PhotoCapture from './PhotoCapture'
 import SignaturePad from './SignaturePad'
@@ -28,6 +53,9 @@ import ChecklistReferencePicker from './ChecklistReferencePicker'
 import {
   ChecklistField, isReferenceField, referenceSource, isAutoField,
 } from '../lib/checklistFields'
+import {
+  DEFAULT_LANG, fieldLabel, fieldOptions, langDir, optionLabel,
+} from '../lib/checklistI18n'
 
 type IconName = keyof typeof Ionicons.glyphMap
 type Tone = 'pass' | 'fail' | 'na' | 'neutral'
@@ -36,6 +64,10 @@ type Tone = 'pass' | 'fail' | 'na' | 'neutral'
 // Infer a Pass / Fail / NA meaning from free-text option labels so choices can
 // be coloured and iconised without any template change. Anything unrecognised
 // stays neutral (still a clear, tappable button).
+//
+// ALWAYS pass the ENGLISH option value here, never a translated label: the
+// vocabulary below is English, so toning a translation would silently drop
+// every checklist back to neutral in Arabic, Hindi and Urdu.
 const PASS_WORDS = ['pass', 'ok', 'okay', 'good', 'yes', 'present', 'working', 'serviceable', 'done', 'compliant', 'passed', 'safe', 'clean', 'available', 'fitted']
 const FAIL_WORDS = ['fail', 'not ok', 'no', 'bad', 'defect', 'faulty', 'fault', 'missing', 'damaged', 'worn', 'leak', 'failed', 'unsafe', 'broken', 'low', 'overdue', 'expired', 'not working']
 const NA_WORDS = ['n/a', 'na', 'not applicable', 'none', 'skip', 'not checked']
@@ -61,16 +93,24 @@ function toneIcon(tone: Tone): IconName {
 interface Props {
   visible: boolean
   field: ChecklistField | null
+  /** The whole template: shared option sets and translations live on it. */
+  template?: { option_sets?: Record<string, any> | null } | null
+  /** Content language the operator is reading the sheet in. */
+  lang?: string
   value: any
   photos: string[]
   printedName: string
-  signatureData: string | null
+  /** THIS field's signature (not a shared one). */
+  signature: string | null
+  /** THIS field's remark, when the field carries `allow_note`. */
+  note?: string
   country?: string | null
   error?: string
   onChange: (v: any) => void
   onPhotos: (urls: string[]) => void
   onPrintedName: (v: string) => void
   onSignature: (v: string | null) => void
+  onNote?: (v: string) => void
   onClose: () => void
 }
 
@@ -122,17 +162,24 @@ function OptionButton({
 }
 
 export default function ChecklistItemSheet({
-  visible, field, value, photos, printedName, signatureData, country, error,
-  onChange, onPhotos, onPrintedName, onSignature, onClose,
+  visible, field, template = null, lang = DEFAULT_LANG, value, photos, printedName,
+  signature, note, country, error,
+  onChange, onPhotos, onPrintedName, onSignature, onNote, onClose,
 }: Props) {
   const { theme } = useTheme()
+  const { t } = useLanguage()
   const insets = useSafeAreaInsets()
   const styles = useMemo(() => makeStyles(theme), [theme])
   const c = theme.color
+  // The CONTENT direction follows the language the checklist is being read in,
+  // which is not necessarily the app's own interface language.
+  const contentAlign = langDir(lang) === 'rtl' ? 'right' : 'left'
 
   if (!field) {
     return <Modal visible={false} transparent animationType="slide" onRequestClose={onClose} />
   }
+
+  const heading = fieldLabel(field, lang) || t('modules.checklistFill.itemFallback')
 
   // Plain render FUNCTION (called as renderBody(), never as <Body />): a JSX
   // component defined here would remount on every parent render, dropping
@@ -148,7 +195,7 @@ export default function ChecklistItemSheet({
           value={typeof value === 'string' ? value : ''}
           onChange={onChange}
           country={country}
-          placeholder={`Select a ${f.type}...`}
+          placeholder={t(`modules.checklistFill.pick.${f.type}`)}
         />
       )
     }
@@ -160,19 +207,23 @@ export default function ChecklistItemSheet({
       case 'signature':
         return (
           <View style={{ gap: spacing.md }}>
-            <SignaturePad onChange={onSignature} height={180} />
+            {/* `value` re-hydrates the pad, so reopening a signed item shows the
+                signature that was captured rather than an empty box. */}
+            <SignaturePad value={signature} onChange={onSignature} height={180} />
             <View>
-              <Text style={styles.miniLabel}>Printed name</Text>
+              <Text style={styles.miniLabel}>{t('modules.checklistFill.printedName')}</Text>
               <TextInput
                 style={styles.input}
                 value={printedName}
                 onChangeText={onPrintedName}
-                placeholder="Type your full name"
+                placeholder={t('modules.checklistFill.printedNamePlaceholder')}
                 placeholderTextColor={c.textMuted}
                 autoCapitalize="words"
               />
               <Text style={styles.help}>
-                {signatureData ? 'Signed. Printed name confirms who signed.' : 'Sign above, then print your name.'}
+                {signature
+                  ? t('modules.checklistFill.signedHelp')
+                  : t('modules.checklistFill.signHelp')}
               </Text>
             </View>
           </View>
@@ -180,14 +231,14 @@ export default function ChecklistItemSheet({
 
       case 'boolean': {
         const opts: { label: string; val: boolean; tone: Tone }[] = [
-          { label: 'Yes', val: true, tone: 'pass' },
-          { label: 'No', val: false, tone: 'fail' },
+          { label: t('common.yes'), val: true, tone: 'pass' },
+          { label: t('common.no'), val: false, tone: 'fail' },
         ]
         return (
           <View style={styles.optGrid}>
             {opts.map(o => (
               <OptionButton
-                key={o.label}
+                key={String(o.val)}
                 label={o.label}
                 tone={o.tone}
                 active={value === o.val}
@@ -201,16 +252,17 @@ export default function ChecklistItemSheet({
       }
 
       case 'select': {
-        const opts = f.options ?? []
+        // Shared set first (the live source), the field's own list as fallback.
+        const opts = fieldOptions(f, template, lang)
         return (
           <View style={styles.optGrid}>
             {opts.map(opt => (
               <OptionButton
-                key={opt}
-                label={opt}
-                tone={optionTone(opt)}
-                active={value === opt}
-                onPress={() => onChange(value === opt ? '' : opt)}
+                key={opt.value}
+                label={opt.label}
+                tone={optionTone(opt.value)}
+                active={value === opt.value}
+                onPress={() => onChange(value === opt.value ? '' : opt.value)}
                 styles={styles}
                 c={c}
               />
@@ -220,19 +272,19 @@ export default function ChecklistItemSheet({
       }
 
       case 'multiselect': {
-        const opts = f.options ?? []
+        const opts = fieldOptions(f, template, lang)
         const arr: any[] = Array.isArray(value) ? value : []
         return (
           <View style={styles.optGrid}>
             {opts.map(opt => {
-              const active = arr.includes(opt)
+              const active = arr.includes(opt.value)
               return (
                 <OptionButton
-                  key={opt}
-                  label={opt}
-                  tone={optionTone(opt)}
+                  key={opt.value}
+                  label={opt.label}
+                  tone={optionTone(opt.value)}
                   active={active}
-                  onPress={() => onChange(active ? arr.filter(v => v !== opt) : [...arr, opt])}
+                  onPress={() => onChange(active ? arr.filter(v => v !== opt.value) : [...arr, opt.value])}
                   styles={styles}
                   c={c}
                 />
@@ -267,10 +319,10 @@ export default function ChecklistItemSheet({
       case 'textarea':
         return (
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.textArea, { textAlign: contentAlign }]}
             value={String(value ?? '')}
             onChangeText={onChange}
-            placeholder="Enter details..."
+            placeholder={t('modules.checklistFill.enterDetails')}
             placeholderTextColor={c.textMuted}
             multiline
             numberOfLines={5}
@@ -297,7 +349,7 @@ export default function ChecklistItemSheet({
             style={[styles.input, styles.bigInput]}
             value={String(value ?? '')}
             onChangeText={onChange}
-            placeholder="YYYY-MM-DD"
+            placeholder={t('modules.checklistFill.datePlaceholder')}
             placeholderTextColor={c.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -308,10 +360,10 @@ export default function ChecklistItemSheet({
       default:
         return (
           <TextInput
-            style={[styles.input, styles.bigInput]}
+            style={[styles.input, styles.bigInput, { textAlign: contentAlign }]}
             value={String(value ?? '')}
             onChangeText={onChange}
-            placeholder="Enter text..."
+            placeholder={t('modules.checklistFill.enterText')}
             placeholderTextColor={c.textMuted}
             autoFocus
           />
@@ -320,6 +372,11 @@ export default function ChecklistItemSheet({
   }
 
   const locked = isAutoField(field)
+  // A locked auto value can still be an option value; show it as the reader
+  // would see it while the stored answer stays English.
+  const lockedText = value != null && value !== ''
+    ? (optionLabel(field, template, value, lang) || String(value))
+    : t('common.notAvailable')
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -334,13 +391,20 @@ export default function ChecklistItemSheet({
 
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title} numberOfLines={2}>
-                {field.label || 'Item'}
+              <Text style={[styles.title, { textAlign: contentAlign }]} numberOfLines={2}>
+                {heading}
                 {field.required ? <Text style={styles.req}> *</Text> : null}
               </Text>
-              {!!field.help && <Text style={styles.headerHelp} numberOfLines={3}>{field.help}</Text>}
+              {!!field.help && (
+                <Text style={[styles.headerHelp, { textAlign: contentAlign }]} numberOfLines={3}>{field.help}</Text>
+              )}
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              hitSlop={8}
+              accessibilityLabel={t('common.close')}
+            >
               <Ionicons name="close" size={22} color={c.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -354,22 +418,38 @@ export default function ChecklistItemSheet({
           >
             {locked ? (
               <View style={styles.lockedRow}>
-                <Text style={styles.lockedText} numberOfLines={1}>
-                  {value != null && value !== '' ? String(value) : 'N/A'}
-                </Text>
+                <Text style={styles.lockedText} numberOfLines={1}>{lockedText}</Text>
                 <View style={styles.lockedHint}>
                   <Ionicons name="lock-closed" size={12} color={c.textMuted} />
-                  <Text style={styles.lockedHintText}>Auto - locked</Text>
+                  <Text style={styles.lockedHintText}>{t('modules.checklistFill.autoLocked')}</Text>
                 </View>
               </View>
             ) : (
               renderBody()
             )}
 
+            {/* Per-line remarks. On the paper sheets this column is where a
+                fitter says WHY a line is not OK; without it a fail is recorded
+                with no cause and reads as "nothing to report". Optional. */}
+            {!locked && field.allow_note && !!onNote && (
+              <View style={{ marginTop: spacing.lg }}>
+                <Text style={styles.miniLabel}>{t('modules.checklistFill.remarks')}</Text>
+                <TextInput
+                  style={[styles.input, styles.noteArea, { textAlign: contentAlign }]}
+                  value={String(note ?? '')}
+                  onChangeText={onNote}
+                  placeholder={t('modules.checklistFill.remarksPlaceholder')}
+                  placeholderTextColor={c.textMuted}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+            )}
+
             {/* Inline photo attach for any non-photo item flagged allow_photo. */}
             {!locked && field.allow_photo && field.type !== 'photo' && (
               <View style={{ marginTop: spacing.lg }}>
-                <Text style={styles.miniLabel}>Attach photo</Text>
+                <Text style={styles.miniLabel}>{t('modules.checklistFill.attachPhoto')}</Text>
                 <PhotoCapture value={photos} onChange={onPhotos} module="checklist" tint={c.primary} max={4} />
               </View>
             )}
@@ -384,7 +464,7 @@ export default function ChecklistItemSheet({
 
           <TouchableOpacity style={styles.doneBtn} onPress={onClose} activeOpacity={0.9}>
             <Ionicons name="checkmark" size={19} color={c.onPrimary} />
-            <Text style={styles.doneBtnText}>Done</Text>
+            <Text style={styles.doneBtnText}>{t('common.done')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -439,6 +519,7 @@ function makeStyles(theme: Theme) {
     },
     bigInput: { fontSize: 18, lineHeight: 24, paddingVertical: 14 },
     textArea: { minHeight: 120, textAlignVertical: 'top' },
+    noteArea: { minHeight: 84, textAlignVertical: 'top' },
 
     miniLabel: { ...typography.label, color: c.textSecondary, marginBottom: 8 },
     help: { ...typography.caption, color: c.textMuted, marginTop: 6, lineHeight: 16 },

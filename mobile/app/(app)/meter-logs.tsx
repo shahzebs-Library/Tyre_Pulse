@@ -41,6 +41,7 @@ const IMPLAUSIBLE_DAILY_KM = 2000
 const RESCAN_COOLDOWN_MS = 2500
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(MeterLogScreen, 'meter')
 
@@ -286,7 +287,7 @@ function MeterLogScreen() {
     <Screen padded={false}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.nav, isRTL && styles.rowR]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>

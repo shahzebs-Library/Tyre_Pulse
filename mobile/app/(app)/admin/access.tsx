@@ -36,7 +36,7 @@ import {
   AdminUserRow, MobileGrantEntryMap,
 } from '../../../lib/accessAdmin'
 import {
-  Screen, AppText, Card, Badge, ListRow, EmptyState, ErrorState, Loading,
+  Screen, AppText, Card, Badge, BackButton, ListRow, EmptyState, ErrorState, Loading,
 } from '../../../components/ui'
 import { spacing, radius, typography } from '../../../lib/theme'
 
@@ -330,7 +330,11 @@ function ScreenHeader({ title, subtitle, onBack }: { title: string; subtitle?: s
         >
           <Ionicons name="chevron-back" size={20} color={c.text} />
         </TouchableOpacity>
-      ) : null}
+      ) : (
+        // No in-screen drill-back means this is the top of the screen, so the
+        // control has to LEAVE it - otherwise there is no way out at all.
+        <BackButton fallback="/(app)/admin" />
+      )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <AppText variant="h2" numberOfLines={1}>{title}</AppText>
         {subtitle ? <AppText variant="caption" color="muted" numberOfLines={1}>{subtitle}</AppText> : null}

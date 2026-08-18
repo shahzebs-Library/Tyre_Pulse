@@ -19,6 +19,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { toUserMessage } from '../../../lib/safeError'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { backTo } from '../../../lib/goBack'
 
 // ── Agent definitions ─────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ export default function AiChatScreen() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

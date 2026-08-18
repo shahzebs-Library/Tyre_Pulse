@@ -35,6 +35,7 @@ import { toUserMessage } from '../../../lib/safeError'
 import { useAdminGuard } from '../../../hooks/useRoleGuard'
 import { COUNTRIES } from '../../../lib/types'
 import { canApproveChecklists } from '../../../lib/permissions'
+import { backTo } from '../../../lib/goBack'
 
 interface PendingUpload {
   id: string
@@ -344,7 +345,7 @@ export default function AdminApprovalsScreen() {
       <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => backTo(router, '/(app)/admin')}>
           <Ionicons name="chevron-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

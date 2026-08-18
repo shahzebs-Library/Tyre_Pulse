@@ -26,6 +26,7 @@ import { toUserMessage } from '../../../lib/safeError'
 import {
   loadAccidentCase, caseChipFor, AccidentCaseResult, CaseChip,
 } from '../../../lib/accidentCase'
+import { backTo } from '../../../lib/goBack'
 
 type IconName = React.ComponentProps<typeof Ionicons>['name']
 
@@ -68,8 +69,7 @@ function AccidentCaseScreen() {
   const [error, setError] = useState<string | null>(null)
 
   function goBack() {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)/accident/dashboard')
+    backTo(router, '/(app)/accident/dashboard')
   }
 
   const load = useCallback(async () => {

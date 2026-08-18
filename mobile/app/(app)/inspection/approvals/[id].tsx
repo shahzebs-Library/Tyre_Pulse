@@ -31,6 +31,7 @@ import {
 } from '../../../../lib/inspectionApprovals'
 
 import { withModuleGuard } from '../../../../components/ModuleGuard'
+import { backTo } from '../../../../lib/goBack'
 
 export default withModuleGuard(InspectionApprovalReviewScreen, 'approvals')
 
@@ -59,8 +60,7 @@ function InspectionApprovalReviewScreen() {
   const statusBarStyle = theme.mode === 'dark' ? 'light-content' : 'dark-content'
 
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)/inspection/approvals')
+    backTo(router, '/(app)/inspection/approvals')
   }, [router])
 
   const load = useCallback(async () => {

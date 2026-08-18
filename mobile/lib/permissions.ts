@@ -87,13 +87,13 @@ const M = (
 export const MODULES: ModuleDef[] = [
   // Field ---------------------------------------------------------------------
   M('inspect',        'New Inspection',    'clipboard-outline',      'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver']),
+  M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician']),
+  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician']),
   M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector']),
-  M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
-  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
+  M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'driver']),
+  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician']),
   M('washing',        'Vehicle Washing',   'water-outline',          'Field',      ['manager', 'director', 'inspector', 'driver', 'tyre_man']),
-  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver']),
+  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician']),
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      []),
   // Field staff need to look an asset up (owner instruction 2026-08-06). Safe to
@@ -101,7 +101,7 @@ export const MODULES: ModuleDef[] = [
   // rows, ~1k per country) - it was never the unbounded table scan that caused
   // the low-end-device crashes; that was the analytics screen, now server-side.
   M('vehicles',       'Vehicles',          'car-outline',            'Fleet',
-    ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver']),
+    ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician']),
   M('history',        'History',           'time-outline',           'Fleet',      []),
   M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector']),
   M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),
@@ -113,11 +113,12 @@ export const MODULES: ModuleDef[] = [
   M('tasks',          'Tasks',             'list-outline',           'Maintenance',['manager', 'director', 'inspector']),
   M('stock',          'Stock Count',       'cube-outline',           'Maintenance',['manager', 'inspector']),
   M('pm',             'Maintenance Due',   'build-outline',          'Maintenance',['manager', 'director']),
-  // Workshop Live Control - technician records job activity. The app has no
-  // dedicated technician/mechanic/foreman roles (see lib/types.ts), so the shop-
-  // floor roles are tyre_man + inspector; supervisors (manager/director) + admin
-  // see it too. Per-user grants can extend it to anyone.
-  M('workshop',       'My Jobs',           'construct-outline',      'Maintenance',['manager', 'director', 'inspector', 'tyre_man']),
+  // Workshop Live Control - a technician records job activity here. V591 finally
+  // created the real trades (mechanic, electrician), so this is no longer
+  // approximated by tyre_man + inspector - though both keep it, because that is
+  // who has been using it. Supervisors (manager/director) + admin see it too,
+  // and a per-user grant can still extend it to anyone.
+  M('workshop',       'My Jobs',           'construct-outline',      'Maintenance',['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician']),
   // Management ----------------------------------------------------------------
   M('overview',       'Overview',          'grid-outline',           'Management', []),
   M('reports',        'Reports',           'document-text-outline',  'Management', []),

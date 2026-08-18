@@ -19,6 +19,7 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { SEVERITY_COLORS, STATUS_COLORS, isAdminOrAbove, isAdmin } from '../../../lib/types'
 import { useElevatedGuard } from '../../../hooks/useRoleGuard'
+import { BackButton } from '../../../components/ui'
 
 interface Stats {
   totalVehicles:    number
@@ -152,6 +153,9 @@ export default function AdminDashboardScreen() {
       {/* ── Purple header ─────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
+          {/* Plain white glyph: this header is a dark purple band, so the
+              default surface tile would be unreadable on it. */}
+          <BackButton plain color="#fff" style={styles.headerBack} />
           <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>{GREETING()}, {profile?.full_name?.split(' ')[0] ?? 'Admin'}</Text>
             <View style={styles.roleBadge}>
@@ -470,7 +474,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20,
     gap: 16,
   },
-  headerTop:   { flexDirection: 'row', alignItems: 'flex-start' },
+  headerTop:   { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  headerBack:  { width: 32, height: 32, marginStart: -6 },
   greeting:    { fontSize: 18, fontWeight: '800', color: '#fff' },
   roleBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   roleText:    { fontSize: 11, color: '#a78bfa', fontWeight: '600' },

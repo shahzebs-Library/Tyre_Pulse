@@ -28,7 +28,9 @@
     "error": "Error",
     "tryAgain": "Please try again.",
     "all": "All",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "no": "No",
+    "notAvailable": "N/A"
   },
   "language": {
     "english": "English",
@@ -1257,7 +1259,8 @@
       "tmSearchPlaceholder": "Search asset number...",
       "tmSearchHint": "Type at least 2 characters to find your asset.",
       "tmNoMatch": "No matching asset found.",
-      "tmChange": "Change"
+      "tmChange": "Change",
+      "forRoles": "For:"
     },
     "checklistFill": {
       "reviewTitle": "Please review",
@@ -1289,7 +1292,33 @@
       "signatureNeeded": "A signature is required before you can submit.",
       "loadError": "Could not load this checklist.",
       "of": "of",
-      "doneWord": "done"
+      "doneWord": "done",
+      "printedName": "Printed name",
+      "printedNamePlaceholder": "Type your full name",
+      "signedHelp": "Signed. The printed name confirms who signed.",
+      "signHelp": "Sign above, then print your name.",
+      "enterDetails": "Enter details...",
+      "enterText": "Enter text...",
+      "datePlaceholder": "YYYY-MM-DD",
+      "remarks": "Remarks",
+      "remarksPlaceholder": "Why is this line not OK? (optional)",
+      "attachPhoto": "Attach photo",
+      "autoLocked": "Auto - locked",
+      "clearAsset": "Clear the selected asset",
+      "photo": "photo",
+      "photos": "photos",
+      "signed": "Signed",
+      "readingLanguage": "Reading language",
+      "answersStayEnglish": "Answers are recorded in English whichever language you fill in.",
+      "signOff": "Sign-off",
+      "signOffCovered": "Already signed by:",
+      "signOffHelp": "This checklist needs a signature before it can be submitted.",
+      "signOffOptionalHelp": "A signature has already been captured. You may add your own sign-off as well.",
+      "pick": {
+        "asset": "Select an asset...",
+        "site": "Select a site...",
+        "user": "Select a person..."
+      }
     },
     "calendar": {
       "title": "Calendar",
@@ -1553,5 +1582,8 @@
   },
   "stock": {
     "otherLocation": "Other"
+  },
+  "signature": {
+    "signHere": "Sign here"
   }
 }

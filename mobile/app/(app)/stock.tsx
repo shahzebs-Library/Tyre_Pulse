@@ -19,6 +19,7 @@ import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
 import {
   Screen, Card, AppText, Badge, StatTile, Button, Loading, EmptyState, ErrorState,
 } from '../../components/ui'
+import { backTo } from '../../lib/goBack'
 
 interface StockItem {
   id: string
@@ -337,7 +338,7 @@ function StockScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

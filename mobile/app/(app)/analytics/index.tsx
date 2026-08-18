@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { toUserMessage } from '../../../lib/safeError'
+import { BackButton } from '../../../components/ui'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
   getMobileAnalytics, avgCostPerTyre,
@@ -133,6 +134,7 @@ function AnalyticsScreen() {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
+        <BackButton />
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Fleet Analytics</Text>
           <Text style={styles.subtitle}>
@@ -390,7 +392,7 @@ const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: '#eff6ff' },
 
   header: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
     backgroundColor: '#fff',
     borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',

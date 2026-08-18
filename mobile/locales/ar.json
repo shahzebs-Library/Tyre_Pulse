@@ -28,7 +28,9 @@
     "error": "خطأ",
     "tryAgain": "يرجى المحاولة مرة أخرى.",
     "all": "الكل",
-    "saving": "جار الحفظ..."
+    "saving": "جار الحفظ...",
+    "no": "لا",
+    "notAvailable": "غير متوفر"
   },
   "language": {
     "english": "English",
@@ -1258,7 +1260,8 @@
       "tmSearchPlaceholder": "ابحث برقم الأصل...",
       "tmSearchHint": "اكتب حرفين على الأقل للعثور على أصلك.",
       "tmNoMatch": "لم يتم العثور على أصل مطابق.",
-      "tmChange": "تغيير"
+      "tmChange": "تغيير",
+      "forRoles": "لـ:"
     },
     "checklistFill": {
       "reviewTitle": "يرجى المراجعة",
@@ -1290,7 +1293,33 @@
       "signatureNeeded": "التوقيع مطلوب قبل الإرسال.",
       "loadError": "تعذّر تحميل قائمة التحقق.",
       "of": "من",
-      "doneWord": "مكتمل"
+      "doneWord": "مكتمل",
+      "printedName": "الاسم بالحروف",
+      "printedNamePlaceholder": "اكتب اسمك الكامل",
+      "signedHelp": "تم التوقيع. الاسم المكتوب يؤكد هوية الموقع.",
+      "signHelp": "وقع في الأعلى ثم اكتب اسمك.",
+      "enterDetails": "أدخل التفاصيل...",
+      "enterText": "أدخل النص...",
+      "datePlaceholder": "سنة-شهر-يوم",
+      "remarks": "ملاحظات",
+      "remarksPlaceholder": "لماذا هذا البند غير سليم؟ (اختياري)",
+      "attachPhoto": "إرفاق صورة",
+      "autoLocked": "تلقائي - مقفل",
+      "clearAsset": "إلغاء الأصل المحدد",
+      "photo": "صورة",
+      "photos": "صور",
+      "signed": "تم التوقيع",
+      "readingLanguage": "لغة القراءة",
+      "answersStayEnglish": "تسجل الإجابات بالإنجليزية مهما كانت لغة التعبئة.",
+      "signOff": "الاعتماد بالتوقيع",
+      "signOffCovered": "تم التوقيع بالفعل من:",
+      "signOffHelp": "تتطلب قائمة الفحص هذه توقيعا قبل الإرسال.",
+      "signOffOptionalHelp": "تم التقاط توقيع بالفعل. يمكنك إضافة توقيعك أيضا.",
+      "pick": {
+        "asset": "اختر أصلا...",
+        "site": "اختر موقعا...",
+        "user": "اختر شخصا..."
+      }
     },
     "calendar": {
       "title": "التقويم",
@@ -1554,5 +1583,8 @@
   },
   "stock": {
     "otherLocation": "أخرى"
+  },
+  "signature": {
+    "signHere": "وقع هنا"
   }
 }

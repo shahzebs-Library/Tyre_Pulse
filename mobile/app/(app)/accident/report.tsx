@@ -34,6 +34,7 @@ import { safeUuid } from '../../../lib/ids'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import { extractScanCode, lookupAssetByCode } from '../../../lib/assetLookup'
 import AccidentPhotoGrid, { AccidentPhotoEntry } from '../../../components/AccidentPhotoGrid'
+import { backTo } from '../../../lib/goBack'
 
 type IconName = React.ComponentProps<typeof Ionicons>['name']
 
@@ -311,8 +312,7 @@ function AccidentReportScreen() {
   )
 
   function goBack() {
-    if (router.canGoBack()) router.back()
-    else router.replace('/(app)/accident/dashboard')
+    backTo(router, '/(app)/accident/dashboard')
   }
 
   // Asset-first flow (web parity): the fleet list loads up front so the reporter

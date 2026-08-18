@@ -29,6 +29,7 @@ import { toUserMessage } from '../../lib/safeError'
 type SearchState = 'idle' | 'searching' | 'found' | 'empty' | 'error'
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(SerialSearchScreen, 'serial')
 
@@ -194,7 +195,7 @@ function SerialSearchScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* Nav header */}
         <View style={[styles.nav, isRTL && styles.rowR]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color="#0f172a" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>

@@ -27,6 +27,7 @@ type ScanState = 'scanning' | 'searching' | 'result'
 const RESCAN_COOLDOWN_MS = 2500
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(ScannerScreen, 'scan')
 
@@ -106,7 +107,7 @@ function ScannerScreen() {
           barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
         />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <AppText variant="title">{t('scanner.title')}</AppText>
@@ -133,7 +134,7 @@ function ScannerScreen() {
           barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'}
         />
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBack}>
             <Ionicons name={backIcon} size={22} color={theme.color.text} />
           </TouchableOpacity>
           <AppText variant="title">{t('scanner.title')}</AppText>
@@ -173,7 +174,7 @@ function ScannerScreen() {
       {/* Top bar (over the live camera feed - kept high-contrast on dark) */}
       <SafeAreaView style={styles.overlayTop} edges={['top']}>
         <View style={[styles.nav, isRTL && styles.navRTL]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navBackDark}>
+          <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.navBackDark}>
             <Ionicons name={backIcon} size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.navTitleDark}>{t('scanner.title')}</Text>

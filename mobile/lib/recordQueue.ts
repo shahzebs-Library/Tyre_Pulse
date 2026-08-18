@@ -159,6 +159,12 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'id', 'template_id', 'template_name', 'template_version', 'country', 'site',
       'asset_no', 'title', 'status', 'answers', 'photos', 'signature_data',
       'printed_name', 'score_pct', 'score_passed', 'approval_status',
+      // Real columns since V212 that mobile never sent. sanitize() drops any key
+      // not listed here, so adding them to SubmitInput alone would have changed
+      // nothing - the payload would have been silently trimmed on the way out.
+      // `signatures` = every trade's sign-off keyed by field id; `notes` = the
+      // per-line Remarks a fitter writes to explain a failed check.
+      'signatures', 'notes',
     ],
   },
   CHECKLIST_ASSIGNMENT_STATUS: {

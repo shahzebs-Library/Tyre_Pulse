@@ -49,6 +49,7 @@ function norm(role: string | null): string {
 }
 
 import { withModuleGuard } from '../../components/ModuleGuard'
+import { backTo } from '../../lib/goBack'
 
 export default withModuleGuard(TeamScreen, 'team')
 
@@ -114,7 +115,7 @@ function TeamScreen() {
   return (
     <Screen edges={['top']}>
       <View style={[s.header, isRTL && s.rowR]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn} activeOpacity={0.7}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.color.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

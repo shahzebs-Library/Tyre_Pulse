@@ -56,7 +56,6 @@ export function useModuleGuard(moduleKey: ModuleKey): { allowed: boolean; loadin
     profile, loading, profileLoading, permissionsError,
     isSuperAdmin, grants, roleMatrix,
   } = useAuth()
-  const router = useRouter()
   const [allowed, setAllowed] = useState(false)
 
   // The auth session or the profile is still being read. Deciding now would
@@ -70,15 +69,18 @@ export function useModuleGuard(moduleKey: ModuleKey): { allowed: boolean; loadin
       moduleKey, profile?.role ?? null, grants, isSuperAdmin, roleMatrix, permissionsError,
     )
 
-    if (!permitted) {
-      setAllowed(false)
-      router.replace('/')
-    } else {
-      setAllowed(true)
-    }
+    // DELIBERATELY NO REDIRECT. This used to call router.replace('/'), which
+    // threw the person back to Home - and a screen that vanishes and dumps you
+    // on the main page reads as the app malfunctioning, not as "you do not have
+    // access to this". The owner reported it exactly that way twice.
+    //
+    // A refusal now stays where it is and SAYS so: a wrapped screen gets
+    // <NoAccess/> from withModuleGuard before its body ever runs, and the few
+    // unwrapped screens render it themselves. Nothing renders blank.
+    setAllowed(permitted)
   }, [
     moduleKey, resolving, profile?.role, isSuperAdmin,
-    grants, roleMatrix, permissionsError, router,
+    grants, roleMatrix, permissionsError,
   ])
 
   return { allowed, loading: resolving }
@@ -115,6 +117,10 @@ export function useRoleGuard(allowedRoles: UserRole[]): { allowed: boolean; load
 
     if (!permitted) {
       setAllowed(false)
+      // The legacy guard still redirects. Its ONE caller (admin/approvals) is
+      // deliberately stricter than any module and renders <NoAccess/> itself
+      // before this fires, so nobody sees the bounce - but do not adopt this
+      // guard for a new screen expecting it to stay put.
       router.replace('/')
     } else {
       setAllowed(true)

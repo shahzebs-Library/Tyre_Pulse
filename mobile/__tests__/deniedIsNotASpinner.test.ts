@@ -65,6 +65,26 @@ describe('denied is not a spinner', () => {
     expect(`blank-on-denied: ${bad.join(', ')}`).toBe('blank-on-denied: ')
   })
 
+  it('the module guard does NOT navigate away when it refuses', () => {
+    // It used to call router.replace('/'), which threw the person back to Home.
+    // A screen that vanishes and dumps you on the main page reads as the app
+    // malfunctioning rather than as a permission boundary - reported twice.
+    // The refusal must stay put and say so.
+    const guard = readFileSync(join(__dirname, '..', 'hooks', 'useRoleGuard.ts'), 'utf8')
+    const start = guard.indexOf('export function useModuleGuard')
+    const end = guard.indexOf('export function useRoleGuard')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    // Strip comments first: the body explains WHY the redirect was removed and
+    // names router.replace('/') in prose. Matching that would fail on the
+    // explanation rather than on the code.
+    const body = guard.slice(start, end)
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'))
+      .join('\n')
+    expect(body).not.toMatch(/router\.(replace|push|navigate)\(/)
+  })
+
   it('the shared denial view is exported so nobody writes a third one', () => {
     const guard = readFileSync(join(__dirname, '..', 'components', 'ModuleGuard.tsx'), 'utf8')
     expect(guard).toMatch(/export function NoAccess/)

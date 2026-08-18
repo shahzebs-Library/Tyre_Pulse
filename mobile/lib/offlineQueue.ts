@@ -1,7 +1,7 @@
 import { OfflineInspection, InspectionPayload } from './types'
 import { supabase } from './supabase'
 import { uploadAllPositionPhotos } from './photoUpload'
-import { secureStorage } from './secureStorage'
+import { secureStorage, readItem } from './secureStorage'
 import { notifySyncSuccess, notifySyncFailure } from './notifications'
 import { clientId } from './ids'
 
@@ -12,6 +12,45 @@ export async function getQueue(): Promise<OfflineInspection[]> {
     const raw = await secureStorage.getItem(QUEUE_KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
+    return []
+  }
+}
+
+/**
+ * THE ONE RULE FOR EVERY READ-MODIFY-WRITE ON THIS QUEUE.
+ *
+ * `getQueue()` answers `[]` for BOTH "there is nothing queued" and "the Keystore
+ * refused to answer", because it can only return an array. That is harmless for
+ * a caller that just wants to draw a badge, and catastrophic for a caller that
+ * then SAVES what it read: a torn read plus a save overwrites a field worker's
+ * unsynced inspections with an empty list, and those inspections are the only
+ * copy that exists. Nobody would ever see an error - the app would simply come
+ * back with an empty queue.
+ *
+ * So a mutator must use THIS, which distinguishes the two and refuses rather
+ * than guessing. The trade is deliberate: when the store is unreadable we risk
+ * failing to save ONE new item, instead of silently destroying ALL of them.
+ */
+export class QueueUnreadableError extends Error {
+  readonly status: string
+  constructor(status: string) {
+    super('The offline store could not be read, so nothing was changed.')
+    this.name = 'QueueUnreadableError'
+    this.status = status
+  }
+}
+
+async function loadQueueForWrite(): Promise<OfflineInspection[]> {
+  const read = await readItem(QUEUE_KEY)
+  // 'absent' is a real, trustworthy answer: there is genuinely nothing queued.
+  if (read.status === 'unreadable' || read.status === 'torn') throw new QueueUnreadableError(read.status)
+  if (!read.value) return []
+  try {
+    const parsed = JSON.parse(read.value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    // Readable but not valid JSON. Overwriting is no worse than what is there,
+    // and refusing forever would strand the device.
     return []
   }
 }
@@ -32,7 +71,7 @@ export async function enqueueInspection(payload: InspectionPayload, clientUuid?:
     synced_at: null,
     error: null,
   }
-  const queue = await getQueue()
+  const queue = await loadQueueForWrite()
   queue.unshift(item)
   await saveQueue(queue)
   return id
@@ -51,7 +90,7 @@ export async function enqueueInspection(payload: InspectionPayload, clientUuid?:
  * everything that is not 'synced'.
  */
 export async function getPendingCount(): Promise<number> {
-  const queue = await getQueue()
+  const queue = await loadQueueForWrite()
   return queue.filter(i => i.sync_status !== 'synced').length
 }
 
@@ -66,7 +105,7 @@ export async function syncQueue(): Promise<{ synced: number; failed: number }> {
 }
 
 async function doSyncQueue(): Promise<{ synced: number; failed: number }> {
-  const queue = await getQueue()
+  const queue = await loadQueueForWrite()
   let synced = 0
   let failed = 0
 
@@ -136,7 +175,7 @@ async function doSyncQueue(): Promise<{ synced: number; failed: number }> {
 }
 
 export async function retryFailed(): Promise<void> {
-  const queue = await getQueue()
+  const queue = await loadQueueForWrite()
   for (const item of queue) {
     if (item.sync_status === 'failed') {
       item.sync_status = 'pending'
@@ -147,7 +186,7 @@ export async function retryFailed(): Promise<void> {
 }
 
 export async function clearSynced(): Promise<void> {
-  const queue = await getQueue()
+  const queue = await loadQueueForWrite()
   const filtered = queue.filter(i => i.sync_status !== 'synced')
   await saveQueue(filtered)
 }

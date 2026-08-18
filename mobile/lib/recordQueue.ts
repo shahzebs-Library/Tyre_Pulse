@@ -30,7 +30,7 @@
  * ----------------------------------------------------------------------------
  */
 import { supabase } from './supabase'
-import { secureStorage } from './secureStorage'
+import { secureStorage, readItem } from './secureStorage'
 import { uploadModulePhoto } from './photoUpload'
 import {
   persistPhotoForQueue,
@@ -510,6 +510,37 @@ export async function getRecordQueue(): Promise<QueuedRecord[]> {
   }
 }
 
+/**
+ * THE ONE RULE FOR EVERY READ-MODIFY-WRITE ON THIS QUEUE. See the identical
+ * note in offlineQueue.ts.
+ *
+ * `getRecordQueue()` answers `[]` for BOTH "nothing is queued" and "the Keystore
+ * refused to answer". Fine for a badge; catastrophic for a caller that saves
+ * what it read, because a torn read plus a save replaces a field worker's
+ * unsynced commands - accident reports, tyre changes, wash records - with an
+ * empty list, silently, with the only copy on that device.
+ */
+export class QueueUnreadableError extends Error {
+  readonly status: string
+  constructor(status: string) {
+    super('The offline store could not be read, so nothing was changed.')
+    this.name = 'QueueUnreadableError'
+    this.status = status
+  }
+}
+
+async function loadRecordQueueForWrite(): Promise<QueuedRecord[]> {
+  const read = await readItem(KEY)
+  if (read.status === 'unreadable' || read.status === 'torn') throw new QueueUnreadableError(read.status)
+  if (!read.value) return []
+  try {
+    const parsed = JSON.parse(read.value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 async function save(queue: QueuedRecord[]): Promise<void> {
   await secureStorage.setItem(KEY, JSON.stringify(queue))
 }
@@ -526,7 +557,7 @@ export async function enqueueCommand(
   // so an OS cache eviction before sync can never lose it (finding #14). This is
   // the single durability seam: every path that queues a command routes here.
   const { payload: durablePayload, meta } = await persistPayloadPhotos(sanitize(type, payload))
-  const queue = await getRecordQueue()
+  const queue = await loadRecordQueueForWrite()
   queue.unshift({
     id,
     type,
@@ -546,7 +577,7 @@ export async function enqueueCommand(
 }
 
 export async function getPendingRecordCount(): Promise<number> {
-  const queue = await getRecordQueue()
+  const queue = await loadRecordQueueForWrite()
   return queue.filter(i => i.sync_status !== 'synced').length
 }
 
@@ -627,7 +658,7 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
 }
 
 async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> {
-  const queue = await getRecordQueue()
+  const queue = await loadRecordQueueForWrite()
   const now = Date.now()
   let synced = 0, failed = 0
   for (const item of queue) {
@@ -704,7 +735,7 @@ async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> 
 }
 
 export async function retryFailedRecords(): Promise<void> {
-  const queue = await getRecordQueue()
+  const queue = await loadRecordQueueForWrite()
   const nowIso = new Date().toISOString()
   for (const i of queue) {
     if (i.sync_status === 'failed') {
@@ -718,7 +749,7 @@ export async function retryFailedRecords(): Promise<void> {
 }
 
 export async function clearSyncedRecords(): Promise<void> {
-  const queue = await getRecordQueue()
+  const queue = await loadRecordQueueForWrite()
   await save(queue.filter(i => i.sync_status !== 'synced'))
 }
 

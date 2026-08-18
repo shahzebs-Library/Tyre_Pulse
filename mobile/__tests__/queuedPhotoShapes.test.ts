@@ -44,6 +44,14 @@ jest.mock('../lib/secureStorage', () => ({
     setItem: async (k: string, v: string) => { store[k] = v },
     removeItem: async (k: string) => { delete store[k] },
   },
+  // The real module also exports readItem, which is what every read-modify-write
+  // on a queue now uses: it distinguishes "nothing is queued" from "the Keystore
+  // refused to answer", so a torn read can never be saved back as an empty
+  // queue. The mock must expose it or the code under test reads `undefined` and
+  // the mock, not the code, is what fails.
+  readItem: async (k: string) => (
+    k in store ? { value: store[k], status: 'ok' } : { value: null, status: 'absent' }
+  ),
 }))
 jest.mock('../lib/photoUpload', () => ({
   uploadModulePhoto: (...a: any[]) => (uploadModulePhoto as any)(...a),

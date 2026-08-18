@@ -166,7 +166,10 @@
     "submittedForApprovalNote": "A supervisor will review and sign off on this inspection. You will see it under History once approved.",
     "step1Label": "Vehicle",
     "step2Label": "Tyres",
-    "step3Label": "Review"
+    "step3Label": "Review",
+    "tyresIncompleteTitle": "Tyres not finished",
+    "tyresIncompleteLead": "These tyres still need details",
+    "tyresIncompleteHint": "Tap each one and record its condition, pressure, photo or a note."
   },
   "history": {
     "title": "Inspection History",

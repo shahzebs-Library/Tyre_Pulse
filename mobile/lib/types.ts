@@ -88,6 +88,8 @@ export interface TyrePositionData {
   serial_number: string
   pressure_psi: string
   tread_depth_mm: string
+  /** true once the inspector deliberately edited this wheel. See emptyTyrePosition. */
+  checked?: boolean
   condition: TyreCondition
   /** Local file URI - used for immediate on-device preview only */
   photo_uri: string | null
@@ -505,5 +507,14 @@ export function emptyTyrePosition(position: string): TyrePositionData {
     photo_uri: null,
     photo_url: null,
     notes: '',
+    // Deliberately absent from the seed. Every wheel is seeded the moment a
+    // vehicle is chosen, and the seed's condition is 'Good', so a seeded wheel
+    // and a wheel somebody looked at and passed were byte identical - there was
+    // no way for an inspector to say "I checked this and it is fine" except by
+    // leaving a pressure or a photo. handleTyreUpdate sets this on any
+    // deliberate edit, which is what lets the completeness gate demand that
+    // every wheel was actually attended to without demanding a reading nobody
+    // has a gauge for.
+    checked: false,
   }
 }

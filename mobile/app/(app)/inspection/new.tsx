@@ -11,6 +11,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { fetchAllRows } from '../../../lib/fetchAllRows'
+import { tyreCompleteness, pendingCodes } from '../../../lib/tyreCompleteness'
 import { assetClassOf, classChips } from '../../../lib/assetClasses'
 import { toUserMessage } from '../../../lib/safeError'
 import { enqueueInspection } from '../../../lib/offlineQueue'
@@ -204,6 +205,31 @@ function NewInspectionScreen() {
     }, 0)
   }, [positions, tyreData])
 
+  /**
+   * Which wheels are still outstanding, from the engine the web gate also uses,
+   * so the phone and the browser can never disagree about what "filled" means.
+   *
+   * requireEvidence is ON here. It is safe now that a deliberate edit stamps the
+   * wheel `checked`: an inspector who looks at a tyre, finds it fine and has no
+   * gauge can still record that by tapping a condition. Without that marker this
+   * would have demanded a reading nobody could give.
+   */
+  const completeness = useMemo(() => {
+    const v = getEffectiveVehicle()
+    return tyreCompleteness(v?.vehicle_type ?? null, v?.asset_no ?? null, tyreData, { requireEvidence: true })
+  }, [tyreData, selectedVehicle, useManualEntry, manualAsset, manualVehicleType])
+
+  /**
+   * The outstanding-wheel sentence. Composed by concatenation because this app's
+   * t() takes a key and NOTHING else - unlike the web's, it has no interpolation
+   * vars, so a "{{count}}" placeholder would render literally.
+   */
+  function tyreGapMessage(): string {
+    const codes = pendingCodes(completeness).join(', ')
+    const total = completeness.expected ?? completeness.pending.length
+    return `${t('inspection.tyresIncompleteLead')}: ${codes} (${completeness.pending.length} / ${total}). ${t('inspection.tyresIncompleteHint')}`
+  }
+
   // Open the focused detail popup for a position (from diagram or list).
   function openTyre(position: string) {
     setActivePosition(position)
@@ -379,7 +405,11 @@ function NewInspectionScreen() {
   }
 
   function handleTyreUpdate(position: string, data: TyrePositionData) {
-    setTyreData(prev => ({ ...prev, [position]: data }))
+    // Stamp the wheel as attended to. This is the ONLY write path for a tyre
+    // edit, so every deliberate interaction lands here - including tapping the
+    // Good chip, which is otherwise indistinguishable from the seed and left an
+    // inspector with no way to record "I checked it and it is fine".
+    setTyreData(prev => ({ ...prev, [position]: { ...data, checked: true } }))
   }
 
   function validateHeader(): boolean {
@@ -435,6 +465,16 @@ function NewInspectionScreen() {
       Alert.alert(
         t('inspection.alertRequired'),
         t('inspection.alertRecordTyre'),
+      )
+      return
+    }
+    // Every wheel must have been attended to before this can be signed off.
+    // Deliberately BEFORE the signature check, so the inspector is sent back to
+    // the tyres rather than being asked to sign for wheels nobody looked at.
+    if (!completeness.ok) {
+      Alert.alert(
+        t('inspection.tyresIncompleteTitle'),
+        tyreGapMessage(),
       )
       return
     }
@@ -1048,6 +1088,7 @@ function NewInspectionScreen() {
               selectedPosition={activePosition}
               onPositionPress={openTyre}
               width={screenWidth - 32}
+              pending={completeness}
             />
           )}
 
@@ -1140,19 +1181,21 @@ function NewInspectionScreen() {
 
           {/* Save guard: an inspection with no recorded tyre condition cannot be
               saved (prevents empty records). */}
-          {recordedCount === 0 && (
+          {(recordedCount === 0 || !completeness.ok) && (
             <View style={[styles.validationWarn, isRTL && styles.navRTL]}>
               <Ionicons name="alert-circle-outline" size={16} color={theme.color.warning.on} />
               <Text style={[styles.validationWarnText, { textAlign }]}>
-                {t('inspection.validationRecordTyre')}
+                {recordedCount === 0
+                  ? t('inspection.validationRecordTyre')
+                  : tyreGapMessage()}
               </Text>
             </View>
           )}
 
           <TouchableOpacity
-            style={[styles.nextBtn, recordedCount === 0 && styles.nextBtnDisabled]}
+            style={[styles.nextBtn, (recordedCount === 0 || !completeness.ok) && styles.nextBtnDisabled]}
             onPress={() => setStep('review')}
-            disabled={recordedCount === 0}
+            disabled={recordedCount === 0 || !completeness.ok}
           >
             <Text style={styles.nextBtnText}>{t('inspection.reviewButton')}</Text>
             <Ionicons name={forwardIcon} size={18} color={theme.color.onPrimary} />

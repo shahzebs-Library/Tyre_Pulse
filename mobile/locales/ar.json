@@ -167,7 +167,10 @@
     "submittedForApprovalNote": "سيقوم المشرف بمراجعة هذا الفحص والتوقيع عليه. سيظهر ضمن السجل بعد الاعتماد.",
     "step1Label": "المركبة",
     "step2Label": "الإطارات",
-    "step3Label": "المراجعة"
+    "step3Label": "المراجعة",
+    "tyresIncompleteTitle": "الإطارات غير مكتملة",
+    "tyresIncompleteLead": "هذه الإطارات ما زالت بحاجة إلى تفاصيل",
+    "tyresIncompleteHint": "اضغط على كل إطار وسجّل حالته أو ضغطه أو صورة أو ملاحظة."
   },
   "history": {
     "title": "سجل الفحوصات",

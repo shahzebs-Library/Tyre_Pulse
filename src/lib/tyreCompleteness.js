@@ -156,13 +156,19 @@ export function classifyEntry(entry) {
   const serial = pick(entry, EVIDENCE_FIELDS.serial)
   const notes = pick(entry, EVIDENCE_FIELDS.notes)
   const photo = pick(entry, EVIDENCE_FIELDS.photo)
+  // A wheel the inspector deliberately opened and edited counts as attended to,
+  // even if they left it Good with no reading. Without this the gate demands a
+  // pressure from somebody who has no gauge and has genuinely checked the tyre,
+  // which is a requirement they cannot satisfy - see mobile emptyTyrePosition.
+  // Only an explicit true counts; the seed writes false.
+  const checked = entry != null && entry.checked === true
   const conditionRaw = entry && hasText(entry.condition) ? String(entry.condition).trim() : ''
   const deliberateCondition = conditionRaw !== '' && keyOf(conditionRaw) !== keyOf(SEEDED_CONDITION)
 
   // Compare against null, never truthiness: a pressure of 0 is a real reading
   // on a flat tyre and `if (!pressure)` would silently discard it.
   const evidence = pressure !== null || tread !== null || serial !== null ||
-    notes !== null || photo !== null || deliberateCondition
+    notes !== null || photo !== null || deliberateCondition || checked
   if (!evidence) return { state: 'blank', pressure: null, condition: conditionRaw || null }
   if (pressure === null) return { state: 'incomplete', pressure: null, condition: conditionRaw || null }
   return { state: 'complete', pressure, condition: conditionRaw || null }

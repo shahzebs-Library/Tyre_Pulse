@@ -285,6 +285,32 @@ describe('helpers the diagram uses', () => {
  * files and compared here. A whole file text compare is impossible (JS against
  * TypeScript), so what is compared is the part that decides behaviour.
  */
+describe('an inspector can say "I checked it and it is fine"', () => {
+  // Without this there was NO way to record a wheel as attended to except by
+  // leaving a pressure, a photo or a note. Every wheel is seeded the moment a
+  // vehicle is chosen and the seed's condition is 'Good', so tapping Good was
+  // byte identical to not tapping anything. That made the gate demand a reading
+  // from somebody who has genuinely checked the tyre and has no gauge - a
+  // requirement they cannot satisfy, which is how a safety gate turns into a
+  // reason to fake a number.
+  it('a deliberately checked wheel is not blank, even with nothing else on it', () => {
+    expect(classifyEntry({ condition: 'Good', checked: true }).state).not.toBe('blank')
+    expect(classifyEntry({ condition: 'Good' }).state).toBe('blank')
+  })
+
+  it('the seeded false does NOT count - only an explicit true', () => {
+    // emptyTyrePosition writes checked: false, so a seeded wheel must stay blank.
+    expect(classifyEntry({ condition: 'Good', checked: false }).state).toBe('blank')
+    expect(classifyEntry({ condition: 'Good', checked: 'yes' }).state).toBe('blank')
+  })
+
+  it('a checked wheel with no pressure is still ADVISORY, not complete', () => {
+    // It counts as attended to, which is what stops it blocking. It does not
+    // pretend a reading was taken.
+    expect(classifyEntry({ condition: 'Good', checked: true }).state).toBe('incomplete')
+  })
+})
+
 describe('mirror does not drift from mobile/lib/tyreCompleteness.ts', () => {
   const webSrc = readFileSync(resolve(__dirname, '../lib/tyreCompleteness.js'), 'utf8')
   const mobSrc = readFileSync(resolve(__dirname, '../../mobile/lib/tyreCompleteness.ts'), 'utf8')

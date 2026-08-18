@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V593**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V594**)
 Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
 V585-V590 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
@@ -216,6 +216,138 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
   preview build).
 
 ---
+
+## SESSION 2026-08-18 (part 3) — R8, THE 1,000-ROW CAP AS A CLASS, AND THE PUMP DIAGRAM (V593). Next free **V594**.
+Owner: "r8 optimization ... many assets are not showing in the assets list ... pump svg has extra lines which is
+not correct ... behaviour improvement". All three were real and all three were measured before anything changed.
+**STILL NO EAS BUILD** - the owner deferred it last session and has not lifted that.
+
+### **THE ASSET COMPLAINT WAS A 1,000-ROW CAP, AND IT WAS A WHOLE CLASS, NOT ONE BUG**
+`vehicle_fleet` is now **1,617** (KSA 1,030 / UAE 452 / Egypt 135; 1,377 distinct asset_no, since 240 codes exist
+in more than one country per V376). Impersonating the real approved KSA-only Manager,
+**`reference_asset_options` returns 1,033 rows**, and PostgREST caps EVERY response at db-max-rows (1,000 here).
+- **THE CAP APPLIES TO A SET-RETURNING RPC EXACTLY AS IT DOES TO A TABLE READ.** That is the part everyone had
+  missed - the pickers' PRIMARY path is the RPC, so fixing only the client fallback would have fixed nothing.
+- **THE SYMPTOM IS WHY IT READ AS "assets are missing":** these lists filter CLIENT-side, so a user types a real
+  asset number, the truncated array has no match, and the asset looks like it was never created.
+- `listAssets` had `limit = 100` as its DEFAULT, so any caller that passed nothing saw the newest hundred; and
+  `ReferencePicker` passed `limit: 1000`, which looks like a generous ceiling and is exactly the cap.
+- **WORSE, AND NOT COSMETIC: `imports.existingKeys` reads `import_existing_keys` (SETOF text, one row per key).**
+  DataIntakeCenter gates its live-duplicate check on `liveKeys.has(key)`, so every key past the first 1,000 was
+  classified NOT a duplicate and staged as a fresh INSERT; `existingRecords()` cannot rescue it because it is only
+  consulted INSIDE that gate. Tyre has 8,432 keys (7,432 invisible); workorder is global at ~89,913. **That is the
+  mechanism behind the 8,248 duplicate expense rows this codebase already deleted once**, and for work orders it
+  is not duplication but a 23505 abort, because `work_order_no` is globally unique. Now paged, and an incomplete
+  key set RAISES A PER-ROW WARNING rather than passing as a clean result.
+
+### **PAGING AN RPC IS NOT PAGING A TABLE - `fetchAllRpcPages` / `fetchAllRpcRows`**
+`.range()` on an RPC is a different server path from `.range()` on a table, this codebase had NO prior instance of
+it, and it could not be verified from here (the REST endpoint 403s through the agent proxy, and V281 revoked every
+anon table grant so there is nothing anon can read to test with).
+- **THE FAILURE MODE IF A RANGE WERE IGNORED IS NOT A SHORT LIST - IT IS THE SAME 1,000 ROWS FETCHED OVER AND OVER
+  UP TO THE CEILING.** 20 round trips on a phone screen a field user is waiting on.
+- So the RPC readers page **BY IDENTITY**: each page folds into a Set through a key function and the FIRST page
+  that adds nothing new ends the read. Correct when ranging works (last page is short) and when it does not (page
+  two repeats page one and we stop). Duplicates can never reach the caller either way.
+- **RULE: page a set-returning RPC with the identity pager, never the offset pager.** The plain table pagers are
+  untouched - offset paging over an ordered table with a unique tiebreak is already sound.
+- Checked the catalog first: `reference_asset_options` and `import_existing_keys` are STABLE, set-returning and
+  carry NO internal LIMIT, so client paging is the right layer. **`get_asset_master` DOES have an internal LIMIT**
+  - a caller must raise `p_limit` as well as page, or the function itself cuts the page short.
+
+### **~20 MORE TRUNCATIONS, and the two that were worse than a short list**
+QR labels (617 assets had no printable label AND could not be found by that page's own search box), mobile admin
+sites (`Vehicles (N)` printed **1000** as if it were the fleet size), the mobile inspection site feed, the stock
+location picker, mobile records site chips (**no ORDER BY at all**, so the chips changed between loads), the
+vehicle designer's "types with no design" panel, Anomalies, Report Center, asset master, the data-cleaning site
+list, gate-pass sites, vehicle history, tyre specs, cost-per-m3 rejections, a dashboard widget, the console user
+site picker, the alert engine tyre feed, the mobile accident site picker, and **five reads in the mobile AI
+screen - those feed numbers the assistant states as fact, so truncation made it confidently wrong.**
+- **`speed_limiters` coverage was the DENOMINATOR**, so a fleet that looked smaller than it is made coverage %
+  **overstated** - wrong in the flattering direction.
+- **The self-healing staleness scan read NEWEST-FIRST**, so the dormant sites it exists to find could never appear
+  in its 1,000 rows. A data-quality scan reporting the data as cleaner than it is.
+- **`get_tyre_cost_by_asset` is a per-asset MONEY map** and was capped at 1,000 of ~1,377 at BOTH call sites
+  (`governedCost.js`, `costSummary.js`). A dropped row there is an asset silently reporting no tyre spend.
+
+### **V593 - THE ORDER BY HAD TO BE UNIQUE BEFORE THE PAGING WAS SOUND**
+`get_tyre_cost_by_asset` ordered by `sum(tyre_cost) DESC` ALONE. Not unique, so a tie straddling a page boundary
+returns one asset twice and drops another. **MEASURED RATHER THAN ASSUMED: of 875 asset rows, 93 sit in a tie and
+the LARGEST TIE GROUP IS 49 ASSETS.** `asset_code` is the GROUP BY key and therefore unique by construction, so
+appending it changes only the order within an exact tie. Body read from the LIVE `pg_get_functiondef` and changed
+in the ORDER BY only, so every org/country/site guard is byte-identical. Verified live as the real KSA Manager:
+688 rows, 688 distinct assets, total 11,573,077, and two consecutive calls now agree on every row.
+**RULE: before paging any RPC, check its ORDER BY is total. A non-unique sort makes offset paging lossy.**
+
+### **THE GUARD IS THE HALF THAT MATTERS - one line is why the whole class survived**
+`src/test/rowCapGuard.test.js` passed the entire time and would have caught NONE of the above, because rule 1
+skipped any chunk matching `.limit(`. **A `.limit(N)` is only a bound when N < 1000; above that it is a lie.**
+Four gaps closed: the limit-argument now resolved (balanced parens, NEAREST preceding assignment, one hop through
+a named constant - a file-wide max previously took another function's `limit = 5000` and exempted a real
+truncation); **mobile is scanned at all** (SCAN_DIRS was `src` only AND `walk()` filtered `/\.(js|jsx)$/`, so
+mobile was invisible twice over); set-returning RPCs are covered; and the ±8-line window no longer lets a
+NEIGHBOURING statement's `count`/`limit` exempt an unbounded read. Counts refreshed (vehicle_fleet 1,610 ->
+1,617) plus a `BELOW_CAP_NOT_POLICED` record for `sites` (62) / `profiles` (38) with a test asserting they stay
+below the cap.
+- **MUTATION-TESTED INDEPENDENTLY, and my FIRST ATTEMPT WAS A BAD TEST, NOT A WEAK GUARD**: I planted the limit
+  inside an already-paged read, where it is legitimately exempt, and it correctly did not fire. A standalone
+  `.limit(3000)` on tyre_records fails with `limit(3000) = 3000 is not a bound - the server caps at 1000`, and
+  the mobile detector fires on a bare select. **RULE: when a guard does not fire, check the mutation before
+  blaming the guard.**
+
+### **THE PUMP DIAGRAM: WEB DREW A 14-WHEEL CONCRETE PUMP FOR MACHINES WITH NO WHEELS**
+The web resolver ended in a generic `pump` catch-all, so the whole family collapsed onto the truck-mounted MP
+pump (3 single steer + 2 dual drive = 14 tyres, plus the full body art). Live, **all with ZERO tyre records**:
+SPIDER PUMP 20 · PLACING BOOM 18 · STATIONARY PUMP 11 · LINE PUMP 5. The 143 real `PUMPS` (116 tyre records) were
+always correct and are untouched.
+- A stationary pump drawn as 14 grey "No Data" wheels does NOT read as "this machine has no wheels" - it reads as
+  "nobody inspected these 14 tyres", which is worse than a wrong picture.
+- **Mobile was fixed for this by the owner's own direction and the WEB NEVER WAS.** Ported
+  `mobile/lib/tyreDiagramLayouts.ts` ORDERING INCLUDED - the specific rules must run BEFORE the generic catch-all,
+  which is exactly what was missing. Now: PUMPS -> Concrete pump 14 · SPIDER PUMP -> Truck 6x4 10 · LINE PUMP ->
+  Line pump 12 · PLACING BOOM + STATIONARY PUMP -> tyreless.
+- **CORRECTION TO MY OWN FIRST DIAGNOSIS: PLACING BOOM was NOT drawing 14.** The resolver read its leading letters
+  as an asset-class prefix (`PL` -> Pickup) and drew 4. Wrong either way, but the prefix rule now requires a DIGIT
+  after the letters, so `PL077` is still a Pickup and `PLACING BOOM` is not.
+- **THE WEB HAD FOUR COPIES of the keyword chain** - `VehicleTyreDiagram`, `tyreBay`, `Inspections`, `exportUtils`
+  - and they had DRIFTED, which is why the same machine looked different on different screens. All four now go
+  through `src/lib/vehicleTyreLayout.js`. **RULE: resolve a vehicle type through that module, never inline.**
+- **VERIFIED AGAINST THE LIVE DB, which the authoring pass could not reach:** every vehicle_type the tyreless
+  rules catch has 0 tyre records - BT-PLANT 58, ICE PLANT 26, PLACING BOOM 18, STATIONARY PUMP 11, BUILDINGS 3,
+  WATER TREATMENT PLANT 2 - so **no recorded tyre is hidden**, and widening `ice plant`/`bt-plant` to `plant`
+  correctly picks up WATER TREATMENT PLANT, which had been drawing a Pickup. `vehicle_diagram_configs` holds
+  **0 rows**, so letting an admin-designed layout outrank the tyreless keyword is inert today and correct later.
+
+### **R8 - ENABLED, AND HONESTLY UNVERIFIABLE FROM HERE**
+`enableProguardInReleaseBuilds` was never set, so release builds shipped unshrunk. Enabled via
+expo-build-properties (option names read from the INSTALLED plugin, not memory: it writes them to
+gradle.properties and APPENDS `extraProguardRules` to `android/app/proguard-rules.pro`).
+- Keep rules written AFTER reading what already ships in node_modules, so nothing duplicates them: **React
+  Native's own consumer rules already cover DoNotStrip (facebook/jni/yoga), every NativeModule and
+  JavaScriptModule, @ReactProp, native <methods> and okio; expo-modules-core covers the whole Expo Kotlin module
+  system; react-native-svg covers com.horcrux.svg.**
+- **THE LOAD-BEARING RULE IS `-keepattributes SourceFile,LineNumberTable`.** R8 strips those by default and a
+  Java/Kotlin frame reaching Sentry then loses its file and line - which would have made last session's native
+  crash undiagnosable. `-renamesourcefileattribute` keeps the line numbers usable while hiding real file names.
+- **RESOURCE SHRINKING DELIBERATELY NOT ENABLED.** It is a DIFFERENT tool from R8 (the Android Gradle resource
+  shrinker) whose failure mode is deleting a drawable that is only ever looked up by name at runtime. Turning it
+  on needs a real release build and a device smoke test.
+- Validated as far as possible without building: `npx expo config --type prebuild` resolves and carries the
+  settings; app is `newArchEnabled: false`, i.e. the old architecture, where R8 is well trodden.
+- **STATED PLAINLY AND MUST STAY STATED: R8 only takes effect in a RELEASE build, cannot be changed by an
+  expo-updates OTA, and every failure mode it has is invisible in development. THE FIRST BUILD AFTER THIS MUST BE
+  SMOKE-TESTED ON A DEVICE BEFORE IT IS PROMOTED.** Pinned by `mobile/__tests__/androidReleaseConfig.test.ts`,
+  which also pins the deliberate ABSENCE of resource shrinking so a future edit has to argue with it.
+
+### OPEN / FLAGGED
+- **NO EAS BUILD.** Everything mobile from parts 2 and 3 needs one, and R8 makes that build the one to smoke-test.
+- Two allowlisted reads, each with measured impact: `materialMaster` (`Math.min(limit, 2000)` over 22,162 rows;
+  default is 200 so no live surface hits it) and mobile `admin/index.tsx` (bare select of `accidents`, **38 rows**
+  today, truncates once that register passes 1,000).
+- Carried unchanged: the `tyre_records.serial_no` partial-scrap bug (43 tyres); `failureRate` printing 0.0% when
+  nothing is rated; 820 UAE rows carrying a brand in `removal_reason`; the realtime re-measure; and the owner
+  decisions at the top of this file.
+
 
 ## SESSION 2026-08-18 (part 2) — CHECKLISTS ON MOBILE: ROLE TARGETING (V591/V592), REAL ICONS, ENGINE PARITY, BACK NAVIGATION. Next free **V593**.
 Owner: "the checklist which we have in the web ... wants to add in mobile applications also, wants to fixed some

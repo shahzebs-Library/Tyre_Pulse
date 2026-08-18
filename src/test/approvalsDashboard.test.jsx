@@ -28,8 +28,16 @@ vi.mock('../lib/api/approvalsQueue', () => ({
 
 // Auth is org-scoped server-side; the page only needs a session-shaped stub.
 // An elevated role unlocks the non-workflow approve/reject actions.
+// The signed-in role is per test, because V600 split WHO SIGNS from who
+// administers: Manager keeps the non-checklist approve/reject actions, but was
+// taken off both CHECKLIST rungs - the area manager or the PMV manager signs
+// those. One global role can no longer serve both halves of this file.
+const authRole = { current: 'Manager', name: 'Mona Manager' }
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({ profile: { id: 'u-1', role: 'Manager', full_name: 'Mona Manager' }, user: { id: 'u-1' } }),
+  useAuth: () => ({
+    profile: { id: 'u-1', role: authRole.current, full_name: authRole.name },
+    user: { id: 'u-1' },
+  }),
 }))
 
 // Country scope defaults to "All" without a provider.
@@ -115,6 +123,7 @@ function sign() {
 }
 
 beforeEach(() => {
+    authRole.current = 'Manager'; authRole.name = 'Mona Manager'
   vi.clearAllMocks()
   workflows.getApprovalDashboard.mockResolvedValue(DASHBOARD)
   workflows.myPendingApprovals.mockResolvedValue([{ id: 'wi-1' }])
@@ -209,6 +218,9 @@ describe('Unified approval dashboard', () => {
   })
 
   it('will not sign off a checklist until a signature is drawn, then does', async () => {
+    // V600: a Manager no longer signs a checklist. This rung is the trades'
+    // own supervisor.
+    authRole.current = 'Maintenance Supervisor'; authRole.name = 'Sam Supervisor'
     // The server refuses an approval that carries no signature (V597). Offering
     // the button anyway would mean somebody presses it and is told afterwards.
     renderPage()
@@ -230,6 +242,9 @@ describe('Unified approval dashboard', () => {
   })
 
   it('shows a supervisor rung as a hand-up, not a close, on a two-stage sheet', async () => {
+    // V600: a Manager no longer signs a checklist. This rung is the trades'
+    // own supervisor.
+    authRole.current = 'Maintenance Supervisor'; authRole.name = 'Sam Supervisor'
     // The owner's rule is two sign-offs. A supervisor pressing approve does NOT
     // close the sheet, and the screen has to say so before they press it.
     queue.listChecklistApprovals.mockResolvedValue([{ ...CHECKLIST, require_area_manager: true }])

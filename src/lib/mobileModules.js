@@ -35,18 +35,18 @@ export const MOBILE_MODULES = [
   // Field ---------------------------------------------------------------------
   { key: 'inspect',        label: 'New Inspection',   group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man'] },
   { key: 'scan',           label: 'Scan',             group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },
-  { key: 'serial',         label: 'Serial Search',    group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician'] },
+  { key: 'serial',         label: 'Serial Search',    group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   { key: 'tyreChange',     label: 'Tyre Change',      group: 'Field',       roles: ['manager', 'director', 'inspector'] },
-  { key: 'checklists',     label: 'Checklists',       group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'driver'] },
-  { key: 'meter',          label: 'Meter Log',        group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician'] },
+  { key: 'checklists',     label: 'Checklists',       group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'driver', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
+  { key: 'meter',          label: 'Meter Log',        group: 'Field',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   { key: 'washing',        label: 'Vehicle Washing',  group: 'Field',       roles: ['manager', 'director', 'inspector', 'driver', 'tyre_man'] },
-  { key: 'reportIssue',    label: 'Report Issue',     group: 'Field',       roles: ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician'] },
+  { key: 'reportIssue',    label: 'Report Issue',     group: 'Field',       roles: ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   // Fleet ---------------------------------------------------------------------
   { key: 'records',        label: 'Tyre Records',     group: 'Fleet',       roles: [] },
-  { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician'] },
+  { key: 'vehicles',       label: 'Vehicles',         group: 'Fleet',       roles: ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   { key: 'history',        label: 'History',          group: 'Fleet',       roles: [] },
   { key: 'alerts',         label: 'Alerts',           group: 'Fleet',       roles: ['manager', 'director', 'inspector'] },
-  { key: 'calendar',       label: 'Calendar',         group: 'Fleet',       roles: ['manager', 'director', 'tyre_man', 'reporter'] },
+  { key: 'calendar',       label: 'Calendar',         group: 'Fleet',       roles: ['manager', 'director', 'tyre_man', 'reporter', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   // Maintenance ---------------------------------------------------------------
   { key: 'accidents',      label: 'Accidents',        group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
   { key: 'reportAccident', label: 'File Accident',    group: 'Maintenance', roles: ['manager', 'director', 'inspector'] },
@@ -67,7 +67,10 @@ export const MOBILE_MODULES = [
   { key: 'ai',             label: 'Fleet AI',         group: 'Management',  roles: [] },
   { key: 'team',           label: 'Team',             group: 'Management',  roles: [] },
   // Admin ---------------------------------------------------------------------
-  { key: 'approvals',      label: 'Approvals',        group: 'Admin',       roles: ['manager', 'director'] },
+  // V600 - who signs: area manager / PMV manager / the trades' supervisors.
+  // Director stays for the checklist FINAL rung only. Mirrors
+  // mobile/lib/permissions.ts; change both.
+  { key: 'approvals',      label: 'Approvals',        group: 'Admin',       roles: ['director', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
   // ADMIN ONLY - no leakage. Mirrors mobile/lib/permissions.ts; change both.
   { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: [] },
   { key: 'users',          label: 'User Management',  group: 'Admin',       roles: [] },

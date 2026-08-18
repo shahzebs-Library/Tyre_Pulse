@@ -42,10 +42,27 @@ describe('the ladder', () => {
 })
 
 describe('who may act', () => {
-  it('a Manager signs off but CANNOT close a two-stage sheet', () => {
-    // Mirrors checklist_is_supervisor / checklist_is_area_manager, proven live.
-    expect(canActOnStage(STAGE_SUPERVISOR, 'Manager')).toBe(true)
+  it('a Manager signs NOTHING - V600 took them off both rungs', () => {
+    // BEHAVIOUR CHANGE, not a weakened test. Until V600 a Manager could sign the
+    // supervisor rung. The owner's instruction was that the area manager or the
+    // PMV manager signs, so Manager came off - on the server too, proven live by
+    // impersonation against a real pending record.
+    expect(canActOnStage(STAGE_SUPERVISOR, 'Manager')).toBe(false)
     expect(canActOnStage(STAGE_AREA_MANAGER, 'Manager')).toBe(false)
+  })
+
+  it('the trades supervisors sign the first rung', () => {
+    for (const role of ['Maintenance Supervisor', 'Workshop Supervisor']) {
+      expect(canActOnStage(STAGE_SUPERVISOR, role)).toBe(true)
+      // ...and cannot close their own sheet. Two rungs or it is one signature
+      // wearing two names.
+      expect(canActOnStage(STAGE_AREA_MANAGER, role)).toBe(false)
+    }
+  })
+
+  it('the PMV manager signs, which is who the owner named', () => {
+    expect(canActOnStage(STAGE_SUPERVISOR, 'PMV Manager')).toBe(true)
+    expect(canActOnStage(STAGE_AREA_MANAGER, 'PMV Manager')).toBe(true)
   })
 
   it('the area manager can close it', () => {
@@ -142,7 +159,8 @@ describe('the mobile mirror does not drift', () => {
     // of each. Pinning V594 alone would quietly compare against a body the
     // database no longer has, which is worse than not checking at all.
     const sql = ['MIGRATIONS_V594_CHECKLIST_TWO_STAGE_APPROVAL.sql',
-                 'MIGRATIONS_V599_WORKSHOP_SUPERVISOR.sql']
+                 'MIGRATIONS_V599_WORKSHOP_SUPERVISOR.sql',
+                 'MIGRATIONS_V600_WHO_SIGNS.sql']
       .map((f) => readFileSync(resolve(__dirname, '../..', f), 'utf8'))
       .join('\n')
     const sqlRoles = (fn) => {

@@ -24,8 +24,9 @@ export const APPROVAL_STAGES = [
     key: STAGE_SUPERVISOR,
     label: 'Supervisor sign-off',
     /** profiles.role values that may act. Compared case/spacing-insensitively. */
-    roles: ['Admin', 'Manager', 'Director', 'Maintenance Supervisor', 'Fleet Supervisor',
-            'Workshop Supervisor',
+    // V600: the trades' own supervisors sign first. Manager, Director and
+    // Fleet Supervisor came OFF this rung - they are not who signs.
+    roles: ['Admin', 'Maintenance Supervisor', 'Workshop Supervisor',
             'PMV Manager', 'Workshop Area Manager', 'Workshop Maintenance Area Manager'],
   },
   {

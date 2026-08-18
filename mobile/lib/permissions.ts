@@ -84,16 +84,30 @@ const M = (
 // RULE: do not give a bulk-listing or reporting module a role default here. If a
 // field role genuinely needs one, either add a server-side aggregate so the
 // phone fetches one row instead of the table, or grant it per user.
+/**
+ * Supervisory + approver roles. Named once so the modules below cannot drift
+ * apart, and so it is obvious WHO these are: the people who sign work off.
+ *
+ * They all used to normalise to 'reporter' on the phone, which is why they are
+ * listed on the field modules a reporter already had - adding a role to
+ * UserRole without listing it here would have TAKEN AWAY access two real people
+ * are using today.
+ */
+export const SUPERVISOR_ROLES: readonly UserRole[] = [
+  'maintenance_supervisor', 'workshop_supervisor',
+  'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager',
+]
+
 export const MODULES: ModuleDef[] = [
   // Field ---------------------------------------------------------------------
   M('inspect',        'New Inspection',    'clipboard-outline',      'Field',      ['manager', 'director', 'inspector', 'tyre_man']),
   M('scan',           'Scan',              'scan-outline',           'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician']),
-  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician']),
+  M('serial',         'Serial Search',     'search-outline',         'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   M('tyreChange',     'Tyre Change',       'swap-horizontal-outline','Field',      ['manager', 'director', 'inspector']),
-  M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'driver']),
-  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician']),
+  M('checklists',     'Checklists',        'checkbox-outline',       'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'driver', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
+  M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   M('washing',        'Vehicle Washing',   'water-outline',          'Field',      ['manager', 'director', 'inspector', 'driver', 'tyre_man']),
-  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician']),
+  M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      []),
   // Field staff need to look an asset up (owner instruction 2026-08-06). Safe to
@@ -101,10 +115,10 @@ export const MODULES: ModuleDef[] = [
   // rows, ~1k per country) - it was never the unbounded table scan that caused
   // the low-end-device crashes; that was the analytics screen, now server-side.
   M('vehicles',       'Vehicles',          'car-outline',            'Fleet',
-    ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician']),
+    ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   M('history',        'History',           'time-outline',           'Fleet',      []),
   M('alerts',         'Alerts',            'notifications-outline',  'Fleet',      ['manager', 'director', 'inspector']),
-  M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter']),
+  M('calendar',       'Calendar',          'calendar-outline',       'Fleet',      ['manager', 'director', 'tyre_man', 'reporter', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   // Maintenance ---------------------------------------------------------------
   M('accidents',      'Accidents',         'warning-outline',        'Maintenance',['manager', 'director', 'inspector']),
   M('reportAccident', 'File Accident',     'alert-circle-outline',   'Maintenance',['manager', 'director', 'inspector']),
@@ -127,7 +141,16 @@ export const MODULES: ModuleDef[] = [
   M('ai',             'Fleet AI',          'sparkles-outline',       'Management', []),
   M('team',           'Team',              'people-outline',         'Management', []),
   // Admin ---------------------------------------------------------------------
-  M('approvals',      'Approvals',         'checkmark-done-outline', 'Admin',      ['manager', 'director']),
+  // WHO SIGNS. The owner's instruction: the area manager or the PMV manager
+  // signs, not a Manager. This key gates all three queues (inspection,
+  // checklist, admin), so it is the UNION of who the server will actually
+  // let act - each screen and RPC still enforces its own rung.
+  // Director stays for the checklist FINAL rung only: exactly one person
+  // holds an area-manager role, and a queue nobody else can clear jams the
+  // moment they take leave (the reasoning V594 recorded).
+  M('approvals',      'Approvals',         'checkmark-done-outline', 'Admin',
+    ['director', 'maintenance_supervisor', 'workshop_supervisor',
+     'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   // ADMIN ONLY - no leakage. This console links straight to User Management,
   // the Access Manager and admin approvals, and its other destinations
   // (analytics, reports) are admin-only modules in their own right - so a

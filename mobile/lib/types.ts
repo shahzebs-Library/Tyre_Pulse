@@ -5,6 +5,14 @@ export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_ma
   // could not be assigned to "the electricians" even in principle, and
   // lib/permissions.ts said as much in a comment on the `workshop` module.
   | 'mechanic' | 'electrician'
+  // Supervisory + approver roles. These are real custom_roles rows held by
+  // real people, and every one of them used to fall through normaliseRole to
+  // 'reporter' - so the PMV Manager and the Workshop Maintenance Area Manager
+  // were seen by the phone as reporters, and V599's Workshop Supervisor could
+  // not have seen a checklist at all. A role missing here does not fail
+  // loudly; it silently becomes somebody else.
+  | 'maintenance_supervisor' | 'workshop_supervisor'
+  | 'pmv_manager' | 'workshop_area_manager' | 'workshop_maintenance_area_manager'
 
 /** Countries the platform operates in - mirrors the web SettingsContext list.
  *  A user's country drives data isolation and stamps their mobile-created rows. */
@@ -35,7 +43,9 @@ export function normaliseRole(raw: string | null | undefined): UserRole {
   // while the server correctly saw tyre_data_collector. Any custom role that
   // needs its own mobile permissions has to be listed here.
   const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man',
-    'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician']
+    'tyre_data_collector', 'reporter', 'driver', 'mechanic', 'electrician',
+    'maintenance_supervisor', 'workshop_supervisor',
+    'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']
   return valid.includes(key as UserRole) ? (key as UserRole) : 'reporter'
 }
 

@@ -146,29 +146,24 @@ const PHOTO_MODULE = 'checklist'
  * Resolve the per-field photo map to permanent tp-storage:// refs BEFORE the
  * submission is handed to the record queue.
  *
- * WHY THIS EXISTS: the queue's photo pipeline (persistPayloadPhotos and
- * resolveCommandPhotos in recordQueue.ts) both begin with `Array.isArray(photos)`,
- * so they only understand a FLAT string[]. A checklist submits
- * Record<fieldId, string[]> - the shape checklist_submissions.photos stores and
- * the approval screen reads - so both queue steps skip it entirely. Without this
- * resolver, a photo that PhotoCapture could not upload at capture time (offline)
- * keeps its device-local file:// cache URI, is never uploaded, and is written
- * verbatim into the database: the submit looks successful while the evidence is
- * unreachable for everyone and the bytes sit in an OS cache the device may purge.
+ * WHY THIS EXISTS: uploading here, while the user is still on the submit screen,
+ * is the fastest path to a permanent ref - the ONLINE case never touches the
+ * queue's photo machinery at all. Entries that are already permanent refs pass
+ * straight through, so this costs nothing extra.
  *
- * Entries that are already permanent refs pass straight through, so the ONLINE
- * path (PhotoCapture uploads on capture) costs nothing extra.
+ * OFFLINE is now handled downstream and no longer loses anything. The queue's
+ * photo pipeline (persistPayloadPhotos / resolveCommandPhotos /
+ * sweepOrphanQueuedPhotos in recordQueue.ts) used to begin with
+ * `Array.isArray(photos)` and so skipped this keyed Record<fieldId, string[]>
+ * entirely: a local path enqueued here was never copied into durable storage,
+ * never re-uploaded, and was written verbatim into the database - the submit
+ * reported success while the evidence was unreachable for everyone. Those three
+ * functions now read either shape (readPhotoBag / writePhotoBag), so a local
+ * path kept below is persisted durably at enqueue and uploaded on the next sync.
  *
- * KNOWN RESIDUAL GAP (needs a recordQueue.ts change, not fixable from here): if
- * the device is STILL offline at submit time the upload cannot succeed, so the
- * local path is enqueued and the queue's later retry skips it for the same
- * Array.isArray reason. Do NOT "improve" this by copying the file into durable
- * storage via persistPhotoForQueue: sweepOrphanQueuedPhotos (recordQueue.ts,
- * run after EVERY sync) builds its active set with the same array-only guard, so
- * a keyed map never marks its durable files as referenced and the sweep deletes
- * them as orphans - that makes the loss deterministic instead of merely likely.
- * The real fix is to teach persistPayloadPhotos, resolveCommandPhotos AND
- * sweepOrphanQueuedPhotos to walk a Record<string, string[]> as well as string[].
+ * Still do NOT call persistPhotoForQueue from here: enqueueCommand already does
+ * it for every queued command, and a second durable copy would be an orphan the
+ * sweep deletes.
  *
  * Never throws: uploadModulePhoto returns null on failure, so photo handling can
  * never block a submit.
@@ -188,8 +183,8 @@ async function resolveSubmissionPhotos(
       if (!raw.startsWith('file://')) { resolved.push(raw); continue } // already a permanent ref
       const ref = await uploadModulePhoto(raw, PHOTO_MODULE, index++)
       // Upload failed (offline, or the file is gone): keep the local path so the
-      // answer is not silently dropped. See the residual gap noted above - it
-      // must NOT be "fixed" with persistPhotoForQueue here.
+      // answer is not silently dropped. The record queue persists it durably at
+      // enqueue and uploads it on the next sync.
       resolved.push(ref || raw)
     }
     if (resolved.length) out[fieldId] = resolved
@@ -206,8 +201,9 @@ async function resolveSubmissionPhotos(
 export async function submitChecklist(input: SubmitInput): Promise<{ id: string; offline: boolean }> {
   const id = safeUuid()
   const t = input.template
-  // Uploaded here, not by the queue: the queue's photo pipeline only handles a
-  // flat string[] and would skip this keyed map (see resolveSubmissionPhotos).
+  // Uploaded here when online so the submit carries permanent refs; anything
+  // still local falls through to the queue, which now understands this keyed
+  // map too (see resolveSubmissionPhotos).
   const photos = await resolveSubmissionPhotos(input.photos)
   const res = await saveCommand('CHECKLIST_SUBMISSION', {
     id,

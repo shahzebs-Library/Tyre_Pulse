@@ -334,6 +334,68 @@ function buildUpdateParts(
 }
 
 /**
+ * A command payload's `photos` is EITHER a flat `string[]` (tyre change, RCA,
+ * report issue, wash, accident) or a keyed `Record<fieldId, string[]>` - the
+ * shape a CHECKLIST submits, because that is what checklist_submissions.photos
+ * stores and what the approval screen reads.
+ *
+ * All three photo steps below used to begin with `Array.isArray(photos)` and so
+ * skipped the keyed map completely. The consequence was silent evidence loss on
+ * exactly the path a field app exists for: a checklist filled in OFFLINE keeps
+ * its raw `file://` cache URIs (checklists.ts cannot upload them with no
+ * signal), persistPayloadPhotos then declined to copy them into durable
+ * document storage, so the bytes stayed in the OS cache Android may purge at any
+ * moment; resolveCommandPhotos declined to upload them on the next sync for the
+ * same reason; and the row was inserted with dead local paths. The submit
+ * reported success while the photos were unreachable for everyone.
+ *
+ * These two helpers read either shape as one flat list and put a transformed
+ * list back in the ORIGINAL shape, so every step handles both and a checklist's
+ * photos follow exactly the same persist -> upload -> sweep path as a tyre
+ * change's. Alignment is by position: the transform returns one entry per input
+ * (null to drop it), so a keyed map is rebuilt by slicing on the original counts.
+ */
+type PhotoBag =
+  | { kind: 'array'; flat: string[] }
+  | { kind: 'map'; flat: string[]; keys: string[]; counts: number[] }
+
+export function readPhotoBag(photos: any): PhotoBag | null {
+  if (Array.isArray(photos)) {
+    return photos.length ? { kind: 'array', flat: photos } : null
+  }
+  // A keyed map. Anything that is not an array of entries is ignored rather
+  // than guessed at - an unknown shape must never be rewritten.
+  if (photos && typeof photos === 'object') {
+    const keys: string[] = []
+    const counts: number[] = []
+    const flat: string[] = []
+    for (const [k, v] of Object.entries(photos)) {
+      if (!Array.isArray(v)) continue
+      keys.push(k)
+      counts.push(v.length)
+      for (const p of v) flat.push(p as string)
+    }
+    return flat.length ? { kind: 'map', flat, keys, counts } : null
+  }
+  return null
+}
+
+export function writePhotoBag(bag: PhotoBag, next: (string | null)[]): any {
+  if (bag.kind === 'array') {
+    const out = next.filter((p): p is string => !!p)
+    return out.length ? out : null
+  }
+  const out: Record<string, string[]> = {}
+  let i = 0
+  bag.keys.forEach((k, ki) => {
+    const slice = next.slice(i, i + bag.counts[ki]).filter((p): p is string => !!p)
+    i += bag.counts[ki]
+    if (slice.length) out[k] = slice
+  })
+  return Object.keys(out).length ? out : null
+}
+
+/**
  * Copy any raw local (cache) file:// photo in a command payload into the DURABLE
  * document folder BEFORE the command is queued (finding #14: OS cache files can
  * be evicted before the queued upload runs, losing the photo). Already-durable
@@ -348,22 +410,23 @@ function buildUpdateParts(
 async function persistPayloadPhotos(
   payload: Record<string, any>,
 ): Promise<{ payload: Record<string, any>; meta: DurablePhoto[] }> {
-  const photos = payload.photos
-  if (!Array.isArray(photos) || photos.length === 0) return { payload, meta: [] }
+  // Handles a flat array AND a checklist's keyed map - see readPhotoBag.
+  const bag = readPhotoBag(payload.photos)
+  if (!bag) return { payload, meta: [] }
 
-  const out: string[] = []
+  const next: (string | null)[] = []
   const meta: DurablePhoto[] = []
-  for (const p of photos) {
+  for (const p of bag.flat) {
     if (typeof p === 'string' && p.startsWith('file://')) {
-      if (isDurablePhotoPath(p)) { out.push(p); continue } // already durable
+      if (isDurablePhotoPath(p)) { next.push(p); continue } // already durable
       const d = await persistPhotoForQueue(p)
-      if (d) { out.push(d.localPath); meta.push(d) }
-      // else: could not persist (no space) -> drop this one photo, keep the record
-    } else if (p) {
-      out.push(p) // already-uploaded ref / non-file entry
+      if (d) { next.push(d.localPath); meta.push(d) }
+      else next.push(null) // could not persist (no space) -> drop this one photo
+    } else {
+      next.push(p ? p : null) // already-uploaded ref / non-file entry
     }
   }
-  return { payload: { ...payload, photos: out.length ? out : null }, meta }
+  return { payload: { ...payload, photos: writePhotoBag(bag, next) }, meta }
 }
 
 /**
@@ -382,29 +445,30 @@ async function resolveCommandPhotos(
   type: CommandType,
   payload: Record<string, any>,
 ): Promise<{ payload: Record<string, any>; pending: boolean }> {
-  const photos = payload.photos
-  if (!Array.isArray(photos) || photos.length === 0) return { payload, pending: false }
+  // Handles a flat array AND a checklist's keyed map - see readPhotoBag.
+  const bag = readPhotoBag(payload.photos)
+  if (!bag) return { payload, pending: false }
 
-  const out: string[] = []
+  const next: (string | null)[] = []
   let pending = false
   let i = 0
-  for (const p of photos) {
+  for (const p of bag.flat) {
     if (typeof p === 'string' && p.startsWith('file://')) {
       const src = resolveDurablePath(p) // heal container path drift for durable copies
       const ref = await uploadModulePhoto(src, TYPE_TO_MODULE[type], i)
       if (ref) {
-        out.push(ref)
+        next.push(ref)
         deleteDurablePhoto(src) // remove durable copy only after a confirmed upload
       } else {
-        out.push(p) // keep the (durable) path for a later retry
+        next.push(p) // keep the (durable) path for a later retry
         pending = true
       }
-    } else if (p) {
-      out.push(p)
+    } else {
+      next.push(p ? p : null)
     }
     i++
   }
-  return { payload: { ...payload, photos: out.length ? out : null }, pending }
+  return { payload: { ...payload, photos: writePhotoBag(bag, next) }, pending }
 }
 
 /**
@@ -417,9 +481,11 @@ export async function sweepOrphanQueuedPhotos(queue?: QueuedRecord[]): Promise<v
   const active = new Set<string>()
   for (const it of q) {
     if (it.sync_status === 'synced') continue
-    const ph = it.payload?.photos
-    if (Array.isArray(ph)) {
-      for (const p of ph) if (typeof p === 'string' && isDurablePhotoPath(p)) active.add(p)
+    // Both shapes, or a keyed map's durable files are never marked as referenced
+    // and this sweep deletes them as orphans while the record is still pending.
+    const bag = readPhotoBag(it.payload?.photos)
+    if (bag) {
+      for (const p of bag.flat) if (typeof p === 'string' && isDurablePhotoPath(p)) active.add(p)
     }
   }
   cleanupOrphanDurablePhotos(active)

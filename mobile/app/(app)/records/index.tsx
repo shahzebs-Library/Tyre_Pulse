@@ -7,7 +7,7 @@
  *   inspector / tyre_man / reporter → own site only, read-only
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   View, FlatList, StyleSheet, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator,
@@ -77,6 +77,10 @@ function RecordsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [total, setTotal]         = useState(0)
   const [page, setPage]           = useState(0)
+  // Monotonic request id. Every load takes a ticket; only the newest ticket may
+  // paint. Without it a slower earlier request lands last on a weak link and
+  // repaints the PREVIOUS filter's rows underneath the new filter chips.
+  const reqRef = useRef(0)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore]     = useState(true)
   const [error, setError]         = useState<string | null>(null)
@@ -117,6 +121,7 @@ function RecordsScreen() {
     }
   }
 
+  // Page 0 is fetched HERE and only here - see the guard on the [page] effect.
   function reset() {
     setPage(0)
     setRecords([])
@@ -125,6 +130,7 @@ function RecordsScreen() {
   }
 
   const loadPage = useCallback(async (p: number, fresh = false) => {
+    const seq = ++reqRef.current
     if (fresh) setLoading(true)
     else setLoadingMore(true)
 
@@ -142,6 +148,9 @@ function RecordsScreen() {
 
     try {
       const { data, count, error: qErr } = await q
+      // A newer query has started while this one was in flight; its answer is the
+      // only true one. Drop this response instead of repainting a stale filter.
+      if (seq !== reqRef.current) return
       if (qErr) throw qErr
       const rows = (data ?? []) as TyreRecord[]
 
@@ -150,18 +159,28 @@ function RecordsScreen() {
       setRecords(prev => fresh ? rows : [...prev, ...rows])
       setHasMore(rows.length === PAGE)
     } catch (e: any) {
+      if (seq !== reqRef.current) return
       if (__DEV__) console.warn('[records] load failed:', e?.message)
       setError(t('modules.records.loadError'))
       if (fresh) setRecords([])
       setHasMore(false)
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
-      setRefreshing(false)
+      // Only the newest request owns the spinners, or a superseded response
+      // clears the spinner the current one is still waiting behind.
+      if (seq === reqRef.current) {
+        setLoading(false)
+        setLoadingMore(false)
+        setRefreshing(false)
+      }
     }
   }, [debouncedSearch, siteFilter, riskFilter, elevated, profile?.site])
 
-  useEffect(() => { loadPage(page) }, [page])
+  // Pages 1+ only. Page 0 is already fetched by reset(), and BOTH effects run on
+  // mount - so this used to fire loadPage(0) with fresh=false alongside reset()'s
+  // loadPage(0, true), and the append branch duplicated every row of the first
+  // page on every open of this screen (and again on every filter change made
+  // after scrolling past page 0).
+  useEffect(() => { if (page > 0) loadPage(page) }, [page])
 
   async function onRefresh() {
     setRefreshing(true)

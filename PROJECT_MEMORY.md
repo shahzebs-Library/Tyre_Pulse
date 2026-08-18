@@ -5,10 +5,9 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-17, next free migration **V588**)
-Live-verified state: main == branch == `125f5e95`, tree clean, production deploy running on that sha,
-lint 0 errors, build clean, suite **528 files / 8,034 tests** green. V585/V586/V587 confirmed present in
-`supabase_migrations` AND as live objects. Nothing is half-applied.
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V590**)
+Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
+V585-V589 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.
 
 ### ~~NEEDS A MEASUREMENT~~ — DONE 2026-08-17 18:00 UTC. THE REALTIME FIX IS CONFIRMED.
@@ -99,13 +98,34 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    NOT changed: `listWorkOrdersForPage()` is retained - Board Overview's executive KPIs are deliberately
    all-time.
 
-10. **NEW, found while fixing item 6, NOT fixed: `tyre_records.brand` splits by CASE.** `Longmarch` vs
-   `LONGMARCH` (**910 rows**) and `Hankook` vs `HANKOOK` (60) are each offered as TWO dropdown options, and
-   picking one MISSES the other's rows - so the filter still under-reports even after V585. This is the
-   V245/V246 class exactly. **The fix is normalise + backfill + a guard trigger ON THE COLUMN**, as V245 did for
-   `vehicle_type` and V246 for `site`. **Do NOT merge them in the dropdown instead** - the grid filters with an
-   exact `.eq()`, so a merged option would drop rows and swap one silent-truncation bug for another. Needs its
-   own migration.
+10. **~~`tyre_records.brand` splits by CASE~~ FIXED by V588+V589 (2026-08-18), and it was SEVEN collisions,
+   not two.** The recorded note said `Longmarch`/`LONGMARCH` (910) and `Hankook`/`HANKOOK` (60). The other five
+   were invisible because the analysis used **`btrim()`, which strips SPACES ONLY** while the master file
+   TAB-pads: TEGRYS 2,089+4 · TRIANGLE 1,304+5 · ERACLE 1,229+5 · PIRELLI 966+3 · INFINITY 382+3. 915 rows
+   normalised, totals preserved exactly, 0 collisions left.
+   **I NEARLY SHIPPED THE SAME BUG INTO THE FIX**: `upper(regexp_replace(btrim(x),'\s+',' ','g'))` turns
+   `'TRIANGLE'||chr(9)` into `'TRIANGLE '` WITH A TRAILING SPACE - a new variant that would have SPLIT a brand
+   that already has 1,304 clean rows. **COLLAPSE WHITESPACE FIRST, THEN btrim, THEN upper.**
+   **THE SAME FLAW IS IN V245's `normalize_vehicle_type()` (no collapse at all) AND V246's `normalize_site()`
+   (btrim before collapse) - both corrected here. LATENT, not live: measured 0 tab/newline-padded site or
+   vehicle_type rows across tyre_records/vehicle_fleet/work_orders/parts_consumption, so no stored row changed.**
+   **IT WAS NEVER JUST A DROPDOWN BUG**: `get_brand_size_cpk` and `report_tyre_summary` both GROUP BY the raw
+   brand, so cost-per-km and the best-value ranking that feeds PROCUREMENT were computed on split populations.
+   **V589, found while verifying V588: 95 rows stored the literal string `'NULL'`** (the V468 master-file blank
+   token) so "NULL" was a selectable brand and a manufacturer in the CPK ranking; 191 rows cleared in total
+   (the other 96 were empty strings). **This RAISES the brand-gap count by 191 on purpose** - those tyres have
+   no recorded brand and were being counted as branded.
+   **`trg_zz_normalize_brand` - the `zz` is load-bearing.** Triggers fire in NAME order and
+   `trg_apply_tyre_learned_facts` WRITES brand and sorts first; a normaliser named earlier is overwritten.
+   **NO TRIGGER WAS DISABLED, and that was measured**: `tyre_records_master_process_tg` nulls km 0 and swaps
+   reversed km on ANY update (232 tyres carry an owner-approved km 0), but of the 915 rows km_fit_zero /
+   km_rem_zero / km_reversed / qty / country changes were all **0**, so it is a provable no-op;
+   `trg_guard_tyre_active_fitment` is column-scoped and a brand-only update never fires it.
+   **MIRROR PAIR: `tyre_brand_canonical()` <-> `normalizeBrandToken()` in `src/lib/tyreLearning.js` - the JS was
+   RIGHT all along and the database now agrees with it.** Pinned by `src/test/tyreBrandCanonical.test.js`.
+   **THAT TEST CANNOT CATCH THE SQL ORDERING TRAP and says so**: JS `String.trim()` strips tabs while SQL
+   `btrim()` does not, so the JS is order-insensitive - confirmed by mutation (swapping the JS order left all 26
+   cases green). The guard for the ordering is the assertion block inside V588 itself.
 
 ### THE CEILING THAT IS NOT A SQL PROBLEM
 9. **`shared_buffers` is 256 MB; `audit_log_v2` is 557 MB.** This session removed ~135 MB of pressure (89 MB audit

@@ -1,0 +1,39 @@
+-- =====================================================================================
+-- V589 - THE BRAND COLUMN OFFERED "NULL" AS A MANUFACTURER. 191 rows cleared.
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v589_tyre_brand_blank_tokens`. Companion to V588.
+-- =====================================================================================
+--
+-- Found while verifying V588. 95 `tyre_records` rows stored the LITERAL STRING 'NULL' as
+-- the brand - the master file's blank token, exactly the trap V468 recorded ("this master
+-- file uses literal NULL text as its blank token"). Because `get_tyre_filter_options`
+-- returns distinct non-blank brands and `get_brand_size_cpk` / `report_tyre_summary`
+-- GROUP BY the raw value, "NULL" was a selectable brand in the filter and a manufacturer
+-- with 95 tyres in the CPK ranking.
+--
+-- Cleared 191 rows in total, not 95: the other 96 were empty/whitespace-only strings.
+-- Both now store NULL, so "brand not recorded" has ONE representation instead of three.
+--
+--
+-- **THIS CHANGES A DISPLAYED NUMBER, DELIBERATELY, IN THE HONEST DIRECTION.** Those 191
+-- tyres move from "has a brand" to "brand not recorded", so the brand-gap count rises by
+-- 191. They genuinely have no recorded brand and were being counted as branded. This
+-- codebase's standing rule is that a data gap must read as a gap, never as a measurement.
+--
+-- The blank-token list is matched on the WHOLE normalised value, so a real brand that
+-- merely contains one survives - asserted in the migration: 'NONE-BRAND' -> 'NONE-BRAND'.
+--
+-- MIRROR PAIR - CHANGE BOTH TOGETHER: `public.tyre_brand_canonical()` and
+-- `normalizeBrandToken()` in src/lib/tyreLearning.js, whose BLANK_TOKENS set is the
+-- reference. The JS has rejected these tokens since V471; this makes the database agree.
+--
+-- VERIFICATION (live): placeholder brands remaining 0 · total rows 11,193 unchanged ·
+-- the super admin's brand dropdown 103 -> 95 entries and no longer offers "NULL", while
+-- LONGMARCH and TRIANGLE each appear exactly once.
+--
+-- ROLLBACK:
+--   update public.tyre_records t set brand = b.old_brand
+--     from _bak.tyre_brand_blank_v589 b where t.id = b.id;
+--   -- and restore the V588 body of tyre_brand_canonical() (no blank-token list).
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above.)

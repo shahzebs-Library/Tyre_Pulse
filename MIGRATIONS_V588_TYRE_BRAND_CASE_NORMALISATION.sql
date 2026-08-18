@@ -1,0 +1,81 @@
+-- =====================================================================================
+-- V588 - tyre_records.brand SPLIT BY CASE *AND* BY TAB PADDING. 7 collisions, 915 rows.
+-- STATUS: APPLIED + VERIFIED LIVE on jhssdmeruxtrlqnwfksc as
+-- `v588_tyre_brand_case_normalisation`. See V589 for the placeholder-token half.
+-- =====================================================================================
+--
+-- THIS FILE'S OWN PREDECESSOR NOTE UNDERSTATED THE BUG, and the reason is worth keeping.
+-- PROJECT_MEMORY recorded "Longmarch vs LONGMARCH (910 rows) and Hankook vs HANKOOK (60)"
+-- - two collisions. The real count is SEVEN. The other five were invisible because the
+-- analysis that found them used `btrim()`, and **`btrim()` WITH NO SECOND ARGUMENT STRIPS
+-- SPACES ONLY**. The master file tab-pads (the V468/V502 trap), so `'TRIANGLE'||chr(9)`
+-- never compared equal to `'TRIANGLE'` and never showed up as a collision:
+--
+--   TEGRYS    2,089 + 4     TRIANGLE 1,304 + 5     ERACLE  1,229 + 5
+--   PIRELLI     966 + 3     INFINITY   382 + 3
+--   LONGMARCH   889 + 21 (case)        HANKOOK      55 + 5 (case)
+--
+-- **I NEARLY SHIPPED THE SAME BUG INTO THE FIX.** My first canonical expression was
+-- `upper(regexp_replace(btrim(brand),'\s+',' ','g'))` - btrim FIRST, then collapse. On a
+-- tab-padded value that yields `'TRIANGLE '` WITH A TRAILING SPACE: a brand-new variant,
+-- and since a clean 'TRIANGLE' already exists (1,304 rows) it would have SPLIT the brand
+-- rather than merged it. Caught by printing the before/after pairs instead of trusting
+-- the expression. **ORDER IS LOAD-BEARING: collapse whitespace FIRST, then btrim, then
+-- upper.**
+--
+-- THE SAME FLAW IS IN V245 AND V246 AND IS FIXED HERE (latent, not live):
+--   normalize_site()          upper(regexp_replace(btrim(site),'\s+',' ','g'))  <- wrong order
+--   normalize_vehicle_type()  upper(btrim(vehicle_type))                        <- no collapse at all
+-- Measured 0 tab/newline-padded values today across tyre_records, vehicle_fleet,
+-- work_orders and parts_consumption for both columns, so correcting them changes NO
+-- stored row. It stops the next tab-padded ERP import from creating a silent split.
+--
+--
+-- IT WAS NOT ONLY A DROPDOWN BUG. `get_brand_size_cpk` and `report_tyre_summary` both
+-- GROUP BY the raw brand (verified against the live definitions), so brand PERFORMANCE -
+-- cost per km, the best-value ranking that feeds procurement - was computed on split
+-- populations. Longmarch's 910 tyres were ranked as two different manufacturers.
+--
+--
+-- NO TRIGGER WAS DISABLED, AND THAT WAS MEASURED RATHER THAN ASSUMED. `tyre_records` has
+-- a BEFORE INSERT OR UPDATE trigger `tyre_records_master_process_tg` that NULLS
+-- km_at_fitment/km_at_removal when they are 0 and SWAPS them when reversed - which is why
+-- the 2026-08-09 session had to disable it for a batch, and there are 232 tyres whose
+-- km 0 is an owner-approved factory-fitment value. Of the 915 rows updated here:
+--   km_fit_zero 0 · km_rem_zero 0 · km_reversed 0 · qty_would_change 0 · country_would_change 0
+-- so it is a provable no-op. `trg_guard_tyre_active_fitment` is column-scoped
+-- (status/asset_no/position/org/country) so a brand-only UPDATE does not fire it at all.
+--
+--
+-- THE TRIGGER NAME IS LOAD-BEARING. Triggers fire in NAME order, and
+-- `trg_apply_tyre_learned_facts` (the V471 learning layer, which WRITES brand) sorts
+-- FIRST. A normaliser named earlier would be overwritten by it. Hence
+-- `trg_zz_normalize_brand` - the same lesson as V524's `trg_zz_normalize_site`.
+-- Verified fire order: trg_apply_tyre_learned_facts ... trg_zz_normalize_brand.
+--
+-- The learning layer is UNAFFECTED: all 22 `tyre_learned_facts` rows are match_type
+-- 'serial' (not 'alias'), so they match on the serial and not the brand, and every
+-- target_value is already canonical.
+--
+--
+-- VERIFICATION (live)
+--   collisions 7 -> 0 · off-canonical rows 915 -> 0 · tab-padded 0 · total rows 11,193 unchanged
+--   totals preserved exactly: LONGMARCH 910 (889+21) · HANKOOK 60 (55+5) · TRIANGLE 1,309 (1,304+5)
+--   distinct brands offered to the super admin 103 -> 96
+-- Behavioural proof as the real KSA-only Manager under RLS, rolled back:
+--   'Longmarch'||chr(9) -> LONGMARCH · '  hank   ook ' -> 'HANK OOK' · '   ' -> NULL
+-- COUNTRY BOUNDARY INTACT: all 910 LONGMARCH rows are UAE, and the KSA-only Manager's
+-- dropdown correctly does NOT offer LONGMARCH while the super admin's does.
+--
+-- MIRROR PAIR - CHANGE BOTH TOGETHER: `public.tyre_brand_canonical()` and
+-- `normalizeBrandToken()` in src/lib/tyreLearning.js. The JS had the CORRECT order all
+-- along; this migration makes the database agree with it. Pinned by
+-- src/test/tyreBrandCanonical.test.js.
+--
+-- ROLLBACK:
+--   update public.tyre_records t set brand = b.old_brand
+--     from _bak.tyre_brand_case_v588 b where t.id = b.id;
+--   drop trigger trg_zz_normalize_brand on public.tyre_records;
+--   -- and re-apply the previous normalize_site() / normalize_vehicle_type() bodies.
+-- =====================================================================================
+-- (The applied body is reproduced by the migration named above.)

@@ -452,11 +452,22 @@ export default function AssetManagement() {
   }, [assets, overviewMap])
 
   // ── filter + sort ─────────────────────────────────────────────────────────────
-  const filteredAssets = useMemo(() => {
-    let list = [...enrichedAssets]
+
+  /**
+   * THE ONE register filter rule, with a hold-out list.
+   *
+   * Every surface on this page narrows with the register filters, but a surface
+   * that BREAKS DOWN a dimension has to hold that dimension out or it stops
+   * saying anything: filter to Critical risk and a "Fleet at risk" tile computed
+   * over the filtered rows just restates the row count, and an assets-by-type
+   * doughnut computed the same way collapses to a single slice. So each caller
+   * names the dimensions it reports on and those are skipped for it alone.
+   */
+  const applyAssetFilters = useCallback((list, skip = {}) => {
+    let out = list
     if (search) {
       const q = search.toLowerCase()
-      list = list.filter(a =>
+      out = out.filter(a =>
         (a.asset_no ?? '').toLowerCase().includes(q) ||
         (a.fleet_number ?? '').toLowerCase().includes(q) ||
         (a.make ?? '').toLowerCase().includes(q) ||
@@ -465,13 +476,21 @@ export default function AssetManagement() {
         (a.registration_no ?? '').toLowerCase().includes(q)
       )
     }
-    if (filterSite) list = list.filter(a => a.site === filterSite)
-    if (filterCountry) list = list.filter(a => a.country === filterCountry)
-    if (filterType) list = list.filter(a => a.vehicle_type === filterType)
-    if (filterStatus === 'active') list = list.filter(a => a.active)
-    if (filterStatus === 'inactive') list = list.filter(a => !a.active)
-    if (filterOps) list = list.filter(a => (a.ops_status ?? '') === filterOps)
-    if (filterRisk) list = list.filter(a => a._worstRisk === filterRisk)
+    if (!skip.site && filterSite) out = out.filter(a => a.site === filterSite)
+    if (!skip.country && filterCountry) out = out.filter(a => a.country === filterCountry)
+    if (!skip.type && filterType) out = out.filter(a => a.vehicle_type === filterType)
+    if (!skip.status && filterStatus === 'active') out = out.filter(a => a.active)
+    if (!skip.status && filterStatus === 'inactive') out = out.filter(a => !a.active)
+    if (!skip.ops && filterOps) out = out.filter(a => (a.ops_status ?? '') === filterOps)
+    if (!skip.risk && filterRisk) out = out.filter(a => a._worstRisk === filterRisk)
+    return out
+  }, [search, filterSite, filterCountry, filterType, filterStatus, filterOps, filterRisk])
+
+  // Is the register showing a NARROWED set? Drives the caption under the tiles.
+  const scopeActive = !!(search || filterSite || filterCountry || filterType || filterStatus || filterOps || filterRisk)
+
+  const filteredAssets = useMemo(() => {
+    const list = [...applyAssetFilters(enrichedAssets)]
 
     list.sort((a, b) => {
       let av = a[sortCol] ?? a[`_${sortCol}`] ?? ''
@@ -486,19 +505,30 @@ export default function AssetManagement() {
       return 0
     })
     return list
-  }, [enrichedAssets, search, filterSite, filterCountry, filterType, filterStatus, filterRisk, filterOps, sortCol, sortDir])
+  }, [enrichedAssets, applyAssetFilters, sortCol, sortDir])
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
+  /**
+   * WHAT THE FIVE TILES COUNT: the assets the register's own filters leave, minus
+   * the two dimensions the tiles themselves break down (active/inactive status and
+   * worst risk). Before this every tile was computed over `enrichedAssets`, so
+   * filtering the register to one site left "Fleet at risk" and "Avg asset cost
+   * YTD" stating whole-register numbers directly above a caption reading
+   * "18 assets (filtered from 1,617)".
+   */
+  const kpiAssets = useMemo(
+    () => applyAssetFilters(enrichedAssets, { status: true, risk: true }),
+    [enrichedAssets, applyAssetFilters],
+  )
   const kpis = useMemo(() => {
-    const totalActive = enrichedAssets.filter(a => a.active !== false).length
-    const totalInactive = enrichedAssets.filter(a => a.active === false).length
-    const atRisk = enrichedAssets.filter(a => a._worstRisk === 'Critical' || a._worstRisk === 'High').length
-    const ytdStart = new Date(new Date().getFullYear(), 0, 1)
-    const totalYtdCost = enrichedAssets.reduce((s, a) => s + (a._ytdCost || 0), 0)
+    const totalActive = kpiAssets.filter(a => a.active !== false).length
+    const totalInactive = kpiAssets.filter(a => a.active === false).length
+    const atRisk = kpiAssets.filter(a => a._worstRisk === 'Critical' || a._worstRisk === 'High').length
+    const totalYtdCost = kpiAssets.reduce((s, a) => s + (a._ytdCost || 0), 0)
     const avgCost = totalActive > 0 ? totalYtdCost / totalActive : 0
-    const needsAttention = enrichedAssets.filter(a => a.active !== false && a._noRecentRecord).length
-    return { totalActive, totalInactive, atRisk, avgCost, needsAttention }
-  }, [enrichedAssets])
+    const needsAttention = kpiAssets.filter(a => a.active !== false && a._noRecentRecord).length
+    return { totalActive, totalInactive, atRisk, avgCost, needsAttention, covered: kpiAssets.length }
+  }, [kpiAssets])
 
   // ── Filter options ─────────────────────────────────────────────────────────────
   const siteOptions = useMemo(() => [...new Set(assets.map(a => a.site).filter(Boolean))].sort(), [assets])
@@ -507,9 +537,14 @@ export default function AssetManagement() {
   const opsOptions = useMemo(() => [...new Set(assets.map(a => a.ops_status).filter(Boolean))].sort(), [assets])
 
   // ── Chart data ────────────────────────────────────────────────────────────────
+  // Holds out the TYPE filter - see applyAssetFilters.
+  const typeChartAssets = useMemo(
+    () => applyAssetFilters(enrichedAssets, { type: true }),
+    [enrichedAssets, applyAssetFilters],
+  )
   const typeChartData = useMemo(() => {
     const counts = {}
-    enrichedAssets.forEach(a => { const t = a.vehicle_type ?? 'Unknown'; counts[t] = (counts[t] ?? 0) + 1 })
+    typeChartAssets.forEach(a => { const t = a.vehicle_type ?? 'Unknown'; counts[t] = (counts[t] ?? 0) + 1 })
     const labels = Object.keys(counts)
     return {
       labels,
@@ -520,20 +555,25 @@ export default function AssetManagement() {
         borderWidth: 2,
       }],
     }
-  }, [enrichedAssets])
+  }, [typeChartAssets])
 
+  // Holds out the SITE and RISK filters - it is a breakdown of both.
+  const siteRiskAssets = useMemo(
+    () => applyAssetFilters(enrichedAssets, { site: true, risk: true }),
+    [enrichedAssets, applyAssetFilters],
+  )
   const siteRiskChartData = useMemo(() => {
-    const sites = [...new Set(enrichedAssets.map(a => a.site).filter(Boolean))].sort()
+    const sites = [...new Set(siteRiskAssets.map(a => a.site).filter(Boolean))].sort()
     return {
       labels: sites,
       datasets: [
-        { label: 'Low', data: sites.map(s => enrichedAssets.filter(a => a.site === s && a._worstRisk === 'Low').length), backgroundColor: '#16a34acc', borderRadius: 4 },
-        { label: 'Medium', data: sites.map(s => enrichedAssets.filter(a => a.site === s && a._worstRisk === 'Medium').length), backgroundColor: '#ca8a04cc', borderRadius: 4 },
-        { label: 'High', data: sites.map(s => enrichedAssets.filter(a => a.site === s && a._worstRisk === 'High').length), backgroundColor: '#ea580ccc', borderRadius: 4 },
-        { label: 'Critical', data: sites.map(s => enrichedAssets.filter(a => a.site === s && a._worstRisk === 'Critical').length), backgroundColor: '#dc2626cc', borderRadius: 4 },
+        { label: 'Low', data: sites.map(s => siteRiskAssets.filter(a => a.site === s && a._worstRisk === 'Low').length), backgroundColor: '#16a34acc', borderRadius: 4 },
+        { label: 'Medium', data: sites.map(s => siteRiskAssets.filter(a => a.site === s && a._worstRisk === 'Medium').length), backgroundColor: '#ca8a04cc', borderRadius: 4 },
+        { label: 'High', data: sites.map(s => siteRiskAssets.filter(a => a.site === s && a._worstRisk === 'High').length), backgroundColor: '#ea580ccc', borderRadius: 4 },
+        { label: 'Critical', data: sites.map(s => siteRiskAssets.filter(a => a.site === s && a._worstRisk === 'Critical').length), backgroundColor: '#dc2626cc', borderRadius: 4 },
       ],
     }
-  }, [enrichedAssets])
+  }, [siteRiskAssets])
 
   // ── Sort helper ───────────────────────────────────────────────────────────────
   function toggleSort(col) {
@@ -653,14 +693,25 @@ export default function AssetManagement() {
           </>}
         />
 
-        {/* KPI Cards */}
+        {/* KPI Cards.
+
+            EVERY figure here is computed over `kpiAssets`: the same assets the
+            register below is showing, minus the status and risk dimensions the
+            tiles themselves break down. The caption states that in words, because
+            a scoped number sitting beside an unscoped one is unreadable either
+            way round. */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
           <KpiCard icon={Truck} label={t('assetmgmt.kpis.totalActiveAssets')} value={fmt(kpis.totalActive)} sub={t('assetmgmt.kpis.inactiveSub', { count: fmt(kpis.totalInactive) })} color="blue" />
           <KpiCard icon={AlertTriangle} label={t('assetmgmt.kpis.fleetAtRisk')} value={fmt(kpis.atRisk)} sub={t('assetmgmt.kpis.criticalOrHighRisk')} color="red" />
           <KpiCard icon={DollarSign} label={t('assetmgmt.kpis.avgAssetCostYtd')} value={fmtCurrency(kpis.avgCost, activeCurrency)} sub={t('assetmgmt.kpis.perActiveVehicle')} color="purple" />
           <KpiCard icon={Clock} label={t('assetmgmt.kpis.needsAttention')} value={fmt(kpis.needsAttention)} sub={t('assetmgmt.kpis.noRecordOver60d')} color="yellow" />
-          <KpiCard icon={Activity} label={t('assetmgmt.kpis.activeInactive')} value={`${fmt(kpis.totalActive)} / ${fmt(kpis.totalInactive)}`} sub={t('assetmgmt.kpis.totalFleet', { count: enrichedAssets.length })} color="green" />
+          <KpiCard icon={Activity} label={t('assetmgmt.kpis.activeInactive')} value={`${fmt(kpis.totalActive)} / ${fmt(kpis.totalInactive)}`} sub={t('assetmgmt.kpis.totalFleet', { count: kpis.covered })} color="green" />
         </div>
+        {scopeActive && !loading && (
+          <p className="text-xs text-[var(--text-muted)] -mt-2">
+            These figures cover the {kpis.covered} asset{kpis.covered === 1 ? '' : 's'} matching your filters, of {enrichedAssets.length} in the register.
+          </p>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--border-dim)] w-fit">
@@ -906,6 +957,14 @@ export default function AssetManagement() {
           {/* ── Fleet Composition Tab ────────────────────────────────────────── */}
           {activeTab === 'charts' && (
             <motion.div key="charts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              {/* The register filters live on the Registry tab, so a chart narrowed
+                  by them would be narrowed by something the reader cannot see from
+                  here. Said in words rather than left to be assumed. */}
+              {scopeActive && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  These charts cover the assets matching the filters set on the Registry tab, of {enrichedAssets.length} in the register. Each chart holds out the filter it breaks down.
+                </p>
+              )}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="card">
                   <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">

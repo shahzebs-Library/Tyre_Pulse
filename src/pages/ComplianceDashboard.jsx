@@ -284,12 +284,24 @@ export default function ComplianceDashboard() {
           .range(from, to)),
         fetchAllPages((from, to) => supabase
           .from('inspections')
-          .select('id,asset_no,site,scheduled_date,status,inspection_type,findings,inspector')
+          // `country` is selected because the page filters on it. Without it an
+          // inspection could not be country-scoped at all, so the compliance
+          // percentage counted every country's work under one site's name.
+          .select('id,asset_no,site,country,scheduled_date,status,inspection_type,findings,inspector')
           .order('scheduled_date', { ascending: false })
           .range(from, to)),
-        supabase
+        // PAGED, and it matters more here than anywhere else on the page: this
+        // register is the DENOMINATOR of the inspection compliance percentage, so
+        // a silent 1,000-row cap does not merely shorten a list, it inflates the
+        // score. (It was already a bare select; the row-cap guard had been letting
+        // it through because its backward window reached the fetchAllPages wrapper
+        // of the read directly above.) `country` is selected for the same reason
+        // as the inspections read - the page filters on it.
+        fetchAllPages((from, to) => supabase
           .from('fleet_master')
-          .select('asset_no,site,vehicle_type,status'),
+          .select('asset_no,site,country,vehicle_type,status')
+          .order('asset_no').order('id')
+          .range(from, to), { max: 20000 }),
       ])
       setTyreRecords(tr || [])
       setInspections(ins || [])
@@ -326,11 +338,40 @@ export default function ComplianceDashboard() {
     return d
   }, [tyreRecords, activeCountry, countryFilter, siteFilter])
 
+  /**
+   * THE country rule for the two reads that had none.
+   *
+   * NULL-SAFE, matching `applyCountry` in src/lib/api/_client.js and the country
+   * RLS policies: a row whose country was never recorded is unattributed, not
+   * another country's, so hiding it would delete real work from the numerator AND
+   * the denominator of a compliance percentage. `filteredTyres` above uses a
+   * STRICT equality and is deliberately left as it is - loosening it would move
+   * the published tread and pressure percentages, which is a different change.
+   */
+  const matchesCountry = useCallback((row) => {
+    if (activeCountry !== 'All' && row.country && row.country !== activeCountry) return false
+    if (countryFilter && row.country && row.country !== countryFilter) return false
+    return true
+  }, [activeCountry, countryFilter])
+
+  // Before this, inspections applied the SITE filter only, so picking a country
+  // narrowed the tyre half of the compliance score and left the inspection half
+  // counting every country - two halves of one percentage answering different
+  // questions.
   const filteredInspections = useMemo(() => {
-    let d = [...inspections]
+    let d = inspections.filter(matchesCountry)
     if (siteFilter) d = d.filter(r => r.site === siteFilter)
     return d
-  }, [inspections, siteFilter])
+  }, [inspections, siteFilter, matchesCountry])
+
+  // The inspection-compliance DENOMINATOR. It used to be every asset in the
+  // register filtered by site alone, so a country-scoped score was measured
+  // against other countries' vehicles.
+  const scopedFleet = useMemo(() => {
+    let d = fleetMaster.filter(matchesCountry)
+    if (siteFilter) d = d.filter(v => v.site === siteFilter)
+    return d
+  }, [fleetMaster, siteFilter, matchesCountry])
 
   // ── Tread compliance ────────────────────────────────────────────────────────
   const treadStats = useMemo(() => {
@@ -377,7 +418,7 @@ export default function ComplianceDashboard() {
 
     // Cross-reference fleet
     const allAssets = [...new Set([
-      ...fleetMaster.filter(v => !siteFilter || v.site === siteFilter).map(v => v.asset_no),
+      ...scopedFleet.map(v => v.asset_no),
       ...Object.keys(latestByAsset),
     ])]
 
@@ -408,7 +449,7 @@ export default function ComplianceDashboard() {
     const pct       = rows.length > 0 ? (compliant / rows.length) * 100 : 0
 
     return { rows, compliant, dueSoon, overdue, noData, pct, total: rows.length }
-  }, [filteredInspections, fleetMaster, siteFilter])
+  }, [filteredInspections, fleetMaster, scopedFleet])
 
   // ── Critical count ──────────────────────────────────────────────────────────
   const criticalCount = useMemo(() =>
@@ -1059,6 +1100,16 @@ export default function ComplianceDashboard() {
 
       {!loading && !error && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+
+          {/* Every percentage below is computed over the same scoped population -
+              tyres, inspections and the fleet register the inspection score is
+              measured against. Said in words, because a scoped score sitting next
+              to an unscoped one is unreadable either way round. */}
+          {(hasFilter || activeCountry !== 'All') && (
+            <p className="text-xs text-[var(--text-muted)]">
+              These figures cover the {treadStats.total.toLocaleString()} tyre{treadStats.total === 1 ? '' : 's'} and {inspectionStats.total.toLocaleString()} asset{inspectionStats.total === 1 ? '' : 's'} matching your filters, of {tyreRecords.length.toLocaleString()} tyres and {fleetMaster.length.toLocaleString()} assets loaded.
+            </p>
+          )}
 
           {/* ── Compliance Score + Trend Header Card ── */}
           <div className={`rounded-xl border p-5 ${c.border} ${c.bg}`}>

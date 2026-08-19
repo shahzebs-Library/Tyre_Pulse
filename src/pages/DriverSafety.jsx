@@ -176,14 +176,49 @@ export default function DriverSafety() {
 
   useEffect(() => { load() }, [load])
 
-  const summary = useMemo(() => summariseSafety(rows || []), [rows])
-  const scorecard = useMemo(() => driverScorecard(rows || []), [rows])
-  const eventTypes = useMemo(() => byEventType(rows || []), [rows])
+  /**
+   * THE ROWS EVERY FILTER EXCEPT THE EVENT-TYPE ONE LEAVES.
+   *
+   * Split out because the "Events by type" breakdown has to hold its OWN
+   * dimension out. Computed over the already-type-filtered rows it collapses to
+   * a single chip the moment a type is picked, which is the one thing that card
+   * exists to let you compare. Country, severity and the search box narrow every
+   * surface on the page alike.
+   */
+  const filteredBase = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (rows || []).filter((r) => {
+      if (countryFilter && r.country !== countryFilter) return false
+      if (severityFilter && r.severity !== severityFilter) return false
+      if (q) {
+        const hay = `${r.asset_no || ''} ${r.driver_name || ''} ${r.location || ''} ${r.notes || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, countryFilter, severityFilter, search])
+
+  // The event log, and the population every KPI/scorecard/trend on this page is
+  // computed over. Before this they read `rows`, so filtering to one country or
+  // one severity left the four tiles stating fleet-wide totals directly above a
+  // caption reading "12 of 407".
+  const filtered = useMemo(
+    () => (typeFilter ? filteredBase.filter((r) => r.event_type === typeFilter) : filteredBase),
+    [filteredBase, typeFilter],
+  )
+
+  // Is the page showing a NARROWED set? Drives the caption under the tiles.
+  const scopeActive = !!(countryFilter || typeFilter || severityFilter || search.trim())
+
+  const summary = useMemo(() => summariseSafety(filtered), [filtered])
+  const scorecard = useMemo(() => driverScorecard(filtered), [filtered])
+  // Holds out the event-type filter - see filteredBase.
+  const eventTypes = useMemo(() => byEventType(filteredBase), [filteredBase])
 
   // ── Deepened engine derivations ──────────────────────────────────────────
-  const weighted = useMemo(() => weightedDriverScorecard(rows || []), [rows])
+  const weighted = useMemo(() => weightedDriverScorecard(filtered), [filtered])
   const correlation = useMemo(() => driverTyreCorrelation(tyreRecords || []), [tyreRecords])
-  const trend = useMemo(() => weeklyEventTrend(rows || []), [rows])
+  const trend = useMemo(() => weeklyEventTrend(filtered), [filtered])
 
   // Per-driver km from trips → utilisation input for the composite band.
   const tripKmByDriver = useMemo(() => {
@@ -230,20 +265,6 @@ export default function DriverSafety() {
     () => [...new Set((rows || []).map((r) => r.country).filter(Boolean))].sort(),
     [rows],
   )
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (rows || []).filter((r) => {
-      if (countryFilter && r.country !== countryFilter) return false
-      if (typeFilter && r.event_type !== typeFilter) return false
-      if (severityFilter && r.severity !== severityFilter) return false
-      if (q) {
-        const hay = `${r.asset_no || ''} ${r.driver_name || ''} ${r.location || ''} ${r.notes || ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-  }, [rows, countryFilter, typeFilter, severityFilter, search])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -393,6 +414,11 @@ export default function DriverSafety() {
           )
         })}
       </div>
+      {scopeActive && rows !== null && (
+        <p className="text-xs text-[var(--text-muted)] -mt-1">
+          These figures cover the {filtered.length} event{filtered.length === 1 ? '' : 's'} matching your filters, of {(rows || []).length} in total.
+        </p>
+      )}
 
       {/* Tab bar */}
       <div className="flex flex-wrap items-center gap-1 border-b border-[var(--input-border)]">
@@ -515,7 +541,7 @@ export default function DriverSafety() {
             {SEVERITIES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
           </select>
           {hasFilters && <button onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {summary.totalEvents}</span>
+          <span className="text-xs text-[var(--text-muted)] ml-auto">{filtered.length} of {(rows || []).length}</span>
         </div>
       </div>
 

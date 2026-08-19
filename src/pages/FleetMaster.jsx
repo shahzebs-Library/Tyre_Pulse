@@ -220,11 +220,23 @@ export default function FleetMaster() {
       // PAGED: these are the headline counts and the register holds 1,523, so an
       // unpaged read made the "Total" card read 1,000 - a number that is simply
       // wrong rather than merely incomplete.
+      //
+      // SAME FILTERS AS THE REGISTER, minus the status one. This query used to
+      // apply the country alone, so filtering the register to one site left all
+      // four cards stating whole-register counts directly above a table showing
+      // 18 rows. The STATUS filter is deliberately held out: the "Active" card
+      // reports on exactly that dimension, and applying it would make Total equal
+      // Active the moment the filter was used, which answers nothing. Held out, it
+      // states how many of the vehicles you are looking at are active - and how
+      // many rows picking Active would show. The export at fetchAll() applies all
+      // four because an export is the rows, not a summary of them.
       const { data, truncated } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('vehicle_fleet')
           .select('status,make,model,expected_km_per_tyre,min_days_between_changes')
           .order('asset_no').order('id').range(from, to)
+        if (debouncedSearch) { const s = sanitizeSearchTerm(debouncedSearch); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
+        if (siteFilter) q = q.eq('site', siteFilter)
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q
       }, { max: 20000 })
@@ -238,7 +250,7 @@ export default function FleetMaster() {
       })
     }
     loadSummary()
-  }, [activeCountry, records])
+  }, [activeCountry, debouncedSearch, siteFilter, records])
 
   // ── add / edit ────────────────────────────────────────────────────────────────
   async function openAdd() {
@@ -558,6 +570,11 @@ export default function FleetMaster() {
           </div>
         ))}
       </div>
+      {(debouncedSearch || siteFilter || statusFilter) && (
+        <p className="text-xs text-gray-400">
+          These figures cover the {summary.total.toLocaleString()} vehicle{summary.total === 1 ? '' : 's'} matching your search and site filters. The status filter is held out, so Active stays comparable against the total.
+        </p>
+      )}
       {summaryCapped && (
         <p className="text-xs text-amber-400">
           Capped view: summary counts are based on the first 20,000 vehicles. Narrow the filters for exact totals.

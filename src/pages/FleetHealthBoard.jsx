@@ -317,18 +317,22 @@ export default function FleetHealthBoard() {
   const countries = useMemo(() => ['All', ...new Set(vehicles.map(v => v.country).filter(Boolean))], [vehicles])
 
   // ── Filtered vehicles ───────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
+
+  /**
+   * THE VEHICLES EVERY FILTER EXCEPT THE RISK ONE LEAVES.
+   *
+   * Split out because two of the four KPI tiles - "Critical vehicles" and
+   * "At-risk tyres" - report on the risk dimension the risk filter sets. Computed
+   * over the already-risk-filtered vehicles they would simply restate the board's
+   * own count the moment the filter was used, and stop being a number you can aim
+   * at. Site, country and the search box narrow the tiles and the board alike.
+   */
+  const scopedVehicles = useMemo(() => {
     return vehicles
       .map(v => ({ ...v, score: vehicleHealthScore(v.tyres), worst: worstRisk(v.tyres) }))
       .filter(v => {
         if (siteFilter !== 'All' && v.site !== siteFilter) return false
         if (countryFilter !== 'All' && v.country !== countryFilter) return false
-        if (riskFilter !== 'All') {
-          if (riskFilter === 'Critical' && v.worst !== 'Critical') return false
-          if (riskFilter === 'High' && !['Critical','High'].includes(v.worst)) return false
-          if (riskFilter === 'Medium' && !['Critical','High','Medium'].includes(v.worst)) return false
-          if (riskFilter === 'Low' && v.worst !== 'Low') return false
-        }
         if (search) {
           const q = search.toLowerCase()
           if (!v.asset_no?.toLowerCase().includes(q) &&
@@ -337,24 +341,49 @@ export default function FleetHealthBoard() {
         }
         return true
       })
+  }, [vehicles, siteFilter, countryFilter, search])
+
+  const filtered = useMemo(() => {
+    return scopedVehicles
+      .filter(v => {
+        if (riskFilter === 'All') return true
+        if (riskFilter === 'Critical') return v.worst === 'Critical'
+        if (riskFilter === 'High') return ['Critical','High'].includes(v.worst)
+        if (riskFilter === 'Medium') return ['Critical','High','Medium'].includes(v.worst)
+        if (riskFilter === 'Low') return v.worst === 'Low'
+        return true
+      })
       .sort((a, b) => a.score - b.score)
-  }, [vehicles, siteFilter, countryFilter, riskFilter, search])
+  }, [scopedVehicles, riskFilter])
+
+  // Is the board showing a NARROWED set? Drives the caption under the tiles.
+  const scopeActive = siteFilter !== 'All' || countryFilter !== 'All' || riskFilter !== 'All' || !!search
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
+  /**
+   * WHAT THE FOUR TILES COUNT: the vehicles the board's own filters leave, minus
+   * the risk dimension (see scopedVehicles). Before this every figure was computed
+   * over `vehicles` / `rawRecords` - the whole loaded country - so filtering the
+   * board to one site left "Fleet health score" and "At-risk tyres" stating
+   * whole-country numbers directly above a caption reading "18 of 604 vehicles".
+   * The two tyre-level figures now read the tyres of THOSE vehicles rather than
+   * every loaded tyre, so tile and board describe one population.
+   */
   const kpis = useMemo(() => {
-    const total = vehicles.length
-    const criticalVehicles = vehicles.filter(v =>
+    const total = scopedVehicles.length
+    const criticalVehicles = scopedVehicles.filter(v =>
       v.tyres.some(t => t.risk_level === 'Critical')
     ).length
-    const atRiskCount = rawRecords.filter(t => ['Critical','High'].includes(t.risk_level)).length
-    const avgTread = rawRecords.filter(t => t.tread_depth != null).reduce((s, t) => s + t.tread_depth, 0) /
-      Math.max(1, rawRecords.filter(t => t.tread_depth != null).length)
-    const healthyVehicles = vehicles.filter(v =>
+    const scopedTyres = scopedVehicles.flatMap(v => v.tyres)
+    const atRiskCount = scopedTyres.filter(t => ['Critical','High'].includes(t.risk_level)).length
+    const treaded = scopedTyres.filter(t => t.tread_depth != null)
+    const avgTread = treaded.reduce((s, t) => s + t.tread_depth, 0) / Math.max(1, treaded.length)
+    const healthyVehicles = scopedVehicles.filter(v =>
       !v.tyres.some(t => ['Critical','High'].includes(t.risk_level))
     ).length
     const fleetHealth = total > 0 ? Math.round((healthyVehicles / total) * 100) : 0
     return { total, criticalVehicles, atRiskCount, avgTread: avgTread.toFixed(1), fleetHealth }
-  }, [vehicles, rawRecords])
+  }, [scopedVehicles])
 
   // ── Fleet health trend (12 months) ────────────────────────────────────────
   const trendChartData = useMemo(() => {
@@ -557,7 +586,7 @@ export default function FleetHealthBoard() {
         <KpiCard
           label={t('fleethealth.kpi.fleetHealthScore')}
           value={`${kpis.fleetHealth}%`}
-          sub={t('fleethealth.kpi.vehiclesCount', { count: vehicles.length })}
+          sub={t('fleethealth.kpi.vehiclesCount', { count: kpis.total })}
           icon={Shield}
           color={kpis.fleetHealth >= 70 ? 'green' : kpis.fleetHealth >= 40 ? 'yellow' : 'red'}
         />
@@ -583,6 +612,11 @@ export default function FleetHealthBoard() {
           color="blue"
         />
       </div>
+      {scopeActive && (
+        <p className="text-xs text-[var(--text-muted)] -mt-2">
+          These figures cover the {kpis.total} vehicle{kpis.total === 1 ? '' : 's'} matching your filters, of {vehicles.length} in this view. The risk filter is held out so the risk tiles stay a target you can aim at.
+        </p>
+      )}
 
       {/* ── Capped-view note (millions-row safety cap) ── */}
       {capped && (

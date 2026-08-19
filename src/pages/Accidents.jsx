@@ -215,6 +215,71 @@ const caseAgeBadge = (days) =>
       ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50'
       : 'bg-red-900/50 text-red-300 border border-red-700/50'
 
+/**
+ * THE accident KPI aggregate, as a pure function of a ROW SET.
+ *
+ * Pulled out of the component so the same arithmetic can be run twice over two
+ * different populations without a second copy of the formulas drifting from the
+ * first: once over every loaded record (the Analytics tab and the analytics PDF,
+ * which carry no filters of their own) and once over the rows the register's own
+ * filters leave (the seven KPI tiles that sit directly above the table).
+ * `fleetCount` is the whole-register vehicle count and is only meaningful for the
+ * per-100 rate, which the caller suppresses when the rows are a narrowed set.
+ */
+function computeAccidentStats(rows, fleetCount) {
+  const total  = rows.length
+  const open   = rows.filter(r => !isClosed(r)).length
+  const delayed = rows.filter(isDelayed).length
+  const insur  = rows.filter(r => canonStatus(r.status) === 'Insurance Claim' || (r.claim_status && r.claim_status !== 'none')).length
+  const openClaims = rows.filter(isOpenClaim).length
+  const cost   = rows.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
+  const closed = rows.filter(r => isClosed(r))
+  // Avg days to CLOSE: incident date -> release date, over closed cases that
+  // actually recorded a release date (an honest case-cycle time). The old calc
+  // used updated_at - created_at (system row lifetime), which measured DB churn
+  // not case duration. avgDaysDenom exposes how many cases fed the average so
+  // the label can stay honest when release dates are missing.
+  let avgDays = 0
+  let avgDaysDenom = 0
+  if (closed.length > 0) {
+    let totalDays = 0
+    closed.forEach(r => {
+      if (r.incident_date && r.release_date) {
+        const d = (new Date(r.release_date) - new Date(r.incident_date)) / 86400000
+        if (Number.isFinite(d) && d >= 0) { totalDays += d; avgDaysDenom++ }
+      }
+    })
+    avgDays = avgDaysDenom > 0 ? Math.round(totalDays / avgDaysDenom) : 0
+  }
+
+  // Severity mix
+  const sevMix = { Minor: 0, Moderate: 0, Major: 0 }
+  rows.forEach(r => { const s = canonSeverity(r.severity); if (sevMix[s] !== undefined) sevMix[s]++ })
+
+  // At-fault %: a record is "at fault" when the liable/responsible party points
+  // to the driver/company rather than a third party. Only records with an
+  // explicit liability signal count toward the denominator so the ratio is honest.
+  const faultText = (r) => `${r.liable_party || ''} ${r.responsible_party || ''}`.toLowerCase()
+  const withLiability = rows.filter(r => faultText(r).trim())
+  const thirdParty = /third\s*party|3rd\s*party|other\s*driver|not\s*at\s*fault|no\s*fault/
+  const atFaultCount = withLiability.filter(r => !thirdParty.test(faultText(r))).length
+  const atFaultPct = withLiability.length ? Math.round((atFaultCount / withLiability.length) * 100) : 0
+
+  // Average claim cost across records that actually carry a cost (repair+parts).
+  const withCost = rows.filter(r => (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0) > 0)
+  const avgClaim = withCost.length ? Math.round(cost / withCost.length) : 0
+
+  // Accidents per 100 vehicles (fleet-normalised frequency). The denominator is
+  // the exact server count, which is the same number the old
+  // `fleetAssets.length` produced once every page had been paged in - it just
+  // no longer costs 1,617 rows to obtain. A null count (unreadable) leaves
+  // fleetSize 0, which suppresses the rate rather than inventing one.
+  const fleetSize = fleetCount ?? 0
+  const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
+
+  return { total, open, delayed, insur, openClaims, cost, avgDays, avgDaysDenom, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
+}
+
 // Muted chip used by the Days Open cell for closed-case total-duration.
 const DIM_CHIP = 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]'
 
@@ -639,59 +704,10 @@ export default function Accidents() {
     [records],
   )
 
-  const stats = useMemo(() => {
-    const total  = records.length
-    const open   = records.filter(r => !isClosed(r)).length
-    const delayed = records.filter(isDelayed).length
-    const insur  = records.filter(r => canonStatus(r.status) === 'Insurance Claim' || (r.claim_status && r.claim_status !== 'none')).length
-    const openClaims = records.filter(isOpenClaim).length
-    const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
-    const closed = records.filter(r => isClosed(r))
-    // Avg days to CLOSE: incident date -> release date, over closed cases that
-    // actually recorded a release date (an honest case-cycle time). The old calc
-    // used updated_at - created_at (system row lifetime), which measured DB churn
-    // not case duration. avgDaysDenom exposes how many cases fed the average so
-    // the label can stay honest when release dates are missing.
-    let avgDays = 0
-    let avgDaysDenom = 0
-    if (closed.length > 0) {
-      let totalDays = 0
-      closed.forEach(r => {
-        if (r.incident_date && r.release_date) {
-          const d = (new Date(r.release_date) - new Date(r.incident_date)) / 86400000
-          if (Number.isFinite(d) && d >= 0) { totalDays += d; avgDaysDenom++ }
-        }
-      })
-      avgDays = avgDaysDenom > 0 ? Math.round(totalDays / avgDaysDenom) : 0
-    }
-
-    // Severity mix
-    const sevMix = { Minor: 0, Moderate: 0, Major: 0 }
-    records.forEach(r => { const s = canonSeverity(r.severity); if (sevMix[s] !== undefined) sevMix[s]++ })
-
-    // At-fault %: a record is "at fault" when the liable/responsible party points
-    // to the driver/company rather than a third party. Only records with an
-    // explicit liability signal count toward the denominator so the ratio is honest.
-    const faultText = (r) => `${r.liable_party || ''} ${r.responsible_party || ''}`.toLowerCase()
-    const withLiability = records.filter(r => faultText(r).trim())
-    const thirdParty = /third\s*party|3rd\s*party|other\s*driver|not\s*at\s*fault|no\s*fault/
-    const atFaultCount = withLiability.filter(r => !thirdParty.test(faultText(r))).length
-    const atFaultPct = withLiability.length ? Math.round((atFaultCount / withLiability.length) * 100) : 0
-
-    // Average claim cost across records that actually carry a cost (repair+parts).
-    const withCost = records.filter(r => (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0) > 0)
-    const avgClaim = withCost.length ? Math.round(cost / withCost.length) : 0
-
-    // Accidents per 100 vehicles (fleet-normalised frequency). The denominator is
-    // the exact server count, which is the same number the old
-    // `fleetAssets.length` produced once every page had been paged in - it just
-    // no longer costs 1,617 rows to obtain. A null count (unreadable) leaves
-    // fleetSize 0, which suppresses the rate rather than inventing one.
-    const fleetSize = fleetCount ?? 0
-    const per100 = fleetSize > 0 ? Number(((total / fleetSize) * 100).toFixed(1)) : 0
-
-    return { total, open, delayed, insur, openClaims, cost, avgDays, avgDaysDenom, sevMix, atFaultPct, atFaultCount, atFaultDenom: withLiability.length, avgClaim, per100, fleetSize }
-  }, [records, fleetCount])
+  // Whole-register figures: every loaded record, no filter applied. Feeds the
+  // Analytics tab, the analytics PDF and the ops-intelligence layer, all of which
+  // are deliberately register-wide. The Incidents tab reads `registerStats` below.
+  const stats = useMemo(() => computeAccidentStats(records, fleetCount), [records, fleetCount])
 
   // Unified accident-workflow KPI set (single calc source: buildAccidentKpis in
   // src/lib/accidentWorkflow.js). Covers stage/VOR/repair/police/claims across the
@@ -1297,18 +1313,27 @@ export default function Accidents() {
   }
 
   // ---- Incidents tab filtered data ----
-  const filtered = useMemo(() => {
+
+  /**
+   * THE ROWS EVERY REGISTER FILTER EXCEPT THE FOUR TOGGLES LEAVES.
+   *
+   * Split out because the KPI tiles and the four toggle surfaces above the table
+   * each have to hold their OWN dimension out or they report a number nobody can
+   * act on. The "Delayed > 5d" tile is itself the delayed toggle: counted over the
+   * already-delayed-filtered rows it would simply restate the table's own row
+   * count the moment it was pressed, and stop being a target you can aim at. The
+   * same is true of the open-claims chip, the off-road chip and the awaiting-
+   * closure banner. Everything else - site, severity, status, stage, repair route,
+   * fault, case age, dates, search - narrows the tiles and the table alike.
+   */
+  const registerScoped = useMemo(() => {
     let arr = records
-    if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
-    if (filterOpenClaims) arr = arr.filter(isOpenClaim)
-    if (filterDelayed)  arr = arr.filter(isDelayed)
     // The dropdown and the funnel both hand over a DISPLAY label; the row holds
     // a raw token. Comparing them directly matched no row, so choosing a status
     // emptied the table instead of filtering it.
     if (statusFunnel)   arr = arr.filter(r => canonStatus(r.status) === statusFunnel)
     if (filterStatus)   arr = arr.filter(r => canonStatus(r.status) === filterStatus)
     if (filterWfStage)  arr = arr.filter(r => stageOf(r) === filterWfStage)
-    if (filterVor)      arr = arr.filter(r => r.vor === true || r.vor === 'true')
     if (filterStage)    arr = arr.filter(r => r.current_status === filterStage || r.case_stage === filterStage)
     if (filterRepairType) arr = arr.filter(r => r.repair_type === filterRepairType)
     if (filterFault)    arr = arr.filter(r => r.fault_status === filterFault)
@@ -1334,7 +1359,69 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure, filterDelayed, filterStage, filterRepairType, filterFault, filterAge, filterOpenClaims, filterWfStage, filterVor])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, filterStage, filterRepairType, filterFault, filterAge, filterWfStage])
+
+  /**
+   * Rows a toggle set would show, counted over every OTHER filter but not its own
+   * dimension - so each toggle states how many rows pressing it puts on screen
+   * instead of restating whatever is already there.
+   */
+  const toggleBase = useCallback((skip) => {
+    let arr = registerScoped
+    if (skip !== 'closure' && onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
+    if (skip !== 'claims'  && filterOpenClaims)   arr = arr.filter(isOpenClaim)
+    if (skip !== 'delayed' && filterDelayed)      arr = arr.filter(isDelayed)
+    if (skip !== 'vor'     && filterVor)          arr = arr.filter(r => r.vor === true || r.vor === 'true')
+    return arr
+  }, [registerScoped, onlyPendingClosure, filterOpenClaims, filterDelayed, filterVor])
+
+  const toggleCounts = useMemo(() => ({
+    delayed:  toggleBase('delayed').filter(isDelayed).length,
+    claims:   toggleBase('claims').filter(isOpenClaim).length,
+    vor:      toggleBase('vor').filter(r => r.vor === true || r.vor === 'true').length,
+    closure:  toggleBase('closure').filter(r => r.closure_status === 'pending_closure').length,
+  }), [toggleBase])
+
+  // The table: the scoped rows plus whichever toggles are pressed.
+  const filtered = useMemo(() => {
+    let arr = registerScoped
+    if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
+    if (filterOpenClaims)   arr = arr.filter(isOpenClaim)
+    if (filterDelayed)      arr = arr.filter(isDelayed)
+    if (filterVor)          arr = arr.filter(r => r.vor === true || r.vor === 'true')
+    return arr
+  }, [registerScoped, onlyPendingClosure, filterOpenClaims, filterDelayed, filterVor])
+
+  /**
+   * WHAT THE SEVEN KPI TILES COUNT: the rows the register's own filters leave,
+   * minus the four toggles (see registerScoped). Before this they were computed
+   * over `records`, so filtering to one site left "Total Cost" and "At-Fault Rate"
+   * - the two figures quoted in claims meetings - stating fleet-wide numbers
+   * directly above a caption reading "12 of 407 shown".
+   */
+  const registerStats = useMemo(() => computeAccidentStats(registerScoped, fleetCount), [registerScoped, fleetCount])
+
+  // Unrecovered exposure over the SAME scoped rows. The Insurance Claims tile used
+  // to take this from `opsIntel`, which is register-wide, so a filtered headline
+  // carried a fleet-wide sub-label - the same defect one line down. Same rule as
+  // opsIntel's own leakage: a filed claim with nothing recovered against it.
+  const registerLeakage = useMemo(
+    () => registerScoped
+      .filter(r => (r.claim_status && r.claim_status !== 'none')
+        && (Number(r.recovered_amount) || 0) === 0
+        && ((Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0)) > 0)
+      .reduce((sum, r) => sum + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0),
+    [registerScoped],
+  )
+
+  /**
+   * Is the register showing a NARROWED set? Drives the caption under the tiles.
+   * The four toggles are excluded on purpose: they are set FROM the tiles and
+   * chips themselves and each already renders its own active state.
+   */
+  const registerScopeActive = !!(search.trim() || filterSite || filterSeverity || filterStatus
+    || filterStage || filterRepairType || filterFault || filterWfStage || filterAge
+    || filterFrom || filterTo || statusFunnel)
 
   // Recovered auto-calc: Claim - Approved - Deductible (spec), unless the user
   // has explicitly typed a value in the Recovered field (then their input wins).
@@ -2082,7 +2169,7 @@ export default function Accidents() {
                 : 'btn-secondary'
             }`}
           >
-            <ShieldAlert size={14} /> Open claims{stats.openClaims ? ` (${stats.openClaims})` : ''}
+            <ShieldAlert size={14} /> Open claims{toggleCounts.claims ? ` (${toggleCounts.claims})` : ''}
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={16} /> New Incident
@@ -2130,7 +2217,7 @@ export default function Accidents() {
       {!showForm && tab === 'incidents' && (
         <>
           {/* Closures awaiting approval */}
-          {pendingClosures > 0 && (
+          {toggleCounts.closure > 0 && (
             <button
               onClick={() => setOnlyPendingClosure(v => !v)}
               className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
@@ -2142,7 +2229,7 @@ export default function Accidents() {
               <Hourglass size={18} className="text-yellow-400 flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-semibold text-yellow-200">
-                  {pendingClosures} closure{pendingClosures > 1 ? 's' : ''} awaiting approval
+                  {toggleCounts.closure} closure{toggleCounts.closure > 1 ? 's' : ''} awaiting approval
                 </p>
                 <p className="text-xs text-yellow-500/80">Tap to {onlyPendingClosure ? 'show all incidents' : 'review and approve closures'}</p>
               </div>
@@ -2151,7 +2238,7 @@ export default function Accidents() {
           )}
 
           {/* Delayed / stalled-case highlight — open cases with no movement > SLA */}
-          {stats.delayed > 0 && (
+          {toggleCounts.delayed > 0 && (
             <button
               onClick={() => setFilterDelayed(v => !v)}
               className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
@@ -2163,7 +2250,7 @@ export default function Accidents() {
               <Clock size={18} className="text-red-400 flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-semibold text-red-200">
-                  {stats.delayed} case{stats.delayed > 1 ? 's' : ''} delayed &gt; {DELAY_THRESHOLD_DAYS} days
+                  {toggleCounts.delayed} case{toggleCounts.delayed > 1 ? 's' : ''} delayed &gt; {DELAY_THRESHOLD_DAYS} days
                 </p>
                 <p className="text-xs text-red-500/80">
                   Open with no status movement in over {DELAY_THRESHOLD_DAYS} days — tap to {filterDelayed ? 'show all incidents' : 'review stalled cases'}
@@ -2173,16 +2260,26 @@ export default function Accidents() {
             </button>
           )}
 
-          {/* KPI header cards — real aggregates */}
+          {/* KPI header cards - real aggregates.
+
+              EVERY figure here is computed over `registerScoped`: the same rows the
+              table below is showing, minus the four toggles (see the comment on
+              registerScoped for why those are held out). The caption states that in
+              words, because a scoped number sitting beside an unscoped one is
+              unreadable either way round. */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
             {[
-              { v: stats.total, label: 'Total Incidents', cls: 'text-[var(--text-primary)]', sub: stats.fleetSize ? `${stats.per100} / 100 vehicles` : null },
-              { v: stats.open, label: 'Open', cls: 'text-orange-400', sub: `${stats.total ? Math.round((stats.open / stats.total) * 100) : 0}% of all` },
-              { v: stats.delayed, label: `Delayed >${DELAY_THRESHOLD_DAYS}d`, cls: 'text-red-400', sub: stats.open ? `${Math.round((stats.delayed / stats.open) * 100)}% of open` : 'none open', onClick: () => setFilterDelayed(v => !v), active: filterDelayed },
-              { v: fmtCurrency(stats.cost), label: 'Total Cost (repair+parts)', cls: 'text-green-400', sub: 'gross exposure' },
-              { v: fmtCurrency(stats.avgClaim), label: 'Avg Cost / Incident', cls: 'text-emerald-400', sub: 'costed incidents' },
-              { v: `${stats.atFaultPct}%`, label: 'At-Fault Rate', cls: 'text-red-400', sub: stats.atFaultDenom ? `${stats.atFaultCount}/${stats.atFaultDenom} tagged` : 'no liability data' },
-              { v: stats.insur, label: 'Insurance Claims', cls: 'text-blue-400', sub: opsIntel.leakage > 0 ? `${fmtCurrency(opsIntel.leakage)} unrecovered` : 'all recovered' },
+              // Per-100 is a filtered numerator over a WHOLE-REGISTER vehicle count, so
+              // it only means anything across the whole register. Suppressed rather
+              // than restated once the rows are narrowed - a rate nobody can reproduce
+              // is worse than no rate.
+              { v: registerStats.total, label: 'Total Incidents', cls: 'text-[var(--text-primary)]', sub: (!registerScopeActive && registerStats.fleetSize) ? `${registerStats.per100} / 100 vehicles` : null },
+              { v: registerStats.open, label: 'Open', cls: 'text-orange-400', sub: `${registerStats.total ? Math.round((registerStats.open / registerStats.total) * 100) : 0}% of all` },
+              { v: toggleCounts.delayed, label: `Delayed >${DELAY_THRESHOLD_DAYS}d`, cls: 'text-red-400', sub: registerStats.open ? `${Math.round((toggleCounts.delayed / registerStats.open) * 100)}% of open` : 'none open', onClick: () => setFilterDelayed(v => !v), active: filterDelayed },
+              { v: fmtCurrency(registerStats.cost), label: 'Total Cost (repair+parts)', cls: 'text-green-400', sub: 'gross exposure' },
+              { v: fmtCurrency(registerStats.avgClaim), label: 'Avg Cost / Incident', cls: 'text-emerald-400', sub: 'costed incidents' },
+              { v: `${registerStats.atFaultPct}%`, label: 'At-Fault Rate', cls: 'text-red-400', sub: registerStats.atFaultDenom ? `${registerStats.atFaultCount}/${registerStats.atFaultDenom} tagged` : 'no liability data' },
+              { v: registerStats.insur, label: 'Insurance Claims', cls: 'text-blue-400', sub: registerLeakage > 0 ? `${fmtCurrency(registerLeakage)} unrecovered` : 'all recovered' },
             ].map((k, i) => (
               <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
                 {k.onClick ? (
@@ -2205,6 +2302,11 @@ export default function Accidents() {
               </motion.div>
             ))}
           </div>
+          {registerScopeActive && (
+            <p className="text-xs text-[var(--text-muted)] -mt-1">
+              These figures cover the {registerStats.total} incident{registerStats.total === 1 ? '' : 's'} matching your filters, of {records.length} in total.
+            </p>
+          )}
 
 
           {/* Filters - search stays out; everything else collapses behind one toggle */}
@@ -2314,7 +2416,7 @@ export default function Accidents() {
                       }`}
                       title="Show only vehicles currently off road (VOR)"
                     >
-                      <AlertOctagon size={13} /> Off road only{wfKpis.vor ? ` (${wfKpis.vor})` : ''}
+                      <AlertOctagon size={13} /> Off road only{toggleCounts.vor ? ` (${toggleCounts.vor})` : ''}
                     </button>
                     <button
                       onClick={() => setOpenClaims(!filterOpenClaims)}
@@ -2326,7 +2428,7 @@ export default function Accidents() {
                       }`}
                       title="Show only incidents whose insurance claim is still open (not closed / settled / rejected). Linkable as ?claims=open"
                     >
-                      <ShieldAlert size={13} /> Open claims only{stats.openClaims ? ` (${stats.openClaims})` : ''}
+                      <ShieldAlert size={13} /> Open claims only{toggleCounts.claims ? ` (${toggleCounts.claims})` : ''}
                     </button>
                   </div>
                 )}

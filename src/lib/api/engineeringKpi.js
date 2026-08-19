@@ -54,15 +54,36 @@ export function listKpiTyreRecords({ country, countries, dateFrom, dateTo, from,
   return q.range(from, to)
 }
 
-/** Inspections for KPI computation, strict country scope, paged range. */
-export function listKpiInspections({ country, countries, from, to } = {}) {
-  return scopeCountry(
-    supabase
-      .from('inspections')
-      .select('id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type'),
-    country,
-    countries,
-  ).range(from, to)
+/**
+ * Inspections for KPI computation: country + optional site and scheduled-date
+ * window, paged range.
+ *
+ * `tyre_conditions` IS THE ONE THAT MATTERS. `computePressureCompliance` reads
+ * its pressure readings out of that column, and it was not in this select - so
+ * `pressureReadings()` saw undefined on every row, returned [], and the KPI
+ * reported "not measured" for the whole fleet. Measured on the live data:
+ * 359 of 426 inspections carry four or more usable readings across 11 sites,
+ * every one of which the page was reporting as unmeasurable. It is the largest
+ * column here, so it is fetched precisely because a KPI depends on it, not for
+ * completeness.
+ *
+ * THE WINDOW IS ON `scheduled_date`, NOT `completed_date`, and that is the
+ * question inspection compliance asks: of the inspections DUE in this period,
+ * how many were done and how many on time. Windowing on completion would drop
+ * every overdue inspection - the exact rows the compliance figure exists to
+ * count - and flatter the number. Safe on this data: 0 of 426 rows have a null
+ * scheduled_date, so nothing is silently excluded by the bound.
+ */
+export function listKpiInspections({
+  country, countries, site, dateFrom, dateTo, from, to,
+} = {}) {
+  let q = supabase
+    .from('inspections')
+    .select('id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type,tyre_conditions')
+  if (site) q = q.eq('site', site)
+  if (dateFrom) q = q.gte('scheduled_date', dateFrom)
+  if (dateTo) q = q.lte('scheduled_date', dateTo)
+  return scopeCountry(q, country, countries).range(from, to)
 }
 
 /**
@@ -71,12 +92,18 @@ export function listKpiInspections({ country, countries, from, to } = {}) {
  * drive it through `fetchAllPages` past the PostgREST 1000-row cap. Omitting
  * them preserves the original single-shot pass-through exactly.
  */
-export function listKpiCorrectiveActions({ country, countries, from, to } = {}) {
-  const q = scopeCountry(
-    supabase.from('corrective_actions').select('id,status,site,country,due_date,created_at'),
-    country,
-    countries,
-  )
+export function listKpiCorrectiveActions({
+  country, countries, site, dateFrom, dateTo, from, to,
+} = {}) {
+  let base = supabase.from('corrective_actions').select('id,status,site,country,due_date,created_at')
+  if (site) base = base.eq('site', site)
+  // Windowed on when the action was RAISED, not when it falls due: the KPI it
+  // feeds is a close rate, and "of the work raised in this period, how much was
+  // closed" is answerable, while grouping by due date would move an action into
+  // a period nobody worked in it.
+  if (dateFrom) base = base.gte('created_at', dateFrom)
+  if (dateTo) base = base.lte('created_at', `${dateTo}T23:59:59.999Z`)
+  const q = scopeCountry(base, country, countries)
   return Number.isFinite(from) && Number.isFinite(to) ? q.range(from, to) : q
 }
 
@@ -90,7 +117,17 @@ export function listKpiCorrectiveActions({ country, countries, from, to } = {}) 
  * `from`/`to` are optional and drive `fetchAllPages` - the fleet register is
  * over 1000 rows, so an un-ranged read silently truncated the count.
  */
-export function listKpiFleet({ country, countries, from, to } = {}) {
-  const q = scopeCountry(supabase.from('vehicle_fleet').select('id,asset_no'), country, countries)
+export function listKpiFleet({ country, countries, site, from, to } = {}) {
+  // Site matters here for the same reason country does: this is a DENOMINATOR.
+  // With one site selected the numerator is that site's tyres while an unscoped
+  // count is the whole country's register, so Fleet Availability reads far
+  // worse than it is. Deliberately NOT date-windowed - a fleet register is the
+  // machines that exist now, not the ones acquired in a period.
+  // `site` is FILTERED ON but deliberately not selected: the page only takes
+  // .length of this, and PostgREST filters a column it does not return, so
+  // fetching it would add a string to 1,617 rows nothing reads.
+  let base = supabase.from('vehicle_fleet').select('id,asset_no')
+  if (site) base = base.eq('site', site)
+  const q = scopeCountry(base, country, countries)
   return Number.isFinite(from) && Number.isFinite(to) ? q.range(from, to) : q
 }

@@ -207,6 +207,8 @@ export default function EngineeringKpi() {
   // Filter state
   const [countryChip, setCountryChip] = useState('All')
   const [siteFilter,  setSiteFilter]  = useState('')
+  // Every site the loaded rows cover, built BEFORE the site filter narrows them.
+  const [siteOptions, setSiteOptions] = useState([])
   const [dateFrom,    setDateFrom]    = useState('')
   const [dateTo,      setDateTo]      = useState('')
 
@@ -264,11 +266,6 @@ export default function EngineeringKpi() {
   const costFigure = costSplit ? pickCost(costMode, { tyre: costSplit.tyre, maintenance: costSplit.maintenance }) : 0
   const costModeOptions = COST_MODES.map(m => ({ ...m, label: m.key === 'maintenance' ? 'General' : m.label }))
 
-  // Sites list for select
-  const sites = useMemo(() =>
-    [...new Set(records.map(r => r.site).filter(Boolean))].sort(),
-    [records]
-  )
 
   // Apply preset date range
   function applyPreset(preset) {
@@ -293,14 +290,20 @@ export default function EngineeringKpi() {
         fetchAllPages((from, to) =>
           engKpiApi.listKpiTyreRecords({ country, dateFrom, dateTo, from, to })
         , { max: 200000 }),
+        // Site and the date window reach these three too. Without them four of
+        // the seventeen KPIs - pressure compliance, inspection compliance,
+        // workshop performance and fleet availability - were all-time and
+        // fleet-wide while sitting in the same grid as tyre KPIs that had both
+        // applied. Fleet availability was the worst of them: one site's tyres
+        // over the whole country's vehicle count.
         fetchAllPages((from, to) =>
-          engKpiApi.listKpiInspections({ country, from, to })
+          engKpiApi.listKpiInspections({ country, site: siteFilter || undefined, dateFrom, dateTo, from, to })
         , { max: 200000 }),
         fetchAllPages((from, to) =>
-          engKpiApi.listKpiCorrectiveActions({ country, from, to })
+          engKpiApi.listKpiCorrectiveActions({ country, site: siteFilter || undefined, dateFrom, dateTo, from, to })
         , { max: 200000 }),
         fetchAllPages((from, to) =>
-          engKpiApi.listKpiFleet({ country, from, to })
+          engKpiApi.listKpiFleet({ country, site: siteFilter || undefined, from, to })
         , { max: 200000 }),
       ])
 
@@ -310,8 +313,12 @@ export default function EngineeringKpi() {
       if (actRes.error)  throw actRes.error
       if (fleetRes.error) throw fleetRes.error
 
-      let recs = recRes.data || []
-      if (siteFilter) recs = recs.filter(r => r.site === siteFilter)
+      const allRecs = recRes.data || []
+      // The site list is built from the UNFILTERED rows. Deriving it from the
+      // filtered ones collapsed the dropdown to the single site already chosen,
+      // so the only way to reach a different site was to clear the filter first.
+      setSiteOptions([...new Set(allRecs.map(r => r.site).filter(Boolean))].sort())
+      const recs = siteFilter ? allRecs.filter(r => r.site === siteFilter) : allRecs
 
       setRecords(recs)
       setInspections(insRes.data || [])
@@ -909,7 +916,7 @@ export default function EngineeringKpi() {
               onChange={e => setSiteFilter(e.target.value)}
             >
               <option value="">All Sites</option>
-              {sites.map(s => <option key={s} value={s}>{s}</option>)}
+              {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 

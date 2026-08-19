@@ -14,6 +14,7 @@ import {
 import MarkChip from '../components/checklist/MarkChip'
 import SignatureView from '../components/checklist/SignatureView'
 import ChecklistApprovalLadder from '../components/checklist/ChecklistApprovalLadder'
+import ChecklistDecisionPanel from '../components/checklist/ChecklistDecisionPanel'
 import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import { renderChecklistPdf } from '../lib/checklistPdf'
 import { CHECKLIST_LANGS } from '../lib/checklist/checklistI18n'
@@ -380,6 +381,12 @@ export default function ChecklistSubmission() {
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Sign-off</h2>
               </div>
               <ChecklistApprovalLadder template={template} submission={sub} />
+
+              {/* The ladder said WHO has signed and offered no way to sign. The
+                  decision lives beside it now, so an approver reading this page
+                  does not have to go and find the same sheet in a queue. It
+                  renders nothing unless the sheet is waiting on this reader. */}
+              <ChecklistDecisionPanel submission={sub} onDecided={load} />
             </div>
 
             <EntityApprovalPanel

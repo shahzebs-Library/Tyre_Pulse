@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { X, ExternalLink, Download, Loader2 } from 'lucide-react'
 import ChecklistAnswers from './ChecklistAnswers'
+import ChecklistDecisionPanel from './ChecklistDecisionPanel'
 import { renderChecklistPdf } from '../../lib/checklistPdf'
 import { useTenant } from '../../contexts/TenantContext'
 import { toUserMessage } from '../../lib/safeError'
@@ -123,6 +124,20 @@ export default function ChecklistViewerDrawer({ submissionId, onClose, onOpenFul
             </div>
           )}
           <ChecklistAnswers submissionId={submissionId} onLoaded={setSub} />
+
+          {/* Sign it off here, in front of the answers that were just read.
+              Before this the only place a checklist could be decided was the
+              Approvals dashboard, so an approver who had finished reading had to
+              leave and find the same sheet in a queue. The panel renders nothing
+              when the sheet is not waiting on anyone. */}
+          {sub && (
+            <div className="mt-5">
+              <ChecklistDecisionPanel
+                submission={sub}
+                onDecided={() => { setSub(null); onClose?.() }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

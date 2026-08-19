@@ -276,12 +276,18 @@ export async function listInspectionApprovals({ country } = {}) {
  * @param {string} id
  * @param {{ approved:boolean, reviewNote?:string|null }} decision
  */
-export async function decideInspection(id, { approved, reviewNote = null } = {}) {
+export async function decideInspection(id, { approved, reviewNote = null, signature = null } = {}) {
+  // THE SIGNATURE USED TO BE DROPPED HERE. The RPC has taken `p_signature` since
+  // V597 and the Inspections register refuses to approve without one, but this
+  // path never sent it - so the SAME inspection, approved from the queue instead
+  // of the register, was stored with `approver_signature` left null. The record
+  // then showed an approval nobody had signed. It is passed through now.
   return unwrap(
     await supabase.rpc('decide_inspection_approval', {
       p_inspection_id: id,
       p_decision: approved ? 'approved' : 'rejected',
       p_note: reviewNote && String(reviewNote).trim() ? String(reviewNote).trim().slice(0, 8000) : null,
+      p_signature: approved && signature ? String(signature) : null,
     }),
   )
 }

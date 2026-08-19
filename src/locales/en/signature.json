@@ -1,0 +1,43 @@
+{
+  "field": {
+    "savedHeading": "Your saved signature",
+    "savedInUse": "This is your saved signature. It will be attached when you approve.",
+    "drawNew": "Draw a new signature",
+    "useSaved": "Use my saved signature",
+    "remember": "Remember this as my signature",
+    "rememberHint": "It will be filled in automatically next time you approve.",
+    "saved": "Saved. It will be filled in next time.",
+    "saveFailed": "Could not save your signature. The one you drew is still attached.",
+    "loading": "Checking for a saved signature..."
+  },
+  "settings": {
+    "title": "My signature",
+    "intro": "Drawn once and reused every time you approve. Only you can see it.",
+    "none": "You have not saved a signature yet. Draw one below, or draw it the next time you approve.",
+    "save": "Save signature",
+    "replace": "Draw a new one",
+    "cancel": "Cancel",
+    "remove": "Delete saved signature",
+    "removed": "Saved signature deleted.",
+    "savedOk": "Signature saved.",
+    "failed": "Could not save your signature.",
+    "removeFailed": "Could not delete your signature.",
+    "loading": "Loading..."
+  },
+  "decide": {
+    "heading": "Sign off",
+    "note": "Reason (required to return for correction)",
+    "approve": "Approve",
+    "signOff": "Sign off",
+    "return": "Return for correction",
+    "needSignature": "Draw or load a signature to sign this off.",
+    "needNote": "A note is required when returning this for correction.",
+    "closes": "Approving closes this sheet. Nothing further is asked for.",
+    "passesOn": "Approving passes this sheet to the area manager for final approval. It is not closed yet.",
+    "notYours": "This sheet is waiting for a sign-off your role cannot give.",
+    "signedOff": "Signed off. It now goes to the area manager for final approval.",
+    "approved": "Approved and closed.",
+    "returned": "Sent back for correction.",
+    "failed": "Could not record the decision."
+  }
+}

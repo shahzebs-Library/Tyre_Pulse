@@ -27,6 +27,8 @@ import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import * as userSignatureApi from '../lib/api/userSignature'
+import { normaliseSignature } from '../lib/savedSignature'
 // The role set that already reaches the app's Approvals surface (mirrored from
 // Layout.jsx nav + the /approvals route). Reused so inspection sign-off does not
 // introduce a second, drifting idea of who may approve.
@@ -845,12 +847,50 @@ export default function Inspections() {
   const [approveTarget, setApproveTarget]       = useState(null)
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [approverSig, setApproverSig]           = useState(null)
+  // Where the mark in the pad came from, so the screen can SAY it is the saved
+  // one. A signature that simply appeared, unexplained, is indistinguishable
+  // from the app signing on the approver's behalf.
+  const [approverSigSource, setApproverSigSource] = useState('none')
+  const [savedSig, setSavedSig]                 = useState(null)
   const [showApproverPad, setShowApproverPad]   = useState(false)
   const [approveSubmitting, setApproveSubmitting] = useState(false)
+
   const [approveMsg, setApproveMsg]             = useState(null)
   // Reason for returning an inspection. The RPC files it in inspection_audit_log,
   // which this screen does not read, so it is also echoed onto the record itself.
   const [approveNote, setApproveNote]           = useState('')
+
+  /**
+   * PRE-FILL THE APPROVER'S OWN SAVED SIGNATURE (V601).
+   *
+   * 379 inspections have been signed off on this system and every one of those
+   * marks was drawn from scratch on the spot. The saved one is loaded when the
+   * approve modal opens on a record that is still waiting, so the approver looks
+   * at it instead of redrawing it.
+   *
+   * IT DOES NOT APPROVE ANYTHING. The mark is only placed in the pad; it is
+   * rendered on screen, labelled as the saved one, and the approve button still
+   * has to be pressed. An already-approved record is skipped entirely - offering
+   * a fresh signature over a decision that is already made is exactly what the
+   * modal above refuses to do.
+   */
+  useEffect(() => {
+    if (!showApproveModal || !approveTarget) return undefined
+    if (approveTarget.approval_status === 'approved') return undefined
+    if (!canApproveInspection) return undefined
+    let cancelled = false
+    userSignatureApi.getMySignature().then((value) => {
+      if (cancelled) return
+      const v = normaliseSignature(value)
+      if (!v) return
+      setSavedSig(v)
+      // Never overwrite a mark the person has just drawn in this session, and
+      // never relabel one that is already accounted for.
+      setApproverSig((cur) => (cur || v))
+      setApproverSigSource((cur) => (cur === 'none' ? 'saved' : cur))
+    })
+    return () => { cancelled = true }
+  }, [showApproveModal, approveTarget, canApproveInspection])
   // Mobile PDF preview
   const [pdfBlobUrl, setPdfBlobUrl]   = useState(null)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
@@ -2676,9 +2716,18 @@ export default function Inspections() {
                 <div>
                   <img src={approverSig} alt="Approver signature"
                     style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
-                  <button onClick={() => setApproverSig(null)}
+                  {/* WHERE THIS MARK CAME FROM, said out loud. A signature that
+                      appeared on its own reads as the app signing for you. */}
+                  {approverSigSource === 'saved' && (
+                    <div style={{ fontSize: 11, color: 'var(--panel-ink-3)', marginTop: 6 }}>
+                      {t('signature.field.savedInUse')}
+                    </div>
+                  )}
+                  <button onClick={() => { setApproverSig(null); setApproverSigSource('none') }}
                     style={{ display: 'block', marginTop: 6, fontSize: 11, color: 'var(--panel-ink-3)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    {t('inspections.approve.clearResign')}
+                    {approverSigSource === 'saved'
+                      ? t('signature.field.drawNew')
+                      : t('inspections.approve.clearResign')}
                   </button>
                 </div>
               ) : (
@@ -2830,7 +2879,21 @@ export default function Inspections() {
           label={t('inspections.approve.approverSignature')}
           inspectorName={profile?.full_name || ''}
           employeeId={profile?.employee_id || ''}
-          onSave={dataUrl => { setApproverSig(dataUrl); setShowApproverPad(false) }}
+          onSave={dataUrl => {
+            setApproverSig(dataUrl)
+            setApproverSigSource('drawn')
+            setShowApproverPad(false)
+            // Remember the FIRST mark a person draws - that is the moment the
+            // owner described. Someone who already has a saved signature is
+            // deliberately left alone: a one-off signature for one record must
+            // not silently replace the mark they chose. Replacing it is done on
+            // purpose, from Settings.
+            if (!savedSig) {
+              userSignatureApi.saveMySignature(dataUrl)
+                .then((v) => setSavedSig(v))
+                .catch(() => {}) // the drawn mark is still attached; only remembering it failed
+            }
+          }}
           onClose={() => setShowApproverPad(false)}
         />
       )}

@@ -5,7 +5,26 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-18, next free migration **V601**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V602**)
+
+**V601 (applied + verified live) — THE APPROVER'S OWN SAVED SIGNATURE.** A person draws it once and
+every later approval pre-fills it, visibly, with a one-click "Draw a new signature". Pre-filling is
+NOT signing: the mark is only placed in the pad and the approve button still has to be pressed.
+**IT IS ITS OWN TABLE, NOT A COLUMN ON `profiles`, AND THAT IS THE LOAD-BEARING DECISION:**
+`profiles_select` is `auth.role() = 'authenticated'`, i.e. EVERY colleague in the organisation reads
+EVERY profile row, so a signature image there would hand all 38 active users a copy of everyone's
+handwriting. `user_signatures` has one rule - the row is mine - proven by impersonating two real
+accounts, rolled back: A reads own 1, B reads A 0, B updates A 0 rows, B deletes A 0 rows, A inserting
+FOR B refused 42501, anon has no grant. The "A reads own 1" control is what makes the zeros mean
+anything.
+Also closed while wiring it: **a checklist could be decided in exactly ONE place** (the Approvals
+queue) while every surface that actually shows the sheet - the viewer drawer, the submission page -
+rendered the sign-off ladder read-only; `ChecklistDecisionPanel` puts the same guarded
+`decide_checklist_approval` writer in front of the evidence. And **`decideInspection` was silently
+dropping the signature**: the RPC has taken `p_signature` since V597 and the register refuses to
+approve without one, so the SAME inspection was signed or unsigned depending on which screen decided
+it. Both now ask for it.
+
 Live-verified state: tree clean, lint 0 errors, build clean, suite **529 files / 8,060 tests** green.
 V585-V590 confirmed present in `supabase_migrations` AND as live objects. Nothing is half-applied.
 Delete an item from this list ONLY when it is actually closed, and say what closed it.

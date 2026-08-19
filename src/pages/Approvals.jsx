@@ -18,7 +18,7 @@ import ApprovalStatusBadge from '../components/workflow/ApprovalStatusBadge'
 import ApprovalAction from '../components/workflow/ApprovalAction'
 import ApprovalTrail from '../components/workflow/ApprovalTrail'
 import ChecklistAnswers from '../components/checklist/ChecklistAnswers'
-import SignatureCapture from '../components/checklist/SignatureCapture'
+import SignatureField from '../components/checklist/SignatureField'
 import BlockingMarksNotice from '../components/checklist/BlockingMarksNotice'
 import ChecklistApprovalLadder from '../components/checklist/ChecklistApprovalLadder'
 import { stepRequirements } from '../lib/workflow/stepRequirements'
@@ -544,13 +544,18 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
   )
   const mayAct = isChecklistish ? mayDecideChecklist : canAct
 
+  // An inspection sign-off is a signature too. The register has always refused
+  // to approve one without a mark; the queue silently stored an approval with
+  // none, so the same inspection was signed or unsigned depending on which
+  // screen it was decided from. Both ask for it now.
+  const needsSignature = isChecklistish || item.source === SOURCE.inspection
+
   // Everything that stops the approve button, said in one place.
-  const approveBlockedReason = !isChecklistish ? null
-    : (wouldClose && !closeCheck.ok)
-      ? 'This sheet still has items marked as a fault, so it cannot be closed yet.'
-      : !signature
-        ? 'Draw a signature to sign this off.'
-        : null
+  const approveBlockedReason = (isChecklistish && wouldClose && !closeCheck.ok)
+    ? 'This sheet still has items marked as a fault, so it cannot be closed yet.'
+    : (needsSignature && !signature)
+      ? 'Draw or load a signature to sign this off.'
+      : null
 
   async function act(approved) {
     if (!approved && rejectNeedsReason && !reason.trim()) {
@@ -572,7 +577,9 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
       } else if (item.source === SOURCE.inspection) {
         // Guarded server RPC: approver identity + timestamp derived server-side,
         // optimistic "already decided" protection, approve locks the record.
-        await queue.decideInspection(item.id, { approved, reviewNote: reason })
+        await queue.decideInspection(item.id, {
+          approved, reviewNote: reason, signature: approved ? signature : null,
+        })
       } else if (isChecklistish) {
         // A gap goes through the SAME writer: recording the decision now enrols
         // it into the queue and answers it. There is no second path, so a
@@ -745,19 +752,25 @@ function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
             className="w-full bg-[var(--surface-2)] border border-[var(--input-border)] rounded-xl px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all resize-none"
           />
 
-          {/* A sign-off IS a signature. The server refuses an approval without
-              one, so it is captured here rather than surfaced as a refusal after
-              the fact. Returning a sheet for correction needs only the note. */}
-          {isChecklistish && (
+          {/* A sign-off IS a signature, on a checklist AND on an inspection. It
+              is captured here rather than surfaced as a refusal after the fact,
+              and it arrives already holding the approver's saved mark so it is
+              one glance rather than a redraw. Returning something for correction
+              needs only the note. */}
+          {needsSignature && (
             <div className="mt-3">
-              <SignatureCapture
-                label={wouldClose ? 'Final approval signature' : 'Supervisor signature'}
+              <SignatureField
+                label={
+                  item.source === SOURCE.inspection
+                    ? 'Approver signature'
+                    : wouldClose ? 'Final approval signature' : 'Supervisor signature'
+                }
                 onChange={setSignature}
               />
             </div>
           )}
 
-          {isChecklistish && approveBlockedReason && (
+          {approveBlockedReason && (
             <p className="text-xs text-amber-400 mt-2 flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {approveBlockedReason}
             </p>

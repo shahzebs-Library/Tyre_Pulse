@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import AppearancePanel from '../components/settings/AppearancePanel'
+import MySignaturePanel from '../components/settings/MySignaturePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
@@ -744,6 +745,10 @@ export default function Settings() {
 
         {/* Column 2 - Appearance (personal theme/accent/density/motion) */}
         <AppearancePanel />
+
+        {/* The saved approval signature. It sits with the profile because it is
+            a fact about the person, not about any one checklist or inspection. */}
+        <MySignaturePanel />
 
         {/* Feature Flags (org-wide, admin only — same gate as other admin sections) */}
         {isAdmin && <FeatureFlagsPanel />}

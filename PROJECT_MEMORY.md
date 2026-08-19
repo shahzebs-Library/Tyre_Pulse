@@ -5,6 +5,24 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ NO MOBILE BUILDS. OWNER INSTRUCTION 2026-08-19, STANDING.
+
+**Do not create an EAS build and do not release to Play.** Not `release-play.yml`,
+not `build-android.yml`, not a `mobile-v*` tag, not `eas build` by hand. The
+owner says when.
+
+Nothing can start one by accident and that was checked: all four mobile
+workflows are `workflow_dispatch` only, and the two build ones additionally fire
+on a `mobile-v*` TAG - so an ordinary push to main can never trigger one.
+
+**THE CONSEQUENCE, STATE IT RATHER THAN LETTING IT LOOK DONE:** mobile code that
+is merged is NOT on anybody's phone. Everything mobile since versionCode 43 -
+the saved signature field on both approval screens, and anything after it -
+exists only in the repo. Do not report mobile work as delivered to users; report
+it as merged and awaiting a build the owner has not asked for.
+
+---
+
 # ⚑ ONE MERGE PER SESSION. THE OWNER HAS NOW SAID THIS TWICE.
 
 **Every push to `main` starts a production build.** Seven pushes in one session

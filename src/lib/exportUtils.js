@@ -1011,6 +1011,11 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   const brand = await _pdfBrand(opts.branding)
   const hdrOpts = { accent: brand.accent, logoData: brand.logoData }
   const ftrOpts = { footerText: brand.footerText }
+  // Optional scope note appended to the header subtitle. A caller that caps its
+  // own row list uses it to say so, because "500 records" in a document built
+  // from 1,200 filtered rows reads as the whole filtered set to anyone holding
+  // the file after the screen is gone.
+  const scopeNote = opts.subtitleNote ? ` | ${opts.subtitleNote}` : ''
 
   // ── EMPTY STATE: never emit a bare table ──
   if (rows.length === 0) {
@@ -1039,7 +1044,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
 
   // ── PAGE 1: ANALYTICAL SUMMARY ──
   if (showSummary) {
-    _pageHeader(doc, title, `${rows.length.toLocaleString()} records | ${nowStr()}`, company, hdrOpts)
+    _pageHeader(doc, title, `${rows.length.toLocaleString()} records${scopeNote} | ${nowStr()}`, company, hdrOpts)
     let y = 30
 
     // KPI cards
@@ -1187,7 +1192,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
       else if (v === 'low') { data.cell.styles.fillColor = P.eCream; data.cell.styles.textColor = P.emerald }
     } : undefined,
     didDrawPage: () => {
-      _pageHeader(doc, title, `${rows.length.toLocaleString()} records | ${nowStr()}`, company, hdrOpts)
+      _pageHeader(doc, title, `${rows.length.toLocaleString()} records${scopeNote} | ${nowStr()}`, company, hdrOpts)
       _pageFooter(doc, doc.internal.getNumberOfPages(), null, company, ftrOpts)
     },
   })

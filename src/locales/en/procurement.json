@@ -18,7 +18,11 @@
     "budgetUsedSub": "of {value} budget",
     "setBudgetBelow": "Set budget below",
     "avgLeadTime": "Avg Lead Time",
-    "avgLeadTimeSub": "Order → Delivery"
+    "avgLeadTimeSub": "Order to Delivery",
+    "totalPosSubFiltered": "{count} matching orders",
+    "budgetUsedSubAll": "of {value} budget, all orders",
+    "scopeNote": "Figures below cover the {count} of {total} orders matching the filters.",
+    "scopeNoteStatus": "The status filter shapes the table and the status chart still shows every status, so each slice states how many orders picking it would show."
   },
   "charts": {
     "vendorSpendTitle": "Monthly PO Spend by Vendor (Top 5)",
@@ -39,7 +43,8 @@
     "annualBudget": "Annual Budget",
     "totalSpend": "Total Spend",
     "remaining": "Remaining",
-    "notSet": "Not set"
+    "notSet": "Not set",
+    "scopeNote": "Budget is annual and company wide, so this panel always covers every order, not the filtered list."
   },
   "filters": {
     "searchPlaceholder": "Search PO#, vendor, site, budget code...",

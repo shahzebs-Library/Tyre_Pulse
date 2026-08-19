@@ -671,16 +671,41 @@ export default function PredictiveMaintenance() {
   }, [fleetMaster])
 
   // ── Filtered predictions ──────────────────────────────────────────────────────
-  const filteredPredictions = useMemo(() => {
-    const maxDays = horizonDays(horizonFilter)
+  // Two scopes, following the pattern in Inspections.jsx.
+  //
+  // `forecastBase` applies the POPULATION filters (site, vehicle type) and
+  // deliberately holds out the two TIME filters. Urgency and horizon are both
+  // statements about days-to-replacement, and every forecast surface below
+  // plots days-to-replacement on its own axis: the KPI strip is banded
+  // <=30 / 31-90 / 91-365 days, the budget line is 12 months, the quarterly
+  // cards are Q1/Q2/H2. Applying a 30-day horizon to a 12-month forecast would
+  // zero out months 2-12 and applying urgency=Urgent would zero out every band
+  // except its own, so each control would drive its own number and stop being
+  // a useful target. The forecast therefore answers "for this site and vehicle
+  // type, what is coming and when".
+  //
+  // `filteredPredictions` applies all four and is what the table renders.
+  const forecastBase = useMemo(() => {
     return allPredictions.filter(p => {
       if (siteFilter !== 'all' && p.site !== siteFilter) return false
-      if (urgencyFilter !== 'all' && p.urgency !== urgencyFilter) return false
       if (vehicleTypeFilter !== 'all' && p.vehicle_type !== vehicleTypeFilter) return false
+      return true
+    })
+  }, [allPredictions, siteFilter, vehicleTypeFilter])
+
+  const filteredPredictions = useMemo(() => {
+    const maxDays = horizonDays(horizonFilter)
+    return forecastBase.filter(p => {
+      if (urgencyFilter !== 'all' && p.urgency !== urgencyFilter) return false
       if (p.days_away > maxDays) return false
       return true
     })
-  }, [allPredictions, siteFilter, urgencyFilter, vehicleTypeFilter, horizonFilter])
+  }, [forecastBase, urgencyFilter, horizonFilter])
+
+  // True when the forecast covers a narrowed population, so the figures say so.
+  const forecastScopeActive = siteFilter !== 'all' || vehicleTypeFilter !== 'all'
+  // True when the table below is narrowed further than the forecast above it.
+  const timeScopeActive = urgencyFilter !== 'all' || horizonFilter !== '12mo'
 
   // ── Failure-risk filtering + KPIs ─────────────────────────────────────────────
   const filteredRisk = useMemo(() => {
@@ -718,10 +743,10 @@ export default function PredictiveMaintenance() {
 
   // ── KPI summary ───────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const urgent = allPredictions.filter(p => p.urgency === 'Urgent')
-    const soon   = allPredictions.filter(p => p.urgency === 'Soon')
-    const monitor = allPredictions.filter(p => p.urgency === 'Monitor' && p.days_away <= 365)
-    const yr12   = allPredictions.filter(p => p.days_away <= 365)
+    const urgent = forecastBase.filter(p => p.urgency === 'Urgent')
+    const soon   = forecastBase.filter(p => p.urgency === 'Soon')
+    const monitor = forecastBase.filter(p => p.urgency === 'Monitor' && p.days_away <= 365)
+    const yr12   = forecastBase.filter(p => p.days_away <= 365)
 
     const urgentCost  = urgent.reduce((s, p) => s + p.estimated_cost, 0)
     const soonCost    = soon.reduce((s, p) => s + p.estimated_cost, 0)
@@ -729,10 +754,10 @@ export default function PredictiveMaintenance() {
     const annualCost  = yr12.reduce((s, p) => s + p.estimated_cost, 0)
 
     return { urgent, soon, monitor, yr12, urgentCost, soonCost, monitorCost, annualCost }
-  }, [allPredictions])
+  }, [forecastBase])
 
   // ── Monthly budget forecast (12 months) ───────────────────────────────────────
-  const monthlyBudget = useMemo(() => buildMonthlyBudget(allPredictions), [allPredictions])
+  const monthlyBudget = useMemo(() => buildMonthlyBudget(forecastBase), [forecastBase])
 
   const avgMonthlyFleetBudget = useMemo(() => {
     if (!fleetMaster.length) return null
@@ -742,10 +767,10 @@ export default function PredictiveMaintenance() {
 
   // ── Site breakdown ────────────────────────────────────────────────────────────
   const siteBreakdown = useMemo(() => {
-    const annual = allPredictions.filter(p => p.days_away <= 365)
+    const annual = forecastBase.filter(p => p.days_away <= 365)
     const totalCost = annual.reduce((s, p) => s + p.estimated_cost, 0)
     return buildSiteBreakdown(annual, totalCost)
-  }, [allPredictions])
+  }, [forecastBase])
 
   // ── Quarterly forecasts ───────────────────────────────────────────────────────
   const quarterlyForecast = useMemo(() => {
@@ -759,7 +784,7 @@ export default function PredictiveMaintenance() {
   // ── Top urgent vehicles ───────────────────────────────────────────────────────
   const urgentVehicles = useMemo(() => {
     const byAsset = {}
-    for (const p of allPredictions) {
+    for (const p of forecastBase) {
       if (!byAsset[p.asset_no]) {
         byAsset[p.asset_no] = {
           asset_no: p.asset_no,
@@ -788,7 +813,7 @@ export default function PredictiveMaintenance() {
             ? 'Urgent inspection + prioritise replacement'
             : 'Schedule within 90 days',
       }))
-  }, [allPredictions])
+  }, [forecastBase])
 
   // ── Pagination ────────────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filteredPredictions.length / PAGE_SIZE))
@@ -858,8 +883,14 @@ export default function PredictiveMaintenance() {
     )
   }, [filteredPredictions, activeCurrency])
 
+  // A landscape A4 page holds ~30 of these rows, so 500 is already ~17 pages and
+  // the whole document is built in memory. The cap stays; what changes is that
+  // the header now says when it bites, instead of a document headed
+  // "500 records" that the reader takes for the whole filtered forecast.
+  const PDF_ROW_CAP = 500
+
   const handlePdfExport = useCallback((opts = {}) => {
-    const rows = filteredPredictions.slice(0, 500).map(p => ({
+    const rows = filteredPredictions.slice(0, PDF_ROW_CAP).map(p => ({
       ...p,
       due_date: fmtDate(p.due_date),
       estimated_cost: `${activeCurrency} ${fmt(p.estimated_cost, 0)}`,
@@ -886,7 +917,12 @@ export default function PredictiveMaintenance() {
       `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
       'landscape',
       '',
-      opts,
+      {
+        ...opts,
+        subtitleNote: filteredPredictions.length > PDF_ROW_CAP
+          ? `of ${fmt(filteredPredictions.length)} matching, narrow the filters to include the rest`
+          : opts.subtitleNote,
+      },
     )
   }, [filteredPredictions, activeCurrency])
 
@@ -1026,6 +1062,16 @@ export default function PredictiveMaintenance() {
       {activeTab === 'forecast' && allPredictions.length > 0 && (
         <>
           {/* ── KPI Strip ──────────────────────────────────────────────────── */}
+          {/* The filter bar sits BELOW this strip and below the charts, so the
+              scope has to be stated here rather than inferred from a control
+              the reader has not scrolled to yet. */}
+          {forecastScopeActive && (
+            <p className="text-xs text-[var(--text-muted)]">
+              Forecast figures cover {fmt(forecastBase.length)} of {fmt(allPredictions.length)} tyres
+              {siteFilter !== 'all' ? ` at ${siteFilter}` : ''}
+              {vehicleTypeFilter !== 'all' ? ` on ${vehicleTypeFilter}` : ''}.
+            </p>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <KpiCard
               icon={AlertTriangle}
@@ -1177,6 +1223,12 @@ export default function PredictiveMaintenance() {
           </div>
 
           {/* ── Quarterly forecast cards ────────────────────────────────────── */}
+          {timeScopeActive && (
+            <p className="text-xs text-[var(--text-muted)]">
+              The forecast charts and quarterly cards plot their own timeline, so the urgency and
+              horizon filters shape the table below but not these figures. Site and vehicle type do apply.
+            </p>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: 'Q1 Forecast (Months 1-3)',  value: quarterlyForecast.q1,    color: 'from-blue-900/30 to-blue-800/10 border-blue-800/40' },

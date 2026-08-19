@@ -237,6 +237,27 @@ export default function RecallTracker() {
     }).sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date))
   }, [recalls, filterSeverity, filterStatus, filterSource, search])
 
+  // Plain-English description of the registry filters, so an exported document
+  // states the scope it actually covers. A recall report is a safety record: a
+  // file headed "Recall Registry" that silently holds only the Critical/Active
+  // subset is read as the whole registry long after the screen is gone.
+  const filterSummary = useMemo(() => {
+    const parts = []
+    const q = String(search || '').trim()
+    if (q) parts.push(`search "${q}"`)
+    if (filterSeverity !== 'All') parts.push(`severity: ${filterSeverity}`)
+    if (filterStatus !== 'All') parts.push(`status: ${filterStatus}`)
+    if (filterSource !== 'All') parts.push(`source: ${filterSource}`)
+    return parts.length ? parts.join(', ') : ''
+  }, [search, filterSeverity, filterStatus, filterSource])
+
+  // Subtitle for both exports. Names the covered subset whenever a filter is on.
+  const exportScopeLine = useMemo(() => (
+    filterSummary
+      ? `${filtered.length} of ${recalls.length} recalls, filtered by ${filterSummary}`
+      : `${filtered.length} recalls (all)`
+  ), [filtered.length, recalls.length, filterSummary])
+
   // ── Batch failure detector ─────────────────────────────────────────────────
   const batchAnalysis = useMemo(() => {
     const map = {}
@@ -446,25 +467,29 @@ export default function RecallTracker() {
     const brand = await resolvePdfBrand(branding)
 
     // ── EMPTY STATE ──
-    if (recalls.length === 0) {
+    // The export covers the filtered registry, so an empty document means the
+    // filters matched nothing, not that the registry is empty.
+    if (filtered.length === 0) {
       pdfHeader(doc, 'Tyre Recall & Batch Quality Tracker', `0 recalls · ${nowStr()}`, company, brand)
-      pdfEmptyState(doc, 'No recalls for the selected period')
+      pdfEmptyState(doc, filterSummary
+        ? `No recalls match the current filters (${filterSummary})`
+        : 'No recalls for the selected period')
       pdfFooter(doc, 1, 1, company, brand)
       doc.save(`TyrePulse_Recall_Report_${new Date().toISOString().slice(0,10)}.pdf`)
       return
     }
 
-    pdfHeader(doc, 'Tyre Recall & Batch Quality Tracker', `${recalls.length} recalls · ${nowStr()}`, company, brand)
+    pdfHeader(doc, 'Tyre Recall & Batch Quality Tracker', `${exportScopeLine} · ${nowStr()}`, company, brand)
 
     doc.setFontSize(11)
     doc.setTextColor(30, 41, 59)
-    doc.text('Active Recalls', 14, 30)
+    doc.text(filterSummary ? 'Recalls (filtered)' : 'Recalls', 14, 30)
 
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
       startY: 34,
       head: [['Recall #', 'Brand', 'Affected Sizes', 'Date Issued', 'Severity', 'Source', 'Status', 'Description']],
-      body: recalls.map(r => [
+      body: filtered.map(r => [
         r.recall_number,
         r.brand,
         (r.affected_sizes ?? []).join(', '),
@@ -484,8 +509,10 @@ export default function RecallTracker() {
       },
     })
 
+    // Affected tyres are listed for the active recalls WITHIN the exported
+    // scope, so this page can never name a recall the first table left out.
     const affectedRows = []
-    recalls.filter(r => r.status === 'Active').forEach(r => {
+    filtered.filter(r => r.status === 'Active').forEach(r => {
       matchTyresForRecall(r).forEach(t => {
         affectedRows.push([r.recall_number, t.serial_number, t.asset_no, t.position, t.site, t.country, t.km_at_removal ? 'Removed' : 'Fitted'])
       })
@@ -493,7 +520,7 @@ export default function RecallTracker() {
 
     if (affectedRows.length > 0) {
       doc.addPage()
-      pdfHeader(doc, 'Tyre Recall & Batch Quality Tracker', `Affected Fleet Tyres (Active Recalls) · ${nowStr()}`, company, brand)
+      pdfHeader(doc, 'Tyre Recall & Batch Quality Tracker', `Affected Fleet Tyres (Active Recalls in this report) · ${nowStr()}`, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 30,
@@ -512,7 +539,17 @@ export default function RecallTracker() {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
-    const recallRows = recalls.map(r => ({
+    // A workbook outlives the filters that produced it, so it states its own
+    // scope on the first sheet rather than looking like the whole registry.
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+      'Report': 'Tyre Recall & Batch Quality Registry',
+      'Generated': nowStr(),
+      'Recalls included': filtered.length,
+      'Recalls in registry': recalls.length,
+      'Filters applied': filterSummary || 'None (whole registry)',
+    }]), 'Report Scope')
+
+    const recallRows = filtered.map(r => ({
       'Recall #': r.recall_number,
       'Brand': r.brand,
       'Affected Sizes': (r.affected_sizes ?? []).join(', '),
@@ -529,7 +566,7 @@ export default function RecallTracker() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(recallRows), 'Recalls')
 
     const affectedRows = []
-    recalls.forEach(r => {
+    filtered.forEach(r => {
       matchTyresForRecall(r).forEach(t => {
         affectedRows.push({
           'Recall #': r.recall_number,
@@ -569,12 +606,14 @@ export default function RecallTracker() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={exportPdf}
+              title={`Exports ${exportScopeLine}`}
               className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition"
             >
               <FileText size={14} /> PDF
             </button>
             <button
               onClick={exportExcel}
+              title={`Exports ${exportScopeLine}`}
               className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition"
             >
               <FileSpreadsheet size={14} /> Excel

@@ -217,7 +217,12 @@ export default function Procurement() {
   const vendors = useMemo(() => ['All', ...Array.from(new Set(orders.map(o => o.vendor_name).filter(Boolean))).sort()], [orders])
   const sites   = useMemo(() => ['All', ...Array.from(new Set(orders.map(o => o.site).filter(Boolean))).sort()], [orders])
 
-  const filtered = useMemo(() => {
+  // Every filter EXCEPT status. The status doughnut computes over this: the
+  // chart IS the status dimension and the filter bar carries a status select,
+  // so counting the already-filtered set would collapse it to a single slice
+  // and it would stop stating how many orders picking each status would show.
+  // Same rule as a tile that doubles as a filter toggle (see Inspections.jsx).
+  const statusChartBase = useMemo(() => {
     let list = [...orders]
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -229,17 +234,23 @@ export default function Procurement() {
         o.requested_by?.toLowerCase().includes(q)
       )
     }
-    if (statusFilter !== 'All') list = list.filter(o => o.status === statusFilter)
     if (vendorFilter !== 'All') list = list.filter(o => o.vendor_name === vendorFilter)
     if (siteFilter !== 'All')   list = list.filter(o => o.site === siteFilter)
     if (dateFrom) list = list.filter(o => o.order_date >= dateFrom)
     if (dateTo)   list = list.filter(o => o.order_date <= dateTo)
+    return list
+  }, [orders, search, vendorFilter, siteFilter, dateFrom, dateTo])
+
+  const filtered = useMemo(() => {
+    const list = statusFilter === 'All'
+      ? [...statusChartBase]
+      : statusChartBase.filter(o => o.status === statusFilter)
     list.sort((a, b) => {
       const av = a[sortField] ?? '', bv = b[sortField] ?? ''
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
     })
     return list
-  }, [orders, search, statusFilter, vendorFilter, siteFilter, dateFrom, dateTo, sortField, sortDir])
+  }, [statusChartBase, statusFilter, sortField, sortDir])
 
   const paginated = useMemo(() => {
     const s = (page - 1) * PAGE_SIZE
@@ -247,41 +258,63 @@ export default function Procurement() {
   }, [filtered, page])
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
+  // True when the register below is narrowed. Drives the caption on the tiles:
+  // a silently narrowed KPI is the same defect as an unfiltered one.
+  const scopeActive = Boolean(
+    search.trim() || statusFilter !== 'All' || vendorFilter !== 'All' ||
+    siteFilter !== 'All' || dateFrom || dateTo
+  )
+
   // ── KPIs ───────────────────────────────────────────────────────────────────
+  // Computed over `filtered`, the same population the table renders. They used
+  // to read the whole `orders` array, so filtering to one vendor or one site
+  // left the spend and lead-time tiles quoting fleet-wide figures directly
+  // above a table showing a subset.
   const kpis = useMemo(() => {
     const now = new Date()
     const yearStart = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10)
-    const thisPeriod = orders.filter(o => o.order_date >= yearStart)
+    const thisPeriod = filtered.filter(o => o.order_date >= yearStart)
     const totalPOs   = thisPeriod.length
 
-    const spend = orders
+    const spend = filtered
       .filter(o => ['Delivered','Closed'].includes(o.status))
       .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
 
-    const pendingDelivery = orders.filter(o => ['Ordered','Partial Delivery'].includes(o.status)).length
+    const pendingDelivery = filtered.filter(o => ['Ordered','Partial Delivery'].includes(o.status)).length
 
-    const pendingValue = orders
+    const pendingValue = filtered
       .filter(o => ['Submitted','Approved','Ordered','Partial Delivery'].includes(o.status))
       .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
 
-    const delivered = orders.filter(o => o.actual_delivery && o.order_date)
+    const delivered = filtered.filter(o => o.actual_delivery && o.order_date)
     const avgLeadTime = delivered.length
       ? Math.round(delivered.reduce((s, o) => s + (daysBetween(o.order_date, o.actual_delivery) || 0), 0) / delivered.length)
       : null
 
-    const budgetVariance = budget > 0 ? ((spend / budget) * 100) : null
+    return { totalPOs, spend, pendingDelivery, pendingValue, avgLeadTime }
+  }, [filtered])
 
-    return { totalPOs, spend, pendingDelivery, pendingValue, avgLeadTime, budgetVariance }
+  // Budget variance DELIBERATELY stays whole-register. `budget` is a single
+  // annual org-wide figure held in settings, so dividing one site's spend by
+  // the whole company's budget would read as "we are well under" when it only
+  // means the filter excluded most of the spend. The panel says which scope it
+  // covers instead of quietly narrowing.
+  const budgetScope = useMemo(() => {
+    const spend = orders
+      .filter(o => ['Delivered','Closed'].includes(o.status))
+      .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
+    return { spend, variance: budget > 0 ? ((spend / budget) * 100) : null }
   }, [orders, budget])
 
   // ── Chart: monthly spend by vendor (top 5) ─────────────────────────────────
+  // Reads `filtered` so the chart analyses the same population as the table.
   const vendorBarData = useMemo(() => {
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
       return d.toISOString().slice(0, 7)
     })
     const vendorTotals = {}
-    orders.forEach(o => {
+    filtered.forEach(o => {
       if (!['Delivered','Closed'].includes(o.status)) return
       vendorTotals[o.vendor_name] = (vendorTotals[o.vendor_name] || 0) + (parseFloat(o.total_amount) || 0)
     })
@@ -295,7 +328,7 @@ export default function Procurement() {
       datasets: top5.map((vendor, idx) => ({
         label: vendor,
         data: months.map(month => {
-          return orders
+          return filtered
             .filter(o => o.vendor_name === vendor && o.order_date?.startsWith(month) && ['Delivered','Closed'].includes(o.status))
             .reduce((s, o) => s + (parseFloat(o.total_amount) || 0), 0)
         }),
@@ -304,9 +337,10 @@ export default function Procurement() {
         borderWidth: 1,
       })),
     }
-  }, [orders])
+  }, [filtered])
 
   // ── Chart: POs by status (doughnut) ───────────────────────────────────────
+  // Reads `statusChartBase` (see above): holds out its own dimension.
   const statusDoughnutData = useMemo(() => {
     const colorMap = {
       Draft: '#6b7280', Submitted: '#3b82f6', Approved: '#10b981',
@@ -314,7 +348,7 @@ export default function Procurement() {
       Delivered: '#14b8a6', Cancelled: '#ef4444', Closed: '#a855f7',
     }
     const counts = {}
-    orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
+    statusChartBase.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
     const entries = Object.entries(counts).filter(([, v]) => v > 0)
     return {
       labels: entries.map(([k]) => k),
@@ -325,9 +359,11 @@ export default function Procurement() {
         borderWidth: 2,
       }],
     }
-  }, [orders])
+  }, [statusChartBase])
 
   // ── Chart: cumulative spend vs budget (line) ───────────────────────────────
+  // Whole-register on purpose: the budget line is one annual org-wide figure,
+  // so plotting a filtered spend against it would compare two different scopes.
   const cumulativeLineData = useMemo(() => {
     const year = new Date().getFullYear().toString()
     const months = Array.from({ length: 12 }, (_, i) =>
@@ -655,6 +691,14 @@ export default function Procurement() {
       )}
 
       {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
+      {/* The filter bar sits BELOW these tiles, so when it is on the tiles must
+          say which set they cover or they read as whole-register figures. */}
+      {scopeActive && (
+        <p className="text-[var(--text-muted)] text-xs">
+          {t('procurement.kpi.scopeNote', { count: filtered.length, total: orders.length })}
+          {statusFilter !== 'All' ? ` ${t('procurement.kpi.scopeNoteStatus')}` : ''}
+        </p>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           {
@@ -663,7 +707,9 @@ export default function Procurement() {
             suffix: '',
             color: 'orange',
             icon: ShoppingCart,
-            sub: t('procurement.kpi.totalPosSub', { count: orders.length }),
+            sub: scopeActive
+              ? t('procurement.kpi.totalPosSubFiltered', { count: filtered.length })
+              : t('procurement.kpi.totalPosSub', { count: orders.length }),
           },
           {
             label: t('procurement.kpi.totalSpend'),
@@ -685,11 +731,15 @@ export default function Procurement() {
           },
           {
             label: t('procurement.kpi.budgetUsed'),
-            value: budget > 0 ? `${kpis.budgetVariance?.toFixed(1)}%` : '-',
+            value: budget > 0 ? `${budgetScope.variance?.toFixed(1)}%` : '-',
             suffix: '',
-            color: kpis.budgetVariance > 100 ? 'red' : kpis.budgetVariance > 80 ? 'yellow' : 'teal',
+            color: budgetScope.variance > 100 ? 'red' : budgetScope.variance > 80 ? 'yellow' : 'teal',
             icon: BarChart2,
-            sub: budget > 0 ? t('procurement.kpi.budgetUsedSub', { value: `${activeCurrency} ${(budget / 1000).toFixed(0)}k` }) : t('procurement.kpi.setBudgetBelow'),
+            sub: budget > 0
+              ? (scopeActive
+                ? t('procurement.kpi.budgetUsedSubAll', { value: `${activeCurrency} ${(budget / 1000).toFixed(0)}k` })
+                : t('procurement.kpi.budgetUsedSub', { value: `${activeCurrency} ${(budget / 1000).toFixed(0)}k` }))
+              : t('procurement.kpi.setBudgetBelow'),
           },
           {
             label: t('procurement.kpi.avgLeadTime'),
@@ -733,7 +783,7 @@ export default function Procurement() {
         <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
           <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.ordersByStatus')}</h3>
           <div className="h-56">
-            {orders.length > 0
+            {statusChartBase.length > 0
               ? <Doughnut data={statusDoughnutData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } } } }} />
               : <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('procurement.charts.noOrders')}</div>
             }
@@ -774,6 +824,10 @@ export default function Procurement() {
             <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{budgetError}</p>
           )}
 
+          {scopeActive && (
+            <p className="text-[var(--text-muted)] text-xs mb-3">{t('procurement.budgetPanel.scopeNote')}</p>
+          )}
+
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-[var(--text-secondary)]">{t('procurement.budgetPanel.annualBudget')}</span>
@@ -781,32 +835,32 @@ export default function Procurement() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-[var(--text-secondary)]">{t('procurement.budgetPanel.totalSpend')}</span>
-              <span className="text-green-400 font-medium">{fmtCur(kpis.spend)}</span>
+              <span className="text-green-400 font-medium">{fmtCur(budgetScope.spend)}</span>
             </div>
             {budget > 0 && (
               <>
                 <div className="flex justify-between text-sm">
                   <span className="text-[var(--text-secondary)]">{t('procurement.budgetPanel.remaining')}</span>
-                  <span className={`font-medium ${budget - kpis.spend < 0 ? 'text-red-400' : 'text-teal-400'}`}>
-                    {fmtCur(budget - kpis.spend)}
+                  <span className={`font-medium ${budget - budgetScope.spend < 0 ? 'text-red-400' : 'text-teal-400'}`}>
+                    {fmtCur(budget - budgetScope.spend)}
                   </span>
                 </div>
                 {/* Gauge */}
                 <div className="mt-3">
                   <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
                     <span>0</span>
-                    <span className={kpis.budgetVariance > 100 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}>
-                      {kpis.budgetVariance?.toFixed(1)}%
+                    <span className={budgetScope.variance > 100 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}>
+                      {budgetScope.variance?.toFixed(1)}%
                     </span>
                     <span>{fmtCur(budget)}</span>
                   </div>
                   <div className="h-3 bg-[var(--surface-2)] rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ${
-                        kpis.budgetVariance > 100 ? 'bg-red-500' :
-                        kpis.budgetVariance > 80  ? 'bg-yellow-500' : 'bg-green-500'
+                        budgetScope.variance > 100 ? 'bg-red-500' :
+                        budgetScope.variance > 80  ? 'bg-yellow-500' : 'bg-green-500'
                       }`}
-                      style={{ width: `${Math.min(100, kpis.budgetVariance || 0)}%` }}
+                      style={{ width: `${Math.min(100, budgetScope.variance || 0)}%` }}
                     />
                   </div>
                 </div>

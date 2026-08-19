@@ -98,6 +98,43 @@ const FAILURE_PALETTE = [
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+// Pure aggregators over a claim list. Shared by the on-screen panels and by the
+// exports, so the same rule produces both and one document cannot carry two
+// different populations under a single title.
+function computeBrandPerf(list) {
+  const map = {}
+  list.forEach(c => {
+    const b = c.brand?.trim() || 'Unknown'
+    if (!map[b]) map[b] = { brand: b, total: 0, approved: 0, credits: 0, kmList: [] }
+    map[b].total++
+    if (['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)) map[b].approved++
+    if (['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount) map[b].credits += Number(c.credit_amount)
+    if (c.km_run > 0) map[b].kmList.push(c.km_run)
+  })
+  return Object.values(map).map(b => ({
+    ...b,
+    approvalRate: b.total > 0 ? (b.approved / b.total) * 100 : 0,
+    avgCredit: b.approved > 0 ? b.credits / b.approved : 0,
+    avgKm: b.kmList.length > 0 ? b.kmList.reduce((s, v) => s + v, 0) / b.kmList.length : 0,
+  })).sort((a, b) => b.total - a.total)
+}
+
+function computeFailureCounts(list) {
+  const map = {}
+  FAILURE_TYPES.forEach(f => { map[f] = { count: 0, kmList: [] } })
+  list.forEach(c => {
+    if (map[c.failure_type]) {
+      map[c.failure_type].count++
+      if (c.km_run > 0) map[c.failure_type].kmList.push(c.km_run)
+    }
+  })
+  return Object.entries(map).map(([type, { count, kmList }]) => ({
+    type,
+    count,
+    avgKm: kmList.length > 0 ? Math.round(kmList.reduce((s, v) => s + v, 0) / kmList.length) : 0,
+  })).sort((a, b) => b.count - a.count)
+}
+
 function fmtDate(iso) {
   if (!iso) return '-'
   const d = new Date(iso)
@@ -280,27 +317,23 @@ export default function WarrantyTracker() {
     return `${cur} ${Math.round(v).toLocaleString()}`
   }
 
-  const kpis = useMemo(() => {
-    const total = scopedClaims.length
-    const open = scopedClaims.filter(c => ['Submitted', 'Under Review', 'Approved'].includes(c.claim_status)).length
-    const credited = scopedClaims.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
-    const totalCredits = credited.reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const approvedCount = scopedClaims.filter(c =>
-      ['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)
-    ).length
-    const approvalRate = total > 0 ? (approvedCount / total) * 100 : 0
-    const avgCredit = credited.length > 0 ? totalCredits / credited.length : 0
-    return { total, open, totalCredits, approvalRate, avgCredit }
-  }, [scopedClaims])
-
   const brands = useMemo(() => ['All', ...new Set(scopedClaims.map(c => c.brand).filter(Boolean))], [scopedClaims])
   const sites  = useMemo(() => ['All', ...new Set(scopedClaims.map(c => c.site).filter(Boolean))], [scopedClaims])
 
-  const filtered = useMemo(() => {
+  // Two scopes, following the pattern in Inspections.jsx.
+  //
+  // `filteredBase` applies the POPULATION filters (site, date range, search)
+  // and deliberately holds out the three DIMENSION selects. The KPI tiles and
+  // the analytics panels compute over it: the Brand Performance table IS the
+  // brand dimension, the status doughnut IS the status dimension and the
+  // Failure Analysis table IS the failure dimension, so counting the
+  // already-filtered set would drive each panel to match its own select and it
+  // would stop stating how many claims picking a value would show.
+  //
+  // The tiles used to compute over `scopedClaims` (country only), so a site or
+  // date filter left five whole-country figures above a narrowed table.
+  const filteredBase = useMemo(() => {
     return scopedClaims.filter(c => {
-      if (filterBrand !== 'All' && c.brand !== filterBrand) return false
-      if (filterStatus !== 'All' && c.claim_status !== filterStatus) return false
-      if (filterFailure !== 'All' && c.failure_type !== filterFailure) return false
       if (filterSite !== 'All' && c.site !== filterSite) return false
       if (dateFrom && c.created_at < dateFrom) return false
       if (dateTo && c.created_at > dateTo + 'T23:59:59') return false
@@ -315,57 +348,54 @@ export default function WarrantyTracker() {
         )
       }
       return true
+    })
+  }, [scopedClaims, filterSite, dateFrom, dateTo, search])
+
+  // True when the tiles cover fewer claims than the country holds.
+  const scopeActive = filteredBase.length !== scopedClaims.length
+  // True when a dimension select narrows the table below the tiles.
+  const dimensionActive = filterBrand !== 'All' || filterStatus !== 'All' || filterFailure !== 'All'
+
+  const filtered = useMemo(() => {
+    return filteredBase.filter(c => {
+      if (filterBrand !== 'All' && c.brand !== filterBrand) return false
+      if (filterStatus !== 'All' && c.claim_status !== filterStatus) return false
+      if (filterFailure !== 'All' && c.failure_type !== filterFailure) return false
+      return true
     }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  }, [scopedClaims, filterBrand, filterStatus, filterFailure, filterSite, dateFrom, dateTo, search])
+  }, [filteredBase, filterBrand, filterStatus, filterFailure])
+
+  const kpis = useMemo(() => {
+    const total = filteredBase.length
+    const open = filteredBase.filter(c => ['Submitted', 'Under Review', 'Approved'].includes(c.claim_status)).length
+    const credited = filteredBase.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
+    const totalCredits = credited.reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
+    const approvedCount = filteredBase.filter(c =>
+      ['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)
+    ).length
+    const approvalRate = total > 0 ? (approvedCount / total) * 100 : 0
+    const avgCredit = credited.length > 0 ? totalCredits / credited.length : 0
+    return { total, open, totalCredits, approvalRate, avgCredit }
+  }, [filteredBase])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const brandPerf = useMemo(() => {
-    const map = {}
-    scopedClaims.forEach(c => {
-      const b = c.brand?.trim() || 'Unknown'
-      if (!map[b]) map[b] = { brand: b, total: 0, approved: 0, credits: 0, kmList: [] }
-      map[b].total++
-      if (['Approved', 'Credit Issued', 'Closed'].includes(c.claim_status)) map[b].approved++
-      if (['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount) map[b].credits += Number(c.credit_amount)
-      if (c.km_run > 0) map[b].kmList.push(c.km_run)
-    })
-    return Object.values(map).map(b => ({
-      ...b,
-      approvalRate: b.total > 0 ? (b.approved / b.total) * 100 : 0,
-      avgCredit: b.approved > 0 ? b.credits / b.approved : 0,
-      avgKm: b.kmList.length > 0 ? b.kmList.reduce((s, v) => s + v, 0) / b.kmList.length : 0,
-    })).sort((a, b) => b.total - a.total)
-  }, [scopedClaims])
+  const brandPerf = useMemo(() => computeBrandPerf(filteredBase), [filteredBase])
 
   const statusCounts = useMemo(() => {
     const map = {}
     CLAIM_STATUSES.forEach(s => { map[s] = 0 })
-    scopedClaims.forEach(c => { if (map[c.claim_status] != null) map[c.claim_status]++ })
+    filteredBase.forEach(c => { if (map[c.claim_status] != null) map[c.claim_status]++ })
     return map
-  }, [scopedClaims])
+  }, [filteredBase])
 
-  const failureCounts = useMemo(() => {
-    const map = {}
-    FAILURE_TYPES.forEach(f => { map[f] = { count: 0, kmList: [] } })
-    scopedClaims.forEach(c => {
-      if (map[c.failure_type]) {
-        map[c.failure_type].count++
-        if (c.km_run > 0) map[c.failure_type].kmList.push(c.km_run)
-      }
-    })
-    return Object.entries(map).map(([type, { count, kmList }]) => ({
-      type,
-      count,
-      avgKm: kmList.length > 0 ? Math.round(kmList.reduce((s, v) => s + v, 0) / kmList.length) : 0,
-    })).sort((a, b) => b.count - a.count)
-  }, [scopedClaims])
+  const failureCounts = useMemo(() => computeFailureCounts(filteredBase), [filteredBase])
 
   const monthlyCredits = useMemo(() => {
     const now = new Date()
     const arr = Array(12).fill(0)
-    scopedClaims.forEach(c => {
+    filteredBase.forEach(c => {
       if (!['Credit Issued', 'Closed'].includes(c.claim_status)) return
       if (!c.credit_date) return
       const d = new Date(c.credit_date)
@@ -379,20 +409,20 @@ export default function WarrantyTracker() {
       labels.push(MONTHS[d.getMonth()])
     }
     return { labels, data: arr }
-  }, [scopedClaims])
+  }, [filteredBase])
 
   const creditAnalysis = useMemo(() => {
-    const totalCredits = scopedClaims
+    const totalCredits = filteredBase
       .filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status))
       .reduce((s, c) => s + (Number(c.credit_amount) || 0), 0)
-    const openApproved = scopedClaims.filter(c => c.claim_status === 'Approved')
-    const avgCreditIssued = scopedClaims.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount)
+    const openApproved = filteredBase.filter(c => c.claim_status === 'Approved')
+    const avgCreditIssued = filteredBase.filter(c => ['Credit Issued', 'Closed'].includes(c.claim_status) && c.credit_amount)
     const avg = avgCreditIssued.length > 0
       ? avgCreditIssued.reduce((s, c) => s + Number(c.credit_amount), 0) / avgCreditIssued.length
       : 0
     const estimatedUnclaimed = openApproved.length * avg
     return { totalCredits, estimatedUnclaimed, openApprovedCount: openApproved.length }
-  }, [scopedClaims])
+  }, [filteredBase])
 
   const openForm = useCallback((claim = null) => {
     if (claim) {
@@ -552,14 +582,19 @@ export default function WarrantyTracker() {
         fmtDate(c.created_at),
       ]),
     })
-    if (brandPerf.length > 0) {
+    // ONE scope per document. Page 1 lists `filtered`; this page used to be
+    // built from the screen's `brandPerf`, which holds out the brand/status/
+    // failure selects, so a filtered report carried a brand table covering
+    // claims that were not in it, under a single title.
+    const exportBrandPerf = computeBrandPerf(filtered)
+    if (exportBrandPerf.length > 0) {
       doc.addPage()
-      pdfHeader(doc, 'Warranty Claims Report', `Brand Warranty Performance · ${formatDate(new Date())}`, company, brand)
+      pdfHeader(doc, 'Warranty Claims Report', `Brand Warranty Performance, same ${filtered.length} claims · ${formatDate(new Date())}`, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 30,
         head: [['Brand', 'Total Claims', 'Approval Rate', 'Avg Credit', 'Avg km at Failure']],
-        body: brandPerf.map(b => [
+        body: exportBrandPerf.map(b => [
           b.brand, b.total, `${b.approvalRate.toFixed(1)}%`,
           b.avgCredit > 0 ? `${cur} ${Math.round(b.avgCredit).toLocaleString()}` : '-',
           b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() : '-',
@@ -569,7 +604,7 @@ export default function WarrantyTracker() {
     const totalPages = doc.internal.getNumberOfPages()
     for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
     doc.save(`warranty-claims-${new Date().toISOString().split('T')[0]}.pdf`)
-  }, [claims, filtered, brandPerf, cur, branding, company])
+  }, [filtered, cur, branding, company])
 
   const exportExcel = useCallback(async () => {
     const XLSX = await import('xlsx')
@@ -596,11 +631,16 @@ export default function WarrantyTracker() {
       Notes: c.notes,
       'Created At': fmtDate(c.created_at),
     }))
-    const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Warranty Claims')
-    if (brandPerf.length > 0) {
-      const bpRows = brandPerf.map(b => ({
+    // ONE scope per workbook: every sheet is derived from `filtered`, the same
+    // set the Warranty Claims sheet lists. The Brand Performance and Failure
+    // Analysis sheets used to be built from the screen aggregates, which cover
+    // a wider population than the claim list beside them.
+    const exportBrandPerf = computeBrandPerf(filtered)
+    const exportFailures = computeFailureCounts(filtered)
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Warranty Claims')
+    if (exportBrandPerf.length > 0) {
+      const bpRows = exportBrandPerf.map(b => ({
         Brand: b.brand,
         'Total Claims': b.total,
         'Approval Rate %': +b.approvalRate.toFixed(1),
@@ -609,13 +649,13 @@ export default function WarrantyTracker() {
       }))
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bpRows), 'Brand Performance')
     }
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(failureCounts.map(f => ({
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportFailures.map(f => ({
       'Failure Type': f.type,
       Count: f.count,
       'Avg km at Failure': f.avgKm,
     }))), 'Failure Analysis')
     XLSX.writeFile(wb, `warranty-claims-${new Date().toISOString().split('T')[0]}.xlsx`)
-  }, [filtered, brandPerf, failureCounts])
+  }, [filtered])
 
   const exportClaimLetter = useCallback(async (claim) => {
     const { default: jsPDF } = await import('jspdf')
@@ -684,6 +724,10 @@ export default function WarrantyTracker() {
     doc.save(`warranty-claim-${claim.claim_no}.pdf`)
   }, [])
 
+  // DELIBERATELY whole-country. The ROI model compares this year's credits with
+  // an annual purchase volume the user types in, and that volume is a
+  // country-wide figure, so narrowing one side of the ratio would understate
+  // the recovery rate. The panel says so on screen.
   const roiCalc = useMemo(() => {
     const annualCount = Number(roiAnnualCount) || 0
     const avgCost = Number(roiAvgCost) || 0
@@ -785,6 +829,13 @@ export default function WarrantyTracker() {
           <Info size={13} className="mt-0.5 flex-shrink-0" />
           <span>Showing all countries. Credit figures below span multiple currencies (SAR, AED, EGP) and are not a single-currency total. Select a country to see credits in that country's currency.</span>
         </div>
+      )}
+
+      {(scopeActive || dimensionActive) && (
+        <p className="text-[var(--text-muted)] text-xs">
+          {scopeActive && `These figures and the analytics panels cover the ${filteredBase.length} of ${scopedClaims.length} claims matching the site, date and search filters. `}
+          {dimensionActive && 'The brand, status and failure selects shape the claim table and the exports below, not these figures, so each panel still states how many claims picking a value would show.'}
+        </p>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -1128,7 +1179,7 @@ export default function WarrantyTracker() {
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Total Credits Received</p>
               <p className="text-3xl font-bold text-emerald-400">{fmt(creditAnalysis.totalCredits)}</p>
-              <p className="text-[var(--text-muted)] text-xs mt-1">across {scopedClaims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">across {filteredBase.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
             </div>
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <p className="text-[var(--text-muted)] text-xs mb-1">Est. Unclaimed (Approved)</p>
@@ -1188,6 +1239,11 @@ export default function WarrantyTracker() {
                 />
               </div>
             </div>
+            {(scopeActive || dimensionActive) && (
+              <p className="text-[var(--text-muted)] text-xs">
+                This model compares the year's credits with the annual purchase volume entered above, which is a whole country figure, so it covers every claim in the country and is not narrowed by the filters.
+              </p>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
                 <p className="text-[var(--text-muted)] text-xs mb-1">Claims Filed (this year)</p>

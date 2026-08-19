@@ -174,6 +174,16 @@ export default function SiteComparison() {
 
   const radarData = useMemo(() => buildSiteRadar(filteredMetrics), [filteredMetrics])
 
+  // The whole page exists to compare a CHOSEN subset of sites, and every chart
+  // already reads `filteredMetrics`. The three exports used to ship `allMetrics`,
+  // so a two-site comparison produced a file covering every site in the country.
+  // They now export the compared sites and name that scope in the document.
+  const exportScopeNote = useMemo(() => (
+    filteredMetrics.length < allMetrics.length
+      ? `${filteredMetrics.length} of ${allMetrics.length} sites compared`
+      : ''
+  ), [filteredMetrics.length, allMetrics.length])
+
   function toggleSite(site) {
     setSelectedSites(prev =>
       prev.includes(site) ? prev.filter(s => s !== site) : [...prev, site]
@@ -240,16 +250,18 @@ export default function SiteComparison() {
         title={t('sitecomparison.title')}
         subtitle={t('sitecomparison.subtitle')}
         icon={GitMerge}
-        actions={!loading && allMetrics.length > 0 ? (
+        actions={!loading && filteredMetrics.length > 0 ? (
           <div className="flex gap-2">
             <button
-              onClick={() => exportToExcel(allMetrics, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
+              title={exportScopeNote || undefined}
+              onClick={() => exportToExcel(filteredMetrics, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <Download size={14} /> {t('sitecomparison.actions.excel')}
             </button>
             <button
-              onClick={() => exportToPdf(allMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape')}
+              title={exportScopeNote || undefined}
+              onClick={() => exportToPdf(filteredMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape', '', exportScopeNote ? { subtitleNote: exportScopeNote } : {})}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <FileText size={14} /> {t('sitecomparison.actions.pdf')}
@@ -257,7 +269,7 @@ export default function SiteComparison() {
             <EmailPdfButton
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
               getPdf={async () => ({
-                base64: await exportToPdf(allMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape', '', { returnBase64: true }),
+                base64: await exportToPdf(filteredMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape', '', { returnBase64: true, ...(exportScopeNote ? { subtitleNote: exportScopeNote } : {}) }),
                 filename: 'TyrePulse_SiteComparison.pdf',
                 subject: 'Site Comparison',
                 bodyHtml: '<p>Attached is the Site Comparison report.</p>',

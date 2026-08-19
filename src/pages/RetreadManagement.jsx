@@ -678,8 +678,11 @@ export default function RetreadManagement() {
   }, [roi])
 
   // ── Export handlers ────────────────────────────────────────────────────────
+  // Both exports cover `filtered`, the same set the lifecycle table renders.
+  // They used to map the whole `enriched` array, so a user narrowed to one site
+  // or one brand received a workbook and a PDF holding every retread record.
   const handleExportExcel = useCallback(() => {
-    const rows = enriched.map(t => ({
+    const rows = filtered.map(t => ({
       serial_number: t.serial_number,
       brand: t.brand,
       size: t.size,
@@ -698,11 +701,11 @@ export default function RetreadManagement() {
       status: t.status,
     }))
     exportToExcel(rows, EXPORT_COLS, EXPORT_HEADERS, `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}`, 'Retread Records')
-  }, [enriched])
+  }, [filtered])
 
   const handleExportPdf = useCallback((opts = {}) => (
     exportToPdf(
-      enriched.map(t => ({
+      filtered.map(t => ({
         serial_number: t.serial_number,
         brand: t.brand,
         size: t.size,
@@ -735,9 +738,14 @@ export default function RetreadManagement() {
       `TyrePulse_Retread_${new Date().toISOString().slice(0, 10)}`,
       'landscape',
       '',
-      opts,
+      {
+        ...opts,
+        subtitleNote: filtered.length < enriched.length
+          ? `of ${enriched.length.toLocaleString()} retread records, filtered`
+          : opts.subtitleNote,
+      },
     )
-  ), [enriched])
+  ), [filtered, enriched])
 
   const handleExportRoiPdf = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')

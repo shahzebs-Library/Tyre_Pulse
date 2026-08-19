@@ -104,6 +104,9 @@ export default function ReportCenter() {
   // response at 1000 whatever a limit says - so the Excel export below shipped
   // a 1,000-row spreadsheet that looked like the complete range (KSA alone is
   // past 8,000 tyre rows). `id` is the paging tiebreak; issue_date repeats.
+  // A landscape A4 page holds ~30 of these rows, so 200 is already ~7 pages.
+  const PDF_ROW_CAP = 200
+
   async function fetchTyreRows() {
     const { data, error, truncated } = await fetchAllPages(
       (from, to) => applyCountry(
@@ -194,13 +197,21 @@ export default function ReportCenter() {
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'Tyre Records', { company: reportCompany })
       } else if (id === 'pdf') {
         const { rows, truncated } = await fetchTyreRows()
-        partialExport = truncated
+        // The PDF body is bounded at PDF_ROW_CAP because the whole document is
+        // built in memory. That cap, not only the 40,000-row fetch cap, has to
+        // count as a partial export: an 8,000-row report used to say "Report
+        // generated and downloaded" and deliver 200 rows.
+        const pdfCapped = rows.length > PDF_ROW_CAP
+        partialExport = truncated || pdfCapped
         if (!rows.length) throw new Error(t('reportcenter.errors.noRecordsInRange'))
         await exportToPdf(
-          rows.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
+          rows.slice(0, PDF_ROW_CAP).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
           [{ key: 'issue_date', header: 'Date', width: 24 }, { key: 'asset_no', header: 'Asset No', width: 28 }, { key: 'brand', header: 'Brand', width: 24 }, { key: 'site', header: 'Site', width: 30 }, { key: 'category', header: 'Category', width: 32 }, { key: 'risk_level', header: 'Risk', width: 20 }, { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 24 }],
           `${reportCompany}: Tyre Records · ${formatDate(now, activeCountry)}`,
-          `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'landscape', reportCompany)
+          `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'landscape', reportCompany,
+          pdfCapped
+            ? { subtitleNote: `of ${rows.length.toLocaleString()} matching records, narrow the date range for the rest` }
+            : {})
       }
       setToast({
         text: partialExport

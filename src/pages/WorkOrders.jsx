@@ -620,9 +620,12 @@ export default function WorkOrders() {
 
   return (
     <div className="space-y-6">
+      {/* Subtitle quotes `total`, the server-reported count for the current
+          filter set. It used to quote `orders.length`, which is the 20-row
+          SERVER PAGE, so a 15,933-card window was headed "20 total". */}
       <PageHeader
         title={t('workorders.title')}
-        subtitle={t('workorders.subtitle', { count: orders.length })}
+        subtitle={t('workorders.subtitle', { count: total.toLocaleString() })}
         icon={Wrench}
         onRefresh={load}
         actions={

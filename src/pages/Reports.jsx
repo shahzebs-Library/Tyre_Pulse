@@ -430,6 +430,15 @@ export default function Reports() {
 
   const displayCols = (REPORT_COLUMNS[reportType] ?? []).filter(c => selectedCols.includes(c))
 
+  // The emailed PDF is built in memory and base64-encoded into an attachment,
+  // so its body is bounded. The cap stays; what changes is that the document
+  // now SAYS when it bites. It used to carry "Total Records: 12,000" in the PDF
+  // summary table and in the email body while the attachment held 5,000 rows,
+  // so a reader drew conclusions from rows that were not in the file.
+  const EMAIL_PDF_ROW_CAP = 5000
+  const emailPdfRowCount = Math.min(allRows.length, EMAIL_PDF_ROW_CAP)
+  const emailPdfCapped = allRows.length > EMAIL_PDF_ROW_CAP
+
   const rangeStart = allRows.length === 0 ? 0 : (previewPage - 1) * PAGE_SIZE + 1
   const rangeEnd   = Math.min(previewPage * PAGE_SIZE, allRows.length)
 
@@ -781,10 +790,13 @@ export default function Reports() {
         onClose={() => setEmailModalOpen(false)}
         reportTitle={reportType ? `${reportType} Report` : 'Custom Report'}
         pdfColumns={displayCols.map(c => COLUMN_LABELS[c] ?? c)}
-        pdfRows={allRows.slice(0, 5000).map(row => displayCols.map(c => row[c] ?? ''))}
+        pdfRows={allRows.slice(0, EMAIL_PDF_ROW_CAP).map(row => displayCols.map(c => row[c] ?? ''))}
         kpiSummary={{
           'Report Type':    reportType || '-',
           'Total Records':  allRows.length.toLocaleString(),
+          'Rows In Attached PDF': emailPdfCapped
+            ? `${emailPdfRowCount.toLocaleString()} of ${allRows.length.toLocaleString()}, narrow the filters to include the rest`
+            : emailPdfRowCount.toLocaleString(),
           'Date From':      dateFrom || '-',
           'Date To':        dateTo || '-',
           'Site Filter':    filterSite || 'All',

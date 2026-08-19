@@ -1126,6 +1126,15 @@ export default function TyreSpecifications() {
     })
   }, [specs, libSearch, libTypeFilter, libPosFilter])
 
+  // Plain-English description of the Spec Library filters, for the export.
+  const specLibraryScope = useMemo(() => {
+    const parts = []
+    if (libSearch.trim()) parts.push(`search "${libSearch.trim()}"`)
+    if (libTypeFilter) parts.push(`vehicle type: ${libTypeFilter}`)
+    if (libPosFilter) parts.push(`position: ${libPosFilter}`)
+    return parts.join(', ')
+  }, [libSearch, libTypeFilter, libPosFilter])
+
   // ── Filtered compliance ────────────────────────────────────────────────────────
 
   const filteredCompliance = useMemo(() => {
@@ -1370,9 +1379,13 @@ export default function TyreSpecifications() {
 
   // ── Export specs to Excel ─────────────────────────────────────────────────────
 
+  // Exports the Spec Library as it is on screen. It used to map the whole
+  // `specs` array while the library renders `filteredSpecs`, so a search or a
+  // vehicle-type filter produced a workbook holding every specification. Its
+  // neighbour in this same toolbar already exports the filtered compliance set.
   async function exportSpecsExcel() {
     const XLSX = await import('xlsx')
-    const rows = specs.map(s => ({
+    const rows = filteredSpecs.map(s => ({
       'Vehicle Type': s.vehicle_type,
       'Position': s.position,
       'Approved Sizes': s.approved_sizes.join(', '),
@@ -1384,9 +1397,15 @@ export default function TyreSpecifications() {
       'Min Tread Depth': s.min_tread_depth,
       'Notes': s.notes,
     }))
-    const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Tyre Specs')
+    // A workbook outlives the filter that produced it, so it names its scope.
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+      'Report': 'Tyre Specification Library',
+      'Specifications included': filteredSpecs.length,
+      'Specifications defined': specs.length,
+      'Filters applied': specLibraryScope || 'None (whole library)',
+    }]), 'Report Scope')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Tyre Specs')
     XLSX.writeFile(wb, 'TyrePulse_Specifications.xlsx')
   }
 
@@ -1521,6 +1540,9 @@ export default function TyreSpecifications() {
             </button>
             <button
               onClick={exportSpecsExcel}
+              title={specLibraryScope
+                ? `Exports ${filteredSpecs.length} of ${specs.length} specifications, filtered by ${specLibraryScope}`
+                : `Exports all ${specs.length} specifications`}
               className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
             >
               <FileSpreadsheet size={14} /> Export

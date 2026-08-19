@@ -397,14 +397,32 @@ export default function VehicleHistory() {
   }, [assetMetrics, allAnomalies, fleetMap, gridByAsset, fullRecordsByAsset, rangeActive])
 
   // ── Filter + sort ────────────────────────────────────────────────────────────
-  const filteredRows = useMemo(() => {
+  // Two scopes, following the pattern in Inspections.jsx.
+  //
+  // `scopedRows` applies the POPULATION filters (search, site). The summary
+  // strip computes over this. It used to compute over `vehicleRows`, so the
+  // date range moved the tiles while the site select in the SAME filter card
+  // did not: picking one site left four fleet-wide figures above a table
+  // showing that site alone.
+  //
+  // The anomaly select is deliberately held out. Two of the four tiles ARE the
+  // anomaly dimension ("With anomalies", "High misuse risk"); counting the
+  // already-filtered set would drive each tile to match the table and it would
+  // stop stating how many vehicles the fleet actually has flagged.
+  const scopedRows = useMemo(() => {
     let rows = vehicleRows
-
     if (search)
       rows = rows.filter(r => r.assetNo.toLowerCase().includes(search.toLowerCase()))
-
     if (siteFilter)
       rows = rows.filter(r => r.sites.includes(siteFilter))
+    return rows
+  }, [vehicleRows, search, siteFilter])
+
+  // True when the tiles cover fewer vehicles than the register holds.
+  const scopeActive = Boolean(search || siteFilter)
+
+  const filteredRows = useMemo(() => {
+    let rows = scopedRows
 
     if (anomalyFilter === 'has')
       rows = rows.filter(r => r.allFlags.length > 0)
@@ -418,7 +436,7 @@ export default function VehicleHistory() {
     if (sortBy === 'date')    copy.sort((a, b) => (b.lastSeen || '').localeCompare(a.lastSeen || ''))
 
     return copy
-  }, [vehicleRows, search, siteFilter, anomalyFilter, sortBy])
+  }, [scopedRows, anomalyFilter, sortBy])
 
   // Paged, not capped. This table used to render filteredRows.slice(0, 200)
   // against a fleet of well over a thousand assets, so most vehicles could
@@ -492,16 +510,18 @@ export default function VehicleHistory() {
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: t('vehiclehistory.summary.totalVehicles'),   value: vehicleRows.length,                                                color: 'text-blue-400' },
-          { label: t('vehiclehistory.summary.withAnomalies'),   value: vehicleRows.filter(r => r.allFlags.length > 0).length,            color: 'text-orange-400' },
-          { label: t('vehiclehistory.summary.highMisuseRisk'), value: vehicleRows.filter(r => r.misuseScore >= 51).length,              color: 'text-red-400' },
+          { label: t('vehiclehistory.summary.totalVehicles'),   value: scopedRows.length,                                                color: 'text-blue-400' },
+          { label: t('vehiclehistory.summary.withAnomalies'),   value: scopedRows.filter(r => r.allFlags.length > 0).length,            color: 'text-orange-400' },
+          { label: t('vehiclehistory.summary.highMisuseRisk'), value: scopedRows.filter(r => r.misuseScore >= 51).length,              color: 'text-red-400' },
           {
             label: t('vehiclehistory.summary.totalFleetCost'),
             // Authoritative fleet tyre spend from the expense grid; falls back to
             // the sum of per-asset totals when the grid is unavailable, and to
             // the windowed tyre-record totals whenever a date range is active
-            // (the grid total covers full history only).
-            value: `${activeCurrency} ${Math.round(!rangeActive && costTyreTotal != null ? costTyreTotal : vehicleRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
+            // (the grid total covers full history only). The same fallback
+            // applies once a search or site filter is on, because the grid
+            // total is fleet-wide and would not describe the narrowed set.
+            value: `${activeCurrency} ${Math.round(!rangeActive && !scopeActive && costTyreTotal != null ? costTyreTotal : scopedRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
             color: 'text-green-400',
           },
         ].map(({ label, value, color }, i) => (
@@ -556,9 +576,11 @@ export default function VehicleHistory() {
             </button>
           )}
         </div>
-        {rangeActive && (
+        {(rangeActive || scopeActive || anomalyFilter !== 'all') && (
           <p className="text-[11px] text-[var(--text-muted)] mt-2">
-            Date range windows the per-vehicle roll-ups (tyre counts, km and cost from tyre records). Anomalies always evaluate full history; the expense-grid cost total is not applied inside a range.
+            {rangeActive && 'Date range windows the per-vehicle roll-ups (tyre counts, km and cost from tyre records). Anomalies always evaluate full history; the expense-grid cost total is not applied inside a range. '}
+            {scopeActive && `The summary above covers the ${scopedRows.length} of ${vehicleRows.length} vehicles matching the search and site filters. `}
+            {anomalyFilter !== 'all' && 'The anomaly filter shapes the table only, so the summary still states how many vehicles are flagged overall in this scope.'}
           </p>
         )}
       </div>

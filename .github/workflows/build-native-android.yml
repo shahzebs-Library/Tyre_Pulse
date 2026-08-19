@@ -51,7 +51,7 @@ jobs:
         uses: r0adkll/upload-google-play@v4
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-          packageName: com.example.tyre_pulse_app
+          packageName: com.shahzebrahman.tyrepulseinspector
           releaseFiles: ${{ steps.sign_app.outputs.signedReleaseFile }}
           track: internal
           status: completed

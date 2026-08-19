@@ -14,7 +14,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.tyre_pulse_app"
+        applicationId = "com.shahzebrahman.tyrepulseinspector"
         minSdk = 26
         targetSdk = 35
         versionCode = 2

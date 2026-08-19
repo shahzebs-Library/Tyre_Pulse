@@ -315,22 +315,27 @@ delete those rows as it's not expenses of us". Real and clean. UAE `parts_consum
   Ali, BN008 Baniyas, BN003 Mussafah Office & construction), department overhead (DP020 HSE 342,969 / DP001 QC
   180,047 / DP002 Diesel 46,620 / DP003 Production 21,342) and BP004. The rule was `asset_description NOT ILIKE
   '%WORKSHOP%'` within `asset_type='BUILDINGS'`.
-- **UAE total AED 15,631,822.96 -> 14,897,804.43** (rows 59,810 -> 59,329), reconciling to the exact snapshot
-  amount. Snapshot **`_bak.uae_building_nonworkshop_20260819`** holds the full 481 rows - restore =
-  `insert into parts_consumption select * from _bak.uae_building_nonworkshop_20260819`. DELETE fires no
-  classify trigger (that is BEFORE INSERT OR UPDATE only), so no re-bucketing. Applied via execute_sql (no repo
-  migration file); verified 0 non-workshop BUILDINGS rows remain, workshops untouched.
+- **UAE total AED 15,631,822.96 -> 14,897,804.43** (rows 59,810 -> 59,329). **OWNER CONFIRMED THE DELETE IS
+  CORRECT AND NO REVERSE IS NEEDED**, so the `_bak.uae_building_nonworkshop_20260819` snapshot was DROPPED - do
+  not look for a restore path, the removal is final by owner decision. DELETE fires no classify trigger (that is
+  BEFORE INSERT OR UPDATE only), so no re-bucketing. Applied via execute_sql; verified 0 non-workshop BUILDINGS
+  rows remain, workshops untouched. Going forward, V603's `trg_ab_uae_building_guard` stops any re-upload
+  re-adding them.
 
 ### SESSION CLOSED CLEAN — everything on main, tree clean, nothing pending
 Pushed straight to main (batched, one push per piece as the work landed); branch
 `claude/accident-builder-report-ui-2bkwb5` == origin/main; tree clean. Suite **8,649 tests / 571 files** green,
 build clean, lint 0 new errors. This session's commits, newest first:
+- `74596a6a` **V603** UAE upload guard: a non-workshop BUILDINGS row is skipped on import (+ owner then had the
+  `_bak` snapshot dropped, delete is final).
 - `e06670c1` bulk approve applies the approver's saved signature + refuses unsigned; **V602** hardens the RPC.
 - `0fae1043` QR labels wear the company logo instead of the "TYREPULSE" text name (fallback wordmark).
 - `b8c50f64` QR labels: paste/upload a list of asset codes -> matched, QRs generated, Excel of the vehicles.
 - `3af6c5ac` QR labels: stop cutting the serial (wrap not clip) + the size control is real (derives the grid).
 - `caea634c` page the long registers at 50 (Inspections first) + region/vehicle-type filters.
 - `eb4fa3aa` Cost Center: page the long tables, stop hiding 505 assets behind a slice.
+Data (owner-instructed, no repo file): 481 UAE non-workshop BUILDINGS expense rows deleted (AED 734,018.53),
+snapshot then DROPPED at owner request - the removal is final, no restore.
 **STILL NO MOBILE BUILD** (standing owner instruction) - the V601 mobile signature work still awaits an EAS
 build to reach devices; nothing this session touched mobile. Owner-side/ops carried, unchanged: promote Play
 Closed -> Production for 1.6.0 then set `mobile_latest_version` 1.6.0; assign the trade accounts (Mechanic,

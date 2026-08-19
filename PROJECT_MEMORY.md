@@ -5,6 +5,38 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ ONE MERGE PER SESSION. THE OWNER HAS NOW SAID THIS TWICE.
+
+**Every push to `main` starts a production build.** Seven pushes in one session
+started seven builds; Vercel queued them, then CANCELED six as superseded and
+built only the tip. Nothing was lost - the tip contains every earlier commit -
+but the queue is what the owner sees, and it is pure noise they have to ask
+about.
+
+**So: accumulate the work locally, commit as many times as the work needs, and
+PUSH ONCE at the end.** A commit is free. A push is a deployment. Do not push
+after each piece "so it is safe" - the commits are already safe locally, and
+`git log origin/main..HEAD` shows exactly what is waiting.
+
+Push mid-session only when the owner asks for something live right now, or when
+the session is genuinely ending.
+
+**`vercel.json` -> `ignoreCommand` now skips the build entirely when a push
+touches only paths the web bundle cannot read** - `mobile/`, `*.md`,
+`MIGRATIONS_*.sql`, `store-assets/`, `.claude/`, `.github/`. Verified by
+replaying this session's seven commits through it: the mobile-only one skips,
+every commit touching `src/` builds, no false skip. It FAILS SAFE - a shallow
+clone with no `HEAD^`, or any other error, exits non-zero and builds. It does
+NOT replace the rule above; it only stops a docs or mobile push from costing a
+web build.
+
+**`git.deploymentEnabled` still lists the working branches as `false`**, so
+pushing the branch ref raises no preview. That is a different lever - it stops
+PREVIEW builds; `ignoreCommand` stops PRODUCTION ones for irrelevant paths;
+batching stops them being started at all.
+
+---
+
 # ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V602**)
 
 **V601 (applied + verified live) — THE APPROVER'S OWN SAVED SIGNATURE.** A person draws it once and

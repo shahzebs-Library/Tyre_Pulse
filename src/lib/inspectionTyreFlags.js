@@ -358,14 +358,52 @@ export function registerWindowDate(row) {
   return raw ? String(raw).slice(0, 10) : ''
 }
 
+/**
+ * One spelling of a vehicle type, for comparing and for grouping.
+ *
+ * V245 normalised the stored column to UPPER, but a value can still arrive from
+ * an import or an older row with different case or padding, and two spellings of
+ * TR-MIXER would split one machine class into two filter options - the exact
+ * defect V245/V246 exist to prevent. Blank stays blank so a caller can tell
+ * "not recorded" from a real type.
+ */
+export function normVehicleType(value) {
+  return String(value == null ? '' : value).trim().toUpperCase()
+}
+
+/**
+ * The vehicle types present in the rows ON SCREEN, deduplicated and sorted.
+ *
+ * Derived from the rows rather than from a fixed list on purpose: offering every
+ * type the fleet register knows would present choices that return nothing, and
+ * the fleet carries 23 types where inspections only ever use 9.
+ */
+export function vehicleTypesIn(rows = []) {
+  const set = new Set()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const v = normVehicleType(r && r.vehicle_type)
+    if (v) set.add(v)
+  }
+  return [...set].sort()
+}
+
 const SEARCH_FIELDS = ['title', 'site', 'asset_no', 'tyre_serial', 'inspector', 'attendees']
 
 /** Does one inspection survive the register's site/region/inspector/date/search filters? */
 export function inspectionMatchesFilters(row, filters = {}, { regionOf = null } = {}) {
   if (!row) return false
-  const { site = 'all', region = 'all', inspector = 'all', from = '', to = '', search = '' } = filters || {}
+  const {
+    site = 'all', region = 'all', inspector = 'all', vehicleType = 'all',
+    from = '', to = '', search = '',
+  } = filters || {}
 
   if (site !== 'all' && row.site !== site) return false
+  // Vehicle type comes off the inspection's OWN column, which V245 normalises to
+  // upper case - so the compare is case-folded rather than trusting either side.
+  // A row with no type is excluded while a type is chosen, for the same reason an
+  // unplaced site is: it is not known to be a mixer. Measured before relying on
+  // it: 435 of 435 live inspections carry one, so this excludes nothing today.
+  if (vehicleType !== 'all' && normVehicleType(row.vehicle_type) !== normVehicleType(vehicleType)) return false
   if (region !== 'all') {
     // No resolver means we cannot place ANY site, so nothing matches. An unplaced
     // site is excluded for the same reason: it is not known to be in this region.

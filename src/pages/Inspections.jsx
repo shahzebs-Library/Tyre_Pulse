@@ -37,7 +37,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections } from '../lib/inspectionTyreFlags'
+import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections , vehicleTypesIn } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
 import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
@@ -740,6 +740,7 @@ export default function Inspections() {
   // leaves untouched.
   const [filters, setFilter, , , setFilters] = useFilterState({
     search: '', status: 'all', site: 'all', region: 'all', inspector: 'all',
+    vehicleType: 'all',
     from: '', to: '',
     // Which overview tile the register is drilled into ('all' = none). URL-borne with
     // the rest, so a focused view survives Back from the tracking page and can be shared.
@@ -751,6 +752,9 @@ export default function Inspections() {
   // register, so it stays recorded in one place. See siteRegionMap.
   const filterRegion = filters.region
   const filterInspector = filters.inspector
+  // Vehicle type IS a column on the inspection (100% populated on the live table),
+  // so unlike region it needs no resolver.
+  const filterVehicleType = filters.vehicleType
   // Which overview tile the register is drilled into, if any.
   const filterFocus = filters.focus
   const [siteRows, setSiteRows]         = useState([])
@@ -761,7 +765,8 @@ export default function Inspections() {
   // a filter that is applied but hidden reads as a wrong result, not a filter.
   const [showFilters, setShowFilters]   = useState(
     () => filters.site !== 'all' || filters.region !== 'all'
-      || filters.inspector !== 'all' || !!filters.from || !!filters.to,
+      || filters.inspector !== 'all' || filters.vehicleType !== 'all'
+      || !!filters.from || !!filters.to,
   )
   // Client-side date range on the register (scheduled_date, falling back to
   // completed_date, then created_at). Empty = existing behavior.
@@ -1169,13 +1174,22 @@ export default function Inspections() {
   const filteredBase = useMemo(
     () => scopeInspections(
       tabFiltered,
-      { site: filterSite, region: filterRegion, inspector: filterInspector, from: filterFrom, to: filterTo, search },
+      {
+        site: filterSite, region: filterRegion, inspector: filterInspector,
+        vehicleType: filterVehicleType, from: filterFrom, to: filterTo, search,
+      },
       // Region lives on the site register, not on the inspection, so the resolver is
       // injected and the rule itself stays a pure, tested function.
       { regionOf: (site) => regionForSite(regionMap, site) },
     ),
-    [tabFiltered, filterSite, filterRegion, filterInspector, regionMap, filterFrom, filterTo, search],
+    [tabFiltered, filterSite, filterRegion, filterInspector, filterVehicleType,
+      regionMap, filterFrom, filterTo, search],
   )
+
+  // Only the machine classes the loaded inspections actually cover. The fleet
+  // register knows 23 types where inspections have only ever used 9, and offering
+  // the other 14 would be 14 choices that return nothing.
+  const vehicleTypes = useMemo(() => vehicleTypesIn(tabFiltered), [tabFiltered])
 
   /**
    * WHAT THE OVERVIEW TILES COUNT: every filter the table applies except the tile
@@ -1208,7 +1222,8 @@ export default function Inspections() {
    * the tiles and already has its own banner under the search box.
    */
   const scopeActive = filterStatus !== 'all' || filterSite !== 'all' || filterRegion !== 'all'
-    || filterInspector !== 'all' || !!filterFrom || !!filterTo || !!search
+    || filterInspector !== 'all' || filterVehicleType !== 'all'
+    || !!filterFrom || !!filterTo || !!search
 
   // Tile numbers over the SAME rows the table is showing (minus the drill-down).
   // `scoped` has already had the date window applied by the register's own rule, so
@@ -3206,6 +3221,16 @@ export default function Inspections() {
                   <option value="all">{t('inspections.filters.allSites')}</option>
                   {sites.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
+                {/* Vehicle type: the pump-versus-mixer split. Same rule as
+                    region - it renders only when the loaded rows actually carry
+                    more than one, since a dropdown with a single choice is not a
+                    filter. */}
+                {vehicleTypes.length > 1 && (
+                  <select className="input text-sm w-44" value={filterVehicleType} onChange={e => setFilter('vehicleType', e.target.value)}>
+                    <option value="all">All vehicle types</option>
+                    {vehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                )}
                 {inspectors.length > 0 && (
                   <select className="input text-sm w-44" value={filterInspector} onChange={e => setFilter('inspector', e.target.value)}>
                     <option value="all">All inspectors</option>

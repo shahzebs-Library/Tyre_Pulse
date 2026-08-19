@@ -503,11 +503,75 @@ export function trackingSummary(rows = []) {
 }
 
 /** Search + state + source filter over tracking rows. */
-export function filterTracking(rows = [], { search = '', state = 'all', source = 'all' } = {}) {
+/**
+ * One spelling of a vehicle type, so TR-MIXER and "tr-mixer " are one option
+ * rather than two. Mirrors normVehicleType in inspectionTyreFlags - change both.
+ */
+export function normTrackVehicleType(value) {
+  return String(value == null ? '' : value).trim().toUpperCase()
+}
+
+/**
+ * The sites and vehicle types the flagged rows actually cover.
+ *
+ * Derived from the rows on screen, never from a master list: the fleet register
+ * knows 23 vehicle types and 62 sites, and offering the ones with no flagged
+ * tyre would be a list of choices that return nothing.
+ */
+export function trackingFacets(rows = [], { regionOf = null } = {}) {
+  const sites = new Set()
+  const types = new Set()
+  const regions = new Set()
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r) continue
+    if (txt(r.site)) sites.add(txt(r.site))
+    const v = normTrackVehicleType(r.vehicleType)
+    if (v) types.add(v)
+    if (typeof regionOf === 'function') {
+      const g = txt(regionOf(r.site))
+      if (g) regions.add(g)
+    }
+  }
+  return {
+    sites: [...sites].sort(),
+    vehicleTypes: [...types].sort(),
+    regions: [...regions].sort(),
+  }
+}
+
+/**
+ * How many flagged rows carry no vehicle type at all.
+ *
+ * Published so the screen can SAY so rather than letting a type filter look like
+ * it covers everything. Measured on the live data: 92.5% of active tyres resolve
+ * a type through the running-life feed's coalesce of the tyre row and the fleet
+ * register, so roughly one row in thirteen cannot be placed in a machine class.
+ */
+export function untypedCount(rows = []) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((r) => r && !normTrackVehicleType(r.vehicleType)).length
+}
+
+export function filterTracking(rows = [], {
+  search = '', state = 'all', source = 'all',
+  site = 'all', region = 'all', vehicleType = 'all',
+} = {}, { regionOf = null } = {}) {
   const q = txt(search).toLowerCase()
   return (Array.isArray(rows) ? rows : []).filter((r) => {
     if (state !== 'all' && r.state !== state) return false
     if (source !== 'all' && r.source !== source) return false
+    if (site !== 'all' && txt(r.site) !== site) return false
+    if (region !== 'all') {
+      // Region lives on the site register, not on a tyre row, so the resolver is
+      // injected and this stays pure. With none supplied nothing matches, rather
+      // than sweeping every unplaced site into whichever region was picked.
+      if (typeof regionOf !== 'function') return false
+      if (txt(regionOf(r.site)) !== region) return false
+    }
+    // A row with no recorded type is excluded while a type is chosen: it is not
+    // known to be a mixer. untypedCount() is what lets the screen say how many.
+    if (vehicleType !== 'all'
+      && normTrackVehicleType(r.vehicleType) !== normTrackVehicleType(vehicleType)) return false
     if (!q) return true
     // Both spellings of the wheel are searchable. The row now READS as RHRI, but
     // somebody who saw R2Ri on the phone should still find it - a search that
@@ -523,10 +587,16 @@ export function filterTracking(rows = [], { search = '', state = 'all', source =
  * "tyre change tracking" that in fact holds one asset's three flags is a false
  * statement that outlives the screen it came from.
  */
-export function trackingScopeLabel({ country = '', asset = '', state = 'all', source = 'all', search = '' } = {}) {
+export function trackingScopeLabel({
+  country = '', asset = '', state = 'all', source = 'all', search = '',
+  site = 'all', region = 'all', vehicleType = 'all',
+} = {}) {
   const parts = ['Flagged tyres tracked to replacement']
   parts.push(country && country !== 'All' ? country : 'all countries')
   if (asset) parts.push(`asset ${asset}`)
+  if (region !== 'all') parts.push(`region: ${region}`)
+  if (site !== 'all') parts.push(`site: ${site}`)
+  if (vehicleType !== 'all') parts.push(`vehicle type: ${vehicleType}`)
   if (state !== 'all') parts.push(`state: ${TRACK_STATE_META[state] ? TRACK_STATE_META[state].label : state}`)
   if (source !== 'all') parts.push(`source: ${SOURCE_META[source] ? SOURCE_META[source].label : source}`)
   const q = txt(search)

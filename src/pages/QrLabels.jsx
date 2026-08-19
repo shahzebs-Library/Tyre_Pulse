@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { LABEL_SIZES, labelGrid, pageCount, fitLabelText } from '../lib/qrLabelLayout'
 import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -11,11 +12,11 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
 
-const LABEL_SIZES = {
-  sm: { label: 'Small',  dim: 140, desc: '40 mm' },
-  md: { label: 'Medium', dim: 180, desc: '55 mm' },
-  lg: { label: 'Large',  dim: 220, desc: '70 mm' },
-}
+// Preview pixels per printed millimetre. The on-screen card is a scaled picture
+// of the real label, so choosing Large now makes the preview bigger AND the
+// printed label bigger - before, the size control moved only the preview and the
+// sheet always printed 60 mm while the page said "70 mm labels".
+const PREVIEW_PX_PER_MM = 3.2
 
 // Ceilings on the paged reads. Both sit well above the live table sizes
 // (fleet ~1,617 assets, tyre_records ~11,132) so a normal load is complete; if
@@ -24,10 +25,6 @@ const LABEL_SIZES = {
 const FLEET_ROW_CAP = 20000
 const TYRE_ROW_CAP  = 40000
 
-const PRINT_LABEL_W  = 60   // mm
-const PRINT_LABEL_H  = 68   // mm
-const PRINT_COLS     = 3
-const PRINT_ROWS_PP  = 4    // rows per page
 
 // ── QR generation helper ──────────────────────────────────────────────────────
 async function makeQR(value) {
@@ -174,55 +171,79 @@ export default function QrLabels() {
     setExporting(true)
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pw = 210
-    const marginX = (pw - PRINT_COLS * PRINT_LABEL_W - (PRINT_COLS - 1) * 5) / 2
-    const marginY = 12
-    const gapX = 5, gapY = 5
-    const perPage = PRINT_COLS * PRINT_ROWS_PP
+    // The grid is DERIVED from the label size the user chose, so a Small label
+    // gets 20 to a sheet instead of the 12 the old fixed 3x4 grid gave every
+    // size, and a Large one stops running off the page width.
+    const g = labelGrid(labelSize)
+    // jsPDF's own measurement, handed to the pure fitter.
+    const measure = (text, size) => {
+      doc.setFontSize(size)
+      return doc.getTextWidth(text)
+    }
+    const textW = g.w - 4   // 2 mm of quiet margin each side
 
     readyItems.forEach((item, idx) => {
-      const pagePos = idx % perPage
-      const col     = pagePos % PRINT_COLS
-      const row     = Math.floor(pagePos / PRINT_COLS)
+      const pagePos = idx % g.perPage
+      const col     = pagePos % g.cols
+      const row     = Math.floor(pagePos / g.cols)
 
       if (idx > 0 && pagePos === 0) doc.addPage()
 
-      const x   = marginX + col * (PRINT_LABEL_W + gapX)
-      const y   = marginY + row * (PRINT_LABEL_H + gapY)
+      const x   = g.marginX + col * (g.w + g.gap)
+      const y   = g.marginY + row * (g.h + g.gap)
       const val = getLabel(item)
       const sub = getSub(item)
 
       // ── Border ──────────────────────────────────────────────────────────
       doc.setDrawColor(22, 163, 74)
       doc.setLineWidth(0.5)
-      doc.roundedRect(x, y, PRINT_LABEL_W, PRINT_LABEL_H, 2, 2)
+      doc.roundedRect(x, y, g.w, g.h, 2, 2)
 
       // ── Header bar ──────────────────────────────────────────────────────
       doc.setFillColor(22, 163, 74)
-      doc.roundedRect(x, y, PRINT_LABEL_W, 6, 2, 2)
-      doc.rect(x, y + 3, PRINT_LABEL_W, 3, 'F')
+      doc.roundedRect(x, y, g.w, 6, 2, 2)
+      doc.rect(x, y + 3, g.w, 3, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(5.5)
       doc.setFont('helvetica', 'bold')
-      doc.text('TYREPULSE', x + PRINT_LABEL_W / 2, y + 4.2, { align: 'center' })
+      doc.text('TYREPULSE', x + g.w / 2, y + 4.2, { align: 'center' })
 
-      // ── QR code image ────────────────────────────────────────────────────
-      const qrPad  = 8
-      const qrSize = PRINT_LABEL_W - qrPad * 2
-      doc.addImage(qrImages[item.id], 'PNG', x + qrPad, y + 8, qrSize, qrSize)
-
-      // ── Serial / Asset number ────────────────────────────────────────────
+      // ── Identifier, fitted ───────────────────────────────────────────────
+      // WRAPPED, NEVER TRUNCATED. A cut serial is not a shorter serial, it is a
+      // different one: somebody reading "EP0604207..." off the label and typing
+      // it in finds nothing, or finds another tyre. So it shrinks, then breaks
+      // across two lines, and only the fitter decides how small.
       doc.setTextColor(0, 0, 0)
-      doc.setFontSize(7.5)
       doc.setFont('helvetica', 'bold')
-      doc.text(val || '', x + PRINT_LABEL_W / 2, y + PRINT_LABEL_H - 7, { align: 'center' })
+      const fitVal = fitLabelText(measure, val, textW, { startSize: 7.5, minSize: 4.5, mode: 'wrap', maxLines: 2 })
+      const subFit = sub
+        ? fitLabelText(measure, sub, textW, { startSize: 5.5, minSize: 4, mode: 'clip', maxLines: 1 })
+        : { lines: [], size: 5.5 }
 
-      // ── Secondary info ───────────────────────────────────────────────────
-      if (sub) {
-        doc.setFontSize(5.5)
+      // Lay the identifier out from the bottom up so one line and two lines both
+      // sit clear of the border.
+      const subH = subFit.lines.length ? subFit.size * 0.42 + 1.2 : 0
+      const baseY = y + g.h - 2.5 - subH
+      doc.setFontSize(fitVal.size)
+      fitVal.lines.forEach((line, i) => {
+        const dy = (fitVal.lines.length - 1 - i) * (fitVal.size * 0.42)
+        doc.text(line, x + g.w / 2, baseY - dy, { align: 'center' })
+      })
+
+      // ── QR code, filling what the text leaves ────────────────────────────
+      // Sized from the space actually available rather than a fixed padding, so
+      // a two-line serial shrinks the code instead of colliding with it.
+      const qrTop = y + 8
+      const qrRoom = Math.max(6, baseY - (fitVal.lines.length - 1) * (fitVal.size * 0.42) - 3 - qrTop)
+      const qrSize = Math.max(6, Math.min(g.w - 10, qrRoom))
+      doc.addImage(qrImages[item.id], 'PNG', x + (g.w - qrSize) / 2, qrTop, qrSize, qrSize)
+
+      // ── Secondary line ───────────────────────────────────────────────────
+      if (subFit.lines.length) {
+        doc.setFontSize(subFit.size)
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(100, 100, 100)
-        doc.text(sub, x + PRINT_LABEL_W / 2, y + PRINT_LABEL_H - 2.5, { align: 'center' })
+        doc.text(subFit.lines[0], x + g.w / 2, y + g.h - 2.5, { align: 'center' })
       }
     })
 
@@ -233,7 +254,11 @@ export default function QrLabels() {
   const selectedItems  = filtered.filter(r => selected.has(r.id))
   const readyItems     = selectedItems.filter(r => qrImages[r.id])
   const pendingItems   = selectedItems.filter(r => !qrImages[r.id])
-  const dim            = LABEL_SIZES[labelSize].dim
+  // The preview is a scaled picture of the real label, so the size control moves
+  // both. It used to move only this.
+  const grid           = labelGrid(labelSize)
+  const dim            = Math.round(grid.w * PREVIEW_PX_PER_MM)
+  const sheets         = pageCount(readyItems.length, labelSize)
 
   return (
     <>
@@ -361,7 +386,7 @@ export default function QrLabels() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-600">Label size:</span>
             <div className="flex p-0.5 rounded-lg gap-0.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              {Object.entries(LABEL_SIZES).map(([key, { label, desc }]) => (
+              {Object.entries(LABEL_SIZES).map(([key, { label, w }]) => (
                 <button
                   key={key}
                   onClick={() => setLabelSize(key)}
@@ -371,7 +396,7 @@ export default function QrLabels() {
                       : 'text-gray-500 hover:text-gray-300'
                   }`}
                 >
-                  {label} <span className="opacity-60">{desc}</span>
+                  {label} <span className="opacity-60">{w} mm</span>
                 </button>
               ))}
             </div>
@@ -451,7 +476,10 @@ export default function QrLabels() {
                   <QrCode size={13} className="text-green-400" />
                   Label Preview - {readyItems.length} generated
                 </h3>
-                <span className="text-xs text-gray-600">Print-ready · {LABEL_SIZES[labelSize].desc} labels</span>
+                <span className="text-xs text-gray-600">
+                  {grid.w} mm labels · {grid.cols} x {grid.rows} per A4 sheet
+                  {sheets > 0 ? ` · ${sheets} ${sheets === 1 ? 'sheet' : 'sheets'} to print` : ''}
+                </span>
               </div>
 
               <div className="flex flex-wrap gap-3">
@@ -495,7 +523,10 @@ export default function QrLabels() {
                           className="px-2 pt-1.5 pb-2 text-center"
                           style={{ background: 'var(--panel-deep)' }}
                         >
-                          <p className="text-[11px] font-bold font-mono text-white tracking-tight truncate">{val}</p>
+                          {/* NOT truncated: the printed label keeps the whole identifier, so a
+                              preview that ends in "..." would be showing something the
+                              sheet does not print. It wraps here as it wraps there. */}
+                          <p className="text-[11px] font-bold font-mono text-white tracking-tight break-all leading-tight">{val}</p>
                           {sub && (
                             <p className="text-[8.5px] text-gray-500 truncate mt-0.5">{sub}</p>
                           )}

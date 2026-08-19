@@ -55,7 +55,7 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V604**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V605**)
 
 **V601 (applied + verified live) — THE APPROVER'S OWN SAVED SIGNATURE.** A person draws it once and
 every later approval pre-fills it, visibly, with a one-click "Draw a new signature". Pre-filling is
@@ -240,8 +240,16 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
    import landing zones and `insurance_policy_assets` MUST stay as delivered. `work_orders` is CLEAN on all
    7 text columns.
 
-12. **REAL, PROVEN, AND DELIBERATELY NOT FIXED: `tyre_records.serial_no` case split causes a PARTIAL SCRAP on
-   43 tyres.** 48 collision groups; 45 are the same asset AND the same wheel with sequential dates = one tyre
+12. **~~REAL, PROVEN, DELIBERATELY NOT FIXED: `tyre_records.serial_no` case split -> PARTIAL SCRAP~~ FIXED by
+   V604 (2026-08-19).** The column is UNTOUCHED (field barcode lookups stay case-sensitive `.eq()` by design);
+   instead `scrap_tyre_by_serial` / `unscrap_tyre_by_serial` / `list_scrapped_tyres` now match the tyre by
+   `upper(btrim(serial_no))`, so a scrap hits EVERY fitment of the canonical serial and the register collapses
+   case-split rows to one. Marks were already 100% canonical (201 of 201), so the mark key still dedupes.
+   VERIFIED live, round-tripped and left net-zero on `.YMM.43710` (TM515): scrapping the LOWERCASE `.ymm.43710`
+   moved BOTH the Active and the Removed fitment to Scrapped; unscrap restored each to its EXACT prior status
+   (Active / Removed, not blindly Active) via `prior_status`; list shows 201 rows / 201 distinct serials, no
+   duplicates. Original context below, kept for the reasoning:
+   `tyre_records.serial_no` case split caused a PARTIAL SCRAP on 43 tyres. 48 collision groups; 45 are the same asset AND the same wheel with sequential dates = one tyre
    whose life is recorded half under `k507B403590` and half under `K507B403590`. `scrap_tyre_by_serial` matches
    `t.serial_no = v_s` EXACTLY. **Proven live as the super admin, rolled back, on TM662 LHRO: scrapping
    `K507B403590` set the 2025 row to Scrapped and left the 2026 row Active** - the tyre reads Scrapped in the

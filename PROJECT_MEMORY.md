@@ -288,6 +288,22 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
 
 ## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, QR LABELS, AND BULK SIGN-OFF (V602). Next free **V603**.
 
+### **UAE EXPENSE CLEANUP — NON-WORKSHOP "BUILDINGS" ROWS DELETED (data-only, reversible)**
+Owner: "in uae expenses ... in vehicle type u will find building ... if anything is not issued for workshop
+delete those rows as it's not expenses of us". Real and clean. UAE `parts_consumption` carries
+`asset_type='BUILDINGS'` = 4,739 rows / AED 1,317,873.09, and the asset_description splits it exactly:
+- **KEPT (issued for a workshop, legitimately ours):** DP027 Jabal Ali Workshop, DP030 Baniyas Workshop,
+  DP024 Musafah Workshop = **4,258 rows / AED 583,854.56**.
+- **DELETED (not workshop, not fleet expense):** **481 rows / AED 734,018.53** - buildings (BN006 Building-Jebel
+  Ali, BN008 Baniyas, BN003 Mussafah Office & construction), department overhead (DP020 HSE 342,969 / DP001 QC
+  180,047 / DP002 Diesel 46,620 / DP003 Production 21,342) and BP004. The rule was `asset_description NOT ILIKE
+  '%WORKSHOP%'` within `asset_type='BUILDINGS'`.
+- **UAE total AED 15,631,822.96 -> 14,897,804.43** (rows 59,810 -> 59,329), reconciling to the exact snapshot
+  amount. Snapshot **`_bak.uae_building_nonworkshop_20260819`** holds the full 481 rows - restore =
+  `insert into parts_consumption select * from _bak.uae_building_nonworkshop_20260819`. DELETE fires no
+  classify trigger (that is BEFORE INSERT OR UPDATE only), so no re-bucketing. Applied via execute_sql (no repo
+  migration file); verified 0 non-workshop BUILDINGS rows remain, workshops untouched.
+
 ### SESSION CLOSED CLEAN — everything on main, tree clean, nothing pending
 Pushed straight to main (batched, one push per piece as the work landed); branch
 `claude/accident-builder-report-ui-2bkwb5` == origin/main; tree clean. Suite **8,649 tests / 571 files** green,

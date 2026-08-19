@@ -1392,13 +1392,26 @@ export default function TyreSpecifications() {
 
   // ── Export compliance PDF ─────────────────────────────────────────────────────
 
+  // A landscape A4 page holds ~30 of these rows, so 500 is already ~17 pages.
+  // Bounded because the whole document is built in memory and, on the email
+  // path, base64-encoded into an attachment.
+  const PDF_ROW_CAP = 500
+
   async function exportCompliancePdf() {
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
     const title = 'Fleet Compliance Report'
-    const subtitle = `${filteredCompliance.length} fitments analysed`
+    // The body is capped (see PDF_ROW_CAP below), so the subtitle has to say
+    // when that bites. It used to print the full filtered count over a shorter
+    // table - a 900-fitment filter produced a document headed "900 fitments
+    // analysed" containing 500, which is the reader drawing a conclusion from
+    // rows that are not there.
+    const shown = Math.min(filteredCompliance.length, PDF_ROW_CAP)
+    const subtitle = shown < filteredCompliance.length
+      ? `${shown} of ${filteredCompliance.length} fitments shown, narrow the filters to include the rest`
+      : `${filteredCompliance.length} fitments analysed`
 
     if (filteredCompliance.length === 0) {
       pdfHeader(doc, title, '0 fitments analysed', company, brand)
@@ -1421,7 +1434,7 @@ export default function TyreSpecifications() {
       startY: 30,
       margin: { left: 14, right: 14, top: 28 },
       head: [['Asset No', 'Vehicle Type', 'Position', 'Fitted Size', 'Fitted Brand', 'Site', 'Spec Status']],
-      body: filteredCompliance.slice(0, 500).map(r => [
+      body: filteredCompliance.slice(0, PDF_ROW_CAP).map(r => [
         r.asset_no || '', r.vehicleType || 'Unknown', normalizePosition(r.position), r.size || '', r.brand || '', r.site || '', r.specStatus,
       ]),
       columnStyles: { 0: { cellWidth: 28 }, 1: { cellWidth: 32 }, 2: { cellWidth: 24 }, 3: { cellWidth: 32 }, 4: { cellWidth: 28 }, 5: { cellWidth: 28 }, 6: { cellWidth: 38 } },

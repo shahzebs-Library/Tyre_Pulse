@@ -30,6 +30,7 @@ import {
 } from '../lib/holdingCompany'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: Layers },
@@ -175,6 +176,10 @@ export default function HoldingCompany() {
       return true
     })
   }, [transfers, statusFilter, search, orgName_])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filteredTransfers` in full.
+  const transferPager = usePagedRows(filteredTransfers)
 
   // ── Exports (subsidiary KPI rows) ──────────────────────────────────────────
   const EXPORT_COLS = ['name', 'is_hq', 'vehicles', 'tyres', 'open_alerts', 'critical_alerts', 'low_tread', 'spend_30d', 'fleet_health_score']
@@ -601,7 +606,7 @@ export default function HoldingCompany() {
                           {(transfers?.length || 0) === 0 ? 'No inter-company transfers yet — record your first movement.' : 'No transfers match these filters.'}
                         </td></tr>
                       ) : (
-                        filteredTransfers.slice(0, 500).map((t) => (
+                        transferPager.pageRows.map((t) => (
                           <tr key={t.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                             <td className="px-4 py-2.5 text-[var(--text-primary)]">{orgName_(t.from_org_id)}</td>
                             <td className="px-4 py-2.5 text-[var(--text-primary)]">{orgName_(t.to_org_id)}</td>
@@ -624,7 +629,7 @@ export default function HoldingCompany() {
                     </tbody>
                   </table>
                 </div>
-                {filteredTransfers.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+                <TablePagination {...transferPager} />
               </div>
             </div>
           )}

@@ -24,6 +24,7 @@ import {
 import { summarisePositions, latestPerAsset, toFiniteNumber } from '../lib/gpsPositions'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   asset_no: '', driver_name: '', latitude: '', longitude: '', speed_kmh: '',
@@ -107,6 +108,13 @@ export default function GpsTracking() {
 
   const summary = useMemo(() => summarisePositions(rows || []), [rows])
   const latest = useMemo(() => latestPerAsset(rows || []), [rows])
+  // Sorted here rather than inline in the tbody so the pager below sees the
+  // same order the reader does. Paged, not capped - it used to stop at 50.
+  const latestSorted = useMemo(
+    () => [...latest].sort((a, b) => (new Date(b.recorded_at || 0)) - (new Date(a.recorded_at || 0))),
+    [latest],
+  )
+  const latestPager = usePagedRows(latestSorted)
 
   const assetOptions = useMemo(
     () => [...new Set((rows || []).map((r) => r.asset_no).filter(Boolean))].sort(),
@@ -125,6 +133,10 @@ export default function GpsTracking() {
       return true
     })
   }, [rows, assetFilter, motionFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -281,11 +293,7 @@ export default function GpsTracking() {
                 </tr>
               </thead>
               <tbody>
-                {latest
-                  .slice()
-                  .sort((a, b) => (new Date(b.recorded_at || 0)) - (new Date(a.recorded_at || 0)))
-                  .slice(0, 50)
-                  .map((r) => {
+                {latestPager.pageRows.map((r) => {
                     const m = motionOf(r)
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -302,6 +310,7 @@ export default function GpsTracking() {
                   })}
               </tbody>
             </table>
+            <TablePagination {...latestPager} />
           </div>
         )}
       </div>
@@ -345,7 +354,7 @@ export default function GpsTracking() {
                   {rows.length === 0 && !notProvisioned ? 'No positions logged yet — log your first position.' : 'No positions match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const m = motionOf(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -371,7 +380,7 @@ export default function GpsTracking() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

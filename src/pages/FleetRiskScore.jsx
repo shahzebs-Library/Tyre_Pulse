@@ -32,6 +32,7 @@ import {
 import { getFleetRiskData } from '../lib/api/fleetRisk'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -324,6 +325,9 @@ export default function FleetRiskScore() {
 }
 
 function TyreTable({ loading, rows, total }) {
+  // Paged, not capped - this register used to stop at 500 rows. `rows` is the
+  // full filtered set, and the "#" column keeps counting across pages.
+  const pager = usePagedRows(rows)
   return (
     <div className="card overflow-hidden !p-0">
       <div className="overflow-x-auto">
@@ -339,9 +343,9 @@ function TyreTable({ loading, rows, total }) {
             ) : rows.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{total === 0 ? 'No live tyre data to score yet.' : 'No tyres match these filters.'}</td></tr>
             ) : (
-              rows.slice(0, 500).map((r, idx) => (
+              pager.pageRows.map((r, idx) => (
                 <tr key={r.id ?? `${r.serial}-${idx}`} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                  <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{idx + 1}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{pager.from + idx}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.serial || '—'}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
                   <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.position || '—'}</td>
@@ -380,12 +384,14 @@ function TyreTable({ loading, rows, total }) {
           </tbody>
         </table>
       </div>
-      {rows.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+      <TablePagination {...pager} />
     </div>
   )
 }
 
 function VehicleTable({ loading, rows, total }) {
+  // Paged, not capped - same treatment as TyreTable above.
+  const pager = usePagedRows(rows)
   return (
     <div className="card overflow-hidden !p-0">
       <div className="overflow-x-auto">
@@ -401,9 +407,9 @@ function VehicleTable({ loading, rows, total }) {
             ) : rows.length === 0 ? (
               <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{total === 0 ? 'No vehicles with live tyres to score yet.' : 'No vehicles match these filters.'}</td></tr>
             ) : (
-              rows.slice(0, 500).map((r, idx) => (
+              pager.pageRows.map((r, idx) => (
                 <tr key={r.asset_no} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
-                  <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{idx + 1}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-muted)] tabular-nums">{pager.from + idx}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no}</td>
                   <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.site || '—'}</td>
                   <td className="px-4 py-2.5 text-[var(--text-secondary)] tabular-nums">{r.tyre_count}</td>
@@ -421,7 +427,7 @@ function VehicleTable({ loading, rows, total }) {
           </tbody>
         </table>
       </div>
-      {rows.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+      <TablePagination {...pager} />
     </div>
   )
 }

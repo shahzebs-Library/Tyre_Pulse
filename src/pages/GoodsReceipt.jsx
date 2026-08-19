@@ -33,6 +33,7 @@ import {
 } from '../lib/goodsReceipts'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -125,6 +126,10 @@ export default function GoodsReceipt() {
       return true
     })
   }, [enriched, statusFilter, supplierFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // Chart — status distribution
   const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
@@ -367,7 +372,7 @@ export default function GoodsReceipt() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.grn_no || '—'}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.po_ref || '—'}</td>
@@ -397,7 +402,7 @@ export default function GoodsReceipt() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / edit modal */}

@@ -38,6 +38,7 @@ import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
 
@@ -341,6 +342,10 @@ export default function FuelDelivery() {
     return sortDir === 'desc' ? sorted.reverse() : sorted
   }, [rows, statusFilter, siteFilter, supplierFilter, from, to, search, sortKey, sortDir])
 
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   // Analytics reflect the filtered set so the KPIs/charts drill with the filters.
   const a = useMemo(() => analyzeDeliveries(filtered), [filtered])
 
@@ -606,7 +611,7 @@ export default function FuelDelivery() {
                   {(rows || []).length === 0 ? 'No fuel deliveries logged yet. Use "Log delivery" to add the first.' : 'No deliveries match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const st = STATUS_META[r.status] || STATUS_META.delivered
                   const StatusIcon = st.icon
                   return (
@@ -640,7 +645,7 @@ export default function FuelDelivery() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <DeliveryModal

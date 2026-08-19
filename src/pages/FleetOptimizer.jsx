@@ -31,6 +31,7 @@ import {
 } from '../lib/fleetOptimizer'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   scenario_name: '', asset_no: '', asset_type: '', utilization_pct: '',
@@ -157,6 +158,10 @@ export default function FleetOptimizer() {
       return true
     })
   }, [rows, recFilter, confFilter, countryFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -438,7 +443,7 @@ export default function FleetOptimizer() {
                   {rows.length === 0 && !notProvisioned ? 'No scenarios modelled yet — create your first optimizer scenario.' : 'No scenarios match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const suggested = suggestRecommendation(r)
                   const mismatch = r.recommendation && suggested !== r.recommendation
                   const cur = r.currency || primaryCurrency
@@ -475,7 +480,7 @@ export default function FleetOptimizer() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

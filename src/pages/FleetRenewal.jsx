@@ -44,6 +44,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -179,6 +180,10 @@ export default function FleetRenewal() {
     if (sortDir === 'desc' && sortKey !== 'soonest') sorted = sorted.reverse()
     return sorted
   }, [rows, statusFilter, priorityFilter, siteFilter, fromDate, toDateVal, search, sortKey, sortDir, now])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   const chartText = (typeof document !== 'undefined'
     && getComputedStyle(document.documentElement).getPropertyValue('--text-muted')) || '#9ca3af'
@@ -594,7 +599,7 @@ export default function FleetRenewal() {
                   {kpi.total === 0 ? 'No renewal plans yet. Create the first to start planning.' : 'No plans match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const dd = daysUntil(r.target_replace_date, now)
                   const isOverdue = ['planned', 'approved', 'deferred'].includes(r.status) && dd != null && dd <= 0
                   return (
@@ -625,7 +630,7 @@ export default function FleetRenewal() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

@@ -33,6 +33,7 @@ import {
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -167,6 +168,10 @@ export default function PartsRequests() {
       return true
     })
   }, [rows, filters])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   const summary = useMemo(() => summarizeParts(rows, {}), [rows])
 
@@ -466,7 +471,7 @@ export default function PartsRequests() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 500).map((r) => {
+                {pager.pageRows.map((r) => {
                   const status = normalizePartsStatus(r.status)
                   const fwd = FORWARD_ACTION[status]
                   const FwdIcon = fwd?.icon
@@ -530,9 +535,7 @@ export default function PartsRequests() {
                 })}
               </tbody>
             </table>
-            {filtered.length > 500 && (
-              <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the first 500 of {filtered.length}. Narrow the filters or export for the full set.</p>
-            )}
+            <TablePagination {...pager} />
           </div>
         )}
       </div>

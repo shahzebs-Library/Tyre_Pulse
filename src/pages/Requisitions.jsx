@@ -25,6 +25,7 @@ import {
 import { summarizeRequisitions } from '../lib/requisitions'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const STATUS_META = {
   draft: { label: 'Draft', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
@@ -308,6 +309,10 @@ export default function Requisitions() {
     })
   }, [rows, statusFilter, categoryFilter, search])
 
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const fmtMoney = useCallback((v) => formatCurrencyCompact(v, activeCurrency), [activeCurrency])
 
   const kpis = [
@@ -443,7 +448,7 @@ export default function Requisitions() {
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const st = STATUS_META[r.status] || STATUS_META.draft
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -469,7 +474,7 @@ export default function Requisitions() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <RequisitionModal open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved} />

@@ -40,6 +40,7 @@ import {
   SEVERITY_META, CATEGORY_META, CATEGORIES,
 } from '../lib/opsIntelligence'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -251,6 +252,10 @@ export default function OpsIntelligence() {
       y: { ticks: { color: chartText }, grid: { display: false } },
     },
   }
+
+  // Paged, not capped - the exception register used to stop at 500 silently.
+  // Both exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['severity', 'category', 'title', 'asset_no', 'serial', 'site', 'detail']
@@ -631,7 +636,7 @@ export default function OpsIntelligence() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((e) => (
+                pager.pageRows.map((e) => (
                   <tr key={e.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${SEVERITY_STYLES[e.severity]}`}>{SEVERITY_META[e.severity]?.label}</span></td>
                     <td className="px-4 py-2.5 whitespace-nowrap">
@@ -655,7 +660,7 @@ export default function OpsIntelligence() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)] flex items-center gap-1.5"><Info size={12} /> Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
     </div>
   )

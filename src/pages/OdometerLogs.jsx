@@ -33,6 +33,7 @@ import {
 } from '../lib/odometerAnalytics'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend)
@@ -157,6 +158,12 @@ export default function OdometerLogs() {
   // ── Engine roll-ups (real data only) ──────────────────────────────────────
   const summary = useMemo(() => summarizeMileage(rows || []), [rows])
   const assetMileage = useMemo(() => computeAssetMileage(rows || []), [rows])
+  // Sorted once here rather than inline in the tbody, so the pager below and
+  // the Export button (which walks assetMileage in full) agree on the order.
+  const assetMileageSorted = useMemo(
+    () => [...assetMileage].sort((a, b) => (b.kmAdded ?? -1) - (a.kmAdded ?? -1)),
+    [assetMileage],
+  )
   const anomalies = useMemo(() => detectAnomalies(rows || []), [rows])
   const trend = useMemo(() => mileageTrend(rows || []), [rows])
   const topAssets = useMemo(() => kmByAsset(rows || [], { limit: 12 }), [rows])
@@ -240,6 +247,12 @@ export default function OdometerLogs() {
     labels: siteKm.map((s) => s.label),
     datasets: [{ label: 'Distance (km)', data: siteKm.map((s) => s.value), backgroundColor: withAlpha(colorAt(2), 0.85), borderRadius: 4 }],
   }), [siteKm])
+
+  // Paged, not capped. Both tables used to be a silent .slice() - the log at
+  // 500 and the per-asset roll-up at 100 - with nothing on screen saying so.
+  // Both Export buttons below still walk the FULL filtered set.
+  const logPager = usePagedRows(filtered)
+  const assetPager = usePagedRows(assetMileageSorted)
 
   // ── Export ───────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['asset_no', 'odometer_km', 'reading_date', 'flag', 'source', 'site', 'notes']
@@ -466,10 +479,7 @@ export default function OdometerLogs() {
               ) : assetMileage.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--text-muted)]">No assets tracked yet.</td></tr>
               ) : (
-                [...assetMileage]
-                  .sort((a, b) => (b.kmAdded ?? -1) - (a.kmAdded ?? -1))
-                  .slice(0, 100)
-                  .map((a) => (
+                assetPager.pageRows.map((a) => (
                     <tr key={a.asset} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{a.asset}</td>
                       <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtKm(a.latestKm)}</td>
@@ -494,6 +504,7 @@ export default function OdometerLogs() {
             </tbody>
           </table>
         </div>
+        <TablePagination {...assetPager} />
       </div>
 
       {/* Filters */}
@@ -549,7 +560,7 @@ export default function OdometerLogs() {
                   {noData ? 'No readings logged yet - log your first reading.' : 'No readings match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                logPager.pageRows.map((r) => {
                   const flag = anomalyById.get(r.id)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -581,7 +592,7 @@ export default function OdometerLogs() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
+        <TablePagination {...logPager} />
       </div>
 
       {/* Create / Edit modal */}

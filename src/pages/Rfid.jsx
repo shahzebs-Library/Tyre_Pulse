@@ -16,6 +16,7 @@ import { listTags, createTag, updateTag, deleteTag, findByTag } from '../lib/api
 import { summarizeTags, normalizeTagId, RFID_STATUSES, RFID_STATUS_META } from '../lib/rfid'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const STATUS_STYLES = {
   active: 'bg-green-900/40 text-green-300 border border-green-700/50',
@@ -277,6 +278,10 @@ export default function Rfid() {
     })
   }, [rows, statusFilter, siteFilter, search])
 
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const openCreate = () => { setEditing(null); setModalOpen(true) }
   const openEdit = (row) => { setEditing(row); setModalOpen(true) }
 
@@ -423,7 +428,7 @@ export default function Rfid() {
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.tag_id}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">
@@ -447,7 +452,7 @@ export default function Rfid() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <TagModal

@@ -63,6 +63,7 @@ import { loadGovernedCostSplit } from '../lib/api/governedCost'
 import { generateWorkOrderNo, insertWorkOrder } from '../lib/api/workOrders'
 import { listParts } from '../lib/api/partsCatalog'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 
@@ -303,6 +304,10 @@ export default function PmPrograms() {
     })
   }, [enrichedPlans, search, statusFilter, categoryFilter, dueOnly])
 
+  // Paged, not capped. This register used to render filteredPlans.slice(0, 500).
+  // The EXPORT below still walks filteredPlans in full.
+  const planPager = usePagedRows(filteredPlans)
+
   const clearPlanFilters = () => { setSearch(''); setStatusFilter('all'); setCategoryFilter('all'); setDueOnly(false) }
   const hasPlanFilters = search || statusFilter !== 'all' || categoryFilter !== 'all' || dueOnly
 
@@ -319,6 +324,9 @@ export default function PmPrograms() {
       return true
     })
   }, [history, histAsset, histProgram, histOutcome, histFrom, histTo])
+
+  // Paged, not capped - the service ledger is meant to be browsed in full.
+  const histPager = usePagedRows(filteredHistory)
 
   const clearHistFilters = () => { setHistAsset(''); setHistProgram('all'); setHistOutcome('all'); setHistFrom(''); setHistTo('') }
   const hasHistFilters = histAsset || histProgram !== 'all' || histOutcome !== 'all' || histFrom || histTo
@@ -1096,7 +1104,7 @@ export default function PmPrograms() {
                   ) : filteredPlans.length === 0 ? (
                     <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{plans.length === 0 ? 'No maintenance plans yet. Create the first plan to get started.' : 'No plans match these filters.'}</td></tr>
                   ) : (
-                    filteredPlans.slice(0, 500).map((p) => {
+                    planPager.pageRows.map((p) => {
                       const st = p._st
                       const intervals = intervalSummary(p)
                       const unit = st.unit || meterUnit(p.meter_source)
@@ -1142,7 +1150,7 @@ export default function PmPrograms() {
                 </tbody>
               </table>
             </div>
-            {filteredPlans.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 : refine filters or export for the full set.</p>}
+            <TablePagination {...planPager} />
           </div>
         </div>
       )}
@@ -1188,7 +1196,7 @@ export default function PmPrograms() {
                   ) : filteredHistory.length === 0 ? (
                     <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]"><History size={22} className="mx-auto mb-2 opacity-60" />{(history || []).length === 0 ? 'No services recorded yet. Record a service from the Plans tab.' : 'No services match these filters.'}</td></tr>
                   ) : (
-                    filteredHistory.slice(0, 500).map((r) => {
+                    histPager.pageRows.map((r) => {
                       const unit = meterUnit(r.meter_type)
                       return (
                         <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -1213,7 +1221,7 @@ export default function PmPrograms() {
                 </tbody>
               </table>
             </div>
-            {filteredHistory.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 : refine filters or export for the full set.</p>}
+            <TablePagination {...histPager} />
           </div>
         </div>
       )}

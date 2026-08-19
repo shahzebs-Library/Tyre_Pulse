@@ -12,6 +12,7 @@ import DateField from '../components/ui/DateField'
 import EmailPdfButton from '../components/EmailPdfButton'
 import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -122,6 +123,11 @@ export default function FleetAnalytics() {
       return true
     })
   }, [sorted, search, dateFrom, dateTo, siteFilter])
+
+  // Paged, not capped. The per-asset table used to render filtered.slice(0, 100)
+  // under a "showing N of M" line that named the gap but gave no way to cross it.
+  // Declared before the early returns below so the hook order stays stable.
+  const pager = usePagedRows(filtered)
 
   if (loading) return (
     <div className="space-y-5">
@@ -334,7 +340,7 @@ export default function FleetAnalytics() {
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, 100).map(a => (
+              {pager.pageRows.map(a => (
                 <tr
                   key={a.assetNo}
                   onClick={() => setSelected(selected === a.assetNo ? null : a.assetNo)}
@@ -367,12 +373,8 @@ export default function FleetAnalytics() {
               <p className="text-gray-500 text-sm">{t('fleetanalytics.empty.noMatch')}</p>
             </div>
           )}
-          {filtered.length > 100 && (
-            <p className="text-xs text-gray-500 text-center pt-3">
-              {t('fleetanalytics.empty.showing', { count: filtered.length })}
-            </p>
-          )}
         </div>
+        <TablePagination {...pager} />
       </div>
 
       {/* Drill-down */}

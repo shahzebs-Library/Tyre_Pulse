@@ -25,6 +25,7 @@ import { summariseAlerts, byAsset, estimatedLoss } from '../lib/fuelTheftAlerts'
 import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   alert_no: '', asset_no: '', driver_name: '', location: '', detected_at: '',
@@ -129,6 +130,10 @@ export default function FuelTheftAlerts() {
       return true
     })
   }, [rows, assetFilter, statusFilter, severityFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -331,7 +336,7 @@ export default function FuelTheftAlerts() {
                   {rows.length === 0 && !notProvisioned ? 'No alerts logged yet — log your first alert.' : 'No alerts match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const sev = String(r.severity || '').toLowerCase()
                   const st = String(r.status || '').toLowerCase()
                   return (
@@ -360,7 +365,7 @@ export default function FuelTheftAlerts() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

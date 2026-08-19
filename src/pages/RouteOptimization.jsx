@@ -24,6 +24,7 @@ import {
 import { summariseRoutePlans, computeSavings } from '../lib/routePlans'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   plan_name: '', asset_no: '', driver_name: '', plan_date: '', stops_count: '',
@@ -113,6 +114,10 @@ export default function RouteOptimization() {
       return true
     })
   }, [rows, statusFilter, assetFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -304,7 +309,7 @@ export default function RouteOptimization() {
                   {rows.length === 0 && !notProvisioned ? 'No route plans yet — create your first plan.' : 'No route plans match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const { savingsKm, savingsPct } = computeSavings(r)
                   const savedKm = r.savings_km != null ? Number(r.savings_km) : savingsKm
                   return (
@@ -338,7 +343,7 @@ export default function RouteOptimization() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

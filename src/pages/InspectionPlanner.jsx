@@ -25,6 +25,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { loadAutoTable } from '../lib/pdfEngine'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -780,6 +781,9 @@ export default function InspectionPlanner() {
       return r.asset_no?.toLowerCase().includes(q) || r.site?.toLowerCase().includes(q)
     })
   }, [gapAnalysis, gapFilter, gapSearch])
+
+  // Paged, not capped - the gap register used to stop at 200 rows.
+  const gapPager = usePagedRows(filteredGap)
 
   // Inspector board
   const inspectorBoard = useMemo(() => {
@@ -1755,7 +1759,7 @@ export default function InspectionPlanner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--input-border)]">
-                      {filteredGap.slice(0, 200).map(row => (
+                      {gapPager.pageRows.map(row => (
                         <tr key={row.asset_no} className="hover:bg-[var(--input-bg)] transition-colors">
                           <td className="px-3 py-2.5 font-medium text-[var(--text-primary)]">{row.asset_no}</td>
                           <td className="px-3 py-2.5 text-[var(--panel-ink-2)] text-xs">{row.site}</td>
@@ -1769,9 +1773,7 @@ export default function InspectionPlanner() {
                       ))}
                     </tbody>
                   </table>
-                  {filteredGap.length > 200 && (
-                    <p className="text-xs text-[var(--panel-ink-4)] px-3 py-2">Showing 200 of {filteredGap.length} records.</p>
-                  )}
+                  <TablePagination {...gapPager} />
                 </div>
               )}
             </div>

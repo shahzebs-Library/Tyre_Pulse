@@ -26,6 +26,7 @@ import { summarisePods, byStatus, byDriver, POD_STATUSES } from '../lib/podRecor
 import { safeHref } from '../lib/safeUrl'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   pod_no: '', asset_no: '', driver_name: '', customer_name: '', delivery_address: '',
@@ -126,6 +127,10 @@ export default function ProofOfDelivery() {
       return true
     })
   }, [rows, statusFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -351,7 +356,7 @@ export default function ProofOfDelivery() {
                   {rows.length === 0 && !notProvisioned ? 'No POD records yet — record your first delivery.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5">
                       <p className="font-medium text-[var(--text-primary)]">{r.pod_no || '—'}</p>
@@ -398,7 +403,7 @@ export default function ProofOfDelivery() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

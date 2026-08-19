@@ -25,6 +25,7 @@ import {
 import { summariseLoadPlans, utilization, isOverloaded } from '../lib/loadPlans'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const STATUS_OPTIONS = ['draft', 'planned', 'loaded', 'dispatched', 'delivered']
 
@@ -132,6 +133,10 @@ export default function LoadPlanning() {
       return true
     })
   }, [rows, statusFilter, countryFilter, search])
+
+  // Paged, not capped - this register used to stop at 500 rows.
+  // The exports below still walk `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   const overloaded = useMemo(
     () => (rows || []).filter((r) => isOverloaded(r)),
@@ -353,7 +358,7 @@ export default function LoadPlanning() {
                   {rows.length === 0 && !notProvisioned ? 'No load plans yet — create your first plan.' : 'No plans match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const u = utilization(r)
                   const over = isOverloaded(r)
                   return (
@@ -397,7 +402,7 @@ export default function LoadPlanning() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

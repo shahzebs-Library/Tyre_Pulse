@@ -286,6 +286,53 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
 
 ---
 
+## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, AND THE QR LABEL PAGE. No migration; next free **V602**.
+
+### **QR LABELS: PASTE A LIST OF ASSET CODES AND GET THE LABELS**
+Owner: "if u upload only assedt codes like tm360 etc so with that i get qr created auto amd i get it
+downalid it vehicle information". Paste or upload a column of codes on `/qr-labels` -> matched, selected,
+QRs generated, and an Excel of the matched vehicles' details beside the PDF of labels. Engine
+`src/lib/qrBulkMatch.js` (canonCode / parseCodes / codesFromRows / matchCodes / matchSummary / rowWhere).
+- **THE LOAD-BEARING RULE IS THAT AN AMBIGUOUS CODE IS NOT MATCHED, and it is not hypothetical.** Measured
+  live: **1,617 fleet rows, 1,377 distinct codes, and 239 codes exist in MORE THAN ONE COUNTRY - every
+  duplicate code in the register is exactly that case, there are zero same-country duplicates.** Per V376 the
+  same code in two countries is usually a DIFFERENT machine, confirmed on real rows: `GN103` is a CATERPILLAR
+  generator in KSA and a Sany one in UAE; `TM360` is an Inactive mixer at AMAALA and an Active one in UAE.
+  Auto-picking one would print a label somebody then STICKS ON A WINDSCREEN. So those come back in
+  `ambiguous` with country + site + type per candidate and the person chooses.
+- **Nothing is dropped quietly.** A code the register does not carry is listed by name, and when the paged
+  read was truncated the panel SAYS the row may simply not be loaded - otherwise "not in the register" reads
+  as a fact about the fleet rather than about this page's read.
+- **A pasted header row survives as unmatched tokens on purpose.** `codesFromRows` reads EVERY cell, so
+  "Asset Code" comes back as two unmatched entries. Guessing which row was a header is how a real code at the
+  top of a headerless file gets eaten. Same reason the file path uses **`parseWorkbookRaw`**, not the
+  header-detecting `parseWorkbook`.
+- **BUG CAUGHT BY RUNNING THE REAL PARSER, NOT BY READING THE CODE: `parseWorkbookRaw` returns
+  `{ sheets: [...] }`, not a bare array.** Read as an array it is `undefined.flatMap`, which the catch turns
+  into "could not read that file" - every upload dead, code looking correct. Pinned by a test that exercises
+  the actual parser plus a source-scan on the destructure.
+- The match runs against the WHOLE loaded set and then CLEARS the filters unconditionally: the preview grid
+  and both exports read the FILTERED set, so a match left behind a site filter would be selected, generated,
+  and then quietly missing from the printed sheet.
+- `handleGenerate(items)` takes an explicit row list - `setSelected` is not readable in the same tick, so
+  generating off `filtered.filter(selected)` produced nothing on the first press.
+- **Excel carries the machine, not just the code** (registration/chassis/engine/make/model/capacity/km/ops
+  status). Population stated so nobody expects a full sheet: make 783 / model 497 / registration 396 /
+  chassis 389 of 1,617. **The export column and the `select()` are a PAIR** - PostgREST returns only what is
+  asked for, so an export column with no matching select renders a blank sheet that looks like missing data;
+  a test pins both lists together.
+- 8 mutations, all caught (auto-select ambiguous, drop unmatched, case-sensitive compare, summary hides the
+  misses, match the filtered view, conditional filter clear, export column with no select, bare-array parse).
+
+### **THE PDF WAS CUTTING NAMES IN HALF, AND THE SIZE CONTROL WAS DECORATIVE**
+Owner: "when i get expoet pdf names is vut in moddle". jsPDF neither wraps nor clips - `doc.text` with
+`align:'center'` and no maxWidth simply OVERFLOWS the label, so a long serial ran across its neighbour.
+Worse, the Small/Medium/Large control moved only the on-screen preview: the sheet always printed a fixed
+3x4 grid whatever the page said. `src/lib/qrLabelLayout.js` DERIVES the grid from the chosen size (sm 20 to
+a sheet, md 12, lg 6) and `fitLabelText` shrinks then **wraps** the identifier across two lines - a cut
+serial is not a shorter serial, it is a different one, and somebody typing "EP0604207..." finds nothing or
+finds another tyre. Context lines (brand, site) clip with an ellipsis, they are not identifiers.
+
 ## SESSION 2026-08-18 (part 5) — WHO SIGNS, THE ROUTE-GUARD CLASS, RESUME + HISTORY (V599/V600). Next free **V601**.
 Owner, across several messages: the duplicate asset block on the checklist; "stock I feel is spinner but in
 actual no access"; a notification tap landing on Unmatched Route; add a Workshop Supervisor; "admin should be

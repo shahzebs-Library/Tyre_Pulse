@@ -3,14 +3,17 @@ import QRCode from 'qrcode'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { LABEL_SIZES, labelGrid, pageCount, fitLabelText } from '../lib/qrLabelLayout'
+import { parseCodes, codesFromRows, matchCodes, matchSummary, rowWhere } from '../lib/qrBulkMatch'
 import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   QrCode, Printer, Download, Search, CircleDot, Truck,
   CheckSquare, Square, RefreshCw, Check, Info, X, AlertCircle,
+  ClipboardList, Upload, FileSpreadsheet, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
+import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 
 // Preview pixels per printed millimetre. The on-screen card is a scaled picture
 // of the real label, so choosing Large now makes the preview bigger AND the
@@ -46,11 +49,18 @@ export default function QrLabels() {
   const [search,     setSearch]     = useState('')
   const [filterSite, setFilterSite] = useState('all')
   const [labelSize,  setLabelSize]  = useState('md')
-  const [qrImages,   setQrImages]   = useState({})       // { id → dataURL }
+  const [qrImages,   setQrImages]   = useState({})       // { id: dataURL }
   const [truncated,  setTruncated]  = useState(false)
   const [generating, setGenerating] = useState(false)
   const [exporting,  setExporting]  = useState(false)
+  // Bulk intake: paste or upload a list of identifiers and get their labels.
+  const [bulkOpen,   setBulkOpen]   = useState(false)
+  const [bulkText,   setBulkText]   = useState('')
+  const [bulkBusy,   setBulkBusy]   = useState(false)
+  const [bulkError,  setBulkError]  = useState(null)
+  const [bulkResult, setBulkResult] = useState(null)
   const printAreaRef = useRef(null)
+  const fileRef      = useRef(null)
 
   useEffect(() => {
     setSelected(new Set())
@@ -58,6 +68,7 @@ export default function QrLabels() {
     setSearch('')
     setFilterSite('all')
     setTruncated(false)
+    setBulkText(''); setBulkResult(null); setBulkError(null)
     loadData()
   }, [mode])
 
@@ -80,7 +91,7 @@ export default function QrLabels() {
         const { data: rows, error: qErr, truncated } = await fetchAllPages(
           (from, to) => supabase
             .from('tyre_records')
-            .select('id, serial_number:serial_no, brand, site, asset_no, risk_level')
+            .select('id, serial_number:serial_no, brand, site, country, asset_no, risk_level, size, position:tyre_position')
             .order('asset_no').order('id')
             .range(from, to),
           { max: TYRE_ROW_CAP },
@@ -97,7 +108,11 @@ export default function QrLabels() {
         const { data: rows, error: qErr, truncated } = await fetchAllPages(
           (from, to) => supabase
             .from('vehicle_fleet')
-            .select('id, asset_no, vehicle_type, site')
+            // The vehicle columns come with the rows so the Excel download
+            // beside the labels carries the machine's details, not just its
+            // code. Population measured live so nobody expects a full sheet:
+            // make 783 / model 497 / registration 396 / chassis 389 of 1,617.
+            .select('id, asset_no, vehicle_type, site, country, status, ops_status, make, model, model_year, registration_no, fleet_number, chassis_no, engine_no, capacity, current_km')
             .not('asset_no', 'is', null)
             .order('asset_no').order('id')
             .range(from, to),
@@ -131,8 +146,10 @@ export default function QrLabels() {
   function getLabel(item) { return mode === 'tyres' ? (item.serial_number ?? item.asset_no ?? String(item.id)) : item.asset_no }
   function getSub(item)   {
     return mode === 'tyres'
-      ? [item.brand, item.site].filter(Boolean).join(' · ')
-      : [item.vehicle_type, item.site].filter(Boolean).join(' · ')
+      // ASCII separator: this line is printed onto the label and into the PDF,
+      // where the house rule keeps output to plain characters.
+      ? [item.brand, item.site].filter(Boolean).join(' - ')
+      : [item.vehicle_type, item.site].filter(Boolean).join(' - ')
   }
 
   function toggleSelect(id) {
@@ -146,11 +163,16 @@ export default function QrLabels() {
     )
   }
 
-  async function handleGenerate() {
+  // `items` lets the bulk intake generate exactly what it just matched without
+  // waiting for `selected` to land in state - a setState is not readable in the
+  // same tick, so a bulk paste that generated off `filtered.filter(selected)`
+  // would produce nothing on the first press.
+  async function handleGenerate(items) {
+    const list = items || filtered.filter(r => selected.has(r.id))
+    if (!list.length) return
     setGenerating(true)
-    const items = filtered.filter(r => selected.has(r.id))
     const results = {}
-    await Promise.all(items.map(async item => {
+    await Promise.all(list.map(async item => {
       const val = getLabel(item)
       if (val) {
         try { results[item.id] = await makeQR(val) } catch { /* skip */ }
@@ -158,6 +180,59 @@ export default function QrLabels() {
     }))
     setQrImages(prev => ({ ...prev, ...results }))
     setGenerating(false)
+  }
+
+  // ── Bulk intake ────────────────────────────────────────────────────────────
+  // Paste a column of asset codes (or tyre serials) and get their labels. The
+  // match runs against the WHOLE loaded set, not the filtered view, so a code is
+  // never reported missing merely because a site filter was left on; the filters
+  // are then cleared so every match is actually visible on the table below.
+  async function runBulk(codes) {
+    setBulkError(null)
+    const result = matchCodes(codes, data, { getCode: getLabel })
+    setBulkResult(result)
+    // Cleared unconditionally: the preview grid and both exports read the
+    // FILTERED set, so a match left behind a site filter would be selected and
+    // generated and then quietly missing from the printed sheet.
+    setSearch(''); setFilterSite('all')
+    if (result.ids.length) {
+      setSelected(prev => new Set([...prev, ...result.ids]))
+      const rows = result.matched.map(m => m.row)
+      await handleGenerate(rows)
+    }
+  }
+
+  async function handleBulkPaste() {
+    const { codes } = parseCodes(bulkText)
+    if (!codes.length) { setBulkResult(null); setBulkError('Nothing to look up - paste or upload a list of codes first.'); return }
+    setBulkBusy(true)
+    try { await runBulk(codes) }
+    finally { setBulkBusy(false) }
+  }
+
+  async function handleBulkFile(e) {
+    const file = e.target.files?.[0]
+    if (e.target) e.target.value = ''
+    if (!file) return
+    setBulkBusy(true)
+    setBulkError(null)
+    try {
+      // Raw sheet read, NOT the header-detecting parser: a file that is just a
+      // column of codes has no header row, and guessing one would silently eat
+      // the first code.
+      const { parseWorkbookRaw } = await import('../lib/import/parseWorkbook')
+      // parseWorkbookRaw returns { sheets: [{ name, aoa }] }, not a bare array.
+      const { sheets } = await parseWorkbookRaw(file, { fileName: file.name })
+      const aoa = (sheets || []).flatMap(sh => sh.aoa || [])
+      const { codes } = codesFromRows(aoa)
+      setBulkText(codes.join('\n'))
+      if (!codes.length) { setBulkResult(null); setBulkError('That file had no readable codes in it.'); return }
+      await runBulk(codes)
+    } catch (err) {
+      setBulkError(toUserMessage(err, 'Could not read that file. A CSV, Excel sheet or plain text list works.'))
+    } finally {
+      setBulkBusy(false)
+    }
   }
 
   function handlePrint() {
@@ -247,8 +322,47 @@ export default function QrLabels() {
       }
     })
 
-    doc.save(`TyrePulse_QR_${mode}_${new Date().toISOString().split('T')[0]}.pdf`)
+    doc.save(`${reportFileName('TyrePulse QR Labels', mode === 'tyres' ? 'Tyres' : 'Vehicles', reportDateLabel())}.pdf`)
     setExporting(false)
+  }
+
+  // The details behind the labels, so a printed run comes with a sheet naming
+  // what each code is. Exports the SELECTED rows - the same set the labels
+  // cover - so the two files can never describe different vehicles.
+  const EXCEL_COLS = mode === 'tyres'
+    ? [
+      ['serial_number', 'Serial No'], ['asset_no', 'Asset Code'], ['position', 'Position'],
+      ['brand', 'Brand'], ['size', 'Size'], ['site', 'Site'], ['country', 'Country'],
+      ['risk_level', 'Risk Level'], ['qr', 'QR Generated'],
+    ]
+    : [
+      ['asset_no', 'Asset Code'], ['vehicle_type', 'Vehicle Type'], ['make', 'Make'],
+      ['model', 'Model'], ['model_year', 'Model Year'], ['registration_no', 'Registration No'],
+      ['fleet_number', 'Fleet No'], ['chassis_no', 'Chassis No'], ['engine_no', 'Engine No'],
+      ['capacity', 'Capacity'], ['current_km', 'Current KM'], ['site', 'Site'],
+      ['country', 'Country'], ['status', 'Status'], ['ops_status', 'Operational Status'],
+      ['qr', 'QR Generated'],
+    ]
+
+  async function exportExcel() {
+    const items = filtered.filter(r => selected.has(r.id))
+    if (!items.length) return
+    setExporting(true)
+    try {
+      const rows = items.map(r => ({ ...r, qr: qrImages[r.id] ? 'Yes' : 'No' }))
+      await exportToExcel(
+        rows,
+        EXCEL_COLS.map(([k]) => k),
+        EXCEL_COLS.map(([, h]) => h),
+        reportFileName('TyrePulse QR', mode === 'tyres' ? 'Tyre Details' : 'Vehicle Details', reportDateLabel()),
+        mode === 'tyres' ? 'Tyres' : 'Vehicles',
+        { title: mode === 'tyres' ? 'Tyre label details' : 'Vehicle label details' },
+      )
+    } catch (err) {
+      setError(toUserMessage(err, 'Could not build the spreadsheet.'))
+    } finally {
+      setExporting(false)
+    }
   }
 
   const selectedItems  = filtered.filter(r => selected.has(r.id))
@@ -335,6 +449,15 @@ export default function QrLabels() {
                 <Printer size={14} /> Print Labels
               </button>
               <button
+                onClick={exportExcel}
+                disabled={selectedItems.length === 0 || exporting}
+                className="btn-secondary flex items-center gap-1.5 text-sm disabled:opacity-40"
+                title={mode === 'tyres' ? 'Spreadsheet of the selected tyres' : 'Spreadsheet of the selected vehicles and their details'}
+              >
+                <FileSpreadsheet size={14} />
+                {`Export Excel${selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}`}
+              </button>
+              <button
                 onClick={exportPDF}
                 disabled={readyItems.length === 0 || exporting}
                 className="btn-primary flex items-center gap-1.5 text-sm disabled:opacity-40"
@@ -408,7 +531,7 @@ export default function QrLabels() {
               <span className="text-xs text-gray-500">{selected.size} selected</span>
               {pendingItems.length > 0 && (
                 <button
-                  onClick={handleGenerate}
+                  onClick={() => handleGenerate()}
                   disabled={generating}
                   className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
                   style={{ boxShadow: generating ? 'none' : '0 0 20px rgba(22,163,74,0.35)' }}
@@ -423,6 +546,140 @@ export default function QrLabels() {
                 <span className="flex items-center gap-1 text-xs text-green-400">
                   <Check size={12} /> {readyItems.length} ready
                 </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Bulk intake: paste a list of codes, get their labels ─────────────── */}
+        <div className="card p-0 overflow-hidden">
+          <button
+            onClick={() => setBulkOpen(o => !o)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left"
+          >
+            <ClipboardList size={14} className="text-green-400 shrink-0" />
+            <span className="text-sm font-semibold text-gray-200">
+              {mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}
+            </span>
+            <span className="text-xs text-gray-600 hidden sm:inline">
+              {mode === 'tyres'
+                ? 'one per line, or upload a file - labels are generated for the ones found'
+                : 'like TM360 - one per line, or upload a file, and labels are generated automatically'}
+            </span>
+            {bulkOpen
+              ? <ChevronUp size={14} className="ml-auto text-gray-500 shrink-0" />
+              : <ChevronDown size={14} className="ml-auto text-gray-500 shrink-0" />}
+          </button>
+
+          {bulkOpen && (
+            <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <textarea
+                className="input w-full text-sm font-mono min-h-28 mt-3"
+                placeholder={mode === 'tyres' ? 'EP060420711\nYMA55312\n...' : 'TM360\nMP093\nBH021\n...'}
+                value={bulkText}
+                onChange={e => setBulkText(e.target.value)}
+                spellCheck={false}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleBulkPaste}
+                  disabled={bulkBusy}
+                  className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {bulkBusy
+                    ? <><RefreshCw size={13} className="animate-spin" /> Matching...</>
+                    : <><QrCode size={13} /> Find and generate</>}
+                </button>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={bulkBusy}
+                  className="btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Upload size={13} /> Upload a file
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".csv,.txt,.tsv,.xlsx,.xls"
+                  onChange={handleBulkFile}
+                  className="hidden"
+                />
+                {(bulkText || bulkResult) && (
+                  <button
+                    onClick={() => { setBulkText(''); setBulkResult(null); setBulkError(null) }}
+                    className="text-xs text-gray-500 hover:text-gray-300 inline-flex items-center gap-1"
+                  >
+                    <X size={12} /> Clear list
+                  </button>
+                )}
+                <span className="text-xs text-gray-600 ml-auto">
+                  A CSV, Excel sheet or plain list all work. Every cell is read.
+                </span>
+              </div>
+
+              {bulkError && (
+                <p className="text-xs text-red-300 flex items-center gap-1.5">
+                  <AlertCircle size={12} className="shrink-0" /> {bulkError}
+                </p>
+              )}
+
+              {bulkResult && (
+                <div className="space-y-2 text-xs">
+                  <p className={bulkResult.counts.matched ? 'text-green-300' : 'text-amber-300'}>
+                    {matchSummary(bulkResult, mode === 'tyres' ? 'serial' : 'asset code')}
+                    {bulkResult.counts.matched > 0 && ' Labels generated and selected below.'}
+                  </p>
+
+                  {/* Not in the register: named, never quietly dropped. */}
+                  {bulkResult.unmatched.length > 0 && (
+                    <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                      <p className="text-amber-300 font-semibold mb-1">
+                        Not found ({bulkResult.unmatched.length})
+                      </p>
+                      <p className="font-mono text-amber-200/80 break-all leading-relaxed">
+                        {bulkResult.unmatched.join('  ')}
+                      </p>
+                      <p className="text-amber-200/60 mt-1">
+                        These are not in the register you can see. Check the spelling, or the record may sit in another country.
+                        {truncated && ' This page also stopped short of the full register, so some may simply not be loaded.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Two machines can share a code, so the person picks. */}
+                  {bulkResult.ambiguous.length > 0 && (
+                    <div className="rounded-lg px-3 py-2 space-y-2" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)' }}>
+                      <p className="text-blue-300 font-semibold">
+                        Found in more than one place ({bulkResult.ambiguous.length})
+                      </p>
+                      <p className="text-blue-200/70">
+                        The same code exists on more than one record, and they are usually different machines.
+                        Nothing was selected for these - pick the right one.
+                      </p>
+                      {bulkResult.ambiguous.map(({ code, rows }) => (
+                        <div key={code} className="space-y-1">
+                          <p className="font-mono text-blue-100">{code}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {rows.map(r => (
+                              <button
+                                key={r.id}
+                                onClick={async () => {
+                                  setSelected(prev => new Set([...prev, r.id]))
+                                  await handleGenerate([r])
+                                }}
+                                className="px-2 py-1 rounded-md text-[11px] transition-colors"
+                                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)' }}
+                              >
+                                {selected.has(r.id) ? <Check size={10} className="inline mr-1 text-green-400" /> : null}
+                                {rowWhere(r)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -477,8 +734,8 @@ export default function QrLabels() {
                   Label Preview - {readyItems.length} generated
                 </h3>
                 <span className="text-xs text-gray-600">
-                  {grid.w} mm labels · {grid.cols} x {grid.rows} per A4 sheet
-                  {sheets > 0 ? ` · ${sheets} ${sheets === 1 ? 'sheet' : 'sheets'} to print` : ''}
+                  {grid.w} mm labels, {grid.cols} x {grid.rows} per A4 sheet
+                  {sheets > 0 ? `, ${sheets} ${sheets === 1 ? 'sheet' : 'sheets'} to print` : ''}
                 </span>
               </div>
 
@@ -644,11 +901,19 @@ export default function QrLabels() {
           </h3>
           <ol className="space-y-1 text-xs text-gray-500 list-decimal list-inside leading-relaxed">
             <li>Choose <strong className="text-gray-400">Tyre Serials</strong> (serial-level labels) or <strong className="text-gray-400">Vehicle Assets</strong> (vehicle-level labels)</li>
-            <li>Tick the rows you want, or use <strong className="text-gray-400">Select All</strong></li>
-            <li>Click <strong className="text-gray-400">Generate QRs</strong>, a live preview appears above the table</li>
             <li>
-              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog, print on A4 label sheets
-              (3 × 4 = 12 per page). Or use <strong className="text-gray-400">Export PDF</strong> for a ready-to-send file.
+              Already have a list? Open <strong className="text-gray-400">{mode === 'tyres' ? 'Paste a list of tyre serials' : 'Paste a list of asset codes'}</strong>,
+              paste it or upload the file, and the labels are found and generated for you. Anything not in the register is named rather than skipped.
+            </li>
+            <li>Otherwise tick the rows you want, or use <strong className="text-gray-400">Select All</strong>, then click <strong className="text-gray-400">Generate QRs</strong></li>
+            <li>
+              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog. Or use{' '}
+              <strong className="text-gray-400">Export PDF</strong> for a ready-to-send file: at the {LABEL_SIZES[labelSize].label.toLowerCase()} size
+              that is {grid.cols} x {grid.rows} = {grid.perPage} labels per A4 sheet.
+            </li>
+            <li>
+              <strong className="text-gray-400">Export Excel</strong> gives the same selection as a spreadsheet with the
+              {mode === 'tyres' ? ' tyre' : ' vehicle'} details, so a printed run comes with a list naming every code.
             </li>
             <li>Cut and stick labels onto the tyre or vehicle windscreen / chassis plate</li>
             <li>Scan with the <strong className="text-gray-400">TyrePulse Scanner</strong> to instantly pull up full tyre details</li>

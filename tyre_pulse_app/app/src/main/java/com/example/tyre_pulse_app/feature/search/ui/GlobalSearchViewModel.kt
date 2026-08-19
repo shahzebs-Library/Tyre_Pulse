@@ -10,14 +10,14 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 
+import androidx.lifecycle.SavedStateHandle
+
 data class GlobalSearchUiState(
     val query: String = "",
     val assetResults: List<Asset> = emptyList(),
     val tyreResults: List<Tyre> = emptyList(),
     val isLoading: Boolean = false
 )
-
-import androidx.lifecycle.SavedStateHandle
 
 @HiltViewModel
 class GlobalSearchViewModel @Inject constructor(

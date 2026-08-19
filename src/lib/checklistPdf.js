@@ -22,7 +22,7 @@
 
 import { loadPdf } from './pdfEngine'
 import {
-  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName,
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, PDF_COLORS,
 } from './exportUtils'
 import {
   submissionSections, submissionSignatures, legendOptions, templateTitle, documentNo,
@@ -109,6 +109,53 @@ async function fetchImage(url) {
 }
 
 /**
+ * The sheet's brand: a big logo, the company green, and no company name in text.
+ *
+ * THREE THINGS, and each was a real gap:
+ *
+ * 1. THE LOGO WAS USUALLY ABSENT. `resolvePdfBrand` reads `branding.logo_url`
+ *    from tenant branding, but the org logo is actually administered in
+ *    Console -> Report Colors, which stores it in `system_config.company_logo`.
+ *    Inspections.jsx already carried a private `brandingForPdf` fallback for
+ *    exactly this; the checklist had no such fallback, so it printed no logo at
+ *    all unless a tenant-branding row happened to exist. Same fallback, applied
+ *    once here so all three checklist surfaces inherit it.
+ *
+ * 2. THE LOGO WAS SMALL. `pdfHeader` defaulted to 14 mm and had no route to pass
+ *    anything else. 18 mm reads across a desk and still clears the hairline
+ *    that closes the 23 mm header band (a 20 mm mark lands exactly on it).
+ *
+ * 3. THE COMPANY NAME WAS SET IN TYPE ABOVE THE TITLE. On a sheet that already
+ *    carries the logo, the uppercase eyebrow was redundant, and the owner asked
+ *    for it gone. The logo carries the identity now.
+ *
+ * The accent falls back to the brand green rather than the app-wide indigo, so
+ * the header rule, the title underline and the table headers all match the mark
+ * in the logo. A tenant that has set its own `primary_color` still wins.
+ */
+async function checklistBrand(branding) {
+  let b = branding
+  if (!b?.logo_url) {
+    try {
+      const { getCompanyLogo } = await import('./api/brandLogo')
+      const logo = await getCompanyLogo()
+      if (logo) b = { ...(branding || {}), logo_url: logo }
+    } catch { /* a missing logo must never cost the sheet */ }
+  }
+  const brand = await resolvePdfBrand(b)
+  if (!branding?.primary_color) brand.accent = PDF_COLORS.green
+  return brand
+}
+
+/** Header options shared by both checklist documents. */
+const CHECKLIST_HEADER = { logoSize: 18, hideEyebrow: true }
+
+/** Table theme with the logo green in the header row. */
+function checklistTheme(brand) {
+  return pdfTableTheme(brand.accent, { headFill: PDF_COLORS.green })
+}
+
+/**
  * Render one completed checklist.
  *
  * @param {object}  opts
@@ -135,14 +182,14 @@ export async function renderChecklistPdf({
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw = doc.internal.pageSize.width
   const ph = doc.internal.pageSize.height
-  const brand = await resolvePdfBrand(branding)
-  const theme = pdfTableTheme(brand.accent)
+  const brand = await checklistBrand(branding)
+  const theme = checklistTheme(brand)
 
   const titleTranslated = templateTitle(template, sub, language)
   const titleEnglish = String(template?.name || sub.template_name || 'Checklist')
   const title = pick(titleTranslated, titleEnglish, state)
 
-  const header = () => pdfHeader(doc, title, sub.asset_no ? `Asset: ${sub.asset_no}` : '', company, brand)
+  const header = () => pdfHeader(doc, title, sub.asset_no ? `Asset: ${sub.asset_no}` : '', company, brand, CHECKLIST_HEADER)
   header()
   let y = 30
 
@@ -410,7 +457,8 @@ export async function renderChecklistPdf({
   const total = doc.internal.getNumberOfPages()
   for (let p = 1; p <= total; p += 1) {
     doc.setPage(p)
-    pdfFooter(doc, p, total, company || 'Fleet Operations', brand)
+    // No company name in text: the logo identifies the sheet (see checklistBrand).
+    pdfFooter(doc, p, total, '', { ...brand, footerText: brand.footerText || 'Confidential, for internal distribution only' })
   }
 
   const name = filename || reportFileName(
@@ -435,14 +483,14 @@ export async function renderMonthlyGridPdf({
   const { jsPDF, autoTable } = await loadPdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pw = doc.internal.pageSize.width
-  const brand = await resolvePdfBrand(branding)
-  const theme = pdfTableTheme(brand.accent)
+  const brand = await checklistBrand(branding)
+  const theme = checklistTheme(brand)
 
   const title = pick(templateTitle(template, {}, language), String(template?.name || 'Checklist'), state)
   const monthLabel = grid
     ? new Date(Date.UTC(grid.year, grid.month - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
     : ''
-  const head = () => pdfHeader(doc, title, [assetNo, monthLabel].filter(Boolean).join('  |  '), company, brand)
+  const head = () => pdfHeader(doc, title, [assetNo, monthLabel].filter(Boolean).join('  |  '), company, brand, CHECKLIST_HEADER)
   head()
   let y = 30
 
@@ -522,7 +570,8 @@ export async function renderMonthlyGridPdf({
   const total = doc.internal.getNumberOfPages()
   for (let p = 1; p <= total; p += 1) {
     doc.setPage(p)
-    pdfFooter(doc, p, total, company || 'Fleet Operations', brand)
+    // No company name in text: the logo identifies the sheet (see checklistBrand).
+    pdfFooter(doc, p, total, '', { ...brand, footerText: brand.footerText || 'Confidential, for internal distribution only' })
   }
 
   const name = filename || reportFileName('Checklist month', assetNo || '', monthLabel)

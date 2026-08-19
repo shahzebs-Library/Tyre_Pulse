@@ -115,6 +115,12 @@ const P = {
   gold:     [245, 158, 11],   // KPI values / highlights
   amber:    [180, 83,  9],    // gold-dark
 
+  // Brand. The Tyre Pulse green, matched to the logo mark so a report reads as
+  // the same product as the app. Deep rather than bright: it has to hold white
+  // text in a table header and survive being printed on a mono office printer.
+  green:    [21,  128, 61],   // #15803D - brand/logo green
+  greenDk:  [22,  101, 52],   // #166534 - pressed / rule under a green header
+
   // Status - rich, not neon
   emerald:  [4,   120, 87],   // good
   crimson:  [153, 27,  27],   // critical
@@ -2378,20 +2384,33 @@ export async function exportChecklistSubmissionPdf(submission = {}, opts = {}) {
      pdfFooter(doc, page, total, company, brand)
 */
 export async function resolvePdfBrand(branding) { return _pdfBrand(branding) }
-export function pdfHeader(doc, title, subtitle = '', company = '', brand = {}) {
-  _pageHeader(doc, title, subtitle, company, { accent: brand.accent, logoData: brand.logoData })
+export function pdfHeader(doc, title, subtitle = '', company = '', brand = {}, opts = {}) {
+  // `logoSize` and `hideEyebrow` were already understood by _pageHeader but had
+  // no route through this wrapper, so every caller got the small 14 mm logo and
+  // an uppercase company eyebrow whether it suited the document or not.
+  _pageHeader(doc, title, subtitle, company, {
+    accent: brand.accent,
+    logoData: brand.logoData,
+    logoSize: opts.logoSize,
+    hideEyebrow: opts.hideEyebrow,
+  })
 }
 export function pdfFooter(doc, page, total, company = '', brand = {}) {
   _pageFooter(doc, page, total, company, { footerText: brand.footerText })
 }
+export const PDF_COLORS = P
 export function pdfEmptyState(doc, message, sub) { _emptyStatePanel(doc, message, sub) }
-export function pdfTableTheme(accent) { return _tableTheme(accent) }
+export function pdfTableTheme(accent, opts) { return _tableTheme(accent, opts) }
 
 // Shared light autoTable theme for a professional, consistent look across every
 // tabular report: dark slate header with white bold text and a thin tenant-
 // accent rule beneath it, very light alternating stripes (#F8FAFC), #E2E8F0
 // grid lines, generous cell padding, header repeated on every page break.
-function _tableTheme(accent = P.indigo) {
+function _tableTheme(accent = P.indigo, opts = {}) {
+  // headFill lets a document brand its table headers (the checklist prints them
+  // in the logo green). Defaults to the dark slate every other report uses, so
+  // passing nothing changes nothing.
+  const headFill = opts.headFill || P.slate
   return {
     theme: 'grid',
     styles: {
@@ -2399,8 +2418,8 @@ function _tableTheme(accent = P.indigo) {
       textColor: P.iron, lineColor: P.silver, lineWidth: 0.15, valign: 'middle',
     },
     headStyles: {
-      fillColor: P.slate, textColor: P.white, fontStyle: 'bold', fontSize: 8,
-      cellPadding: 2.8, lineColor: P.slate, lineWidth: 0.15, valign: 'middle',
+      fillColor: headFill, textColor: P.white, fontStyle: 'bold', fontSize: 8,
+      cellPadding: 2.8, lineColor: headFill, lineWidth: 0.15, valign: 'middle',
     },
     alternateRowStyles: { fillColor: P.offWhite },
     margin: { left: MX, right: MX },

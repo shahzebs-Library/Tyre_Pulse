@@ -41,7 +41,13 @@
   },
   "table": {
     "noRecords": "No records found",
-    "pageOf": "Page {page} of {total}"
+    "pageOf": "Page {page} of {total}",
+    "showingRange": "Showing {from} to {to} of {total}",
+    "rowsPerPage": "Rows per page",
+    "first": "First page",
+    "previous": "Previous page",
+    "next": "Next page",
+    "last": "Last page"
   },
   "filterBar": {
     "searchPlaceholder": "Search..."

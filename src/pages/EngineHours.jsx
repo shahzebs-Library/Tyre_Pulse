@@ -35,6 +35,7 @@ import {
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -209,6 +210,12 @@ export default function EngineHours() {
   // Export -------------------------------------------------------------------
   const EXPORT_COLS = ['asset_no', 'engine_hours', 'reading_date', 'source', 'site', 'notes']
   const EXPORT_HEADERS = ['Asset', 'Engine hours', 'Reading date', 'Source', 'Site', 'Notes']
+  // Paged, not capped. This table used to render sortedRows.slice(0, 500)
+  // against 4,379 stored readings, so 3,879 were unreachable.
+  // The EXPORT deliberately still covers sortedRows in full - a page of 50
+  // is a reading convenience, not a narrowing of what you asked for.
+  const pager = usePagedRows(sortedRows)
+
   const exportRows = sortedRows.map((r) => ({
     asset_no: r.asset_no || '',
     engine_hours: r.engine_hours ?? '',
@@ -510,7 +517,7 @@ export default function EngineHours() {
                     : <><Filter size={22} className="mx-auto mb-2 opacity-60" />No readings match these filters.</>}
                 </td></tr>
               ) : (
-                sortedRows.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const isAnomaly = anomalyIds.has(r.id)
                   return (
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${isAnomaly ? 'bg-red-900/10' : ''}`}>
@@ -536,7 +543,7 @@ export default function EngineHours() {
             </tbody>
           </table>
         </div>
-        {sortedRows.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

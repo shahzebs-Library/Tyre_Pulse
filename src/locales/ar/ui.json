@@ -41,7 +41,13 @@
   },
   "table": {
     "noRecords": "لا توجد سجلات",
-    "pageOf": "صفحة {page} من {total}"
+    "pageOf": "صفحة {page} من {total}",
+    "showingRange": "عرض {from} إلى {to} من {total}",
+    "rowsPerPage": "صفوف لكل صفحة",
+    "first": "الصفحة الأولى",
+    "previous": "الصفحة السابقة",
+    "next": "الصفحة التالية",
+    "last": "الصفحة الأخيرة"
   },
   "filterBar": {
     "searchPlaceholder": "بحث..."

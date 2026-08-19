@@ -32,7 +32,7 @@ import { useLanguage } from '../../../../contexts/LanguageContext'
 import { useGoBack } from '../../../../hooks/useGoBack'
 import { canApproveChecklists } from '../../../../lib/permissions'
 import { toUserMessage } from '../../../../lib/safeError'
-import SignaturePad from '../../../../components/SignaturePad'
+import SignatureField from '../../../../components/SignatureField'
 import SignatureView from '../../../../components/SignatureView'
 import {
   getSubmission, getTemplate, decideApproval,
@@ -522,7 +522,7 @@ function ChecklistApprovalReviewScreen() {
                 {/* `value` re-hydrates the pad: without it, reopening this
                     screen showed a blank pad over a captured signature and
                     Clear then erased what was there. */}
-                <SignaturePad value={approverSig} onChange={setApproverSig} height={170} />
+                <SignatureField onChange={setApproverSig} height={170} />
                 <View style={{ marginTop: 12 }}>
                   <Text style={[styles.fieldLabel, { textAlign }]}>{t('modules.checklistApprovals.yourName')}</Text>
                   <TextInput

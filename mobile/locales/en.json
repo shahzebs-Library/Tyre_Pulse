@@ -1760,5 +1760,13 @@
     "restoreBody": "We could not open your saved sign in on this device. You are still signed in and your work is safe. Try again, or sign in to continue.",
     "tryAgain": "Try again",
     "signIn": "Sign in"
+  },
+  "signatureField": {
+    "usingSaved": "Using your saved signature.",
+    "drawNew": "Draw a new signature",
+    "rememberThis": "Remember this signature for next time",
+    "replaceSaved": "Replace my saved signature with this one",
+    "remembered": "Saved. It will be filled in next time.",
+    "notRemembered": "Could not save it for next time. This approval is not affected."
   }
 }

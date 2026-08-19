@@ -22,7 +22,7 @@
 
 import { loadPdf } from './pdfEngine'
 import {
-  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, reportFileName, PDF_COLORS,
+  resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, PDF_COLORS,
 } from './exportUtils'
 import {
   submissionSections, submissionSignatures, legendOptions, templateTitle, documentNo,
@@ -73,6 +73,45 @@ function pick(translated, english, state) {
 // The language list, its names and its direction live in checklistI18n - a
 // second copy here would be the drift this codebase keeps paying for.
 function langName(code) { return langMeta(code)?.label || String(code || 'English') }
+
+/**
+ * The name the file lands under in the operator's Downloads folder.
+ *
+ * The old name was `Checklist TM514 English.pdf` for every sheet that machine
+ * ever produced, so a folder of them sorted into an indistinguishable pile and
+ * the only way to tell two apart was to open both. A checklist already has a
+ * unique identity - V594 mints a document number on insert (WDC-TM514-2026-0001)
+ * - and that number is what the workshop files the paper copy under, so the
+ * download should carry it too.
+ *
+ * HYPHENS ARE DELIBERATELY KEPT. `reportFileName` strips every non-alphanumeric,
+ * which turns WDC-TM514-2026-0001 into "WDC TM514 2026 0001" - four fragments
+ * that no longer match the number printed on the sheet or stored in the
+ * register. Hyphens are safe in a filename on every platform this ships to, so
+ * this sanitises locally rather than routing through that helper.
+ *
+ * "English" is not appended: the overwhelming majority of sheets are English and
+ * a suffix that is true of nearly every file distinguishes nothing. A non-English
+ * sheet does say so, because that one IS worth telling apart.
+ */
+export function checklistFileName(parts, { lang = 'en' } = {}) {
+  const clean = (v) => String(v == null ? '' : v)
+    .replace(/[^A-Za-z0-9 ()\-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const out = (Array.isArray(parts) ? parts : [parts]).map(clean).filter(Boolean)
+  const code = normalizeLang(lang)
+  if (code && code !== 'en') out.push(clean(langName(code)))
+  return out.join(' ').slice(0, 120) || 'Checklist'
+}
+
+/** The date a sheet belongs to, as YYYY-MM-DD. Blank when nothing was recorded. */
+function fileDate(v) {
+  if (!v) return ''
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().slice(0, 10)
+}
 
 function fmtDateTime(v) {
   if (!v) return 'Not recorded'
@@ -461,10 +500,12 @@ export async function renderChecklistPdf({
     pdfFooter(doc, p, total, '', { ...brand, footerText: brand.footerText || 'Confidential, for internal distribution only' })
   }
 
-  const name = filename || reportFileName(
-    'Checklist',
-    String(sub.asset_no || sub.id || '').replace(/[^a-z0-9]/gi, ' ').slice(0, 40),
-    langName(language),
+  // The document number identifies the sheet on its own, so the asset code is
+  // only added when there is no number to carry it (it is already inside one).
+  const docRefName = documentNo(sub)
+  const name = filename || checklistFileName(
+    [title, docRefName || sub.asset_no || sub.id, fileDate(sub.submitted_at || sub.created_at)],
+    { lang: language },
   )
   if (save) doc.save(`${name}.pdf`)
   return { doc, filename: `${name}.pdf`, fellBack: state.fellBack, translated: state.translated, language }
@@ -574,7 +615,7 @@ export async function renderMonthlyGridPdf({
     pdfFooter(doc, p, total, '', { ...brand, footerText: brand.footerText || 'Confidential, for internal distribution only' })
   }
 
-  const name = filename || reportFileName('Checklist month', assetNo || '', monthLabel)
+  const name = filename || checklistFileName([title, assetNo, monthLabel], { lang: language })
   if (save) doc.save(`${name}.pdf`)
   return { doc, filename: `${name}.pdf`, fellBack: state.fellBack, translated: state.translated, language }
 }

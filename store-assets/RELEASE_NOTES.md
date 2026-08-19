@@ -1,165 +1,78 @@
-# Release notes - TyrePulse Inspector 1.5.0
+# Release notes - TyrePulse Inspector 1.6.0
 
-Web app moves to 2.2.0 in the same release.
+Build 43, submitted to the Play **Closed testing** track on 2026-08-19.
 
-**What is on Play today: 1.3.2.** So this release carries everything from 1.3.2
-through 1.5.0, not just the last batch. `system_config.mobile_latest_version` is
-still 1.3.2 - see "After the build is live" at the bottom.
+**What is on Play Production today: 1.3.2.** This release therefore carries
+everything from 1.3.2 through 1.6.0, not just the last batch.
+`system_config.mobile_latest_version` is still 1.3.2 - see "After the build is
+live" at the bottom.
 
 ---
 
 ## 1. Paste this into Play Console -> Release -> "What's new"
 
 Google caps this field at **500 characters per language**. Both versions below
-are inside that limit. Use the English one for en-US and the Arabic one for
-ar (the app ships Arabic, so it is worth filling in).
+are inside that limit. Use the English one for en-US and the Arabic one for ar.
 
 ### English (en-US)
 
 ```
-Workshop Daily Checklist rebuilt: two-stage sign-off, automatic document
-numbers, and details that fill themselves from the asset. Nothing closes while
-a fault is still open, and an unfinished sheet now waits for you instead of
-being lost.
+Back now returns to where you were, not the home screen.
 
-Your own checklist history is here.
+The home screen is cleaner: less text on every button, and colour now only
+marks what needs attention.
 
-Fixed: screens that bounced you back to Home instead of opening, notifications
-that led nowhere, and being signed out for no reason.
+Checklist condition icons show correctly again.
+
+Approvals stay on the record after you sign, and a screen you cannot open now
+says so instead of sending you home.
+
+Plus everything from the Workshop Daily Checklist release: two-stage sign-off,
+automatic document numbers, and resumable sheets.
 ```
-(410 characters, Play allows 500)
+(437 characters, Play allows 500)
 
 ### Arabic (ar)
 
 ```
-تم إعادة بناء قائمة الفحص اليومية للورشة: اعتماد على مرحلتين (المشرف ثم مدير
-المنطقة)، وأرقام مستندات تلقائية، وبيانات تُملأ تلقائياً من الأصل. لا يمكن
-الإغلاق وهناك عطل لم يُصلح بعد.
+زر الرجوع يعيدك الآن إلى المكان الذي كنت فيه، وليس إلى الشاشة الرئيسية.
 
-تم الإصلاح: شاشات كانت تعيدك إلى الصفحة الرئيسية بدل أن تفتح. المخزون وسجل
-العداد والمركبات تفتح الآن لكل من يراها.
+الشاشة الرئيسية أصبحت أوضح: نص أقل على كل زر، واللون يشير الآن إلى ما يحتاج
+انتباهك فقط.
 
-تبقى مسجلاً للدخول. لا يمكن فقدان الصور وقوائم الفحص المحفوظة دون اتصال.
+أيقونات حالة قائمة الفحص تظهر بشكل صحيح مرة أخرى.
+
+تبقى الموافقات على السجل بعد التوقيع، والشاشة التي لا يمكنك فتحها توضح ذلك
+بدلاً من إعادتك إلى الرئيسية.
 ```
 
 ---
 
-## 2. Full changelog - what actually changed and why
+## 2. What actually changed in 1.6.0
 
-Written for a person, not a developer. This is the version to keep for your own
-records and to hand to anyone who asks what changed.
+**Back navigation went to the home screen from every screen.** The cause was
+the navigator, not the individual screens: every screen sits in one tab
+navigator whose back behaviour defaulted to "first route", so its history was
+always [Home, current] and Back always popped to Home. Three earlier attempts
+adjusted per-screen fallbacks that were never reached. One navigator setting
+fixed it.
 
-### Workshop Daily Checklist and Fleet Transit Mixer - rebuilt
+**Home screen decluttered.** The second line of explanatory text under every
+tile is gone. The seven decorative tile colours are replaced by one neutral
+treatment plus colour reserved for real signal - red for Accidents, File
+Accident and Alerts; green for Approvals. The grid is squared to a consistent
+three-across. No tile was removed and no role lost access to anything.
 
-* **Two people sign, in order.** A supervisor signs first, then the area
-  manager closes it. Before this, one person could close a sheet and the system
-  had no way to record that two had checked it.
-* **Nothing closes while a fault is open.** If any line is marked Not OK, the
-  final approval is refused until the item is re-marked as repaired. This is
-  enforced by the database, not just by the screen, so it cannot be bypassed.
-  A supervisor can still sign off with a fault present - a fault found on the
-  last item of the day must still be recordable - but it cannot be closed.
-* **Automatic document number**, for example `WDC-TM514-2026-0001`. It is
-  assigned when the sheet is created, counted per asset per year. An abandoned
-  sheet never burns a number, and a sheet uploaded days later from a phone that
-  was offline still gets one.
-* **Enter the asset once.** The asset code is asked in one place only. The
-  registration / fleet number and the site fill themselves from the register and
-  show as read-only - but only when the register actually has that value, so a
-  vehicle we do not hold a fleet number for can still be filled in by hand.
-* **Km and hour meter.** Either one is enough. Zero is accepted as a real
-  reading rather than treated as blank.
-* **Eight marking icons, each with a plain meaning** - OK, Not OK, Repaired,
-  Adjusted, Lubricated, Not applicable and so on, instead of a bare word.
-* **Ten-day reminder.** If the same vehicle comes back inside ten days the sheet
-  says so. It warns; it never refuses.
-* **Removed** the "Inspection stage" field and the "Job card No" field, and the
-  duplicate places that asked for the asset and the site a second time.
-* **Language selector** on the sheet itself, offering only the languages that
-  sheet actually carries. Answers are always recorded in English whichever
-  language it was filled in.
-* Photos can be added from the gallery, not only the camera. A signature can be
-  opened and viewed, with the signer's name.
+**Checklist condition icons rendered as "?".** The icon lookup was being
+skipped and a type cast hid it.
 
-### Who signs, and who sees what
+**Approvals bounced to the home screen.** A screen you lack access to now says
+so and stays put, instead of vanishing and dumping you on Home - which read as
+the app malfunctioning rather than as a refusal.
 
-* **A Workshop Supervisor role now exists** and signs the first rung of the
-  workshop sheets. It did not exist before, which meant it could not be assigned
-  at all.
-* **The area maintenance manager or the PMV manager signs an inspection.** A
-  Manager no longer can. Nothing was lost in practice: every inspection ever
-  approved was approved by an admin.
-* **The Admin Console is admin only.** It used to be offered to Managers and
-  Directors, whose own entries inside it then refused them.
-* Screens you cannot open are no longer offered to you at all, and if you do
-  reach one it says so plainly instead of showing a spinner that never ends.
-
-### Approvals
-
-* The queue keeps your place. It no longer scrolls back to the top each time.
-* After signing you stay on the record instead of being thrown back to Home.
-* The queue now shows sheets waiting on either rung and says which one is
-  holding it, rather than the single word "pending".
-* Inspections and checklists are both signed through the server, so two people
-  cannot approve the same record and silently overwrite each other, and the
-  approver's name comes from the account that signed rather than from the form.
-
-### Screens that would not open (the one most people will notice)
-
-Several screens checked permissions differently from the menu that offered
-them. You saw the tile, tapped it, and were sent straight back to Home - which
-reads as the screen spinning or never loading.
-
-* **Stock** did this for inspectors.
-* **Meter Log** did this for drivers - their own main tab.
-* **Vehicles** and **Calendar** did it for other roles.
-
-All screens now read one shared list of who may open what, so the menu and the
-screen can never disagree again. A per-person access grant given from the web
-Access Manager now works on the phone as well; before this it was ignored.
-
-### Staying signed in
-
-* You are no longer signed out for no reason. Two separate causes were fixed: a
-  single refused read from the phone's secure storage was being treated as "no
-  account", and the app was not refreshing its session while in the background,
-  so a phone left overnight woke up signed out.
-* The offline profile is kept for 90 days instead of 14, so time off does not
-  lock you out of your own queued work.
-
-### Work that can no longer be lost
-
-* If the phone's secure storage refuses a read, the app no longer treats it as
-  "nothing is queued" and overwrites your unsynced inspections and accident
-  reports with an empty list. It now refuses to save rather than destroy what is
-  there. The trade is deliberate: risk failing to save one new item rather than
-  silently losing all of them.
-* Photos attached to a checklist are stored durably as soon as they are queued.
-
-### Inspections
-
-* An inspection can no longer be signed off with wheels nobody attended to. Any
-  wheel still needing details is named by position and outlined on the diagram.
-  Equipment with no tyres correctly reports "not applicable" rather than "0 of 0",
-  and a spare is never counted as missing.
-* The summary cards now answer the same question as the filters above them.
-  Selecting a region or a site used to leave the cards showing the whole fleet.
-
-### Assets and lists
-
-* Lists stopped silently showing only the first 1,000 rows. This affected asset
-  pickers, QR labels, site lists and around twenty other places - an asset past
-  the first thousand simply could not be found, which read as "the asset was
-  never created".
-* Concrete pump diagrams: stationary pumps, placing booms and spider pumps were
-  being drawn as a 14-wheel truck. Machines with no wheels now say so.
-
-### Performance and stability
-
-* Release builds are now shrunk and optimised (R8), so the app is smaller and
-  starts faster.
-* Fixed a crash on the sync banner and several lifecycle crashes found in the
-  crash reports.
+**Language fixes.** Removed a key present only in Arabic, which could print a
+raw key path on screen instead of text. English and Arabic are now identical at
+1564 keys each.
 
 ---
 

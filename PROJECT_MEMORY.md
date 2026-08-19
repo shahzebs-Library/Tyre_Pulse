@@ -324,6 +324,22 @@ QRs generated, and an Excel of the matched vehicles' details beside the PDF of l
 - 8 mutations, all caught (auto-select ambiguous, drop unmatched, case-sensitive compare, summary hides the
   misses, match the filtered view, conditional filter clear, export column with no select, bare-array parse).
 
+### **THE LABEL WEARS THE COMPANY LOGO, NOT A TEXT NAME**
+Owner: "can we add logos also with it? Not the pulse name without it, make it more beautiful". The label's
+green header printed the word "TYREPULSE"; it now carries the company logo instead, on a white header with a
+thin green rule beneath it (the logo's real colours read on white; a light logo would vanish on green).
+- The logo is `system_config.company_logo` - the same org-wide image the checklist PDF and the public TV
+  board already use, administered in Console -> Report Colors. Live value is a signed storage URL to
+  `GCC-3D-Logo-Light.png` valid into 2027. Loaded ONCE per page (preview) and ONCE per export (PDF), never per
+  label - a signed URL cannot be handed to jsPDF, and per-label fetching would be N round trips.
+- **`fitLogoBox(imgW,imgH,boxW,boxH)` (in `qrLabelLayout.js`) keeps the logo's shape.** A stretched logo on a
+  windscreen sticker reads as amateur; it scales to fit undistorted and centres. Degenerate input (a failed
+  `getImageProperties`) fills the box rather than emit a NaN rectangle jsPDF then refuses.
+- **A missing or blocked logo falls back to a "TYRE PULSE" wordmark, never a blank header**, on both the
+  preview and the print/PDF. `getImageProperties` and `addImage` are each wrapped so one corrupt frame degrades
+  to the wordmark instead of throwing out of the whole run.
+- 4 mutations caught (raw signed URL to jsPDF, old text name kept, aspect ignored, NaN on degenerate input).
+
 ### **THE PDF WAS CUTTING NAMES IN HALF, AND THE SIZE CONTROL WAS DECORATIVE**
 Owner: "when i get expoet pdf names is vut in moddle". jsPDF neither wraps nor clips - `doc.text` with
 `align:'center'` and no maxWidth simply OVERFLOWS the label, so a long serial ran across its neighbour.

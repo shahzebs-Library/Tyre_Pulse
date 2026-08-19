@@ -158,4 +158,32 @@ function wrapAt(measure, text, maxW, size) {
   return out
 }
 
+/**
+ * Fit an image into a box while keeping its shape.
+ *
+ * A logo is almost never square, and a QR label is a small, exact rectangle, so
+ * the logo must be scaled to fit WITHOUT distortion - a stretched company logo
+ * on a windscreen sticker reads as amateur. Returns the drawn size and the
+ * offsets that centre it in the box, so the caller only positions the box.
+ *
+ * @param {number} imgW natural width  (any unit; only the ratio matters)
+ * @param {number} imgH natural height
+ * @param {number} boxW box width  (mm)
+ * @param {number} boxH box height (mm)
+ * @returns {{w:number, h:number, dx:number, dy:number}}
+ */
+export function fitLogoBox(imgW, imgH, boxW, boxH) {
+  const iw = Number(imgW), ih = Number(imgH), bw = Number(boxW), bh = Number(boxH)
+  // Degenerate input (a zero dimension, a failed getImageProperties) must not
+  // produce a NaN rectangle the PDF then refuses - fill the box instead.
+  if (!(iw > 0) || !(ih > 0) || !(bw > 0) || !(bh > 0)) {
+    const w = bw > 0 ? bw : 0, h = bh > 0 ? bh : 0
+    return { w, h, dx: 0, dy: 0 }
+  }
+  const scale = Math.min(bw / iw, bh / ih)
+  const w = round2(iw * scale)
+  const h = round2(ih * scale)
+  return { w, h, dx: round2((bw - w) / 2), dy: round2((bh - h) / 2) }
+}
+
 function round2(n) { return Math.round(n * 100) / 100 }

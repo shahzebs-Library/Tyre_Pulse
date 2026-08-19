@@ -101,3 +101,46 @@ describe('QR detail spreadsheet', () => {
     expect(src).not.toMatch(/TyrePulse_QR_/)
   })
 })
+
+describe('QR label branding', () => {
+  it('loads the company logo once, not per label', () => {
+    // Per-export fetch is fine (one run), but the preview must not re-request
+    // the logo on every render, and the PDF must not fetch it per label.
+    expect(src).toMatch(/getCompanyLogo\(\)\.then/)
+    expect(src).toMatch(/useEffect\(\(\) => \{[\s\S]*?getCompanyLogo/)
+  })
+
+  it('embeds the logo in the PDF via a data URL, once per run', () => {
+    // A signed storage URL cannot be handed to jsPDF, and fetching per label
+    // would be N round trips.
+    expect(src).toMatch(/const logoData = await fetchLogoDataUrl\(logoUrl\)/)
+    const body = src.slice(src.indexOf('async function exportPDF'), src.indexOf('doc.save'))
+    // fetch happens before the per-item loop
+    expect(body.indexOf('fetchLogoDataUrl')).toBeLessThan(body.indexOf('readyItems.forEach'))
+  })
+
+  it('fits the logo without stretching it', () => {
+    expect(src).toMatch(/fitLogoBox\(logo\.w, logo\.h/)
+  })
+
+  it('falls back to a wordmark when no logo is set, never a blank header', () => {
+    // Both surfaces (preview and print) keep a text stand-in.
+    expect(src).toMatch(/logoUrl\s*\n?\s*\?\s*<img/)
+    expect(src).toContain('TYRE PULSE')
+  })
+
+  it('does not print the old TYREPULSE text name when a logo is present', () => {
+    // The owner asked for the logo instead of the name. The wordmark that
+    // remains is only the fallback branch, spelt "TYRE PULSE".
+    expect(src).not.toMatch(/doc\.text\('TYREPULSE'/)
+    expect(src).not.toMatch(/>\s*TYREPULSE\s*</)
+  })
+
+  it('never lets a bad logo frame cost the sheet', () => {
+    // getImageProperties and addImage are both wrapped - a corrupt image must
+    // degrade to the wordmark, not throw out of the whole export.
+    const body = src.slice(src.indexOf('async function exportPDF'), src.indexOf('doc.save'))
+    expect(body).toMatch(/try \{ props = doc\.getImageProperties/)
+    expect(body).toMatch(/doc\.addImage\(logo\.data[\s\S]*?catch/)
+  })
+})

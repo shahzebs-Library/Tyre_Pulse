@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
-  LABEL_SIZES, labelGrid, pageCount, fitLabelText, PAGE_W, PAGE_H,
+  LABEL_SIZES, labelGrid, pageCount, fitLabelText, fitLogoBox, PAGE_W, PAGE_H,
 } from '../lib/qrLabelLayout'
 
 // A stand-in for jsPDF's getTextWidth: proportional to length and font size.
@@ -132,5 +132,40 @@ describe('degrading honestly', () => {
   it('with no measurer it returns the text rather than throwing away the label', () => {
     expect(fitLabelText(null, 'YMA55312', 51).lines).toEqual(['YMA55312'])
     expect(fitLabelText(measure, 'YMA55312', 0).lines).toEqual(['YMA55312'])
+  })
+})
+
+describe('fitLogoBox', () => {
+  it('preserves the aspect ratio - a logo is never stretched', () => {
+    // 3:1 logo into a 20x6 box: width would fit but the 6mm height binds first
+    // only if the logo is squarer than the box; here the box is 3.33:1 so the
+    // wide logo is width-... let ratio decide, and assert no distortion.
+    const r = fitLogoBox(300, 100, 20, 6)
+    expect(r.w / r.h).toBeCloseTo(3, 5)
+    expect(r.w).toBeLessThanOrEqual(20)
+    expect(r.h).toBeLessThanOrEqual(6)
+  })
+
+  it('height-binds a tall logo and centres it horizontally', () => {
+    const r = fitLogoBox(100, 300, 20, 6)
+    expect(r.h).toBe(6)
+    expect(r.w / r.h).toBeCloseTo(100 / 300, 5)
+    expect(r.dx).toBeGreaterThan(0)
+    expect(r.dy).toBe(0)
+  })
+
+  it('centres a square logo', () => {
+    const r = fitLogoBox(100, 100, 20, 6)
+    expect(r.w).toBe(6)
+    expect(r.h).toBe(6)
+    expect(r.dx).toBe(7)
+  })
+
+  it('fills the box rather than emit NaN on a degenerate dimension', () => {
+    // getImageProperties can fail; a NaN rectangle makes jsPDF throw, which
+    // would take down the whole export for one bad logo.
+    expect(fitLogoBox(0, 100, 20, 6)).toEqual({ w: 20, h: 6, dx: 0, dy: 0 })
+    expect(fitLogoBox(100, 0, 20, 6)).toEqual({ w: 20, h: 6, dx: 0, dy: 0 })
+    expect(Number.isNaN(fitLogoBox(NaN, NaN, 20, 6).w)).toBe(false)
   })
 })

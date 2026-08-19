@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
-import { LABEL_SIZES, labelGrid, pageCount, fitLabelText } from '../lib/qrLabelLayout'
+import { LABEL_SIZES, labelGrid, pageCount, fitLabelText, fitLogoBox } from '../lib/qrLabelLayout'
 import { parseCodes, codesFromRows, matchCodes, matchSummary, rowWhere } from '../lib/qrBulkMatch'
 import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -14,6 +14,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { getCompanyLogo } from '../lib/api/brandLogo'
 
 // Preview pixels per printed millimetre. The on-screen card is a scaled picture
 // of the real label, so choosing Large now makes the preview bigger AND the
@@ -35,6 +36,33 @@ async function makeQR(value) {
     width: 400, margin: 1, errorCorrectionLevel: 'M',
     color: { dark: '#000000', light: '#ffffff' },
   })
+}
+
+// Fetch the company logo to a data URL, ONCE, for embedding in the PDF. A signed
+// storage URL cannot be handed straight to jsPDF (it does not fetch), and doing
+// it per label would be N network round trips. Never throws: a blocked, slow or
+// missing logo leaves the label falling back to the wordmark rather than losing
+// the sheet. Mirrors the checklist PDF's own logo path.
+async function fetchLogoDataUrl(url) {
+  if (!url || typeof url !== 'string') return null
+  if (/^data:image\//i.test(url)) return url
+  if (typeof fetch !== 'function' || typeof FileReader === 'undefined') return null
+  try {
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null
+    const timer = ctrl && typeof setTimeout === 'function' ? setTimeout(() => ctrl.abort(), 12000) : null
+    let res
+    try { res = await fetch(url, { mode: 'cors', signal: ctrl ? ctrl.signal : undefined }) }
+    finally { if (timer && typeof clearTimeout === 'function') clearTimeout(timer) }
+    if (!res || !res.ok) return null
+    const blob = await res.blob()
+    if (!blob.type || !blob.type.startsWith('image/') || blob.size > 8000000) return null
+    return await new Promise((resolve) => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null)
+      fr.onerror = () => resolve(null)
+      fr.readAsDataURL(blob)
+    })
+  } catch { return null }
 }
 
 export default function QrLabels() {
@@ -59,8 +87,17 @@ export default function QrLabels() {
   const [bulkBusy,   setBulkBusy]   = useState(false)
   const [bulkError,  setBulkError]  = useState(null)
   const [bulkResult, setBulkResult] = useState(null)
+  const [logoUrl,    setLogoUrl]    = useState('')       // company logo, live URL for the preview
   const printAreaRef = useRef(null)
   const fileRef      = useRef(null)
+
+  // The company logo is org-wide and rarely changes - load it once, not per
+  // export. '' means no logo is set, and the label falls back to the wordmark.
+  useEffect(() => {
+    let live = true
+    getCompanyLogo().then((u) => { if (live) setLogoUrl(typeof u === 'string' ? u : '') }).catch(() => {})
+    return () => { live = false }
+  }, [])
 
   useEffect(() => {
     setSelected(new Set())
@@ -250,6 +287,19 @@ export default function QrLabels() {
     // gets 20 to a sheet instead of the 12 the old fixed 3x4 grid gave every
     // size, and a Large one stops running off the page width.
     const g = labelGrid(labelSize)
+
+    // Load the logo ONCE for the whole run, and measure it once. A missing or
+    // blocked logo leaves `logo` null and the header falls back to the wordmark -
+    // the sheet is never lost for the sake of an image.
+    let logo = null
+    const logoData = await fetchLogoDataUrl(logoUrl)
+    if (logoData) {
+      let props = null
+      try { props = doc.getImageProperties ? doc.getImageProperties(logoData) : null } catch { props = null }
+      const fmt = /png/i.test(logoData.slice(0, 40)) || props?.fileType === 'PNG' ? 'PNG'
+        : /webp/i.test(logoData.slice(0, 40)) ? 'WEBP' : 'JPEG'
+      logo = { data: logoData, w: props?.width || 0, h: props?.height || 0, fmt }
+    }
     // jsPDF's own measurement, handed to the pure fitter.
     const measure = (text, size) => {
       doc.setFontSize(size)
@@ -269,19 +319,33 @@ export default function QrLabels() {
       const val = getLabel(item)
       const sub = getSub(item)
 
-      // ── Border ──────────────────────────────────────────────────────────
+      // ── Card: white face, soft green border ─────────────────────────────
+      doc.setFillColor(255, 255, 255)
       doc.setDrawColor(22, 163, 74)
-      doc.setLineWidth(0.5)
-      doc.roundedRect(x, y, g.w, g.h, 2, 2)
+      doc.setLineWidth(0.4)
+      doc.roundedRect(x, y, g.w, g.h, 2.2, 2.2, 'FD')
 
-      // ── Header bar ──────────────────────────────────────────────────────
-      doc.setFillColor(22, 163, 74)
-      doc.roundedRect(x, y, g.w, 6, 2, 2)
-      doc.rect(x, y + 3, g.w, 3, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(5.5)
-      doc.setFont('helvetica', 'bold')
-      doc.text('TYREPULSE', x + g.w / 2, y + 4.2, { align: 'center' })
+      // ── Header: the LOGO carries the brand, not a text name ──────────────
+      // The owner asked for the logo instead of the "TyrePulse" wordmark. The
+      // logo sits on the white face (its real colours read there) with a thin
+      // green rule beneath it; only when no logo is set does the wordmark stand
+      // in, so a label is never blank at the top.
+      const headH = 7
+      if (logo) {
+        const box = fitLogoBox(logo.w, logo.h, g.w - 6, headH - 1.5)
+        try {
+          doc.addImage(logo.data, logo.fmt, x + 3 + box.dx, y + 1.2 + box.dy, box.w, box.h, undefined, 'FAST')
+        } catch { /* a bad frame must not lose the label */ }
+      } else {
+        doc.setTextColor(22, 163, 74)
+        doc.setFontSize(6)
+        doc.setFont('helvetica', 'bold')
+        doc.text('TYRE PULSE', x + g.w / 2, y + 4.6, { align: 'center' })
+      }
+      // Green accent rule under the header.
+      doc.setDrawColor(22, 163, 74)
+      doc.setLineWidth(0.35)
+      doc.line(x + 2.5, y + headH + 0.5, x + g.w - 2.5, y + headH + 0.5)
 
       // ── Identifier, fitted ───────────────────────────────────────────────
       // WRAPPED, NEVER TRUNCATED. A cut serial is not a shorter serial, it is a
@@ -308,7 +372,7 @@ export default function QrLabels() {
       // ── QR code, filling what the text leaves ────────────────────────────
       // Sized from the space actually available rather than a fixed padding, so
       // a two-line serial shrinks the code instead of colliding with it.
-      const qrTop = y + 8
+      const qrTop = y + headH + 2
       const qrRoom = Math.max(6, baseY - (fitVal.lines.length - 1) * (fitVal.size * 0.42) - 3 - qrTop)
       const qrSize = Math.max(6, Math.min(g.w - 10, qrRoom))
       doc.addImage(qrImages[item.id], 'PNG', x + (g.w - qrSize) / 2, qrTop, qrSize, qrSize)
@@ -405,10 +469,13 @@ export default function QrLabels() {
             background: white !important;
           }
           .tp-print-header {
-            width: 100% !important; background: #16a34a !important;
-            text-align: center !important; padding: 2mm 0 !important;
+            width: 100% !important; background: white !important;
+            display: flex !important; align-items: center !important; justify-content: center !important;
+            padding: 1.5mm 0 !important; border-bottom: 0.6mm solid #16a34a !important;
+            min-height: 7mm !important;
           }
-          .tp-print-header span { color: white !important; font-size: 7pt !important; font-weight: bold !important; font-family: Arial, sans-serif !important; }
+          .tp-print-header img { max-width: 46mm !important; max-height: 6mm !important; object-fit: contain !important; }
+          .tp-print-header span { color: #16a34a !important; font-size: 7pt !important; font-weight: bold !important; letter-spacing: 0.06em !important; font-family: Arial, sans-serif !important; }
           .tp-print-qr { width: 50mm !important; height: 50mm !important; margin: 2mm !important; }
           .tp-print-serial { font-family: monospace !important; font-size: 8pt !important; font-weight: bold !important; text-align: center !important; color: #000 !important; margin-bottom: 1mm !important; }
           .tp-print-sub { font-size: 6pt !important; color: #666 !important; text-align: center !important; padding-bottom: 2mm !important; }
@@ -425,7 +492,11 @@ export default function QrLabels() {
       >
         {readyItems.map(item => (
           <div key={item.id} className="tp-print-label">
-            <div className="tp-print-header"><span>TYREPULSE</span></div>
+            <div className="tp-print-header">
+              {logoUrl
+                ? <img src={logoUrl} alt="" crossOrigin="anonymous" />
+                : <span>TYRE PULSE</span>}
+            </div>
             <img src={qrImages[item.id]} alt={`QR code for ${getLabel(item)}`} className="tp-print-qr" />
             <p className="tp-print-serial">{getLabel(item)}</p>
             {getSub(item) && <p className="tp-print-sub">{getSub(item)}</p>}
@@ -758,12 +829,17 @@ export default function QrLabels() {
                           boxShadow: '0 0 24px rgba(22,163,74,0.1), 0 4px 16px rgba(0,0,0,0.4)',
                         }}
                       >
-                        {/* Green header */}
+                        {/* Header - the company logo, on white, with a green rule.
+                            The label carries the brand as an image now, not a name;
+                            when no logo is set the wordmark stands in so it is
+                            never blank. */}
                         <div
-                          className="py-1.5 text-center text-[9px] font-black tracking-[0.18em] uppercase text-white"
-                          style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+                          className="flex items-center justify-center bg-white px-2"
+                          style={{ height: Math.max(24, dim * 0.16), borderBottom: '1.5px solid #16a34a' }}
                         >
-                          TYREPULSE
+                          {logoUrl
+                            ? <img src={logoUrl} alt="" crossOrigin="anonymous" style={{ maxHeight: '80%', maxWidth: '86%', objectFit: 'contain', display: 'block' }} />
+                            : <span className="text-[9px] font-black tracking-[0.16em] uppercase" style={{ color: '#16a34a' }}>TYRE PULSE</span>}
                         </div>
 
                         {/* QR image - white background so codes are scannable */}
@@ -917,6 +993,12 @@ export default function QrLabels() {
             </li>
             <li>Cut and stick labels onto the tyre or vehicle windscreen / chassis plate</li>
             <li>Scan with the <strong className="text-gray-400">TyrePulse Scanner</strong> to instantly pull up full tyre details</li>
+            <li>
+              Labels carry your <strong className="text-gray-400">company logo</strong> across the top.
+              {logoUrl
+                ? ' It is loaded from your report branding.'
+                : ' Set one in the console under Report Colors and it appears here automatically.'}
+            </li>
           </ol>
         </div>
       </div>

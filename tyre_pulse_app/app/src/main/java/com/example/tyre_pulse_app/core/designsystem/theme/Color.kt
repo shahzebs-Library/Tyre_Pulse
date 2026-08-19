@@ -37,3 +37,6 @@ val TextOnYellow = Color(0xFF000000)
 val TextPrimary = Color(0xFFFFFFFF)
 val TextSecondary = Color(0xFFB0B0B0)
 
+// OLED Card Background
+val OLED_Card = Color(0xFF161B22)
+

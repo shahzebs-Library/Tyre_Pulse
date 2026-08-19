@@ -56,7 +56,7 @@ object AITyreScanner {
         }
 
         // Current estimated tread depth if not scanned
-        val currentTread = max(2.0f, initialTread - (usageKm / 10000.0f) * calculatedWearRate)
+        val currentTread = max(2.0f, initialTread - (usageKm.toFloat() / 10000.0f) * calculatedWearRate)
 
         // Remaining life calculation (limit is 3.0mm)
         val remainingTread = max(0.0f, currentTread - 3.0f)

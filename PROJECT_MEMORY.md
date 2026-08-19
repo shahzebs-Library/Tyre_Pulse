@@ -288,6 +288,24 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
 
 ## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, QR LABELS, AND BULK SIGN-OFF (V602). Next free **V603**.
 
+### SESSION CLOSED CLEAN — everything on main, tree clean, nothing pending
+Pushed straight to main (batched, one push per piece as the work landed); branch
+`claude/accident-builder-report-ui-2bkwb5` == origin/main; tree clean. Suite **8,649 tests / 571 files** green,
+build clean, lint 0 new errors. This session's commits, newest first:
+- `e06670c1` bulk approve applies the approver's saved signature + refuses unsigned; **V602** hardens the RPC.
+- `0fae1043` QR labels wear the company logo instead of the "TYREPULSE" text name (fallback wordmark).
+- `b8c50f64` QR labels: paste/upload a list of asset codes -> matched, QRs generated, Excel of the vehicles.
+- `3af6c5ac` QR labels: stop cutting the serial (wrap not clip) + the size control is real (derives the grid).
+- `caea634c` page the long registers at 50 (Inspections first) + region/vehicle-type filters.
+- `eb4fa3aa` Cost Center: page the long tables, stop hiding 505 assets behind a slice.
+**STILL NO MOBILE BUILD** (standing owner instruction) - the V601 mobile signature work still awaits an EAS
+build to reach devices; nothing this session touched mobile. Owner-side/ops carried, unchanged: promote Play
+Closed -> Production for 1.6.0 then set `mobile_latest_version` 1.6.0; assign the trade accounts (Mechanic,
+Electrician, Driver, Maintenance/Workshop Supervisor) in Title Case. Code carried: `tyre_records.serial_no`
+partial-scrap (43 tyres); `failureRate` printing 0.0%; 820 UAE rows with a brand in `removal_reason`; the
+realtime re-measure. For NEW work, start from latest main.
+
+
 ### **BULK APPROVE STORED INSPECTIONS WITHOUT A SIGNATURE - "saved without signature" (V602)**
 Owner: "we can sign when we select all for signing, why is the saved one not put on, why does it say saved
 without signature". Real. `bulkDecide`'s inspection branch called `decideInspection` with NO signature, and

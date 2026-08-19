@@ -25,10 +25,10 @@ import {
   resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, PDF_COLORS,
 } from './exportUtils'
 import {
-  submissionSections, submissionSignatures, legendOptions, templateTitle, documentNo,
+  submissionSections, submissionSignatures, templateTitle, documentNo,
   templateFieldsOf, templateFromSubmission,
 } from './checklistView'
-import { gridFields, monthlySummary, cellText, isNotOk } from './checklistMonthly'
+import { gridFields, monthlySummary, cellText, isNotOk, isNotApplicable, needsAttention } from './checklistMonthly'
 import { langMeta, normalizeLang } from './checklist/checklistI18n'
 
 const MX = 12                 // page margin, mm
@@ -263,22 +263,39 @@ export async function renderChecklistPdf({
     }
   }
 
+  // Identification is what identifies the MACHINE and the sheet. The sign-off
+  // fields - who inspected it, who certified it fit - are a different statement
+  // and belong beside the signatures they go with; sweeping every non-check
+  // answer into one block put "Mechanic name: ALI" under Identification while
+  // ALI's signature sat at the foot of the page.
+  //
+  // The template's own structure decides the split: anything before the first
+  // section that carries checks identifies the machine, anything after it is
+  // sign-off. No hardcoded field ids, so a new template needs no code change.
+  const firstCheckSection = sections.findIndex((sec) => sec.rows.some((r) => checkIds.has(r.id)))
   const meta = []
-  for (const s of sections) {
-    for (const r of s.rows) {
+  const signoff = []
+  sections.forEach((sec, idx) => {
+    for (const r of sec.rows) {
       if (checkIds.has(r.id)) continue
       if (!r.answered) continue
-      meta.push([pick(r.label, r.englishLabel, state), pick(r.text, r.text, state) || 'Not recorded'])
+      const cell = [pick(r.label, r.englishLabel, state), pick(r.text, r.text, state) || 'Not recorded']
+      if (firstCheckSection === -1 || idx < firstCheckSection) meta.push(cell)
+      else signoff.push(cell)
     }
-  }
+  })
   // The document number leads the identification block: it is the reference the
   // filed sheet is known by. Absent when the template mints none, in which case
   // nothing is printed rather than a placeholder somebody would go on to quote.
   const docRef = documentNo(sub)
   if (docRef) meta.unshift(['Document no', docRef])
   meta.push(['Submitted', fmtDateTime(sub.submitted_at || sub.created_at)])
-  if (sub.site) meta.push(['Site', String(sub.site)])
-  if (sub.country) meta.push(['Country', String(sub.country)])
+  // The row already carries the site, and the sheet nearly always asks for it as
+  // a field too ("Location"). Printing both put DIRIYAH-G1 on the page twice
+  // under two different labels, which reads as two facts rather than one.
+  const already = new Set(meta.map((m) => String(m[1]).trim().toLowerCase()))
+  if (sub.site && !already.has(String(sub.site).trim().toLowerCase())) meta.push(['Site', String(sub.site)])
+  if (sub.country && !already.has(String(sub.country).trim().toLowerCase())) meta.push(['Country', String(sub.country)])
 
   sectionBar('Identification')
   {
@@ -301,19 +318,56 @@ export async function renderChecklistPdf({
   }
   y += 2
 
-  // ── The checks, section by section, with the remarks column ───────────────
-  let printedChecks = 0
-  for (const s of sections) {
-    const rows = s.rows.filter((r) => checkIds.has(r.id))
-    if (!rows.length) continue
-    sectionBar(pick(s.label, s.label, state))
-    const body = rows.map((r) => [
+  // ── The checks: only the lines that need reading ──────────────────────────
+  //
+  // The sheet used to print every line, so a 31-check machine produced three
+  // pages in which 28 rows said OK and the three that mattered were buried. The
+  // printed copy is now an EXCEPTION report: a line is printed when it is
+  // neither OK nor Not applicable, which keeps every reported fault AND every
+  // completed action (Repaired, Changed, Adjusted, Lubricated, Added) - work
+  // that was carried out has to stay traceable.
+  //
+  // THE TALLY IS NOT DECORATION. Dropping the OK rows without saying how many
+  // there were would leave a sheet that cannot show the other checks happened at
+  // all, which is the same silent-omission failure this codebase keeps paying
+  // for. So the counts are stated, and an UNRECORDED line is counted on its own:
+  // it is a gap, and rolling it into "OK" would assert a check nobody made.
+  const allChecks = []
+  for (const s2 of sections) for (const r of s2.rows) if (checkIds.has(r.id)) allChecks.push(r)
+
+  const attention = allChecks.filter((r) => needsAttention(r.value))
+  const okCount = allChecks.filter((r) => String(r.value ?? '').trim() && !needsAttention(r.value)
+    && !isNotApplicable(r.value)).length
+  const naCount = allChecks.filter((r) => isNotApplicable(r.value)).length
+  const blankCount = allChecks.filter((r) => !String(r.value ?? '').trim()).length
+
+  const tally = () => {
+    const parts = []
+    if (okCount) parts.push(`${okCount} OK`)
+    if (naCount) parts.push(`${naCount} not applicable`)
+    if (attention.length) parts.push(`${attention.length} needing attention`)
+    if (blankCount) parts.push(`${blankCount} not recorded`)
+    const line = allChecks.length
+      ? `${allChecks.length} check${allChecks.length === 1 ? '' : 's'} on this sheet: ${parts.join(', ')}.`
+      : 'This checklist recorded no inspection lines.'
+    need(8)
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+    doc.text(line, MX, y)
+    y += 6
+  }
+
+  if (attention.length) {
+    // One flat table. The section bars are gone deliberately: with only the
+    // exceptions printed, a heading per system separated three rows into three
+    // near-empty blocks. The printed number still ties each line back to its
+    // place on the paper sheet.
+    sectionBar('Items needing attention')
+    const body = attention.map((r) => [
       String(checkNo.get(r.id) ?? r.line),
       pick(r.label, r.englishLabel, state),
       r.text ? pick(r.text, r.text, state) : 'Not recorded',
       r.note ? pick(r.note, r.note, state) : '',
     ])
-    printedChecks += rows.length
     autoTable(doc, {
       ...theme,
       startY: y,
@@ -328,41 +382,29 @@ export async function renderChecklistPdf({
         3: { cellWidth: 'auto' },
       },
       // A reported fault is the reason anyone reads this sheet, so it is marked
-      // in the printed copy and not left to look like every other line.
+      // in the printed copy and not left to look like the completed work above it.
       didParseCell: (data) => {
         if (data.section !== 'body') return
-        const status = body[data.row.index]?.[2]
-        if (isNotOk(rows[data.row.index]?.value) || /^not ok$/i.test(String(status))) {
+        if (isNotOk(attention[data.row.index]?.value)) {
           data.cell.styles.textColor = FAULT
           if (data.column.index === 2) data.cell.styles.fontStyle = 'bold'
         }
       },
       didDrawPage: (data) => { if (data.pageNumber > 1) header() },
     })
-    y = (doc.lastAutoTable?.finalY ?? y) + 5
+    y = (doc.lastAutoTable?.finalY ?? y) + 4
+    tally()
+  } else {
+    sectionBar('Checks')
+    need(10)
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK)
+    doc.text(allChecks.length
+      ? 'Nothing needed attention. Every check on this sheet was recorded OK or not applicable.'
+      : 'This checklist recorded no inspection lines.', MX, y)
+    y += 6
+    tally()
   }
-
-  if (!printedChecks) {
-    need(14)
-    doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(...MUTED)
-    doc.text('This checklist recorded no inspection lines.', MX, y)
-    y += 8
-  }
-
-  // ── Legend ────────────────────────────────────────────────────────────────
-  const legend = legendOptions(template, language)
-  if (legend.length) {
-    sectionBar('Status legend')
-    const text = legend
-      .map((o) => `${o.value}${o.label !== o.value && canRenderText(o.label) ? ` (${o.label})` : ''}`)
-      .join('   |   ')
-    const lines = doc.splitTextToSize(text, pw - MX * 2 - 4)
-    need(lines.length * 4 + 4)
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK)
-    doc.text(lines, MX + 2, y + 1)
-    y += lines.length * 4 + 4
-    if (legend.some((o) => o.label !== o.value && !canRenderText(o.label))) state.fellBack = true
-  }
+  y += 2
 
   // ── Photographs, labelled by the line they belong to ──────────────────────
   const items = []
@@ -430,6 +472,28 @@ export async function renderChecklistPdf({
       doc.text(`${items.length - shown.length} further photograph(s) not printed.`, MX, y)
       y += 6
     }
+  }
+
+  // ── Sign off: the names, beside the signatures they belong to ─────────────
+  if (signoff.length) {
+    sectionBar('Sign off')
+    const half = (pw - MX * 2) / 2
+    for (let i = 0; i < signoff.length; i += 2) {
+      need(9)
+      const pair = [signoff[i], signoff[i + 1]]
+      pair.forEach((cell, col) => {
+        if (!cell) return
+        const x = MX + col * half
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+        doc.text(doc.splitTextToSize(String(cell[0]), half - 6)[0] || '', x, y)
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...INK)
+        doc.text(doc.splitTextToSize(String(cell[1]), half - 6)[0] || '', x, y + 4.4)
+        doc.setDrawColor(...LINE); doc.setLineWidth(0.2)
+        doc.line(x, y + 6.2, x + half - 5, y + 6.2)
+      })
+      y += 9
+    }
+    y += 2
   }
 
   // ── Signatures: every one of them ─────────────────────────────────────────

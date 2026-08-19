@@ -250,6 +250,38 @@ export function isNotOk(englishValue) {
   return s === 'not ok' || s === 'notok' || s === 'not-ok'
 }
 
+/**
+ * A line that was checked and found correct.
+ *
+ * Matched on the ENGLISH stored answer for the same reason as isNotOk: the
+ * translation is display only.
+ */
+export function isOk(englishValue) {
+  return String(englishValue == null ? '' : englishValue).trim().toLowerCase() === 'ok'
+}
+
+/** A line this machine does not have. Not a pass and not a fault - it does not apply. */
+export function isNotApplicable(englishValue) {
+  const s = String(englishValue == null ? '' : englishValue).trim().toLowerCase()
+  return s === 'not applicable' || s === 'n/a' || s === 'na' || s === 'not-applicable'
+}
+
+/**
+ * Did this line need somebody to do something, or to know about it?
+ *
+ * TRUE for every recorded answer that is neither OK nor Not applicable: a fault
+ * (Not OK) and a completed action (Changed, Repaired, Added / Top-Up, Adjusted,
+ * Lubricated) are BOTH worth reading, because the second kind is work that was
+ * carried out and has to be traceable. FALSE for an unanswered line, which is a
+ * gap rather than a finding and is counted separately - reporting an unrecorded
+ * check as a finding would invent one, and reporting it as OK would be worse.
+ */
+export function needsAttention(englishValue) {
+  const s = String(englishValue == null ? '' : englishValue).trim()
+  if (!s) return false
+  return !isOk(s) && !isNotApplicable(s)
+}
+
 /** Short cell text for the grid. An unrecorded day stays empty, never "OK". */
 export function cellText(cell) {
   if (!cell || cell.english == null || cell.english === '') return ''
@@ -275,5 +307,5 @@ export function monthlyExportRows(grid) {
 
 export default {
   daysInMonth, elapsedDays, submissionDay, gridFields,
-  monthlyGrid, monthlySummary, monthlyExportRows, isNotOk, cellText,
+  monthlyGrid, monthlySummary, monthlyExportRows, isNotOk, isOk, isNotApplicable, needsAttention, cellText,
 }

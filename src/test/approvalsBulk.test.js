@@ -107,6 +107,30 @@ describe('bulkDecide', () => {
     expect(ok.ok).toHaveLength(1)
   })
 
+  it('carries the batch signature into an INSPECTION approval', async () => {
+    // The bug: bulk approve of inspections passed no signature, so the RPC
+    // (approver_signature = COALESCE(p_signature, ...)) stored an approval with
+    // no mark - "saved without signature". The batch signature is the approver's
+    // own saved mark applied to each sheet, which is what a batch sign-off is.
+    rpc.mockResolvedValue({ data: { ok: true }, error: null })
+    from.mockImplementation(() => builder({ data: {}, error: null }))
+
+    await queue.bulkDecide([{ source: 'inspection', id: 'in-1' }], 'approve', { signature: '<svg id="me"/>' })
+
+    expect(rpc).toHaveBeenCalledWith('decide_inspection_approval', expect.objectContaining({
+      p_inspection_id: 'in-1', p_decision: 'approved', p_signature: '<svg id="me"/>',
+    }))
+  })
+
+  it('never sends a signature when REJECTING an inspection', async () => {
+    rpc.mockResolvedValue({ data: { ok: true }, error: null })
+    from.mockImplementation(() => builder({ data: {}, error: null }))
+    await queue.bulkDecide([{ source: 'inspection', id: 'in-2' }], 'reject', { reason: 'redo', signature: '<svg/>' })
+    expect(rpc).toHaveBeenCalledWith('decide_inspection_approval', expect.objectContaining({
+      p_decision: 'rejected', p_signature: null,
+    }))
+  })
+
   it('handles being given nothing', async () => {
     await expect(queue.bulkDecide(null, 'approve')).resolves.toEqual({ ok: [], failed: [] })
     await expect(queue.bulkDecide([], 'approve')).resolves.toEqual({ ok: [], failed: [] })
@@ -141,5 +165,41 @@ describe('listChecklistSignoffGaps', () => {
   it('degrades to empty before the tables exist rather than breaking the page', async () => {
     from.mockImplementation(() => builder({ data: null, error: { code: '42P01', message: 'does not exist' } }))
     await expect(queue.listChecklistSignoffGaps({})).resolves.toEqual([])
+  })
+})
+
+/**
+ * Source-scan for the page guard (Approvals.jsx has no exported seam for the
+ * bulk-run path). These pin the decisions that would each silently store an
+ * unsigned inspection approval.
+ */
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+const pageSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'pages', 'Approvals.jsx'), 'utf8')
+
+describe('Approvals bulk-run guard (source)', () => {
+  it('loads the approver saved signature before a bulk approve', () => {
+    expect(pageSrc).toMatch(/signature = await getMySignature\(\)/)
+  })
+
+  it('refuses to bulk-approve inspections with no usable signature', () => {
+    // Without this the batch would store approvals nobody signed - the exact
+    // defect. The refusal points at where to save one.
+    const run = pageSrc.slice(pageSrc.indexOf('async function runBulk'), pageSrc.indexOf('function openRow'))
+    expect(run).toMatch(/pickedInspections\.length > 0/)
+    expect(run).toMatch(/isUsableSignature\(signature\)/)
+    expect(run).toMatch(/return\b/)
+  })
+
+  it('passes the loaded signature through to bulkDecide', () => {
+    expect(pageSrc).toMatch(/queue\.bulkDecide\(pickedItems, action, \{ reason, signature \}\)/)
+  })
+
+  it('checks the signature only when approving, not when returning', () => {
+    const run = pageSrc.slice(pageSrc.indexOf('async function runBulk'), pageSrc.indexOf('function openRow'))
+    expect(run).toMatch(/action === 'approve' && pickedInspections\.length > 0/)
   })
 })

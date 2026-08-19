@@ -26,6 +26,16 @@ vi.mock('../lib/api/approvalsQueue', () => ({
   bulkDecide: vi.fn(),
 }))
 
+// The saved-signature API is used by SignatureField (the single drawer) AND by
+// the bulk-run guard. Default: nobody has a saved mark, which is what keeps the
+// "must draw before signing" drawer test honest; a test that needs a saved one
+// overrides getMySignature.
+vi.mock('../lib/api/userSignature', () => ({
+  getMySignature: vi.fn().mockResolvedValue(null),
+  saveMySignature: vi.fn().mockResolvedValue('<svg id="saved"/>'),
+  clearMySignature: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Auth is org-scoped server-side; the page only needs a session-shaped stub.
 // An elevated role unlocks the non-workflow approve/reject actions.
 // The signed-in role is per test, because V600 split WHO SIGNS from who
@@ -57,6 +67,7 @@ vi.mock('framer-motion', () => ({
 
 import * as workflows from '../lib/api/workflows'
 import * as queue from '../lib/api/approvalsQueue'
+import * as sigApi from '../lib/api/userSignature'
 import Approvals from '../pages/Approvals'
 
 const renderPage = () => render(<MemoryRouter><Approvals /></MemoryRouter>)
@@ -140,6 +151,7 @@ beforeEach(() => {
   queue.listInspectionApprovals.mockResolvedValue([])
   queue.decideInspection.mockResolvedValue({ ok: true })
   queue.bulkDecide.mockResolvedValue({ ok: [], failed: [] })
+  sigApi.getMySignature.mockResolvedValue(null)
 })
 
 afterEach(() => cleanup())
@@ -347,6 +359,9 @@ describe('Unified approval dashboard', () => {
     // that can be.
     queue.listChecklistApprovals.mockResolvedValue([])
     queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
+    // Bulk-approving an inspection needs the approver's saved signature - the
+    // guard refuses without one, so the batch here has a saved mark.
+    sigApi.getMySignature.mockResolvedValue('<svg id="me"/>')
     queue.bulkDecide.mockResolvedValue({
       ok: [{ source: 'inspection', id: 'insp-1', title: 'Tyre inspection' }],
       failed: [{ item: { source: 'accident_closure', id: 'ac-1', title: 'TM704 closure' }, error: 'already decided' }],
@@ -358,6 +373,38 @@ describe('Unified approval dashboard', () => {
     await waitFor(() => expect(screen.getByText(/1 item\(s\) approved/)).toBeInTheDocument())
     expect(screen.getByText(/1 could not be actioned/)).toBeInTheDocument()
     expect(screen.getByText(/already decided/)).toBeInTheDocument()
+  })
+
+  it('applies the approver saved signature when bulk-approving inspections', async () => {
+    // The reported bug: "saved without signature". Bulk approve passed none, so
+    // the inspection was stored unsigned. Now the approver saved mark is loaded
+    // and carried into each row.
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
+    sigApi.getMySignature.mockResolvedValue('<svg id="me"/>')
+    queue.bulkDecide.mockResolvedValue({ ok: [{ source: 'inspection', id: 'insp-1', title: 'Tyre inspection' }], failed: [] })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Select all 2')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Select all 2'))
+    fireEvent.click(screen.getByText('Approve selected'))
+    await waitFor(() => expect(queue.bulkDecide).toHaveBeenCalled())
+    const [, action, opts] = queue.bulkDecide.mock.calls[0]
+    expect(action).toBe('approve')
+    expect(opts.signature).toBe('<svg id="me"/>')
+  })
+
+  it('refuses a bulk inspection approve when no signature is saved', async () => {
+    // Rather than silently storing an unsigned approval (the defect), it points
+    // the approver at where to save one and calls nothing.
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listInspectionApprovals.mockResolvedValue([INSPECTION])
+    sigApi.getMySignature.mockResolvedValue(null)
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Select all 2')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Select all 2'))
+    fireEvent.click(screen.getByText('Approve selected'))
+    await waitFor(() => expect(screen.getByText(/need a signature/i)).toBeInTheDocument())
+    expect(queue.bulkDecide).not.toHaveBeenCalled()
   })
 
   // ── Missed sign-offs ───────────────────────────────────────────────────────

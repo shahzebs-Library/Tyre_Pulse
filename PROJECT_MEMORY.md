@@ -55,7 +55,7 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V602**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V603**)
 
 **V601 (applied + verified live) — THE APPROVER'S OWN SAVED SIGNATURE.** A person draws it once and
 every later approval pre-fills it, visibly, with a one-click "Draw a new signature". Pre-filling is
@@ -286,7 +286,32 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
 
 ---
 
-## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, AND THE QR LABEL PAGE. No migration; next free **V602**.
+## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, QR LABELS, AND BULK SIGN-OFF (V602). Next free **V603**.
+
+### **BULK APPROVE STORED INSPECTIONS WITHOUT A SIGNATURE - "saved without signature" (V602)**
+Owner: "we can sign when we select all for signing, why is the saved one not put on, why does it say saved
+without signature". Real. `bulkDecide`'s inspection branch called `decideInspection` with NO signature, and
+`decide_inspection_approval` writes `approver_signature = COALESCE(p_signature, approver_signature)` and never
+refuses a null - so a batch-approved inspection was stored with `approver_signature` left null: an approval
+nobody signed. The single-drawer and register paths were fine (they block the button without a mark); only the
+bulk "Select all -> Approve selected" path dropped it.
+- **CLIENT FIX**: `runBulk('approve')` now loads the approver's OWN saved signature (`getMySignature`, V601) and
+  passes it to `bulkDecide`, which carries it into every inspection row - the same person signing each sheet,
+  which is what a batch sign-off IS. With NO saved (or drawn) mark it REFUSES rather than store unsigned,
+  pointing at Settings > My signature. The bulk bar shows "Your saved signature is applied to each inspection".
+- **CHECKLISTS STAY EXCLUDED FROM BULK APPROVE, and the reason is NOT the signature** (we could now supply it):
+  a checklist's closability depends on its own answers - a single blocking fault mark refuses it - and the queue
+  row does not carry them, so a bulk approve could not warn about the one thing that matters. Rejections (one
+  shared reason, no signature) stay bulk-able.
+- **V602 hardens the RPC so no client can regress this**: `decide_inspection_approval` now RAISES
+  "An inspection approval needs a signature" when approving a row that is still pending AND would be signed with
+  nothing. Tight by design - rejections, already-decided rows ("already approved by X") and inaccessible rows
+  keep their own messages; a re-approval of a row that already carries a signature is allowed. The 372 historical
+  Admin approvals are all already `approved`, not `pending_approval`, so it cannot touch them. Verified live,
+  impersonating the real Workshop Maintenance Area Manager on a real pending KSA inspection, rolled back:
+  unsigned approve REFUSED and the row unmutated; signed approve ACCEPTED.
+- 4 client mutations caught (signature dropped in bulkDecide, guard skipped, saved sig not loaded, sig not
+  passed to bulkDecide) + the RPC guard proven live.
 
 ### **QR LABELS: PASTE A LIST OF ASSET CODES AND GET THE LABELS**
 Owner: "if u upload only assedt codes like tm360 etc so with that i get qr created auto amd i get it

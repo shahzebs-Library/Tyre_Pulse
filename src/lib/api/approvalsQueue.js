@@ -418,9 +418,15 @@ export async function bulkDecide(items, action, opts = {}) {
         if (approve) await approveAccidentClosure(item.id)
         else await rejectAccidentClosure(item.id, opts.reason || null)
       } else if (item.source === 'inspection') {
+        // An inspection sign-off IS a signature, and the register refuses to
+        // approve one without a mark. This path used to send none, so a
+        // bulk-approved inspection was stored with `approver_signature` null -
+        // an approval nobody had signed. The batch signature (the approver's
+        // saved mark, applied to every row) is passed through now.
         await decideInspection(item.id, {
           approved: approve,
           reviewNote: approve ? null : (opts.reason || null),
+          signature: approve ? (opts.signature || null) : null,
         })
       } else if (item.source === 'checklist') {
         await decideChecklist(item.id, {

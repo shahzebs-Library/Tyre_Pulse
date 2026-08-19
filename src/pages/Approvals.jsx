@@ -4,7 +4,7 @@ import {
   CheckSquare, X, Search, Clock, Inbox, Filter, AlertTriangle,
   ClipboardList, CheckCircle2, XCircle, Undo2, RefreshCw,
   ChevronRight, ServerCrash, Car, ClipboardCheck, Database, Loader2,
-  ExternalLink, GitBranch, AlertOctagon, Square, Ban,
+  ExternalLink, GitBranch, AlertOctagon, Square, Ban, PenLine,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as workflows from '../lib/api/workflows'
@@ -26,6 +26,8 @@ import {
   canDecide, stageFor, stageLabel, statusSummary, isTwoStage, STAGE_SUPERVISOR,
 } from '../lib/checklist/checklistApproval'
 import { canClose } from '../lib/checklist/checklistMarks'
+import { getMySignature } from '../lib/api/userSignature'
+import { isUsableSignature } from '../lib/savedSignature'
 import { templateFromSubmission, submissionAnswers } from '../lib/checklistView'
 
 // ─── Source taxonomy ────────────────────────────────────────────────────────────
@@ -1105,6 +1107,15 @@ export default function Approvals() {
     [pickedItems],
   )
 
+  // An inspection carries a signature too, so a batch approve must supply one -
+  // the approver's saved mark, the same person signing each sheet. Without a
+  // saved (or drawn) signature the server stores an unsigned approval, which is
+  // the exact defect this guards.
+  const pickedInspections = useMemo(
+    () => pickedItems.filter(i => i.source === SOURCE.inspection),
+    [pickedItems],
+  )
+
   const togglePick = useCallback((item) => {
     setBulk(b => ({ ...b, result: null }))
     setPicked(prev => {
@@ -1132,13 +1143,26 @@ export default function Approvals() {
       if (reason == null) return
       if (!reason.trim()) { setBulk({ busy: false, result: { failed: [], ok: [], note: 'A reason is required to return items.' } }); return }
     }
+    // Approving inspections in a batch needs a signature - the approver's saved
+    // mark, applied to each. Load it up front and refuse rather than store an
+    // approval nobody signed. Returning for correction needs no signature.
+    let signature = null
+    if (action === 'approve' && pickedInspections.length > 0) {
+      try { signature = await getMySignature() } catch { signature = null }
+      if (!isUsableSignature(signature)) {
+        setBulk({ busy: false, result: {
+          ok: [], failed: [],
+          note: 'These inspections need a signature. Save one in Settings > My signature, or open each to sign it.',
+        } })
+        return
+      }
+    }
+
     setBulk({ busy: true, result: null })
     try {
-      // No signature is passed, and none is needed: checklists cannot be
-      // approved in bulk (see pickedChecklists), and returning one for
-      // correction asks only for the shared reason. The approver's identity is
-      // taken server-side from the session, never from the client.
-      const res = await queue.bulkDecide(pickedItems, action, { reason })
+      // The approver's identity is taken server-side from the session, never
+      // from the client; only the signature (their own saved mark) is carried.
+      const res = await queue.bulkDecide(pickedItems, action, { reason, signature })
       setBulk({ busy: false, result: { ...res, action } })
       setPicked(new Set())
       await load()
@@ -1343,6 +1367,12 @@ export default function Approvals() {
                     <span className="text-[11px] text-amber-400">
                       A checklist sign-off needs a signature, so open each one to approve it. They can
                       still be returned together.
+                    </span>
+                  )}
+                  {pickedInspections.length > 0 && (
+                    <span className="text-[11px] text-[var(--text-muted)] inline-flex items-center gap-1">
+                      <PenLine className="w-3 h-3" />
+                      Your saved signature is applied to each inspection you approve here.
                     </span>
                   )}
                   <div className="ml-auto flex items-center gap-2">

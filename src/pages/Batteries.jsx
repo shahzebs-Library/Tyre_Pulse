@@ -30,6 +30,7 @@ import {
 } from '../lib/batteries'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -162,6 +163,10 @@ export default function Batteries() {
   // Export
   const EXPORT_COLS = ['serial_no', 'asset_no', 'brand', 'site', 'status', 'health_pct', 'voltage', 'install_date', 'warranty_months', 'expiry']
   const EXPORT_HEADERS = ['Serial', 'Asset', 'Brand', 'Site', 'Status', 'Health %', 'Voltage', 'Installed', 'Warranty (mo)', 'Warranty expiry']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     serial_no: r.serial_no || '', asset_no: r.asset_no || '', brand: r.brand || '', site: r.site || '',
     status: BATTERY_STATUS_META[r.status]?.label || r.status || '',
@@ -372,7 +377,7 @@ export default function Batteries() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.serial_no || '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
@@ -404,7 +409,7 @@ export default function Batteries() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / edit modal */}

@@ -35,6 +35,7 @@ import {
 import { colorAt, withAlpha, ACCENTS } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -368,6 +369,10 @@ export default function Equipment() {
   // Export (includes computed age on record + calibration status)
   const EXPORT_COLS = ['name', 'equipment_type', 'serial_no', 'site', 'condition', 'calibration_due', 'calibration_status', 'age_on_record', 'status']
   const EXPORT_HEADERS = ['Name', 'Type', 'Serial', 'Site', 'Condition', 'Calibration due', 'Calibration status', 'Age on record', 'Status']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     name: r.name || '', equipment_type: r.equipment_type || '', serial_no: r.serial_no || '',
     site: r.site || '', condition: r.condition || '', calibration_due: r.calibration_due || '',
@@ -595,7 +600,7 @@ export default function Equipment() {
                   {rows.length === 0 ? 'No equipment registered yet.' : 'No equipment matches these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const cs = calibrationState(r, now)
                   const cm = CAL_META[cs]
                   const st = STATUS_META[r.status] || STATUS_META.available
@@ -630,7 +635,7 @@ export default function Equipment() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {modal && <EquipmentModal initial={modal.item} onClose={() => setModal(null)} onSaved={onSaved} />}

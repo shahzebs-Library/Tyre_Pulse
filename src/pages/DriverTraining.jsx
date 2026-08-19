@@ -28,6 +28,7 @@ import {
 } from '../lib/driverTraining'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   driver_name: '', course_name: '', category: '', provider: '',
@@ -173,6 +174,10 @@ export default function DriverTraining() {
     'Driver', 'Course', 'Category', 'Provider', 'Completed', 'Expiry',
     'Expiry status', 'Result', 'Score', 'Certificate', 'Cost',
   ]
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     driver_name: r.driver_name || '',
     course_name: r.course_name || '',
@@ -391,7 +396,7 @@ export default function DriverTraining() {
                   {rows.length === 0 && !notProvisioned ? 'No training records yet — add your first record.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const status = expiryStatus(r, nowMs)
                   const days = daysUntilExpiry(r, nowMs)
                   return (
@@ -426,7 +431,7 @@ export default function DriverTraining() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

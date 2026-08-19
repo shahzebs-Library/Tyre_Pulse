@@ -22,6 +22,7 @@ import {
 } from '../lib/tpmsAnalytics'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement,
@@ -225,6 +226,11 @@ export default function Tpms() {
     }
     return rows
   }, [offenders, sortBy])
+
+  // Paged, not capped. The alert table used to render alertRows.slice(0, 200),
+  // so alert 201 was unreachable. The Excel and PDF exports below still cover
+  // every filtered reading.
+  const alertPager = usePagedRows(alertRows)
 
   // Charts
   const doughnutData = useMemo(() => ({
@@ -628,7 +634,7 @@ export default function Tpms() {
                         </tr>
                       </thead>
                       <tbody>
-                        {alertRows.slice(0, 200).map((r, i) => (
+                        {alertPager.pageRows.map((r, i) => (
                           <tr key={r.id ?? i} className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
                             <td className="py-2 pr-3 text-white font-medium">{r.asset_no || 'N/A'}</td>
                             <td className="py-2 pr-3 text-gray-300">{r.position || 'N/A'}</td>
@@ -644,9 +650,7 @@ export default function Tpms() {
                         ))}
                       </tbody>
                     </table>
-                    {alertRows.length > 200 && (
-                      <p className="text-xs text-gray-500 mt-3">Showing first 200 of {alertRows.length} alerts. Refine filters or export for the full set.</p>
-                    )}
+                    <TablePagination {...alertPager} />
                   </div>
                 )}
               </div>

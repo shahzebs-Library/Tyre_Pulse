@@ -31,6 +31,7 @@ import {
   serialOf, positionOf,
 } from '../lib/tyreAgeCompliance'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
@@ -113,6 +114,11 @@ export default function TyreAgeCompliance() {
       return av < bv ? -dir : dir
     })
   }, [enriched, bandFilter, siteFilter, brandFilter, search, sortDir])
+
+  // Paged, not capped. The table used to render filtered.slice(0, 500), so a
+  // fleet with more than 500 matching tyres looked complete while it was not.
+  // The exports below still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   const chartText = (typeof document !== 'undefined'
     && getComputedStyle(document.documentElement).getPropertyValue('--text-muted')) || '#9ca3af'
@@ -340,7 +346,7 @@ export default function TyreAgeCompliance() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No tyres match these filters.</td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{dash(serialOf(r))}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{dash(r.asset_no)}</td>
@@ -358,7 +364,7 @@ export default function TyreAgeCompliance() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
     </div>
   )

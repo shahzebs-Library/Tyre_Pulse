@@ -32,6 +32,7 @@ import {
   summariseListings, byCategory, topRatedSuppliers, summariseRfqs, potentialSaving,
 } from '../lib/marketplace'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const LISTING_CATEGORIES = ['tyre', 'retread', 'parts', 'service', 'other']
@@ -185,6 +186,11 @@ export default function SupplierMarketplace() {
   const loadingTab = isListings ? listings === null : rfqs === null
   const filtered = isListings ? filteredListings : filteredRfqs
   const totalRows = isListings ? (listings || []).length : (rfqs || []).length
+
+  // Paged, not capped. Both tabs used to render their filtered set as
+  // .slice(0, 500). One pager serves both because the tab switch swaps the
+  // array; the exports still cover the whole filtered set for the active tab.
+  const pager = usePagedRows(filtered)
 
   // ── KPI tiles ─────────────────────────────────────────────────────────────
   const listingKpis = [
@@ -506,7 +512,7 @@ export default function SupplierMarketplace() {
                   </td>
                 </tr>
               ) : isListings ? (
-                filteredListings.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
                       {r.supplier || '—'}
@@ -538,7 +544,7 @@ export default function SupplierMarketplace() {
                   </tr>
                 ))
               ) : (
-                filteredRfqs.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const saving = potentialSaving(r)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -574,7 +580,7 @@ export default function SupplierMarketplace() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

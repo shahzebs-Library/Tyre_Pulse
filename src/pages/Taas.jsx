@@ -31,6 +31,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrency, formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   subscription_no: '', customer_name: '', asset_no: '', plan_type: 'per_km',
@@ -163,6 +164,11 @@ export default function Taas() {
       return true
     })
   }, [rows, planFilter, statusFilter, countryFilter, search])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   // Renewals due (live contracts, next 30 days incl. overdue) — attention list.
   const renewals = useMemo(() => {
@@ -453,7 +459,7 @@ export default function Taas() {
                   {rows.length === 0 && !notProvisioned ? 'No subscriptions yet — create your first TaaS contract.' : 'No subscriptions match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const cpk = costPerKm(r)
                   const util = kmUtilization(r)
                   const days = daysToRenewal(r, nowMs)
@@ -490,7 +496,7 @@ export default function Taas() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

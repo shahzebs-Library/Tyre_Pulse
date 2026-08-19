@@ -30,6 +30,7 @@ import {
 } from '../lib/actionCenter'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 // ── Enum vocabularies (mirror the V186 CHECK constraints) ────────────────────
 const CATEGORY_OPTS = [
@@ -173,6 +174,10 @@ export default function ActionCenter() {
     })
     return prioritise(list, nowMs)
   }, [allRows, search, statusFilter, severityFilter, categoryFilter, openOnly, nowMs])
+
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The export below still covers `filtered` in full.
+  const pager = usePagedRows(filtered)
 
   // Top of the prioritised queue (worst-first triage panel).
   const topQueue = useMemo(() => filtered.filter((r) => isOpen(r)).slice(0, 6), [filtered])
@@ -479,7 +484,7 @@ export default function ActionCenter() {
                   {allRows.length === 0 && !notProvisioned ? 'No action items yet — raise your first exception.' : 'No action items match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const overdue = isOverdue(r, nowMs)
                   return (
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${overdue ? 'bg-red-950/15' : ''}`}>
@@ -509,7 +514,7 @@ export default function ActionCenter() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

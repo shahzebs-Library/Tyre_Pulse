@@ -28,6 +28,7 @@ import { listProfiles } from '../lib/api/users'
 import { summariseDelegations, delegationStatus } from '../lib/approvalDelegations'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const MANAGER_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -172,6 +173,10 @@ export default function ApprovalDelegations() {
   // ── Export ─────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['delegator', 'delegate', 'entity_type', 'status', 'starts_at', 'ends_at', 'reason']
   const EXPORT_HEADERS = ['Delegator', 'Delegate (acting)', 'Scope', 'Status', 'Starts', 'Ends', 'Reason']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     delegator: nameOf(r.delegator_id),
     delegate: nameOf(r.delegate_id),
@@ -425,12 +430,12 @@ export default function ApprovalDelegations() {
                   {(rows.length === 0 && !notProvisioned) ? 'No delegations yet — appoint an acting approver to get started.' : 'No delegations match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map(renderRow)
+                pager.pageRows.map(renderRow)
               )}
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

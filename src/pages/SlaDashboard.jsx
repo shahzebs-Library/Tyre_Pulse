@@ -27,6 +27,7 @@ import {
   summariseSla, byType, breachStatus, hoursRemaining, resolutionHours,
 } from '../lib/slaRecords'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   reference: '', sla_type: 'work_order', asset_no: '', priority: 'medium',
@@ -179,6 +180,11 @@ export default function SlaDashboard() {
       return true
     })
   }, [decorated, search, typeFilter, statusFilter, priorityFilter])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -437,7 +443,7 @@ export default function SlaDashboard() {
                   {rows.length === 0 && !notProvisioned ? 'No SLA records yet — create your first tracked SLA.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const sMeta = STATUS_META[r._status]
                   const pMeta = PRIORITY_META[r.priority] || PRIORITY_META.medium
                   const open = r._status !== 'met' && r._status !== 'unknown'
@@ -470,7 +476,7 @@ export default function SlaDashboard() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

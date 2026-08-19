@@ -25,6 +25,7 @@ import {
 import { summariseRequests, byStatus, byCategory } from '../lib/serviceRequests'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const CATEGORY_OPTIONS = ['tyre', 'mechanical', 'electrical', 'bodywork', 'inspection', 'breakdown', 'other']
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent']
@@ -143,6 +144,11 @@ export default function ServiceRequests() {
       return true
     })
   }, [rows, statusFilter, priorityFilter, categoryFilter, search])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -368,7 +374,7 @@ export default function ServiceRequests() {
                   {rows.length === 0 && !notProvisioned ? 'No requests raised yet — create your first request.' : 'No requests match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.request_no || '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-primary)] max-w-[280px] truncate" title={r.subject || ''}>{r.subject || '—'}</td>
@@ -389,7 +395,7 @@ export default function ServiceRequests() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

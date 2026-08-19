@@ -40,6 +40,7 @@ import {
 } from '../lib/coldChainAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -283,6 +284,10 @@ export default function ColdChain() {
   // Export --------------------------------------------------------------------
   const EXPORT_COLS = ['asset_no', 'site', 'temperature_c', 'range', 'deviation', 'status', 'recorded_at', 'notes']
   const EXPORT_HEADERS = ['Asset', 'Site', 'Temp (C)', 'Safe range', 'Deviation (C)', 'Status', 'Recorded at', 'Notes']
+  // Paged, not capped: this table used to render sorted.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `sorted` in full.
+  const pager = usePagedRows(sorted)
+
   const exportRows = sorted.map((r) => {
     const dev = deviationC(r)
     return {
@@ -605,7 +610,7 @@ export default function ColdChain() {
                   {(rows.length === 0 && !notProvisioned) ? 'No readings logged yet. Log your first reading.' : 'No readings match these filters.'}
                 </td></tr>
               ) : (
-                sorted.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const st = readingStatus(r)
                   const dev = deviationC(r)
                   const kind = excursionKind(r)
@@ -637,7 +642,7 @@ export default function ColdChain() {
             </tbody>
           </table>
         </div>
-        {sorted.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

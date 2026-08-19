@@ -27,6 +27,7 @@ import { loadAbsenceData, enrichAttendanceWithNames, distinctSites } from '../li
 import { summarizeAttendance } from '../lib/workshopAbsence'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 
@@ -215,6 +216,11 @@ export default function WorkshopAbsence() {
       }))
       .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || b.date.localeCompare(a.date) || a.person.localeCompare(b.person))
   }, [summary.detail])
+
+  // Paged, not capped. This table used to render detailRows.slice(0, 500), so
+  // shift 501 was unreachable. The exports below still cover every rostered
+  // shift in the filtered window.
+  const pager = usePagedRows(detailRows)
 
   // ── Exports ─────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['date', 'person', 'site', 'rostered', 'checkIn', 'statusLabel']
@@ -460,7 +466,7 @@ export default function WorkshopAbsence() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailRows.slice(0, 500).map((r, i) => (
+                  {pager.pageRows.map((r, i) => (
                     <tr key={`${r.person}-${r.date}-${i}`} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
                       <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.date)}</td>
                       <td className="py-2 pr-3 text-[var(--text-primary)]">{r.person}</td>
@@ -476,9 +482,7 @@ export default function WorkshopAbsence() {
                   ))}
                 </tbody>
               </table>
-              {detailRows.length > 500 && (
-                <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the first 500 of {detailRows.length}. Narrow the filters or export for the full set.</p>
-              )}
+              <TablePagination {...pager} />
             </div>
           </div>
         </>

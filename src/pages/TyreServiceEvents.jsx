@@ -34,6 +34,7 @@ import {
 } from '../lib/tyreServiceEventsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
@@ -305,6 +306,10 @@ export default function TyreServiceEvents() {
     const sorted = [...list].sort(cmp)
     return sortDir === 'desc' ? sorted.reverse() : sorted
   }, [rows, typeFilter, siteFilter, positionFilter, from, to, search, sortKey, sortDir])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so event 501 was unreachable. The exports still cover the full filtered set.
+  const pager = usePagedRows(filtered)
 
   const chartText = cssVar('--text-muted', '#9ca3af')
   const gridColor = cssVar('--panel-2', 'rgba(148,163,184,0.15)')
@@ -592,7 +597,7 @@ export default function TyreServiceEvents() {
                   {rows.length === 0 ? 'No service events logged yet - use "Log event" to add the first.' : 'No events match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const Icon = EVENT_ICON[r.event_type] || CircleDot
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -623,7 +628,7 @@ export default function TyreServiceEvents() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <EventModal open={modalOpen} initial={editRow} onClose={() => setModalOpen(false)} onSaved={load} />

@@ -25,6 +25,7 @@ import {
 import { summariseTachograph, byDriver, hasInfringement } from '../lib/tachographRecords'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   driver_name: '', asset_no: '', card_number: '', record_date: '',
@@ -154,6 +155,11 @@ export default function Tachograph() {
       return true
     })
   }, [rows, countryFilter, statusFilter, typeFilter, search])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -366,7 +372,7 @@ export default function Tachograph() {
                   {rows.length === 0 && !notProvisioned ? 'No tachograph records yet — add your first record.' : 'No records match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const infr = hasInfringement(r)
                   const count = Number(r.infringement_count) || 0
                   return (
@@ -407,7 +413,7 @@ export default function Tachograph() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

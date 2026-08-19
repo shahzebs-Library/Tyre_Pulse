@@ -17,6 +17,7 @@ import { listShifts, createShift, updateShift, deleteShift, SHIFT_STATUS_VALUES 
 import { summarizeShifts } from '../lib/shifts'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const STATUS_META = {
   scheduled: { label: 'Scheduled', cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50', icon: Calendar },
@@ -264,6 +265,11 @@ export default function ShiftScheduling() {
     })
   }, [rows, statusFilter, roleFilter, search])
 
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
+
   const kpis = [
     { label: 'Total shifts', value: summary.total, icon: CalendarClock, tone: 'text-[var(--text-primary)]' },
     { label: 'Scheduled', value: summary.byStatus.scheduled, icon: Calendar, tone: 'text-sky-400' },
@@ -409,7 +415,7 @@ export default function ShiftScheduling() {
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const st = STATUS_META[r.status] || STATUS_META.scheduled
                   const StatusIcon = st.icon
                   return (
@@ -450,7 +456,7 @@ export default function ShiftScheduling() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <ShiftModal

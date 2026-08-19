@@ -42,6 +42,7 @@ import {
 } from '../lib/fitmentValidation'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -202,6 +203,10 @@ export default function FitmentValidation() {
   }
 
   const EXPORT_COLS = ['asset_no', 'vehicle', 'site', 'spec', 'fitted', 'mismatch', 'fittedCount', 'status']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     asset_no: r.asset_no || '',
     vehicle: [r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || '',
@@ -581,7 +586,7 @@ export default function FitmentValidation() {
                   ) : filtered.length === 0 ? (
                     <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{hasAny ? 'No assets match these filters.' : 'No fleet assets found for this country.'}</td></tr>
                   ) : (
-                    filtered.slice(0, 500).map((r) => (
+                    pager.pageRows.map((r) => (
                       <tr key={r.asset_no || Math.random()} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                         <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.asset_no || '—'}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[r.make, r.model].filter(Boolean).join(' ') || r.vehicle_type || '—'}</td>
@@ -603,7 +608,7 @@ export default function FitmentValidation() {
                 </tbody>
               </table>
             </div>
-            {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+            <TablePagination {...pager} />
           </div>
         </div>
       )}

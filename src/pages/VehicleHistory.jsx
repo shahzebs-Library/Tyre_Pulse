@@ -17,6 +17,7 @@ import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
@@ -419,6 +420,11 @@ export default function VehicleHistory() {
     return copy
   }, [vehicleRows, search, siteFilter, anomalyFilter, sortBy])
 
+  // Paged, not capped. This table used to render filteredRows.slice(0, 200)
+  // against a fleet of well over a thousand assets, so most vehicles could
+  // never be opened from here.
+  const pager = usePagedRows(filteredRows)
+
   const selectedRow = selected ? vehicleRows.find(r => r.assetNo === selected) : null
 
   // ── Load related records when asset selected ─────────────────────────────────
@@ -582,7 +588,7 @@ export default function VehicleHistory() {
                   </td>
                 </tr>
               )}
-              {filteredRows.slice(0, 200).map(row => (
+              {pager.pageRows.map(row => (
                 <tr
                   key={row.assetNo}
                   onClick={() => setSelected(selected === row.assetNo ? null : row.assetNo)}
@@ -638,11 +644,7 @@ export default function VehicleHistory() {
             </tbody>
           </table>
         </div>
-        {filteredRows.length > 200 && (
-          <p className="text-xs text-muted text-center py-3">
-            {t('vehiclehistory.table.showingOf', { count: filteredRows.length })}
-          </p>
-        )}
+        <TablePagination {...pager} />
       </div>
 
       {/* Vehicle detail panel */}

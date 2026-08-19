@@ -43,6 +43,7 @@ import {
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   ArcElement, CategoryScale, LinearScale, BarElement,
@@ -416,6 +417,10 @@ export default function DriverExpenses() {
   // ── Export (respects the active filter + sort) ──
   const EXPORT_COLS = ['driver_name', 'category', 'amount', 'expense_date', 'asset_no', 'status', 'description']
   const EXPORT_HEADERS = ['Driver', 'Category', 'Amount', 'Expense date', 'Asset', 'Status', 'Description']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     driver_name: r.driver_name || '', category: categoryLabel(r.category) || '', amount: r.amount ?? '',
     expense_date: r.expense_date || '', asset_no: r.asset_no || '',
@@ -596,7 +601,7 @@ export default function DriverExpenses() {
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const st = STATUS_META[normStatus(r.status)] || STATUS_META.pending
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -621,7 +626,7 @@ export default function DriverExpenses() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 - refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <ExpenseModal open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved} />

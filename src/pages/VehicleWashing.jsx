@@ -63,6 +63,7 @@ import {
 } from '../lib/washAnalytics'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { safeImageSrc } from '../lib/safeUrl'
 import { toUserMessage } from '../lib/safeError'
@@ -263,6 +264,9 @@ export default function VehicleWashing() {
   // Log register (own filters) + its cost basis.
   const regRows = useMemo(() => filterWashes(rows, regFilters), [rows, regFilters])
   const regCost = useMemo(() => costBasis(regRows), [regRows])
+  // Paged, not capped. The register used to render regRows.slice(0, 500), so
+  // wash 501 was unreachable. The downloads still cover the whole filtered set.
+  const regPager = usePagedRows(regRows)
 
   // Schedule + due lists. `washDue` is fed the WHOLE record set, not the
   // reporting filter, because "this vehicle has not been washed for 12 days" is
@@ -919,7 +923,7 @@ export default function VehicleWashing() {
             <div className="flex items-center gap-2 mb-3">
               <ClipboardList size={16} className="text-[var(--text-secondary)]" />
               <h3 className="font-semibold text-[var(--text-primary)]">Wash records</h3>
-              <span className="text-[11px] text-[var(--text-muted)]">{regRows.length} shown</span>
+              <span className="text-[11px] text-[var(--text-muted)]">{regRows.length} matched</span>
             </div>
             {loading ? (
               <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
@@ -951,7 +955,7 @@ export default function VehicleWashing() {
                     </tr>
                   </thead>
                   <tbody>
-                    {regRows.slice(0, 500).map((r) => (
+                    {regPager.pageRows.map((r) => (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.wash_date)}</td>
                         <td className="py-2 pr-3">
@@ -991,9 +995,7 @@ export default function VehicleWashing() {
                     ))}
                   </tbody>
                 </table>
-                {regRows.length > 500 && (
-                  <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the first 500 of {regRows.length}. Narrow the filters or download for the full set.</p>
-                )}
+                <TablePagination {...regPager} />
               </div>
             )}
           </div>
@@ -1413,6 +1415,8 @@ export default function VehicleWashing() {
  * correction RPC as any other edit, so there is no second write path.
  */
 function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, canWrite, onComplete, onEdit, tone = '' }) {
+  // Paged, not capped. This list used to render rows.slice(0, 200).
+  const pager = usePagedRows(rows)
   return (
     <div className={`card ${tone}`}>
       <div className="flex items-center gap-2 mb-3">
@@ -1439,7 +1443,7 @@ function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, ca
               </tr>
             </thead>
             <tbody>
-              {rows.slice(0, 200).map((r) => (
+              {pager.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--input-border)]/60">
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.wash_date)}</td>
                   <td className="py-2 pr-3">
@@ -1469,9 +1473,7 @@ function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, ca
               ))}
             </tbody>
           </table>
-          {rows.length > 200 && (
-            <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing the first 200 of {rows.length}.</p>
-          )}
+          <TablePagination {...pager} />
         </div>
       )}
     </div>

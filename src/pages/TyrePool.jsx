@@ -42,6 +42,7 @@ import {
 } from '../lib/tyrePool'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
 
@@ -275,6 +276,10 @@ export default function TyrePool() {
       return true
     })
   }, [pool, brandFilter, sizeFilter, siteFilter, search])
+
+  // Paged, not capped. The pool register used to render filtered.slice(0, 500)
+  // with no way to reach tyre 501. The exports still cover the full filtered set.
+  const pager = usePagedRows(filtered)
 
   const filteredValue = useMemo(
     () => filtered.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0), 0),
@@ -729,7 +734,7 @@ export default function TyrePool() {
                       {totalTyres === 0 ? 'No unfitted or spare tyres in the pool.' : 'No pool tyres match these filters.'}
                     </td></tr>
                   ) : (
-                    filtered.slice(0, 500).map((r) => (
+                    pager.pageRows.map((r) => (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                         <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{poolSerialOf(r) || '—'}</td>
                         <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.brand || '—'}{r.size ? ` · ${r.size}` : ''}</td>
@@ -748,7 +753,7 @@ export default function TyrePool() {
                 </tbody>
               </table>
             </div>
-            {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+            <TablePagination {...pager} />
           </div>
         </div>
       )}

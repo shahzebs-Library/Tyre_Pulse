@@ -26,6 +26,7 @@ import {
 } from '../lib/emissionsTests'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   asset_no: '', certificate_no: '', test_date: '', expiry_date: '', test_center: '',
@@ -179,6 +180,10 @@ export default function Emissions() {
   // ── Export ───────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['asset_no', 'certificate_no', 'test_date', 'expiry_date', 'result', 'test_center', 'standard', 'co_pct', 'hc_ppm', 'nox_ppm', 'opacity_pct', 'co2_pct', 'cost', 'currency', 'notes']
   const EXPORT_HEADERS = ['Asset', 'Certificate', 'Test date', 'Expiry date', 'Result', 'Test center', 'Standard', 'CO %', 'HC ppm', 'NOx ppm', 'Opacity %', 'CO2 %', 'Cost', 'Currency', 'Notes']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     asset_no: r.asset_no || '', certificate_no: r.certificate_no || '',
     test_date: r.test_date || '', expiry_date: r.expiry_date || '',
@@ -406,7 +411,7 @@ export default function Emissions() {
                   {rows.length === 0 && !notProvisioned ? 'No emissions tests recorded yet — record your first test.' : 'No tests match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.certificate_no || '—'}</td>
@@ -432,7 +437,7 @@ export default function Emissions() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

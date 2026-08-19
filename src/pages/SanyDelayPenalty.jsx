@@ -21,6 +21,7 @@ import {
   DEFAULT_RATE_PER_HOUR, DEFAULT_MIN_DAYS,
 } from '../lib/api/sanyDelayPenalty'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 
 const STATUSES = ['draft', 'deducted', 'waived']
@@ -76,6 +77,12 @@ export default function SanyDelayPenalty() {
   useEffect(() => loadLedger(), [loadLedger])
 
   const summary = useMemo(() => summarizeDelayPenalties(ledger), [ledger])
+
+  // Paged, not capped. The candidate list used to render candidates.slice(0, 200)
+  // while the tick-boxes it exists for cover every candidate, so rows 201+ could
+  // only ever be added blind through Select all. Selection is keyed by candKey
+  // and is independent of the page, and Select all still spans the whole set.
+  const candPager = usePagedRows(candidates)
 
   async function findCandidates() {
     // The candidate RPC falls back to KSA when it is handed no country, so this
@@ -257,7 +264,7 @@ export default function SanyDelayPenalty() {
                   </tr>
                 </thead>
                 <tbody>
-                  {candidates.slice(0, 200).map((c) => {
+                  {candPager.pageRows.map((c) => {
                     const k = candKey(c)
                     return (
                       <tr key={k} className="border-t border-[var(--border-subtle)]">
@@ -274,8 +281,8 @@ export default function SanyDelayPenalty() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...candPager} />
             </div>
-            {candidates.length > 200 && <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>Showing first 200 rows; use Select all to add every candidate, or narrow the window.</p>}
           </>
         )}
       </section>

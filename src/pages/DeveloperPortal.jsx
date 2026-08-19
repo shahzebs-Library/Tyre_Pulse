@@ -23,6 +23,7 @@ import {
   FileText, Plus, Pencil, Trash2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listApiKeys, createApiKey, updateApiKey, deleteApiKey,
@@ -218,6 +219,12 @@ export default function DeveloperPortal() {
       else exportToPdf(rows, cols.map((k, i) => ({ key: k, header: headers[i] })), 'Webhook Endpoints', 'webhook_endpoints', 'landscape')
     }
   }
+
+  // Paged, not capped: both tables used to render <list>.slice(0, 500) with no
+  // way to reach row 501. The exports still cover the whole filtered list.
+  const keysPager = usePagedRows(filteredKeys)
+  const hooksPager = usePagedRows(filteredHooks)
+  const activePager = tab === 'keys' ? keysPager : hooksPager
 
   const activeFilteredCount = tab === 'keys' ? filteredKeys.length : filteredHooks.length
   const activeTotalCount = tab === 'keys' ? keySummary.totalKeys : hookSummary.totalEndpoints
@@ -441,7 +448,7 @@ export default function DeveloperPortal() {
                     {keys.length === 0 && !notProvisioned ? 'No API keys issued yet — create your first key.' : 'No keys match these filters.'}
                   </td></tr>
                 ) : (
-                  filteredKeys.slice(0, 500).map((r) => {
+                  keysPager.pageRows.map((r) => {
                     const expired = isKeyExpired(r, nowMs)
                     const effStatus = expired ? 'expired' : String(r.status || '').toLowerCase()
                     return (
@@ -481,7 +488,7 @@ export default function DeveloperPortal() {
                     {hooks.length === 0 && !notProvisioned ? 'No webhook endpoints yet — register your first endpoint.' : 'No endpoints match these filters.'}
                   </td></tr>
                 ) : (
-                  filteredHooks.slice(0, 500).map((r) => {
+                  hooksPager.pageRows.map((r) => {
                     const status = String(r.status || '').toLowerCase()
                     return (
                       <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -514,7 +521,7 @@ export default function DeveloperPortal() {
             </table>
           )}
         </div>
-        {activeFilteredCount > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...activePager} />
       </div>
 
       {/* Create / Edit modal */}

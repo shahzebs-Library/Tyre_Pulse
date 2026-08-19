@@ -20,6 +20,7 @@ import { exportToExcel } from '../lib/exportUtils'
 import { configNum } from '../lib/api/systemConfig'
 import { downloadErpTemplates } from '../lib/erpTemplates'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const ELEVATED = ['admin', 'manager', 'director']
 const PREVIEW_LIMIT = 50
@@ -776,6 +777,10 @@ function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
     return out
   }, [rows, search, flagFilter, datasetKey])
 
+  // Paged, not capped: this table used to render filtered.slice(0, 2000), so a
+  // batch larger than that hid its tail. onExport below still covers `filtered`.
+  const pager = usePagedRows(filtered)
+
   const displayCols = dataset.columns.map((c) => c.key)
 
   async function onDelete() {
@@ -909,7 +914,7 @@ function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.slice(0, 2000).map((r, i) => (
+                      {pager.pageRows.map((r, i) => (
                         <tr key={r.id || i} className="border-t border-[var(--border-dim)]">
                           <td className="px-2 py-1.5 text-[var(--text-muted)]">{r.source_row}</td>
                           {datasetKey === 'change' && <td className="px-2 py-1.5"><FlagCell row={r} datasetKey="change" /></td>}
@@ -923,9 +928,7 @@ function ReviewPanel({ datasetKey, dataset, canWrite, countryTag }) {
                     </tbody>
                   </table>
                 </div>
-                {filtered.length > 2000 && (
-                  <p className="text-xs text-[var(--text-muted)]">Showing the first 2,000 rows. Export to Excel for the full batch.</p>
-                )}
+                <TablePagination {...pager} className="border border-t-0 border-[var(--border-dim)] rounded-b-xl" />
               </>
             )}
     </div>

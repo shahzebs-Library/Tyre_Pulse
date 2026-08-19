@@ -28,6 +28,7 @@ import { analyzeDtc, severityRank } from '../lib/dtcCodes'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, Tooltip, Legend, BarElement, CategoryScale, LinearScale)
 
@@ -350,6 +351,10 @@ export default function DtcDiagnostics() {
 
   const EXPORT_COLS = ['asset_no', 'code', 'system', 'description', 'severity', 'sev_rank', 'status', 'detected_at', 'recurrence', 'site']
   const EXPORT_HEADERS = ['Asset', 'Code', 'System', 'Description', 'Severity', 'Severity rank', 'Status', 'Detected', 'Recurrence', 'Site']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     asset_no: r.asset_no || '', code: r.code || '', system: r.system || '', description: r.description || '',
     severity: SEVERITY_META[r.severity]?.label || r.severity || '', sev_rank: severityRank(r.severity),
@@ -656,7 +661,7 @@ export default function DtcDiagnostics() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const rec = rowRecurrence(r)
                   return (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -686,7 +691,7 @@ export default function DtcDiagnostics() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <CodeModal

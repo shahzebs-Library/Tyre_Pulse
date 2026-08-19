@@ -32,6 +32,7 @@ import {
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -263,6 +264,10 @@ export default function Certifications() {
   // Export ----------------------------------------------------------------------
   const EXPORT_COLS = ['subject_type', 'subject_name', 'cert_type', 'cert_number', 'issuer', 'issue_date', 'expiry_date', 'days', 'status']
   const EXPORT_HEADERS = ['Subject type', 'Subject', 'Cert type', 'Cert number', 'Issuer', 'Issue date', 'Expiry date', 'Days to expiry', 'Status']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     subject_type: SUBJECT_LABELS[r.subject_type] || r.subject_type || '',
     subject_name: r.subject_name || '', cert_type: r.cert_type || '', cert_number: r.cert_number || '',
@@ -465,7 +470,7 @@ export default function Certifications() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No certifications match these filters.</td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const expClass = r._status === 'expired' ? 'text-red-400 font-medium' : r._status === 'expiring' ? 'text-amber-400 font-medium' : 'text-[var(--text-secondary)]'
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -500,7 +505,7 @@ export default function Certifications() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / edit modal */}

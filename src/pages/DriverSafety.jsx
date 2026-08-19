@@ -36,6 +36,7 @@ import {
 } from '../lib/driverSafety'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, BarElement,
@@ -255,6 +256,10 @@ export default function DriverSafety() {
   // ── Export ───────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['asset_no', 'driver_name', 'event_type', 'severity', 'event_at', 'location', 'speed_kmh', 'speed_limit_kmh', 'g_force', 'penalty_points', 'notes']
   const EXPORT_HEADERS = ['Asset', 'Driver', 'Event type', 'Severity', 'Event at', 'Location', 'Speed (km/h)', 'Speed limit', 'G-force', 'Penalty points', 'Notes']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     asset_no: r.asset_no || '', driver_name: r.driver_name || '',
     event_type: EVENT_TYPE_LABEL[r.event_type] || r.event_type || '',
@@ -532,7 +537,7 @@ export default function DriverSafety() {
                   {rows.length === 0 && !notProvisioned ? 'No events logged yet — log your first event.' : 'No events match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.driver_name || '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.asset_no || '—'}</td>
@@ -561,7 +566,7 @@ export default function DriverSafety() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
       </>)}
 

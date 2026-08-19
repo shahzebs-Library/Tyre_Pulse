@@ -46,6 +46,7 @@ import {
 } from '../lib/carbon'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
@@ -714,6 +715,10 @@ function FuelEmissionsView() {
   // ── Export ───────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['vehicle', 'site', 'distanceKm', 'litres', 'co2Kg', 'co2Tonnes']
   const EXPORT_HEADERS = ['Vehicle', 'Site', 'Distance (km)', 'Diesel (L)', 'CO₂ (kg)', 'CO₂ (t)']
+  // Paged, not capped: this table used to render filteredVehicles.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filteredVehicles` in full.
+  const pager = usePagedRows(filteredVehicles)
+
   const exportRows = filteredVehicles.map((v) => ({
     vehicle: v.vehicle,
     site: v.site,
@@ -862,7 +867,7 @@ function FuelEmissionsView() {
               ) : filteredVehicles.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />{hasData ? 'No vehicles match these filters.' : 'No fuel usage data for the selected period.'}</td></tr>
               ) : (
-                filteredVehicles.slice(0, 500).map((v, i) => {
+                pager.pageRows.map((v, i) => {
                   const share = carbon.totalCo2 ? (v.co2 / carbon.totalCo2) * 100 : 0
                   return (
                     <tr key={v.vehicle} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -880,7 +885,7 @@ function FuelEmissionsView() {
             </tbody>
           </table>
         </div>
-        {filteredVehicles.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
     </>
   )

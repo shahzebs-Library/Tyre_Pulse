@@ -29,6 +29,7 @@ import {
 import { summarizeDvir, DVIR_TYPE_META, DVIR_STATUS_META } from '../lib/dvir'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -301,6 +302,10 @@ export default function Dvir() {
 
   const EXPORT_COLS = ['asset_no', 'driver_name', 'inspection_type', 'inspection_date', 'defects_found', 'safe_to_operate', 'site', 'status']
   const EXPORT_HEADERS = ['Asset', 'Driver', 'Type', 'Date', 'Defects', 'Safe to operate', 'Site', 'Status']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     asset_no: r.asset_no || '',
     driver_name: r.driver_name || '',
@@ -449,7 +454,7 @@ export default function Dvir() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.driver_name || '—'}</td>
@@ -483,7 +488,7 @@ export default function Dvir() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {modal && (

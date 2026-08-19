@@ -26,6 +26,7 @@ import { listLoads, createLoad, updateLoad, deleteLoad, LOAD_STATUSES } from '..
 import { summarizeDispatch, loadStatusMeta } from '../lib/dispatch'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -291,6 +292,10 @@ export default function Dispatch() {
 
   const EXPORT_COLS = ['load_no', 'asset_no', 'driver_name', 'origin', 'destination', 'cargo', 'weight_kg', 'scheduled_at', 'status', 'site']
   const EXPORT_HEADERS = ['Load no', 'Asset', 'Driver', 'Origin', 'Destination', 'Cargo', 'Weight (kg)', 'Scheduled', 'Status', 'Site']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     load_no: r.load_no || '', asset_no: r.asset_no || '', driver_name: r.driver_name || '',
     origin: r.origin || '', destination: r.destination || '', cargo: r.cargo || '',
@@ -452,7 +457,7 @@ export default function Dispatch() {
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const meta = loadStatusMeta[r.status] || loadStatusMeta.planned
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -486,7 +491,7 @@ export default function Dispatch() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {modal && <LoadModal initial={modal.initial} onClose={() => setModal(null)} onSaved={onSaved} />}

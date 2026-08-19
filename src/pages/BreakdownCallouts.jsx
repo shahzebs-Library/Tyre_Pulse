@@ -25,6 +25,7 @@ import {
 import { summariseCallouts, byType, responseMinutes, resolutionMinutes } from '../lib/breakdownCallouts'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const BREAKDOWN_TYPES = ['tyre', 'engine', 'electrical', 'brakes', 'transmission', 'accident', 'fuel', 'other']
 const SEVERITIES = ['low', 'medium', 'high', 'critical']
@@ -161,6 +162,10 @@ export default function BreakdownCallouts() {
   // ── Export ───────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['callout_no', 'asset_no', 'breakdown_type', 'severity', 'status', 'driver_name', 'location', 'provider', 'reported_at', 'response_minutes', 'resolution_minutes', 'cost', 'currency']
   const EXPORT_HEADERS = ['Callout #', 'Asset', 'Type', 'Severity', 'Status', 'Driver', 'Location', 'Provider', 'Reported', 'Response (min)', 'Resolution (min)', 'Cost', 'Currency']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     callout_no: r.callout_no || '', asset_no: r.asset_no || '',
     breakdown_type: r.breakdown_type || '', severity: r.severity || '',
@@ -364,7 +369,7 @@ export default function BreakdownCallouts() {
                   {rows.length === 0 && !notProvisioned ? 'No callouts logged yet — log your first breakdown callout.' : 'No callouts match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)] whitespace-nowrap">{r.callout_no || '—'}</td>
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.asset_no || '—'}</td>
@@ -394,7 +399,7 @@ export default function BreakdownCallouts() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

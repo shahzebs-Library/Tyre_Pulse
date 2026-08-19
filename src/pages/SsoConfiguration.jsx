@@ -29,6 +29,7 @@ import {
 } from '../lib/api/ssoConfig'
 import { summariseSso, byProtocol, certStatus, certDaysRemaining, parseDomains } from '../lib/ssoConfig'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   connection_name: '', protocol: 'saml', idp_provider: '', idp_entity_id: '',
@@ -160,6 +161,11 @@ export default function SsoConfiguration() {
       return true
     })
   }, [rows, protocolFilter, statusFilter, countryFilter, search])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = [
@@ -408,7 +414,7 @@ export default function SsoConfiguration() {
                   {rows.length === 0 && !notProvisioned ? 'No SSO connections yet — add your first identity-provider connection.' : 'No connections match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const cs = certStatus(r, nowMs)
                   const cm = CERT_META[cs]
                   const CIcon = cm.Icon
@@ -462,7 +468,7 @@ export default function SsoConfiguration() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

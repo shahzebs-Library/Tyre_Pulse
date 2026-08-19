@@ -29,6 +29,7 @@ import {
   summariseTrip, orderSegments, countEvents, speedProfile, EVENT_TYPES,
 } from '../lib/tripReplay'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 
 const EMPTY_FORM = {
@@ -184,6 +185,11 @@ export default function TripReplay() {
       return true
     })
   }, [segments, assetFilter, eventFilter, search])
+
+  // Paged, not capped. The timeline used to render filtered.slice(0, 1000), so
+  // a long replay silently stopped there. The exports still cover every
+  // matching segment.
+  const pager = usePagedRows(filtered)
 
   // ── KPI tiles (5+) ─────────────────────────────────────────────────────────
   const kpis = [
@@ -489,7 +495,7 @@ export default function TripReplay() {
                       : 'No segments match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 1000).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)] tabular-nums">{r.sequence ?? '—'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{fmtTime(r.recorded_at)}</td>
@@ -510,7 +516,7 @@ export default function TripReplay() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 1000 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 1000 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

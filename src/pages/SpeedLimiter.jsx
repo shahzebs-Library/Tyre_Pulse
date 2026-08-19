@@ -45,6 +45,7 @@ import {
   verificationBand, nextDueDate, daysToNextDue,
 } from '../lib/speedLimiterAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import toUserMessage from '../lib/safeError'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
@@ -169,6 +170,11 @@ export default function SpeedLimiter() {
     }).filter((r) => !assetFilter || r.asset_no === assetFilter)
     return sortByExpiry(base, { direction: sortDir, ...engineOpts })
   }, [rows, statusFilter, bandFilter, siteFilter, assetFilter, search, fromDate, toDate, sortDir, engineOpts])
+
+  // Paged, not capped. The register used to render filtered.slice(0, 500) with
+  // no way to reach row 501. The exports below still cover the whole filtered
+  // set - a page of 50 is a reading convenience, not a narrowing.
+  const pager = usePagedRows(filtered)
 
   // ---- Charts -------------------------------------------------------------
   const chartText = getComputedStyle(document.documentElement).getPropertyValue('--text-muted') || '#9ca3af'
@@ -554,7 +560,7 @@ export default function SpeedLimiter() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const band = verificationBand(r, engineOpts)
                   const days = daysToNextDue(r, engineOpts)
                   return (
@@ -580,7 +586,7 @@ export default function SpeedLimiter() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / edit modal */}

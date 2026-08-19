@@ -22,6 +22,7 @@ import {
 } from '../lib/driverDocuments'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const STATUS_STYLES = {
   valid: 'bg-green-900/40 text-green-300 border border-green-700/50',
@@ -178,6 +179,10 @@ export default function DriverDocuments() {
   // ── Export ───────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['driver_name', 'doc_type', 'doc_number', 'issuer', 'issue_date', 'expiry_date', 'status']
   const EXPORT_HEADERS = ['Driver', 'Document type', 'Doc number', 'Issuer', 'Issue date', 'Expiry date', 'Status']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     driver_name: r.driver_name || '',
     doc_type: docTypeLabel(r.doc_type),
@@ -299,7 +304,7 @@ export default function DriverDocuments() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No documents match these filters.</td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const expClass = r._status === 'expired' ? 'text-red-400 font-medium' : r._status === 'expiring' ? 'text-amber-400 font-medium' : 'text-[var(--text-secondary)]'
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -333,7 +338,7 @@ export default function DriverDocuments() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / edit modal */}

@@ -37,6 +37,7 @@ import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
 import HeaderChangeDialog from '../components/intake/HeaderChangeDialog'
 import IntakeDiagnosticsPanel from '../components/intake/IntakeDiagnosticsPanel'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 // Trigger a client-side text download (diagnostics report export).
 function downloadText(filename, text) {
@@ -277,6 +278,11 @@ export default function DataIntakeCenter() {
     () => summarizeValidation(annotated, { module, actionOf: effectiveAction, overriddenCount: actionPlan.overridden }),
     [annotated, module, effectiveAction, actionPlan.overridden],
   )
+  // Paged, not capped: the review table used to render annotated.slice(0, 200),
+  // so on a large file rows 201+ could never be inspected or overridden row by
+  // row. Bulk actions and the commit itself always covered the whole batch.
+  const reviewPager = usePagedRows(annotated)
+
   const commitDiag = useMemo(() => (result ? summarizeCommitResult(result) : null), [result])
 
   // Post-commit diagnosis for a batch in the "Recent imports" list.
@@ -1187,7 +1193,7 @@ export default function DataIntakeCenter() {
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th><th className="text-left px-3 py-2">Action</th></tr></thead>
               <tbody>
-                {annotated.slice(0, 200).map((r) => {
+                {reviewPager.pageRows.map((r) => {
                   const act = effectiveAction(r)
                   const overridden = isElevated && !!rowActionOverride[r.sourceRowNo]
                   return (
@@ -1226,7 +1232,8 @@ export default function DataIntakeCenter() {
               </tbody>
             </table>
           </div>
-          {isElevated && <p className="text-xs text-[var(--text-muted)]">You have the final say on every row, override any action above. Anything set to <span className="text-green-300">Insert</span>/<span className="text-sky-300">Update</span> is committed even if it was flagged; genuinely un-insertable rows still fail safely per-row and are logged. Showing first 200 rows; bulk actions apply to the whole batch.</p>}
+          <TablePagination {...reviewPager} className="border border-t-0 border-[var(--border-dim)] rounded-b-xl" />
+          {isElevated && <p className="text-xs text-[var(--text-muted)]">You have the final say on every row, override any action above. Anything set to <span className="text-green-300">Insert</span>/<span className="text-sky-300">Update</span> is committed even if it was flagged; genuinely un-insertable rows still fail safely per-row and are logged. Bulk actions apply to the whole batch, not just the page on screen.</p>}
           {counts?.countryConflict > 0 && (
             <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
               <p className="text-sm text-amber-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.countryConflict} row(s) carry a country that differs from the selected import country <span className="font-semibold">{activeCountry}</span>.</p>

@@ -20,6 +20,7 @@ import {
 import { summarizeCheckInOut } from '../lib/vehicleCheckInOut'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const DIRECTION_META = {
   out: { label: 'Checked out', icon: LogOut, cls: 'bg-sky-900/40 text-sky-300 border border-sky-700/50' },
@@ -105,6 +106,11 @@ export default function VehicleCheckInOut() {
       return true
     })
   }, [rows, directionFilter, statusFilter, assetFilter, search])
+
+  // Paged, not capped. This register used to render filtered.slice(0, 500),
+  // so row 501 was unreachable and the table looked complete. The exports
+  // still cover the whole filtered set on purpose.
+  const pager = usePagedRows(filtered)
 
   const kpis = [
     { label: 'Total entries', value: summary.total, icon: ArrowRightLeft, tone: 'text-[var(--text-primary)]' },
@@ -301,7 +307,7 @@ export default function VehicleCheckInOut() {
                   {summary.total === 0 ? 'No handovers logged yet. Use “Check out” or “Check in” to record one.' : 'No entries match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const dir = DIRECTION_META[r.direction] || DIRECTION_META.out
                   const DirIcon = dir.icon
                   const st = STATUS_META[r.status] || STATUS_META.open
@@ -336,7 +342,7 @@ export default function VehicleCheckInOut() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / edit modal */}

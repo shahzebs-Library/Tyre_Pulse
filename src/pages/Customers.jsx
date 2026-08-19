@@ -24,6 +24,7 @@ import {
 import { summarizeCustomers, isValidEmail } from '../lib/customers'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const STATUS_META = {
   active: { label: 'Active', cls: 'bg-green-900/40 text-green-300 border border-green-700/50' },
@@ -272,6 +273,10 @@ export default function Customers() {
 
   const EXPORT_COLS = ['name', 'customer_type', 'status', 'contact_name', 'email', 'phone', 'site', 'address']
   const EXPORT_HEADERS = ['Name', 'Type', 'Status', 'Contact', 'Email', 'Phone', 'Site', 'Address']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => ({
     name: r.name || '', customer_type: r.customer_type || '', status: STATUS_META[r.status]?.label || r.status || '',
     contact_name: r.contact_name || '', email: r.email || '', phone: r.phone || '', site: r.site || '', address: r.address || '',
@@ -392,7 +397,7 @@ export default function Customers() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const status = STATUS_META[r.status] || STATUS_META.inactive
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -424,7 +429,7 @@ export default function Customers() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       <datalist id="customer-type-options">

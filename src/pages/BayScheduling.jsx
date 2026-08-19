@@ -29,6 +29,7 @@ import {
 } from '../lib/bayScheduling'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 const EMPTY_FORM = {
   bay_name: '', workshop_site: '', asset_no: '', job_type: '', technician: '',
@@ -197,6 +198,10 @@ export default function BayScheduling() {
   // ── Export ───────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['bay_name', 'workshop_site', 'asset_no', 'job_type', 'technician', 'scheduled_start', 'scheduled_end', 'estimated_min', 'overrun_min', 'priority', 'status', 'work_order_ref']
   const EXPORT_HEADERS = ['Bay', 'Site', 'Asset', 'Job type', 'Technician', 'Scheduled start', 'Scheduled end', 'Est. min', 'Overrun min', 'Priority', 'Status', 'Work order']
+  // Paged, not capped: this table used to render filtered.slice(0, 500) with no
+  // way to reach row 501. The exports below still cover `filtered` in full.
+  const pager = usePagedRows(filtered)
+
   const exportRows = filtered.map((r) => {
     const ov = overrunMinutes(r)
     return {
@@ -564,7 +569,7 @@ export default function BayScheduling() {
                   {rows.length === 0 && !notProvisioned ? 'No jobs scheduled yet — schedule your first job.' : 'No jobs match these filters.'}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => {
+                pager.pageRows.map((r) => {
                   const ov = overrunMinutes(r)
                   const overrun = ov != null && ov > 0
                   return (
@@ -602,7 +607,7 @@ export default function BayScheduling() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500 — refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {/* Create / Edit modal */}

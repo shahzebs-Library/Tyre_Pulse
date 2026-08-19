@@ -36,6 +36,7 @@ import {
   DEFAULT_STALE_THRESHOLD_HOURS,
 } from '../lib/telematicsAnalytics'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import { toUserMessage } from '../lib/safeError'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 
@@ -327,6 +328,10 @@ export default function TelematicsDevices() {
     const withAsset = assetFilter ? f.filter((r) => r.asset_no === assetFilter) : f
     return sortDevices(withAsset, sortKey, sortDir)
   }, [rows, statusFilter, siteFilter, vendorFilter, connFilter, search, assetFilter, sortKey, sortDir, now, thresholdHours])
+
+  // Paged, not capped. The register used to render filtered.slice(0, 500), so
+  // device 501 was unreachable. The exports still cover the whole filtered set.
+  const pager = usePagedRows(filtered)
 
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -626,7 +631,7 @@ export default function TelematicsDevices() {
                   )}
                 </td></tr>
               ) : (
-                filtered.slice(0, 500).map((r) => (
+                pager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.device_id}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{r.provider || 'N/A'}</td>
@@ -648,7 +653,7 @@ export default function TelematicsDevices() {
             </tbody>
           </table>
         </div>
-        {filtered.length > 500 && <p className="px-4 py-2 text-xs text-[var(--text-muted)] border-t border-[var(--input-border)]">Showing first 500. Refine filters or export for the full set.</p>}
+        <TablePagination {...pager} />
       </div>
 
       {rows && rows.length > 0 && (

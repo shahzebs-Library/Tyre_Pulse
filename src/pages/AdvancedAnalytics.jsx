@@ -27,6 +27,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -1431,12 +1432,20 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
 }
 
 // ── Tab 6: Vehicle Comparison ──────────────────────────────────────────────────
-function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
-  if (!data) return <EmptyState />
-  const { top20Cost, vehicles, outlierThreshold } = data
-  if (!vehicles.length) return <EmptyState />
+const EMPTY_VEHICLES = []
 
+function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
+  // The sort and the pager run before the early returns below - a hook cannot
+  // sit after a conditional return. Paged, not capped: the "All Vehicles" table
+  // used to render sorted.slice(0, 100), so a fleet larger than that showed a
+  // hundred rows under a heading promising all of them.
+  const vehicles = data?.vehicles || EMPTY_VEHICLES
   const sorted = sortedRows(vehicles, sortField, sortDir)
+  const pager = usePagedRows(sorted)
+
+  if (!data) return <EmptyState />
+  const { top20Cost, outlierThreshold } = data
+  if (!vehicles.length) return <EmptyState />
 
   const costBar = {
     labels: top20Cost.map(v => v.assetNo),
@@ -1537,7 +1546,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
               </tr>
             </thead>
             <tbody>
-              {sorted.slice(0, 100).map((v, i) => (
+              {pager.pageRows.map((v, i) => (
                 <tr key={i} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20 ${v.isOutlier ? 'bg-red-950/20' : ''}`}>
                   <td className="py-1.5 px-2 font-medium text-[var(--text-secondary)]">{v.assetNo}</td>
                   <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(v.count)}</td>
@@ -1553,9 +1562,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
               ))}
             </tbody>
           </table>
-          {sorted.length > 100 && (
-            <p className="text-xs text-[var(--text-dim)] mt-2 text-center">Showing top 100 of {sorted.length} vehicles</p>
-          )}
+          <TablePagination {...pager} />
         </div>
       </Card>
     </div>

@@ -28,6 +28,7 @@ import {
   Gauge, Navigation, Boxes, Timer, Plus, Trash2, Pencil, Save, X, CheckCircle2,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -330,8 +331,24 @@ export default function CostCenter() {
         return { ...v, avgCpk, riskScore, trend }
       })
       .sort((a, b) => b.totalCost - a.totalCost)
-      .slice(0, 50)
   }, [normalised, kpis.fleetAvgCpk])
+
+  // The By Vehicle table used to render `.slice(0, 50)` of this list against 555
+  // assets that carry tyre records, with nothing on screen saying so: rows 51+
+  // were unreachable and the table looked complete. It is paged now instead, so
+  // the cap is gone and the bar below states the real total.
+  //
+  // The ANOMALY FEED keeps the old 50-asset population on purpose. It scans the
+  // most expensive assets for CPK outliers, and widening it to every asset would
+  // change which alerts a manager is shown - a different decision from making a
+  // table readable, and not one to slip into a paging change.
+  const byVehicleTop50 = useMemo(() => byVehicle.slice(0, 50), [byVehicle])
+
+  // Paged, not capped - 50 a page, the shared pager every table in the app uses.
+  // Both cover the FULL filtered set: every total, chart, anomaly and export on
+  // this page is still computed over that set, never over the visible page.
+  const brandPager = usePagedRows(byBrand)
+  const vehiclePager = usePagedRows(byVehicle)
 
   // ── By Month ──────────────────────────────────────────────────────────────────
   const byMonth = useMemo(() => {
@@ -359,7 +376,7 @@ export default function CostCenter() {
 
     // Assets with CPK > 2× fleet avg
     if (fleetAvg) {
-      byVehicle.forEach(v => {
+      byVehicleTop50.forEach(v => {
         if (v.avgCpk && v.avgCpk > fleetAvg * 2) {
           items.push({
             type: 'vehicle',
@@ -407,7 +424,7 @@ export default function CostCenter() {
     })
 
     return items.slice(0, 12)
-  }, [kpis.fleetAvgCpk, byVehicle, bySite, byBrand, activeCurrency, t])
+  }, [kpis.fleetAvgCpk, byVehicleTop50, bySite, byBrand, activeCurrency, t])
 
   // ── ROI Calculator ────────────────────────────────────────────────────────────
   const roi = useMemo(() => {
@@ -1006,7 +1023,7 @@ export default function CostCenter() {
                           </tr>
                         </thead>
                         <tbody>
-                          {byBrand.map(b => (
+                          {brandPager.pageRows.map(b => (
                             <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                               <td className="py-2.5 pr-4">
                                 <RankBadge rank={b.rank} />
@@ -1028,6 +1045,7 @@ export default function CostCenter() {
                           )}
                         </tbody>
                       </table>
+                      <TablePagination {...brandPager} />
                     </div>
                   </div>
                 )}
@@ -1051,7 +1069,7 @@ export default function CostCenter() {
                         </tr>
                       </thead>
                       <tbody>
-                        {byVehicle.map(v => (
+                        {vehiclePager.pageRows.map(v => (
                           <tr key={v.asset} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                             <td className="py-2.5 pr-4 text-gray-200 font-medium font-mono text-xs">{v.asset}</td>
                             <td className="py-2.5 pr-4 text-[var(--panel-ink-3)]">{v.count}</td>
@@ -1074,6 +1092,7 @@ export default function CostCenter() {
                         )}
                       </tbody>
                     </table>
+                    <TablePagination {...vehiclePager} />
                   </div>
                 )}
 
@@ -1428,6 +1447,9 @@ async function sumMeterDeltas(table, valueCol, { country, site, from, to }) {
   }
 }
 
+/** How many production entries the list below asks the server for. */
+const PROD_ROW_LIMIT = 200
+
 function CostPerUnitSection({ currency, country, siteOptions = [] }) {
   const { profile, isSuperAdmin } = useAuth()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
@@ -1455,6 +1477,15 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
     return [...set].sort((a, b) => String(a).localeCompare(String(b)))
   }, [siteOptions, prodRows])
 
+  // 50 a page. The site picker above still reads the FULL set, and the m3 figure
+  // this panel divides by comes from sumProductionM3 - a server sum over the
+  // whole window - so neither depends on which page is on screen.
+  const prodPager = usePagedRows(prodRows)
+  // listProduction asks for at most PROD_ROW_LIMIT rows, so a full response is a
+  // read that stopped at its own limit rather than at the end of the data. Say
+  // so, or the pager's "of 200" reads as the total for the range.
+  const prodAtLimit = prodRows.length >= PROD_ROW_LIMIT
+
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
@@ -1465,7 +1496,7 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
         sumProductionM3({ country, site: siteArg, from: from || undefined, to: to || undefined }),
         sumMeterDeltas('odometer_logs', 'odometer_km', { country, site: siteArg, from, to }),
         sumMeterDeltas('engine_hours_logs', 'engine_hours', { country, site: siteArg, from, to }),
-        listProduction({ country, site: siteArg, from: from || undefined, to: to || undefined, limit: 200 }),
+        listProduction({ country, site: siteArg, from: from || undefined, to: to || undefined, limit: PROD_ROW_LIMIT }),
       ])
       setData({ split: { tyre: split.tyre, maintenance: split.maintenance }, m3, km, hours })
       setProdRows(rows)
@@ -1800,7 +1831,14 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
                   <p className="text-[var(--panel-ink-4)] text-xs">No m3 recorded for this range yet.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <div>
+                  {prodAtLimit && (
+                    <p className="text-[11px] text-amber-400 mb-2">
+                      This list asks for the {PROD_ROW_LIMIT} most recent entries in the range, so older ones are not in it.
+                      Narrow the dates or the site to reach them. The m3 total above is a server sum over the whole range and is not limited.
+                    </p>
+                  )}
+                  <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-800 text-left text-[var(--panel-ink-4)]">
@@ -1811,7 +1849,7 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {prodRows.map(r => (
+                      {prodPager.pageRows.map(r => (
                         <tr key={r.id} className="border-b border-gray-800/50">
                           <td className="py-2 pr-3 text-[var(--panel-ink-2)]">{r.site || 'N/A'}</td>
                           <td className="py-2 pr-3 text-[var(--panel-ink-3)]">{String(r.period_date || '').slice(0, 7) || 'N/A'}</td>
@@ -1832,6 +1870,8 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
                       ))}
                     </tbody>
                   </table>
+                  </div>
+                  <TablePagination {...prodPager} />
                 </div>
               )}
             </div>

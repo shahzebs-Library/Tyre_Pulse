@@ -4,6 +4,7 @@ import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw, X } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
@@ -457,6 +458,22 @@ export default function SerialTracker() {
     return rows
   }, [bulkResults, bulkSearch, statusFilter])
 
+  /**
+   * BOTH LONG LISTS ARE READ A PAGE AT A TIME, through the app's one pager.
+   *
+   * A bulk lookup is a pasted file - it is routinely hundreds of serials - and
+   * the scrapped register is the whole scrap history (about 300 rows today,
+   * server-capped at 500). Rendering either in full made the page a single
+   * unbroken scroll.
+   *
+   * Each pager is given the FULL FILTERED list. Nothing else reads `pageRows`:
+   * the status chips still count `bulkResults`, the "N of M" captions still
+   * quote the filtered totals, and the Excel export still writes every result
+   * rather than the fifty on screen.
+   */
+  const bulkPager  = usePagedRows(filteredBulkResults)
+  const scrapPager = usePagedRows(filteredScrapList)
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -775,7 +792,7 @@ export default function SerialTracker() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredBulkResults.map(r => (
+                      {bulkPager.pageRows.map(r => (
                         <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
                           <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
                           <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs">{formatDate(r.first_seen)}</td>
@@ -799,6 +816,7 @@ export default function SerialTracker() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePagination {...bulkPager} />
                 </div>
               )}
             </>
@@ -887,7 +905,7 @@ export default function SerialTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredScrapList.map(r => (
+                  {scrapPager.pageRows.map(r => (
                     <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] align-top">
                       <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
                       <td className="py-2 pr-4 text-[var(--text-secondary)] whitespace-nowrap">
@@ -952,6 +970,7 @@ export default function SerialTracker() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...scrapPager} />
             </div>
           )}
         </div>

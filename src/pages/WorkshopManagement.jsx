@@ -12,10 +12,11 @@ import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
 import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
 import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import {
   Wrench, ClipboardList, Clock, CheckCircle, DollarSign, AlertTriangle,
   TrendingUp, TrendingDown, Search, Filter, X, Download, RefreshCw,
-  FileSpreadsheet, FileText, ChevronLeft, ChevronRight, ChevronDown,
+  FileSpreadsheet, FileText, ChevronDown,
   Calendar, User, Building2, Zap, BarChart2, PieChart, Activity,
   Package, Star, Award, Target, Maximize2, Loader2,
 } from 'lucide-react'
@@ -74,7 +75,6 @@ const STATUSES   = WO_STATUSES.filter(s => s !== 'Overdue')
 // vocabulary. Blank / unrecognised values are not counted as open.
 const OPEN_STATUSES = new Set(WO_STATUSES.filter(s => !isClosedWoStatus(s)))
 const PRIORITIES = ['Critical','High','Medium','Low']
-const PAGE_SIZE  = 20
 
 // work_orders is one of the largest tables in the system (millions of rows at
 // scale), so the browser must never pull it all. The grid fetch is bounded two
@@ -293,7 +293,6 @@ export default function WorkshopManagement() {
   const [dateFrom, setDateFrom]   = useState('')
   const [dateTo, setDateTo]       = useState('')
   const [search, setSearch]       = useState('')
-  const [page, setPage]           = useState(1)
   const [activeTab, setActiveTab] = useState('overview')
 
   // Five filters drive this load (site, type, priority and both dates), so two
@@ -628,13 +627,14 @@ export default function WorkshopManagement() {
     }
   }, [orders])
 
-  // Paginated jobs
-  const paginatedJobs = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return filteredOrders.slice(start, start + PAGE_SIZE)
-  }, [filteredOrders, page])
-
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE))
+  // Paged jobs - the shared pager, 50 a page, so this grid behaves like every
+  // other register in the app. The read is still SERVER-bounded (20,000 rows in
+  // a 12-month default window, see loadMeta) and the banner above still says so:
+  // a page is a reading convenience, it does not make a bounded read complete.
+  //
+  // `filteredOrders` stays the full filtered set. It is what BOTH exports write
+  // and what the "N jobs" caption quotes - never `jobsPager.pageRows`.
+  const jobsPager = usePagedRows(filteredOrders)
 
   // ── Export ────────────────────────────────────────────────────────────────────
   function handleExcelExport() {
@@ -769,7 +769,7 @@ export default function WorkshopManagement() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
               <input
                 value={search}
-                onChange={e => { setSearch(e.target.value); setPage(1) }}
+                onChange={e => { setSearch(e.target.value); jobsPager.setPage(0) }}
                 placeholder="Search WO#, Asset, Site..."
                 className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
               />
@@ -778,7 +778,7 @@ export default function WorkshopManagement() {
             {/* Site */}
             <select
               value={site}
-              onChange={e => { setSite(e.target.value); setPage(1) }}
+              onChange={e => { setSite(e.target.value); jobsPager.setPage(0) }}
               className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[130px]"
             >
               <option value="">All Sites</option>
@@ -788,7 +788,7 @@ export default function WorkshopManagement() {
             {/* Work Type */}
             <select
               value={workType}
-              onChange={e => { setWorkType(e.target.value); setPage(1) }}
+              onChange={e => { setWorkType(e.target.value); jobsPager.setPage(0) }}
               className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[140px]"
             >
               <option value="">All Types</option>
@@ -798,7 +798,7 @@ export default function WorkshopManagement() {
             {/* Status */}
             <select
               value={status}
-              onChange={e => { setStatus(e.target.value); setPage(1) }}
+              onChange={e => { setStatus(e.target.value); jobsPager.setPage(0) }}
               className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[140px]"
             >
               <option value="">All Statuses</option>
@@ -808,7 +808,7 @@ export default function WorkshopManagement() {
             {/* Priority */}
             <select
               value={priority}
-              onChange={e => { setPriority(e.target.value); setPage(1) }}
+              onChange={e => { setPriority(e.target.value); jobsPager.setPage(0) }}
               className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[120px]"
             >
               <option value="">All Priorities</option>
@@ -820,7 +820,7 @@ export default function WorkshopManagement() {
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
               <input
                 value={techSearch}
-                onChange={e => { setTechSearch(e.target.value); setPage(1) }}
+                onChange={e => { setTechSearch(e.target.value); jobsPager.setPage(0) }}
                 placeholder="Technician..."
                 className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
               />
@@ -832,14 +832,14 @@ export default function WorkshopManagement() {
               <input
                 type="date"
                 value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); setPage(1) }}
+                onChange={e => { setDateFrom(e.target.value); jobsPager.setPage(0) }}
                 className="px-2 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-36"
               />
               <span className="text-[var(--text-dim)] text-xs">to</span>
               <input
                 type="date"
                 value={dateTo}
-                onChange={e => { setDateTo(e.target.value); setPage(1) }}
+                onChange={e => { setDateTo(e.target.value); jobsPager.setPage(0) }}
                 className="px-2 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-36"
               />
             </div>
@@ -849,7 +849,7 @@ export default function WorkshopManagement() {
               {[{ label: '30d', days: 30 }, { label: '90d', days: 90 }, { label: '6m', days: 180 }, { label: '1yr', days: 365 }].map(p => (
                 <button
                   key={p.label}
-                  onClick={() => { const r = applyDatePreset(p.days); setDateFrom(r.from); setDateTo(r.to); setPage(1) }}
+                  onClick={() => { const r = applyDatePreset(p.days); setDateFrom(r.from); setDateTo(r.to); jobsPager.setPage(0) }}
                   className="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
                   {p.label}
@@ -860,7 +860,7 @@ export default function WorkshopManagement() {
             {/* Clear filters */}
             {(site || workType || status || priority || techSearch || dateFrom || dateTo || search) && (
               <button
-                onClick={() => { setSite(''); setWorkType(''); setStatus(''); setPriority(''); setTechSearch(''); setDateFrom(''); setDateTo(''); setSearch(''); setPage(1) }}
+                onClick={() => { setSite(''); setWorkType(''); setStatus(''); setPriority(''); setTechSearch(''); setDateFrom(''); setDateTo(''); setSearch(''); jobsPager.setPage(0) }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -1086,7 +1086,8 @@ export default function WorkshopManagement() {
                 >
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <p className="text-sm text-[var(--text-muted)]">
-                      {filteredOrders.length.toLocaleString()} jobs | page {page} of {totalPages}
+                      {filteredOrders.length.toLocaleString()} job{filteredOrders.length === 1 ? '' : 's'}
+                      {filteredOrders.length !== allOrders.length ? ` of ${allOrders.length.toLocaleString()} loaded` : ''}
                     </p>
                     {loadMeta.truncated && (
                       <p className="text-xs text-blue-400">
@@ -1107,14 +1108,14 @@ export default function WorkshopManagement() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--input-border)]">
-                          {paginatedJobs.length === 0 ? (
+                          {filteredOrders.length === 0 ? (
                             <tr>
                               <td colSpan={11} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">
                                 No work orders found matching current filters.
                               </td>
                             </tr>
                           ) : (
-                            paginatedJobs.map((job, i) => (
+                            jobsPager.pageRows.map((job, i) => (
                               <motion.tr
                                 key={job.id}
                                 initial={{ opacity: 0 }}
@@ -1163,49 +1164,8 @@ export default function WorkshopManagement() {
                       </table>
                     </div>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)]">
-                        <span className="text-xs text-[var(--text-muted)]">
-                          Showing {((page - 1) * PAGE_SIZE) + 1}-{Math.min(page * PAGE_SIZE, filteredOrders.length)} of {filteredOrders.length}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                          {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
-                            let p = i + 1
-                            if (totalPages > 7) {
-                              if (page <= 4) p = i + 1
-                              else if (page >= totalPages - 3) p = totalPages - 6 + i
-                              else p = page - 3 + i
-                            }
-                            return (
-                              <button
-                                key={p}
-                                onClick={() => setPage(p)}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                                  p === page ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:bg-[var(--input-bg)]'
-                                }`}
-                              >
-                                {p}
-                              </button>
-                            )
-                          })}
-                          <button
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {/* Pagination - the shared bar (50 a page by default). */}
+                    <TablePagination {...jobsPager} />
                   </div>
                 </motion.div>
               )}

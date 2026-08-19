@@ -2492,8 +2492,13 @@ export default function Accidents() {
               enableSorting={true}
               enableExport={false}
               enableColumnVisibility={false}
-              initialPageSize={25}
-              pageSizeOptions={[10, 25, 50, 100]}
+              // 50 a page, the app-wide default (see TablePagination). The
+              // register holds 38 incidents today, so this is one page - but the
+              // table has to keep paging for the year this register does get long,
+              // and EnterpriseTable already owns that behaviour. A second pager on
+              // top of it would be two controls fighting over one table.
+              initialPageSize={50}
+              pageSizeOptions={[25, 50, 100, 200]}
               emptyMessage="No incidents found"
             />
           )}

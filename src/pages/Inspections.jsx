@@ -20,6 +20,7 @@ import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { legacyPositionCode } from '../lib/tyrePositions'
 import { LAYOUT_KEYS, LAYOUT_SLOTS, layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment } from '../lib/vehicleTyreLayout'
@@ -1268,13 +1269,42 @@ export default function Inspections() {
     return c
   }, [filteredBase, filterFocus, flagMap])
 
-  // Virtualizer for the inspections table
+  /**
+   * THE REGISTER IS READ ONE PAGE AT A TIME.
+   *
+   * It used to render the whole filtered set as one list - 435 inspections today,
+   * and growing with every sheet the field records - which is what "all of them
+   * load at once, make it less" is about. `usePagedRows` is the app's one pager,
+   * so this behaves like every other register rather than inventing a second idea
+   * of what a page is.
+   *
+   * IT PAGES `filtered`, WHICH IS THE FULL FILTERED SET, AND NOTHING ELSE READS
+   * `pager.pageRows`. The tiles, the status pill counts, the "N of M shown"
+   * caption and both exports all still count `scoped`/`filtered`, so a headline
+   * never quietly becomes a per-page number.
+   */
+  const pager = usePagedRows(filtered)
+
+  // Virtualizer for the inspections table - now over the CURRENT PAGE only.
   const rowVirtualizer = useVirtualizer({
-    count: filtered.length,
+    count: pager.pageRows.length,
     getScrollElement: () => tableParentRef.current,
     estimateSize: () => 52,
     overscan: 10,
   })
+
+  /**
+   * Every page starts at its own first row. Carrying the previous page's scroll
+   * offset would drop the reader into the middle of a page whose top they have
+   * never seen. The first render is skipped deliberately so this cannot fight
+   * useScrollRestore, which is putting the reader back where they left off.
+   */
+  const lastPageRef = useRef(pager.page)
+  useEffect(() => {
+    if (lastPageRef.current === pager.page) return
+    lastPageRef.current = pager.page
+    if (tableParentRef.current) tableParentRef.current.scrollTop = 0
+  }, [pager.page])
 
   // Puts the register back where it was scrolled to when the user returns from
   // the tyre-change tracking page. The list scrolls inside its own fixed-height
@@ -3269,7 +3299,11 @@ export default function Inspections() {
           <div style={inspGridStyle} className="px-0">
             {isAdmin && (
               <div className="pb-2 pt-3 px-3 flex items-center">
-                <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage} title="Select all shown"
+                {/* Selects every row the FILTERS left, not just the page on
+                    screen - the delete button then states the real count, so a
+                    bulk delete can never be larger than it reads. */}
+                <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+                  title={`Select all ${filtered.length} records these filters leave`}
                   className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
               </div>
             )}
@@ -3299,7 +3333,8 @@ export default function Inspections() {
           ) : (
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
               {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                const r = filtered[virtualRow.index]
+                const r = pager.pageRows[virtualRow.index]
+                if (!r) return null
                 const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
                 const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
                 const isObs  = isObservationType(r.inspection_type)
@@ -3445,6 +3480,9 @@ export default function Inspections() {
             </div>
           )}
         </div>
+        {/* Page controls. `pager.total` is the FILTERED total, so the bar states
+            how many rows the filters left as well as which of them are on screen. */}
+        <TablePagination {...pager} />
       </div>
       </>}
 

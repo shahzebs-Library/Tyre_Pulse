@@ -20,6 +20,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToPdf, exportToExcel, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
@@ -337,6 +338,24 @@ export default function TyreExchange() {
     if (!custodySerial) return []
     return deriveCustody(records, custodySerial)
   }, [records, custodySerial])
+
+  /**
+   * THE TWO DERIVED REGISTERS ARE READ A PAGE AT A TIME.
+   *
+   * Both are derived from every tyre record the country holds - 11,200 rows -
+   * with no ceiling of their own, so either can become a single unbroken table
+   * the moment retreading starts being recorded. Measured on the live data today
+   * both are EMPTY (no record carries a retread/repair/scrap category), so this
+   * changes nothing a reader can see right now; it is the bound that stops the
+   * page growing without limit later.
+   *
+   * The transfer history already pages itself (25 a page, `txPagedData`) and is
+   * left alone; the custody chain is one serial's own history and is short by
+   * construction. Neither list has an export, and the KPI tiles above still
+   * count `retreads`/`transfers` in full.
+   */
+  const retreadPager = usePagedRows(retreads)
+  const pendingPager = usePagedRows(pendingReturns)
 
   // The current-state record for the searched serial: the tyre-replacement
   // document the Approval & Workflow Engine tracks. Latest event in the chain.
@@ -1086,7 +1105,7 @@ export default function TyreExchange() {
                           </td>
                         </tr>
                       ) : (
-                        retreads.map((r, idx) => (
+                        retreadPager.pageRows.map((r, idx) => (
                           <tr key={`${r.serial}-${idx}`} className={`border-t border-[var(--input-border)] hover:bg-gray-800/30 transition-colors ${r.overdue ? 'bg-red-900/10' : ''}`}>
                             <td className="px-4 py-3 font-mono text-blue-400 text-xs">{r.serial}</td>
                             <td className="px-4 py-3 text-[var(--text-secondary)]">{r.brand}</td>
@@ -1120,6 +1139,7 @@ export default function TyreExchange() {
                       )}
                     </tbody>
                   </table>
+                  <TablePagination {...retreadPager} />
                 </div>
               </div>
             </div>
@@ -1417,7 +1437,7 @@ export default function TyreExchange() {
                           </td>
                         </tr>
                       ) : (
-                        pendingReturns.map((p, idx) => (
+                        pendingPager.pageRows.map((p, idx) => (
                           <tr key={`${p.serial}-${idx}`} className={`border-t border-[var(--input-border)] hover:bg-gray-800/30 transition-colors ${
                             p.daysPending > 60 ? 'bg-red-900/5' : p.daysPending > 30 ? 'bg-yellow-900/5' : ''
                           }`}>
@@ -1479,6 +1499,7 @@ export default function TyreExchange() {
                       )}
                     </tbody>
                   </table>
+                  <TablePagination {...pendingPager} />
                 </div>
               </div>
 

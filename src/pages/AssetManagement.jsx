@@ -12,7 +12,7 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import {
   Truck, Plus, Edit2, X, Save, Search, Filter,
-  FileSpreadsheet, FileText, RefreshCw, ChevronLeft, ChevronRight,
+  FileSpreadsheet, FileText, RefreshCw,
   ChevronDown, ChevronUp, AlertTriangle, Clock,
   DollarSign, Activity, Shield, BarChart2, TrendingUp, Eye,
   ToggleLeft, ToggleRight, MapPin,
@@ -26,6 +26,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+import { TablePagination, PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE } from '../components/ui/TablePagination'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
@@ -38,7 +39,8 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const PAGE_SIZE = 25
+// Rows per page comes from the shared pager (50). It is NOT a constant here:
+// the reader can change it and the choice rides in the URL with the filters.
 
 const RISK_COLOR = {
   Critical: { bg: 'bg-red-900/50',    text: 'text-red-300',    hex: '#dc2626' },
@@ -334,7 +336,7 @@ export default function AssetManagement() {
   // NOT the working-context country - that stays in the settings context.
   const [filters, setFilter, , , setFilters] = useFilterState({
     search: '', site: '', country: '', type: '', status: '', risk: '', ops: '',
-    sort: 'asset_no', dir: 'asc', page: '1',
+    sort: 'asset_no', dir: 'asc', page: '1', size: String(DEFAULT_PAGE_SIZE),
   })
   const search = filters.search
   const filterSite = filters.site
@@ -358,8 +360,20 @@ export default function AssetManagement() {
 
   // ── pagination ───────────────────────────────────────────────────────────────
   // The URL carries a human-readable 1-based page; the list is 0-based.
-  const page = Math.max(0, (Number(filters.page) || 1) - 1)
+  // Page AND size ride in the URL for the same reason the filters do: a row
+  // opens `/assets/:assetNo` as a route, so local state would be lost on Back.
+  // That rules out `usePagedRows`, which owns its page in component state - the
+  // shared BAR is still what renders, so there is no second pager UI, and the
+  // arithmetic below is the same shape FleetMaster already uses for its own
+  // URL-borne pager.
+  const rawPage = Math.max(0, (Number(filters.page) || 1) - 1)
   const setPage = useCallback(p => setFilter('page', String((Number(p) || 0) + 1)), [setFilter])
+  // Clamped to the sizes the bar itself offers: a hand-typed `?size=100000`
+  // must not become the page size.
+  const pageSize = PAGE_SIZE_OPTIONS.includes(Number(filters.size))
+    ? Number(filters.size)
+    : DEFAULT_PAGE_SIZE
+  const setPageSize = useCallback(n => setFilters({ size: String(n), page: '1' }), [setFilters])
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   // Full asset detail (profile, tyres, costs, work orders, disposal approval) now
@@ -588,8 +602,15 @@ export default function AssetManagement() {
   }
 
   // ── Pagination ────────────────────────────────────────────────────────────────
-  const totalPages = Math.ceil(filteredAssets.length / PAGE_SIZE)
-  const pageAssets = filteredAssets.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  // Only the TABLE is paged. `filteredAssets` stays the full filtered set and
+  // remains what the exports write and what the row-count caption quotes - a
+  // page is a reading convenience, not a narrowing of what the reader asked for.
+  // The tiles read `kpiAssets` (see above) and are untouched by paging.
+  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / pageSize))
+  // Clamp, so a restored `?page=40` that no longer exists after a filter renders
+  // the last real page instead of an empty table - which reads as "no matches".
+  const page = Math.min(rawPage, totalPages - 1)
+  const pageAssets = filteredAssets.slice(page * pageSize, (page + 1) * pageSize)
 
   // ── Export ────────────────────────────────────────────────────────────────────
   async function handleExcelExport() {
@@ -924,32 +945,19 @@ export default function AssetManagement() {
                   </div>
                 )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border-dim)] text-sm text-[var(--text-secondary)]">
-                    <span>Page {page + 1} of {totalPages}</span>
-                    <div className="flex items-center gap-2">
-                      <button disabled={page === 0} onClick={() => setPage(page - 1)}
-                        className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-30 transition-colors">
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        const start = Math.max(0, Math.min(page - 2, totalPages - 5))
-                        const pg = start + i
-                        return (
-                          <button key={pg} onClick={() => setPage(pg)}
-                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${pg === page ? 'bg-blue-600 text-white' : 'hover:bg-[var(--surface-2)]'}`}>
-                            {pg + 1}
-                          </button>
-                        )
-                      })}
-                      <button disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}
-                        className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] disabled:opacity-30 transition-colors">
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Pagination - the shared bar, so this register behaves like
+                    every other table in the app (50 a page by default). */}
+                <TablePagination
+                  page={page}
+                  setPage={setPage}
+                  pageSize={pageSize}
+                  setPageSize={setPageSize}
+                  total={filteredAssets.length}
+                  totalPages={totalPages}
+                  from={filteredAssets.length === 0 ? 0 : page * pageSize + 1}
+                  to={Math.min(filteredAssets.length, (page + 1) * pageSize)}
+                  className="border-[var(--border-dim)]"
+                />
               </div>
             </motion.div>
           )}

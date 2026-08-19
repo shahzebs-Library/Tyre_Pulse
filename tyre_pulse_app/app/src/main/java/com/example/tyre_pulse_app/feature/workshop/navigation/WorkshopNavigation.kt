@@ -18,13 +18,15 @@ fun NavController.navigateToWorkshop(navOptions: NavOptions? = null) {
 
 fun NavGraphBuilder.workshopScreen(
     onWorkOrderClick: (String) -> Unit,
+    onViewTeam: () -> Unit,
+    onViewCalendar: () -> Unit,
     onBack: () -> Unit
 ) {
     composable(route = WorkshopDestination.route) {
         WorkshopHomeScreen(
             onViewOrders = { onWorkOrderClick("list") },
-            onViewTeam = { /* TODO */ },
-            onViewCalendar = { /* TODO */ }
+            onViewTeam = onViewTeam,
+            onViewCalendar = onViewCalendar
         )
     }
 }

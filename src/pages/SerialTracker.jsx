@@ -201,7 +201,7 @@ export default function SerialTracker() {
       const { data, error: qErr } = await supabase
         .from('tyre_records')
         .select('*')
-        .eq('serial_no', q)
+        .ilike('serial_no', q)
         .order('issue_date', { ascending: true })
       if (qErr) throw qErr
       setRecords(data || [])
@@ -374,7 +374,7 @@ export default function SerialTracker() {
             const { data, error: qErr } = await supabase
               .from('tyre_records')
               .select('serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre')
-              .eq('serial_no', serial)
+              .ilike('serial_no', serial)
               .order('issue_date', { ascending: true })
             if (qErr) throw qErr
             if (!data || data.length === 0) {
@@ -424,7 +424,7 @@ export default function SerialTracker() {
   function exportBulkExcel() {
     try {
       exportToExcel(
-        bulkResults,
+        filteredBulkResults,
         ['serial', 'first_seen', 'last_asset', 'total_records', 'cost', 'status'],
         ['Serial No', 'First Seen', 'Last Asset', 'Records', 'Cost', 'Status'],
         'TyrePulse_BulkLookup'

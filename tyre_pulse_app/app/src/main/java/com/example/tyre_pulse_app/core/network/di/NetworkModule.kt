@@ -104,4 +104,8 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideStorageApi(retrofit: Retrofit): StorageApi = retrofit.create(StorageApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideGenericApi(retrofit: Retrofit): GenericApi = retrofit.create(GenericApi::class.java)
 }

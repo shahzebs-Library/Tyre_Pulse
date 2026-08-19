@@ -3,9 +3,14 @@ package com.example.tyre_pulse_app.feature.washing.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tyre_pulse_app.core.authentication.WorkspaceManager
+import com.example.tyre_pulse_app.core.authentication.data.UserRepository
+import com.example.tyre_pulse_app.core.data.repository.SyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 data class WashingUiState(
@@ -18,7 +23,9 @@ data class WashingUiState(
 
 @HiltViewModel
 class WashingViewModel @Inject constructor(
-    private val workspaceManager: WorkspaceManager
+    private val syncRepository: SyncRepository,
+    private val workspaceManager: WorkspaceManager,
+    private val userRepository: UserRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(WashingUiState())
     val uiState = _uiState.asStateFlow()
@@ -32,10 +39,35 @@ class WashingViewModel @Inject constructor(
     }
 
     fun submitWash() {
+        val asset = _uiState.value.selectedAsset ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            // TODO: Connect to Real Wash API
-            _uiState.update { it.copy(isLoading = false, selectedAsset = null) }
+            try {
+                val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
+                val user = userRepository.getCurrentUser().filterNotNull().first()
+                
+                val payload = mapOf(
+                    "asset_no" to asset,
+                    "driver_name" to user.name,
+                    "date" to SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()),
+                    "status" to _uiState.value.washType,
+                    "site" to (workspace.site?.name ?: "Main Site")
+                )
+
+                syncRepository.enqueueCommand(
+                    type = "WASH_RECORD",
+                    payload = payload,
+                    tenantId = workspace.tenant.id,
+                    companyId = workspace.company.id,
+                    countryId = workspace.country.id,
+                    siteId = workspace.site?.id,
+                    userId = user.id
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("WashingViewModel", "Failed to submit wash record", e)
+            } finally {
+                _uiState.update { it.copy(isLoading = false, selectedAsset = null) }
+            }
         }
     }
 }

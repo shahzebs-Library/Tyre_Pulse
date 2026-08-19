@@ -13,29 +13,31 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = YellowPrimary,
-    onPrimary = TextOnYellow,
-    secondary = YellowVariant,
-    background = OLED_Black,
-    surface = OLED_Black,
-    surfaceVariant = OLED_Card,
-    onSurface = TextPrimary,
-    onBackground = TextPrimary,
-    outline = TextSecondary,
-    error = StatusRed
+    primary = Night_Primary,
+    onPrimary = Color.Black,
+    secondary = Night_Secondary,
+    onSecondary = Color.Black,
+    background = Night_Canvas,
+    surface = Night_Surface,
+    surfaceVariant = Color(0xFF21262D),
+    onSurface = Night_TextPrimary,
+    onBackground = Night_TextPrimary,
+    outline = Night_TextSecondary,
+    error = Night_Danger
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = YellowPrimary,
-    onPrimary = Color.Black,
-    secondary = YellowVariant,
-    background = Color(0xFFF8F9FA),
-    surface = Color.White,
-    surfaceVariant = Color(0xFFF1F3F4),
-    onSurface = Color(0xFF1F2937),
-    onBackground = Color(0xFF1F2937),
-    outline = Color(0xFF9CA3AF),
-    error = Color(0xFFDC2626)
+    primary = Day_Primary,
+    onPrimary = Color.White,
+    secondary = Day_Secondary,
+    onSecondary = Color.White,
+    background = Day_Canvas,
+    surface = Day_Surface,
+    surfaceVariant = Color(0xFFF1F5F9),
+    onSurface = Day_TextPrimary,
+    onBackground = Day_TextPrimary,
+    outline = Day_TextSecondary,
+    error = Day_Danger
 )
 
 @Composable

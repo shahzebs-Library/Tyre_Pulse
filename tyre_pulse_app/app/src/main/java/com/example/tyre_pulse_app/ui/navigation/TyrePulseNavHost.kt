@@ -26,6 +26,7 @@ import com.example.tyre_pulse_app.feature.inspections.navigation.inspectionsScre
 import com.example.tyre_pulse_app.feature.inspections.navigation.navigateToInspectionForm
 import com.example.tyre_pulse_app.feature.inspections.navigation.navigateToTyreInspection
 import com.example.tyre_pulse_app.feature.inspections.ui.InspectionDetailScreen
+import com.example.tyre_pulse_app.feature.scan.navigation.scanScreen
 import com.example.tyre_pulse_app.feature.workshop.navigation.workshopScreen
 import com.example.tyre_pulse_app.feature.workshop.ui.*
 import com.example.tyre_pulse_app.feature.team.ui.TeamRoute
@@ -68,7 +69,8 @@ fun TyrePulseNavHost(
         
         homeScreen(
             onNavigateToModule = { route -> navController.navigate(route) },
-            onAssetClick = { assetId -> navController.navigate("asset_detail_route/$assetId") }
+            onAssetClick = { assetId -> navController.navigate("asset_detail_route/$assetId") },
+            onNavigateToScan = { navController.navigate("scan_route") }
         )
         
         approvalsScreen(
@@ -80,7 +82,7 @@ fun TyrePulseNavHost(
             onAssetClick = { assetId -> navController.navigate("asset_detail_route/$assetId") },
             onBack = { navController.popBackStack() },
             onStartInspection = { assetId -> navController.navigateToInspectionForm(assetId) },
-            onTyreClick = { tyreId -> /* TODO */ }
+            onTyreClick = { tyreId -> navController.navigate("tyre_history/$tyreId") }
         )
 
         composable("asset_detail_route/{assetId}") { backStackEntry ->
@@ -117,6 +119,8 @@ fun TyrePulseNavHost(
 
         workshopScreen(
             onWorkOrderClick = { id -> navController.navigate("job_details_route/$id") },
+            onViewTeam = { navController.navigate("team_route") },
+            onViewCalendar = { navController.navigate("calendar_route") },
             onBack = { navController.popBackStack() }
         )
 
@@ -186,5 +190,24 @@ fun TyrePulseNavHost(
         )
         settingsScreen(onBack = { navController.popBackStack() })
         diagnosticsScreen(onBack = { navController.popBackStack() })
+
+        scanScreen(
+            onBack = { navController.popBackStack() },
+            onNavigateToInspection = { assetId, tyreSerial ->
+                navController.navigateToInspectionForm(assetId)
+            },
+            onNavigateToTyreChange = { id, position ->
+                navController.navigate("tyre_replacement/$id")
+            },
+            onNavigateToAssetDetail = { assetId ->
+                navController.navigate("asset_detail_route/$assetId")
+            },
+            onNavigateToTyreHistory = { tyreId ->
+                navController.navigate("tyre_history/$tyreId")
+            },
+            onNavigateToSearch = { query ->
+                navController.navigate("search_route?q=$query")
+            }
+        )
     }
 }

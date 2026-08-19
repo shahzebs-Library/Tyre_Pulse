@@ -330,7 +330,7 @@ export default function TyreLifecycle() {
     const { data } = await supabase
       .from('tyre_records')
       .select('id,asset_no,serial_number:serial_no,position,brand,size,issue_date,km_at_fitment,km_at_removal,category,risk_level,cost_per_tyre,site')
-      .eq('serial_no', serial)
+      .ilike('serial_no', serial)
       .order('issue_date')
     setSerialHistory(prev => ({ ...prev, [serial]: data || [] }))
   }

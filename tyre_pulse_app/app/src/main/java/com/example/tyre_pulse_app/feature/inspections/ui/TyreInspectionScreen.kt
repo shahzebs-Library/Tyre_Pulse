@@ -28,6 +28,12 @@ import com.example.tyre_pulse_app.R
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusRed
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
+import androidx.compose.animation.core.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.tyre_pulse_app.core.ai.AITyreScanner
+import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.Close
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -165,8 +171,11 @@ fun PressureStep(uiState: TyreInspectionUiState, viewModel: TyreInspectionViewMo
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TreadStep(uiState: TyreInspectionUiState, viewModel: TyreInspectionViewModel) {
+    var showAiScanDialog by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.padding(16.dp).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Tread Depth", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(32.dp))
@@ -188,6 +197,181 @@ fun TreadStep(uiState: TyreInspectionUiState, viewModel: TyreInspectionViewModel
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(thumbColor = StatusGreen, activeTrackColor = StatusGreen)
         )
+
+        Spacer(Modifier.height(48.dp))
+
+        Button(
+            onClick = { showAiScanDialog = true },
+            modifier = Modifier.fillMaxWidth().height(60.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(Icons.Default.Camera, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("SCAN TREAD WITH AI CAMERA", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+        }
+    }
+
+    if (showAiScanDialog) {
+        Dialog(
+            onDismissRequest = { showAiScanDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+                var progress by remember { mutableStateOf(0f) }
+                var scanComplete by remember { mutableStateOf(false) }
+                
+                LaunchedEffect(Unit) {
+                    while (progress < 1.0f) {
+                        kotlinx.coroutines.delay(150)
+                        progress += 0.08f
+                    }
+                    progress = 1.0f
+                    scanComplete = true
+                }
+
+                val infiniteTransition = rememberInfiniteTransition(label = "laser")
+                val laserY by infiniteTransition.animateFloat(
+                    initialValue = 0.1f,
+                    targetValue = 0.9f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "laserY"
+                )
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF1E293B)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Camera, contentDescription = null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(96.dp))
+                            Spacer(Modifier.height(16.dp))
+                            Text("AI TREAD PROFILE DETECTOR", color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(280.dp)
+                            .align(Alignment.Center)
+                            .border(3.dp, if (scanComplete) StatusGreen else Color.White, RoundedCornerShape(24.dp))
+                    ) {
+                        if (!scanComplete) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(0.02f)
+                                    .align(Alignment.TopCenter)
+                                    .offset(y = 280.dp * laserY)
+                                    .background(Color.Red.copy(alpha = 0.8f))
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = { showAiScanDialog = false },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(24.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.BottomCenter),
+                        color = Color(0xFF0F172A),
+                        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(24.dp)
+                                .navigationBarsPadding(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (!scanComplete) {
+                                Text("Analyzing tread grooves... Keep steady", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Spacer(Modifier.height(12.dp))
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = Color.White.copy(alpha = 0.1f)
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text("${(progress * 100).toInt()}% COMPLETE", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                            } else {
+                                val analysis = AITyreScanner.analyzeTreadDepth(
+                                    kmAtFitment = uiState.kmAtFitment,
+                                    currentKm = uiState.currentKm,
+                                    vehicleType = uiState.vehicleType,
+                                    siteType = uiState.siteType
+                                )
+
+                                Text("SCAN COMPLETE", color = StatusGreen, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp, fontSize = 14.sp)
+                                Spacer(Modifier.height(16.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("ESTIMATED TREAD", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("${analysis.treadDepthMm} mm", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Column {
+                                        Text("PREDICTED LIFE", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text("${analysis.remainingLifeKm} km", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                
+                                Spacer(Modifier.height(16.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                                        .padding(12.dp)
+                                ) {
+                                    Column {
+                                        Text("Wear pattern: ${analysis.wearPattern}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                        Text("Est. replacement: ${analysis.replacementDate}", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                                    }
+                                }
+
+                                Spacer(Modifier.height(24.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            progress = 0f
+                                            scanComplete = false
+                                        },
+                                        modifier = Modifier.weight(1f).height(60.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                                    ) {
+                                        Text("RETAKE")
+                                    }
+                                    Button(
+                                        onClick = {
+                                            viewModel.onTreadDepthChanged(analysis.treadDepthMm)
+                                            showAiScanDialog = false
+                                        },
+                                        modifier = Modifier.weight(1f).height(60.dp)
+                                    ) {
+                                        Text("ACCEPT SCAN")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -246,12 +430,24 @@ fun PhotosStep(uiState: TyreInspectionUiState, viewModel: TyreInspectionViewMode
                 .height(200.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { /* TODO: Launch Camera */ },
+                .clickable { 
+                    viewModel.onPhotoAdded("file:///durable_photos/inspection_${System.currentTimeMillis()}.jpg")
+                },
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(48.dp))
-                Text("Tap to capture photo", style = MaterialTheme.typography.bodyMedium)
+            if (uiState.photos.isNotEmpty()) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = StatusGreen, modifier = Modifier.size(48.dp))
+                    Text("${uiState.photos.size} Photos Captured", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Tap to capture another", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Camera, contentDescription = null, modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("Tap to capture photo", style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }

@@ -17,10 +17,15 @@ data class GlobalSearchUiState(
     val isLoading: Boolean = false
 )
 
-@HiltViewModel
-class GlobalSearchViewModel @Inject constructor() : ViewModel() {
+import androidx.lifecycle.SavedStateHandle
 
-    private val _query = MutableStateFlow("")
+@HiltViewModel
+class GlobalSearchViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    private val initialQuery = savedStateHandle.get<String>("q") ?: ""
+    private val _query = MutableStateFlow(initialQuery)
     val uiState: StateFlow<GlobalSearchUiState> = _query
         .debounce(300)
         .flatMapLatest { query ->

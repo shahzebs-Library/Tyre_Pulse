@@ -2,9 +2,11 @@ package com.example.tyre_pulse_app.feature.checklists.ui
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +22,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -250,6 +257,128 @@ fun AdvancedRecorder(field: ChecklistField, value: String?, onSave: (String) -> 
                 Spacer(Modifier.height(24.dp))
                 Button(onClick = { onSave(text) }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
                     Text("SAVE READING", fontWeight = FontWeight.ExtraBold)
+                }
+            }
+            "photo" -> {
+                var photoPath by remember { mutableStateOf(value ?: "") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    if (photoPath.isNotBlank()) {
+                        Surface(
+                            modifier = Modifier.size(150.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(48.dp))
+                                Text("Photo Captured", style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.BottomCenter).padding(8.dp))
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(150.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No photo captured", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            photoPath = "file:///durable_photos/captured_${System.currentTimeMillis()}.jpg"
+                        },
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (photoPath.isBlank()) "CAPTURE PHOTO" else "RETAKE PHOTO", fontWeight = FontWeight.Bold)
+                    }
+                    if (photoPath.isNotBlank()) {
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { onSave(photoPath) },
+                            modifier = Modifier.fillMaxWidth().height(60.dp)
+                        ) {
+                            Text("SAVE PHOTO", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+            "signature" -> {
+                val path = remember { Path() }
+                var drawTrigger by remember { mutableStateOf(0) }
+                var isDrawing by remember { mutableStateOf(false) }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .background(Color.White, RoundedCornerShape(16.dp))
+                            .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        path.moveTo(offset.x, offset.y)
+                                        isDrawing = true
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        path.lineTo(change.position.x, change.position.y)
+                                        drawTrigger++
+                                    }
+                                )
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val dummy = drawTrigger
+                            drawPath(
+                                path = path,
+                                color = Color.Black,
+                                style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            )
+                        }
+                        if (!isDrawing) {
+                            Text(
+                                "Draw signature here using your finger",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                path.reset()
+                                isDrawing = false
+                                drawTrigger++
+                            },
+                            modifier = Modifier.weight(1f).height(60.dp)
+                        ) {
+                            Text("CLEAR")
+                        }
+                        Button(
+                            onClick = {
+                                if (isDrawing) {
+                                    onSave("signature_data_url_mock_${System.currentTimeMillis()}")
+                                }
+                            },
+                            enabled = isDrawing,
+                            modifier = Modifier.weight(1f).height(60.dp)
+                        ) {
+                            Text("CONFIRM")
+                        }
+                    }
                 }
             }
         }

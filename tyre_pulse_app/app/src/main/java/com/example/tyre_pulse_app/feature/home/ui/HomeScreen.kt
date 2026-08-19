@@ -33,13 +33,15 @@ import com.example.tyre_pulse_app.core.designsystem.theme.*
 fun HomeRoute(
     onNavigateToModule: (String) -> Unit,
     onAssetClick: (String) -> Unit,
+    onNavigateToScan: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     HomeScreen(
         uiState = uiState,
         onNavigateToModule = onNavigateToModule,
-        onAssetClick = onAssetClick
+        onAssetClick = onAssetClick,
+        onScanClick = onNavigateToScan
     )
 }
 
@@ -47,16 +49,17 @@ fun HomeRoute(
 fun HomeScreen(
     uiState: HomeUiState,
     onNavigateToModule: (String) -> Unit,
-    onAssetClick: (String) -> Unit
+    onAssetClick: (String) -> Unit,
+    onScanClick: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { HighFidelityTopBar() }
-    ) { padding ->
+        topBar = { HighFidelityTopBar(onScanClick) }
+    ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(paddingValues)
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -181,7 +184,7 @@ fun JobActionCard(job: JobSummary, onClick: () -> Unit) {
 }
 
 @Composable
-fun HighFidelityTopBar() {
+fun HighFidelityTopBar(onScanClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp).statusBarsPadding(),
         verticalAlignment = Alignment.CenterVertically,
@@ -191,8 +194,14 @@ fun HighFidelityTopBar() {
             Text("Good morning,", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             Text("John Technician", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
         }
-        IconButton(onClick = { /* TODO */ }, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-            Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onScanClick, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR")
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = { /* TODO */ }, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Icon(Icons.Default.Notifications, contentDescription = "Notifications")
+            }
         }
     }
 }

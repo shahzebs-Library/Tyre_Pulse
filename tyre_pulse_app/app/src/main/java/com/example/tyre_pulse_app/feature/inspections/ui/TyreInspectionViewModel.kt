@@ -3,6 +3,9 @@ package com.example.tyre_pulse_app.feature.inspections.ui
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tyre_pulse_app.core.authentication.WorkspaceManager
+import com.example.tyre_pulse_app.core.data.repository.AssetRepository
+import com.example.tyre_pulse_app.core.data.repository.InspectionRepository
 import com.example.tyre_pulse_app.core.model.TyreInspectionReading
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -23,20 +26,53 @@ data class TyreInspectionUiState(
     val damageReason: String? = null,
     val photos: List<String> = emptyList(),
     val isSaving: Boolean = false,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val vehicleType: String = "Truck",
+    val currentKm: Double = 0.0,
+    val kmAtFitment: Double = 0.0,
+    val siteType: String = "Highway"
 )
 
 @HiltViewModel
 class TyreInspectionViewModel @Inject constructor(
+    private val inspectionRepository: InspectionRepository,
+    private val assetRepository: AssetRepository,
+    private val workspaceManager: WorkspaceManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    private val assetId: String = savedStateHandle["assetId"] ?: ""
+    private val tyreId: String = savedStateHandle["tyreId"] ?: ""
+    private val position: String = savedStateHandle["position"] ?: "FL"
+
     private val _uiState = MutableStateFlow(TyreInspectionUiState(
-        assetId = savedStateHandle["assetId"] ?: "",
-        tyreId = savedStateHandle["tyreId"] ?: "",
-        position = savedStateHandle["position"] ?: "Rear Right Outer"
+        assetId = assetId,
+        tyreId = tyreId,
+        position = position
     ))
     val uiState: StateFlow<TyreInspectionUiState> = _uiState.asStateFlow()
+
+    init {
+        loadAssetContext()
+    }
+
+    private fun loadAssetContext() {
+        viewModelScope.launch {
+            try {
+                val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
+                val asset = assetRepository.getAsset(assetId, workspace.tenant.id)
+                val tyre = asset.tyres?.find { it.id == tyreId || it.position.uppercase() == position.uppercase() }
+                _uiState.update { it.copy(
+                    vehicleType = asset.type ?: "Truck",
+                    currentKm = asset.odometerKm ?: 0.0,
+                    kmAtFitment = tyre?.kmAtFitment ?: 0.0,
+                    siteType = workspace.site?.name ?: "Highway"
+                ) }
+            } catch (e: Exception) {
+                android.util.Log.e("TyreInspectionViewModel", "Failed to load asset context", e)
+            }
+        }
+    }
 
     fun onPressureChanged(value: Float) {
         _uiState.update { it.copy(pressure = value) }
@@ -83,8 +119,35 @@ class TyreInspectionViewModel @Inject constructor(
     fun saveReading() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
-            // TODO: Save to Room/Draft repository
-            _uiState.update { it.copy(isSaving = false, isSaved = true) }
+            try {
+                val draft = inspectionRepository.getDraft(assetId)
+                if (draft != null) {
+                    val updatedReadings = draft.tyreReadings.toMutableList()
+                    val index = updatedReadings.indexOfFirst { it.position.uppercase() == position.uppercase() }
+
+                    val newReading = TyreInspectionReading(
+                        position = position,
+                        pressure = _uiState.value.pressure?.toString(),
+                        condition = _uiState.value.condition ?: "Good",
+                        treadDepth = _uiState.value.treadDepth?.toString()
+                    )
+
+                    if (index >= 0) {
+                        updatedReadings[index] = newReading
+                    } else {
+                        updatedReadings.add(newReading)
+                    }
+
+                    inspectionRepository.saveDraft(
+                        assetId,
+                        draft.copy(tyreReadings = updatedReadings)
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TyreInspectionViewModel", "Failed to save tyre reading", e)
+            } finally {
+                _uiState.update { it.copy(isSaving = false, isSaved = true) }
+            }
         }
     }
 }

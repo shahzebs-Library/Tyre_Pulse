@@ -27,6 +27,8 @@ import com.example.tyre_pulse_app.core.designsystem.component.AppBanner
 import com.example.tyre_pulse_app.core.designsystem.theme.Tyre_pulse_appTheme
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.navigation.AuthDestination
+import com.example.tyre_pulse_app.core.permissions.PermissionManager
+import com.example.tyre_pulse_app.core.permissions.ModuleKey
 import com.example.tyre_pulse_app.feature.assets.navigation.AssetListDestination
 import com.example.tyre_pulse_app.feature.home.navigation.HomeDestination
 import com.example.tyre_pulse_app.feature.notifications.navigation.NotificationsDestination
@@ -44,6 +46,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var networkMonitor: NetworkMonitor
 
+    @Inject
+    lateinit var permissionManager: PermissionManager
+
     private val userViewModel: UserViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -59,6 +64,10 @@ class MainActivity : ComponentActivity() {
             val currentUser by userViewModel.currentUser.collectAsState()
             val currentWorkspace by userViewModel.currentWorkspace.collectAsState()
             val isOnline by networkMonitor.isOnline.collectAsState(initial = true)
+
+            val hasAssetsAccess by permissionManager.hasAccess(ModuleKey.VEHICLES).collectAsState(initial = true)
+            val hasScanAccess by permissionManager.hasAccess(ModuleKey.SCAN).collectAsState(initial = true)
+            val hasAlertsAccess by permissionManager.hasAccess(ModuleKey.ALERTS).collectAsState(initial = true)
 
             var showWorkspaceSwitcher by remember { mutableStateOf(false) }
             val isMaintenance by remember { mutableStateOf(false) }
@@ -138,53 +147,59 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.DirectionsCar, contentDescription = null) },
-                                    label = { Text(stringResource(R.string.assets)) },
-                                    selected = currentDestination?.hierarchy?.any { it.route == AssetListDestination.route } == true,
-                                    onClick = {
-                                        navController.navigate(AssetListDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
+                                if (hasAssetsAccess) {
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.DirectionsCar, contentDescription = null) },
+                                        label = { Text(stringResource(R.string.assets)) },
+                                        selected = currentDestination?.hierarchy?.any { it.route == AssetListDestination.route } == true,
+                                        onClick = {
+                                            navController.navigate(AssetListDestination.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                                 
-                                NavigationBarItem(
-                                    icon = { 
-                                        Surface(
-                                            modifier = Modifier.size(48.dp),
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primary
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Add, 
-                                                contentDescription = null,
-                                                modifier = Modifier.padding(8.dp),
-                                                tint = Color.Black
-                                            )
+                                if (hasScanAccess) {
+                                    NavigationBarItem(
+                                        icon = { 
+                                            Surface(
+                                                modifier = Modifier.size(48.dp),
+                                                shape = CircleShape,
+                                                color = MaterialTheme.colorScheme.primary
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.QrCodeScanner, 
+                                                    contentDescription = null,
+                                                    modifier = Modifier.padding(8.dp),
+                                                    tint = Color.Black
+                                                )
+                                            }
+                                        },
+                                        label = { Text("Scan QR") },
+                                        selected = currentDestination?.route == "scan_route",
+                                        onClick = { 
+                                            navController.navigate("scan_route")
                                         }
-                                    },
-                                    label = { Text(stringResource(R.string.inspect)) },
-                                    selected = false,
-                                    onClick = { 
-                                        navController.navigate("checklist_library")
-                                    }
-                                )
+                                    )
+                                }
 
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Notifications, contentDescription = null) },
-                                    label = { Text(stringResource(R.string.alerts)) },
-                                    selected = currentDestination?.hierarchy?.any { it.route == NotificationsDestination.route } == true,
-                                    onClick = {
-                                        navController.navigate(NotificationsDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
+                                if (hasAlertsAccess) {
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.Notifications, contentDescription = null) },
+                                        label = { Text(stringResource(R.string.alerts)) },
+                                        selected = currentDestination?.hierarchy?.any { it.route == NotificationsDestination.route } == true,
+                                        onClick = {
+                                            navController.navigate(NotificationsDestination.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                                 NavigationBarItem(
                                     icon = { Icon(Icons.Default.Menu, contentDescription = null) },
                                     label = { Text(stringResource(R.string.more)) },

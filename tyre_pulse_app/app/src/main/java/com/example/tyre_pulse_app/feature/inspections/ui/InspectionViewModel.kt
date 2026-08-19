@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tyre_pulse_app.core.authentication.WorkspaceManager
+import com.example.tyre_pulse_app.core.authentication.data.UserRepository
 import com.example.tyre_pulse_app.core.data.repository.AssetRepository
 import com.example.tyre_pulse_app.core.data.repository.InspectionRepository
 import com.example.tyre_pulse_app.core.model.*
@@ -27,6 +28,7 @@ class InspectionViewModel @Inject constructor(
     private val inspectionRepository: InspectionRepository,
     private val assetRepository: AssetRepository,
     private val workspaceManager: WorkspaceManager,
+    private val userRepository: UserRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -45,9 +47,10 @@ class InspectionViewModel @Inject constructor(
             try {
                 val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
                 val asset = assetRepository.getAsset(assetId, workspace.tenant.id)
+                val user = userRepository.getCurrentUser().filterNotNull().first()
                 
                 val draft = inspectionRepository.getDraft(assetId)
-                val initialInspection = draft ?: createInitialInspection(asset, workspace)
+                val initialInspection = draft ?: createInitialInspection(asset, workspace, user.name)
 
                 _uiState.update { it.copy(asset = asset, inspection = initialInspection, isLoading = false) }
             } catch (e: Exception) {
@@ -56,13 +59,13 @@ class InspectionViewModel @Inject constructor(
         }
     }
 
-    private fun createInitialInspection(asset: Asset, workspace: WorkspaceContext): Inspection {
+    private fun createInitialInspection(asset: Asset, workspace: WorkspaceContext, inspectorName: String): Inspection {
         return Inspection(
             id = UUID.randomUUID().toString(),
             assetNumber = asset.assetNumber,
             type = "Routine",
             status = "In Progress",
-            inspector = "Current User",
+            inspector = inspectorName,
             scheduledDate = System.currentTimeMillis().toString(),
             tenantId = workspace.tenant.id,
             site = workspace.site?.name ?: workspace.company.name,

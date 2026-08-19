@@ -18,12 +18,14 @@ fun NavController.navigateToHome(navOptions: NavOptions? = null) {
 
 fun NavGraphBuilder.homeScreen(
     onNavigateToModule: (String) -> Unit,
-    onAssetClick: (String) -> Unit
+    onAssetClick: (String) -> Unit,
+    onNavigateToScan: () -> Unit
 ) {
     composable(route = HomeDestination.route) {
         HomeRoute(
             onNavigateToModule = onNavigateToModule,
-            onAssetClick = onAssetClick
+            onAssetClick = onAssetClick,
+            onNavigateToScan = onNavigateToScan
         )
     }
 }

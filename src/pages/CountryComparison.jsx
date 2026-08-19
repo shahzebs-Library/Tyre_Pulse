@@ -84,13 +84,12 @@ export default function CountryComparison() {
     setError(null)
     try {
       const { data, error: e, truncated: tr } = await fetchAllPages((from, to) => {
-        let q = supabase
+        return supabase
           .from('tyre_records')
           .select('country, brand, site, category, risk_level, cost_per_tyre, qty, km_at_fitment, km_at_removal')
           .not('country', 'is', null)
           .order('country')
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        return q.range(from, to)
+          .range(from, to)
       }, { max: ROW_CAP })
       if (e) throw new Error(e.message || e)
       setTruncated(Boolean(tr))
@@ -99,13 +98,12 @@ export default function CountryComparison() {
 
       const available = [...new Set(recs.map(r => String(r.country).trim()))].sort()
       setAllCountries(available)
-      // Preserve any prior selection that is still valid; otherwise seed with the
-      // first few countries (or all, if fewer) so the page renders a real
-      // comparison on first paint instead of an empty state.
+      // Preserve any prior selection that is still valid; otherwise seed with all available
+      // countries so the user gets a complete side-by-side comparison on first paint.
       setCountries(prev => {
         const stillValid = prev.filter(c => available.includes(c))
         if (stillValid.length > 0) return stillValid
-        return available.slice(0, Math.min(3, available.length))
+        return available
       })
     } catch (err) {
       setError(toUserMessage(err, 'Failed to load country data.'))
@@ -116,7 +114,7 @@ export default function CountryComparison() {
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [])
 
   useEffect(() => { load() }, [load])
 

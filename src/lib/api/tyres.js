@@ -26,7 +26,9 @@ export async function listTyreRecords({ country, riskLevel, site, limit = 100 } 
 
 /** Look up a tyre by its serial number (or null). */
 export async function getTyreBySerial(serial) {
+  const s = String(serial || '').trim()
+  if (!s) return null
   return unwrap(
-    await supabase.from('tyre_records').select(COLS).eq('serial_no', serial).maybeSingle(),
+    await supabase.from('tyre_records').select(COLS).ilike('serial_no', s).maybeSingle(),
   )
 }

@@ -29,45 +29,53 @@ import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 @Composable
 fun JobDetailsRoute(
     onBack: () -> Unit,
-    viewModel: WorkOrderViewModel = hiltViewModel()
+    viewModel: WorkOrderDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Job Details", fontWeight = FontWeight.Bold) },
+                title = { Text(uiState.workOrder?.let { "Job #${it.workOrderNo}" } ?: "Job Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    Text(
-                        text = "In Progress",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier
-                            .padding(end = 16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(StatusOrange.copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = StatusOrange
-                    )
+                    uiState.workOrder?.status?.let { status ->
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(StatusOrange.copy(alpha = 0.2f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = StatusOrange
+                        )
+                    }
                 }
             )
         },
         bottomBar = {
-            if (uiState.canStart || uiState.canComplete) {
+            val status = uiState.workOrder?.status?.lowercase() ?: "pending"
+            val showButton = status == "pending" || status == "assigned" || status == "in_progress" || status == "started"
+            if (showButton) {
                 Surface(modifier = Modifier.fillMaxWidth(), tonalElevation = 8.dp) {
                     Button(
-                        onClick = { /* TODO: Toggle Status */ },
+                        onClick = {
+                            if (status == "pending" || status == "assigned") {
+                                viewModel.startJob()
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
                             .navigationBarsPadding(),
                         colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black)
                     ) {
-                        Text("Continue Job", fontWeight = FontWeight.Bold)
+                        Text(if (status == "pending" || status == "assigned") "Start Job" else "Complete Job", fontWeight = FontWeight.Bold)
                     }
                 }
             }

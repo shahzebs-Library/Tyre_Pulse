@@ -171,7 +171,7 @@ export async function findTyreBySerial(serial) {
   if (!s) return null
   const { data, error } = await supabase.from('tyre_records')
     .select('serial_no,asset_no,tyre_position,brand,size,site,country,status,cost_per_tyre,issue_date')
-    .eq('serial_no', s)
+    .ilike('serial_no', s)
     .order('issue_date', { ascending: false, nullsFirst: false })
     .limit(1)
   if (error) throw error

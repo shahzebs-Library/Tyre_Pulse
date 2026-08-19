@@ -244,14 +244,18 @@ export default function BrandPerformance() {
               <p className="text-xs text-green-400 font-medium uppercase tracking-wide">Best Brand</p>
             </div>
             <p className="text-lg font-bold text-white truncate">{bestBrand.brand}</p>
-            <p className="text-xs text-green-400">{bestBrand.failureRate.toFixed(1)}% failure rate</p>
+            <p className="text-xs text-green-400">
+              {bestBrand.failureRate != null && !Number.isNaN(bestBrand.failureRate) ? `${bestBrand.failureRate.toFixed(1)}% failure rate` : 'N/A'}
+            </p>
           </div>
         )}
         {worstBrand && worstBrand.brand !== bestBrand?.brand && (
           <div className="card text-center border-red-700/40">
             <p className="text-xs text-red-400 font-medium uppercase tracking-wide mb-0.5">Highest Risk</p>
             <p className="text-lg font-bold text-white truncate">{worstBrand.brand}</p>
-            <p className="text-xs text-red-400">{worstBrand.failureRate.toFixed(1)}% failure rate</p>
+            <p className="text-xs text-red-400">
+              {worstBrand.failureRate != null && !Number.isNaN(worstBrand.failureRate) ? `${worstBrand.failureRate.toFixed(1)}% failure rate` : 'N/A'}
+            </p>
           </div>
         )}
       </div>
@@ -405,8 +409,11 @@ export default function BrandPerformance() {
             accessorFn: row => row.failureRate,
             size: 110,
             meta: { align: 'right' },
-            cell: ({ getValue }) => {
+            cell: ({ getValue, row }) => {
               const val = getValue()
+              if (val == null || Number.isNaN(val) || (row.original?.count === 0)) {
+                return <span className="text-xs text-gray-500">N/A</span>
+              }
               return (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                   val > 30 ? 'bg-red-900/40 text-red-400' :

@@ -55,7 +55,7 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V603**)
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V604**)
 
 **V601 (applied + verified live) — THE APPROVER'S OWN SAVED SIGNATURE.** A person draws it once and
 every later approval pre-fills it, visibly, with a one-click "Draw a new signature". Pre-filling is
@@ -286,7 +286,24 @@ Delete an item from this list ONLY when it is actually closed, and say what clos
 
 ---
 
-## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, QR LABELS, AND BULK SIGN-OFF (V602). Next free **V603**.
+## SESSION 2026-08-19 — PAGING, REGION/TYPE FILTERS, QR LABELS, AND BULK SIGN-OFF (V602-V603). Next free **V604**.
+
+### **V603 — UAE UPLOAD RULE: A NON-WORKSHOP "BUILDINGS" ROW IS NOT ADDED**
+Owner, straight after the cleanup above: "make this a rule also in upload, it should not add it". Done as a
+BEFORE INSERT trigger on `parts_consumption` (`trg_ab_uae_building_guard` -> `expense_building_guard()`), so it
+catches EVERY upload path (per-country staging, in-app intake, dashboard CSV) - they all insert there.
+- **THE RULE**: skip a row when `country='UAE'` AND `asset_type` is BUILDING(S) AND `asset_description` does NOT
+  contain WORKSHOP. Skipped rows are logged to `expense_import_rejects` (new nullable `reject_reason` column,
+  value `uae_building_non_workshop`) so a dropped line is auditable, exactly like V491's cross-country guard.
+- **ORDER IS LOAD-BEARING**: named `trg_ab_` so it fires AFTER `trg_aa_expense_country_guard` and BEFORE
+  `trg_classify_parts_consumption` - returning NULL stops the classifier running for a row being dropped, so
+  `brain_cache` is never written for a skipped row (the V491 lesson).
+- **UAE-SCOPED on purpose**, matching the instruction; KSA/Egypt untouched (BUILDINGS may mean something else
+  there). Matches BUILDING and BUILDINGS, case/space-insensitive; keeps the three fleet workshops
+  (Jabal Ali/Baniyas/Musafah) because their description names WORKSHOP.
+- **Verified live, rolled back**: UAE HSE building SKIPPED, UAE 'building' lowercase SKIPPED, UAE Jabal Ali
+  Workshop KEPT, UAE mixer KEPT, KSA building KEPT; probe rows + reject rows cleaned; guard enabled.
+  Rollback: drop the trigger + `expense_building_guard()`.
 
 ### **UAE EXPENSE CLEANUP — NON-WORKSHOP "BUILDINGS" ROWS DELETED (data-only, reversible)**
 Owner: "in uae expenses ... in vehicle type u will find building ... if anything is not issued for workshop

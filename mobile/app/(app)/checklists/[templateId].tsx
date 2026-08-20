@@ -895,12 +895,38 @@ function ChecklistFillScreen() {
       if (assetApplyStamp.current === stamp) setAssetLoading(false)
     }
 
-    // The 10-day rule. Advisory: it warns, it never refuses, and a null result
-    // (including a failed lookup) says nothing at all.
+    // The 10-day rule. Enforced to prevent duplicate inspections only for Tyre checkup sheets.
     try {
       const last = await getLastSubmission(templateId, clean)
       if (assetApplyStamp.current !== stamp) return
-      setRecurrence(recurrenceNotice(last, template?.min_interval_days))
+      
+      const minInterval = Number(template?.min_interval_days) > 0 ? Number(template?.min_interval_days) : 7
+      const notice = recurrenceNotice(last, minInterval)
+      
+      const cat = template?.category?.toLowerCase() ?? ""
+      const tName = template?.name?.toLowerCase() ?? ""
+      const isTyreChecklist = cat.includes("tyre") || cat.includes("tire") || tName.includes("tyre") || tName.includes("tire") || tName.includes("tread")
+
+      if (isTyreChecklist && notice && notice.early) {
+        Alert.alert(
+          "Inspection Restricted",
+          `This vehicle has already been inspected recently (Last check: ${notice.daysAgo} days ago).\n\nDuplicate tyre checklists are restricted to once every ${notice.minIntervalDays} days.\nPlease choose a different vehicle.`,
+          [{ 
+            text: "OK", 
+            onPress: () => {
+              assetApplyStamp.current += 1
+              seededAssetRef.current = ''
+              setAssetNo('')
+              setAsset(null)
+              setAssetQuery('')
+              setAssetResults([])
+              setRecurrence(null)
+            }
+          }]
+        )
+        return
+      }
+      setRecurrence(notice)
     } catch {
       /* silence is correct: "we could not look" is not "it is not due" */
     }

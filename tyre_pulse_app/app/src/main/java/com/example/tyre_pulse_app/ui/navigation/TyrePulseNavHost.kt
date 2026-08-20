@@ -38,8 +38,10 @@ import com.example.tyre_pulse_app.feature.accidents.ui.*
 import com.example.tyre_pulse_app.feature.rca.ui.RcaRoute
 import com.example.tyre_pulse_app.feature.admin.ui.*
 import com.example.tyre_pulse_app.feature.ai.ui.PredictiveMaintenanceScreen
+import com.example.tyre_pulse_app.feature.ai.ui.FleetAiChatScreen
 import com.example.tyre_pulse_app.feature.reports.navigation.reportsScreen
-import com.example.tyre_pulse_app.feature.reports.ui.ReportsRoute
+import com.example.tyre_pulse_app.feature.reports.ui.ReportsScreen
+import com.example.tyre_pulse_app.feature.team.ui.DriverScorecardScreen
 import com.example.tyre_pulse_app.feature.inventory.ui.StockRoute
 import com.example.tyre_pulse_app.feature.profile.navigation.profileScreen
 import com.example.tyre_pulse_app.feature.settings.navigation.navigateToSettings
@@ -171,8 +173,10 @@ fun TyrePulseNavHost(
         composable("meter_log_route") { MeterLogRoute(onBack = { navController.popBackStack() }) }
         composable("rca_route") { RcaRoute(onBack = { navController.popBackStack() }) }
         composable("ai_predictive_route") { PredictiveMaintenanceScreen() }
+        composable("fleet_ai_chat_route") { FleetAiChatScreen() }
+        composable("driver_scorecard_route") { DriverScorecardScreen() }
         reportsScreen()
-        composable("reports_route") { ReportsRoute() }
+        composable("reports_route_v2") { ReportsScreen() }
         composable("stock_route") { StockRoute(onBack = { navController.popBackStack() }) }
 
         myWorkScreen(onTaskClick = { /* TODO */ })

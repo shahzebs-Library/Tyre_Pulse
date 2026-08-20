@@ -5,7 +5,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
 import com.example.tyre_pulse_app.core.navigation.NavigationDestination
-import com.example.tyre_pulse_app.feature.reports.ui.ReportsRoute
+import com.example.tyre_pulse_app.feature.reports.ui.ReportsScreen
 
 object ReportsDestination : NavigationDestination {
     override val route = "reports_route"
@@ -18,6 +18,7 @@ fun NavController.navigateToReports(navOptions: NavOptions? = null) {
 
 fun NavGraphBuilder.reportsScreen() {
     composable(route = ReportsDestination.route) {
-        ReportsRoute()
+        ReportsScreen()
     }
 }
+

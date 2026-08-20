@@ -39,15 +39,18 @@ fun ProfileRoute(
     onNavigateToModule: (String) -> Unit
 ) {
     val modules = listOf(
-        AppModule("Fleet Hub", Icons.Default.DirectionsCar, "asset_list_route", "Manage 100K+ Vehicles"),
+        AppModule("Fleet Hub", Icons.Default.DirectionsCar, "asset_list_route", "Manage Vehicles & Fleet"),
         AppModule("Workshop", Icons.Default.Build, "workshop_route", "Jobs & Team Calendar"),
-        AppModule("AI Predict", Icons.Default.AutoGraph, "ai_predictive_route", "Thermal & Wear Analytics"),
+        AppModule("AI Chat", Icons.Default.SmartToy, "fleet_ai_chat_route", "Ask Your Fleet AI"),
+        AppModule("Analytics", Icons.Default.BarChart, "reports_route", "Charts, Costs & Trends"),
+        AppModule("Scoreboard", Icons.Default.EmojiEvents, "driver_scorecard_route", "Driver Safety Rankings"),
+        AppModule("AI Predict", Icons.Default.AutoGraph, "ai_predictive_route", "Tyre Life Predictions"),
         AppModule("Inventory", Icons.Default.Inventory, "stock_route", "Spare Parts & Stock"),
         AppModule("Accidents", Icons.Default.ReportProblem, "accident_dashboard", "RCA & Evidence Hub"),
-        AppModule("Inspections", Icons.Default.Assignment, "checklist_library", "Dynamic Checklist Runner"),
-        AppModule("Reports", Icons.Default.Assessment, "reports_route", "Operational ROI Stats"),
+        AppModule("Inspections", Icons.Default.Assignment, "checklist_library", "Dynamic Checklists"),
         AppModule("Cleaning", Icons.Default.LocalLaundryService, "washing_route", "Washing & Meter Logs")
     )
+
 
     Scaffold(
         containerColor = OLED_Black

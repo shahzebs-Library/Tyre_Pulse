@@ -12,6 +12,7 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { fetchAllRows } from '../../../lib/fetchAllRows'
 import { tyreCompleteness, pendingCodes } from '../../../lib/tyreCompleteness'
+import { recurrenceNotice } from '../../../lib/checklistMarks'
 import { assetClassOf, classChips } from '../../../lib/assetClasses'
 import { toUserMessage } from '../../../lib/safeError'
 import { enqueueInspection } from '../../../lib/offlineQueue'
@@ -126,6 +127,9 @@ function NewInspectionScreen() {
   const [positions, setPositions] = useState<string[]>([])
   const [tyreData, setTyreData] = useState<Record<string, TyrePositionData>>({})
   const [submitting, setSubmitting] = useState(false)
+  // Advisory interval notice: shown when the selected vehicle was inspected
+  // recently. Never blocks submission — the inspector can always proceed.
+  const [inspectionRecurrence, setInspectionRecurrence] = useState<ReturnType<typeof recurrenceNotice>>(null)
 
   // GPS location tagging: warmed up when the inspector reaches the tyre step so
   // the review chip shows live status and the fix is ready by submit time.
@@ -281,6 +285,35 @@ function NewInspectionScreen() {
       setManualAsset(String(params.asset).trim())
     }
   }, [vehicles, loadingVehicles, params.asset, selectedVehicle])
+
+  // Advisory: check when this vehicle was last inspected. Shows a notice if
+  // done less than 7 days ago but never prevents the inspector from filing.
+  useEffect(() => {
+    setInspectionRecurrence(null)
+    const assetNo = selectedVehicle?.asset_no
+    if (!assetNo) return
+    let cancelled = false
+    supabase
+      .from('inspections')
+      .select('inspection_date, document_no')
+      .eq('asset_no', assetNo)
+      .order('inspection_date', { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const daysAgo = data.inspection_date
+          ? Math.floor((Date.now() - new Date(data.inspection_date).getTime()) / 86_400_000)
+          : null
+        setInspectionRecurrence(
+          recurrenceNotice(
+            daysAgo !== null ? { found: true, days_ago: daysAgo, document_no: data.document_no } : null,
+            7,
+          )
+        )
+      })
+    return () => { cancelled = true }
+  }, [selectedVehicle])
 
   useEffect(() => {
     const v = selectedVehicle ?? (useManualEntry && manualAsset ? getEffectiveVehicle() : null)
@@ -650,6 +683,28 @@ function NewInspectionScreen() {
                         <Text style={styles.changeVehicleText}>{t('common.change')}</Text>
                       </TouchableOpacity>
                     </View>
+                  {/* Advisory interval notice — same pattern as checklist screen */}
+                  {!!inspectionRecurrence && (
+                    <View style={[styles.noticeCard, {
+                      backgroundColor: theme.color.warning?.soft ?? '#fffbeb',
+                      borderColor: theme.color.warning?.base ?? '#f59e0b',
+                      borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 10,
+                      flexDirection: 'column', gap: 4,
+                    }]}>
+                      <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="time-outline" size={16} color={theme.color.warning?.base ?? '#f59e0b'} />
+                        <Text style={{ fontWeight: '700', fontSize: 13, color: theme.color.warning?.on ?? '#92400e', textAlign, flex: 1 }}>
+                          {t('modules.checklistFill.notDueTitle')}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: theme.color.warning?.on ?? '#92400e', textAlign, marginTop: 2 }}>
+                        {t('modules.checklistFill.lastChecked')} {inspectionRecurrence.daysAgo} {t('modules.checklistFill.daysWord')}
+                        {inspectionRecurrence.documentNo ? ` (${inspectionRecurrence.documentNo})` : ''}.
+                        {' '}{t('modules.checklistFill.notDueFor')} {inspectionRecurrence.dueInDays} {t('modules.checklistFill.daysWord2')}.
+                        {' '}{t('modules.checklistFill.notDueStillAllowed')}
+                      </Text>
+                    </View>
+                  )}
                   ) : (
                   <>
                     <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>

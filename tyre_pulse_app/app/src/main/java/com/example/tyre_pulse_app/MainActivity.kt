@@ -23,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.tyre_pulse_app.core.authentication.TokenManager
 import com.example.tyre_pulse_app.core.authentication.UserViewModel
 import com.example.tyre_pulse_app.core.common.NetworkMonitor
+import com.example.tyre_pulse_app.core.datastore.AppPrefsDataStore
 import com.example.tyre_pulse_app.core.designsystem.component.AppBanner
 import com.example.tyre_pulse_app.core.designsystem.theme.Tyre_pulse_appTheme
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
@@ -49,6 +50,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var permissionManager: PermissionManager
 
+    @Inject
+    lateinit var appPrefsDataStore: AppPrefsDataStore
+
     private val userViewModel: UserViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -72,7 +76,11 @@ class MainActivity : ComponentActivity() {
             var showWorkspaceSwitcher by remember { mutableStateOf(false) }
             val isMaintenance by remember { mutableStateOf(false) }
 
-            Tyre_pulse_appTheme(darkTheme = false) { // FORCING LIGHT MODE FOR VIEWING
+            // RTL: Arabic (ar) and Urdu (ur) are right-to-left languages
+            val languageCode by appPrefsDataStore.languageCode.collectAsState(initial = "en")
+            val isRtl = languageCode in listOf("ar", "ur")
+
+            Tyre_pulse_appTheme(darkTheme = false, isRtl = isRtl) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination

@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.core.designsystem.theme
+﻿package com.example.tyre_pulse_app.core.designsystem.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -6,10 +6,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
@@ -40,14 +43,23 @@ private val LightColorScheme = lightColorScheme(
     error = Day_Danger
 )
 
+/**
+ * TyrePulse app-wide theme.
+ *
+ * @param darkTheme   Enable dark colour scheme (default: system setting).
+ * @param isRtl       When true (Arabic / Urdu selected), the entire Compose
+ *                    layout tree is wrapped in LayoutDirection.Rtl so every
+ *                    Row, Padding, and Alignment mirrors automatically.
+ */
 @Composable
 fun Tyre_pulse_appTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    isRtl: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     val view = LocalView.current
-    
+
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
@@ -59,9 +71,13 @@ fun Tyre_pulse_appTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val layoutDirection = if (isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

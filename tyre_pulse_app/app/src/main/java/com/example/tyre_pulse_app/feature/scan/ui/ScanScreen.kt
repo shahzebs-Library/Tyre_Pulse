@@ -8,7 +8,7 @@ import android.util.Size
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.OptIn
+import kotlin.OptIn
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
@@ -52,7 +52,7 @@ import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-@OptIn(ExperimentalGetImage::class)
+@OptIn(ExperimentalGetImage::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ScanRoute(
     onBack: () -> Unit,
@@ -90,7 +90,6 @@ fun ScanRoute(
 
     Scaffold(
         topBar = {
-            @OptIn(ExperimentalMaterial3Api::class)
             CenterAlignedTopAppBar(
                 title = { Text("QR & Barcode Scanner", fontWeight = FontWeight.Bold) },
                 navigationIcon = {

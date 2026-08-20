@@ -20,7 +20,7 @@ import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreLayou
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InspectionDetailScreen(
+fun InspectionFormScreen(
     assetId: String,
     onBack: () -> Unit,
     onTyreClick: (String) -> Unit,

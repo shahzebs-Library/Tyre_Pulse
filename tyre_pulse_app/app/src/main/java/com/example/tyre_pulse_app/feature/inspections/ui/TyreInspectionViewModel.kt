@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.tyre_pulse_app.core.authentication.WorkspaceManager
 import com.example.tyre_pulse_app.core.data.repository.AssetRepository
 import com.example.tyre_pulse_app.core.data.repository.InspectionRepository
+import com.example.tyre_pulse_app.core.data.repository.TyreRepository
 import com.example.tyre_pulse_app.core.model.TyreInspectionReading
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -38,6 +39,7 @@ class TyreInspectionViewModel @Inject constructor(
     private val inspectionRepository: InspectionRepository,
     private val assetRepository: AssetRepository,
     private val workspaceManager: WorkspaceManager,
+    private val tyreRepository: TyreRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -62,10 +64,11 @@ class TyreInspectionViewModel @Inject constructor(
                 val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
                 val asset = assetRepository.getAsset(assetId, workspace.tenant.id)
                 val tyre = asset.tyres?.find { it.id == tyreId || it.position.uppercase() == position.uppercase() }
+                val fullTyre = tyre?.let { tyreRepository.getTyre(it.id) }
                 _uiState.update { it.copy(
                     vehicleType = asset.type ?: "Truck",
-                    currentKm = asset.odometerKm ?: 0.0,
-                    kmAtFitment = tyre?.kmAtFitment ?: 0.0,
+                    currentKm = asset.currentKm?.toDouble() ?: 0.0,
+                    kmAtFitment = fullTyre?.installationKm?.toDouble() ?: 0.0,
                     siteType = workspace.site?.name ?: "Highway"
                 ) }
             } catch (e: Exception) {

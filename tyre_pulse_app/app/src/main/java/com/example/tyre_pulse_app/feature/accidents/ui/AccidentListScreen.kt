@@ -84,7 +84,7 @@ private fun AccidentItem(accident: Accident, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = accident.accidentNumber, style = MaterialTheme.typography.titleMedium)
+                Text(text = accident.accidentNumber ?: "N/A", style = MaterialTheme.typography.titleMedium)
                 val statusColor = when (accident.status) {
                     AccidentStatus.CLOSED -> Color(0xFF2E7D32)
                     AccidentStatus.REJECTED -> MaterialTheme.colorScheme.error
@@ -94,7 +94,7 @@ private fun AccidentItem(accident: Accident, onClick: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             Text(text = "Asset: ${accident.assetNumber}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = accident.location, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(text = accident.location ?: "Unknown Location", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             Spacer(Modifier.height(4.dp))
             Text(text = accident.date, style = MaterialTheme.typography.labelSmall)
         }

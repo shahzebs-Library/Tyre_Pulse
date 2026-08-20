@@ -59,8 +59,8 @@ fun JobDetailsRoute(
             )
         },
         bottomBar = {
-            val status = uiState.workOrder?.status?.lowercase() ?: "pending"
-            val showButton = status == "pending" || status == "assigned" || status == "in_progress" || status == "started"
+            val status = uiState.workOrder?.status?.name?.lowercase() ?: "pending"
+            val showButton = status == "pending" || status == "assigned" || status == "in_progress" || status == "started" || status == "new"
             if (showButton) {
                 Surface(modifier = Modifier.fillMaxWidth(), tonalElevation = 8.dp) {
                     Button(

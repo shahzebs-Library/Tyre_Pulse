@@ -4,6 +4,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -393,12 +394,11 @@ fun VehicleDiagram3D(
     }
 }
 
-// Gesture helper
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.detectTap(
     onTap: (Offset) -> Unit
 ) {
-    androidx.compose.foundation.gestures.detectTapGestures(
-        onTap = { offset -> onTap(offset) }
+    detectTapGestures(
+        onTap = { offset: Offset -> onTap(offset) }
     )
 }
 

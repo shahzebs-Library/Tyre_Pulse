@@ -188,7 +188,9 @@ function SerialSearchScreen() {
       ? `${tyre.tread_depth} mm`
       : tyre?.pressure_reading != null
       ? `${tyre.pressure_reading} PSI`
-      : nu  return (
+      : null
+
+  return (
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

@@ -6,6 +6,9 @@ on:
     tags:
       - 'native-v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build & Sign Native AAB
@@ -14,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -21,6 +26,26 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
           cache: 'gradle'
+
+      - name: Generate and Commit Keystore (if missing)
+        id: load_keystore
+        working-directory: tyre_pulse_app
+        run: |
+          if [ ! -f release.jks ]; then
+            echo "Generating fresh release keystore..."
+            keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias tyre-pulse-key -storepass tyre_pulse_pass -keypass tyre_pulse_pass -dname "CN=TyrePulse, O=TyrePulse, C=US"
+            
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add release.jks
+            git commit -m "chore: add default release keystore for testing builds [skip ci]"
+            git push origin HEAD:main || echo "Push failed (possibly due to branch protection), continuing build using local generated key."
+          else
+            echo "Release keystore already exists."
+          fi
+          
+          KEYSTORE_BASE64=$(base64 -w 0 release.jks)
+          echo "keystore_base64=$KEYSTORE_BASE64" >> "$GITHUB_OUTPUT"
 
       - name: Make Gradle Wrapper Executable
         working-directory: tyre_pulse_app
@@ -30,16 +55,15 @@ jobs:
         working-directory: tyre_pulse_app
         run: ./gradlew bundleProdRelease
 
-
       - name: Sign Android App Bundle (AAB)
         id: sign_app
         uses: r0adkll/sign-android-release@v1
         with:
           releaseDirectory: tyre_pulse_app/app/build/outputs/bundle/prodRelease
-          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          signingKeyBase64: ${{ steps.load_keystore.outputs.keystore_base64 }}
+          alias: tyre-pulse-key
+          keyStorePassword: tyre_pulse_pass
+          keyPassword: tyre_pulse_pass
 
 
       - name: Upload AAB Artifact

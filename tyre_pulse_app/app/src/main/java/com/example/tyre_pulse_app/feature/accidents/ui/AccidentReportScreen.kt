@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.model.Accident
@@ -112,7 +113,7 @@ fun IncidentSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) {
         SectionTitle("Incident Details", Icons.Default.Info)
         OutlinedTextField(
             value = acc.assetNumber,
-            onValueChange = { v -> onUpdate { it.copy(assetNumber = v) } },
+            onValueChange = { v: String -> onUpdate { it.copy(assetNumber = v) } },
             label = { Text("Asset Number") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
@@ -120,14 +121,14 @@ fun IncidentSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(
                 value = acc.date,
-                onValueChange = { v -> onUpdate { it.copy(date = v) } },
+                onValueChange = { v: String -> onUpdate { it.copy(date = v) } },
                 label = { Text("Date") },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
             )
             OutlinedTextField(
                 value = acc.time ?: "",
-                onValueChange = { v -> onUpdate { it.copy(time = v) } },
+                onValueChange = { v: String -> onUpdate { it.copy(time = v) } },
                 label = { Text("Time") },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
@@ -135,18 +136,17 @@ fun IncidentSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) {
         }
         OutlinedTextField(
             value = acc.location ?: "",
-            onValueChange = { v -> onUpdate { it.copy(location = v) } },
+            onValueChange = { v: String -> onUpdate { it.copy(location = v) } },
             label = { Text("Location") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
         OutlinedTextField(
             value = acc.description,
-            onValueChange = { v -> onUpdate { it.copy(description = v) } },
+            onValueChange = { v: String -> onUpdate { it.copy(description = v) } },
             label = { Text("Description") },
             modifier = Modifier.fillMaxWidth().height(120.dp),
-            shape = RoundedCornerShape(12.dp),
-            multiline = true
+            shape = RoundedCornerShape(12.dp)
         )
     }
 }

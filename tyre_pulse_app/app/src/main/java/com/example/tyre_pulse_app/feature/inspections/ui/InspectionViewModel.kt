@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+import com.example.tyre_pulse_app.core.notifications.TyreAlertNotificationManager
+
 
 data class InspectionUiState(
     val asset: Asset? = null,
@@ -29,6 +31,7 @@ class InspectionViewModel @Inject constructor(
     private val assetRepository: AssetRepository,
     private val workspaceManager: WorkspaceManager,
     private val userRepository: UserRepository,
+    private val notificationManager: TyreAlertNotificationManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -109,6 +112,28 @@ class InspectionViewModel @Inject constructor(
             )
             if (result.isSuccess) {
                 _uiState.update { it.copy(isSubmitting = false, isSubmitted = true) }
+                
+                // Parse and trigger alerts based on tyre life and pressure
+                inspection.tyreReadings.forEach { reading ->
+                    val depthVal = reading.treadDepth?.toDoubleOrNull()
+                    val pressVal = reading.pressure?.toDoubleOrNull()
+                    
+                    if (depthVal != null && depthVal <= 2.0) {
+                        notificationManager.sendCriticalTyreAlert(
+                            assetNumber = inspection.assetNumber,
+                            tyrePosition = reading.position,
+                            treadDepth = depthVal,
+                            pressure = pressVal
+                        )
+                    } else if (depthVal != null && depthVal <= 3.5) {
+                        notificationManager.sendTyreLifeWarning(
+                            assetNumber = inspection.assetNumber,
+                            tyrePosition = reading.position,
+                            remainingLifePercent = ((depthVal / 8.0) * 100).toInt().coerceIn(0, 100),
+                            predictedKmLeft = ((depthVal - 2.0) * 8000).toInt().coerceAtLeast(0)
+                        )
+                    }
+                }
             } else {
                 _uiState.update { it.copy(isSubmitting = false, error = result.exceptionOrNull()?.message) }
             }

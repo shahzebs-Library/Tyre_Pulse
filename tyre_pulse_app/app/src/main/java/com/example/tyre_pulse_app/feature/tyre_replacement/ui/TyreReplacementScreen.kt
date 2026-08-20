@@ -17,8 +17,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.component.TPCard
+import com.example.tyre_pulse_app.core.designsystem.component.AxlePositionPicker
+import com.example.tyre_pulse_app.core.designsystem.component.TyrePositionData
 import com.example.tyre_pulse_app.core.model.RemovalReason
 import com.example.tyre_pulse_app.core.model.Tyre
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,10 +102,32 @@ private fun RemovalStep(state: TyreReplacementUiState, viewModel: TyreReplacemen
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
+        state.asset?.let { asset ->
+            val positions = asset.fittedTyres.map { fittedTyre ->
+                TyrePositionData(
+                    code = fittedTyre.position,
+                    label = "Position ${fittedTyre.position}",
+                    hasTyre = true,
+                    treadDepth = fittedTyre.treadDepth,
+                    isSelected = fittedTyre.id == state.removedTyre?.id
+                )
+            }
+            Text(text = "Select Tyre Position", style = MaterialTheme.typography.titleMedium)
+            AxlePositionPicker(
+                positions = positions,
+                onPositionSelected = { positionData ->
+                    asset.fittedTyres.firstOrNull { it.position == positionData.code }?.let { ft ->
+                        viewModel.selectRemovedTyre(ft.id)
+                    }
+                },
+                vehicleLabel = "${asset.assetNumber} (${asset.type ?: "Vehicle"})"
+            )
+        }
+
         state.removedTyre?.let { tyre ->
             TPCard {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Currently Fitted", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(text = "Selected for Removal", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.height(8.dp))
                     Text(text = tyre.serialNumber, style = MaterialTheme.typography.titleMedium)
                     Text(text = "${tyre.brand} • ${tyre.size}", style = MaterialTheme.typography.bodySmall)
@@ -110,6 +135,7 @@ private fun RemovalStep(state: TyreReplacementUiState, viewModel: TyreReplacemen
                 }
             }
         }
+
 
         Text(text = "Removal Information", style = MaterialTheme.typography.titleMedium)
         

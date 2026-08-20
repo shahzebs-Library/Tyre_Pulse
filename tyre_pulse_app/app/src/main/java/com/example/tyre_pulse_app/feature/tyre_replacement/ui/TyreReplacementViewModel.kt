@@ -102,6 +102,18 @@ class TyreReplacementViewModel @Inject constructor(
         _uiState.update { it.copy(selectedNewTyre = tyre) }
     }
 
+    fun selectRemovedTyre(tyreId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val tyre = tyreRepository.getTyre(tyreId)
+                _uiState.update { it.copy(removedTyre = tyre, isLoading = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message, isLoading = false) }
+            }
+        }
+    }
+
     fun submit() {
         viewModelScope.launch {
             val state = _uiState.value

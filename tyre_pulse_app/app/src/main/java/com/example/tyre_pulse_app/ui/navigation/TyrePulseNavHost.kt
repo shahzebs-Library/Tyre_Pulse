@@ -135,7 +135,14 @@ fun TyrePulseNavHost(
         }
         
         composable("work_order_list") {
-            WorkOrderListScreen(onOrderClick = { id -> navController.navigate("job_details_route/$id") })
+            WorkOrderListScreen(
+                onOrderClick = { id -> navController.navigate("job_details_route/$id") },
+                onCreateOrderClick = { navController.navigate("create_work_order") }
+            )
+        }
+
+        composable("create_work_order") {
+            CreateWorkOrderScreen(onBack = { navController.popBackStack() })
         }
 
         composable("job_details_route/{jobId}") {

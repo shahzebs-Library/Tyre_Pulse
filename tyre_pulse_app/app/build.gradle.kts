@@ -14,14 +14,17 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.shahzebrahman.tyrepulseinspector"
+        // NOTE: Production app is com.shahzebrahman.tyrepulseinspector (Expo/React Native).
+        // This native Kotlin app uses a DIFFERENT ID so both can coexist on the same device.
+        applicationId = "com.shahzebrahman.tyrepulse.native"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 1
+        versionName = "1.0.0-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
 
     buildTypes {
         release {
@@ -133,6 +136,12 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.play.services.mlkit.barcode.scanning)
+
+    // Vico Charts
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
+    implementation(libs.vico.core)
+
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

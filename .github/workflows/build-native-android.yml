@@ -28,17 +28,19 @@ jobs:
 
       - name: Build Release Bundle (AAB)
         working-directory: tyre_pulse_app
-        run: ./gradlew bundleRelease
+        run: ./gradlew bundleProdRelease
+
 
       - name: Sign Android App Bundle (AAB)
         id: sign_app
         uses: r0adkll/sign-android-release@v1
         with:
-          releaseDirectory: tyre_pulse_app/app/build/outputs/bundle/release
+          releaseDirectory: tyre_pulse_app/app/build/outputs/bundle/prodRelease
           signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           alias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
 
       - name: Upload AAB Artifact
         uses: actions/upload-artifact@v4
@@ -51,7 +53,11 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
-          packageName: com.shahzebrahman.tyrepulseinspector
+          # NOTE: This is the NATIVE app — separate listing from the production Expo app
+          # Production app ID: com.shahzebrahman.tyrepulseinspector  (DO NOT TOUCH)
+          # Native app ID:     com.shahzebrahman.tyrepulse.native     (this workflow)
+          packageName: com.shahzebrahman.tyrepulse.native
           releaseFiles: ${{ steps.sign_app.outputs.signedReleaseFile }}
           track: internal
           status: completed
+

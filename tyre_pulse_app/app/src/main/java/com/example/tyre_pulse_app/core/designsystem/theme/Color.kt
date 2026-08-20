@@ -37,6 +37,8 @@ val TextOnYellow = Color(0xFF000000)
 val TextPrimary = Color(0xFFFFFFFF)
 val TextSecondary = Color(0xFFB0B0B0)
 
-// OLED Card Background
-val OLED_Card = Color(0xFF161B22)
+// OLED Backgrounds
+val OLED_Black = Color(0xFF000000)   // Pure OLED black (TeamLive, dark mode backgrounds)
+val OLED_Surface = Color(0xFF0D1117) // GitHub-dark equivalent surface
+val OLED_Card = Color(0xFF161B22)    // Elevated card on OLED
 

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "TyrePulse Inspector",
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "com.shahzebrahman.tyrepulseinspector",
+      "releaseNotes": {
+        "en-US": "v1.6.1 — What's new:\n• Tyre Data Collector role can now sign and approve tyre inspection checklists on both mobile and web.\n• Weekly tyre checklist interval reminder is now advisory only — you will see a notice if a vehicle was recently inspected, but you can still fill and submit the checklist.\n• Signature is now saved and auto-applied on bulk approvals.\n• General stability and permission improvements."
+      }
+    }
+  }
+}

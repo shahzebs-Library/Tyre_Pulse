@@ -75,7 +75,7 @@ class AccidentReportViewModel @Inject constructor(
     fun submit() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val workspace = workspaceManager.currentWorkspace.value
+            val workspace = workspaceManager.currentWorkspace.firstOrNull()
             val finalAccident = _uiState.value.accident.copy(
                 tenantId = workspace?.tenant?.id,
                 companyId = workspace?.company?.id,

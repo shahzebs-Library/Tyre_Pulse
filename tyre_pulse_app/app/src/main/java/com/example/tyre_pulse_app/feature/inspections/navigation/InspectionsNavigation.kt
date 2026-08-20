@@ -38,7 +38,7 @@ fun NavGraphBuilder.inspectionsScreen(
         InspectionDetailScreen(
             assetId = assetId,
             onBack = onBack,
-            onTyreClick = { tyreId -> onTyreClick(assetId, tyreId) }
+            onTyreClick = { tyreId: String -> onTyreClick(assetId, tyreId) }
         )
     }
 

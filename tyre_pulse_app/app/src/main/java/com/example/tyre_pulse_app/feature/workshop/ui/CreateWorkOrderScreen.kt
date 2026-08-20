@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.workshop.ui
+package com.example.tyre_pulse_app.feature.workshop.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -279,7 +279,7 @@ fun CreateWorkOrderScreen(
                             TaskPriority.LOW -> StatusGreen
                             TaskPriority.MEDIUM -> StatusOrange
                             TaskPriority.HIGH -> StatusRed
-                            TaskPriority.CRITICAL -> Color(0xFF7C3AED)
+                            TaskPriority.URGENT -> Color(0xFF7C3AED)
                         })
                     }
                 }

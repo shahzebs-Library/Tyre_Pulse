@@ -36,7 +36,7 @@ fun JobDetailsRoute(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.workOrder?.let { "Job #${it.workOrderNo}" } ?: "Job Details", fontWeight = FontWeight.Bold) },
+                title = { Text(uiState.workOrder?.let { "Job #${it.jobNumber}" } ?: "Job Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

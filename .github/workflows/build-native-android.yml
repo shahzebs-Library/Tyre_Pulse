@@ -37,7 +37,7 @@ jobs:
             
             git config --global user.name "github-actions[bot]"
             git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add release.jks
+            git add -f release.jks
             git commit -m "chore: add default release keystore for testing builds [skip ci]"
             git push origin HEAD:main || echo "Push failed (possibly due to branch protection), continuing build using local generated key."
           else

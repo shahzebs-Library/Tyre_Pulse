@@ -4,8 +4,7 @@ import {
   Filter, Gauge as GaugeIcon, Image as ImageIcon, Layers, LineChart, Lock,
   Network, PieChart as PieChartIcon, RefreshCw, ShieldAlert, Wrench,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import { executiveReport } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -105,65 +104,28 @@ export default function ExecutiveAnalytics() {
     const myReq = ++reqIdRef.current
     setLoading(true)
 
-    const from = dateFrom || defaultRange().from
-    const to = dateTo || isoDate(new Date())
-    const inspSince = isoDate(new Date(Date.now() - 90 * 86400000))
-    const byCountry = (q) => (country !== 'All' ? q.eq('country', country) : q)
+    try {
+      const res = await executiveReport.loadExecutiveAnalyticsData({
+        country,
+        dateFrom,
+        dateTo
+      })
+      if (myReq !== reqIdRef.current) return
 
-    const tasks = {
-      // Feeds: heatmap, treemap, sankey, combo, risk bubble size
-      tyres: () => fetchAllPages((f, t) => byCountry(supabase
-        .from('tyre_records')
-        .select('asset_no,site,brand,size,supplier,cost_per_tyre,qty,issue_date'))
-        .gte('issue_date', from)
-        .lte('issue_date', to)
-        .range(f, t), { max: 50000 }),
-      // Feeds: pressure-compliance gauge, risk matrix y-axis (90-day window)
-      inspections: () => fetchAllPages((f, t) => supabase
-        .from('inspections')
-        .select('asset_no,site,status,findings,scheduled_date,completed_date')
-        .gte('scheduled_date', inspSince)
-        .range(f, t), { max: 10000 }),
-      // Feeds: availability gauge (available / total). Page past the 1000-row cap
-      // so the total is not silently truncated on a fleet over 1000 rows.
-      fleet: async () => {
-        const { data, error } = await fetchAllPages((f, t) => supabase
-          .from('vehicle_fleet')
-          .select('asset_no,site,status')
-          .range(f, t), { max: 20000 })
-        return { data: data ?? [], error }
-      },
-      // Feeds: risk matrix x-axis (currently-fitted High/Critical tyres).
-      // This slice has no natural date column (it is "the tyres on vehicles
-      // right now", removal_date IS NULL), so it cannot be date-windowed without
-      // changing its meaning. Country + the risk_level/removal_date filters run
-      // SERVER-SIDE; the all-time scan is then bounded by a hard row ceiling and
-      // a capped-view note surfaces when the ceiling is hit.
-      openTyres: () => fetchAllPages((f, t) => byCountry(supabase
-        .from('tyre_records')
-        .select('asset_no,site,risk_level'))
-        .is('removal_date', null)
-        .in('risk_level', ['High', 'Critical'])
-        .range(f, t), { max: 50000 }),
-    }
-
-    const keys = Object.keys(tasks)
-    const settled = await Promise.allSettled(keys.map((k) => tasks[k]()))
-    if (myReq !== reqIdRef.current) return
-
-    const next = {}
-    keys.forEach((k, i) => {
-      const s = settled[i]
-      if (s.status === 'fulfilled' && !s.value?.error) {
-        next[k] = { data: s.value?.data ?? [], error: null, truncated: s.value?.truncated === true }
-      } else {
-        const err = s.status === 'rejected' ? s.reason : s.value?.error
-        next[k] = { data: [], error: err?.message || String(err) || 'Query failed', truncated: false }
+      setSlices(res)
+      setUpdatedAt(new Date())
+    } catch (e) {
+      if (myReq === reqIdRef.current) {
+        setSlices({
+          tyres: { data: [], error: e.message || String(e), truncated: false },
+          inspections: { data: [], error: e.message || String(e), truncated: false },
+          fleet: { data: [], error: e.message || String(e), truncated: false },
+          openTyres: { data: [], error: e.message || String(e), truncated: false }
+        })
       }
-    })
-    setSlices(next)
-    setUpdatedAt(new Date())
-    setLoading(false)
+    } finally {
+      if (myReq === reqIdRef.current) setLoading(false)
+    }
   }, [dateFrom, dateTo, country])
 
   useEffect(() => { if (canView) load() }, [load, canView])

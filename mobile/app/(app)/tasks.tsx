@@ -13,6 +13,8 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useModuleGuard } from '../../hooks/useRoleGuard'
 import { canInspect } from '../../lib/permissions'
+import { useTheme } from '../../contexts/ThemeContext'
+import { Theme } from '../../lib/theme'
 
 type FilterKey = 'open' | 'mine' | 'all'
 
@@ -44,9 +46,11 @@ import { backTo } from '../../lib/goBack'
 export default withModuleGuard(TasksScreen, 'tasks')
 
 function TasksScreen() {
-  const { profile } = useAuth()
-  const { t, isRTL } = useLanguage()
   const router = useRouter()
+  const { t, isRTL } = useLanguage()
+  const { profile } = useAuth()
+  const { theme } = useTheme()
+  const s = useMemo(() => makeStyles(theme), [theme])
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -111,109 +115,109 @@ function TasksScreen() {
   if (!allowed) return null
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
-      <View style={[styles.header, isRTL && styles.rowR]}>
-        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={styles.backBtn}>
-          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
+    <SafeAreaView style={s.safe}>
+      <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
+      <View style={[s.header, isRTL && s.rowR]}>
+        <TouchableOpacity onPress={() => backTo(router, '/(app)')} style={s.backBtn}>
+          <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color={theme.mode === 'dark' ? theme.color.text : '#0f172a'} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>{t('modules.tasks.title')}</Text>
-          <Text style={[styles.sub, { textAlign }]}>{openCount} {t('modules.tasks.open')}</Text>
+          <Text style={[s.title, { textAlign }]}>{t('modules.tasks.title')}</Text>
+          <Text style={[s.sub, { textAlign }]}>{openCount} {t('modules.tasks.open')}</Text>
         </View>
         {canResolve && (
-          <TouchableOpacity style={styles.newBtn} onPress={() => router.push('/(app)/report-issue')}>
-            <Ionicons name="add" size={20} color="#fff" />
+          <TouchableOpacity style={s.newBtn} onPress={() => router.push('/(app)/report-issue')}>
+            <Ionicons name="add" size={20} color={theme.color.onPrimary} />
           </TouchableOpacity>
         )}
       </View>
 
       <TouchableOpacity
-        style={[styles.calendarLink, isRTL && styles.rowR]}
+        style={[s.calendarLink, isRTL && s.rowR]}
         onPress={() => router.push('/(app)/calendar')}
         activeOpacity={0.8}
       >
-        <View style={styles.calendarIcon}>
-          <Ionicons name="calendar-outline" size={18} color="#0369a1" />
+        <View style={s.calendarIcon}>
+          <Ionicons name="calendar-outline" size={18} color={theme.mode === 'dark' ? theme.color.primary : '#0369a1'} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.calendarTitle, { textAlign }]}>{t('modules.tasks.openCalendar')}</Text>
-          <Text style={[styles.calendarSub, { textAlign }]}>{t('modules.tasks.openCalendarSub')}</Text>
+          <Text style={[s.calendarTitle, { textAlign }]}>{t('modules.tasks.openCalendar')}</Text>
+          <Text style={[s.calendarSub, { textAlign }]}>{t('modules.tasks.openCalendarSub')}</Text>
         </View>
-        <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#94a3b8" />
+        <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color={theme.color.textMuted} />
       </TouchableOpacity>
 
-      <View style={styles.filters}>
+      <View style={s.filters}>
         {FILTERS.map(f => (
           <TouchableOpacity
             key={f.key}
-            style={[styles.chip, filter === f.key && styles.chipActive]}
+            style={[s.chip, filter === f.key && s.chipActive]}
             onPress={() => setFilter(f.key)}
           >
-            <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{t(f.labelKey)}</Text>
+            <Text style={[s.chipText, filter === f.key && s.chipTextActive]}>{t(f.labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={theme.color.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={shown}
           keyExtractor={i => i.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+          contentContainerStyle={s.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.color.primary} />}
           ListEmptyComponent={
             error ? (
-              <View style={styles.empty}>
-                <Ionicons name="cloud-offline-outline" size={48} color="#cbd5e1" />
-                <Text style={styles.emptyText}>{error}</Text>
-                <TouchableOpacity onPress={load} style={{ marginTop: 14, backgroundColor: '#16a34a', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>{t('common.retry')}</Text>
+              <View style={s.empty}>
+                <Ionicons name="cloud-offline-outline" size={48} color={theme.color.textMuted} />
+                <Text style={s.emptyText}>{error}</Text>
+                <TouchableOpacity onPress={load} style={{ marginTop: 14, backgroundColor: theme.color.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 }}>
+                  <Text style={{ color: theme.color.onPrimary, fontWeight: '600' }}>{t('common.retry')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.empty}>
-                <Ionicons name="checkmark-done-circle-outline" size={48} color="#cbd5e1" />
-                <Text style={styles.emptyText}>{t('modules.tasks.none')}</Text>
+              <View style={s.empty}>
+                <Ionicons name="checkmark-done-circle-outline" size={48} color={theme.color.textMuted} />
+                <Text style={s.emptyText}>{t('modules.tasks.none')}</Text>
               </View>
             )
           }
           renderItem={({ item }) => {
             const closed = (item.status ?? '').toLowerCase() === 'closed'
-            const pc = PRIORITY_COLOR[item.priority ?? ''] ?? '#64748b'
+            const pc = PRIORITY_COLOR[item.priority ?? ''] ?? theme.color.textMuted
             const overdue = !closed && item.due_date && new Date(item.due_date) < new Date()
             return (
-              <View style={[styles.card, closed && { opacity: 0.6 }]}>
-                <View style={[styles.priBar, { backgroundColor: pc }]} />
+              <View style={[s.card, closed && { opacity: 0.6 }]}>
+                <View style={[s.priBar, { backgroundColor: pc }]} />
                 <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={2}>{item.title}</Text>
-                  <Text style={[styles.cardMeta, { textAlign }]}>
+                  <Text style={[s.cardTitle, { textAlign }]} numberOfLines={2}>{item.title}</Text>
+                  <Text style={[s.cardMeta, { textAlign }]}>
                     {[item.site, item.asset_no].filter(Boolean).join(' · ') || '-'}
                   </Text>
-                  <View style={[styles.badges, isRTL && styles.rowR]}>
-                    <View style={[styles.badge, { backgroundColor: pc + '1a' }]}>
-                      <Text style={[styles.badgeText, { color: pc }]}>{item.priority ?? t('modules.tasks.normal')}</Text>
+                  <View style={[s.badges, isRTL && s.rowR]}>
+                    <View style={[s.badge, { backgroundColor: pc + '1a' }]}>
+                      <Text style={[s.badgeText, { color: pc }]}>{item.priority ?? t('modules.tasks.normal')}</Text>
                     </View>
                     {item.due_date && (
-                      <View style={[styles.badge, overdue && { backgroundColor: 'rgba(220,38,38,0.1)' }]}>
-                        <Text style={[styles.badgeText, overdue && { color: '#dc2626' }]}>
+                      <View style={[s.badge, overdue && { backgroundColor: theme.color.danger.soft }]}>
+                        <Text style={[s.badgeText, overdue && { color: theme.color.danger.base }]}>
                           {t('modules.tasks.due')} {new Date(item.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </Text>
                       </View>
                     )}
                     {closed && (
-                      <View style={[styles.badge, { backgroundColor: 'rgba(22,163,74,0.12)' }]}>
-                        <Text style={[styles.badgeText, { color: '#15803d' }]}>{t('modules.tasks.resolved')}</Text>
+                      <View style={[s.badge, { backgroundColor: theme.color.success.soft }]}>
+                        <Text style={[s.badgeText, { color: theme.color.success.base }]}>{t('modules.tasks.resolved')}</Text>
                       </View>
                     )}
                   </View>
                 </View>
                 {!closed && canResolve && (
-                  <TouchableOpacity style={styles.resolveBtn} onPress={() => resolve(item)} disabled={busyId === item.id}>
+                  <TouchableOpacity style={s.resolveBtn} onPress={() => resolve(item)} disabled={busyId === item.id}>
                     {busyId === item.id
-                      ? <ActivityIndicator size="small" color="#16a34a" />
-                      : <Ionicons name="checkmark-circle" size={26} color="#16a34a" />}
+                      ? <ActivityIndicator size="small" color={theme.color.primary} />
+                      : <Ionicons name="checkmark-circle" size={26} color={theme.color.primary} />}
                   </TouchableOpacity>
                 )}
               </View>
@@ -225,32 +229,35 @@ function TasksScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f5f1' },
-  rowR: { flexDirection: 'row-reverse' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
-  backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  newBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' },
-  calendarLink: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 10, backgroundColor: '#fff', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  calendarIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: 'rgba(3,105,161,0.08)', alignItems: 'center', justifyContent: 'center' },
-  calendarTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  calendarSub: { fontSize: 11, color: '#94a3b8', marginTop: 2 },
-  filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
-  chipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
-  chipTextActive: { color: '#fff' },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff', borderRadius: 14, padding: 14, paddingLeft: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
-  priBar: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  cardMeta: { fontSize: 12, color: '#94a3b8' },
-  badges: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 2 },
-  badge: { backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 10, fontWeight: '700', color: '#64748b' },
-  resolveBtn: { width: 40, alignItems: 'center', justifyContent: 'center' },
-  empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
-})
+function makeStyles(theme: Theme) {
+  const c = theme.color
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.mode === 'dark' ? c.bg : '#f0f5f1' },
+    rowR: { flexDirection: 'row-reverse' },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
+    backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: theme.mode === 'dark' ? c.surface : '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.mode === 'dark' ? c.border : 'rgba(0,0,0,0.06)' },
+    title: { fontSize: 20, fontWeight: '800', color: theme.mode === 'dark' ? c.text : '#0f172a' },
+    sub: { fontSize: 12, color: theme.mode === 'dark' ? c.textSecondary : '#64748b', marginTop: 2 },
+    newBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    calendarLink: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 10, backgroundColor: theme.mode === 'dark' ? c.surface : '#fff', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.mode === 'dark' ? c.border : 'rgba(0,0,0,0.06)' },
+    calendarIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: theme.mode === 'dark' ? c.surfaceAlt : 'rgba(3,105,161,0.08)', alignItems: 'center', justifyContent: 'center' },
+    calendarTitle: { fontSize: 14, fontWeight: '700', color: theme.mode === 'dark' ? c.text : '#0f172a' },
+    calendarSub: { fontSize: 11, color: theme.mode === 'dark' ? c.textMuted : '#94a3b8', marginTop: 2 },
+    filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
+    chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: theme.mode === 'dark' ? c.surface : '#fff', borderWidth: 1, borderColor: theme.mode === 'dark' ? c.border : 'rgba(0,0,0,0.08)' },
+    chipActive: { backgroundColor: c.primary, borderColor: c.primary },
+    chipText: { fontSize: 12, fontWeight: '700', color: theme.mode === 'dark' ? c.textSecondary : '#64748b' },
+    chipTextActive: { color: c.onPrimary },
+    list: { padding: 16, gap: 10, paddingBottom: 40 },
+    card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.mode === 'dark' ? c.surface : '#fff', borderRadius: 14, padding: 14, paddingLeft: 10, borderWidth: 1, borderColor: theme.mode === 'dark' ? c.border : 'rgba(0,0,0,0.06)' },
+    priBar: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
+    cardTitle: { fontSize: 14, fontWeight: '700', color: theme.mode === 'dark' ? c.text : '#0f172a' },
+    cardMeta: { fontSize: 12, color: theme.mode === 'dark' ? c.textMuted : '#94a3b8' },
+    badges: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 2 },
+    badge: { backgroundColor: theme.mode === 'dark' ? c.surfaceAlt : 'rgba(0,0,0,0.05)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+    badgeText: { fontSize: 10, fontWeight: '700', color: theme.mode === 'dark' ? c.textSecondary : '#64748b' },
+    resolveBtn: { width: 40, alignItems: 'center', justifyContent: 'center' },
+    empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
+    emptyText: { fontSize: 15, fontWeight: '700', color: theme.mode === 'dark' ? c.textMuted : '#94a3b8' },
+  })
+}

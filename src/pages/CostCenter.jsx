@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import { costCenter } from '../lib/api'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -186,30 +185,13 @@ export default function CostCenter() {
     setError(null)
     setTruncated(false)
     try {
-      // Country + the date window are applied SERVER-SIDE, and the pull is capped
-      // at TYRE_ROW_CEILING so this never loads the whole tyre_records table into
-      // the browser. When the cap is hit `truncated` is surfaced as a note so the
-      // capped totals and CPK below are read as a bounded view, not the full set.
-      const { data, error: err, truncated: trunc } = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('tyre_records')
-          .select(
-            'id, asset_number, asset_no, brand, site, country, cost_per_tyre, ' +
-            'km_at_fitment, km_at_removal, risk_level, removal_reason, category, ' +
-            'created_at, tyre_position, position'
-          )
-
-        if (activeCountry && activeCountry !== 'All') {
-          q = q.eq('country', activeCountry)
-        }
-        if (dateFrom) q = q.gte('created_at', dateFrom)
-        if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
-
-        return q.order('created_at', { ascending: false }).range(from, to)
-      }, { max: TYRE_ROW_CEILING })
-      if (err) throw err
-      setRecords(data ?? [])
-      setTruncated(Boolean(trunc))
+      const { data, truncated: trunc } = await costCenter.fetchCostCenterRecords({
+        country: activeCountry,
+        dateFrom,
+        dateTo
+      })
+      setRecords(data)
+      setTruncated(trunc)
     } catch (e) {
       setError(toUserMessage(e, 'Failed to load data'))
     } finally {
@@ -1421,31 +1403,7 @@ function fmtPerUnit(value, currency, suffix) {
  * per-asset (max reading - min reading). Degrades to 0 when the table is
  * missing / errors, so a per-unit figure is never fabricated.
  */
-async function sumMeterDeltas(table, valueCol, { country, site, from, to }) {
-  try {
-    let q = supabase.from(table).select(`asset_no,${valueCol},reading_date`)
-    q = applyCountry(q, country)
-    if (site && site !== 'All') q = q.eq('site', site)
-    if (from) q = q.gte('reading_date', from)
-    if (to) q = q.lte('reading_date', to)
-    const { data, error } = await q.limit(100000)
-    if (error) throw error
-    const byAsset = new Map()
-    for (const r of data || []) {
-      const v = Number(r?.[valueCol])
-      if (!Number.isFinite(v)) continue
-      const a = r?.asset_no || '__none__'
-      const cur = byAsset.get(a)
-      if (!cur) byAsset.set(a, { min: v, max: v })
-      else { cur.min = Math.min(cur.min, v); cur.max = Math.max(cur.max, v) }
-    }
-    let total = 0
-    for (const { min, max } of byAsset.values()) total += Math.max(0, max - min)
-    return total
-  } catch {
-    return 0
-  }
-}
+
 
 /** How many production entries the list below asks the server for. */
 const PROD_ROW_LIMIT = 200
@@ -1491,14 +1449,13 @@ function CostPerUnitSection({ currency, country, siteOptions = [] }) {
     setError('')
     try {
       const siteArg = site && site !== 'All' ? site : undefined
-      const [split, m3, km, hours, rows] = await Promise.all([
+      const [split, m3, meters, rows] = await Promise.all([
         loadGovernedCostSplit({ country, from: from || undefined, to: to || undefined, site: siteArg }),
         sumProductionM3({ country, site: siteArg, from: from || undefined, to: to || undefined }),
-        sumMeterDeltas('odometer_logs', 'odometer_km', { country, site: siteArg, from, to }),
-        sumMeterDeltas('engine_hours_logs', 'engine_hours', { country, site: siteArg, from, to }),
+        costCenter.getMeterDeltas({ country, site: siteArg, from, to }),
         listProduction({ country, site: siteArg, from: from || undefined, to: to || undefined, limit: PROD_ROW_LIMIT }),
       ])
-      setData({ split: { tyre: split.tyre, maintenance: split.maintenance }, m3, km, hours })
+      setData({ split: { tyre: split.tyre, maintenance: split.maintenance }, m3, km: meters.odometer, hours: meters.engineHours })
       setProdRows(rows)
     } catch (e) {
       setError(toUserMessage(e, 'Could not load unit cost data.'))

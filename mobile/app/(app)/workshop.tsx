@@ -123,7 +123,7 @@ function WorkshopScreen() {
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
-  const todayLabel = new Date().toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })
+  const todayLabel = useMemo(() => safeFormatDate(new Date(), dateLocale, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }), [dateLocale])
 
   // Bounce a user without access.
   useEffect(() => { if (!allowed) router.replace('/') }, [allowed])
@@ -477,7 +477,7 @@ function WorkshopScreen() {
                         ) : null}
                         {job.target_completion ? (
                           <Badge kind="neutral" icon="time-outline">
-                            {new Date(job.target_completion).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })}
+                            {safeFormatDate(job.target_completion, dateLocale, { day: 'numeric', month: 'short' })}
                           </Badge>
                         ) : null}
                         {jSt ? (
@@ -607,6 +607,25 @@ function WorkshopScreen() {
       </Modal>
     </Screen>
   )
+}
+
+function safeFormatDate(
+  dateInput: Date | string | number | null | undefined,
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+): string {
+  if (!dateInput) return ''
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return d.toLocaleDateString(locale, { ...options, numberingSystem: 'latn' })
+  } catch {
+    try {
+      return d.toLocaleDateString('en-GB', options)
+    } catch {
+      return d.toISOString().slice(0, 10)
+    }
+  }
 }
 
 function makeStyles(theme: Theme) {

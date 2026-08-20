@@ -24,7 +24,7 @@ import {
   Trash2, GripVertical, RotateCcw, StickyNote, SeparatorHorizontal,
   LayoutList, Layers,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { executiveReport } from '../lib/api'
 import { toUserMessage } from '../lib/safeError'
 import EmailReportModal from '../components/EmailReportModal'
 import {
@@ -36,7 +36,7 @@ import {
 import { useSettings } from '../contexts/SettingsContext'
 import { applyCountry } from '../lib/countryFilter'
 import { formatDate } from '../lib/formatters'
-import { fetchAllPages } from '../lib/fetchAll'
+
 import { recordCost } from '../lib/analyticsEngine'
 import { loadGovernedCostSplit, COST_SPLIT_TTL_MS } from '../lib/api/governedCost'
 import { COST_MODES, pickCost, costModeLabel, pickMonthly, splitTotals } from '../lib/costSources'
@@ -527,46 +527,16 @@ export default function ExecutiveReport() {
       setLoading(true)
       setError(null)
       try {
-        // Bound every raw pull: country + the report's period window are applied
-        // SERVER-SIDE (never an unbounded all-time scan), each read is capped at a
-        // 50,000-row ceiling, and the client-side filterByPeriod still trims to the
-        // exact window so no total/KPI/export number changes. `scoped` layers the
-        // country filter + inclusive date bounds onto a query for its date column.
-        const bounds = periodBounds(period)
-        const scoped = (query, dateField) => {
-          let s = applyCountry(query, activeCountry)
-          if (bounds?.from) s = s.gte(dateField, bounds.from)
-          if (bounds?.toExclusive) s = s.lt(dateField, bounds.toExclusive)
-          return s
-        }
-        const [rRes, iRes, aRes, fRes] = await Promise.all([
-          fetchAllPages((from, to) => scoped(supabase.from('tyre_records').select(
-            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,qty,issue_date,tread_depth,pressure_reading,country'
-          ), 'issue_date').order('issue_date', { ascending: false }).range(from, to), { max: 50000 }),
-          fetchAllPages((from, to) => scoped(supabase.from('inspections').select(
-            'id,asset_no,site,status,scheduled_date,completed_date,findings,country'
-          ), 'scheduled_date').order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
-          fetchAllPages((from, to) => scoped(supabase.from('corrective_actions').select(
-            'id,site,status,priority,title,created_at,resolved_at,country'
-          ), 'created_at').order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
-          fetchAllPages((from, to) => applyCountry(
-            supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'),
-            activeCountry).order('id').range(from, to), { max: 20000 }).then(
-            res => ({ data: res.data || [], error: null })
-          ).catch(() => ({ data: [], error: null })),
-        ])
+        const { records, inspections, actions, fleet, truncated } =
+          await executiveReport.loadExecutiveData({ country: activeCountry, period })
         if (cancelled) return
-        if (rRes.error) throw rRes.error
-        if (iRes.error) throw iRes.error
-        if (aRes.error) throw aRes.error
-        setRecords(rRes.data || [])
-        setInspections(iRes.data || [])
-        setActions(aRes.data || [])
-        setFleet(fRes.data || [])
-        setTruncated({ records: !!rRes.truncated, inspections: !!iRes.truncated, actions: !!aRes.truncated })
-        // Only an all-time load refreshes the year list; a narrowed (bounded)
-        // load must not shrink the PeriodFilter dropdown to the chosen window.
-        if (!bounds) setPeriodBasis(rRes.data || [])
+        setRecords(records)
+        setInspections(inspections)
+        setActions(actions)
+        setFleet(fleet)
+        setTruncated(truncated)
+        const bounds = periodBounds(period)
+        if (!bounds) setPeriodBasis(records)
       } catch (e) {
         if (!cancelled) setError(toUserMessage(e, 'Failed to load data'))
       } finally {

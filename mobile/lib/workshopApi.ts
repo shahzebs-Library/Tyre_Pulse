@@ -91,7 +91,7 @@ export async function listMyJobs(userId: string): Promise<WorkshopJob[]> {
   try {
     const { data, error } = await supabase
       .from('wo_assignments')
-      .select('role, active, work_orders:job_id(id, work_order_no, asset_no, status, priority, target_completion, site)')
+      .select('role, active, work_orders!job_id(id, work_order_no, asset_no, status, priority, target_completion, site)')
       .eq('user_id', userId)
       .eq('active', true)
     if (!error && Array.isArray(data)) {

@@ -16,6 +16,7 @@ import SyncBanner from '../../components/SyncBanner'
 import { SkeletonList } from '../../components/SkeletonLoader'
 import { useRealtime } from '../../hooks/useRealtime'
 import { Theme, StatusKind, spacing, radius, elevation } from '../../lib/theme'
+import { isAdminOrAbove } from '../../lib/types'
 import {
   Screen, Card, AppText, Badge, BackButton, EmptyState, ErrorState,
 } from '../../components/ui'
@@ -96,10 +97,23 @@ function HistoryScreen() {
 
     let syncedItems: HistoryItem[] = []
     if (profile?.id) {
-      const { data: dbItems, error: dbErr } = await supabase
+      const isElevated = isAdminOrAbove(profile.role) ||
+        profile.role === 'inspector' ||
+        profile.role === 'maintenance_supervisor' ||
+        profile.role === 'workshop_supervisor' ||
+        profile.role === 'pmv_manager' ||
+        profile.role === 'workshop_area_manager' ||
+        profile.role === 'workshop_maintenance_area_manager'
+
+      let query = supabase
         .from('inspections')
         .select('id, title, site, asset_no, inspection_date, tyre_conditions, locked')
-        .eq('created_by', profile.id)
+
+      if (!isElevated) {
+        query = query.eq('created_by', profile.id)
+      }
+
+      const { data: dbItems, error: dbErr } = await query
         .order('created_at', { ascending: false })
         .limit(100)
 
@@ -179,11 +193,9 @@ function HistoryScreen() {
 
   function renderItem({ item }: { item: HistoryItem }) {
     const meta = STATUS_META[item.sync_status]
-    const formattedDate = item.inspection_date
-      ? new Date(item.inspection_date + 'T00:00:00').toLocaleDateString(dateLocale, {
-          day: 'numeric', month: 'short', year: 'numeric',
-        })
-      : '-'
+    const formattedDate = safeFormatDate(item.inspection_date ? item.inspection_date + 'T00:00:00' : null, dateLocale, {
+      day: 'numeric', month: 'short', year: 'numeric',
+    }) || '-'
     const openable = !item.isOffline
 
     return (
@@ -350,6 +362,25 @@ function HistoryScreen() {
       )}
     </Screen>
   )
+}
+
+function safeFormatDate(
+  dateInput: Date | string | number | null | undefined,
+  locale: string,
+  options: Intl.DateTimeFormatOptions
+): string {
+  if (!dateInput) return ''
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return d.toLocaleDateString(locale, { ...options, numberingSystem: 'latn' })
+  } catch {
+    try {
+      return d.toLocaleDateString('en-GB', options)
+    } catch {
+      return d.toISOString().slice(0, 10)
+    }
+  }
 }
 
 function makeStyles(theme: Theme) {

@@ -141,3 +141,129 @@ export async function getAssetByNo(assetNo, country) {
   const { row } = await getAssetMatches(assetNo, country)
   return row
 }
+
+export async function listFleetRecords({ page, pageSize, search, site, status, country } = {}) {
+  let q = supabase
+    .from('vehicle_fleet')
+    .select('*', { count: 'exact' })
+    .order('asset_no', { ascending: true })
+
+  if (page != null && pageSize != null) {
+    q = q.range(page * pageSize, (page + 1) * pageSize - 1)
+  }
+
+  if (search) {
+    const s = String(search).trim().replace(/[%_]/g, '\\$&')
+    q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`)
+  }
+  if (site) q = q.eq('site', site)
+  if (status) q = q.eq('status', status)
+  q = applyCountry(q, country)
+
+  const { data, count, error } = await q
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return { data: data ?? [], count: count ?? 0 }
+}
+
+export async function listSites({ country } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase
+      .from('vehicle_fleet')
+      .select('site')
+      .not('site', 'is', null)
+      .order('id')
+      .range(from, to)
+    q = applyCountry(q, country)
+    return q
+  }, { max: MAX_ASSET_ROWS })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return [...new Set((data ?? []).map(r => r.site))].sort()
+}
+
+export async function getFleetSummary({ country, search, site } = {}) {
+  const { data, truncated, error } = await fetchAllPages((from, to) => {
+    let q = supabase
+      .from('vehicle_fleet')
+      .select('status,make,model,expected_km_per_tyre,min_days_between_changes')
+      .order('asset_no')
+      .order('id')
+      .range(from, to)
+    if (search) {
+      const s = String(search).trim().replace(/[%_]/g, '\\$&')
+      q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`)
+    }
+    if (site) q = q.eq('site', site)
+    q = applyCountry(q, country)
+    return q
+  }, { max: MAX_ASSET_ROWS })
+
+  if (error) throw new ServiceError(error.message, error.code, error)
+  const rows = data ?? []
+  return {
+    total:        rows.length,
+    active:       rows.filter(r => r.status === 'Active').length,
+    missingSpecs: rows.filter(r => !r.make || !r.model).length,
+    noPolicy:     rows.filter(r => !r.expected_km_per_tyre && !r.min_days_between_changes).length,
+    truncated:    Boolean(truncated),
+  }
+}
+
+export async function saveFleetRecord(payload, id) {
+  const q = id
+    ? supabase.from('vehicle_fleet').update(payload).eq('id', id)
+    : supabase.from('vehicle_fleet').insert(payload)
+  const { error } = await q
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
+export async function deleteFleetRecord(id) {
+  const { data, error } = await supabase
+    .from('vehicle_fleet')
+    .delete()
+    .eq('id', id)
+    .select('id')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  if (!data || data.length === 0) {
+    throw new Error('No permission or record not found.')
+  }
+  return data
+}
+
+export async function deleteFleetRecords(ids) {
+  let deleted = 0
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100)
+    const { data, error } = await supabase
+      .from('vehicle_fleet')
+      .delete()
+      .in('id', chunk)
+      .select('id')
+    if (error) throw new ServiceError(error.message, error.code, error)
+    deleted += data?.length ?? 0
+  }
+  if (deleted === 0) {
+    throw new Error('No permission or records not found.')
+  }
+  return deleted
+}
+
+export async function fetchAllFleetRecords({ search, site, status, country } = {}) {
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase
+      .from('vehicle_fleet')
+      .select('*')
+      .order('asset_no')
+      .order('id')
+      .range(from, to)
+    if (search) {
+      const s = String(search).trim().replace(/[%_]/g, '\\$&')
+      q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`)
+    }
+    if (site) q = q.eq('site', site)
+    if (status) q = q.eq('status', status)
+    q = applyCountry(q, country)
+    return q
+  }, { max: MAX_ASSET_ROWS })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data ?? []
+}

@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
 import { useScrollRestore } from '../hooks/useScrollRestore'
-import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/safeError'
-import { fetchAllPages } from '../lib/fetchAll'
+import { assets } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -169,36 +168,29 @@ export default function FleetMaster() {
   useEffect(() => { loadRecords() }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
   async function loadSites() {
-    // PAGED: a bare select is silently capped at 1000, so the distinct site list
-    // feeding the filter dropdown + datalist would drop sites past the cap on a
-    // 1,000+ row register. Page it (bounded, stable order) for a complete list.
-    const { data } = await fetchAllPages((from, to) =>
-      supabase.from('vehicle_fleet').select('site').not('site', 'is', null).order('id').range(from, to),
-      { max: 20000 }
-    )
-    setSites([...new Set((data ?? []).map(r => r.site))].sort())
+    try {
+      const siteList = await assets.listSites({ country: activeCountry })
+      setSites(siteList)
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const loadRecords = useCallback(async () => {
     const myReq = ++reqIdRef.current
     setLoading(true)
-    let q = supabase
-      .from('vehicle_fleet')
-      .select('*', { count: 'exact' })
-      .order('asset_no', { ascending: true })
-      .range(page * pageSize, (page + 1) * pageSize - 1)
-
-    if (debouncedSearch) { const s = sanitizeSearchTerm(debouncedSearch); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
-    if (siteFilter)   q = q.eq('site', siteFilter)
-    if (statusFilter) q = q.eq('status', statusFilter)
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-
     try {
-      const { data, count, error } = await q
+      const { data, count } = await assets.listFleetRecords({
+        page,
+        pageSize,
+        search: debouncedSearch,
+        site: siteFilter,
+        status: statusFilter,
+        country: activeCountry
+      })
       if (myReq !== reqIdRef.current) return   // a newer request superseded this one
-      if (error) throw error
-      setRecords(data ?? [])
-      setTotal(count ?? 0)
+      setRecords(data)
+      setTotal(count)
       setLoadError('')
     } catch (e) {
       if (myReq === reqIdRef.current) {
@@ -217,37 +209,22 @@ export default function FleetMaster() {
 
   useEffect(() => {
     async function loadSummary() {
-      // PAGED: these are the headline counts and the register holds 1,523, so an
-      // unpaged read made the "Total" card read 1,000 - a number that is simply
-      // wrong rather than merely incomplete.
-      //
-      // SAME FILTERS AS THE REGISTER, minus the status one. This query used to
-      // apply the country alone, so filtering the register to one site left all
-      // four cards stating whole-register counts directly above a table showing
-      // 18 rows. The STATUS filter is deliberately held out: the "Active" card
-      // reports on exactly that dimension, and applying it would make Total equal
-      // Active the moment the filter was used, which answers nothing. Held out, it
-      // states how many of the vehicles you are looking at are active - and how
-      // many rows picking Active would show. The export at fetchAll() applies all
-      // four because an export is the rows, not a summary of them.
-      const { data, truncated } = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('vehicle_fleet')
-          .select('status,make,model,expected_km_per_tyre,min_days_between_changes')
-          .order('asset_no').order('id').range(from, to)
-        if (debouncedSearch) { const s = sanitizeSearchTerm(debouncedSearch); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
-        if (siteFilter) q = q.eq('site', siteFilter)
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        return q
-      }, { max: 20000 })
-      const rows = data ?? []
-      setSummaryCapped(!!truncated)
-      setSummary({
-        total:        rows.length,
-        active:       rows.filter(r => r.status === 'Active').length,
-        missingSpecs: rows.filter(r => !r.make || !r.model).length,
-        noPolicy:     rows.filter(r => !r.expected_km_per_tyre && !r.min_days_between_changes).length,
-      })
+      try {
+        const sumData = await assets.getFleetSummary({
+          country: activeCountry,
+          search: debouncedSearch,
+          site: siteFilter
+        })
+        setSummaryCapped(sumData.truncated)
+        setSummary({
+          total:        sumData.total,
+          active:       sumData.active,
+          missingSpecs: sumData.missingSpecs,
+          noPolicy:     sumData.noPolicy,
+        })
+      } catch (e) {
+        console.error(e)
+      }
     }
     loadSummary()
   }, [activeCountry, debouncedSearch, siteFilter, records])
@@ -320,15 +297,16 @@ export default function FleetMaster() {
       updated_at:                 new Date().toISOString(),
       created_by:                 profile?.id,
     }
-    const { error } = editRecord?.id
-      ? await supabase.from('vehicle_fleet').update(payload).eq('id', editRecord.id)
-      : await supabase.from('vehicle_fleet').insert(payload)
-
-    if (error) { setFormError(toUserMessage(error, 'Could not save the vehicle.')); setSaving(false); return }
-    setEditRecord(null)
-    loadRecords()
-    loadSites()
-    setSaving(false)
+    try {
+      await assets.saveFleetRecord(payload, editRecord?.id)
+      setEditRecord(null)
+      loadRecords()
+      loadSites()
+      setSaving(false)
+    } catch (error) {
+      setFormError(toUserMessage(error, 'Could not save the vehicle.'))
+      setSaving(false)
+    }
   }
 
   // ── delete ────────────────────────────────────────────────────────────────────
@@ -342,12 +320,7 @@ export default function FleetMaster() {
     setSaving(true)
     setDeleteError('')
     try {
-      const { data, error } = await supabase
-        .from('vehicle_fleet').delete().eq('id', deleteTarget.id).select('id')
-      if (error) throw error
-      if ((data?.length ?? 0) === 0) {
-        throw new Error(t('fleetmaster.delete.errNoPermission'))
-      }
+      await assets.deleteFleetRecord(deleteTarget.id)
       setShowDeleteConfirm(false)
       setDeleteTarget(null)
       loadRecords()
@@ -364,18 +337,7 @@ export default function FleetMaster() {
     setBulkBusy(true)
     setBulkError('')
     try {
-      const ids = [...selectedIds]
-      let deleted = 0
-      for (let i = 0; i < ids.length; i += 100) {
-        const chunk = ids.slice(i, i + 100)
-        const { data, error } = await supabase
-          .from('vehicle_fleet').delete().in('id', chunk).select('id')
-        if (error) throw error
-        deleted += data?.length ?? 0
-      }
-      if (deleted === 0) {
-        throw new Error(t('fleetmaster.bulkDelete.errNoPermission'))
-      }
+      await assets.deleteFleetRecords([...selectedIds])
       setBulkDeleteOpen(false)
       setRowSelection({})
       loadRecords()
@@ -389,15 +351,17 @@ export default function FleetMaster() {
 
   // ── export ────────────────────────────────────────────────────────────────────
   async function fetchAll() {
-    const { data } = await fetchAllPages((from, to) => {
-      let q = supabase.from('vehicle_fleet').select('*').order('asset_no').order('id').range(from, to)
-      if (search)       { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
-      if (siteFilter)   q = q.eq('site', siteFilter)
-      if (statusFilter) q = q.eq('status', statusFilter)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      return q
-    }, { max: 20000 })
-    return data ?? []
+    try {
+      return await assets.fetchAllFleetRecords({
+        search,
+        site: siteFilter,
+        status: statusFilter,
+        country: activeCountry
+      })
+    } catch (e) {
+      console.error(e)
+      return []
+    }
   }
 
   function handleExport() {

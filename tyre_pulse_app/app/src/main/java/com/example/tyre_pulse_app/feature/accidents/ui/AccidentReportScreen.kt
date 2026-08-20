@@ -166,13 +166,13 @@ fun DamageSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionTitle("People & Damage", Icons.Default.MedicalServices)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = acc.injuries, onCheckedChange = { v -> onUpdate { it.copy(injuries = v) } })
+            Checkbox(checked = acc.injuries, onCheckedChange = { v: Boolean -> onUpdate { it.copy(injuries = v) } })
             Text("Any Injuries?")
         }
         if (acc.injuries) {
             OutlinedTextField(
                 value = acc.injuryCount.toString(),
-                onValueChange = { v -> onUpdate { it.copy(injuryCount = v.toIntOrNull() ?: 0) } },
+                onValueChange = { v: String -> onUpdate { it.copy(injuryCount = v.toIntOrNull() ?: 0) } },
                 label = { Text("Number of Injuries") },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -186,7 +186,7 @@ fun GccCaseSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) {
         SectionTitle("GCC Case & Liability", Icons.Default.Gavel)
         OutlinedTextField(
             value = acc.najmStatus ?: "",
-            onValueChange = { v -> onUpdate { it.copy(najmStatus = v) } },
+            onValueChange = { v: String -> onUpdate { it.copy(najmStatus = v) } },
             label = { Text("Najm Status") },
             modifier = Modifier.fillMaxWidth()
         )
@@ -199,7 +199,7 @@ fun InsuranceSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) 
         SectionTitle("Insurance & Claim", Icons.Default.AccountBalance)
         OutlinedTextField(
             value = acc.claimAmount?.toString() ?: "",
-            onValueChange = { v -> onUpdate { it.copy(claimAmount = v.toDoubleOrNull()) } },
+            onValueChange = { v: String -> onUpdate { it.copy(claimAmount = v.toDoubleOrNull()) } },
             label = { Text("Claim Amount") },
             modifier = Modifier.fillMaxWidth()
         )
@@ -212,7 +212,7 @@ fun RepairSection(acc: Accident, onUpdate: ((Accident) -> Accident) -> Unit) {
         SectionTitle("Repair & Release", Icons.Default.Build)
         OutlinedTextField(
             value = acc.workshopName ?: "",
-            onValueChange = { v -> onUpdate { it.copy(workshopName = v) } },
+            onValueChange = { v: String -> onUpdate { it.copy(workshopName = v) } },
             label = { Text("Workshop Name") },
             modifier = Modifier.fillMaxWidth()
         )

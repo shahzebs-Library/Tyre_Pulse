@@ -27,7 +27,8 @@ export const APPROVAL_STAGES = [
     // V600: the trades' own supervisors sign first. Manager, Director and
     // Fleet Supervisor came OFF this rung - they are not who signs.
     roles: ['Admin', 'Maintenance Supervisor', 'Workshop Supervisor',
-            'PMV Manager', 'Workshop Area Manager', 'Workshop Maintenance Area Manager'],
+            'PMV Manager', 'Workshop Area Manager', 'Workshop Maintenance Area Manager',
+            'Tyre Data Collector'],
   },
   {
     key: STAGE_AREA_MANAGER,

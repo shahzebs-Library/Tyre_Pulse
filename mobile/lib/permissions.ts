@@ -150,7 +150,8 @@ export const MODULES: ModuleDef[] = [
   // moment they take leave (the reasoning V594 recorded).
   M('approvals',      'Approvals',         'checkmark-done-outline', 'Admin',
     ['director', 'maintenance_supervisor', 'workshop_supervisor',
-     'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
+     'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager',
+     'tyre_data_collector']),
   // ADMIN ONLY - no leakage. This console links straight to User Management,
   // the Access Manager and admin approvals, and its other destinations
   // (analytics, reports) are admin-only modules in their own right - so a

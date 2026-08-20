@@ -271,7 +271,7 @@ describe('Inspections.jsx sign-off', () => {
   it('offers the sign-off controls only to someone allowed to sign', () => {
     expect(src).toMatch(/const canApproveInspection = Boolean\(/)
     // Reuses the app's existing approver role set rather than a new hardcoded list.
-    expect(src).toMatch(/const APPROVER_ROLES = \[\.\.\.ANALYTICS_ROLES, 'Maintenance Supervisor'\]/)
+    expect(src).toMatch(/const APPROVER_ROLES = \[\.\.\.ANALYTICS_ROLES, 'Maintenance Supervisor', 'Tyre Data Collector'\]/)
     expect(src).toMatch(/APPROVER_ROLES\.includes\(profile\?\.role\)/)
     expect(src).toMatch(/hasCapability\?\.\('inspections', 'approve'\)/)
     // Both decisions, and the pad itself, sit behind it.

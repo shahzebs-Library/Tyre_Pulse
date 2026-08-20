@@ -709,7 +709,7 @@ export default function Inspections() {
    * does not recognise that person's role it will still refuse, and the refusal is
    * shown rather than swallowed.
    */
-  const APPROVER_ROLES = [...ANALYTICS_ROLES, 'Maintenance Supervisor']
+  const APPROVER_ROLES = [...ANALYTICS_ROLES, 'Maintenance Supervisor', 'Tyre Data Collector']
   const canApproveInspection = Boolean(
     isSuperAdmin
     || APPROVER_ROLES.includes(profile?.role)

@@ -52,6 +52,10 @@ describe('who may reach an approvals queue', () => {
       expect(moduleAllowedByRole('approvals', role)).toBe(false)
     }
   })
+
+  it('a tyre data collector can access approvals', () => {
+    expect(moduleAllowedByRole('approvals', 'tyre_data_collector')).toBe(true)
+  })
 })
 
 describe('nothing was taken away from the two real people affected', () => {

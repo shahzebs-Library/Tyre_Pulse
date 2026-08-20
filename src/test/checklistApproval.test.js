@@ -83,6 +83,11 @@ describe('who may act', () => {
     }
   })
 
+  it('a tyre data collector can sign the supervisor rung but not the area manager rung', () => {
+    expect(canActOnStage(STAGE_SUPERVISOR, 'Tyre Data Collector')).toBe(true)
+    expect(canActOnStage(STAGE_AREA_MANAGER, 'Tyre Data Collector')).toBe(false)
+  })
+
   it('matches the DB Title Case against the app lowercase role', () => {
     // profiles.role is 'Maintenance Supervisor'; the app carries
     // 'maintenance_supervisor'. A raw compare matches nobody, which is how a
@@ -160,7 +165,8 @@ describe('the mobile mirror does not drift', () => {
     // database no longer has, which is worse than not checking at all.
     const sql = ['MIGRATIONS_V594_CHECKLIST_TWO_STAGE_APPROVAL.sql',
                  'MIGRATIONS_V599_WORKSHOP_SUPERVISOR.sql',
-                 'MIGRATIONS_V600_WHO_SIGNS.sql']
+                 'MIGRATIONS_V600_WHO_SIGNS.sql',
+                 'MIGRATIONS_V604_CHECKLIST_DATA_COLLECTOR_APPROVAL.sql']
       .map((f) => readFileSync(resolve(__dirname, '../..', f), 'utf8'))
       .join('\n')
     const sqlRoles = (fn) => {

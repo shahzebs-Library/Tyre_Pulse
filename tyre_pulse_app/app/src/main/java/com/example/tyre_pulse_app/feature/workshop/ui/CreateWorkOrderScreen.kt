@@ -184,7 +184,7 @@ fun CreateWorkOrderScreen(
                         TaskPriority.LOW to (StatusGreen to "Low"),
                         TaskPriority.MEDIUM to (StatusOrange to "Medium"),
                         TaskPriority.HIGH to (StatusRed to "High"),
-                        TaskPriority.CRITICAL to (Color(0xFF7C3AED) to "Critical")
+                        TaskPriority.URGENT to (Color(0xFF7C3AED) to "Urgent")
                     ).forEach { (priority, pair) ->
                         val (color, label) = pair
                         val selected = priority == selectedPriority

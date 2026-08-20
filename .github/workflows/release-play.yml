@@ -47,25 +47,26 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Write Google service account key (if provided)
+        id: check-submit
         working-directory: mobile
         env:
           GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
         run: |
           if [ -n "$GOOGLE_SERVICE_ACCOUNT_KEY" ]; then
             printf '%s' "$GOOGLE_SERVICE_ACCOUNT_KEY" > google-service-account.json
-            echo "SUBMIT=1" >> "$GITHUB_ENV"
+            echo "submit=1" >> "$GITHUB_OUTPUT"
           else
             echo "No service account key set — will build only (no submit)."
-            echo "SUBMIT=0" >> "$GITHUB_ENV"
+            echo "submit=0" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build AAB and auto-submit to Play (closed testing)
-        if: env.SUBMIT == '1'
+        if: steps.check-submit.outputs.submit == '1'
         working-directory: mobile
         run: eas build --platform android --profile production --auto-submit --non-interactive
 
       - name: Build AAB only (no submit)
-        if: env.SUBMIT == '0'
+        if: steps.check-submit.outputs.submit == '0'
         working-directory: mobile
         run: eas build --platform android --profile production --non-interactive
 

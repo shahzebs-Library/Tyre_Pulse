@@ -45,7 +45,7 @@ fun JobDetailsRoute(
                 actions = {
                     uiState.workOrder?.status?.let { status ->
                         Text(
-                            text = status,
+                            text = status.name,
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier
                                 .padding(end = 16.dp)

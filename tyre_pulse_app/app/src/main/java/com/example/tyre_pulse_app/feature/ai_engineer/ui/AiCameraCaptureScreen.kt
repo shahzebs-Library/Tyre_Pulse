@@ -20,6 +20,10 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import java.io.File
 import java.util.concurrent.Executor
 
@@ -34,6 +38,27 @@ fun AiCameraCaptureScreen(
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
+
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -65,53 +90,59 @@ fun AiCameraCaptureScreen(
         },
         floatingActionButtonPosition = FabPosition.Center
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            AndroidView(
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx)
-                    val executor = ContextCompat.getMainExecutor(ctx)
-                    
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
+        if (hasCameraPermission) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                AndroidView(
+                    factory = { ctx ->
+                        val previewView = PreviewView(ctx)
+                        val executor = ContextCompat.getMainExecutor(ctx)
                         
-                        imageCapture = ImageCapture.Builder().build()
+                        cameraProviderFuture.addListener({
+                            val cameraProvider = cameraProviderFuture.get()
+                            val preview = Preview.Builder().build().also {
+                                it.setSurfaceProvider(previewView.surfaceProvider)
+                            }
+                            
+                            imageCapture = ImageCapture.Builder().build()
+                            
+                            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                            
+                            try {
+                                cameraProvider.unbindAll()
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    cameraSelector,
+                                    preview,
+                                    imageCapture
+                                )
+                            } catch (exc: Exception) {
+                                Log.e("CameraX", "Use case binding failed", exc)
+                            }
+                        }, executor)
                         
-                        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                        
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                cameraSelector,
-                                preview,
-                                imageCapture
-                            )
-                        } catch (exc: Exception) {
-                            Log.e("CameraX", "Use case binding failed", exc)
-                        }
-                    }, executor)
-                    
-                    previewView
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-            
-            // Overlay for AI guidance
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(16.dp)
-            ) {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha=0.7f))) {
-                    Text(
-                        "Align the mechanical part or tyre tread within the frame for AI wear analysis.",
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                        previewView
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                // Overlay for AI guidance
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(16.dp)
+                ) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha=0.7f))) {
+                        Text(
+                            "Align the mechanical part or tyre tread within the frame for AI wear analysis.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Text("Camera permission is required for AI Analysis")
             }
         }
     }

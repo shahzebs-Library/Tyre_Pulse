@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -59,6 +60,10 @@ fun InspectionFormScreen(
                 }
             }
 
+            uiState.recurrenceWarning?.let { recurrence ->
+                RecurrenceAdvisoryBanner(recurrence = recurrence)
+            }
+
             // High-Fidelity Interactive Map (Mirroring Expo)
             uiState.asset?.let { asset ->
                 VehicleTyreLayout(
@@ -86,6 +91,41 @@ fun InspectionFormScreen(
                 ) {
                     Text("FINISH INSPECTION", fontWeight = FontWeight.ExtraBold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecurrenceAdvisoryBanner(recurrence: RecurrenceInfo) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFEF3C7), // Light yellow background
+            contentColor = Color(0xFF92400E)  // Dark amber text
+        )
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = "Warning",
+                tint = Color(0xFFF59E0B),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "Not due for another ${recurrence.dueInDays} days",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "Last checked ${recurrence.daysAgo} days ago" + 
+                           (if (recurrence.documentNo != null) " (${recurrence.documentNo})" else "") +
+                           ". You can still proceed if needed.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }

@@ -2,6 +2,7 @@ package com.example.tyre_pulse_app.core.data.repository
 
 import com.example.tyre_pulse_app.core.model.Inspection
 import com.example.tyre_pulse_app.core.network.api.InspectionApi
+import com.example.tyre_pulse_app.core.network.api.InspectionRecurrenceDto
 import com.example.tyre_pulse_app.core.database.dao.DraftDao
 import com.example.tyre_pulse_app.core.database.model.DraftEntity
 import kotlinx.serialization.json.Json
@@ -35,6 +36,15 @@ class InspectionRepository @Inject constructor(
             inspectionApi.submitInspection(inspection)
             draftDao.deleteDraft(inspection.assetNumber)
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun checkRecurrence(assetNumber: String): Result<InspectionRecurrenceDto?> {
+        return try {
+            val res = inspectionApi.getLastInspection("eq.$assetNumber")
+            Result.success(res.firstOrNull())
         } catch (e: Exception) {
             Result.failure(e)
         }

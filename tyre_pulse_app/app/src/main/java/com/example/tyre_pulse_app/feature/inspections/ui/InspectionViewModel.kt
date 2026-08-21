@@ -16,9 +16,16 @@ import javax.inject.Inject
 import com.example.tyre_pulse_app.core.notifications.TyreAlertNotificationManager
 
 
+data class RecurrenceInfo(
+    val daysAgo: Long,
+    val dueInDays: Long,
+    val documentNo: String?
+)
+
 data class InspectionUiState(
     val asset: Asset? = null,
     val inspection: Inspection? = null,
+    val recurrenceWarning: RecurrenceInfo? = null,
     val isLoading: Boolean = false,
     val isSubmitting: Boolean = false,
     val error: String? = null,
@@ -55,7 +62,30 @@ class InspectionViewModel @Inject constructor(
                 val draft = inspectionRepository.getDraft(assetId)
                 val initialInspection = draft ?: createInitialInspection(asset, workspace, user.name)
 
-                _uiState.update { it.copy(asset = asset, inspection = initialInspection, isLoading = false) }
+                // Check recurrence (7-day rule)
+                val recurrenceRes = inspectionRepository.checkRecurrence(asset.assetNumber)
+                val dto = recurrenceRes.getOrNull()
+                var warning: RecurrenceInfo? = null
+                if (dto?.inspectionDate != null) {
+                    try {
+                        val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                        val date = format.parse(dto.inspectionDate)
+                        if (date != null) {
+                            val daysAgo = (System.currentTimeMillis() - date.time) / 86400000L
+                            if (daysAgo < 7) {
+                                warning = RecurrenceInfo(
+                                    daysAgo = daysAgo,
+                                    dueInDays = 7 - daysAgo,
+                                    documentNo = dto.documentNo
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("InspectionViewModel", "Failed to parse date", e)
+                    }
+                }
+
+                _uiState.update { it.copy(asset = asset, inspection = initialInspection, recurrenceWarning = warning, isLoading = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message, isLoading = false) }
             }

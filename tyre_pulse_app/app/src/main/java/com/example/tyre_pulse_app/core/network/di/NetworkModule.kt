@@ -108,4 +108,12 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGenericApi(retrofit: Retrofit): GenericApi = retrofit.create(GenericApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAnalyticsApi(retrofit: Retrofit): AnalyticsApi = retrofit.create(AnalyticsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideRecordsApi(retrofit: Retrofit): RecordsApi = retrofit.create(RecordsApi::class.java)
 }

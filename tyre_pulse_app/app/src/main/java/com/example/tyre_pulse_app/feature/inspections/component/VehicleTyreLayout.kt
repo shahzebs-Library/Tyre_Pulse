@@ -1,9 +1,11 @@
 package com.example.tyre_pulse_app.feature.inspections.component
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -16,6 +18,11 @@ import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawi
 import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawGenericBody
 import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawPickupBody
 import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTyre
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawPickupL300Body
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawPickupIsuzuBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawSkidLoaderBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawForkliftBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawConcretePump4AxleBody
 
 @Composable
 fun VehicleTyreLayout(
@@ -30,6 +37,27 @@ fun VehicleTyreLayout(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp - 32.dp
     // Scale everything relative to the 200px base width from React Native
     val scale = screenWidth.value / 200f 
+
+    val infiniteTransition = rememberInfiniteTransition(label = "vehicle_animations")
+    val blinkPhase by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(400, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "blinker_alpha"
+    )
+    
+    val drumRotationPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "drum_rotation"
+    )
 
     Box(
         modifier = modifier
@@ -59,8 +87,17 @@ fun VehicleTyreLayout(
         ) {
             // Draw exact vehicle body based on bodyKey
             when (layout.bodyKey) {
-                "PickupBody" -> drawPickupBody(scale)
-                "CanterBody" -> drawCanterBody(scale)
+                "pickup" -> drawPickupBody(scale, blinkPhase)
+                "pickupL300" -> drawPickupL300Body(scale, blinkPhase)
+                "pickupIsuzu" -> drawPickupIsuzuBody(scale, blinkPhase)
+                "canter", "bus", "tata", "ashokLeyland" -> drawCanterBody(scale, blinkPhase)
+                "triMixer" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTriMixerBody(scale, blinkPhase, drumRotationPhase)
+                "concretePump" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawConcretePumpBody(scale, blinkPhase)
+                "concretePump4Axle" -> drawConcretePump4AxleBody(scale, blinkPhase)
+                "wheelLoader" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawWheelLoaderBody(scale, blinkPhase)
+                "skidLoader" -> drawSkidLoaderBody(scale, blinkPhase)
+                "forklift" -> drawForkliftBody(scale, blinkPhase)
+                "trailer" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTrailerBody(scale, blinkPhase)
                 // Implement others later, fallback to generic
                 else -> drawGenericBody(scale)
             }

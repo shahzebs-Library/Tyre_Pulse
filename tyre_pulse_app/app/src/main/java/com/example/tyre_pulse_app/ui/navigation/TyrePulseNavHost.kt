@@ -43,6 +43,8 @@ import com.example.tyre_pulse_app.feature.reports.navigation.reportsScreen
 import com.example.tyre_pulse_app.feature.reports.ui.ReportsScreen
 import com.example.tyre_pulse_app.feature.team.ui.DriverScorecardScreen
 import com.example.tyre_pulse_app.feature.inventory.ui.StockRoute
+import com.example.tyre_pulse_app.feature.analytics.ui.AnalyticsScreen
+import com.example.tyre_pulse_app.feature.records.ui.RecordsScreen
 import com.example.tyre_pulse_app.feature.profile.navigation.profileScreen
 import com.example.tyre_pulse_app.feature.settings.navigation.navigateToSettings
 import com.example.tyre_pulse_app.feature.settings.navigation.settingsScreen
@@ -185,6 +187,8 @@ fun TyrePulseNavHost(
         reportsScreen()
         composable("reports_route_v2") { ReportsScreen() }
         composable("stock_route") { StockRoute(onBack = { navController.popBackStack() }) }
+        composable("analytics_route") { AnalyticsScreen() }
+        composable("records_route") { RecordsScreen() }
 
         myWorkScreen(onTaskClick = { /* TODO */ })
         notificationsScreen(onNotificationClick = { /* TODO */ })

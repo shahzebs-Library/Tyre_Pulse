@@ -54,7 +54,17 @@ object TyreLayoutEngine {
                 TyreSlot("RL", "LHR1", 24f, 155f, 32f, 56f),
                 TyreSlot("RR", "RHR1", 144f, 155f, 32f, 56f)
             ))
-            "Concrete pump" -> VehicleLayout("Concrete pump", "🏗️", 375f, "concretePump", listOf(
+            "Concrete pump 4-axle" -> VehicleLayout("Concrete pump 4-axle", "🏗️", 330f, "concretePump4Axle", listOf(
+                TyreSlot("F1L", "LHF1", 29f, 40f, 22f, 38f),
+                TyreSlot("F1R", "RHF1", 149f, 40f, 22f, 38f),
+                TyreSlot("F2L", "LHF2", 29f, 84f, 22f, 38f),
+                TyreSlot("F2R", "RHF2", 149f, 84f, 22f, 38f),
+                TyreSlot("R1Lo", "LHR1-O", 13f, 220f, 19f, 33f),
+                TyreSlot("R1Li", "LHR1-I", 34f, 220f, 19f, 33f),
+                TyreSlot("R1Ri", "RHR1-I", 147f, 220f, 19f, 33f),
+                TyreSlot("R1Ro", "RHR1-O", 168f, 220f, 19f, 33f)
+            ))
+            "Concrete pump 5-axle" -> VehicleLayout("Concrete pump 5-axle", "🏗️", 375f, "concretePump", listOf(
                 TyreSlot("F1L", "LHF1", 29f, 40f, 22f, 38f),
                 TyreSlot("F1R", "RHF1", 149f, 40f, 22f, 38f),
                 TyreSlot("F2L", "LHF2", 29f, 84f, 22f, 38f),
@@ -65,6 +75,30 @@ object TyreLayoutEngine {
                 TyreSlot("R1Li", "LHR1-I", 34f, 258f, 19f, 33f),
                 TyreSlot("R1Ri", "RHR1-I", 147f, 258f, 19f, 33f),
                 TyreSlot("R1Ro", "RHR1-O", 168f, 258f, 19f, 33f)
+            ))
+            "Pickup L300" -> VehicleLayout("L300", "🚐", 280f, "pickupL300", listOf(
+                TyreSlot("FL", "LHF1", 32f, 30f, 23f, 44f),
+                TyreSlot("FR", "RHF1", 145f, 30f, 23f, 44f),
+                TyreSlot("RL", "LHR1", 32f, 170f, 23f, 44f),
+                TyreSlot("RR", "RHR1", 145f, 170f, 23f, 44f)
+            ))
+            "Pickup Isuzu" -> VehicleLayout("Isuzu", "🛻", 320f, "pickupIsuzu", listOf(
+                TyreSlot("FL", "LHF1", 32f, 48f, 23f, 44f),
+                TyreSlot("FR", "RHF1", 145f, 48f, 23f, 44f),
+                TyreSlot("RL", "LHR1", 32f, 200f, 23f, 44f),
+                TyreSlot("RR", "RHR1", 145f, 200f, 23f, 44f)
+            ))
+            "Skid loader" -> VehicleLayout("Skid loader", "🚜", 200f, "skidLoader", listOf(
+                TyreSlot("FL", "LHF1", 20f, 40f, 30f, 50f),
+                TyreSlot("FR", "RHF1", 150f, 40f, 30f, 50f),
+                TyreSlot("RL", "LHR1", 20f, 110f, 30f, 50f),
+                TyreSlot("RR", "RHR1", 150f, 110f, 30f, 50f)
+            ))
+            "Forklift" -> VehicleLayout("Forklift", "🛺", 220f, "forklift", listOf(
+                TyreSlot("FL", "LHF1", 25f, 40f, 25f, 45f),
+                TyreSlot("FR", "RHF1", 150f, 40f, 25f, 45f),
+                TyreSlot("RL", "LHR1", 35f, 140f, 20f, 35f), // rear tyres are usually smaller on a forklift
+                TyreSlot("RR", "RHR1", 145f, 140f, 20f, 35f)
             ))
             else -> VehicleLayout("Pickup", "🛻", 320f, "pickup", listOf(
                 TyreSlot("FL", "LHF1", 32f, 48f, 23f, 44f),
@@ -79,10 +113,15 @@ object TyreLayoutEngine {
         val s = (vt ?: assetNo ?: "").lowercase()
         return when {
             s.contains("mixer") -> "Tri-mixer"
-            s.contains("pump") -> "Concrete pump"
+            s.contains("pump") && s.contains("4") -> "Concrete pump 4-axle"
+            s.contains("pump") -> "Concrete pump 5-axle"
+            s.contains("skid") -> "Skid loader"
             s.contains("loader") -> "Wheel loader"
+            s.contains("forklift") -> "Forklift"
             s.contains("canter") -> "Canter"
             s.contains("bus") -> "Bus"
+            s.contains("l300") -> "Pickup L300"
+            s.contains("isuzu") -> "Pickup Isuzu"
             else -> "Pickup"
         }
     }

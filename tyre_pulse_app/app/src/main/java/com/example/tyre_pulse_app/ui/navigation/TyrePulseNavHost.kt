@@ -41,10 +41,13 @@ import com.example.tyre_pulse_app.feature.rca.ui.RcaRoute
 import com.example.tyre_pulse_app.feature.admin.ui.*
 import com.example.tyre_pulse_app.feature.ai.ui.PredictiveMaintenanceScreen
 import com.example.tyre_pulse_app.feature.ai.ui.FleetAiChatScreen
+import com.example.tyre_pulse_app.feature.ai_engineer.ui.AiAnalyticsDashboard
+import com.example.tyre_pulse_app.feature.ai_engineer.ui.AiCameraCaptureScreen
 import com.example.tyre_pulse_app.feature.reports.navigation.reportsScreen
 import com.example.tyre_pulse_app.feature.reports.ui.ReportsScreen
 import com.example.tyre_pulse_app.feature.team.ui.DriverScorecardScreen
 import com.example.tyre_pulse_app.feature.inventory.ui.StockRoute
+import com.example.tyre_pulse_app.feature.inventory.ui.StockManagementScreen
 import com.example.tyre_pulse_app.feature.analytics.ui.AnalyticsScreen
 import com.example.tyre_pulse_app.feature.records.ui.RecordsScreen
 import com.example.tyre_pulse_app.feature.profile.navigation.profileScreen

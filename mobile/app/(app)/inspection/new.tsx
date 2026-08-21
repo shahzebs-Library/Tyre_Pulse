@@ -664,6 +664,7 @@ function NewInspectionScreen() {
 
                 {!useManualEntry && (
                   selectedVehicle ? (
+                    <>
                     /* Collapsed: a vehicle is chosen - show it + a Change control
                        and hide the search results until the user reopens search. */
                     <View style={[styles.selectedVehicleRow, isRTL && styles.navRTL]}>
@@ -705,6 +706,7 @@ function NewInspectionScreen() {
                       </Text>
                     </View>
                   )}
+                  </>
                   ) : (
                   <>
                     <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>

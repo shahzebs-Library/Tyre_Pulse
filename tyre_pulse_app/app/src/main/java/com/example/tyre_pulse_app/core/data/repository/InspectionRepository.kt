@@ -43,7 +43,12 @@ class InspectionRepository @Inject constructor(
 
     suspend fun checkRecurrence(assetNumber: String): Result<InspectionRecurrenceDto?> {
         return try {
-            val res = inspectionApi.getLastInspection("eq.$assetNumber")
+            val res = inspectionApi.getLastInspection(
+                assetNo = "eq.$assetNumber",
+                select = "inspection_date,document_no",
+                order = "inspection_date.desc",
+                limit = 1
+            )
             Result.success(res.firstOrNull())
         } catch (e: Exception) {
             Result.failure(e)

@@ -21,9 +21,9 @@ interface InspectionApi {
     @GET("inspections")
     suspend fun getLastInspection(
         @Query("asset_no") assetNo: String,
-        @Query("select") select: String = "inspection_date,document_no",
-        @Query("order") order: String = "inspection_date.desc",
-        @Query("limit") limit: Int = 1
+        @Query("select") select: String,
+        @Query("order") order: String,
+        @Query("limit") limit: Int
     ): List<InspectionRecurrenceDto>
 
     @POST("inspections")

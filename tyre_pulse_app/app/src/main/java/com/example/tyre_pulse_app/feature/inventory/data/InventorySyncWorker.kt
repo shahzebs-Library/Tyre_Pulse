@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.ListenableWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,7 @@ class InventorySyncWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    override suspend fun doWork(): ListenableWorker.Result = withContext(Dispatchers.IO) {
         try {
             Log.d("InventorySync", "Starting offline inventory sync...")
             // Simulated: Fetch all unsynced part deductions from Room DB
@@ -24,7 +25,7 @@ class InventorySyncWorker @AssistedInject constructor(
             
             if (unsyncedDeductions.isEmpty()) {
                 Log.d("InventorySync", "No items to sync.")
-                return@withContext Result.success()
+                return@withContext ListenableWorker.Result.success()
             }
 
             // Simulated: Push to Supabase backend
@@ -34,10 +35,10 @@ class InventorySyncWorker @AssistedInject constructor(
             }
             
             Log.d("InventorySync", "Inventory sync complete!")
-            Result.success()
+            ListenableWorker.Result.success()
         } catch (e: Exception) {
             Log.e("InventorySync", "Sync failed: ${e.message}")
-            Result.retry()
+            ListenableWorker.Result.retry()
         }
     }
 }

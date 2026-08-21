@@ -168,7 +168,11 @@ fun TyrePulseNavHost(
 
         composable("digital_invoice_route") {
             DigitalInvoiceScreen(
-                onClose = { navController.navigate("home_route") { popUpTo(0) } }
+                onClose = { 
+                    navController.navigate("home_route") { 
+                        popUpTo(HomeDestination.route) { inclusive = true } 
+                    } 
+                }
             )
         }
 

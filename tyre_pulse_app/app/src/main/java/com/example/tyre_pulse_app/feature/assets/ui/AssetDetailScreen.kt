@@ -15,6 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Warning
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
@@ -84,7 +88,7 @@ fun AssetDetailScreen(assetId: String, onBack: () -> Unit, onInspect: (String) -
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             when (selectedTab) {
-                0 -> AssetOverviewContent(assetId)
+                0 -> AssetOverviewContent(assetId, uiState)
                 1 -> AssetTyreMapContent(assetId)
                 2 -> AssetMaintenanceContent(assetId)
                 3 -> AssetHistoryContent(assetId)
@@ -94,14 +98,32 @@ fun AssetDetailScreen(assetId: String, onBack: () -> Unit, onInspect: (String) -
 }
 
 @Composable
-fun AssetOverviewContent(assetId: String) {
+fun AssetOverviewContent(assetId: String, uiState: AssetDetailUiState) {
     Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         AssetHeaderSection(assetId)
         MetricsGrid()
+        
+        if (uiState.telemetry.aiRiskMessage != null) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(12.dp))
+                    Text(uiState.telemetry.aiRiskMessage, color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Text("Live Telemetry", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MetricCard("Engine Temp", "${String.format("%.1f", uiState.telemetry.engineTemp)} °C", Modifier.weight(1f))
+            MetricCard("Oil Pressure", "${String.format("%.1f", uiState.telemetry.oilPressure)} psi", Modifier.weight(1f))
+        }
+
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.Black)) {
             Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Health Score", color = Color.White, modifier = Modifier.weight(1f))
-                Text("94%", style = MaterialTheme.typography.headlineMedium, color = StatusGreen, fontWeight = FontWeight.ExtraBold)
+                val scoreColor = if (uiState.telemetry.healthScore >= 90) StatusGreen else if (uiState.telemetry.healthScore >= 75) YellowPrimary else MaterialTheme.colorScheme.error
+                Text("${uiState.telemetry.healthScore}%", style = MaterialTheme.typography.headlineMedium, color = scoreColor, fontWeight = FontWeight.ExtraBold)
             }
         }
     }

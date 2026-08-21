@@ -14,6 +14,9 @@ import java.util.UUID
  */
 object SecuritySupport {
     fun getEncryptionFactory(context: Context): SupportFactory {
+        // MUST load native SQLCipher libraries before any SQLCipher operations
+        SQLiteDatabase.loadLibs(context)
+
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()

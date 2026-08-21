@@ -36,22 +36,22 @@ interface IconDef {
 }
 
 export const CHECKLIST_ICONS: IconDef[] = [
-  { token: 'clipboard',   label: 'General check', ionicon: 'clipboard-outline',          keywords: ['check', 'checklist', 'inspection', 'daily', 'general', 'audit'] },
-  { token: 'wrench',      label: 'Mechanical',    ionicon: 'construct-outline',          keywords: ['mechanic', 'mechanical', 'service', 'maintenance', 'repair', 'workshop', 'pm'] },
-  { token: 'bolt',        label: 'Electrical',    ionicon: 'flash-outline',              keywords: ['electric', 'electrical', 'electrician', 'wiring', 'alternator', 'starter'] },
-  { token: 'truck',       label: 'Vehicle',       ionicon: 'bus-outline',                keywords: ['vehicle', 'truck', 'mixer', 'driver', 'trip', 'pre-trip', 'fleet', 'bus'] },
-  { token: 'tyre',        label: 'Tyre',          ionicon: 'disc-outline',               keywords: ['tyre', 'tire', 'wheel', 'tread', 'pressure'] },
-  { token: 'gauge',       label: 'Meter',         ionicon: 'speedometer-outline',        keywords: ['meter', 'odometer', 'reading', 'hours', 'gauge'] },
-  { token: 'fuel',        label: 'Fuel / fluids', ionicon: 'flask-outline',              keywords: ['fuel', 'diesel', 'oil', 'fluid', 'lubricant', 'coolant'] },
-  { token: 'water',       label: 'Washing',       ionicon: 'water-outline',              keywords: ['wash', 'washing', 'clean', 'cleaning', 'water'] },
-  { token: 'temperature', label: 'Temperature',   ionicon: 'thermometer-outline',        keywords: ['temperature', 'heat', 'thermal', 'overheat'] },
-  { token: 'battery',     label: 'Battery',       ionicon: 'battery-charging',           keywords: ['battery', 'charge', 'charging'] },
-  { token: 'safety',      label: 'Safety / HSE',  ionicon: 'shield-checkmark-outline',   keywords: ['safety', 'hse', 'ppe', 'compliance', 'security'] },
-  { token: 'fire',        label: 'Fire',          ionicon: 'flame-outline',              keywords: ['fire', 'extinguisher', 'flame'] },
-  { token: 'stores',      label: 'Stores',        ionicon: 'cube-outline',               keywords: ['store', 'stores', 'stock', 'parts', 'inventory', 'spare'] },
-  { token: 'cold',        label: 'Cold chain',    ionicon: 'snow-outline',               keywords: ['cold', 'chiller', 'freezer', 'refrigerat', 'ac ', 'aircon'] },
-  { token: 'hammer',      label: 'Body / fabric', ionicon: 'hammer-outline',             keywords: ['body', 'fabricat', 'weld', 'structure', 'chassis'] },
-  { token: 'health',      label: 'First aid',     ionicon: 'medkit-outline',             keywords: ['first aid', 'medical', 'health', 'medic'] },
+  { token: 'clipboard', label: 'General check', ionicon: 'clipboard-outline', keywords: ['check', 'checklist', 'inspection', 'daily', 'general', 'audit'] },
+  { token: 'wrench', label: 'Mechanical', ionicon: 'construct-outline', keywords: ['mechanic', 'mechanical', 'service', 'maintenance', 'repair', 'workshop', 'pm'] },
+  { token: 'bolt', label: 'Electrical', ionicon: 'flash-outline', keywords: ['electric', 'electrical', 'electrician', 'wiring', 'alternator', 'starter'] },
+  { token: 'truck', label: 'Vehicle', ionicon: 'bus-outline', keywords: ['vehicle', 'truck', 'mixer', 'driver', 'trip', 'pre-trip', 'fleet', 'bus'] },
+  { token: 'tyre', label: 'Tyre', ionicon: 'disc-outline', keywords: ['tyre', 'tire', 'wheel', 'tread', 'pressure'] },
+  { token: 'gauge', label: 'Meter', ionicon: 'speedometer-outline', keywords: ['meter', 'odometer', 'reading', 'hours', 'gauge'] },
+  { token: 'fuel', label: 'Fuel / fluids', ionicon: 'flask-outline', keywords: ['fuel', 'diesel', 'oil', 'fluid', 'lubricant', 'coolant'] },
+  { token: 'water', label: 'Washing', ionicon: 'water-outline', keywords: ['wash', 'washing', 'clean', 'cleaning', 'water'] },
+  { token: 'temperature', label: 'Temperature', ionicon: 'thermometer-outline', keywords: ['temperature', 'heat', 'thermal', 'overheat'] },
+  { token: 'battery', label: 'Battery', ionicon: 'battery-charging-outline', keywords: ['battery', 'charge', 'charging'] },
+  { token: 'safety', label: 'Safety / HSE', ionicon: 'shield-checkmark-outline', keywords: ['safety', 'hse', 'ppe', 'compliance', 'security'] },
+  { token: 'fire', label: 'Fire', ionicon: 'flame-outline', keywords: ['fire', 'extinguisher', 'flame'] },
+  { token: 'stores', label: 'Stores', ionicon: 'cube-outline', keywords: ['store', 'stores', 'stock', 'parts', 'inventory', 'spare'] },
+  { token: 'cold', label: 'Cold chain', ionicon: 'snow-outline', keywords: ['cold', 'chiller', 'freezer', 'refrigerat', 'ac ', 'aircon'] },
+  { token: 'hammer', label: 'Body / fabric', ionicon: 'hammer-outline', keywords: ['body', 'fabricat', 'weld', 'structure', 'chassis'] },
+  { token: 'health', label: 'First aid', ionicon: 'medkit-outline', keywords: ['first aid', 'medical', 'health', 'medic'] },
 ]
 
 export const CHECKLIST_ICON_TOKENS = CHECKLIST_ICONS.map((i) => i.token)

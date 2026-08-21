@@ -1,30 +1,21 @@
 package com.example.tyre_pulse_app.feature.inspections.component
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.tyre_pulse_app.core.common.TyreLayoutEngine
-import com.example.tyre_pulse_app.core.common.TyreSlot
 import com.example.tyre_pulse_app.core.model.Asset
 import com.example.tyre_pulse_app.core.model.Inspection
-import com.example.tyre_pulse_app.core.designsystem.theme.*
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawCanterBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawGenericBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawPickupBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTyre
 
 @Composable
 fun VehicleTyreLayout(
@@ -36,7 +27,8 @@ fun VehicleTyreLayout(
 ) {
     val layout = TyreLayoutEngine.buildLayout(asset.type, asset.assetNumber)
     
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp - 64.dp
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp - 32.dp
+    // Scale everything relative to the 200px base width from React Native
     val scale = screenWidth.value / 200f 
 
     Box(
@@ -44,50 +36,61 @@ fun VehicleTyreLayout(
             .fillMaxWidth()
             .height((layout.viewH * scale).dp)
             .padding(16.dp),
-        contentAlignment = Alignment.TopStart
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Draw exact vehicle body based on bodyKey
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawVehicleBody(layout.bodyKey, scale)
-        }
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures { tapOffset ->
+                        // Detect hits on the slots
+                        for (slot in layout.slots) {
+                            val x = slot.x * scale
+                            val y = slot.y * scale
+                            val w = slot.w * scale
+                            val h = slot.h * scale
+                            if (tapOffset.x in x..(x + w) && tapOffset.y in y..(y + h)) {
+                                onTyreClick(slot.id)
+                                break
+                            }
+                        }
+                    }
+                }
+        ) {
+            // Draw exact vehicle body based on bodyKey
+            when (layout.bodyKey) {
+                "PickupBody" -> drawPickupBody(scale)
+                "CanterBody" -> drawCanterBody(scale)
+                // Implement others later, fallback to generic
+                else -> drawGenericBody(scale)
+            }
 
-        // Exact Slot Mapping from Expo
-        layout.slots.forEach { slot ->
-            val reading = inspection?.tyreReadings?.find { it.position == slot.id }
-            val isSelected = selectedPosition == slot.id
-            
-            Box(
-                modifier = Modifier
-                    .offset(x = (slot.x * scale).dp, y = (slot.y * scale).dp)
-                    .size(width = (slot.w * scale).dp, height = (slot.h * scale).dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isSelected) YellowPrimary.copy(alpha = 0.3f) else OLED_Card)
-                    .border(
-                        width = if (isSelected) 3.dp else 1.dp,
-                        color = if (isSelected) YellowPrimary else Color.White.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(6.dp)
-                    )
-                    .clickable { onTyreClick(slot.id) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = slot.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = (8 * scale).sp,
-                    color = if (reading != null) StatusGreen else Color.White
+            // Draw exact high-fidelity tyres over the slots
+            layout.slots.forEach { slot ->
+                val reading = inspection?.tyreReadings?.find { it.position == slot.id }
+                val isSelected = selectedPosition == slot.id
+                
+                // Determine risk from reading condition
+                val risk = when (reading?.condition) {
+                    "Good" -> "good"
+                    "Cuts", "Crack", "Chunking" -> "warning"
+                    "Bulge", "Puncture", "Sidewall Damage" -> "critical"
+                    else -> "none"
+                }
+
+                drawTyre(
+                    x = slot.x * scale,
+                    y = slot.y * scale,
+                    w = slot.w * scale,
+                    h = slot.h * scale,
+                    label = slot.label,
+                    risk = risk,
+                    isSelected = isSelected,
+                    isRecorded = reading != null,
+                    isOutstanding = reading == null,
+                    scale = scale
                 )
             }
         }
     }
-}
-
-private fun DrawScope.drawVehicleBody(bodyKey: String, scale: Float) {
-    val center = 100f * scale
-    // Simple Chassis drawing for now, could be expanded to full SVG paths later
-    drawRect(
-        color = Color.White.copy(alpha = 0.05f),
-        topLeft = Offset(center - (25f * scale), 20f * scale),
-        size = Size(50f * scale, 280f * scale)
-    )
 }

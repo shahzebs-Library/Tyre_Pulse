@@ -4,7 +4,7 @@ import androidx.navigation.*
 import androidx.navigation.compose.composable
 import com.example.tyre_pulse_app.core.navigation.NavigationDestination
 import com.example.tyre_pulse_app.feature.inspections.ui.InspectionDetailScreen
-import com.example.tyre_pulse_app.feature.inspections.ui.TyreInspectionRoute
+import com.example.tyre_pulse_app.feature.inspections.ui.InspectionDetailScreen
 
 object InspectionFormDestination : NavigationDestination {
     override val route = "inspection_form_route/{assetId}"
@@ -42,13 +42,5 @@ fun NavGraphBuilder.inspectionsScreen(
         )
     }
 
-    composable(
-        route = TyreInspectionDestination.route,
-        arguments = listOf(
-            navArgument("assetId") { type = NavType.StringType },
-            navArgument("tyreId") { type = NavType.StringType }
-        )
-    ) {
-        TyreInspectionRoute(onBack = onBack)
-    }
+    // TyreInspectionDestination is obsolete, handled by BottomSheet
 }

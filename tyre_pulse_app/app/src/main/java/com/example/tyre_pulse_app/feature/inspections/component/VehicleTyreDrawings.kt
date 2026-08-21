@@ -242,17 +242,17 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x4D000000), topLeft = Offset(22f * scale, 295f * scale), size = Size(156f * scale, 20f * scale))
         val roofPathStr = "M 72,22 Q 60,22 58,36 L 56,70 L 56,275 Q 56,286 72,288 L 128,288 Q 144,286 144,275 L 144,70 L 142,36 Q 140,22 128,22 Z"
         val roofPath = PathParser.createPathFromPathData(roofPathStr).asComposePath()
-        roofPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        roofPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = roofPath, brush = Brush.radialGradient(colors = listOf(Color(0xFF93c5fd), Color(0xFF3b82f6), Color(0xFF1d4ed8), Color(0xFF1e3a8a)), center = Offset(96f * scale, 120f * scale), radius = 120f * scale))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF1e3a8a), Color(0xFF2563eb), Color(0xFF60a5fa), Color(0xFF2563eb), Color(0xFF1e3a8a)), start = Offset(60f * scale, 22f * scale), end = Offset(140f * scale, 22f * scale)), topLeft = Offset(60f * scale, 22f * scale), size = Size(80f * scale, 52f * scale), cornerRadius = CornerRadius(5f * scale, 5f * scale))
         val wsPathStr = "M 65,74 L 135,74 L 131,96 L 69,96 Z"
         val wsPath = PathParser.createPathFromPathData(wsPathStr).asComposePath()
-        wsPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        wsPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = wsPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(65f * scale, 74f * scale), end = Offset(135f * scale, 96f * scale)))
         drawRoundRect(brush = Brush.radialGradient(colors = listOf(Color(0xFF3b82f6), Color(0xFF1e3a8a)), center = Offset(100f * scale, 128f * scale), radius = 64f * scale), topLeft = Offset(60f * scale, 96f * scale), size = Size(80f * scale, 64f * scale), cornerRadius = CornerRadius(3f * scale, 3f * scale))
         val rwPathStr = "M 68,158 L 132,158 L 130,169 L 70,169 Z"
         val rwPath = PathParser.createPathFromPathData(rwPathStr).asComposePath()
-        rwPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        rwPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = rwPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(68f * scale, 158f * scale), end = Offset(132f * scale, 169f * scale)))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF1e3a8a), Color(0xFF1d4ed8), Color(0xFF1e3a8a)), start = Offset(60f * scale, 172f * scale), end = Offset(140f * scale, 280f * scale)), topLeft = Offset(60f * scale, 172f * scale), size = Size(80f * scale, 108f * scale), cornerRadius = CornerRadius(3f * scale, 3f * scale))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFFf1f5f9), Color(0xFF94a3b8), Color(0xFF475569)), start = Offset(60f * scale, 12f * scale), end = Offset(60f * scale, 25f * scale)), topLeft = Offset(60f * scale, 12f * scale), size = Size(80f * scale, 13f * scale), cornerRadius = CornerRadius(4f * scale, 4f * scale))
@@ -265,12 +265,12 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x4D000000), topLeft = Offset(22f * scale, 275f * scale), size = Size(156f * scale, 20f * scale))
         val bodyPathStr = "M 66,10 L 134,10 L 140,20 L 140,260 Q 140,270 128,270 L 72,270 Q 60,270 60,260 L 60,20 Z"
         val bodyPath = PathParser.createPathFromPathData(bodyPathStr).asComposePath()
-        bodyPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        bodyPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = bodyPath, brush = Brush.radialGradient(colors = listOf(Color.White, Color(0xFFcbd5e1), Color(0xFF94a3b8)), center = Offset(100f * scale, 140f * scale), radius = 150f * scale))
         
         val wsPathStr = "M 63,14 L 137,14 L 133,40 L 67,40 Z"
         val wsPath = PathParser.createPathFromPathData(wsPathStr).asComposePath()
-        wsPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        wsPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = wsPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(63f * scale, 14f * scale), end = Offset(137f * scale, 40f * scale)))
         
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF94a3b8), Color(0xFF64748b), Color(0xFF94a3b8)), start = Offset(62f * scale, 70f * scale), end = Offset(138f * scale, 260f * scale)), topLeft = Offset(62f * scale, 70f * scale), size = Size(76f * scale, 190f * scale), cornerRadius = CornerRadius(2f * scale, 2f * scale))
@@ -282,19 +282,19 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x4D000000), topLeft = Offset(22f * scale, 305f * scale), size = Size(156f * scale, 20f * scale))
         val bodyPathStr = "M 70,18 Q 58,18 56,32 L 52,80 L 54,285 Q 54,295 70,295 L 130,295 Q 146,295 146,285 L 148,80 L 144,32 Q 142,18 130,18 Z"
         val bodyPath = PathParser.createPathFromPathData(bodyPathStr).asComposePath()
-        bodyPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        bodyPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = bodyPath, brush = Brush.radialGradient(colors = listOf(Color(0xFFfca5a5), Color(0xFFef4444), Color(0xFFb91c1c), Color(0xFF7f1d1d)), center = Offset(100f * scale, 140f * scale), radius = 150f * scale))
         
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFFb91c1c), Color(0xFFef4444), Color(0xFFfca5a5), Color(0xFFef4444), Color(0xFFb91c1c)), start = Offset(56f * scale, 22f * scale), end = Offset(144f * scale, 22f * scale)), topLeft = Offset(62f * scale, 22f * scale), size = Size(76f * scale, 60f * scale), cornerRadius = CornerRadius(5f * scale, 5f * scale))
         
         val wsPathStr = "M 61,84 L 139,84 L 133,106 L 67,106 Z"
         val wsPath = PathParser.createPathFromPathData(wsPathStr).asComposePath()
-        wsPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        wsPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = wsPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(61f * scale, 84f * scale), end = Offset(139f * scale, 106f * scale)))
         
         val rwPathStr = "M 66,168 L 134,168 L 132,179 L 68,179 Z"
         val rwPath = PathParser.createPathFromPathData(rwPathStr).asComposePath()
-        rwPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        rwPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = rwPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(66f * scale, 168f * scale), end = Offset(134f * scale, 179f * scale)))
         
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF7f1d1d), Color(0xFF991b1b), Color(0xFF7f1d1d)), start = Offset(58f * scale, 182f * scale), end = Offset(142f * scale, 290f * scale)), topLeft = Offset(58f * scale, 182f * scale), size = Size(84f * scale, 108f * scale), cornerRadius = CornerRadius(3f * scale, 3f * scale))
@@ -330,7 +330,7 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x40000000), topLeft = Offset(20f * scale, 290f * scale), size = Size(160f * scale, 20f * scale))
         val bodyPathStr = "M 70,18 Q 57,18 56,30 L 54,110 L 54,278 Q 54,288 70,290 L 130,290 Q 146,288 146,278 L 146,110 L 144,30 Q 143,18 130,18 Z"
         val bodyPath = PathParser.createPathFromPathData(bodyPathStr).asComposePath()
-        bodyPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        bodyPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = bodyPath, brush = Brush.radialGradient(colors = listOf(Color(0xFFf8fafc), Color(0xFFe2e8f0), Color(0xFF94a3b8)), center = Offset(96f * scale, 105f * scale), radius = 124f * scale))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFFcbd5e1), Color(0xFFf1f5f9), Color(0xFFf8fafc), Color(0xFFf1f5f9), Color(0xFFcbd5e1)), start = Offset(58f * scale, 128f * scale), end = Offset(142f * scale, 128f * scale)), topLeft = Offset(58f * scale, 128f * scale), size = Size(84f * scale, 154f * scale), cornerRadius = CornerRadius(3f * scale, 3f * scale))
 
@@ -341,12 +341,12 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x40000000), topLeft = Offset(20f * scale, 342f * scale), size = Size(160f * scale, 20f * scale))
         val cabPathStr = "M 70,14 Q 57,14 56,28 L 54,108 L 54,125 L 146,125 L 146,108 L 144,28 Q 143,14 130,14 Z"
         val cabPath = PathParser.createPathFromPathData(cabPathStr).asComposePath()
-        cabPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        cabPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = cabPath, brush = Brush.radialGradient(colors = listOf(Color(0xFFffffff), Color(0xFFf1f5f9), Color(0xFFcbd5e1)), center = Offset(96f * scale, 90f * scale), radius = 120f * scale))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF94a3b8), Color(0xFFe2e8f0), Color(0xFFffffff), Color(0xFFe2e8f0), Color(0xFF94a3b8)), start = Offset(60f * scale, 21f * scale), end = Offset(140f * scale, 21f * scale)), topLeft = Offset(60f * scale, 21f * scale), size = Size(80f * scale, 42f * scale), cornerRadius = CornerRadius(4f * scale, 4f * scale))
         val wsPathStr = "M 63,63 L 137,63 L 133,80 L 67,80 Z"
         val wsPath = PathParser.createPathFromPathData(wsPathStr).asComposePath()
-        wsPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        wsPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = wsPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(63f * scale, 63f * scale), end = Offset(137f * scale, 80f * scale)))
         drawRect(Color(0xFF334155), Offset(68f * scale, 126f * scale), Size(12f * scale, 215f * scale))
         drawRect(Color(0xFF334155), Offset(120f * scale, 126f * scale), Size(12f * scale, 215f * scale))
@@ -394,11 +394,11 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x40000000), topLeft = Offset(10f * scale, shadowY * scale), size = Size(180f * scale, 22f * scale))
         val cabPathStr = "M 70,14 Q 57,14 56,28 L 54,110 L 54,128 L 146,128 L 146,110 L 144,28 Q 143,14 130,14 Z"
         val cabPath = PathParser.createPathFromPathData(cabPathStr).asComposePath()
-        cabPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        cabPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = cabPath, brush = Brush.radialGradient(colors = listOf(Color(0xFFffffff), Color(0xFFf1f5f9), Color(0xFFcbd5e1)), center = Offset(96f * scale, 90f * scale), radius = 120f * scale))
         val wsPathStr = "M 63,65 L 137,65 L 133,83 L 67,83 Z"
         val wsPath = PathParser.createPathFromPathData(wsPathStr).asComposePath()
-        wsPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        wsPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = wsPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(63f * scale, 65f * scale), end = Offset(137f * scale, 83f * scale)))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF004d26), Color(0xFF00A850), Color(0xFF004d26)), start = Offset(40f * scale, 150f * scale), end = Offset(160f * scale, 150f * scale)), topLeft = Offset(40f * scale, 150f * scale), size = Size(120f * scale, 40f * scale), cornerRadius = CornerRadius(8f * scale, 8f * scale))
         drawOval(brush = Brush.radialGradient(colors = listOf(Color(0xFFffffff), Color(0xFFf1f5f9), Color(0xFFcbd5e1)), center = Offset(100f * scale, machineryY * scale + 20f * scale), radius = 60f * scale), topLeft = Offset(60f * scale, machineryY * scale), size = Size(80f * scale, 90f * scale))
@@ -409,11 +409,11 @@ object VehicleTyreDrawings {
         drawOval(color = Color(0x40000000), topLeft = Offset(10f * scale, 230f * scale), size = Size(180f * scale, 22f * scale))
         val rearPathStr = "M 54,130 L 146,130 L 140,240 L 60,240 Z"
         val rearPath = PathParser.createPathFromPathData(rearPathStr).asComposePath()
-        rearPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        rearPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = rearPath, brush = Brush.linearGradient(colors = listOf(Color(0xFFf59e0b), Color(0xFFd97706), Color(0xFFb45309)), start = Offset(54f * scale, 130f * scale), end = Offset(146f * scale, 130f * scale)))
         val cabPathStr = "M 66,134 L 134,134 L 128,190 L 72,190 Z"
         val cabPath = PathParser.createPathFromPathData(cabPathStr).asComposePath()
-        cabPath.transform(android.graphics.Matrix().apply { setScale(scale, scale) })
+        cabPath.transform(androidx.compose.ui.graphics.Matrix().apply { scale(scale, scale) })
         drawPath(path = cabPath, brush = Brush.linearGradient(colors = listOf(Color(0xF2dbeafe), Color(0xD993c5fd), Color(0x993b82f6)), start = Offset(66f * scale, 134f * scale), end = Offset(134f * scale, 190f * scale)))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFF334155), Color(0xFF1e293b)), start = Offset(70f * scale, 40f * scale), end = Offset(130f * scale, 40f * scale)), topLeft = Offset(70f * scale, 40f * scale), size = Size(60f * scale, 90f * scale), cornerRadius = CornerRadius(4f * scale, 4f * scale))
         drawRoundRect(brush = Brush.linearGradient(colors = listOf(Color(0xFFcbd5e1), Color(0xFF94a3b8)), start = Offset(40f * scale, 10f * scale), end = Offset(160f * scale, 10f * scale)), topLeft = Offset(40f * scale, 10f * scale), size = Size(120f * scale, 30f * scale), cornerRadius = CornerRadius(2f * scale, 2f * scale))

@@ -210,7 +210,7 @@ fun TyrePulseNavHost(
         }
 
         composable("accident_report") {
-            AccidentReportRoute(onBack = { navController.popBackStack() })
+            AccidentReportScreen(onBack = { navController.popBackStack() }, onSubmit = { navController.popBackStack() })
         }
 
         composable("accident_case/{caseId}") { backStackEntry ->

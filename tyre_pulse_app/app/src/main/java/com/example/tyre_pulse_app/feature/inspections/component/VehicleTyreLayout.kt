@@ -23,6 +23,10 @@ import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawi
 import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawSkidLoaderBody
 import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawForkliftBody
 import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawConcretePump4AxleBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTriMixerBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawConcretePumpBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawWheelLoaderBody
+import com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTrailerBody
 
 @Composable
 fun VehicleTyreLayout(
@@ -91,13 +95,13 @@ fun VehicleTyreLayout(
                 "pickupL300" -> drawPickupL300Body(scale, blinkPhase)
                 "pickupIsuzu" -> drawPickupIsuzuBody(scale, blinkPhase)
                 "canter", "bus", "tata", "ashokLeyland" -> drawCanterBody(scale, blinkPhase)
-                "triMixer" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTriMixerBody(scale, blinkPhase, drumRotationPhase)
-                "concretePump" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawConcretePumpBody(scale, blinkPhase)
+                "triMixer" -> drawTriMixerBody(scale, blinkPhase, drumRotationPhase)
+                "concretePump" -> drawConcretePumpBody(scale, blinkPhase)
                 "concretePump4Axle" -> drawConcretePump4AxleBody(scale, blinkPhase)
-                "wheelLoader" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawWheelLoaderBody(scale, blinkPhase)
+                "wheelLoader" -> drawWheelLoaderBody(scale, blinkPhase)
                 "skidLoader" -> drawSkidLoaderBody(scale, blinkPhase)
                 "forklift" -> drawForkliftBody(scale, blinkPhase)
-                "trailer" -> com.example.tyre_pulse_app.feature.inspections.component.VehicleTyreDrawings.drawTrailerBody(scale, blinkPhase)
+                "trailer" -> drawTrailerBody(scale, blinkPhase)
                 // Implement others later, fallback to generic
                 else -> drawGenericBody(scale)
             }

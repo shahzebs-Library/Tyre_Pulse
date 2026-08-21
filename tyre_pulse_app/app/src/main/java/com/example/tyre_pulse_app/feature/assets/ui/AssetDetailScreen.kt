@@ -17,9 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.Warning
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 
@@ -34,6 +31,7 @@ fun AssetDetailRoute(
     
     AssetDetailScreen(
         assetId = assetId,
+        uiState = uiState,
         onBack = onBack,
         onInspect = onInspect
     )
@@ -41,7 +39,7 @@ fun AssetDetailRoute(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AssetDetailScreen(assetId: String, onBack: () -> Unit, onInspect: (String) -> Unit) {
+fun AssetDetailScreen(assetId: String, uiState: AssetDetailUiState, onBack: () -> Unit, onInspect: (String) -> Unit) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Overview", "Tyres", "Maintenance", "History")
 

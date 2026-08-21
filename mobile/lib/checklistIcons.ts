@@ -45,7 +45,7 @@ export const CHECKLIST_ICONS: IconDef[] = [
   { token: 'fuel',        label: 'Fuel / fluids', ionicon: 'flask-outline',              keywords: ['fuel', 'diesel', 'oil', 'fluid', 'lubricant', 'coolant'] },
   { token: 'water',       label: 'Washing',       ionicon: 'water-outline',              keywords: ['wash', 'washing', 'clean', 'cleaning', 'water'] },
   { token: 'temperature', label: 'Temperature',   ionicon: 'thermometer-outline',        keywords: ['temperature', 'heat', 'thermal', 'overheat'] },
-  { token: 'battery',     label: 'Battery',       ionicon: 'battery-charging-outline',   keywords: ['battery', 'charge', 'charging'] },
+  { token: 'battery',     label: 'Battery',       ionicon: 'battery-charging',           keywords: ['battery', 'charge', 'charging'] },
   { token: 'safety',      label: 'Safety / HSE',  ionicon: 'shield-checkmark-outline',   keywords: ['safety', 'hse', 'ppe', 'compliance', 'security'] },
   { token: 'fire',        label: 'Fire',          ionicon: 'flame-outline',              keywords: ['fire', 'extinguisher', 'flame'] },
   { token: 'stores',      label: 'Stores',        ionicon: 'cube-outline',               keywords: ['store', 'stores', 'stock', 'parts', 'inventory', 'spare'] },

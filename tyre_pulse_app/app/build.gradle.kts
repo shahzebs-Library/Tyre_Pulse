@@ -1,5 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,6 +11,14 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+val supabaseAnonKeyDev = localProperties.getProperty("SUPABASE_ANON_KEY_DEV", "MISSING_KEY_DEV")
+val supabaseAnonKeyProd = localProperties.getProperty("SUPABASE_ANON_KEY_PROD", "MISSING_KEY_PROD")
 
 android {
     namespace = "com.example.tyre_pulse_app"
@@ -42,13 +53,13 @@ android {
             versionNameSuffix = "-dev"
             buildConfigField("String", "BASE_URL", "\"https://jhssdmeruxtrlqnwfksc.supabase.co/rest/v1/\"")
             buildConfigField("String", "SUPABASE_URL", "\"https://jhssdmeruxtrlqnwfksc.supabase.co/\"")
-            buildConfigField("String", "SUPABASE_ANON_KEY", "\"sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKeyDev\"")
         }
         create("prod") {
             dimension = "environment"
             buildConfigField("String", "BASE_URL", "\"https://jhssdmeruxtrlqnwfksc.supabase.co/rest/v1/\"")
             buildConfigField("String", "SUPABASE_URL", "\"https://jhssdmeruxtrlqnwfksc.supabase.co/\"")
-            buildConfigField("String", "SUPABASE_ANON_KEY", "\"sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKeyProd\"")
         }
     }
 
@@ -136,6 +147,9 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.play.services.mlkit.barcode.scanning)
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+    implementation("com.google.guava:guava:31.1-android")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 
     // Vico Charts
     implementation(libs.vico.compose)

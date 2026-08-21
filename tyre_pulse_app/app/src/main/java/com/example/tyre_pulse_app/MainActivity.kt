@@ -62,8 +62,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val accessToken by tokenManager.accessToken.collectAsState(initial = null)
             val isAuthenticated = accessToken != null
-            
-            android.util.Log.d("TyrePulse", "Auth state: $isAuthenticated, Token: ${accessToken?.take(10)}...")
 
             val currentUser by userViewModel.currentUser.collectAsState()
             val currentWorkspace by userViewModel.currentWorkspace.collectAsState()
@@ -80,7 +78,8 @@ class MainActivity : ComponentActivity() {
             val languageCode by appPrefsDataStore.languageCode.collectAsState(initial = "en")
             val isRtl = languageCode in listOf("ar", "ur")
 
-            Tyre_pulse_appTheme(darkTheme = false, isRtl = isRtl) {
+            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            Tyre_pulse_appTheme(darkTheme = isDarkTheme, isRtl = isRtl) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
@@ -143,64 +142,106 @@ class MainActivity : ComponentActivity() {
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 tonalElevation = 8.dp
                             ) {
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                    label = { Text(stringResource(R.string.home)) },
-                                    selected = currentDestination?.hierarchy?.any { it.route == HomeDestination.route } == true,
-                                    onClick = {
-                                        navController.navigate(HomeDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                )
-                                if (hasAssetsAccess) {
-                                    NavigationBarItem(
-                                        icon = { Icon(Icons.Default.DirectionsCar, contentDescription = null) },
-                                        label = { Text(stringResource(R.string.assets)) },
-                                        selected = currentDestination?.hierarchy?.any { it.route == AssetListDestination.route } == true,
-                                        onClick = {
-                                            navController.navigate(AssetListDestination.route) {
-                                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        }
-                                    )
-                                }
+                                val isMechanic = true // Mock role based on PMV logic
                                 
-                                if (hasScanAccess) {
+                                if (isMechanic) {
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.Build, contentDescription = null) },
+                                        label = { Text("Active Job") },
+                                        selected = currentDestination?.route?.startsWith("active_job") == true,
+                                        onClick = { navController.navigate("active_job_execution") }
+                                    )
                                     NavigationBarItem(
                                         icon = { 
                                             Surface(
-                                                modifier = Modifier.size(48.dp),
+                                                modifier = Modifier.size(56.dp),
                                                 shape = CircleShape,
                                                 color = MaterialTheme.colorScheme.primary
                                             ) {
                                                 Icon(
                                                     Icons.Default.QrCodeScanner, 
                                                     contentDescription = null,
-                                                    modifier = Modifier.padding(8.dp),
+                                                    modifier = Modifier.padding(12.dp),
                                                     tint = Color.Black
                                                 )
                                             }
                                         },
-                                        label = { Text("Scan QR") },
-                                        selected = currentDestination?.route == "scan_route",
-                                        onClick = { 
-                                            navController.navigate("scan_route")
+                                        label = { Text("Omni-Scan", style = MaterialTheme.typography.labelSmall) },
+                                        selected = currentDestination?.route == "scanner_route",
+                                        onClick = { navController.navigate("scanner_route") }
+                                    )
+                                } else {
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                        label = { Text(stringResource(R.string.home)) },
+                                        selected = currentDestination?.hierarchy?.any { it.route == HomeDestination.route } == true,
+                                        onClick = {
+                                            navController.navigate(HomeDestination.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         }
                                     )
-                                }
+                                    if (hasAssetsAccess) {
+                                        NavigationBarItem(
+                                            icon = { Icon(Icons.Default.DirectionsCar, contentDescription = null) },
+                                            label = { Text(stringResource(R.string.assets)) },
+                                            selected = currentDestination?.hierarchy?.any { it.route == AssetListDestination.route } == true,
+                                            onClick = {
+                                                navController.navigate(AssetListDestination.route) {
+                                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        )
+                                    }
+                                    
+                                    if (hasScanAccess) {
+                                        NavigationBarItem(
+                                            icon = { 
+                                                Surface(
+                                                    modifier = Modifier.size(48.dp),
+                                                    shape = CircleShape,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.QrCodeScanner, 
+                                                        contentDescription = null,
+                                                        modifier = Modifier.padding(8.dp),
+                                                        tint = Color.Black
+                                                    )
+                                                }
+                                            },
+                                            label = { Text("Scan") },
+                                            selected = currentDestination?.route == "scanner_route",
+                                            onClick = { 
+                                                navController.navigate("scanner_route")
+                                            }
+                                        )
+                                    }
 
-                                if (hasAlertsAccess) {
+                                    if (hasAlertsAccess) {
+                                        NavigationBarItem(
+                                            icon = { Icon(Icons.Default.Notifications, contentDescription = null) },
+                                            label = { Text(stringResource(R.string.alerts)) },
+                                            selected = currentDestination?.hierarchy?.any { it.route == NotificationsDestination.route } == true,
+                                            onClick = {
+                                                navController.navigate(NotificationsDestination.route) {
+                                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        )
+                                    }
                                     NavigationBarItem(
-                                        icon = { Icon(Icons.Default.Notifications, contentDescription = null) },
-                                        label = { Text(stringResource(R.string.alerts)) },
-                                        selected = currentDestination?.hierarchy?.any { it.route == NotificationsDestination.route } == true,
+                                        icon = { Icon(Icons.Default.Menu, contentDescription = null) },
+                                        label = { Text(stringResource(R.string.more)) },
+                                        selected = currentDestination?.hierarchy?.any { it.route == ProfileDestination.route } == true,
                                         onClick = {
-                                            navController.navigate(NotificationsDestination.route) {
+                                            navController.navigate(ProfileDestination.route) {
                                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                                 launchSingleTop = true
                                                 restoreState = true
@@ -208,18 +249,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                 }
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Menu, contentDescription = null) },
-                                    label = { Text(stringResource(R.string.more)) },
-                                    selected = currentDestination?.hierarchy?.any { it.route == ProfileDestination.route } == true,
-                                    onClick = {
-                                        navController.navigate(ProfileDestination.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                )
                             }
                         }
                     }

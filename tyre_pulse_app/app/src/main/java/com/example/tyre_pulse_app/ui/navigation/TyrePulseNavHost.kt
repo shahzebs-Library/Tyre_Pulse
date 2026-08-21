@@ -35,6 +35,8 @@ import com.example.tyre_pulse_app.feature.checklists.ui.*
 import com.example.tyre_pulse_app.feature.washing.ui.WashingRoute
 import com.example.tyre_pulse_app.feature.meters.ui.MeterLogRoute
 import com.example.tyre_pulse_app.feature.accidents.ui.*
+import com.example.tyre_pulse_app.feature.scanner.ui.ScannerScreen
+import com.example.tyre_pulse_app.feature.odometer.ui.OdometerUpdateScreen
 import com.example.tyre_pulse_app.feature.rca.ui.RcaRoute
 import com.example.tyre_pulse_app.feature.admin.ui.*
 import com.example.tyre_pulse_app.feature.ai.ui.PredictiveMaintenanceScreen
@@ -150,6 +152,45 @@ fun TyrePulseNavHost(
         composable("job_details_route/{jobId}") {
             JobDetailsRoute(onBack = { navController.popBackStack() })
         }
+        
+        composable("active_job_execution?scannedPartId={partId}") { backStackEntry ->
+            val partId = backStackEntry.arguments?.getString("partId")
+            ActiveJobExecutionScreen(
+                scannedPartId = partId,
+                onBack = { navController.popBackStack() },
+                onCompleteJob = { navController.navigate("digital_invoice_route") },
+                onScanPart = { navController.navigate("scanner_route") }
+            )
+        }
+
+        composable("digital_invoice_route") {
+            DigitalInvoiceScreen(
+                onClose = { navController.navigate("home_route") { popUpTo(0) } }
+            )
+        }
+
+        composable("stock_management_route") {
+            StockManagementScreen(
+                onScanClick = { navController.navigate("scanner_route") },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable("ai_dashboard_route") {
+            AiAnalyticsDashboard(
+                onOpenCameraQC = { navController.navigate("camera_qc_route") }
+            )
+        }
+
+        composable("camera_qc_route") {
+            AiCameraCaptureScreen(
+                onImageCaptured = { file -> 
+                    // File is saved locally. We would upload to Supabase Storage and run Edge AI model here.
+                    navController.popBackStack() 
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
 
         composable("team_route") { TeamRoute() }
         composable("calendar_route") { MaintenanceCalendarScreen() }
@@ -180,6 +221,44 @@ fun TyrePulseNavHost(
 
         composable("washing_route") { WashingRoute(onBack = { navController.popBackStack() }) }
         composable("meter_log_route") { MeterLogRoute(onBack = { navController.popBackStack() }) }
+        composable("odometer_route") { 
+            OdometerUpdateScreen(
+                onBack = { navController.popBackStack() },
+                onSubmit = { navController.popBackStack() }
+            ) 
+        }
+        composable("scanner_route") {
+            ScannerScreen(
+                onBack = { navController.popBackStack() },
+                onScanSuccess = { result ->
+                    // Omni-Scanner Auto-Routing Logic
+                    when {
+                        result.startsWith("ASSET:") -> {
+                            val id = result.substringAfter("ASSET:")
+                            navController.navigate("asset_detail_route/$id")
+                        }
+                        result.startsWith("PART:") -> {
+                            val partId = result.substringAfter("PART:")
+                            // Auto-deduct part and add to active job
+                            navController.navigate("active_job_execution?scannedPartId=$partId")
+                        }
+                        result.startsWith("FAULT:") -> {
+                            val faultId = result.substringAfter("FAULT:")
+                            // Auto-generate Work Order for this fault
+                            navController.navigate("create_work_order?faultCode=$faultId")
+                        }
+                        result.startsWith("RFID:") -> {
+                            val tyreId = result.substringAfter("RFID:")
+                            navController.navigate("tyre_history/$tyreId")
+                        }
+                        else -> {
+                            // Fallback to global search
+                            navController.navigate("search_route?q=$result")
+                        }
+                    }
+                }
+            )
+        }
         composable("rca_route") { RcaRoute(onBack = { navController.popBackStack() }) }
         composable("ai_predictive_route") { PredictiveMaintenanceScreen() }
         composable("fleet_ai_chat_route") { FleetAiChatScreen() }

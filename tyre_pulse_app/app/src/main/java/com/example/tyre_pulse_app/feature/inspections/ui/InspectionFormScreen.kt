@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -183,6 +184,20 @@ fun TyreDetailBottomSheet(
             colors = SliderDefaults.colors(thumbColor = StatusGreen, activeTrackColor = StatusGreen)
         )
         
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // AI Scan Button
+        Button(
+            onClick = { /* TODO: Hook up AITyreScanner overlay */ },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Icon(Icons.Default.Camera, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("SCAN TREAD WITH AI", fontWeight = FontWeight.ExtraBold)
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // Condition Section

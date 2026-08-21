@@ -426,7 +426,6 @@ function SerialSearchScreen() {
         </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  )>
   )
 }
 

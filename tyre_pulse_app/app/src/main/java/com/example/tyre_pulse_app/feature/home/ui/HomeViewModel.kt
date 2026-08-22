@@ -35,7 +35,7 @@ class HomeViewModel @Inject constructor() : ViewModel() {
         loadDashboardData()
     }
 
-    private fun loadDashboardData() {
+    fun loadDashboardData() {
         _uiState.update { 
             it.copy(
                 inspectionsDue = 4,

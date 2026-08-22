@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.home.ui
+package com.example.tyre_pulse_app.feature.home.ui
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+
+
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +20,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +39,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeRoute(
     onNavigateToModule: (String) -> Unit,
@@ -51,7 +56,7 @@ fun HomeRoute(
 
     if (isRefreshing) {
         LaunchedEffect(true) {
-            viewModel.loadHomeData()
+            viewModel.loadDashboardData()
         }
     }
     
@@ -63,7 +68,8 @@ fun HomeRoute(
 
     HomeScreen(
         uiState = uiState,
-        pullToRefreshState = pullToRefreshState,
+        isRefreshing = isRefreshing,
+        onRefresh = { isRefreshing = true },
         snackbarHostState = snackbarHostState,
         onNavigateToModule = onNavigateToModule,
         onAssetClick = onAssetClick,
@@ -75,7 +81,8 @@ fun HomeRoute(
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
-    pullToRefreshState: androidx.compose.material3.pulltorefresh.PullToRefreshState,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     snackbarHostState: SnackbarHostState,
     onNavigateToModule: (String) -> Unit,
     onAssetClick: (String) -> Unit,
@@ -88,7 +95,7 @@ fun HomeScreen(
     ) { paddingValues ->
         PullToRefreshBox(
             isRefreshing = isRefreshing,
-            onRefresh = { isRefreshing = true },
+            onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)

@@ -1,8 +1,6 @@
-package com.example.tyre_pulse_app.feature.checklists.ui
+﻿package com.example.tyre_pulse_app.feature.checklists.ui
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,12 +50,12 @@ fun ChecklistLibraryScreen(
         TemplateSummary("gate_pass_1", "Vehicle Gate Pass / Release", "LOGISTICS", false)
     )
     
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -68,11 +69,14 @@ fun ChecklistLibraryScreen(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -94,10 +98,7 @@ fun ChecklistLibraryScreen(
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

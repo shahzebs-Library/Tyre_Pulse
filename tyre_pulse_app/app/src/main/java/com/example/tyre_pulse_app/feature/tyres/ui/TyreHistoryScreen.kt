@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.tyres.ui
+﻿package com.example.tyre_pulse_app.feature.tyres.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,6 +9,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,9 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
@@ -28,12 +29,12 @@ import androidx.compose.runtime.LaunchedEffect
 @Composable
 fun TyreHistoryScreen(tyreId: String) {
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             delay(1000)
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -43,11 +44,14 @@ fun TyreHistoryScreen(tyreId: String) {
             TopAppBar(title = { Text("Tyre Lifecycle History", fontWeight = FontWeight.Bold) })
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                 Spacer(Modifier.height(8.dp))
@@ -66,10 +70,7 @@ fun TyreHistoryScreen(tyreId: String) {
                     }
                 }
             }
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.notifications.ui
+﻿package com.example.tyre_pulse_app.feature.notifications.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,9 +26,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusRed
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.model.Notification
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,12 +37,12 @@ fun NotificationCenterRoute(
     val uiState by viewModel.uiState.collectAsState()
     var selectedFilter by remember { mutableStateOf("All") }
     
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh() // Implement refresh logic
+            isRefreshing = false // Implement refresh logic
         }
     }
     
@@ -67,11 +65,14 @@ fun NotificationCenterRoute(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 FilterTabs(
@@ -99,10 +100,7 @@ fun NotificationCenterRoute(
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

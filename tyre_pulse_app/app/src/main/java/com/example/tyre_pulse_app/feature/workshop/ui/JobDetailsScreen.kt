@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.workshop.ui
+﻿package com.example.tyre_pulse_app.feature.workshop.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,9 +25,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusOrange
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
@@ -38,13 +36,13 @@ fun JobDetailsRoute(
     viewModel: WorkOrderDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -97,11 +95,14 @@ fun JobDetailsRoute(
             }
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -135,10 +136,7 @@ fun JobDetailsRoute(
             }
         }
         
-        PullToRefreshContainer(
-            state = pullToRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        
     }
 }
 }

@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.assets.ui
+﻿package com.example.tyre_pulse_app.feature.assets.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -21,9 +21,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.designsystem.component.VehicleDiagram3D
 import com.example.tyre_pulse_app.core.model.FittedTyre
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -51,12 +49,12 @@ fun AssetDetailScreen(assetId: String, uiState: AssetDetailUiState, onBack: () -
     val tabs = listOf("Overview", "Tyres", "Maintenance", "History")
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             delay(1000)
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -102,11 +100,14 @@ fun AssetDetailScreen(assetId: String, uiState: AssetDetailUiState, onBack: () -
             }
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 when (selectedTab) {
@@ -116,10 +117,7 @@ fun AssetDetailScreen(assetId: String, uiState: AssetDetailUiState, onBack: () -
                     3 -> AssetHistoryContent(assetId)
                 }
             }
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

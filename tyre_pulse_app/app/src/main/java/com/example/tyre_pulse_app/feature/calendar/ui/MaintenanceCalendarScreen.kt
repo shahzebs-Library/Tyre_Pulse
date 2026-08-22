@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.calendar.ui
+﻿package com.example.tyre_pulse_app.feature.calendar.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,9 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusBlue
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.rememberScrollState
@@ -25,12 +23,12 @@ import androidx.compose.foundation.verticalScroll
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaintenanceCalendarScreen() {
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -38,11 +36,14 @@ fun MaintenanceCalendarScreen() {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { TopAppBar(title = { Text("Calendar", fontWeight = FontWeight.Bold) }) }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             Column(
                 modifier = Modifier
@@ -91,10 +92,7 @@ fun MaintenanceCalendarScreen() {
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

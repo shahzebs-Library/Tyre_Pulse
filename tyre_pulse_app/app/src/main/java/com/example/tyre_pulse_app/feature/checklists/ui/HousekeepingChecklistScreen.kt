@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.checklists.ui
+﻿package com.example.tyre_pulse_app.feature.checklists.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,9 +23,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -57,12 +55,12 @@ fun HousekeepingChecklistScreen(
     var hasSigned by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             delay(1000)
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -82,11 +80,14 @@ fun HousekeepingChecklistScreen(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
         LazyColumn(
             modifier = Modifier
@@ -209,10 +210,7 @@ fun HousekeepingChecklistScreen(
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
-        PullToRefreshContainer(
-            state = pullToRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.approvals.ui
+﻿package com.example.tyre_pulse_app.feature.approvals.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,9 +25,7 @@ import com.example.tyre_pulse_app.core.model.ApprovalStatus
 import com.example.tyre_pulse_app.core.designsystem.component.TPCard
 import com.example.tyre_pulse_app.core.designsystem.component.TPStatusChip
 import com.example.tyre_pulse_app.core.designsystem.component.TPTopBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 @Composable
@@ -175,12 +173,12 @@ internal fun ApprovalsScreen(
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             delay(1000)
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -235,10 +233,7 @@ internal fun ApprovalsScreen(
                 }
             }
         }
-        PullToRefreshContainer(
-            state = pullToRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        
     }
 }
 

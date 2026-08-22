@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.odometer.ui
+﻿package com.example.tyre_pulse_app.feature.odometer.ui
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,9 +22,7 @@ import android.graphics.Bitmap
 import java.io.ByteArrayOutputStream
 import androidx.compose.material.icons.filled.Check
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,12 +39,12 @@ fun OdometerUpdateScreen(
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var capturedPhoto by remember { mutableStateOf<Bitmap?>(null) }
     
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -91,11 +89,14 @@ fun OdometerUpdateScreen(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             Column(
                 modifier = Modifier
@@ -172,10 +173,7 @@ fun OdometerUpdateScreen(
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.admin.ui
+﻿package com.example.tyre_pulse_app.feature.admin.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,12 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -24,13 +22,13 @@ fun UserSessionScreen(onBack: () -> Unit = {}) {
     val users = listOf("John Technician" to "Active", "Ahmed Supervisor" to "Active", "Mike Ross" to "Offline")
     
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             delay(1000) // Simulate network refresh
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -47,11 +45,14 @@ fun UserSessionScreen(onBack: () -> Unit = {}) {
             )
         }
     ) { paddingValues ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -77,10 +78,7 @@ fun UserSessionScreen(onBack: () -> Unit = {}) {
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

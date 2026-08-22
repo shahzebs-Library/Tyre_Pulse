@@ -55,12 +55,12 @@ class InspectionViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val workspace = workspaceManager.currentWorkspace.value
+                val workspace = workspaceManager.currentWorkspace.firstOrNull()
                     ?: throw Exception("No active workspace found")
                 val tenantId = workspace.tenant.id
                 
                 val realAsset = assetRepository.getAsset(assetId.ifEmpty { "asset-1" }, tenantId)
-                val user = userRepository.getCurrentUser().value
+                val user = userRepository.getCurrentUser().firstOrNull()
                 val inspectorName = user?.name ?: "Unknown Inspector"
                 
                 val initialInspection = createInitialInspection(realAsset, workspace, inspectorName)

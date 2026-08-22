@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.tyres.ui
+﻿package com.example.tyre_pulse_app.feature.tyres.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -23,9 +23,7 @@ import com.example.tyre_pulse_app.core.model.Tyre
 import com.example.tyre_pulse_app.core.model.TyreHistoryEvent
 import com.example.tyre_pulse_app.core.model.TyreStatus
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
@@ -39,20 +37,20 @@ fun TyreDetailRoute(
     viewModel: TyreDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             // viewModel.refresh()
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
     
     LaunchedEffect(uiState.isLoading) {
         if (!uiState.isLoading) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
     
@@ -86,22 +84,22 @@ fun TyreDetailRoute(
             }
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
-            if (uiState.isLoading && !pullToRefreshState.isRefreshing) {
+            if (uiState.isLoading && !isRefreshing) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else if (uiState.tyre != null) {
                 TyreDetailContent(tyre = uiState.tyre!!, history = uiState.history)
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

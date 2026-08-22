@@ -1,8 +1,6 @@
-package com.example.tyre_pulse_app.feature.ai.ui
+﻿package com.example.tyre_pulse_app.feature.ai.ui
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,12 +32,12 @@ fun PredictiveMaintenanceScreen() {
     var query by remember { mutableStateOf("") }
     var messages by remember { mutableStateOf(listOf(Message("assistant", "I am the Fleet AI Command Center. Ask me anything about your costs, risks, or asset health."))) }
     
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
     
@@ -84,11 +82,14 @@ fun PredictiveMaintenanceScreen() {
             }
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -109,10 +110,7 @@ fun PredictiveMaintenanceScreen() {
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

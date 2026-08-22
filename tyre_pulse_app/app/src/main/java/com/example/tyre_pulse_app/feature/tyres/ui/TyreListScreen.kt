@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.tyres.ui
+﻿package com.example.tyre_pulse_app.feature.tyres.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,9 +24,7 @@ import com.example.tyre_pulse_app.core.designsystem.component.TPStatusChip
 import com.example.tyre_pulse_app.core.designsystem.component.TPTopBar
 import com.example.tyre_pulse_app.core.model.Tyre
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,21 +38,21 @@ fun TyreListRoute(
     val currentWorkspace by userViewModel.currentWorkspace.collectAsState()
     val listState = rememberLazyListState()
     
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             // Ideally trigger refresh on view model.
             // viewModel.refresh()
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
     
     LaunchedEffect(uiState.isLoading) {
         if (!uiState.isLoading) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -79,13 +77,16 @@ fun TyreListRoute(
             }
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
-            if (uiState.isLoading && uiState.tyres.isEmpty() && !pullToRefreshState.isRefreshing) {
+            if (uiState.isLoading && uiState.tyres.isEmpty() && !isRefreshing) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
                 LazyColumn(
@@ -107,10 +108,7 @@ fun TyreListRoute(
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

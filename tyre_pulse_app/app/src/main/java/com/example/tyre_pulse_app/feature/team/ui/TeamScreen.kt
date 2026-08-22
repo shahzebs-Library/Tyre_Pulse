@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.team.ui
+﻿package com.example.tyre_pulse_app.feature.team.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,9 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 
@@ -30,12 +28,12 @@ import androidx.compose.runtime.LaunchedEffect
 @Composable
 fun TeamRoute(viewModel: TeamViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
-            pullToRefreshState.endRefresh() // Assume viewModel refresh called here later
+            isRefreshing = false // Assume viewModel refresh called here later
         }
     }
 
@@ -43,11 +41,14 @@ fun TeamRoute(viewModel: TeamViewModel = hiltViewModel()) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { TopAppBar(title = { Text("Team Management", fontWeight = FontWeight.Bold) }) }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -61,10 +62,7 @@ fun TeamRoute(viewModel: TeamViewModel = hiltViewModel()) {
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

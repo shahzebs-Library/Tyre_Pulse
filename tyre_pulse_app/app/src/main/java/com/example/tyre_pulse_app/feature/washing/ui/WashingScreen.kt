@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.washing.ui
+﻿package com.example.tyre_pulse_app.feature.washing.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,9 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.model.WashRecord
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,11 +26,11 @@ fun WashingScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Handle Pull to refresh
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             viewModel.loadWashes()
         }
@@ -41,7 +39,7 @@ fun WashingScreen(
     // When state transitions from Loading to Success/Error, stop refreshing
     LaunchedEffect(uiState) {
         if (uiState !is WashingUiState.Loading) {
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
         if (uiState is WashingUiState.Error) {
             val msg = (uiState as WashingUiState.Error).message
@@ -69,15 +67,18 @@ fun WashingScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             when (val state = uiState) {
                 is WashingUiState.Loading -> {
-                    if (!pullToRefreshState.isRefreshing) {
+                    if (!isRefreshing) {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
                 }
@@ -110,10 +111,7 @@ fun WashingScreen(
                 }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

@@ -1,8 +1,6 @@
-package com.example.tyre_pulse_app.feature.assets.ui
+﻿package com.example.tyre_pulse_app.feature.assets.ui
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -75,14 +73,14 @@ fun AssetListScreen(
 ) {
     var expandedId by remember { mutableStateOf<String?>(null) }
     
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             assets.refresh()
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -160,11 +158,14 @@ fun AssetListScreen(
             }
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -187,14 +188,11 @@ fun AssetListScreen(
                 }
             }
 
-            if (assets.loadState.refresh is LoadState.Loading && !pullToRefreshState.isRefreshing) {
+            if (assets.loadState.refresh is LoadState.Loading && !isRefreshing) {
                 LoadingIndicator(modifier = Modifier.align(Alignment.Center))
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

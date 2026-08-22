@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.records.ui
+﻿package com.example.tyre_pulse_app.feature.records.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,9 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.feature.records.model.TyreRecord
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -51,12 +49,12 @@ fun RecordsScreen(
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             delay(1000)
-            pullToRefreshState.endRefresh()
+            isRefreshing = false
         }
     }
 
@@ -82,11 +80,14 @@ fun RecordsScreen(
                 singleLine = true
             )
 
-            Box(
-                modifier = Modifier
+            PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
+            modifier = Modifier
                     .fillMaxSize()
-                    .nestedScroll(pullToRefreshState.nestedScrollConnection)
-            ) {
+                    
+            
+        ) {
                 when (val state = uiState) {
                     is RecordsUiState.Loading -> {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -114,10 +115,7 @@ fun RecordsScreen(
                         }
                     }
                 }
-                PullToRefreshContainer(
-                    state = pullToRefreshState,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
+                
             }
         }
     }

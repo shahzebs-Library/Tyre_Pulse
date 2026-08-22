@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.home.ui
+﻿package com.example.tyre_pulse_app.feature.home.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,9 +29,7 @@ import com.example.tyre_pulse_app.R
 import com.example.tyre_pulse_app.core.authentication.UserRole
 import com.example.tyre_pulse_app.core.designsystem.theme.*
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,11 +42,11 @@ fun HomeRoute(
     val uiState by viewModel.uiState.collectAsState()
     
     // Setup for Pull-To-Refresh
-    val pullToRefreshState = rememberPullToRefreshState()
+    var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (pullToRefreshState.isRefreshing) {
+    if (isRefreshing) {
         LaunchedEffect(true) {
             viewModel.loadHomeData()
         }
@@ -57,7 +55,7 @@ fun HomeRoute(
     // Simulate loading finished
     LaunchedEffect(uiState) {
         // Ideally uiState should have Loading/Success states, assuming it updates values for now
-        pullToRefreshState.endRefresh()
+        isRefreshing = false
     }
 
     HomeScreen(
@@ -85,11 +83,14 @@ fun HomeScreen(
         topBar = { HighFidelityTopBar(onScanClick) },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+                
+        
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -165,10 +166,7 @@ fun HomeScreen(
             item { Spacer(Modifier.height(32.dp)) }
             }
             
-            PullToRefreshContainer(
-                state = pullToRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            
         }
     }
 }

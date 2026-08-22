@@ -141,6 +141,7 @@ fun JobDetailsRoute(
         )
     }
 }
+}
 
 @Composable
 fun JobHeaderCard() {

@@ -1,4 +1,8 @@
-﻿package com.example.tyre_pulse_app.feature.analytics.ui
+package com.example.tyre_pulse_app.feature.analytics.ui
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -31,7 +35,7 @@ fun AnalyticsScreen(
 
     if (isRefreshing) {
         LaunchedEffect(true) {
-            viewModel.loadData() // Assume loadData exists
+            viewModel.loadAnalytics() // Assume loadData exists
             isRefreshing = false
         }
     }

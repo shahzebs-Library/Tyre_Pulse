@@ -1,4 +1,6 @@
 ﻿package com.example.tyre_pulse_app.feature.team.ui
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

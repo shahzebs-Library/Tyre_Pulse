@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.approvals.ui
+package com.example.tyre_pulse_app.feature.approvals.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -182,11 +182,12 @@ internal fun ApprovalsScreen(
         }
     }
 
-    Box(
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { isRefreshing = true },
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .nestedScroll(pullToRefreshState.nestedScrollConnection)
     ) {
         if (uiState.isLoading && uiState.approvals.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

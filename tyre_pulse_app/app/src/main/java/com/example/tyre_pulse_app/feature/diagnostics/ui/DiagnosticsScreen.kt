@@ -1,4 +1,6 @@
 ﻿package com.example.tyre_pulse_app.feature.diagnostics.ui
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn

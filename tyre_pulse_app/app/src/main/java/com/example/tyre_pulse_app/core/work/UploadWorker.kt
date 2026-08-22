@@ -9,6 +9,9 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import java.io.File
 
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.asRequestBody
+
 @HiltWorker
 class UploadWorker @AssistedInject constructor(
     @Assisted appContext: Context,
@@ -24,8 +27,8 @@ class UploadWorker @AssistedInject constructor(
             val file = File(filePath)
             if (!file.exists()) return Result.failure()
             
-            val mediaType = okhttp3.MediaType.Companion.toMediaTypeOrNull("image/jpeg")
-            val requestFile = okhttp3.RequestBody.Companion.asRequestBody(file, mediaType)
+            val mediaType = "image/jpeg".toMediaTypeOrNull()
+            val requestFile = file.asRequestBody(mediaType)
             val body = okhttp3.MultipartBody.Part.createFormData("file", file.name, requestFile)
             
             storageApi.uploadFile(bucket, file.name, body)

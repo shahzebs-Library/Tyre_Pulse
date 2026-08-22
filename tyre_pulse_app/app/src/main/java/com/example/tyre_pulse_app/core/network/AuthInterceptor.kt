@@ -3,6 +3,7 @@ package com.example.tyre_pulse_app.core.network
 import com.example.tyre_pulse_app.core.authentication.TokenManager
 import com.example.tyre_pulse_app.core.network.di.NetworkConfig
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response

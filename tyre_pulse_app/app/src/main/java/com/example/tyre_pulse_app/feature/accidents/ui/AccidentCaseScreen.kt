@@ -10,6 +10,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.ViewInAr
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.PictureAsPdf
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

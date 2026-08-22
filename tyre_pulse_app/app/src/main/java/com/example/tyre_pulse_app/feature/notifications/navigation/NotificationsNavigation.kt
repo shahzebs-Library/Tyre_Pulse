@@ -5,7 +5,8 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
 import com.example.tyre_pulse_app.core.navigation.NavigationDestination
-import com.example.tyre_pulse_app.feature.notifications.ui.NotificationsRoute
+import com.example.tyre_pulse_app.feature.notifications.ui.NotificationCenterRoute
+import com.example.tyre_pulse_app.core.model.Notification
 
 object NotificationsDestination : NavigationDestination {
     override val route = "notifications_route"
@@ -17,9 +18,9 @@ fun NavController.navigateToNotifications(navOptions: NavOptions? = null) {
 }
 
 fun NavGraphBuilder.notificationsScreen(
-    onNotificationClick: (String) -> Unit
+    onNotificationClick: (Notification) -> Unit
 ) {
     composable(route = NotificationsDestination.route) {
-        NotificationsRoute(onNotificationClick = onNotificationClick)
+        NotificationCenterRoute(onNotificationClick = onNotificationClick)
     }
 }

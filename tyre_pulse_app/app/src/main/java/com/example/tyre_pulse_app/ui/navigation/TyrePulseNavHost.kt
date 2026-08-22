@@ -32,7 +32,6 @@ import com.example.tyre_pulse_app.feature.workshop.ui.*
 import com.example.tyre_pulse_app.feature.team.ui.TeamRoute
 import com.example.tyre_pulse_app.feature.calendar.ui.MaintenanceCalendarScreen
 import com.example.tyre_pulse_app.feature.checklists.ui.*
-import com.example.tyre_pulse_app.feature.washing.ui.WashingRoute
 import com.example.tyre_pulse_app.feature.meters.ui.MeterLogRoute
 import com.example.tyre_pulse_app.feature.accidents.navigation.accidentsGraph
 import com.example.tyre_pulse_app.feature.accidents.navigation.AccidentReportDestination
@@ -63,7 +62,8 @@ import com.example.tyre_pulse_app.feature.diagnostics.navigation.navigateToDiagn
 import com.example.tyre_pulse_app.feature.tasks.navigation.myWorkScreen
 import com.example.tyre_pulse_app.feature.search.navigation.searchScreen
 import com.example.tyre_pulse_app.feature.notifications.navigation.notificationsScreen
-
+import androidx.compose.runtime.getValue
+import com.example.tyre_pulse_app.core.model.Notification
 @Composable
 fun TyrePulseNavHost(
     navController: NavHostController,

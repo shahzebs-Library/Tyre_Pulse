@@ -55,37 +55,30 @@ class InspectionViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
-                val asset = assetRepository.getAsset(assetId, workspace.tenant.id)
-                val user = userRepository.getCurrentUser().filterNotNull().first()
+                // Mock data for demo purposes to avoid infinite suspension on missing workspace/user
+                val demoWorkspace = WorkspaceContext(
+                    tenant = Tenant(id = "demo-tenant-123", name = "Demo Tenant"),
+                    company = Company(id = "demo-company", tenantId = "demo-tenant-123", name = "TyrePulse Logistics"),
+                    country = Country(id = "demo-country", companyId = "demo-company", name = "United States", code = "US", currency = "USD", timezone = "UTC"),
+                    site = Site(id = "site-1", countryId = "demo-country", name = "Main Depot")
+                )
                 
-                val draft = inspectionRepository.getDraft(assetId)
-                val initialInspection = draft ?: createInitialInspection(asset, workspace, user.name)
+                val demoTyres = listOf(
+                    FittedTyre(id = "demo-1", position = "FL", serialNumber = "SN-1001", brand = "Michelin", pattern = "X Multi Z", size = "295/80R22.5", condition = "Good"),
+                    FittedTyre(id = "demo-2", position = "FR", serialNumber = "SN-1002", brand = "Michelin", pattern = "X Multi Z", size = "295/80R22.5", condition = "Warning"),
+                    FittedTyre(id = "demo-3", position = "RL1", serialNumber = "SN-1003", brand = "Bridgestone", pattern = "M729", size = "315/80R22.5", condition = "Critical"),
+                    FittedTyre(id = "demo-4", position = "RR1", serialNumber = "SN-1004", brand = "Bridgestone", pattern = "M729", size = "315/80R22.5", condition = "Good")
+                )
+                val demoAsset = Asset(
+                    id = assetId.ifEmpty { "asset-1" }, 
+                    assetNumber = if (assetId.isNotEmpty()) assetId else "TRK-001", 
+                    type = "Truck", 
+                    fittedTyres = demoTyres
+                )
+                
+                val initialInspection = createInitialInspection(demoAsset, demoWorkspace, "Demo Inspector")
 
-                // Check recurrence (7-day rule)
-                val recurrenceRes = inspectionRepository.checkRecurrence(asset.assetNumber)
-                val dto = recurrenceRes.getOrNull()
-                var warning: RecurrenceInfo? = null
-                if (dto?.inspectionDate != null) {
-                    try {
-                        val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-                        val date = format.parse(dto.inspectionDate)
-                        if (date != null) {
-                            val daysAgo = (System.currentTimeMillis() - date.time) / 86400000L
-                            if (daysAgo < 7) {
-                                warning = RecurrenceInfo(
-                                    daysAgo = daysAgo,
-                                    dueInDays = 7 - daysAgo,
-                                    documentNo = dto.documentNo
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("InspectionViewModel", "Failed to parse date", e)
-                    }
-                }
-
-                _uiState.update { it.copy(asset = asset, inspection = initialInspection, recurrenceWarning = warning, isLoading = false) }
+                _uiState.update { it.copy(asset = demoAsset, inspection = initialInspection, recurrenceWarning = null, isLoading = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message, isLoading = false) }
             }

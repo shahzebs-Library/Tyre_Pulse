@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
+import com.example.tyre_pulse_app.core.designsystem.component.VehicleDiagram3D
+import com.example.tyre_pulse_app.core.model.FittedTyre
 
 @Composable
 fun AssetDetailRoute(
@@ -132,9 +134,20 @@ fun AssetTyreMapContent(assetId: String) {
     Column(modifier = Modifier.padding(16.dp)) {
         Text("Bird-View Layout", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-             Text("Interactive Vehicle Map Ready", color = YellowPrimary)
-        }
+        
+        val demoTyres = listOf(
+            FittedTyre(id = "demo-1", position = "FL", serialNumber = "SN-1001", brand = "Michelin", pattern = "X Multi Z", size = "295/80R22.5", condition = "Good"),
+            FittedTyre(id = "demo-2", position = "FR", serialNumber = "SN-1002", brand = "Michelin", pattern = "X Multi Z", size = "295/80R22.5", condition = "Warning"),
+            FittedTyre(id = "demo-3", position = "RL1", serialNumber = "SN-1003", brand = "Bridgestone", pattern = "M729", size = "315/80R22.5", condition = "Critical"),
+            FittedTyre(id = "demo-4", position = "RR1", serialNumber = "SN-1004", brand = "Bridgestone", pattern = "M729", size = "315/80R22.5", condition = "Good")
+        )
+        
+        VehicleDiagram3D(
+            vehicleType = "Truck",
+            fittedTyres = demoTyres,
+            onTyreClick = { /* handled in inspection */ },
+            modifier = Modifier.fillMaxWidth().height(320.dp)
+        )
     }
 }
 

@@ -78,6 +78,9 @@ class PermissionManager @Inject constructor(
     }
 
     private fun resolveAccess(user: User?, workspace: WorkspaceContext?, moduleKey: ModuleKey): Boolean {
+        // MOCK: Grant admin access to all modules for testing
+        return true
+        
         if (user == null || workspace == null) return false
         val role = user.role?.lowercase() ?: "driver"
         

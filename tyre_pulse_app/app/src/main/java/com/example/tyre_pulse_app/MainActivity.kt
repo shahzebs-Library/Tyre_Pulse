@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 tonalElevation = 8.dp
                             ) {
-                                val isMechanic = true // Mock role based on PMV logic
+                                val isMechanic = false // Mock role based on PMV logic (set to false to show full menu)
                                 
                                 if (isMechanic) {
                                     NavigationBarItem(
@@ -237,8 +237,8 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     NavigationBarItem(
-                                        icon = { Icon(Icons.Default.Menu, contentDescription = null) },
-                                        label = { Text(stringResource(R.string.more)) },
+                                        icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                        label = { Text("Profile") },
                                         selected = currentDestination?.hierarchy?.any { it.route == ProfileDestination.route } == true,
                                         onClick = {
                                             navController.navigate(ProfileDestination.route) {

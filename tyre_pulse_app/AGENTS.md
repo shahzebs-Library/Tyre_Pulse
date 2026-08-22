@@ -29,3 +29,6 @@ Never restart completed implementation blindly.
 
 ## Multi-tenant requirement
 Support Tenant -> Company -> Country -> Project/Site isolation. Never assume a single global role or scope.
+
+## CI/CD Pipeline
+There is already a build pipeline configured in GitHub. Do not attempt to trigger local builds for deployment or pipeline-related tasks unless explicitly requested for local testing.

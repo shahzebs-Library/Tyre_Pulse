@@ -109,6 +109,7 @@ fun CreateWorkOrderScreen(
             GlassCard {
                 SectionTitle("ASSET DETAILS", Icons.Default.DirectionsCar, StatusBlue)
                 Spacer(Modifier.height(12.dp))
+                val isAssetError = assetNumber.isBlank()
                 OutlinedTextField(
                     value = assetNumber,
                     onValueChange = { assetNumber = it },
@@ -116,6 +117,7 @@ fun CreateWorkOrderScreen(
                     placeholder = { Text("e.g. MIX-2841 or scan QR") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = isAssetError,
                     leadingIcon = { Icon(Icons.Default.QrCodeScanner, null) },
                     trailingIcon = {
                         if (assetNumber.isNotEmpty())
@@ -210,6 +212,7 @@ fun CreateWorkOrderScreen(
             GlassCard {
                 SectionTitle("ISSUE DESCRIPTION", Icons.Default.Report, StatusRed)
                 Spacer(Modifier.height(12.dp))
+                val isIssueError = reportedIssue.length < 10
                 OutlinedTextField(
                     value = reportedIssue,
                     onValueChange = { reportedIssue = it },
@@ -217,6 +220,7 @@ fun CreateWorkOrderScreen(
                     placeholder = { Text("Describe the fault, noise, symptom...") },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
                     maxLines = 6,
+                    isError = isIssueError,
                     supportingText = {
                         Text("/500 — min 10 characters",
                             color = if (reportedIssue.length < 10 && reportedIssue.isNotEmpty())

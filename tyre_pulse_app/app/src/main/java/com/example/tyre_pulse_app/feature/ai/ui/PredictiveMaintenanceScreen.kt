@@ -23,13 +23,27 @@ import com.example.tyre_pulse_app.core.designsystem.theme.*
 
 data class Message(val role: String, val content: String)
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PredictiveMaintenanceScreen() {
     var query by remember { mutableStateOf("") }
     var messages by remember { mutableStateOf(listOf(Message("assistant", "I am the Fleet AI Command Center. Ask me anything about your costs, risks, or asset health."))) }
     
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh()
+        }
+    }
+    
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
@@ -69,23 +83,35 @@ fun PredictiveMaintenanceScreen() {
             }
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 20.dp)
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
-            item {
-                Text("QUICK INTELLIGENCE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AiQuickChip("Risk Analysis", Icons.Default.Warning)
-                    AiQuickChip("Cost Breakdown", Icons.Default.Payments)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 20.dp)
+            ) {
+                item {
+                    Text("QUICK INTELLIGENCE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AiQuickChip("Risk Analysis", Icons.Default.Warning)
+                        AiQuickChip("Cost Breakdown", Icons.Default.Payments)
+                    }
+                }
+    
+                items(messages) { msg ->
+                    ChatBubble(msg)
                 }
             }
-
-            items(messages) { msg ->
-                ChatBubble(msg)
-            }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

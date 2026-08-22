@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.ai.ui
+package com.example.tyre_pulse_app.feature.ai.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
@@ -33,6 +33,10 @@ private val suggestions = listOf(
     "Predict next month's tyre budget"
 )
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FleetAiChatScreen() {
@@ -45,6 +49,15 @@ fun FleetAiChatScreen() {
     var isTyping by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     fun sendMessage(text: String) {
         if (text.isBlank()) return
@@ -63,6 +76,7 @@ fun FleetAiChatScreen() {
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -130,16 +144,28 @@ fun FleetAiChatScreen() {
             }
         }
     ) { padding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
-            items(messages) { msg -> ChatBubble(msg) }
-            if (isTyping) {
-                item { TypingIndicator() }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(messages) { msg -> ChatBubble(msg) }
+                if (isTyping) {
+                    item { TypingIndicator() }
+                }
             }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

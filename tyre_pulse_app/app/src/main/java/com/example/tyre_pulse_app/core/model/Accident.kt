@@ -4,79 +4,77 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Accident(
-    val id: String,
-    val accidentNumber: String? = null,
-    val assetId: String? = null,
-    val assetNumber: String,
+    val id: String? = null,
+    @SerialName("reference_no") val accidentNumber: String? = null,
+    @SerialName("vehicle_id") val assetId: String? = null,
+    @SerialName("asset_no") val assetNumber: String,
     val site: String? = null,
     val country: String? = null,
-    val tenantId: String? = null,
-    val companyId: String? = null,
     
     // Incident Details
-    val date: String,
-    val time: String? = null,
+    @SerialName("incident_date") val date: String,
+    @SerialName("incident_time") val time: String? = null,
     val location: String? = null,
-    val driverName: String? = null,
-    val description: String,
-    val reportedBy: String? = null,
-    val reporterName: String? = null,
+    @SerialName("driver_name") val driverName: String? = null,
+    val description: String? = null,
+    @SerialName("reported_by") val reportedBy: String? = null,
+    @SerialName("reporter_name") val reporterName: String? = null,
     
     // Classification
     val status: AccidentStatus = AccidentStatus.REPORTED,
-    val accidentType: String? = "other",
+    @SerialName("accident_type") val accidentType: String? = "other",
     val severity: String = "minor",
-    val currentStatus: String? = null,
-    val damageCondition: String? = null,
+    @SerialName("current_status") val currentStatus: String? = null,
+    @SerialName("damage_condition") val damageCondition: String? = null,
     
     // People & Damage
     val injuries: Boolean = false,
-    val injuryCount: Int = 0,
-    val thirdPartyInvolved: Boolean = false,
-    val policeReportNo: String? = null,
-    val damageDescription: String? = null,
-    val estimatedDamageCost: Double? = null,
+    @SerialName("injury_count") val injuryCount: Int = 0,
+    @SerialName("third_party_involved") val thirdPartyInvolved: Boolean = false,
+    @SerialName("police_report_no") val policeReportNo: String? = null,
+    @SerialName("damage_description") val damageDescription: String? = null,
+    @SerialName("estimated_damage_cost") val estimatedDamageCost: Double? = null,
     
     // Liability & GCC Case
-    val faultStatus: String? = null,
-    val gccLiabilityRatio: Double? = null,
-    val najmStatus: String? = null,
-    val najmFault: String? = null,
-    val taqdeerStatus: String? = null,
-    val taqdeerNo: String? = null,
-    val liableParty: String? = null,
+    @SerialName("fault_status") val faultStatus: String? = null,
+    @SerialName("gcc_liability_ratio") val gccLiabilityRatio: Double? = null,
+    @SerialName("najm_status") val najmStatus: String? = null,
+    @SerialName("najm_fault") val najmFault: String? = null,
+    @SerialName("taqdeer_status") val taqdeerStatus: String? = null,
+    @SerialName("taqdeer_no") val taqdeerNo: String? = null,
+    @SerialName("liable_party") val liableParty: String? = null,
     val payer: String? = null,
-    val responsibleParty: String? = null,
+    @SerialName("responsible_party") val responsibleParty: String? = null,
     
     // Insurance & Claim
     val insurer: String? = null,
-    val policyNo: String? = null,
-    val insuranceClaimNo: String? = null,
-    val claimStatus: String? = "none",
-    val claimAmount: Double? = null,
-    val claimApprovedAmount: Double? = null,
+    @SerialName("policy_no") val policyNo: String? = null,
+    @SerialName("insurance_claim_no") val insuranceClaimNo: String? = null,
+    @SerialName("claim_status") val claimStatus: String? = "none",
+    @SerialName("claim_amount") val claimAmount: Double? = null,
+    @SerialName("claim_approved_amount") val claimApprovedAmount: Double? = null,
     val deductible: Double? = null,
-    val recoveredAmount: Double? = null,
+    @SerialName("recovered_amount") val recoveredAmount: Double? = null,
     
     // Cost Recovery
-    val recoveryStatus: String? = "N/A",
-    val recoverySource: String? = "none",
-    val recoveryDate: String? = null,
-    val recoveryReference: String? = null,
-    val amountTransfer: Double? = null,
+    @SerialName("recovery_status") val recoveryStatus: String? = "N/A",
+    @SerialName("recovery_source") val recoverySource: String? = "none",
+    @SerialName("recovery_date") val recoveryDate: String? = null,
+    @SerialName("recovery_reference") val recoveryReference: String? = null,
+    @SerialName("amount_transfer") val amountTransfer: Double? = null,
     
     // Repair & Release
-    val repairType: String? = null,
-    val workshopName: String? = null,
-    val workshopLocation: String? = null,
-    val repairCost: Double? = null,
-    val expectedReleaseDate: String? = null,
-    val releaseDate: String? = null,
+    @SerialName("repair_type") val repairType: String? = null,
+    @SerialName("workshop_name") val workshopName: String? = null,
+    @SerialName("workshop_location") val workshopLocation: String? = null,
+    @SerialName("repair_cost") val repairCost: Double? = null,
+    @SerialName("expected_release_date") val expectedReleaseDate: String? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
     
     // Attachments
     val photos: List<String> = emptyList(),
     val notes: String? = null,
-    val clientUuid: String? = null
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 @Serializable

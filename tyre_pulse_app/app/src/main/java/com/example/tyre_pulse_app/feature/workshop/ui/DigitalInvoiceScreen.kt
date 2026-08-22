@@ -16,7 +16,10 @@ fun DigitalInvoiceScreen(
     jobId: String? = "WO-9021",
     onClose: () -> Unit
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(title = { Text("Invoice Generated") })
         }

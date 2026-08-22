@@ -3,6 +3,8 @@ package com.example.tyre_pulse_app.feature.assets.ui
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tyre_pulse_app.core.authentication.WorkspaceManager
+import com.example.tyre_pulse_app.core.data.repository.AssetRepository
 import com.example.tyre_pulse_app.core.model.Asset
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -28,7 +30,9 @@ data class AssetDetailUiState(
 
 @HiltViewModel
 class AssetDetailViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val assetRepository: AssetRepository,
+    private val workspaceManager: WorkspaceManager
 ) : ViewModel() {
 
     private val assetId: String = savedStateHandle["assetId"] ?: ""
@@ -42,8 +46,15 @@ class AssetDetailViewModel @Inject constructor(
     }
 
     private fun loadAsset() {
-        // Mocking asset load
-        _uiState.update { it.copy(isLoading = false) }
+        viewModelScope.launch {
+            try {
+                val tenantId = workspaceManager.currentWorkspace.value?.tenant?.id ?: "00000000-0000-0000-0000-000000000001"
+                val realAsset = assetRepository.getAsset(assetId, tenantId)
+                _uiState.update { it.copy(asset = realAsset, isLoading = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message ?: "Failed to load asset", isLoading = false) }
+            }
+        }
     }
 
     private fun startTelemetrySimulation() {

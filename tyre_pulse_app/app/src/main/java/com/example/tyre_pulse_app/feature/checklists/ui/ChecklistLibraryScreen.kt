@@ -28,6 +28,14 @@ data class TemplateSummary(
     val duration: String = "5-10 min"
 )
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChecklistLibraryScreen(
@@ -39,8 +47,18 @@ fun ChecklistLibraryScreen(
         TemplateSummary("post_maint_1", "Post-Maintenance Verification", "MAINTENANCE", true),
         TemplateSummary("gate_pass_1", "Vehicle Gate Pass / Release", "LOGISTICS", false)
     )
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = OLED_Black,
         topBar = {
             TopAppBar(
@@ -49,24 +67,36 @@ fun ChecklistLibraryScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp)
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
-            item {
-                Text(
-                    text = "AVAILABLE TEMPLATES",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = YellowPrimary,
-                    letterSpacing = 1.5.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp)
+            ) {
+                item {
+                    Text(
+                        text = "AVAILABLE TEMPLATES",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = YellowPrimary,
+                        letterSpacing = 1.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+    
+                items(templates) { template ->
+                    TemplateCard(template) { onStartChecklist(template.id) }
+                }
             }
-
-            items(templates) { template ->
-                TemplateCard(template) { onStartChecklist(template.id) }
-            }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

@@ -16,8 +16,10 @@ import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 @Composable
 fun TyreReplacementScreen(tyreId: String, onBack: () -> Unit) {
     var step by remember { mutableStateOf(1) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Tyre Replacement", fontWeight = FontWeight.Bold) },

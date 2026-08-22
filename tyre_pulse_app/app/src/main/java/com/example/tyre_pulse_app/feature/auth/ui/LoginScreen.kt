@@ -41,9 +41,23 @@ fun LoginScreen(
     onPasswordChanged: (String) -> Unit,
     onLoginClick: () -> Unit
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            scope.launch {
+                snackbarHostState.showSnackbar(it)
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { paddingValues ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp).navigationBarsPadding().imePadding(),
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(24.dp).navigationBarsPadding().imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -58,17 +72,20 @@ fun LoginScreen(
             
             Spacer(Modifier.height(48.dp))
             
+            val isIdentifierError = uiState.error != null && uiState.identifier.isBlank()
             OutlinedTextField(
                 value = uiState.identifier,
                 onValueChange = onIdentifierChanged,
                 label = { Text("Username or Employee ID") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                singleLine = true
+                singleLine = true,
+                isError = isIdentifierError
             )
             
             Spacer(Modifier.height(16.dp))
             
+            val isPasswordError = uiState.error != null && uiState.password.isBlank()
             OutlinedTextField(
                 value = uiState.password,
                 onValueChange = onPasswordChanged,
@@ -76,7 +93,8 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = PasswordVisualTransformation(),
                 shape = RoundedCornerShape(12.dp),
-                singleLine = true
+                singleLine = true,
+                isError = isPasswordError
             )
             
             Spacer(Modifier.height(32.dp))
@@ -86,18 +104,13 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
                 shape = RoundedCornerShape(12.dp),
-                enabled = !uiState.isLoading
+                enabled = !uiState.isLoading && uiState.identifier.isNotBlank() && uiState.password.isNotBlank()
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Black, strokeWidth = 2.dp)
                 } else {
                     Text("SIGN IN", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
-            }
-            
-            if (uiState.error != null) {
-                Spacer(Modifier.height(16.dp))
-                Text(text = uiState.error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

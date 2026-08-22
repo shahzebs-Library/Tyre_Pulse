@@ -38,7 +38,10 @@ fun GlobalSearchScreen(
     onAssetClick: (String) -> Unit,
     onTyreClick: (String) -> Unit
 ) {
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             SearchBar(
                 query = uiState.query,

@@ -25,6 +25,12 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusOrange
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JobDetailsRoute(
@@ -32,8 +38,18 @@ fun JobDetailsRoute(
     viewModel: WorkOrderDetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(uiState.workOrder?.let { "Job #${it.jobNumber}" } ?: "Job Details", fontWeight = FontWeight.Bold) },
@@ -81,13 +97,18 @@ fun JobDetailsRoute(
             }
         }
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
             item {
                 JobHeaderCard()
             }
@@ -113,6 +134,11 @@ fun JobDetailsRoute(
                 TaskRow(task, isDone)
             }
         }
+        
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 

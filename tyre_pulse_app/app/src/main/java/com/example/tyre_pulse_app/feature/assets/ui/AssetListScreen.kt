@@ -56,6 +56,11 @@ fun AssetListRoute(
     )
 }
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssetListScreen(
@@ -68,8 +73,29 @@ fun AssetListScreen(
     onBack: () -> Unit
 ) {
     var expandedId by remember { mutableStateOf<String?>(null) }
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            assets.refresh()
+            pullToRefreshState.endRefresh()
+        }
+    }
+
+    LaunchedEffect(assets.loadState.refresh) {
+        if (assets.loadState.refresh is LoadState.Error) {
+            val e = (assets.loadState.refresh as LoadState.Error).error
+            scope.launch {
+                snackbarHostState.showSnackbar(e.message ?: "Failed to load assets")
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = OLED_Black,
         topBar = {
             Column(modifier = Modifier.background(OLED_Black)) {
@@ -133,7 +159,12 @@ fun AssetListScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+        ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(20.dp),
@@ -155,9 +186,14 @@ fun AssetListScreen(
                 }
             }
 
-            if (assets.loadState.refresh is LoadState.Loading) {
+            if (assets.loadState.refresh is LoadState.Loading && !pullToRefreshState.isRefreshing) {
                 LoadingIndicator(modifier = Modifier.align(Alignment.Center))
             }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

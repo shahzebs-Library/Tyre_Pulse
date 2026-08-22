@@ -52,7 +52,10 @@ fun ProfileRoute(
     )
 
 
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = OLED_Black
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 24.dp)) {

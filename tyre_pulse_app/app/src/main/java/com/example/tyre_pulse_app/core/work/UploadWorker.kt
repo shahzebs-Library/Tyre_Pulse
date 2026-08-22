@@ -24,8 +24,10 @@ class UploadWorker @AssistedInject constructor(
             val file = File(filePath)
             if (!file.exists()) return Result.failure()
             
-            // TODO: Real Supabase Storage Upload
-            // storageApi.uploadFile(bucket, file.name, file)
+            val requestFile = okhttp3.RequestBody.create(okhttp3.MediaType.parse("image/jpeg"), file)
+            val body = okhttp3.MultipartBody.Part.createFormData("file", file.name, requestFile)
+            
+            storageApi.uploadFile(bucket, file.name, body)
             
             Result.success()
         } catch (e: Exception) {

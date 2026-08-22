@@ -3,8 +3,7 @@ package com.example.tyre_pulse_app.feature.inspections.navigation
 import androidx.navigation.*
 import androidx.navigation.compose.composable
 import com.example.tyre_pulse_app.core.navigation.NavigationDestination
-import com.example.tyre_pulse_app.feature.inspections.ui.InspectionDetailScreen
-import com.example.tyre_pulse_app.feature.inspections.ui.InspectionDetailScreen
+import com.example.tyre_pulse_app.feature.inspections.ui.InspectionFormScreen
 
 object InspectionFormDestination : NavigationDestination {
     override val route = "inspection_form_route/{assetId}"
@@ -28,17 +27,19 @@ fun NavController.navigateToTyreInspection(assetId: String, tyreId: String, navO
 
 fun NavGraphBuilder.inspectionsScreen(
     onBack: () -> Unit,
-    onTyreClick: (String, String) -> Unit
+    onTyreClick: (String, String) -> Unit,
+    onNavigateToScan: () -> Unit
 ) {
     composable(
         route = InspectionFormDestination.route,
         arguments = listOf(navArgument("assetId") { type = NavType.StringType })
     ) { backStackEntry ->
         val assetId = backStackEntry.arguments?.getString("assetId") ?: ""
-        InspectionDetailScreen(
+        InspectionFormScreen(
             assetId = assetId,
             onBack = onBack,
-            onTyreClick = { tyreId: String -> onTyreClick(assetId, tyreId) }
+            onTyreClick = { tyreId: String -> onTyreClick(assetId, tyreId) },
+            onNavigateToScan = onNavigateToScan
         )
     }
 

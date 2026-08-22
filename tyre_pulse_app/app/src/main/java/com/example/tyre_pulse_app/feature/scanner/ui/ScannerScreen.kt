@@ -79,14 +79,19 @@ fun ScannerScreen(
         hasCameraPermission = granted
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
-    if (hasCameraPermission) {
-        Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        if (hasCameraPermission) {
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
@@ -208,6 +213,7 @@ fun ScannerScreen(
             Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) {
                 Text("Grant Permission")
             }
+        }
         }
     }
 }

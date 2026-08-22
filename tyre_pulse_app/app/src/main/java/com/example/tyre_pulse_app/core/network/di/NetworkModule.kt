@@ -116,4 +116,8 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideRecordsApi(retrofit: Retrofit): RecordsApi = retrofit.create(RecordsApi::class.java)
+    
+    @Provides
+    @Singleton
+    fun provideWashApi(retrofit: Retrofit): WashApi = retrofit.create(WashApi::class.java)
 }

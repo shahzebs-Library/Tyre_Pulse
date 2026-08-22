@@ -13,6 +13,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.component.TPCard
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiagnosticsRoute(
@@ -20,8 +27,18 @@ fun DiagnosticsRoute(
     viewModel: DiagnosticsViewModel = hiltViewModel()
 ) {
     val diag by viewModel.diagnostics.collectAsState()
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("App Diagnostics") },
@@ -33,46 +50,56 @@ fun DiagnosticsRoute(
             )
         }
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
-            diag?.let { d ->
-                item {
-                    TPCard {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "App Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(8.dp))
-                            DiagRow("Version", d.appVersion)
-                            DiagRow("Build", d.buildNumber.toString())
-                            DiagRow("Environment", d.environment)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                diag?.let { d ->
+                    item {
+                        TPCard {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "App Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(8.dp))
+                                DiagRow("Version", d.appVersion)
+                                DiagRow("Build", d.buildNumber.toString())
+                                DiagRow("Environment", d.environment)
+                            }
                         }
                     }
-                }
-                item {
-                    TPCard {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Device Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(8.dp))
-                            DiagRow("Model", d.deviceModel)
-                            DiagRow("Android", d.androidVersion)
+                    item {
+                        TPCard {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "Device Info", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(8.dp))
+                                DiagRow("Model", d.deviceModel)
+                                DiagRow("Android", d.androidVersion)
+                            }
                         }
                     }
-                }
-                item {
-                    TPCard {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Sync Health", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(8.dp))
-                            DiagRow("Pending Ops", d.pendingSyncCount.toString())
-                            DiagRow("Failed Ops", d.failedSyncCount.toString())
+                    item {
+                        TPCard {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(text = "Sync Health", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(8.dp))
+                                DiagRow("Pending Ops", d.pendingSyncCount.toString())
+                                DiagRow("Failed Ops", d.failedSyncCount.toString())
+                            }
                         }
                     }
                 }
             }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

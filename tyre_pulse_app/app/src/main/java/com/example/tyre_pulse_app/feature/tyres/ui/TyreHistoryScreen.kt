@@ -16,24 +16,60 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TyreHistoryScreen(tyreId: String) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Tyre Lifecycle History", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("Serial: $tyreId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-        
-        Spacer(Modifier.height(24.dp))
-        
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            items(listOf(
-                "Installed" to "Mixer 2841 - FL",
-                "Inspected" to "Condition: Good, Tread: 8mm",
-                "Repaired" to "Puncture repair - Bay 02",
-                "Purchased" to "New Bridgestone - Qiddiya Store"
-            )) { (event, detail) ->
-                TimelineItem(event, detail)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            delay(1000)
+            pullToRefreshState.endRefresh()
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(title = { Text("Tyre Lifecycle History", fontWeight = FontWeight.Bold) })
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+        ) {
+            Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                Spacer(Modifier.height(8.dp))
+                Text("Serial: $tyreId", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                
+                Spacer(Modifier.height(24.dp))
+                
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    items(listOf(
+                        "Installed" to "Mixer 2841 - FL",
+                        "Inspected" to "Condition: Good, Tread: 8mm",
+                        "Repaired" to "Puncture repair - Bay 02",
+                        "Purchased" to "New Bridgestone - Qiddiya Store"
+                    )) { (event, detail) ->
+                        TimelineItem(event, detail)
+                    }
+                }
             }
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

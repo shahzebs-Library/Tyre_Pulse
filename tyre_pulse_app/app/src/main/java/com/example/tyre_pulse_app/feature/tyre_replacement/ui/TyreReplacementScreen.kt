@@ -31,6 +31,8 @@ fun TyreReplacementRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(uiState.isSubmitted) {
         if (uiState.isSubmitted) {
             onBack()
@@ -38,6 +40,7 @@ fun TyreReplacementRoute(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Tyre Replacement - Step ${uiState.currentStep}/2") },

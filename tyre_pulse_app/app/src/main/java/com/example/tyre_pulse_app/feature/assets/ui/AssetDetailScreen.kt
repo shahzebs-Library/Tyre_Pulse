@@ -21,6 +21,11 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusGreen
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.designsystem.component.VehicleDiagram3D
 import com.example.tyre_pulse_app.core.model.FittedTyre
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun AssetDetailRoute(
@@ -45,7 +50,18 @@ fun AssetDetailScreen(assetId: String, uiState: AssetDetailUiState, onBack: () -
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Overview", "Tyres", "Maintenance", "History")
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            delay(1000)
+            pullToRefreshState.endRefresh()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column {
                 TopAppBar(
@@ -86,13 +102,24 @@ fun AssetDetailScreen(assetId: String, uiState: AssetDetailUiState, onBack: () -
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            when (selectedTab) {
-                0 -> AssetOverviewContent(assetId, uiState)
-                1 -> AssetTyreMapContent(assetId)
-                2 -> AssetMaintenanceContent(assetId)
-                3 -> AssetHistoryContent(assetId)
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                when (selectedTab) {
+                    0 -> AssetOverviewContent(assetId, uiState)
+                    1 -> AssetTyreMapContent(assetId)
+                    2 -> AssetMaintenanceContent(assetId)
+                    3 -> AssetHistoryContent(assetId)
+                }
             }
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

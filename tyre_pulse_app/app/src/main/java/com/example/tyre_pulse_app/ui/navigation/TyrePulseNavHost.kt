@@ -34,9 +34,14 @@ import com.example.tyre_pulse_app.feature.calendar.ui.MaintenanceCalendarScreen
 import com.example.tyre_pulse_app.feature.checklists.ui.*
 import com.example.tyre_pulse_app.feature.washing.ui.WashingRoute
 import com.example.tyre_pulse_app.feature.meters.ui.MeterLogRoute
-import com.example.tyre_pulse_app.feature.accidents.ui.*
+import com.example.tyre_pulse_app.feature.accidents.navigation.accidentsGraph
+import com.example.tyre_pulse_app.feature.accidents.navigation.AccidentReportDestination
+import com.example.tyre_pulse_app.feature.accidents.navigation.navigateToAccidentCase
 import com.example.tyre_pulse_app.feature.scanner.ui.ScannerScreen
 import com.example.tyre_pulse_app.feature.odometer.ui.OdometerUpdateScreen
+import com.example.tyre_pulse_app.feature.odometer.ui.OdometerViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.tyre_pulse_app.feature.rca.ui.RcaRoute
 import com.example.tyre_pulse_app.feature.admin.ui.*
 import com.example.tyre_pulse_app.feature.ai.ui.PredictiveMaintenanceScreen
@@ -63,7 +68,8 @@ import com.example.tyre_pulse_app.feature.notifications.navigation.notifications
 fun TyrePulseNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    isAuthenticated: Boolean = false
+    isAuthenticated: Boolean = false,
+    onLogout: () -> Unit = {}
 ) {
     NavHost(
         navController = navController,
@@ -107,7 +113,8 @@ fun TyrePulseNavHost(
             onBack = { navController.popBackStack() },
             onTyreClick = { assetId, tyreId ->
                 navController.navigateToTyreInspection(assetId, tyreId)
-            }
+            },
+            onNavigateToScan = { navController.navigate("camera_qc_route") }
         )
 
         tyresScreen(
@@ -202,21 +209,11 @@ fun TyrePulseNavHost(
         composable("team_route") { TeamRoute() }
         composable("calendar_route") { MaintenanceCalendarScreen() }
 
-        composable("accident_dashboard") {
-            AccidentDashboardScreen(
-                onReportAccident = { navController.navigate("accident_report") },
-                onCaseClick = { id -> navController.navigate("accident_case/$id") }
-            )
-        }
-
-        composable("accident_report") {
-            AccidentReportScreen(onBack = { navController.popBackStack() }, onSubmit = { navController.popBackStack() })
-        }
-
-        composable("accident_case/{caseId}") { backStackEntry ->
-            val caseId = backStackEntry.arguments?.getString("caseId") ?: ""
-            AccidentCaseScreen(caseId = caseId, onBack = { navController.popBackStack() })
-        }
+        accidentsGraph(
+            onNavigateBack = { navController.popBackStack() },
+            onNavigateToReport = { navController.navigate(AccidentReportDestination.route) },
+            onCaseClick = { caseId -> navController.navigateToAccidentCase(caseId) }
+        )
 
         composable("checklist_library") {
             ChecklistLibraryScreen(onStartChecklist = { id -> navController.navigate("checklist_runner/$id") })
@@ -226,12 +223,35 @@ fun TyrePulseNavHost(
             ChecklistRunnerRoute(onBack = { navController.popBackStack() })
         }
 
-        composable("washing_route") { WashingRoute(onBack = { navController.popBackStack() }) }
+        composable("washing_route") { 
+            com.example.tyre_pulse_app.feature.washing.ui.WashingScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToLogWash = { navController.navigate("log_wash") }
+            ) 
+        }
+        
+        composable("log_wash") {
+            com.example.tyre_pulse_app.feature.washing.ui.LogWashScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
         composable("meter_log_route") { MeterLogRoute(onBack = { navController.popBackStack() }) }
         composable("odometer_route") { 
+            val viewModel: OdometerViewModel = hiltViewModel()
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            
             OdometerUpdateScreen(
+                isSubmitting = uiState.isSubmitting,
+                submitError = uiState.error,
                 onBack = { navController.popBackStack() },
-                onSubmit = { navController.popBackStack() }
+                onSubmit = { reading, photoBytes -> 
+                    viewModel.submitOdometer(
+                        vehicleId = "V-1024",
+                        reading = reading,
+                        photoBytes = photoBytes,
+                        onSuccess = { navController.popBackStack() }
+                    )
+                }
             ) 
         }
         composable("scanner_route") {
@@ -276,15 +296,25 @@ fun TyrePulseNavHost(
         composable("analytics_route") { AnalyticsScreen() }
         composable("records_route") { RecordsScreen() }
 
-        myWorkScreen(onTaskClick = { /* TODO */ })
-        notificationsScreen(onNotificationClick = { /* TODO */ })
+        myWorkScreen(onTaskClick = { taskId -> navController.navigate("job_details_route/$taskId") })
+        notificationsScreen(onNotificationClick = { notification -> 
+            notification.relatedEntityId?.let { id ->
+                when (notification.relatedEntityType) {
+                    "APPROVAL" -> navController.navigateToApprovalDetails(id)
+                    "TASK" -> navController.navigate("job_details_route/$id")
+                    "INSPECTION" -> navController.navigateToInspectionForm(id)
+                    "ASSET" -> navController.navigate("asset_detail_route/$id")
+                    else -> {}
+                }
+            }
+        })
         searchScreen(
             onAssetClick = { id -> navController.navigate("asset_detail_route/$id") },
             onTyreClick = { id -> navController.navigate("tyre_history/$id") }
         )
         
         profileScreen(
-            onLogout = { /* TODO */ },
+            onLogout = onLogout,
             onNavigateToSettings = { navController.navigateToSettings() },
             onNavigateToDiagnostics = { navController.navigateToDiagnostics() },
             onNavigateToModule = { route -> navController.navigate(route) }

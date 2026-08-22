@@ -20,6 +20,12 @@ import com.example.tyre_pulse_app.core.designsystem.component.TPStatusChip
 import com.example.tyre_pulse_app.core.designsystem.component.TPTopBar
 import com.example.tyre_pulse_app.core.model.Tyre
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TyreListRoute(
     onTyreClick: (String) -> Unit,
@@ -29,8 +35,27 @@ fun TyreListRoute(
     val uiState by viewModel.uiState.collectAsState()
     val currentWorkspace by userViewModel.currentWorkspace.collectAsState()
     val listState = rememberLazyListState()
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            // Ideally trigger refresh on view model.
+            // viewModel.refresh()
+            pullToRefreshState.endRefresh()
+        }
+    }
+    
+    LaunchedEffect(uiState.isLoading) {
+        if (!uiState.isLoading) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column {
                 TPTopBar(
@@ -50,8 +75,13 @@ fun TyreListRoute(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (uiState.isLoading && uiState.tyres.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+        ) {
+            if (uiState.isLoading && uiState.tyres.isEmpty() && !pullToRefreshState.isRefreshing) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
                 LazyColumn(
@@ -72,6 +102,11 @@ fun TyreListRoute(
                     }
                 }
             }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

@@ -16,4 +16,9 @@ class TyrePulseApp : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
+
+    override fun onCreate() {
+        super.onCreate()
+        com.example.tyre_pulse_app.core.work.workers.SyncWorker.startPeriodicSync(this)
+    }
 }

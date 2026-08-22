@@ -49,13 +49,17 @@ class TyreRepository @Inject constructor(
     }
 
     suspend fun getRemovalReasons(): List<RemovalReason> {
-        // Mocking removal reasons if API not ready, or use the one from web
-        return listOf(
-            RemovalReason("1", "Worn Out"),
-            RemovalReason("2", "Puncture"),
-            RemovalReason("3", "Sidewall Damage"),
-            RemovalReason("4", "Tread Separation")
-        )
+        return try {
+            tyreApi.getRemovalReasons()
+        } catch (e: Exception) {
+            // Fallback if API fails
+            listOf(
+                RemovalReason("1", "Worn Out"),
+                RemovalReason("2", "Puncture"),
+                RemovalReason("3", "Sidewall Damage"),
+                RemovalReason("4", "Tread Separation")
+            )
+        }
     }
 
     suspend fun submitReplacementRequest(request: TyreReplacementRequest): TyreReplacementRequest {

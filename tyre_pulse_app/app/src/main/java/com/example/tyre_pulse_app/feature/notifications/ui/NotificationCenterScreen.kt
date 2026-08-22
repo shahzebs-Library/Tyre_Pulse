@@ -26,6 +26,10 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusRed
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.model.Notification
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationCenterRoute(
@@ -34,8 +38,24 @@ fun NotificationCenterRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedFilter by remember { mutableStateOf("All") }
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh() // Implement refresh logic
+        }
+    }
+    
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.alerts), fontWeight = FontWeight.Bold) },
@@ -47,30 +67,42 @@ fun NotificationCenterRoute(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            FilterTabs(
-                selected = selectedFilter,
-                onSelected = { selectedFilter = it }
-            )
-            
-            if (uiState.isLoading && uiState.notifications.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = YellowPrimary)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(uiState.notifications) { alert ->
-                        AlertItem(
-                            alert = alert,
-                            onClick = { onNotificationClick(alert) }
-                        )
+        Box(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                FilterTabs(
+                    selected = selectedFilter,
+                    onSelected = { selectedFilter = it }
+                )
+                
+                if (uiState.isLoading && uiState.notifications.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = YellowPrimary)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.notifications) { alert ->
+                            AlertItem(
+                                alert = alert,
+                                onClick = { onNotificationClick(alert) }
+                            )
+                        }
                     }
                 }
             }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
@@ -150,7 +182,7 @@ fun AlertItem(alert: Notification, onClick: () -> Unit) {
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Just now", // TODO: Real timestamp
+                        text = alert.createdAt,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )

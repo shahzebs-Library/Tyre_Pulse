@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.reports.ui
+package com.example.tyre_pulse_app.feature.reports.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -28,8 +28,10 @@ import com.example.tyre_pulse_app.core.designsystem.theme.*
 fun ReportsScreen() {
     var selectedPeriod by remember { mutableStateOf("30d") }
     val periods = listOf("7d", "30d", "90d", "YTD")
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

@@ -82,6 +82,8 @@ fun ScanRoute(
         }
     )
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(key1 = true) {
         if (!hasCameraPermission) {
             launcher.launch(Manifest.permission.CAMERA)
@@ -89,6 +91,7 @@ fun ScanRoute(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("QR & Barcode Scanner", fontWeight = FontWeight.Bold) },

@@ -15,7 +15,10 @@ import androidx.compose.ui.unit.dp
 fun NotificationsRoute(
     onNotificationClick: (String) -> Unit
 ) {
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Notifications", fontWeight = FontWeight.Bold) }

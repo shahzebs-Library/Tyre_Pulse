@@ -1,9 +1,14 @@
 package com.example.tyre_pulse_app.core.network.api
 
 import com.example.tyre_pulse_app.core.model.WorkOrder
+import com.example.tyre_pulse_app.core.model.WorkshopEvent
 import retrofit2.http.*
 
 interface WorkshopApi {
+    @GET("workshop_events")
+    suspend fun getWorkshopEvents(
+        @Query("user_id") userId: String? = null
+    ): List<WorkshopEvent>
     @GET("workshop/jobs")
     suspend fun getWorkOrders(
         @Query("status") status: String? = null,

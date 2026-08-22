@@ -142,7 +142,7 @@ class MainActivity : ComponentActivity() {
                                 containerColor = MaterialTheme.colorScheme.surface,
                                 tonalElevation = 8.dp
                             ) {
-                                val isMechanic = false // Mock role based on PMV logic (set to false to show full menu)
+                                val isMechanic = currentUser?.role?.lowercase() == "mechanic"
                                 
                                 if (isMechanic) {
                                     NavigationBarItem(
@@ -256,7 +256,8 @@ class MainActivity : ComponentActivity() {
                     TyrePulseNavHost(
                         navController = navController,
                         modifier = Modifier.padding(innerPadding),
-                        isAuthenticated = isAuthenticated
+                        isAuthenticated = isAuthenticated,
+                        onLogout = { userViewModel.logout() }
                     )
                 }
             }

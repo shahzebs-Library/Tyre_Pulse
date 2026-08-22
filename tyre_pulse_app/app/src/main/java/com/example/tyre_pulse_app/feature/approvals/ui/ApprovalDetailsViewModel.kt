@@ -4,7 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tyre_pulse_app.core.model.Approval
+import com.example.tyre_pulse_app.core.model.ApprovalStatus
 import com.example.tyre_pulse_app.core.data.repository.ApprovalRepository
+import com.example.tyre_pulse_app.core.data.repository.SyncRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +23,7 @@ data class ApprovalDetailsUiState(
 @HiltViewModel
 class ApprovalDetailsViewModel @Inject constructor(
     private val repository: ApprovalRepository,
+    private val syncRepository: SyncRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -39,6 +42,15 @@ class ApprovalDetailsViewModel @Inject constructor(
             repository.getApprovalById(approvalId).collect { approval ->
                 _uiState.value = _uiState.value.copy(approval = approval, isLoading = false)
             }
+        }
+    }
+
+    fun updateStatus(status: ApprovalStatus, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            syncRepository.enqueueCommand("UPDATE_APPROVAL", mapOf("id" to approvalId, "status" to status.name))
+            _uiState.value = _uiState.value.copy(isLoading = false)
+            onComplete()
         }
     }
 }

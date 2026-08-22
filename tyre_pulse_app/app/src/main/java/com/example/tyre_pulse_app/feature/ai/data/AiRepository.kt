@@ -43,8 +43,8 @@ class AiRepository @Inject constructor(
     private suspend fun fetchContext(intent: String): String {
         return when (intent) {
             "risk_analysis" -> {
-                val criticalCount = 12 // Mocked for now, will use tyreApi in production
-                "Found $criticalCount critical tyres across Site A and Site B."
+                val criticalTyres = try { tyreApi.getTyres(status = "eq.Critical") } catch (e: Exception) { emptyList() }
+                "Found ${criticalTyres.size} critical tyres across the fleet."
             }
             "cost_analysis" -> {
                 "Fleet spend in Q2 is SAR 450,000, 12% over budget."

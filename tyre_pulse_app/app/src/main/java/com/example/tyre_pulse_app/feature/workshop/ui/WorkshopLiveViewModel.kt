@@ -51,7 +51,7 @@ class WorkshopLiveViewModel @Inject constructor(
             
             combine(
                 repository.getWorkOrders(),
-                flowOf(emptyList<WorkshopEvent>()) // Mock events for now
+                repository.getLiveEvents(user.id)
             ) { jobs, events ->
                 val checkedIn = events.any { it.eventType == "check_in" } && 
                                events.none { it.eventType == "check_out" && it.at > (events.find { it.eventType == "check_in" }?.at ?: "") }

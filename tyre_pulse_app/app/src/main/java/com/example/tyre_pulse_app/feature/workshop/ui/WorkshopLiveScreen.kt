@@ -24,6 +24,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.*
 import com.example.tyre_pulse_app.core.model.WorkOrder
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkshopLiveRoute(
@@ -32,7 +38,18 @@ fun WorkshopLiveRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            delay(1000)
+            pullToRefreshState.endRefresh()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Workshop Live", fontWeight = FontWeight.ExtraBold) },
@@ -44,38 +61,49 @@ fun WorkshopLiveRoute(
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
-                .padding(padding)
                 .fillMaxSize()
+                .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
-            // Check-In Banner
-            CheckInBanner(
-                isCheckedIn = uiState.isCheckedIn,
-                onToggle = { 
-                    viewModel.recordEvent(if (uiState.isCheckedIn) "check_out" else "check_in") 
-                }
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Spacer(Modifier.height(8.dp))
+                // Check-In Banner
+                CheckInBanner(
+                    isCheckedIn = uiState.isCheckedIn,
+                    onToggle = { 
+                        viewModel.recordEvent(if (uiState.isCheckedIn) "check_out" else "check_in") 
+                    }
+                )
 
-            // Productivity Rollup
-            ProductivityCard(uiState.productivity)
+                // Productivity Rollup
+                ProductivityCard(uiState.productivity)
 
-            // My Jobs List
-            Text("MY OPEN JOBS", style = MaterialTheme.typography.labelSmall, color = YellowPrimary, fontWeight = FontWeight.Bold)
-            
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(uiState.jobs) { job ->
-                    JobInteractionCard(
-                        job = job,
-                        isSelected = uiState.selectedJobId == job.id,
-                        onClick = { viewModel.selectJob(job.id) },
-                        onAction = { type -> viewModel.recordEvent(type, job.id) }
-                    )
+                // My Jobs List
+                Text("MY OPEN JOBS", style = MaterialTheme.typography.labelSmall, color = YellowPrimary, fontWeight = FontWeight.Bold)
+                
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(uiState.jobs) { job ->
+                        JobInteractionCard(
+                            job = job,
+                            isSelected = uiState.selectedJobId == job.id,
+                            onClick = { viewModel.selectJob(job.id) },
+                            onAction = { type -> viewModel.recordEvent(type, job.id) }
+                        )
+                    }
                 }
             }
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

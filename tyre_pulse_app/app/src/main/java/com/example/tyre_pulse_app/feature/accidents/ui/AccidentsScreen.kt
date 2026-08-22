@@ -1,4 +1,4 @@
-package com.example.tyre_pulse_app.feature.washing.ui
+package com.example.tyre_pulse_app.feature.accidents.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,7 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.tyre_pulse_app.core.model.WashRecord
+import com.example.tyre_pulse_app.core.model.Accident
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -21,10 +21,11 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WashingScreen(
+fun AccidentsScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToLogWash: () -> Unit,
-    viewModel: WashingViewModel = hiltViewModel()
+    onNavigateToReport: () -> Unit,
+    onCaseClick: (String) -> Unit,
+    viewModel: AccidentsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -34,17 +35,17 @@ fun WashingScreen(
     // Handle Pull to refresh
     if (pullToRefreshState.isRefreshing) {
         LaunchedEffect(true) {
-            viewModel.loadWashes()
+            viewModel.loadAccidents()
         }
     }
     
     // When state transitions from Loading to Success/Error, stop refreshing
     LaunchedEffect(uiState) {
-        if (uiState !is WashingUiState.Loading) {
+        if (uiState !is AccidentsUiState.Loading) {
             pullToRefreshState.endRefresh()
         }
-        if (uiState is WashingUiState.Error) {
-            val msg = (uiState as WashingUiState.Error).message
+        if (uiState is AccidentsUiState.Error) {
+            val msg = (uiState as AccidentsUiState.Error).message
             scope.launch {
                 snackbarHostState.showSnackbar(msg)
             }
@@ -55,7 +56,7 @@ fun WashingScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Vehicle Washing") },
+                title = { Text("Accidents") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -64,8 +65,8 @@ fun WashingScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToLogWash) {
-                Icon(Icons.Default.Add, contentDescription = "Log Wash")
+            FloatingActionButton(onClick = onNavigateToReport) {
+                Icon(Icons.Default.Add, contentDescription = "Report Accident")
             }
         }
     ) { paddingValues ->
@@ -76,23 +77,22 @@ fun WashingScreen(
                 .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
             when (val state = uiState) {
-                is WashingUiState.Loading -> {
+                is AccidentsUiState.Loading -> {
                     if (!pullToRefreshState.isRefreshing) {
                         CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     }
                 }
-                is WashingUiState.Error -> {
-                    // Show a localized error text if we have NO data to show, otherwise snackbar handles it.
+                is AccidentsUiState.Error -> {
                     Text(
                         text = "Failed to load data. Swipe to retry.",
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.align(Alignment.Center).padding(16.dp)
                     )
                 }
-                is WashingUiState.Success -> {
+                is AccidentsUiState.Success -> {
                     if (state.records.isEmpty()) {
                         Text(
-                            text = "No washes logged yet. Swipe to refresh.",
+                            text = "No accidents reported yet. Swipe to refresh.",
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.align(Alignment.Center)
                         )
@@ -103,7 +103,7 @@ fun WashingScreen(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(state.records) { record ->
-                                WashRecordCard(record)
+                                AccidentCard(record, onClick = { onCaseClick(record.id) })
                             }
                         }
                     }
@@ -119,17 +119,17 @@ fun WashingScreen(
 }
 
 @Composable
-fun WashRecordCard(record: WashRecord) {
+fun AccidentCard(accident: Accident, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Asset: ${record.assetNumber}", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Asset: ${accident.assetNumber}", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "Date: ${record.washDate}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = "Type: ${record.washType}", style = MaterialTheme.typography.bodyMedium)
-            Text(text = "Status: ${record.status}", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Date: ${accident.date}", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "Type: ${accident.accidentType}", style = MaterialTheme.typography.bodyMedium)
+            Text(text = "Status: ${accident.status.name}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

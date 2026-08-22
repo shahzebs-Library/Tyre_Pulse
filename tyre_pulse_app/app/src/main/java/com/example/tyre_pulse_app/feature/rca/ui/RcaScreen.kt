@@ -27,8 +27,10 @@ fun RcaRoute(
     viewModel: RcaViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Root Cause Analysis", fontWeight = FontWeight.Bold) },
@@ -87,7 +89,7 @@ fun RcaRoute(
 
             item {
                 Button(
-                    onClick = { /* TODO */ },
+                    onClick = { viewModel.submit(onSuccess = onBack) },
                     modifier = Modifier.fillMaxWidth().height(56.dp).padding(vertical = 8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
                     shape = RoundedCornerShape(12.dp)

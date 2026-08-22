@@ -42,6 +42,15 @@ class AuthRepository @Inject constructor(
                     site = null
                 )
                 workspaceManager.setWorkspace(defaultWorkspace)
+
+                val user = User(
+                    id = profile.id,
+                    name = profile.fullName ?: profile.username ?: "Unknown",
+                    email = profile.email ?: response.user.email ?: "",
+                    role = profile.role,
+                    availableWorkspaces = listOf(defaultWorkspace) // Ideally fetched from DB
+                )
+                userRepository.setCurrentUser(user)
             }
             
             Result.success(Unit)
@@ -53,5 +62,6 @@ class AuthRepository @Inject constructor(
     suspend fun logout() {
         tokenManager.clearTokens()
         workspaceManager.clearWorkspace()
+        userRepository.clearCurrentUser()
     }
 }

@@ -18,13 +18,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 /**
  * Agent 05: Accident Evidence Vault.
  * Handles Photos, Audio Statements, and Witness Logs.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccidentEvidenceVault() {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+fun AccidentEvidenceVault(onBack: () -> Unit = {}) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Evidence Vault") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
         Text("Incident Evidence", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(16.dp))
         

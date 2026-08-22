@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.team.ui
+package com.example.tyre_pulse_app.feature.team.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -33,6 +33,12 @@ data class DriverScore(
     val onTimeRate: Float
 )
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DriverScorecardScreen() {
@@ -44,8 +50,18 @@ fun DriverScorecardScreen() {
         DriverScore("Rashid Khalil", "Driver", 1200, 0, "📋", 21, 82.1f),
     )
     val myDriver = drivers.first()
+    
+    val pullToRefreshState = rememberPullToRefreshState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            pullToRefreshState.endRefresh()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -60,11 +76,17 @@ fun DriverScorecardScreen() {
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             // My card (hero)
             item {
                 Box(
@@ -168,6 +190,11 @@ fun DriverScorecardScreen() {
                 LeaderboardRow(rank = index + 1, driver = driver)
             }
         }
+        
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 

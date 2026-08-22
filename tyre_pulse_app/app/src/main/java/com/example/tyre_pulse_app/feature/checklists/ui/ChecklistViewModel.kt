@@ -3,6 +3,7 @@ package com.example.tyre_pulse_app.feature.checklists.ui
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tyre_pulse_app.core.data.repository.ChecklistRepository
 import com.example.tyre_pulse_app.core.model.ChecklistField
 import com.example.tyre_pulse_app.core.model.ChecklistTemplate
 import com.example.tyre_pulse_app.core.model.VisibilityCondition
@@ -20,7 +21,8 @@ data class ChecklistUiState(
 
 @HiltViewModel
 class ChecklistViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    private val checklistRepository: ChecklistRepository
 ) : ViewModel() {
 
     private val templateId: String = savedStateHandle["templateId"] ?: "dvir_1"
@@ -29,32 +31,25 @@ class ChecklistViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     init {
-        loadMockTemplate()
+        loadTemplate()
     }
 
-    private fun loadMockTemplate() {
-        val mockTemplate = ChecklistTemplate(
-            id = "dvir_1",
-            name = "Driver Daily Inspection (DVIR)",
-            fields = listOf(
-                ChecklistField("s1", "General Vehicle State", "section"),
-                ChecklistField("f1", "Exterior Cleanliness", "boolean", required = true),
-                ChecklistField("f2", "Odometer Reading", "number", required = true),
-                ChecklistField("s2", "Safety Systems", "section"),
-                ChecklistField("f3", "Brake Performance", "boolean", required = true),
-                ChecklistField("f4", "Lights & Indicators", "boolean", required = true),
-                ChecklistField("has_defects", "Any defects found?", "boolean"),
-                ChecklistField(
-                    id = "f6",
-                    label = "Defect Description",
-                    type = "select",
-                    options = listOf("Oil Leak", "Brake Squeal", "Tire Wear", "Body Damage"),
-                    visibleWhen = VisibilityCondition("has_defects", "eq", "true")
-                )
-            ),
-            scored = true
-        )
-        _uiState.update { it.copy(template = mockTemplate) }
+    private fun loadTemplate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            val result = checklistRepository.getTemplates()
+            if (result.isSuccess) {
+                val templates = result.getOrNull() ?: emptyList()
+                val match = templates.find { it.id == templateId }
+                if (match != null) {
+                    _uiState.update { it.copy(template = match, isLoading = false) }
+                } else {
+                    _uiState.update { it.copy(error = "Template not found", isLoading = false) }
+                }
+            } else {
+                _uiState.update { it.copy(error = result.exceptionOrNull()?.message ?: "Failed to load", isLoading = false) }
+            }
+        }
     }
 
     fun updateAnswer(fieldId: String, value: String) {

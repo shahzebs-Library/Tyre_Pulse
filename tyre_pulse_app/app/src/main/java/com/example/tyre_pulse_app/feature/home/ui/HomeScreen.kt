@@ -29,6 +29,11 @@ import com.example.tyre_pulse_app.R
 import com.example.tyre_pulse_app.core.authentication.UserRole
 import com.example.tyre_pulse_app.core.designsystem.theme.*
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.launch
+
 @Composable
 fun HomeRoute(
     onNavigateToModule: (String) -> Unit,
@@ -37,32 +42,61 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    
+    // Setup for Pull-To-Refresh
+    val pullToRefreshState = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            viewModel.loadHomeData()
+        }
+    }
+    
+    // Simulate loading finished
+    LaunchedEffect(uiState) {
+        // Ideally uiState should have Loading/Success states, assuming it updates values for now
+        pullToRefreshState.endRefresh()
+    }
+
     HomeScreen(
         uiState = uiState,
+        pullToRefreshState = pullToRefreshState,
+        snackbarHostState = snackbarHostState,
         onNavigateToModule = onNavigateToModule,
         onAssetClick = onAssetClick,
         onScanClick = onNavigateToScan
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
+    pullToRefreshState: androidx.compose.material3.pulltorefresh.PullToRefreshState,
+    snackbarHostState: SnackbarHostState,
     onNavigateToModule: (String) -> Unit,
     onAssetClick: (String) -> Unit,
     onScanClick: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { HighFidelityTopBar(onScanClick) }
+        topBar = { HighFidelityTopBar(onScanClick) },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
             // Live KPI Hub
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -129,6 +163,12 @@ fun HomeScreen(
             }
             
             item { Spacer(Modifier.height(32.dp)) }
+            }
+            
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

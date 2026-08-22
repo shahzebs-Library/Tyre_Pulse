@@ -2,7 +2,9 @@ package com.example.tyre_pulse_app.core.data.repository
 
 import com.example.tyre_pulse_app.core.model.WorkOrder
 import com.example.tyre_pulse_app.core.model.WorkOrderStatus
+import com.example.tyre_pulse_app.core.model.WorkshopEvent
 import com.example.tyre_pulse_app.core.network.api.WorkshopApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -23,6 +25,18 @@ class WorkshopRepository @Inject constructor(
             assetId = assetId
         )
         emit(jobs)
+    }
+
+    fun getLiveEvents(userId: String? = null): Flow<List<WorkshopEvent>> = flow {
+        while(true) {
+            try {
+                val events = workshopApi.getWorkshopEvents(userId)
+                emit(events)
+            } catch (e: Exception) {
+                // Ignore errors for polling
+            }
+            delay(5000) // Poll every 5s
+        }
     }
 
     suspend fun getWorkOrder(id: String): WorkOrder {

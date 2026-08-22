@@ -2,6 +2,7 @@ package com.example.tyre_pulse_app.core.authentication
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tyre_pulse_app.core.authentication.data.AuthRepository
 import com.example.tyre_pulse_app.core.authentication.data.UserRepository
 import com.example.tyre_pulse_app.core.model.User
 import com.example.tyre_pulse_app.core.model.WorkspaceContext
@@ -15,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class UserViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val workspaceManager: WorkspaceManager
+    private val workspaceManager: WorkspaceManager,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     val currentUser: StateFlow<User?> = userRepository.getCurrentUser()
@@ -28,6 +30,12 @@ class UserViewModel @Inject constructor(
         viewModelScope.launch {
             workspaceManager.setWorkspace(workspace)
             // Here we would also trigger a global refresh of other repositories
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            authRepository.logout()
         }
     }
 }

@@ -18,6 +18,7 @@ fun ActiveJobExecutionScreen(
     onScanPart: () -> Unit
 ) {
     val deductedParts = remember { mutableStateListOf<String>() }
+    val snackbarHostState = remember { SnackbarHostState() }
     
     LaunchedEffect(scannedPartId) {
         if (!scannedPartId.isNullOrEmpty() && !deductedParts.contains(scannedPartId)) {
@@ -27,6 +28,7 @@ fun ActiveJobExecutionScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(title = { Text("Active Job: WO-9021") })
         },

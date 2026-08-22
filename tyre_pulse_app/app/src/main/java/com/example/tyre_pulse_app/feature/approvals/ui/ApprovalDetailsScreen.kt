@@ -34,8 +34,10 @@ fun ApprovalDetailsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val approval: Approval? = uiState.approval
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Request Details", style = MaterialTheme.typography.titleLarge) },
@@ -62,7 +64,7 @@ fun ApprovalDetailsRoute(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { /* TODO */ },
+                            onClick = { viewModel.updateStatus(ApprovalStatus.REJECTED, onBack) },
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
@@ -72,7 +74,7 @@ fun ApprovalDetailsRoute(
                             Text("Reject")
                         }
                         Button(
-                            onClick = { /* TODO */ },
+                            onClick = { viewModel.updateStatus(ApprovalStatus.APPROVED, onBack) },
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
                         ) {

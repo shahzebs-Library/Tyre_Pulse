@@ -1,5 +1,6 @@
 package com.example.tyre_pulse_app.core.network.api
 
+import com.example.tyre_pulse_app.core.model.RemovalReason
 import com.example.tyre_pulse_app.core.model.Tyre
 import com.example.tyre_pulse_app.core.model.TyreHistoryEvent
 import retrofit2.http.GET
@@ -27,4 +28,10 @@ interface TyreApi {
         @Query("tyre_id") id: String,
         @Query("select") select: String = "*"
     ): List<TyreHistoryEvent>
+
+    @GET("lookup_reasons")
+    suspend fun getRemovalReasons(
+        @Query("type") type: String = "eq.removal",
+        @Query("select") select: String = "*"
+    ): List<RemovalReason>
 }

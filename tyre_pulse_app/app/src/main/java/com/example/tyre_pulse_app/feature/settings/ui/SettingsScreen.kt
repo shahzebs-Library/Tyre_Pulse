@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.settings.ui
+package com.example.tyre_pulse_app.feature.settings.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,8 +33,10 @@ fun SettingsRoute(
     var offlineSync by remember { mutableStateOf(true) }
     var selectedLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
     var showLanguagePicker by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.ExtraBold) },

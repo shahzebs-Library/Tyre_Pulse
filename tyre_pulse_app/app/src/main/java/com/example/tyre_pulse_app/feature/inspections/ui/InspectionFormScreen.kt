@@ -33,6 +33,7 @@ fun InspectionFormScreen(
     assetId: String,
     onBack: () -> Unit,
     onTyreClick: (String) -> Unit, // Kept for API compatibility, though we handle it internally now
+    onNavigateToScan: () -> Unit,
     viewModel: InspectionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -40,8 +41,18 @@ fun InspectionFormScreen(
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(it)
+            }
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Vehicle Inspection", fontWeight = FontWeight.ExtraBold) },
@@ -132,7 +143,8 @@ fun InspectionFormScreen(
                         showBottomSheet = false
                         selectedPosition = null
                     }
-                }
+                },
+                onNavigateToScan = onNavigateToScan
             )
         }
     }
@@ -143,7 +155,8 @@ fun TyreDetailBottomSheet(
     position: String,
     initialReading: TyreInspectionReading?,
     onSave: (TyreInspectionReading) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onNavigateToScan: () -> Unit
 ) {
     var pressure by remember { mutableStateOf(initialReading?.pressure?.toFloatOrNull() ?: 6.2f) }
     var treadDepth by remember { mutableStateOf(initialReading?.treadDepth?.toFloatOrNull() ?: 6.5f) }
@@ -188,7 +201,7 @@ fun TyreDetailBottomSheet(
 
         // AI Scan Button
         Button(
-            onClick = { /* TODO: Hook up AITyreScanner overlay */ },
+            onClick = onNavigateToScan,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             shape = RoundedCornerShape(12.dp)

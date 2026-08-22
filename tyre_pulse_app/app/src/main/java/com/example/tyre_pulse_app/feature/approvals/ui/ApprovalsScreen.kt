@@ -25,7 +25,11 @@ import com.example.tyre_pulse_app.core.model.ApprovalStatus
 import com.example.tyre_pulse_app.core.designsystem.component.TPCard
 import com.example.tyre_pulse_app.core.designsystem.component.TPStatusChip
 import com.example.tyre_pulse_app.core.designsystem.component.TPTopBar
-
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 @Composable
 fun ApprovalsRoute(
     onApprovalClick: (String) -> Unit,
@@ -35,8 +39,10 @@ fun ApprovalsRoute(
     val uiState by viewModel.uiState.collectAsState()
     val currentWorkspace by userViewModel.currentWorkspace.collectAsState()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Surface(shadowElevation = 4.dp) {
                 Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -160,6 +166,7 @@ fun FilterSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ApprovalsScreen(
     uiState: ApprovalsUiState,
@@ -168,7 +175,21 @@ internal fun ApprovalsScreen(
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))) {
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            delay(1000)
+            pullToRefreshState.endRefresh()
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .nestedScroll(pullToRefreshState.nestedScrollConnection)
+    ) {
         if (uiState.isLoading && uiState.approvals.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -214,6 +235,10 @@ internal fun ApprovalsScreen(
                 }
             }
         }
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 

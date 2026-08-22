@@ -26,8 +26,10 @@ fun MeterLogRoute(
     viewModel: MeterLogViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Meter Logs", fontWeight = FontWeight.Bold) },
@@ -92,7 +94,7 @@ fun MeterLogRoute(
             }
 
             Button(
-                onClick = { /* TODO: Submit */ },
+                onClick = { viewModel.submit(onSuccess = onBack) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
                 shape = RoundedCornerShape(12.dp),

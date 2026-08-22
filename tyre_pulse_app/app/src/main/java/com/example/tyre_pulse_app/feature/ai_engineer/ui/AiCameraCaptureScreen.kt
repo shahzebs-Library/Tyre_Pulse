@@ -54,6 +54,8 @@ fun AiCameraCaptureScreen(
         hasCameraPermission = granted
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -61,6 +63,7 @@ fun AiCameraCaptureScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(title = { Text("AI Part Wear Analysis") })
         },

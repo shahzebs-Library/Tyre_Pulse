@@ -23,8 +23,14 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class ChecklistItem(val id: Int, val title: String, var isChecked: Boolean = false)
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +56,18 @@ fun HousekeepingChecklistScreen(
     var signaturePath by remember { mutableStateOf(Path()) }
     var hasSigned by remember { mutableStateOf(false) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val pullToRefreshState = rememberPullToRefreshState()
+    
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            delay(1000)
+            pullToRefreshState.endRefresh()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("PMV Housekeeping") },
@@ -65,6 +82,12 @@ fun HousekeepingChecklistScreen(
             )
         }
     ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
+        ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -182,8 +205,14 @@ fun HousekeepingChecklistScreen(
                     Text("Clear Signature")
                 }
                 
+                
                 Spacer(modifier = Modifier.height(80.dp))
             }
+        }
+        PullToRefreshContainer(
+            state = pullToRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
         }
     }
 }

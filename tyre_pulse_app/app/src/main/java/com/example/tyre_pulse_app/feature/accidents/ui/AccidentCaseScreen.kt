@@ -12,7 +12,10 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccidentCaseScreen(caseId: String, onBack: () -> Unit) {
+    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
+    
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Case: $caseId", fontWeight = FontWeight.Bold) },

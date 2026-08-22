@@ -120,4 +120,8 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideWashApi(retrofit: Retrofit): WashApi = retrofit.create(WashApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideChecklistApi(retrofit: Retrofit): ChecklistApi = retrofit.create(ChecklistApi::class.java)
 }

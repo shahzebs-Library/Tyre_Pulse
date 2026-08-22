@@ -95,13 +95,23 @@ fun HomeScreen(
                     HomeModule("Fleet", Icons.Default.DirectionsCar, "asset_list_route"),
                     HomeModule("Workshop", Icons.Default.Build, "workshop_route"),
                     HomeModule("AI Center", Icons.Default.AutoGraph, "ai_predictive_route"),
-                    HomeModule("Checklists", Icons.Default.Assignment, "checklist_library")
+                    HomeModule("Checklists", Icons.Default.Assignment, "checklist_library"),
+                    HomeModule("Accidents", Icons.Default.Warning, "accident_dashboard"),
+                    HomeModule("Washing", Icons.Default.LocalCarWash, "washing_route")
                 )
                 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    modules.forEach { module ->
-                        ModuleLauncherItem(module, modifier = Modifier.weight(1f)) {
-                            onNavigateToModule(module.route)
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    modules.chunked(3).forEach { rowModules ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            rowModules.forEach { module ->
+                                ModuleLauncherItem(module, modifier = Modifier.weight(1f)) {
+                                    onNavigateToModule(module.route)
+                                }
+                            }
+                            // Fill remaining space if the last row has fewer than 3 items
+                            repeat(3 - rowModules.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }

@@ -5,7 +5,6 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
 import com.example.tyre_pulse_app.core.navigation.NavigationDestination
-import com.example.tyre_pulse_app.feature.accidents.ui.AccidentListRoute
 
 import androidx.navigation.NavType
 import androidx.navigation.navArgument

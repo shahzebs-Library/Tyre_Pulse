@@ -24,7 +24,8 @@ class UploadWorker @AssistedInject constructor(
             val file = File(filePath)
             if (!file.exists()) return Result.failure()
             
-            val requestFile = okhttp3.RequestBody.create(okhttp3.MediaType.parse("image/jpeg"), file)
+            val mediaType = okhttp3.MediaType.Companion.toMediaTypeOrNull("image/jpeg")
+            val requestFile = okhttp3.RequestBody.Companion.asRequestBody(file, mediaType)
             val body = okhttp3.MultipartBody.Part.createFormData("file", file.name, requestFile)
             
             storageApi.uploadFile(bucket, file.name, body)

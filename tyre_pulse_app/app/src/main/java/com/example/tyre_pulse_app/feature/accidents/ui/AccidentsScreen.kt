@@ -103,7 +103,7 @@ fun AccidentsScreen(
                             modifier = Modifier.fillMaxSize()
                         ) {
                             items(state.records) { record ->
-                                AccidentCard(record, onClick = { onCaseClick(record.id) })
+                                AccidentCard(record, onClick = { onCaseClick(record.id ?: "") })
                             }
                         }
                     }

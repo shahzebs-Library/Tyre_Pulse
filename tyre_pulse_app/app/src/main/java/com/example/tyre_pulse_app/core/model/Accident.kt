@@ -1,6 +1,7 @@
 package com.example.tyre_pulse_app.core.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class Accident(

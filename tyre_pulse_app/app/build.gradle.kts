@@ -30,8 +30,8 @@ android {
         applicationId = "com.shahzebrahman.tyrepulse.native"
         minSdk = 26
         targetSdk = 35
-        versionCode = 225
-        versionName = "2.1.15"
+        versionCode = 226
+        versionName = "2.1.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

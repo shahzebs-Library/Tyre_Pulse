@@ -47,7 +47,7 @@ class WorkshopLiveViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val user = userRepository.getCurrentUser().first() ?: return@launch
+            val user = userRepository.getCurrentUser().filterNotNull().first()
             
             combine(
                 repository.getWorkOrders(),
@@ -71,7 +71,7 @@ class WorkshopLiveViewModel @Inject constructor(
 
     fun recordEvent(type: String, jobId: String? = null, reason: String? = null, note: String? = null) {
         viewModelScope.launch {
-            val user = userRepository.getCurrentUser().first() ?: return@launch
+            val user = userRepository.getCurrentUser().filterNotNull().first()
             val event = WorkshopEvent(
                 id = UUID.randomUUID().toString(),
                 userId = user.id,

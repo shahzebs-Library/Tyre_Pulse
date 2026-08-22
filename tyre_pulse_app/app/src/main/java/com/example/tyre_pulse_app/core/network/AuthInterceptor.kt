@@ -25,12 +25,15 @@ class AuthInterceptor @Inject constructor(
         
         // Agent R1: Thread-safe token refresh and workspace injection
         synchronized(refreshLock) {
-            val token = runBlocking { tokenManager.accessToken.first() }
-            val currentWorkspace = runBlocking { workspaceManager.currentWorkspace.first() }
+            val token = runBlocking { tokenManager.accessToken.value }
+            val currentWorkspace = runBlocking { workspaceManager.currentWorkspace.firstOrNull() }
             
             val requestBuilder = originalRequest.newBuilder()
                 .header("apikey", NetworkConfig.SUPABASE_ANON_KEY)
-                .header("Authorization", "Bearer $token")
+            
+            if (token != null) {
+                requestBuilder.header("Authorization", "Bearer $token")
+            }
 
             // Agent G-12: Strict Site Trespass Guard
             currentWorkspace?.let {
@@ -41,7 +44,7 @@ class AuthInterceptor @Inject constructor(
             val request = requestBuilder.build()
             val response = chain.proceed(request)
 
-            if (response.code == 401 && !isRefreshing) {
+            if (response.code == 401 && !isRefreshing && token != null) {
                 isRefreshing = true
                 try {
                     val refreshedToken = runBlocking { tokenManager.refreshToken() }
@@ -51,6 +54,9 @@ class AuthInterceptor @Inject constructor(
                             .header("Authorization", "Bearer $refreshedToken")
                             .build()
                         return chain.proceed(newRequest)
+                    } else {
+                        // Force clear if refresh fails completely so app logs out
+                        runBlocking { tokenManager.clearTokens() }
                     }
                 } finally {
                     isRefreshing = false

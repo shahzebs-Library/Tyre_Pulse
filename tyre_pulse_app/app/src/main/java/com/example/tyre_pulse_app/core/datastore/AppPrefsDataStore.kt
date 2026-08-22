@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.core.datastore
+package com.example.tyre_pulse_app.core.datastore
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -27,15 +27,26 @@ class AppPrefsDataStore @Inject constructor(
 ) {
     companion object {
         private val KEY_LANGUAGE = stringPreferencesKey("app_language")
+        private val KEY_THEME = stringPreferencesKey("app_theme")
     }
 
     val languageCode: Flow<String> = context.appPrefs.data.map { prefs ->
         prefs[KEY_LANGUAGE] ?: AppLanguage.ENGLISH.code
     }
 
+    val themeMode: Flow<String> = context.appPrefs.data.map { prefs ->
+        prefs[KEY_THEME] ?: "system"
+    }
+
     suspend fun setLanguage(code: String) {
         context.appPrefs.edit { prefs ->
             prefs[KEY_LANGUAGE] = code
+        }
+    }
+
+    suspend fun setThemeMode(mode: String) {
+        context.appPrefs.edit { prefs ->
+            prefs[KEY_THEME] = mode
         }
     }
 }

@@ -78,7 +78,12 @@ class MainActivity : ComponentActivity() {
             val languageCode by appPrefsDataStore.languageCode.collectAsState(initial = "en")
             val isRtl = languageCode in listOf("ar", "ur")
 
-            val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            val themeMode by appPrefsDataStore.themeMode.collectAsState(initial = "system")
+            val isDarkTheme = when (themeMode) {
+                "dark" -> true
+                "light" -> false
+                else -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
             Tyre_pulse_appTheme(darkTheme = isDarkTheme, isRtl = isRtl) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()

@@ -1,4 +1,4 @@
-﻿package com.example.tyre_pulse_app.feature.workshop.ui
+package com.example.tyre_pulse_app.feature.workshop.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.SecondaryIndicator
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -63,25 +65,53 @@ fun TeamLiveScreen(onBack: () -> Unit = {}) {
                 .fillMaxSize()
                 .padding(padding)
                 .background(OLED_Black)
-                
-        
         ) {
+            var selectedTab by remember { mutableStateOf(0) }
+            val tabs = listOf("Technicians", "Managers", "Drivers")
+            
             Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
                 Spacer(Modifier.height(16.dp))
+                
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color.Transparent,
+                    contentColor = YellowPrimary,
+                    indicator = { tabPositions ->
+                        SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = YellowPrimary
+                        )
+                    }
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(title, fontWeight = FontWeight.Bold) },
+                            unselectedContentColor = Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+
+                val currentList = when (selectedTab) {
+                    0 -> listOf("John T.", "Ahmed S.", "Musa B.", "Kevin L.")
+                    1 -> listOf("Sarah M.", "David O.")
+                    else -> listOf("Omar H.", "Ali M.", "Tariq K.")
+                }
 
                 LazyVerticalGrid(columns = GridCells.Fixed(2), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(listOf("John T.", "Ahmed S.", "Musa B.", "Kevin L.")) { tech ->
-                        TechnicianStatusCard(tech)
+                    items(currentList) { name ->
+                        TechnicianStatusCard(name, selectedTab)
                     }
                 }
             }
-            
         }
     }
 }
 
 @Composable
-fun TechnicianStatusCard(name: String) {
+fun TechnicianStatusCard(name: String, tabIndex: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = OLED_Card),
@@ -89,13 +119,15 @@ fun TechnicianStatusCard(name: String) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(StatusGreen))
+                Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(if (tabIndex == 0) StatusGreen else StatusBlue))
                 Spacer(Modifier.width(8.dp))
                 Text(name, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(12.dp))
-            Text("ACTIVE: Mixer 2841", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
-            Text("ELAPSED: 45m", fontWeight = FontWeight.ExtraBold, color = YellowPrimary)
+            Text(if (tabIndex == 0) "ACTIVE: Mixer 2841" else if (tabIndex == 1) "Reviewing Approvals" else "En Route: Site B", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+            if (tabIndex == 0) {
+                Text("ELAPSED: 45m", fontWeight = FontWeight.ExtraBold, color = YellowPrimary)
+            }
         }
     }
 }

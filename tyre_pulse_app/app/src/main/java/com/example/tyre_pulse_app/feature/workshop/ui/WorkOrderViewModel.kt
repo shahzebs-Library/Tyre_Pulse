@@ -38,7 +38,7 @@ class WorkOrderViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             
             // Sync user role state
-            val user = userRepository.getCurrentUser().first()
+            val user = userRepository.getCurrentUser().filterNotNull().first()
             val currentRole = UserRole.resolveRole(user?.role)
             
             repository.getWorkOrders().onEach { orders ->

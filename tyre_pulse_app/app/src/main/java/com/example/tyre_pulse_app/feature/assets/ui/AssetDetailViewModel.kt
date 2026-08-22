@@ -48,8 +48,7 @@ class AssetDetailViewModel @Inject constructor(
     private fun loadAsset() {
         viewModelScope.launch {
             try {
-                val workspace = workspaceManager.currentWorkspace.firstOrNull()
-                    ?: throw Exception("No active workspace found")
+                val workspace = workspaceManager.currentWorkspace.filterNotNull().first()
                 val tenantId = workspace.tenant.id
                 val realAsset = assetRepository.getAsset(assetId, tenantId)
                 _uiState.update { it.copy(asset = realAsset, isLoading = false) }

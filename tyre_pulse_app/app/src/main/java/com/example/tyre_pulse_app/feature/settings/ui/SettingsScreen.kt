@@ -23,16 +23,22 @@ import androidx.compose.ui.unit.sp
 import com.example.tyre_pulse_app.core.datastore.AppLanguage
 import com.example.tyre_pulse_app.core.designsystem.theme.*
 
+import androidx.hilt.navigation.compose.hiltViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsRoute(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    var darkMode by remember { mutableStateOf(false) }
+    val themeMode by viewModel.themeMode.collectAsState()
+    val languageCode by viewModel.languageCode.collectAsState()
+    
     var notificationsEnabled by remember { mutableStateOf(true) }
     var offlineSync by remember { mutableStateOf(true) }
-    var selectedLanguage by remember { mutableStateOf(AppLanguage.ENGLISH) }
+    var selectedLanguage = AppLanguage.entries.find { it.code == languageCode } ?: AppLanguage.ENGLISH
     var showLanguagePicker by remember { mutableStateOf(false) }
+    var showThemePicker by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
@@ -58,11 +64,58 @@ fun SettingsRoute(
             item {
                 SettingsTile(
                     icon = Icons.Default.DarkMode,
-                    title = "Dark Mode",
-                    subtitle = "Enable OLED-optimised dark theme",
-                    iconTint = MaterialTheme.colorScheme.primary
+                    title = "App Theme",
+                    subtitle = when (themeMode) {
+                        "dark" -> "Dark Mode"
+                        "light" -> "Light Mode"
+                        else -> "System Default"
+                    },
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    onClick = { showThemePicker = true }
                 ) {
-                    Switch(checked = darkMode, onCheckedChange = { darkMode = it })
+                    Icon(Icons.Default.ChevronRight, null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+                }
+            }
+
+            if (showThemePicker) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Select Theme", fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(bottom = 8.dp))
+                            
+                            val themes = listOf("system" to "System Default", "light" to "Light Mode", "dark" to "Dark Mode")
+                            themes.forEach { (mode, title) ->
+                                val isSelected = mode == themeMode
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
+                                        .clickable {
+                                            viewModel.setThemeMode(mode)
+                                            showThemePicker = false
+                                        }
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                    if (isSelected) {
+                                        Icon(Icons.Default.CheckCircle, null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -107,7 +160,7 @@ fun SettingsRoute(
                                             RoundedCornerShape(10.dp)
                                         )
                                         .clickable {
-                                            selectedLanguage = lang
+                                            viewModel.setLanguage(lang.code)
                                             showLanguagePicker = false
                                         }
                                         .padding(12.dp),

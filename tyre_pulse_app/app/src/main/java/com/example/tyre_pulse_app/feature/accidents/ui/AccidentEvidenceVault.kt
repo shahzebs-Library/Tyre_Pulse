@@ -66,6 +66,7 @@ fun AccidentEvidenceVault(onBack: () -> Unit = {}) {
         )
     }
 }
+}
 
 @Composable
 fun EvidenceTypeCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {

@@ -1,5 +1,10 @@
 package com.example.tyre_pulse_app.feature.team.ui
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -33,11 +38,7 @@ data class DriverScore(
     val onTimeRate: Float
 )
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,6 +197,7 @@ fun DriverScorecardScreen() {
             modifier = Modifier.align(Alignment.TopCenter)
         )
     }
+}
 }
 
 @Composable

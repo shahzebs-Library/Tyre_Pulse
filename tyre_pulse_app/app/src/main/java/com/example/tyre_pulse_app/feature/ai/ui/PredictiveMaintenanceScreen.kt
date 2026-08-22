@@ -1,5 +1,8 @@
 package com.example.tyre_pulse_app.feature.ai.ui
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,9 +26,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.*
 
 data class Message(val role: String, val content: String)
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

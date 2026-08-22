@@ -1,5 +1,8 @@
 package com.example.tyre_pulse_app.feature.ai.ui
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -33,9 +36,7 @@ private val suggestions = listOf(
     "Predict next month's tyre budget"
 )
 
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

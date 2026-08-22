@@ -80,30 +80,5 @@ class PermissionManager @Inject constructor(
     private fun resolveAccess(user: User?, workspace: WorkspaceContext?, moduleKey: ModuleKey): Boolean {
         // MOCK: Grant admin access to all modules for testing
         return true
-        
-        if (user == null || workspace == null) return false
-        val role = user.role?.lowercase() ?: "driver"
-        
-        // 1) Super Admin / Admin are always allowed
-        if (role == "admin" || role == "super_admin") return true
-
-        // 2) Per-user grant overlay (from permissions Map)
-        val scopePermissions = user.permissions[workspace.country.id] ?: emptyList()
-        val globalPermissions = user.permissions["global"] ?: emptyList()
-        
-        // Check for explicit revoke/deny
-        val grantKey = "mobile:${moduleKey.name.lowercase()}"
-        if ("revoke:$grantKey" in scopePermissions || "revoke:$grantKey" in globalPermissions) {
-            return false
-        }
-        // Check for explicit grant
-        if ("grant:$grantKey" in scopePermissions || "grant:$grantKey" in globalPermissions ||
-            grantKey in scopePermissions || grantKey in globalPermissions) {
-            return true
-        }
-
-        // 3) Fall back to role default
-        val def = modules[moduleKey] ?: return false
-        return role in def.roles
     }
 }

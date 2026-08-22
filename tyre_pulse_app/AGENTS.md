@@ -32,3 +32,4 @@ Support Tenant -> Company -> Country -> Project/Site isolation. Never assume a s
 
 ## CI/CD Pipeline
 There is already a build pipeline configured in GitHub. Do not attempt to trigger local builds for deployment or pipeline-related tasks unless explicitly requested for local testing.
+When preparing for a release or triggering the GitHub pipeline, ensure that you always bump the application version (e.g., in `build.gradle.kts`) before pushing the tags.

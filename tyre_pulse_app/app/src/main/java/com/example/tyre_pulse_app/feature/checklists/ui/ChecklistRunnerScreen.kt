@@ -23,6 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import com.example.tyre_pulse_app.core.designsystem.component.SignatureSvg
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -320,6 +324,11 @@ fun AdvancedRecorder(field: ChecklistField, value: String?, onSave: (String) -> 
                 val path = remember { Path() }
                 var drawTrigger by remember { mutableStateOf(0) }
                 var isDrawing by remember { mutableStateOf(false) }
+                // The on-screen Path cannot be serialised, so the points are captured
+                // as they are drawn. Without this the saved "signature" was a
+                // placeholder string - see SignatureSvg.
+                val strokes = remember { mutableStateListOf<MutableList<Offset>>() }
+                var padSize by remember { mutableStateOf(IntSize.Zero) }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Box(
@@ -328,22 +337,31 @@ fun AdvancedRecorder(field: ChecklistField, value: String?, onSave: (String) -> 
                             .height(180.dp)
                             .background(Color.White, RoundedCornerShape(16.dp))
                             .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                            .onSizeChanged { padSize = it }
                             .pointerInput(Unit) {
                                 detectDragGestures(
                                     onDragStart = { offset ->
                                         path.moveTo(offset.x, offset.y)
+                                        strokes.add(mutableListOf(offset))
                                         isDrawing = true
                                     },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         path.lineTo(change.position.x, change.position.y)
+                                        strokes.lastOrNull()?.add(change.position)
                                         drawTrigger++
                                     }
                                 )
                             }
                     ) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            val dummy = drawTrigger
+                            // Reading drawTrigger inside the draw scope is what makes the
+                            // canvas redraw as strokes are added: Path is mutable, so
+                            // appending to it changes no state Compose can observe. Named
+                            // for what it does - it was called "dummy", which reads as
+                            // placeholder code and invites deletion.
+                            @Suppress("UNUSED_VARIABLE")
+                            val redrawWhenStrokeAdded = drawTrigger
                             drawPath(
                                 path = path,
                                 color = Color.Black,
@@ -368,6 +386,7 @@ fun AdvancedRecorder(field: ChecklistField, value: String?, onSave: (String) -> 
                         OutlinedButton(
                             onClick = {
                                 path.reset()
+                                strokes.clear()
                                 isDrawing = false
                                 drawTrigger++
                             },
@@ -377,9 +396,15 @@ fun AdvancedRecorder(field: ChecklistField, value: String?, onSave: (String) -> 
                         }
                         Button(
                             onClick = {
-                                if (isDrawing) {
-                                    onSave("signature_data_url_mock_${System.currentTimeMillis()}")
-                                }
+                                // Save the real mark. fromStrokes returns null when
+                                // nothing was drawn, and nothing is saved in that case -
+                                // an empty signature must never be stored as if a
+                                // person had signed.
+                                SignatureSvg.fromStrokes(
+                                    strokes = strokes,
+                                    width = padSize.width,
+                                    height = padSize.height,
+                                )?.let(onSave)
                             },
                             enabled = isDrawing,
                             modifier = Modifier.weight(1f).height(60.dp)

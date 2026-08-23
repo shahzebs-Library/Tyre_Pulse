@@ -70,21 +70,35 @@ fun TeamRoute(viewModel: TeamViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun TechnicianCard(tech: TechnicianStatus) {
+fun TechnicianCard(tech: TeamMemberStatus) {
+    // Toned by whether anything is actually KNOWN about this person, not by an
+    // invented status. The old card coloured every technician from a hard-coded
+    // status field that no data backed.
+    val tone = if (tech.hasActivity) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(tech.color).copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Group, contentDescription = null, tint = Color(tech.color))
+            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(tone.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Group, contentDescription = null, tint = tone)
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(tech.name, fontWeight = FontWeight.Bold)
-                Text(tech.status, style = MaterialTheme.typography.bodySmall, color = Color(tech.color))
+                Text(
+                    // "No activity recorded" is not "Idle". The first says we do not
+                    // know; the second asserts the person is doing nothing.
+                    tech.lastEvent?.replace("_", " ")?.replaceFirstChar { it.uppercase() }
+                        ?: "No activity recorded",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tone
+                )
+                tech.role?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
             }
-            if (tech.activeJob != "N/A") {
+            tech.site?.takeIf { it.isNotBlank() }?.let {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("Working on", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    Text(tech.activeJob, fontWeight = FontWeight.ExtraBold)
+                    Text("Site", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    Text(it, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }

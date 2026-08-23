@@ -68,7 +68,7 @@ fun StockRoute(
         
         ) {
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                Text(uiState.selectedSite, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = YellowPrimary)
+                Text(uiState.selectedSite ?: "All sites", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = YellowPrimary)
                 Spacer(Modifier.height(16.dp))
 
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -95,8 +95,8 @@ fun StockCard(item: StockItem) {
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.brand, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                Text("${item.size} • ${item.type}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                Text(item.description, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(item.location + " - " + item.status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("${item.quantity}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)

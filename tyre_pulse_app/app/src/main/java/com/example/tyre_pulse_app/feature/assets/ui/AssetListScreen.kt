@@ -277,15 +277,35 @@ fun HighFidelityAssetCard(
     }
 }
 
+/**
+ * The register facts this app can actually read for an asset.
+ *
+ * TWO FABRICATIONS REMOVED HERE.
+ *
+ * 1. "OPERATOR" was hard-coded to "John Doe" on every asset in the fleet. There is
+ *    no operator or driver column on vehicle_fleet and no assignment table this
+ *    screen reads, so the field could never have been filled honestly. It is gone
+ *    rather than blanked - a permanently empty "OPERATOR" row invites someone to
+ *    conclude the asset is unassigned, which is a different claim from "we do not
+ *    record that".
+ *
+ * 2. "YEAR" was `latestInspectionDate.take(4)` - the year of the last INSPECTION,
+ *    printed under a label every reader takes to mean model year. The value was
+ *    real but the label was not, which is the more dangerous of the two. It now
+ *    carries its true name and its full date.
+ *
+ * Make and model take their place; both are real columns on vehicle_fleet.
+ */
 @Composable
 fun AssetDetailGrid(asset: Asset) {
     val details = listOf(
         "FLEET NO" to (asset.assetNumber),
         "REG NO" to (asset.plateNumber ?: "-"),
         "TYPE" to (asset.type ?: "-"),
-        "YEAR" to (asset.latestInspectionDate?.take(4) ?: "-"),
+        "MAKE" to (asset.make ?: "-"),
+        "MODEL" to (asset.model ?: "-"),
         "SITE" to (asset.site ?: "-"),
-        "OPERATOR" to ("John Doe")
+        "LAST INSPECTED" to (asset.latestInspectionDate?.take(10) ?: "-")
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

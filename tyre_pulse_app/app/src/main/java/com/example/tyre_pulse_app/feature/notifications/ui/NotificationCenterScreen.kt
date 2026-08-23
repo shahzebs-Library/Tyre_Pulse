@@ -29,6 +29,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.StatusOrange
 import com.example.tyre_pulse_app.core.designsystem.theme.StatusRed
 import com.example.tyre_pulse_app.core.designsystem.theme.YellowPrimary
 import com.example.tyre_pulse_app.core.model.Notification
+import com.example.tyre_pulse_app.core.model.NotificationType
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
@@ -53,6 +54,7 @@ fun NotificationCenterRoute(
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
+            viewModel.dismissError()
         }
     }
 
@@ -84,9 +86,25 @@ fun NotificationCenterRoute(
                     onSelected = { selectedFilter = it }
                 )
                 
+                // The filter tabs were a dead control - the selection was stored and
+                // never applied, so every tab showed the same list.
+                val visible = uiState.notifications.filter { matchesFilter(it, selectedFilter) }
+
                 if (uiState.isLoading && uiState.notifications.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = YellowPrimary)
+                    }
+                } else if (visible.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            if (uiState.notifications.isEmpty()) {
+                                "No notifications."
+                            } else {
+                                "No $selectedFilter notifications."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                        )
                     }
                 } else {
                     LazyColumn(
@@ -94,10 +112,13 @@ fun NotificationCenterRoute(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.notifications) { alert ->
+                        items(visible) { alert ->
                             AlertItem(
                                 alert = alert,
-                                onClick = { onNotificationClick(alert) }
+                                onClick = {
+                                    viewModel.markAsRead(alert.id)
+                                    onNotificationClick(alert)
+                                }
                             )
                         }
                     }
@@ -107,6 +128,21 @@ fun NotificationCenterRoute(
             
         }
     }
+}
+
+/**
+ * Which tab a notification belongs under.
+ *
+ * "Critical" is the band that needs a person to act - errors and anything awaiting
+ * their decision. SUCCESS sits with Info rather than getting a tab of its own,
+ * because the tab strip has four fixed labels and a completed action is not
+ * something the reader has to chase.
+ */
+private fun matchesFilter(alert: Notification, filter: String): Boolean = when (filter) {
+    "Critical" -> alert.type == NotificationType.ERROR || alert.type == NotificationType.ACTION_REQUIRED
+    "Warnings" -> alert.type == NotificationType.WARNING
+    "Info" -> alert.type == NotificationType.INFO || alert.type == NotificationType.SUCCESS
+    else -> true
 }
 
 @Composable
@@ -154,9 +190,15 @@ fun AlertItem(alert: Notification, onClick: () -> Unit) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.Top
         ) {
-            val (iconColor, bgColor) = when {
-                alert.title.contains("Critical", true) || alert.message.contains("low", true) -> StatusRed to StatusRed.copy(alpha = 0.1f)
-                alert.message.contains("High", true) || alert.message.contains("Overdue", true) -> StatusOrange to StatusOrange.copy(alpha = 0.1f)
+            // Colour comes from the notification's own type, which is a real column.
+            // This used to sniff the title and body for the words "Critical", "low",
+            // "High" and "Overdue" - so an urgent notice whose wording happened to
+            // differ rendered as routine grey, and a routine one mentioning a low
+            // reading rendered as an emergency.
+            val (iconColor, bgColor) = when (alert.type) {
+                NotificationType.ERROR -> StatusRed to StatusRed.copy(alpha = 0.1f)
+                NotificationType.ACTION_REQUIRED -> YellowPrimary to YellowPrimary.copy(alpha = 0.1f)
+                NotificationType.WARNING -> StatusOrange to StatusOrange.copy(alpha = 0.1f)
                 else -> Color.Gray to Color.Gray.copy(alpha = 0.1f)
             }
             

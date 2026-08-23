@@ -5,7 +5,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -25,57 +24,50 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-data class ChatMessage(val text: String, val isUser: Boolean, val timestamp: Long = System.currentTimeMillis())
 
+/**
+ * Starter prompts.
+ *
+ * The previous four each demanded a specific figure about THIS fleet - "cost-per-KM
+ * for Bridgestone", "critical tyres on Mixer fleet" - which the assistant has no
+ * records to answer. They existed to trigger the hard-coded replies that have now
+ * been deleted, so leaving them would invite the model to invent the same numbers.
+ * These ask for guidance instead, which is what it can honestly give.
+ */
 private val suggestions = listOf(
-    "Which tyres need replacing in the next 30 days?",
-    "What is our cost-per-KM for Bridgestone?",
-    "Show me critical tyres on Mixer fleet",
-    "Predict next month's tyre budget"
+    "What causes uneven tyre wear on a mixer?",
+    "How do I read a DOT code on a tyre?",
+    "What tread depth is legally too low?",
+    "Steps for a safe roadside wheel change"
 )
 
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FleetAiChatScreen() {
-    var messages by remember {
-        mutableStateOf(listOf(
-            ChatMessage("Hello! I'm your Fleet AI assistant. Ask me anything about your tyres, fleet health, or maintenance predictions.", false)
-        ))
-    }
+fun FleetAiChatScreen(viewModel: FleetAiChatViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsState()
+    val messages = uiState.messages
+    val isTyping = uiState.isSending
+
     var input by remember { mutableStateOf("") }
-    var isTyping by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    
-    var isRefreshing by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (isRefreshing) {
-        LaunchedEffect(true) {
-            isRefreshing = false
-        }
+    // Follow the conversation as it grows. This used to be done inside the fake
+    // response coroutine; keyed on the count it now also follows a real reply that
+    // arrives whenever the network returns it.
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
     }
 
     fun sendMessage(text: String) {
         if (text.isBlank()) return
-        val userMsg = ChatMessage(text, true)
-        messages = messages + userMsg
+        viewModel.send(text)
         input = ""
-        isTyping = true
-
-        scope.launch {
-            delay(1200)
-            val aiResponse = generateAiResponse(text)
-            messages = messages + ChatMessage(aiResponse, false)
-            isTyping = false
-            listState.animateScrollToItem(messages.size - 1)
-        }
     }
 
     Scaffold(
@@ -84,10 +76,8 @@ fun FleetAiChatScreen() {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = { isRefreshing = true },
-            modifier = Modifier.size(36.dp).clip(CircleShape)
+                        Box(
+                            modifier = Modifier.size(36.dp).clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) { Icon(Icons.Default.SmartToy, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
@@ -95,13 +85,13 @@ fun FleetAiChatScreen() {
                         Column {
                             Text("Fleet AI", fontWeight = FontWeight.ExtraBold,
                                 style = MaterialTheme.typography.titleMedium)
-                            Text("Powered by Gemini", style = MaterialTheme.typography.labelSmall,
+                            Text("Not connected to fleet records", style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 },
                 actions = {
-                    IconButton(onClick = { messages = messages.take(1) }) {
+                    IconButton(onClick = { viewModel.clear() }) {
                         Icon(Icons.Default.RestartAlt, "Clear chat")
                     }
                 }
@@ -174,7 +164,7 @@ fun FleetAiChatScreen() {
 }
 
 @Composable
-private fun ChatBubble(msg: ChatMessage) {
+private fun ChatBubble(msg: ChatUiMessage) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start
@@ -193,15 +183,27 @@ private fun ChatBubble(msg: ChatMessage) {
                 topEnd = if (msg.isUser) 4.dp else 18.dp,
                 bottomStart = 18.dp, bottomEnd = 18.dp
             ),
-            color = if (msg.isUser) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant,
+            // A refusal must not be mistakable for an answer. A failed call used to be
+            // impossible here (the replies were local constants), so there was no
+            // failure tone at all; now that the call is real, one is required.
+            color = when {
+                msg.isUser -> MaterialTheme.colorScheme.primary
+                msg.isError -> MaterialTheme.colorScheme.errorContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
             modifier = Modifier.widthIn(max = 280.dp)
         ) {
             Text(
                 text = msg.text,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (msg.isUser) Color.White else MaterialTheme.colorScheme.onSurface
+                // Matched to the surface chosen above, or an error bubble renders
+                // onSurface text on an errorContainer ground and can fail contrast.
+                color = when {
+                    msg.isUser -> Color.White
+                    msg.isError -> MaterialTheme.colorScheme.onErrorContainer
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
             )
         }
     }
@@ -230,21 +232,5 @@ private fun TypingIndicator() {
                 }
             }
         }
-    }
-}
-
-private fun generateAiResponse(input: String): String {
-    val lower = input.lowercase()
-    return when {
-        "replac" in lower || "30 day" in lower ->
-            "Based on current wear rates, 12 tyres are predicted to reach end-of-life within 30 days:\n• Mixer 2841 — FL, FR (tread < 2mm)\n• Truck 104 — RL1, RL2 (80% worn)\n• Trailer 502 — 4 drive axle tyres (critical)\n\nEstimated replacement budget: AED 18,400."
-        "cost" in lower || "bridgestone" in lower ->
-            "Your Bridgestone cost-per-KM analysis:\n• Average: AED 0.042/km\n• Best performing model: R22.5 (AED 0.038/km)\n• Vs fleet average: 12% better than Goodyear\n\nRecommendation: Increase Bridgestone allocation on highway routes."
-        "critical" in lower || "mixer" in lower ->
-            "Critical tyres on Mixer fleet:\n🔴 Mixer 2841 — FL (tread: 1.8mm, REPLACE NOW)\n🟡 Mixer 3012 — RR1 (tread: 2.2mm, due in 2 weeks)\n🟡 Mixer 2901 — RL2 (pressure low: 85 PSI)\n\nI recommend scheduling maintenance for Mixer 2841 today."
-        "budget" in lower || "predict" in lower ->
-            "Next month tyre budget prediction:\n\nBased on 6-month wear trend analysis:\n• Estimated replacements: 18-22 tyres\n• Predicted cost: AED 24,000–32,000\n• High-risk vehicles: 4 mixers, 2 trucks\n\nConfidence: 87%. I recommend pre-ordering 15 R22.5 tyres now."
-        else ->
-            "I analysed your fleet data. Here's a quick summary:\n• Total fleet: 47 vehicles\n• Tyres monitored: 312\n• Health: 68% good, 22% warning, 10% critical\n• Last 30 days: 247 inspections completed\n\nAsk me about specific vehicles, brands, or maintenance predictions!"
     }
 }

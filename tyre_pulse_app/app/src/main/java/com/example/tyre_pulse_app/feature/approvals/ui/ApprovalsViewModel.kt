@@ -81,7 +81,7 @@ class ApprovalsViewModel @Inject constructor(
         viewModelScope.launch {
             if (reset) currentPage = 0
             
-            _uiState.update { if (reset) it.copy(isLoading = true) else it.copy(isLoading = false) }
+            _uiState.update { if (reset) it.copy(isLoading = true, error = null) else it.copy(isLoading = false, error = null) }
             
             repository.getApprovals(
                 status = _status.value,
@@ -89,12 +89,30 @@ class ApprovalsViewModel @Inject constructor(
                 category = _category.value,
                 page = currentPage,
                 pageSize = pageSize
-            ).collect { newApprovals ->
+            ).catch { e ->
+                // The repository used to swallow failures and substitute invented
+                // approvals, so this collector never needed to handle an error. It
+                // does now: without this the flow would fail silently and the screen
+                // would sit on its spinner forever.
+                //
+                // `isEndReached` is set so a failed page does not leave the list
+                // asking for the same page again on every recomposition. The
+                // reader gets the error and a Try again, not a silent retry loop.
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        isEndReached = true,
+                        error = e.message ?: "Could not load approvals",
+                    )
+                }
+            }.collect { newApprovals ->
                 _uiState.update { state ->
                     state.copy(
                         approvals = if (reset) newApprovals else state.approvals + newApprovals,
                         isLoading = false,
                         isRefreshing = false,
+                        error = null,
                         isEndReached = newApprovals.size < pageSize
                     )
                 }

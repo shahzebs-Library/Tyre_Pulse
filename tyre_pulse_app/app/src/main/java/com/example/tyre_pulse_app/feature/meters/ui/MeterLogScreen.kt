@@ -47,6 +47,34 @@ fun MeterLogRoute(
         ) {
             Text("Update Odometer & Engine Hours", style = MaterialTheme.typography.titleMedium)
 
+            // The screen had NO asset field at all: assetNo defaulted to "" and nothing
+            // could set it, so every reading was filed against no machine. The asset is
+            // confirmed against the fleet register before anything can be saved -
+            // a reading against an unknown asset number is unattributable.
+            OutlinedTextField(
+                value = uiState.assetNo,
+                onValueChange = viewModel::onAssetChanged,
+                label = { Text("Asset number") },
+                singleLine = true,
+                isError = uiState.lookupError != null,
+                supportingText = {
+                    when {
+                        uiState.lookupError != null -> Text(uiState.lookupError!!)
+                        uiState.assetResolved -> Text(
+                            uiState.assetSite?.let { "Found - $it" } ?: "Found"
+                        )
+                        else -> Text("Enter the asset number, then Find")
+                    }
+                },
+                trailingIcon = {
+                    TextButton(
+                        onClick = { viewModel.lookupAsset() },
+                        enabled = uiState.assetNo.isNotBlank() && !uiState.isLookingUp
+                    ) { Text(if (uiState.isLookingUp) "..." else "Find") }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -55,7 +83,15 @@ fun MeterLogRoute(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Speed, contentDescription = null, tint = StatusBlue)
                         Spacer(Modifier.width(8.dp))
-                        Text("Current Odometer: ${uiState.currentKm} KM", fontWeight = FontWeight.Bold)
+                        // Was "Current Odometer: 125420 KM" - a hard-coded number shown
+                        // for every asset, which the new reading was then validated
+                        // against. Null means no reading is on record, which is a fact,
+                        // not a zero.
+                        Text(
+                            uiState.previousKm?.let { "Last odometer: $it km" }
+                                ?: "No odometer reading on record",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Spacer(Modifier.height(16.dp))
                     OutlinedTextField(
@@ -63,7 +99,10 @@ fun MeterLogRoute(
                         onValueChange = viewModel::onKmChanged,
                         label = { Text("New Odometer Reading") },
                         isError = uiState.kmError != null,
-                        supportingText = uiState.kmError?.let { { Text(it) } },
+                        // A backwards reading WARNS, it does not block: a meter can be
+                        // replaced or roll over, and refusing would leave the reading
+                        // uncaptured entirely.
+                        supportingText = (uiState.kmError ?: uiState.kmWarning)?.let { { Text(it) } },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                     )
@@ -78,7 +117,11 @@ fun MeterLogRoute(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Timer, contentDescription = null, tint = StatusOrange)
                         Spacer(Modifier.width(8.dp))
-                        Text("Current Hours: ${uiState.currentHours} Hrs", fontWeight = FontWeight.Bold)
+                        Text(
+                            uiState.previousHours?.let { "Last hour meter: $it hrs" }
+                                ?: "No hour reading on record",
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Spacer(Modifier.height(16.dp))
                     OutlinedTextField(
@@ -86,7 +129,7 @@ fun MeterLogRoute(
                         onValueChange = viewModel::onHoursChanged,
                         label = { Text("New Hour Reading") },
                         isError = uiState.hoursError != null,
-                        supportingText = uiState.hoursError?.let { { Text(it) } },
+                        supportingText = (uiState.hoursError ?: uiState.hoursWarning)?.let { { Text(it) } },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                     )
@@ -98,9 +141,15 @@ fun MeterLogRoute(
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
                 shape = RoundedCornerShape(12.dp),
-                enabled = uiState.kmError == null && uiState.hoursError == null && (uiState.newKm.isNotEmpty() || uiState.newHours.isNotEmpty())
+                enabled = uiState.canSubmit
             ) {
-                Text("Update Readings", fontWeight = FontWeight.Bold)
+                Text(if (uiState.isSubmitting) "Saving..." else "Update Readings", fontWeight = FontWeight.Bold)
+            }
+
+            // submit() used to call onSuccess() unconditionally, so a failed enqueue
+            // still reported a saved reading and the screen closed.
+            uiState.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

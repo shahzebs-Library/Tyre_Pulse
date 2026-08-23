@@ -22,16 +22,16 @@ val supabaseAnonKeyProd = localProperties.getProperty("SUPABASE_ANON_KEY_PROD", 
 
 android {
     namespace = "com.example.tyre_pulse_app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // NOTE: Production app is com.shahzebrahman.tyrepulseinspector (Expo/React Native).
         // This native Kotlin app uses a DIFFERENT ID so both can coexist on the same device.
         applicationId = "com.shahzebrahman.tyrepulse.native"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 227
-        versionName = "2.1.17"
+        targetSdk = 36
+        versionCode = 228
+        versionName = "2.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -85,9 +85,12 @@ android {
         }
     }
 
-    ksp {
-        arg("ksp.incremental", "false")
-    }
+}
+
+// Top level on purpose: `ksp` is a PROJECT extension. Nested inside `android {}`
+// it only resolved by outer-scope lookup, which is luck rather than intent.
+ksp {
+    arg("ksp.incremental", "false")
 }
 
 dependencies {

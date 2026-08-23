@@ -231,6 +231,9 @@ fun FilterSection(
     }
 }
 
+// PullToRefreshBox is still ExperimentalMaterial3Api in the Compose BOM this project
+// is held at (2024.09.02), so every composable that calls it has to opt in.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ApprovalsScreen(
     uiState: ApprovalsUiState,

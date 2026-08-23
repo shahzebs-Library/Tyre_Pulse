@@ -100,11 +100,12 @@ fun TyrePulseNavHost(
             onBack = { navController.popBackStack() }
         )
 
+        // List only. It used to also register asset_detail_route, which this file
+        // registers immediately below - the same route twice in one graph, where the
+        // later one silently wins.
         assetsScreen(
             onAssetClick = { assetId -> navController.navigate("asset_detail_route/$assetId") },
-            onBack = { navController.popBackStack() },
-            onStartInspection = { assetId -> navController.navigateToInspectionForm(assetId) },
-            onTyreClick = { tyreId -> navController.navigate("tyre_history/$tyreId") }
+            onBack = { navController.popBackStack() }
         )
 
         composable("asset_detail_route/{assetId}") { backStackEntry ->

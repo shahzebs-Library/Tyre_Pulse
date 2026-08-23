@@ -146,6 +146,17 @@ fails the build. Break it with a bare `OkHttpClient` (what `refreshToken` does) 
 crash that nothing else catches. Tapping a tyre on the Inspection Form crashed the app
 this way for exactly that reason.
 
+**lintVital, not just compile.** `bundleProdRelease` runs `lintVitalProdRelease` AFTER
+the Kotlin compiler, so a green compile is not a green build and a fatal lint fails it.
+The one this project hit: `RemoveWorkManagerInitializer`. `TyrePulseApp` implements
+`androidx.work.Configuration.Provider`, so the manifest must remove
+`androidx.startup.InitializationProvider` with `tools:node="remove"` on the WHOLE
+provider. The check keys on the provider EXISTING, so removing only the
+`androidx.work.WorkManagerInitializer` meta-data does NOT satisfy it - that was tried
+first and cost a run. It guards a real bug rather than a style preference: left in
+place, WorkManager initialises with the default worker factory before Hilt's is
+available and every `@HiltWorker` fails to instantiate at runtime.
+
 **Regex mass-refactors.** `refactor.py`, `refactor.ps1` and `ensure_imports.ps1` at
 the project root are what stripped imports across many screens in the first place.
 Prefer targeted edits; if a sweep is unavoidable, run the checkers after it and read

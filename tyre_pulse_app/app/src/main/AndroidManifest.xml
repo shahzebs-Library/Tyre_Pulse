@@ -26,26 +26,31 @@
         <!--
             TyrePulseApp implements androidx.work.Configuration.Provider and supplies a
             HiltWorkerFactory, i.e. WorkManager is initialised ON DEMAND. The default
-            WorkManagerInitializer must therefore be removed, and this is not merely a
-            lint preference: left in place it initialises WorkManager with the DEFAULT
-            worker factory before Hilt's is available, and every @HiltWorker then fails
-            to instantiate at runtime - the periodic sync started in onCreate included.
+            initializer must therefore be removed, and this is not merely a lint
+            preference: left in place it initialises WorkManager with the DEFAULT worker
+            factory before Hilt's is available, and every @HiltWorker then fails to
+            instantiate at runtime - including the periodic sync started in onCreate,
+            which is what drains the offline queue.
 
-            Only WorkManager's own initializer is removed. A blanket
-            tools:node="remove" on InitializationProvider would take every androidx
-            .startup initializer with it, including ones merged in by libraries such as
-            profileinstaller, which nothing here intends to disable.
+            THE WHOLE PROVIDER GOES, NOT JUST WORKMANAGER'S META-DATA. Removing only
+            the androidx.work.WorkManagerInitializer meta-data was tried first and lint
+            still failed: RemoveWorkManagerInitializer keys on the PRESENCE of
+            androidx.startup.InitializationProvider, not on its children. This is also
+            the form the WorkManager documentation prescribes.
+
+            The cost, checked rather than assumed: this removes every androidx.startup
+            initializer, not only WorkManager's. Nothing in this app references
+            ProcessLifecycleOwner, EmojiCompat, ProfileInstaller or androidx.startup,
+            and none of those is a declared dependency - so the only ones that could be
+            merged in arrive transitively and degrade quietly (a baseline profile not
+            installed, newer emoji not backfilled). If a library is ever added that
+            genuinely needs its initializer, re-add InitializationProvider here with
+            just that initializer's meta-data rather than reverting this.
         -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
-            android:exported="false"
-            tools:node="merge">
-            <meta-data
-                android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup"
-                tools:node="remove" />
-        </provider>
+            tools:node="remove" />
 
         <activity
             android:name=".MainActivity"

@@ -67,6 +67,18 @@ jobs:
 
       - name: Build Release Bundle (AAB)
         working-directory: tyre_pulse_app
+        # local.properties is untracked, so CI never had one and the build fell back to
+        # the literal "MISSING_KEY_PROD". That produced a signed, published AAB whose
+        # every request returned 401 - login included - while the build reported
+        # success. The key is passed through the environment now; build.gradle.kts
+        # reads local.properties first, then this, then the publishable default, and
+        # FAILS a release build if what it ends up with is not a usable key.
+        #
+        # Setting the secret is optional: it exists so a future key rotation does not
+        # need a commit. Without it the publishable default is used, which is the same
+        # key the deployed web bundle already ships.
+        env:
+          SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
         run: ./gradlew bundleProdRelease
 
       - name: Sign Android App Bundle (AAB)

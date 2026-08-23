@@ -55,8 +55,8 @@ android {
         applicationId = "com.shahzebrahman.tyrepulse.native"
         minSdk = 26
         targetSdk = 36
-        versionCode = 233
-        versionName = "2.2.5"
+        versionCode = 234
+        versionName = "2.2.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -120,29 +120,34 @@ android {
  * including login. Nothing failed; it just did not work. This makes that outcome a
  * BUILD failure instead of a field one.
  *
- * Checked on the release bundle/assemble tasks only - a developer without
+ * Checked only when a prod release is actually requested, so a developer without
  * local.properties can still build and run a debug variant.
  *
- * The value is captured in a local val rather than read from the project inside
- * doFirst, so the configuration cache stays valid.
+ * IT RUNS AT CONFIGURATION TIME, DELIBERATELY, AND MUST STAY THAT WAY. The first
+ * version put this in a `doFirst {}` on the bundle task, which failed the build with
+ * "cannot serialize Gradle script object references": a lambda written in a build
+ * script captures the script instance, and the configuration cache cannot store that.
+ * It failed AFTER the AAB had been packaged and signed, which made it look like a
+ * packaging fault rather than a build-script one. Reading startParameter.taskNames
+ * needs no task action and no lambda, so nothing is captured.
  */
-val prodKeyForCheck = supabaseAnonKeyProd
-tasks.matching { it.name.startsWith("bundleProd") || it.name.startsWith("assembleProd") }
-    .configureEach {
-        doFirst {
-            val looksReal = prodKeyForCheck.startsWith("sb_publishable_") ||
-                prodKeyForCheck.startsWith("eyJ")
-            if (!looksReal) {
-                throw GradleException(
-                    "SUPABASE_ANON_KEY_PROD is not a usable key (got \"$prodKeyForCheck\").\n" +
-                        "Every request would return 401, including login, and the build would " +
-                        "still have succeeded.\n" +
-                        "Set it in tyre_pulse_app/local.properties or as the " +
-                        "SUPABASE_ANON_KEY_PROD environment variable."
-                )
-            }
-        }
+val requestedTasks = gradle.startParameter.taskNames
+val buildingProdRelease = requestedTasks.any {
+    it.contains("bundleProd", ignoreCase = true) || it.contains("assembleProd", ignoreCase = true)
+}
+if (buildingProdRelease) {
+    val looksReal = supabaseAnonKeyProd.startsWith("sb_publishable_") ||
+        supabaseAnonKeyProd.startsWith("eyJ")
+    if (!looksReal) {
+        throw GradleException(
+            "SUPABASE_ANON_KEY_PROD is not a usable key (got \"$supabaseAnonKeyProd\").\n" +
+                "Every request would return 401, including login, and the build would " +
+                "still have succeeded.\n" +
+                "Set it in tyre_pulse_app/local.properties or as the " +
+                "SUPABASE_ANON_KEY_PROD environment variable."
+        )
     }
+}
 
 // Top level on purpose: `ksp` is a PROJECT extension. Nested inside `android {}`
 // it only resolved by outer-scope lookup, which is luck rather than intent.

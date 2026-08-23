@@ -157,6 +157,21 @@ first and cost a run. It guards a real bug rather than a style preference: left 
 place, WorkManager initialises with the default worker factory before Hilt's is
 available and every `@HiltWorker` fails to instantiate at runtime.
 
+**Configuration cache vs build-script lambdas.** This build runs with the configuration
+cache on. A `doFirst {}` / `doLast {}` written in `build.gradle.kts` captures the script
+instance, and the build fails with *"cannot serialize Gradle script object references"* —
+**after** the AAB has been packaged and signed, so it reads like a packaging fault rather
+than a build-script one. Do validation at configuration time instead, gated on
+`gradle.startParameter.taskNames`, which needs no task action and captures nothing.
+
+**The release APK needs a real Supabase key.** `SUPABASE_ANON_KEY_PROD` resolves
+local.properties → environment → the publishable default in `app/build.gradle.kts`.
+`local.properties` is untracked, so CI once built with the literal `"MISSING_KEY_PROD"`;
+that is a valid String, so the build succeeded, signed, and published an app that got
+401 on every request including login. A prod release now fails the build if the resolved
+key is not usable. The publishable key is not a secret — it ships in every APK and in
+the deployed web bundle, and RLS is the boundary.
+
 **Regex mass-refactors.** `refactor.py`, `refactor.ps1` and `ensure_imports.ps1` at
 the project root are what stripped imports across many screens in the first place.
 Prefer targeted edits; if a sweep is unavoidable, run the checkers after it and read

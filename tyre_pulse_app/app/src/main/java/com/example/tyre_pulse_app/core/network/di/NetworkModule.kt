@@ -103,7 +103,28 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideStorageApi(retrofit: Retrofit): StorageApi = retrofit.create(StorageApi::class.java)
+    fun provideStorageApi(okHttpClient: OkHttpClient, json: Json): StorageApi {
+        // Storage is NOT under /rest/v1/ - see StorageApi.
+        return Retrofit.Builder()
+            .baseUrl(NetworkConfig.SUPABASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(StorageApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAiApi(okHttpClient: OkHttpClient, json: Json): AiApi {
+        // Edge functions are NOT under /rest/v1/ - see AiApi. Same second-base-URL
+        // arrangement as storage above.
+        return Retrofit.Builder()
+            .baseUrl(NetworkConfig.SUPABASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(AiApi::class.java)
+    }
 
     @Provides
     @Singleton
@@ -124,4 +145,24 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideChecklistApi(retrofit: Retrofit): ChecklistApi = retrofit.create(ChecklistApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideStockApi(retrofit: Retrofit): StockApi = retrofit.create(StockApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideOdometerApi(retrofit: Retrofit): OdometerApi = retrofit.create(OdometerApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideEngineHoursApi(retrofit: Retrofit): EngineHoursApi = retrofit.create(EngineHoursApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideMaintenanceApi(retrofit: Retrofit): MaintenanceApi = retrofit.create(MaintenanceApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideTeamApi(retrofit: Retrofit): TeamApi = retrofit.create(TeamApi::class.java)
 }

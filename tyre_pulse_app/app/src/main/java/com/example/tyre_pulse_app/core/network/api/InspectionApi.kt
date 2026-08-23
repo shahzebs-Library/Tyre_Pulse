@@ -11,6 +11,10 @@ data class InspectionRecurrenceDto(
     @SerialName("document_no") val documentNo: String? = null
 )
 
+/** Just the key, for counting rows without pulling them. */
+@Serializable
+data class InspectionIdDto(val id: String? = null)
+
 interface InspectionApi {
     @GET("inspections")
     suspend fun getInspections(
@@ -25,6 +29,20 @@ interface InspectionApi {
         @Query("order") order: String,
         @Query("limit") limit: Int
     ): List<InspectionRecurrenceDto>
+
+    /**
+     * Ids only, for a headline count.
+     *
+     * Bounded on purpose: this feeds a dashboard tile, and an unbounded read of a
+     * growing table to show one number is not worth the round trip. The caller states
+     * the cap rather than presenting a capped number as exact.
+     */
+    @GET("inspections")
+    suspend fun countByStatus(
+        @Query("status") statusEq: String,
+        @Query("select") select: String = "id",
+        @Query("limit") limit: Int = 200,
+    ): List<InspectionIdDto>
 
     @POST("inspections")
     suspend fun submitInspection(@Body inspection: Inspection): Inspection

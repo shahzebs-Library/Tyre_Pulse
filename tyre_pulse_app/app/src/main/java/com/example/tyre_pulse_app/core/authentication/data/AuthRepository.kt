@@ -35,11 +35,30 @@ class AuthRepository @Inject constructor(
             val profiles: List<Profile> = authApi.getProfile("eq.${response.user.id}")
             if (profiles.isNotEmpty()) {
                 val profile = profiles.first()
+                // The workspace country used to be the literal
+                // Country("sa", "c1", "Saudi Arabia", "SA", "SAR", "Asia/Riyadh") for
+                // EVERY user who signed in. It is not cosmetic: the country carries the
+                // CURRENCY, so a UAE user's workspace reported their AED figures as SAR.
+                // The real scope is on the profile - `profiles.country` is a text[], and
+                // primaryCountry() picks one the same way the Expo app does.
+                //
+                // When the profile names no country we do NOT fall back to a default.
+                // Null there means "not known", and the currency is left null with it,
+                // so a caller shows an amount with no currency code rather than a
+                // confidently wrong one.
+                val scopedCountry = profile.primaryCountry()
                 val defaultWorkspace = WorkspaceContext(
                     tenant = Tenant(profile.orgId ?: "00000000-0000-0000-0000-000000000001", "Organization"),
                     company = Company("c1", profile.orgId ?: "00000000-0000-0000-0000-000000000001", "Company"),
-                    country = Country("sa", "c1", "Saudi Arabia", "SA", "SAR", "Asia/Riyadh"),
-                    site = null
+                    country = Country(
+                        id = scopedCountry?.lowercase() ?: "unknown",
+                        companyId = "c1",
+                        name = scopedCountry ?: "Not set",
+                        code = scopedCountry ?: "",
+                        currency = currencyForCountry(scopedCountry) ?: "",
+                        timezone = "Asia/Riyadh"
+                    ),
+                    site = profile.site?.takeIf { it.isNotBlank() }?.let { Site("s1", "c1", it) }
                 )
                 workspaceManager.setWorkspace(defaultWorkspace)
 

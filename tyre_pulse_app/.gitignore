@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Kotlin/KSP compiler scratch and per-module build output. Four .kotlin/errors
+# logs are already tracked from before this rule - untrack with
+#   git rm --cached -r tyre_pulse_app/.kotlin
+# They are build artifacts, not source.
+.kotlin/
+app/build/

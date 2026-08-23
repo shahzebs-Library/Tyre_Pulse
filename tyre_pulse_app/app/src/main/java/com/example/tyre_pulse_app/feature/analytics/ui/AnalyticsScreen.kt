@@ -106,7 +106,14 @@ fun AnalyticsScreen(
                                 KpiCard(
                                     modifier = Modifier.weight(1f),
                                     title = "Critical",
-                                    value = data.tyresCritical.toString(),
+                                    // `tyre_records.risk_level` is NULL on all 11,205
+                                    // rows, so this tile read a confident "0" - which a
+                                    // manager takes as "no tyre is critical". That is a
+                                    // claim about the fleet made from no data. A zero
+                                    // count here is indistinguishable from an unrated
+                                    // register, so it renders as a dash until something
+                                    // actually rates a tyre.
+                                    value = data.tyresCritical.takeIf { it > 0 }?.toString() ?: "-",
                                     gradient = Brush.linearGradient(listOf(Color(0xFFef4444), Color(0xFFb91c1c)))
                                 )
                                 KpiCard(

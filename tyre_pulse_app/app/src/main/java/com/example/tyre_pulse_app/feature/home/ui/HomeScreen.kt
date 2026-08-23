@@ -38,6 +38,7 @@ import com.example.tyre_pulse_app.core.designsystem.theme.*
 
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,7 +91,13 @@ fun HomeScreen(
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { HighFidelityTopBar(onScanClick) },
+        topBar = {
+            HighFidelityTopBar(
+                userName = uiState.userName,
+                onScanClick = onScanClick,
+                onNotificationsClick = { onNavigateToModule("notifications_route") }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         PullToRefreshBox(
@@ -112,13 +119,13 @@ fun HomeScreen(
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     StatCard(
-                        count = "${uiState.inspectionsDue}",
-                        label = "DUE TODAY",
+                        count = kpiText(uiState.inspectionsInProgress),
+                        label = "IN PROGRESS",
                         color = StatusRed,
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
-                        count = "${uiState.openJobs}",
+                        count = kpiText(uiState.openJobs),
                         label = "ACTIVE JOBS",
                         color = StatusBlue,
                         modifier = Modifier.weight(1f)
@@ -141,7 +148,7 @@ fun HomeScreen(
                     HomeModule("Workshop", Icons.Default.Build, "workshop_route"),
                     HomeModule("AI Center", Icons.Default.AutoGraph, "ai_predictive_route"),
                     HomeModule("Checklists", Icons.Default.Assignment, "checklist_library"),
-                    HomeModule("Accidents", Icons.Default.Warning, "accident_dashboard"),
+                    HomeModule("Accidents", Icons.Default.Warning, "accident_list_route"),
                     HomeModule("Washing", Icons.Default.LocalCarWash, "washing_route")
                 )
                 
@@ -164,11 +171,39 @@ fun HomeScreen(
 
             // Real-Time Schedule (Mirroring vehicles.tsx depth)
             item {
-                SectionHeader(title = "TODAY'S SCHEDULE")
+                SectionHeader(
+                    title = "TODAY'S SCHEDULE",
+                    onViewAll = { onNavigateToModule("work_order_list") }
+                )
                 Spacer(Modifier.height(12.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    uiState.todaysJobs.forEach { job ->
-                        JobActionCard(job, onClick = { onAssetClick(job.id) })
+                    // An empty schedule used to render as bare whitespace under the
+                    // heading, which reads as a screen that failed to draw. The two
+                    // cases are separated on purpose: nothing assigned is a fact about
+                    // the day, a failed read is a fact about the app, and a user acts
+                    // very differently on each.
+                    when {
+                        uiState.todaysJobs.isNotEmpty() -> uiState.todaysJobs.forEach { job ->
+                            JobActionCard(job, onClick = { onAssetClick(job.id) })
+                        }
+
+                        uiState.isLoading -> Text(
+                            "Loading today's jobs...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+
+                        uiState.partial || uiState.error != null -> Text(
+                            "Today's jobs could not be loaded. Pull down to try again.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = StatusRed
+                        )
+
+                        else -> Text(
+                            "No open jobs assigned.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
                     }
                 }
             }
@@ -242,22 +277,39 @@ fun JobActionCard(job: JobSummary, onClick: () -> Unit) {
 }
 
 @Composable
-fun HighFidelityTopBar(onScanClick: () -> Unit) {
+fun HighFidelityTopBar(
+    userName: String?,
+    onScanClick: () -> Unit,
+    onNotificationsClick: () -> Unit
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp).statusBarsPadding(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column {
-            Text("Good morning,", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-            Text("John Technician", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            // Two fixed strings used to live here: the greeting "Good morning," shown
+            // at every hour of the day, and the name "John Technician" shown to every
+            // user on every device. The name now comes from the signed-in profile, and
+            // when it has not loaded the greeting simply stands alone - an anonymous
+            // greeting is honest, an invented name is not.
+            Text(
+                greetingForHour(remember { LocalTime.now().hour }) + if (userName != null) "," else "",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            if (userName != null) {
+                Text(userName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onScanClick, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
                 Icon(Icons.Default.QrCodeScanner, contentDescription = "Scan QR")
             }
             Spacer(Modifier.width(8.dp))
-            IconButton(onClick = { /* TODO */ }, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+            // The bell was a dead control - onClick did nothing. Home already receives a
+            // navigation callback, and the notifications screen is a registered route.
+            IconButton(onClick = onNotificationsClick, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
                 Icon(Icons.Default.Notifications, contentDescription = "Notifications")
             }
         }
@@ -265,9 +317,41 @@ fun HighFidelityTopBar(onScanClick: () -> Unit) {
 }
 
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(title: String, onViewAll: (() -> Unit)? = null) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text("VIEW ALL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.clickable { })
+        // "VIEW ALL" used to be `Modifier.clickable { }` - an empty lambda. It looked
+        // like a control and did nothing when tapped, which reads to a user as the app
+        // being broken. It now renders ONLY when a caller supplies a destination.
+        if (onViewAll != null) {
+            Text(
+                "VIEW ALL",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.clickable { onViewAll() }
+            )
+        }
     }
+}
+
+/**
+ * Render a KPI that was never measured as a dash, not as a number.
+ *
+ * These counts are nullable because a failed read and a real zero mean opposite
+ * things. String-interpolating a null would print the word "null" on the dashboard;
+ * printing 0 would be worse still, because it reads as a fact.
+ */
+private fun kpiText(value: Int?): String = value?.toString() ?: "-"
+
+/**
+ * Time-appropriate greeting. The header previously said "Good morning" at every hour
+ * of the day, including to a night-shift crew at 2am - a small thing, but it is the
+ * first line of the app and it was reliably wrong for a third of the fleet.
+ *
+ * Boundaries are local-clock hours: morning to 12, afternoon to 17, evening after.
+ */
+internal fun greetingForHour(hour: Int): String = when (hour) {
+    in 0..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
 }

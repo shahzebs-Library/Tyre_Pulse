@@ -32,7 +32,6 @@ import kotlinx.coroutines.launch
 fun InspectionFormScreen(
     assetId: String,
     onBack: () -> Unit,
-    onTyreClick: (String) -> Unit, // Kept for API compatibility, though we handle it internally now
     onNavigateToScan: () -> Unit,
     viewModel: InspectionViewModel = hiltViewModel()
 ) {

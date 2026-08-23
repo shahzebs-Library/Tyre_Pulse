@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -226,11 +227,28 @@ fun SettingsRoute(
             item {
                 SettingsTile(
                     icon = Icons.Default.Warning,
-                    title = "Critical Tyre Alerts",
-                    subtitle = "Notify when tread depth < 2mm",
+                    title = "Critical tyre alerts",
+                    // Two things were wrong here and the second is the reason this is
+                    // not simply wired up.
+                    //
+                    // It was `Switch(checked = true, onCheckedChange = {})`: permanently
+                    // on, impossible to change, connected to nothing - a setting the
+                    // user believed they had enabled.
+                    //
+                    // And the alert it promised CANNOT FIRE. It reads on tread depth,
+                    // and `tyre_records.tread_depth` is populated on 0 of 11,205 rows -
+                    // the field has never been captured. A working toggle would be the
+                    // worse outcome: you would switch it on and simply never be warned.
+                    // Saying so is the actionable version, because the fix is upstream -
+                    // start recording tread depth during inspections.
+                    subtitle = "Unavailable - tread depth is not being recorded during inspections",
                     iconTint = StatusRed
                 ) {
-                    Switch(checked = true, onCheckedChange = {})
+                    Text(
+                        "Not available",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
                 }
             }
 
@@ -251,11 +269,20 @@ fun SettingsRoute(
                     icon = Icons.Default.Storage,
                     title = "Local Storage",
                     subtitle = "Encrypted with AES-256 (SQLCipher)",
-                    iconTint = MaterialTheme.colorScheme.primary,
-                    onClick = {}
+                    // onClick is nullable and the tile only draws a ripple when one is
+                    // supplied, so the previous empty {} made this look tappable and do
+                    // nothing. There is nowhere to drill into, so it is omitted.
+                    iconTint = MaterialTheme.colorScheme.primary
                 ) {
-                    Text("48 MB", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    // Was the literal string "48 MB", shown to every user on every
+                    // device whatever the database actually held. This measures the
+                    // encrypted database file, and reports the gap honestly if the
+                    // file cannot be read rather than printing a comfortable number.
+                    Text(
+                        localDatabaseSize(LocalContext.current),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
                 }
             }
 
@@ -328,4 +355,28 @@ private fun SettingsTile(
             trailing()
         }
     }
+}
+
+/**
+ * Size of the on-device encrypted database, formatted for display.
+ *
+ * Room is built with the name "tyre_pulse_db" (see DatabaseModule), and WAL is
+ * enabled - so the -wal and -shm side files are counted too, or the figure understates
+ * what the app is actually occupying.
+ *
+ * Returns "Not available" rather than "0 MB" when the files cannot be read: zero
+ * bytes and unreadable are different facts, and only one of them means the cache is
+ * empty.
+ */
+private fun localDatabaseSize(context: android.content.Context): String {
+    val bytes = runCatching {
+        listOf("tyre_pulse_db", "tyre_pulse_db-wal", "tyre_pulse_db-shm")
+            .map { context.getDatabasePath(it) }
+            .filter { it.exists() }
+            .sumOf { it.length() }
+    }.getOrNull() ?: return "Not available"
+
+    if (bytes <= 0L) return "Empty"
+    val mb = bytes.toDouble() / (1024 * 1024)
+    return if (mb < 0.1) "< 0.1 MB" else String.format("%.1f MB", mb)
 }

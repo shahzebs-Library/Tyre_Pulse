@@ -18,6 +18,22 @@ import com.example.tyre_pulse_app.core.database.SecuritySupport
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    /**
+     * WARNING BEFORE YOU BUMP THE ROOM VERSION.
+     *
+     * `fallbackToDestructiveMigration()` below means a schema change with no
+     * migration DROPS AND RECREATES this database. That is harmless for the cached
+     * asset and tyre tables, which re-fetch - but `sync_queue` is the OFFLINE WRITE
+     * QUEUE. It holds inspections, meter readings and fault reports that exist
+     * NOWHERE ELSE until they sync. Bumping the version to add a column to any
+     * entity would silently delete a technician's unsynced work on the next app
+     * start, with no error anywhere.
+     *
+     * So: adding a column to sync_queue is not a free change. Either ship a real
+     * Migration alongside it, or do without the column. SyncRepository's retry
+     * backoff is derived from the drain cadence rather than a stored
+     * `nextAttemptAt` column for exactly this reason.
+     */
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): TyrePulseDatabase =

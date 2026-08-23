@@ -26,38 +26,30 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.tyre_pulse_app.core.designsystem.theme.*
+import com.example.tyre_pulse_app.core.model.ChecklistTemplate
 
-data class TemplateSummary(
-    val id: String,
-    val name: String,
-    val category: String,
-    val isScored: Boolean = false,
-    val duration: String = "5-10 min"
-)
+// TemplateSummary is gone. It carried a `duration` field defaulting to "5-10 min",
+// printed on every card whatever the checklist contained, and ids that named no real
+// template. The screen renders ChecklistTemplate, the model the API already returns.
 
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChecklistLibraryScreen(
-    onStartChecklist: (String) -> Unit
+    onStartChecklist: (String) -> Unit,
+    viewModel: ChecklistLibraryViewModel = hiltViewModel()
 ) {
-    val templates = listOf(
-        TemplateSummary("dvir_1", "Driver Daily Inspection (DVIR)", "OPERATIONS", true),
-        TemplateSummary("handover_1", "Shift Handover Checklist", "SAFETY", false),
-        TemplateSummary("post_maint_1", "Post-Maintenance Verification", "MAINTENANCE", true),
-        TemplateSummary("gate_pass_1", "Vehicle Gate Pass / Release", "LOGISTICS", false)
-    )
-    
-    var isRefreshing by remember { mutableStateOf(false) }
+    val uiState by viewModel.uiState.collectAsState()
+    val templates = uiState.templates
     val snackbarHostState = remember { SnackbarHostState() }
 
-    if (isRefreshing) {
-        LaunchedEffect(true) {
-            isRefreshing = false
-        }
-    }
+    // Pull-to-refresh now performs a real reload. It used to set a flag and clear it
+    // again on the next frame, so the spinner appeared and nothing was re-read.
+    val isRefreshing = uiState.isLoading && templates.isNotEmpty()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -71,7 +63,7 @@ fun ChecklistLibraryScreen(
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = isRefreshing,
-            onRefresh = { isRefreshing = true },
+            onRefresh = { viewModel.load() },
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
@@ -96,6 +88,42 @@ fun ChecklistLibraryScreen(
                 items(templates) { template ->
                     TemplateCard(template) { onStartChecklist(template.id) }
                 }
+
+                // Three outcomes, three different messages. "Nobody has published a
+                // checklist" and "we could not reach the server" look identical as an
+                // empty list, and a technician acts differently on each.
+                if (templates.isEmpty()) {
+                    item {
+                        when {
+                            uiState.isLoading -> Text(
+                                "Loading checklists...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 24.dp)
+                            )
+
+                            uiState.error != null -> Column(modifier = Modifier.padding(top = 24.dp)) {
+                                Text(
+                                    uiState.error ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Button(
+                                    onClick = { viewModel.load() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black)
+                                ) { Text("Try again", fontWeight = FontWeight.Bold) }
+                            }
+
+                            else -> Text(
+                                "No checklists have been published for your organisation yet.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = 24.dp)
+                            )
+                        }
+                    }
+                }
             }
             
             
@@ -104,7 +132,7 @@ fun ChecklistLibraryScreen(
 }
 
 @Composable
-fun TemplateCard(template: TemplateSummary, onClick: () -> Unit) {
+fun TemplateCard(template: ChecklistTemplate, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(24.dp),
@@ -122,14 +150,23 @@ fun TemplateCard(template: TemplateSummary, onClick: () -> Unit) {
             Spacer(Modifier.width(20.dp))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(template.category, style = MaterialTheme.typography.labelSmall, color = YellowPrimary, fontWeight = FontWeight.Bold)
+                // category is nullable on the real model, so an uncategorised template
+                // shows nothing here rather than the word "null".
+                template.category?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.labelSmall, color = YellowPrimary, fontWeight = FontWeight.Bold)
+                }
                 Text(template.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Icon(Icons.Default.Timer, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(template.duration, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                    
-                    if (template.isScored) {
+                    // The clock and "5-10 min" are gone: no checklist template records an
+                    // expected duration, so the figure was the same invented estimate on
+                    // every card.
+                    if (template.require_signature) {
+                        Surface(color = YellowPrimary.copy(alpha = 0.1f), shape = CircleShape) {
+                            Text("SIGNATURE", color = YellowPrimary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontWeight = FontWeight.ExtraBold)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    if (template.scored) {
                         Spacer(Modifier.width(12.dp))
                         Surface(color = StatusGreen.copy(alpha = 0.1f), shape = CircleShape) {
                             Text("SCORED", color = StatusGreen, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontWeight = FontWeight.ExtraBold)

@@ -152,9 +152,15 @@ class MainActivity : ComponentActivity() {
                                 if (isMechanic) {
                                     NavigationBarItem(
                                         icon = { Icon(Icons.Default.Build, contentDescription = null) },
-                                        label = { Text("Active Job") },
-                                        selected = currentDestination?.route?.startsWith("active_job") == true,
-                                        onClick = { navController.navigate("active_job_execution") }
+                                        // Was "Active Job", opening a screen that showed
+                                        // the SAME invented job to every mechanic and
+                                        // ended in an invented invoice. It now opens the
+                                        // real job list; "Jobs" because a list is what it
+                                        // is - the app cannot currently tell which job a
+                                        // given mechanic is actively on.
+                                        label = { Text("Jobs") },
+                                        selected = currentDestination?.route?.startsWith("work_order") == true,
+                                        onClick = { navController.navigate("work_order_list") }
                                     )
                                     NavigationBarItem(
                                         icon = { 

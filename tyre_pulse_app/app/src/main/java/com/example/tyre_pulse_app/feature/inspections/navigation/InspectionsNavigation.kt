@@ -11,23 +11,14 @@ object InspectionFormDestination : NavigationDestination {
     fun createRoute(assetId: String) = "inspection_form_route/$assetId"
 }
 
-object TyreInspectionDestination : NavigationDestination {
-    override val route = "tyre_inspection_route/{assetId}/{tyreId}"
-    override val destination = "tyre_inspection_destination"
-    fun createRoute(assetId: String, tyreId: String) = "tyre_inspection_route/$assetId/$tyreId"
-}
 
 fun NavController.navigateToInspectionForm(assetId: String, navOptions: NavOptions? = null) {
     this.navigate(InspectionFormDestination.createRoute(assetId), navOptions)
 }
 
-fun NavController.navigateToTyreInspection(assetId: String, tyreId: String, navOptions: NavOptions? = null) {
-    this.navigate(TyreInspectionDestination.createRoute(assetId, tyreId), navOptions)
-}
 
 fun NavGraphBuilder.inspectionsScreen(
     onBack: () -> Unit,
-    onTyreClick: (String, String) -> Unit,
     onNavigateToScan: () -> Unit
 ) {
     composable(
@@ -38,10 +29,12 @@ fun NavGraphBuilder.inspectionsScreen(
         InspectionFormScreen(
             assetId = assetId,
             onBack = onBack,
-            onTyreClick = { tyreId: String -> onTyreClick(assetId, tyreId) },
             onNavigateToScan = onNavigateToScan
         )
     }
 
-    // TyreInspectionDestination is obsolete, handled by BottomSheet
+    // Tyre taps are handled inside InspectionFormScreen by a ModalBottomSheet, so
+    // there is deliberately no tyre-inspection destination. A previous one was
+    // deleted but its navigate() helper was left wired up, which crashed the app
+    // on every tyre tap: the route it targeted no longer existed.
 }

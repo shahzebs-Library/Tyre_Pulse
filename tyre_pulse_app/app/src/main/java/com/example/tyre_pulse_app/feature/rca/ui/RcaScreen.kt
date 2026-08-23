@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +29,12 @@ fun RcaRoute(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
+
+    // The screen declared a SnackbarHostState and never posted to it, so a failed
+    // submission said nothing at all. It now shows the ViewModel's own sentence.
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { snackbarHostState.showSnackbar(it) }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -74,6 +81,19 @@ fun RcaRoute(
             }
 
             item {
+                // There was NO asset field. An RCA names the machine that failed, and
+                // without one the record cannot be attributed to anything - it is the
+                // first thing an investigation needs.
+                OutlinedTextField(
+                    value = uiState.assetNo,
+                    onValueChange = viewModel::onAssetNoChanged,
+                    label = { Text("Asset number") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            item {
                 Text("The 5 Whys (Guided)", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
                 listOf(uiState.why1, uiState.why2, uiState.why3, uiState.why4, uiState.why5).forEachIndexed { i, text ->
@@ -90,6 +110,7 @@ fun RcaRoute(
             item {
                 Button(
                     onClick = { viewModel.submit(onSuccess = onBack) },
+                    enabled = uiState.assetNo.isNotBlank() && !uiState.isSubmitting,
                     modifier = Modifier.fillMaxWidth().height(56.dp).padding(vertical = 8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = YellowPrimary, contentColor = Color.Black),
                     shape = RoundedCornerShape(12.dp)

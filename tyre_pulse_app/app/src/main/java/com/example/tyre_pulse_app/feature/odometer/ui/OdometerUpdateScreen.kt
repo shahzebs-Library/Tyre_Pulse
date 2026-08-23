@@ -31,8 +31,16 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OdometerUpdateScreen(
-    vehicleId: String = "V-1024",
-    previousOdometer: Int = 124500, // Mocked previous value
+    // No defaults. Both of these used to be fabricated - vehicleId defaulted to
+    // "V-1024" and previousOdometer to 124500 - so any caller that forgot to pass
+    // them wrote a meter reading against a vehicle that does not exist and validated
+    // it against an invented baseline. A default here is not a convenience, it is a
+    // silent data-integrity bug.
+    vehicleId: String,
+    // Null means the previous reading is genuinely unknown. It is NOT zero, and it is
+    // not a guess: with no baseline the monotonic check below is skipped rather than
+    // run against a number nobody recorded.
+    previousOdometer: Int?,
     isSubmitting: Boolean = false,
     submitError: String? = null,
     onBack: () -> Unit,
@@ -62,10 +70,14 @@ fun OdometerUpdateScreen(
         val newOdo = newOdometerStr.toIntOrNull()
         if (newOdo == null) {
             errorMessage = "Please enter a valid number"
-        } else if (newOdo <= previousOdometer) {
-            errorMessage = "New reading must be strictly greater than $previousOdometer km"
-        } else if (newOdo > previousOdometer + 50000) {
-            errorMessage = "Value seems unusually high. Please double check."
+        } else if (newOdo < 0) {
+            errorMessage = "A meter reading cannot be negative"
+        } else if (previousOdometer != null && newOdo <= previousOdometer) {
+            // A meter does not run backwards. This check is only meaningful when the
+            // previous reading is actually known, which is why it is guarded.
+            errorMessage = "New reading must be higher than the last recorded $previousOdometer km"
+        } else if (previousOdometer != null && newOdo > previousOdometer + 50000) {
+            errorMessage = "That is more than 50,000 km above the last reading. Please double check."
         } else {
             errorMessage = null
             var photoBytes: ByteArray? = null
@@ -119,7 +131,12 @@ fun OdometerUpdateScreen(
                         Text("Vehicle ID: $vehicleId", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Last Recorded Odometer:", style = MaterialTheme.typography.bodyMedium)
-                        Text("$previousOdometer km", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                        // An unknown baseline says so; it must not render as a number.
+                        Text(
+                            previousOdometer?.let { "$it km" } ?: "No previous reading recorded",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
     

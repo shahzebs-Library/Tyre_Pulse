@@ -50,6 +50,15 @@ fun WorkshopLiveRoute(
         }
     }
 
+    // A failed read or a refused action is shown. The snackbar host was already here
+    // and nothing ever posted to it, so every error was silent.
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissError()
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -83,8 +92,9 @@ fun WorkshopLiveRoute(
                 // Check-In Banner
                 CheckInBanner(
                     isCheckedIn = uiState.isCheckedIn,
-                    onToggle = { 
-                        viewModel.recordEvent(if (uiState.isCheckedIn) "check_out" else "check_in") 
+                    site = uiState.site,
+                    onToggle = {
+                        viewModel.recordEvent(if (uiState.isCheckedIn) "check_out" else "check_in")
                     }
                 )
 
@@ -111,7 +121,7 @@ fun WorkshopLiveRoute(
 }
 
 @Composable
-fun CheckInBanner(isCheckedIn: Boolean, onToggle: () -> Unit) {
+fun CheckInBanner(isCheckedIn: Boolean, site: String?, onToggle: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -122,7 +132,13 @@ fun CheckInBanner(isCheckedIn: Boolean, onToggle: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(if (isCheckedIn) "On Duty" else "Off Duty", fontWeight = FontWeight.Bold)
-                Text("Site A - Workshop", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                // The site comes from the technician's own work. "Site A - Workshop"
+                // was hard-coded here and shown to everyone, at every location.
+                Text(
+                    site ?: "Site not recorded",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
             Button(onClick = onToggle, colors = ButtonDefaults.buttonColors(containerColor = if (isCheckedIn) Color.Gray else YellowPrimary)) {
                 Text(if (isCheckedIn) "Check Out" else "Check In", color = Color.Black)
@@ -139,8 +155,11 @@ fun ProductivityCard(prod: Productivity) {
         colors = CardDefaults.cardColors(containerColor = OLED_Card)
     ) {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceAround) {
-            ProdItem("${prod.productiveMin}m", "Productive", StatusGreen)
-            ProdItem("${prod.blockedMin}m", "Blocked", StatusOrange)
+            // A minute count that cannot be measured renders as a dash, never as 0 -
+            // "no activity recorded yet" and "worked zero minutes" are different
+            // statements, and only one of them is an accusation.
+            ProdItem(prod.productiveMin?.let { "${it}m" } ?: "-", "Productive", StatusGreen)
+            ProdItem(prod.blockedMin?.let { "${it}m" } ?: "-", "Blocked", StatusOrange)
             ProdItem("${prod.jobsCompleted}", "Completed", YellowPrimary)
         }
     }

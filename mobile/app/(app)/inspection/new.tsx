@@ -665,8 +665,8 @@ function NewInspectionScreen() {
                 {!useManualEntry && (
                   selectedVehicle ? (
                     <>
-                    /* Collapsed: a vehicle is chosen - show it + a Change control
-                       and hide the search results until the user reopens search. */
+                    {/* Collapsed: a vehicle is chosen - show it + a Change control
+                       and hide the search results until the user reopens search. */}
                     <View style={[styles.selectedVehicleRow, isRTL && styles.navRTL]}>
                       <Ionicons name="bus" size={18} color={theme.color.primary} />
                       <View style={{ flex: 1 }}>
@@ -686,12 +686,12 @@ function NewInspectionScreen() {
                     </View>
                   {/* Advisory interval notice — same pattern as checklist screen */}
                   {!!inspectionRecurrence && (
-                    <View style={[styles.noticeCard, {
+                    <View style={{
                       backgroundColor: theme.color.warning?.soft ?? '#fffbeb',
                       borderColor: theme.color.warning?.base ?? '#f59e0b',
                       borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 10,
                       flexDirection: 'column', gap: 4,
-                    }]}>
+                    }}>
                       <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 6 }}>
                         <Ionicons name="time-outline" size={16} color={theme.color.warning?.base ?? '#f59e0b'} />
                         <Text style={{ fontWeight: '700', fontSize: 13, color: theme.color.warning?.on ?? '#92400e', textAlign, flex: 1 }}>

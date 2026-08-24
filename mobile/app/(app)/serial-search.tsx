@@ -8,7 +8,7 @@
  * scanner starts one from a scanned tyre. Reads require connectivity — a lookup
  * that throws surfaces a friendly, retryable error rather than a raw failure.
  */
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, StatusBar, Platform, KeyboardAvoidingView,

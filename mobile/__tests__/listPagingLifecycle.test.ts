@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, sep } from 'path'
 
 /**
  * An infinite-scroll list must fetch each page exactly once, and only the newest
@@ -42,7 +42,10 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const FILES = walk(ROOT).map(f => ({ path: f.slice(ROOT.length + 1), src: readFileSync(f, 'utf8') }))
+// Path separators are normalised to "/" so the scan matches on Windows too:
+// join() yields backslashes there, so a literal "app/(app)/..." compare found
+// nothing and the scan silently policed an empty set.
+const FILES = walk(ROOT).map(f => ({ path: f.slice(ROOT.length + 1).split(sep).join('/'), src: readFileSync(f, 'utf8') }))
 const RECORDS = 'app/(app)/records/index.tsx'
 const records = FILES.find(f => f.path === RECORDS)
 

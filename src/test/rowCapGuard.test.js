@@ -197,7 +197,17 @@ function sourceFiles() {
 const FROM_LARGE = new RegExp(`\\.from\\(\\s*['"](${LARGE_TABLES.join('|')})['"]`)
 const ANY_FROM = /\.from\(\s*['"]([a-z_0-9]+)['"]/
 const RPC_LARGE = new RegExp(`\\.rpc\\(\\s*['"](${LARGE_RPCS.join('|')})['"]`)
-const BOUNDED_EQ = new RegExp(`\\.eq\\(\\s*['"](${BOUNDED_EQ_KEYS.join('|')})['"]`)
+// `.ilike(` counts too. The serial lookups in SerialTracker and TyreLifecycle
+// moved from .eq('serial_no', s) to .ilike('serial_no', s) so a tyre whose serial
+// is stored under a different casing is still found - the client half of the
+// case-insensitive scrap work (V604). That is still ONE serial, so it is bounded
+// by that tyre's own fitment history exactly as the .eq form was, and the guard
+// flagging it was a false positive rather than a real unbounded read.
+//
+// CAVEAT worth knowing: ilike treats % and _ as wildcards, so this is only
+// single-entity while the supplied value is a literal serial. Callers pass a
+// scanned or typed serial straight through, so they escape it first.
+const BOUNDED_EQ = new RegExp(`\\.(eq|ilike)\\(\\s*['"](${BOUNDED_EQ_KEYS.join('|')})['"]`)
 const PAGING = /fetchAllPages\s*\(|fetchAllRows\s*\(|fetchAllRpcPages\s*\(|fetchAllRpcRows\s*\(|pageAll\s*\(/
 
 /**
@@ -282,7 +292,7 @@ function callText(src, openIdx) {
 function findOffenders() {
   const hits = []
   for (const file of sourceFiles()) {
-    const src = readFileSync(join(ROOT, file), 'utf8')
+    const src = readFileSync(join(ROOT, file), 'utf8').replace(/\r\n/g, '\n')
     const lines = src.split('\n')
     const lineStart = []
     { let acc = 0; for (const l of lines) { lineStart.push(acc); acc += l.length + 1 } }

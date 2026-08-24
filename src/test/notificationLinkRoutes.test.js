@@ -16,8 +16,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const APP = fs.readFileSync(path.join(root, 'src/App.jsx'), 'utf8')
-const CENTER = fs.readFileSync(path.join(root, 'src/components/NotificationCenter.jsx'), 'utf8')
+const APP = fs.readFileSync(path.join(root, 'src/App.jsx'), 'utf8').replace(/\r\n/g, '\n')
+const CENTER = fs.readFileSync(path.join(root, 'src/components/NotificationCenter.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
 /** Every path App.jsx declares as a <Route path="...">. */
 function declaredRoutes() {

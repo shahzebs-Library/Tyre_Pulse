@@ -134,18 +134,34 @@ describe('localStorage unavailable', () => {
   let getSpy
   let setSpy
 
-  // NOTE: the spy MUST go on Storage.prototype, not on the `localStorage`
-  // instance. jsdom's localStorage is proxy-backed, so vi.spyOn(localStorage,
-  // 'getItem') silently fails to install and the test would pass against the
-  // REAL storage - i.e. prove nothing. Verified: instance spying reports
-  // isMockFunction === false, prototype spying === true.
+  // WHERE THE SPY GOES DEPENDS ON WHAT PROVIDED THE STORAGE, and getting it
+  // wrong makes this whole block pass VACUOUSLY against real storage.
+  //
+  //  - jsdom's own localStorage is proxy-backed, so vi.spyOn(localStorage, ...)
+  //    silently fails to install and only Storage.prototype spying takes.
+  //  - Under a recent Node, Node's own `localStorage` global (undefined without
+  //    --localstorage-file) shadows jsdom's, and src/test/setup.js installs a
+  //    plain-object stand-in. Its methods are OWN properties, so a
+  //    Storage.prototype spy does NOT reach them.
+  //
+  // So: spy on whichever target actually owns the method, then PROVE the spy
+  // installed. Without that assertion this block silently stops testing anything.
+  const spyTarget = () =>
+    Object.prototype.hasOwnProperty.call(globalThis.localStorage, 'getItem')
+      ? globalThis.localStorage
+      : Storage.prototype
+
   beforeEach(() => {
-    getSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    const target = spyTarget()
+    getSpy = vi.spyOn(target, 'getItem').mockImplementation(() => {
       throw new Error('storage disabled')
     })
-    setSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    setSpy = vi.spyOn(target, 'setItem').mockImplementation(() => {
       throw new Error('storage disabled')
     })
+    // The spy must be live on the object the code under test actually calls.
+    expect(vi.isMockFunction(globalThis.localStorage.getItem)).toBe(true)
+    expect(vi.isMockFunction(globalThis.localStorage.setItem)).toBe(true)
   })
   afterEach(() => {
     getSpy.mockRestore()

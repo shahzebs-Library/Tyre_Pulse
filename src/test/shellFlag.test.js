@@ -109,7 +109,7 @@ describe('new_shell flag - registration', () => {
     // EVERY load for a switch almost nobody has flipped. Source-scan, because
     // the regression is a few lines in a component that is expensive to render
     // in a test (it pulls auth, settings, tenant and the Supabase client).
-    const src = readFileSync('src/App.jsx', 'utf8')
+    const src = readFileSync('src/App.jsx', 'utf8').replace(/\r\n/g, '\n')
     const shell = src.slice(src.indexOf('function AppShell('))
     const body = shell.slice(0, shell.indexOf('\n}\n'))
     expect(body).not.toMatch(/setTimeout|TIMEOUT/)

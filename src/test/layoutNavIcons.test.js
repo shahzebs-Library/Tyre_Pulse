@@ -16,7 +16,7 @@ import * as lucide from 'lucide-react'
  * lucide-react (and actually exist there) or as one of the custom `*Ic` icons.
  */
 const layoutPath = resolve(process.cwd(), 'src/components/Layout.jsx')
-const src = readFileSync(layoutPath, 'utf8')
+const src = readFileSync(layoutPath, 'utf8').replace(/\r\n/g, '\n')
 
 function importedNames(source) {
   const names = new Set()

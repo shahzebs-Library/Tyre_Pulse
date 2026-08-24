@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
  */
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const read = (rel) => readFileSync(join(ROOT, rel), 'utf8')
+const read = (rel) => readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n')
 
 /**
  * Every case: a page, a fragment that MUST be present (the filtered form), and

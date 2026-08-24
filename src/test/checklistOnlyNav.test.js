@@ -23,7 +23,7 @@ import {
 } from '../lib/checklistAccess'
 import { APPROVAL_STAGES, STAGE_SUPERVISOR, STAGE_AREA_MANAGER } from '../lib/checklist/checklistApproval'
 
-const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8')
+const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n')
 
 describe('the sidebar can reach the checklist-only rule', () => {
   for (const file of ['src/components/Layout.jsx', 'src/components/LegacyLayout.jsx']) {

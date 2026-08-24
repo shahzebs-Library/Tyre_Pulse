@@ -66,7 +66,7 @@ describe('report builder access', () => {
       'src/components/display/ReportShareBuilder.jsx',
     ]
     for (const file of EMBEDDED) {
-      const src = readFileSync(file, 'utf8')
+      const src = readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
       expect(src, file).toContain('canUseReportBuilder')
       // The gate must sit in the exported wrapper, not behind other hooks.
       expect(src, file).toMatch(/export default function \w+\(props\) \{[\s\S]{0,400}canUseReportBuilder/)
@@ -74,7 +74,7 @@ describe('report builder access', () => {
   })
 
   it('keeps the builder ROUTES Admin-only in App.jsx', () => {
-    const app = readFileSync('src/App.jsx', 'utf8')
+    const app = readFileSync('src/App.jsx', 'utf8').replace(/\r\n/g, '\n')
     for (const route of REPORT_BUILDER_ROUTES) {
       const line = app.split('\n').find((l) => l.includes(`path="${route}"`))
       expect(line, route).toBeTruthy()

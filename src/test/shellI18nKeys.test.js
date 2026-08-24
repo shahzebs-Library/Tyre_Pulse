@@ -34,7 +34,7 @@ const CALL = /(?:tx|tOr|labelOr)\(\s*t,\s*'([a-zA-Z][\w.]*)'\s*,\s*'((?:[^'\\]|\
 function collect() {
   const out = new Map()
   for (const file of SRC_FILES) {
-    const src = readFileSync(file, 'utf8')
+    const src = readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
     for (const m of src.matchAll(CALL)) {
       out.set(m[1], { fallback: m[2].replace(/\\'/g, "'"), file })
     }
@@ -45,7 +45,7 @@ function collect() {
 function lookup(locale, key) {
   const [ns, ...rest] = key.split('.')
   let json
-  try { json = JSON.parse(readFileSync(`src/locales/${locale}/${ns}.json`, 'utf8')) }
+  try { json = JSON.parse(readFileSync(`src/locales/${locale}/${ns}.json`, 'utf8').replace(/\r\n/g, '\n')) }
   catch { return undefined }
   return rest.reduce((cur, part) => (cur && typeof cur === 'object' ? cur[part] : undefined), json)
 }

@@ -16,7 +16,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { tyreCompleteness } from '../lib/tyreCompleteness'
 
-const SRC = fs.readFileSync(path.join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8')
+const SRC = fs.readFileSync(path.join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('checklist tyre gate composition', () => {
   it('keeps the pressure floor as an OR term, so the engine can only add', () => {

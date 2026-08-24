@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url'
  */
 
 const PAGES = join(dirname(fileURLToPath(import.meta.url)), '..', 'pages')
-const src = (f) => readFileSync(join(PAGES, f), 'utf8')
+const src = (f) => readFileSync(join(PAGES, f), 'utf8').replace(/\r\n/g, '\n')
 // Collapse runs of whitespace so a reformat cannot fail the guard, while an
 // actual change of ARGUMENT still does.
 const flat = (f) => src(f).replace(/\s+/g, ' ')
@@ -160,13 +160,31 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     const s = flat('FleetMaster.jsx')
 
     // The summary read is the one that used to apply the country alone.
+    //
+    // It no longer builds the query inline: loadSummary() now delegates to
+    // assets.getFleetSummary(). The RULE is unchanged - the summary must be
+    // narrowed by the same filters as the register - so the assertion follows
+    // the query to where it actually lives instead of pinning a shape that was
+    // refactored. Asserting on the page ALONE would have gone quietly vacuous.
     const summary = s.slice(s.indexOf('async function loadSummary()'), s.indexOf('loadSummary() }, ['))
-    must(summary, 'if (debouncedSearch)', 'The summary read is the one that used to apply the country alone')
-    must(summary, "if (siteFilter) q = q.eq('site', siteFilter)", 'The summary read is the one that used to apply the country alone')
-    must(summary, "if (activeCountry !== 'All') q = q.eq('country', activeCountry)", 'The summary read is the one that used to apply the country alone')
+    must(summary, 'assets.getFleetSummary(', 'The summary read must go through the fleet summary service')
+    must(summary, 'country: activeCountry', 'The summary read is the one that used to apply the country alone')
+    must(summary, 'search: debouncedSearch', 'The summary must be narrowed by the search box, not just the country')
+    must(summary, 'site: siteFilter', 'The summary must be narrowed by the site filter, not just the country')
+
+    // ...and the service itself must apply all three to the query.
+    const svc = readFileSync(join(PAGES, '..', 'lib', 'api', 'assets.js'), 'utf8').replace(/\r\n/g, '\n')
+      .replace(/\r\n/g, '\n').replace(/\s+/g, ' ')
+    const fleetSummary = svc.slice(
+      svc.indexOf('export async function getFleetSummary('),
+      svc.indexOf('export async function saveFleetRecord('))
+    must(fleetSummary, 'if (search)', 'getFleetSummary must apply the search term')
+    must(fleetSummary, "if (site) q = q.eq('site', site)", 'getFleetSummary must apply the site filter')
+    must(fleetSummary, 'applyCountry(q, country)', 'getFleetSummary must apply the country scope')
     // RULE 1: status is held out - the "Active" card reports on exactly that
     // dimension, so applying it would make Total equal Active.
     mustNot(summary, 'statusFilter', 'dimension, so applying it would make Total equal Active')
+    mustNot(fleetSummary, "q.eq('status'", 'dimension, so applying it would make Total equal Active')
 
     // The effect re-runs when those filters move.
     must(s, '}, [activeCountry, debouncedSearch, siteFilter, records])', 'The effect re-runs when those filters move')

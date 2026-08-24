@@ -25,9 +25,9 @@ import { join } from 'path'
  * NAV_GROUPS itself. A test that imported the catalog would silently check nothing.
  */
 
-const APP = readFileSync(join(process.cwd(), 'src/App.jsx'), 'utf8')
-const LAYOUT = readFileSync(join(process.cwd(), 'src/components/Layout.jsx'), 'utf8')
-const NAV_ACCESS = readFileSync(join(process.cwd(), 'src/lib/navAccess.js'), 'utf8')
+const APP = readFileSync(join(process.cwd(), 'src/App.jsx'), 'utf8').replace(/\r\n/g, '\n')
+const LAYOUT = readFileSync(join(process.cwd(), 'src/components/Layout.jsx'), 'utf8').replace(/\r\n/g, '\n')
+const NAV_ACCESS = readFileSync(join(process.cwd(), 'src/lib/navAccess.js'), 'utf8').replace(/\r\n/g, '\n')
 
 /** Every `{ to: '/x', ... }` entry in NAV_GROUPS, with the raw text of its options. */
 function navItems() {

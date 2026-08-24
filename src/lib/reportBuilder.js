@@ -214,10 +214,15 @@ export const CHART_PALETTE = Object.freeze([
 ])
 
 // ── Value helpers ─────────────────────────────────────────────────────────────
-/** Escape PostgREST/SQL LIKE wildcards in a user-supplied search term. */
-export function escapeLike(s) {
-  return String(s ?? '').replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
-}
+// escapeLike lives in searchFilter.js (its canonical home, beside
+// sanitizeSearchTerm) and is re-exported here so existing importers of this
+// module keep working and there is only ONE implementation.
+//
+// It is IMPORTED as well as re-exported on purpose: `export { x } from '...'`
+// forwards the name but does NOT bind it in this module's scope, and this file
+// calls escapeLike itself in the `contains` filter below.
+import { escapeLike } from './searchFilter'
+export { escapeLike }
 
 function toNumber(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null

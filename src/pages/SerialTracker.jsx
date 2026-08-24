@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { escapeLike } from '../lib/searchFilter'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload, AlertTriangle, Trash2, RotateCcw, X } from 'lucide-react'
@@ -201,7 +202,7 @@ export default function SerialTracker() {
       const { data, error: qErr } = await supabase
         .from('tyre_records')
         .select('*')
-        .ilike('serial_no', q)
+        .ilike('serial_no', escapeLike(q))
         .order('issue_date', { ascending: true })
       if (qErr) throw qErr
       setRecords(data || [])
@@ -374,7 +375,7 @@ export default function SerialTracker() {
             const { data, error: qErr } = await supabase
               .from('tyre_records')
               .select('serial_no, issue_date, asset_no, status, country, cost:cost_per_tyre')
-              .ilike('serial_no', serial)
+              .ilike('serial_no', escapeLike(serial))
               .order('issue_date', { ascending: true })
             if (qErr) throw qErr
             if (!data || data.length === 0) {

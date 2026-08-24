@@ -140,8 +140,8 @@ describe('what the reader is shown', () => {
 })
 
 describe('the mobile mirror does not drift', () => {
-  const web = readFileSync(resolve(__dirname, '../lib/checklist/checklistApproval.js'), 'utf8')
-  const mob = readFileSync(resolve(__dirname, '../../mobile/lib/checklistApproval.ts'), 'utf8')
+  const web = readFileSync(resolve(__dirname, '../lib/checklist/checklistApproval.js'), 'utf8').replace(/\r\n/g, '\n')
+  const mob = readFileSync(resolve(__dirname, '../../mobile/lib/checklistApproval.ts'), 'utf8').replace(/\r\n/g, '\n')
 
   it('exports the same decisions on both stacks', () => {
     const fns = (s) => [...s.matchAll(/export function (\w+)/g)].map((x) => x[1]).sort()
@@ -166,8 +166,10 @@ describe('the mobile mirror does not drift', () => {
     const sql = ['MIGRATIONS_V594_CHECKLIST_TWO_STAGE_APPROVAL.sql',
                  'MIGRATIONS_V599_WORKSHOP_SUPERVISOR.sql',
                  'MIGRATIONS_V600_WHO_SIGNS.sql',
-                 'MIGRATIONS_V604_CHECKLIST_DATA_COLLECTOR_APPROVAL.sql']
-      .map((f) => readFileSync(resolve(__dirname, '../..', f), 'utf8'))
+                 // Renumbered from V604 to V606 on 2026-08-24: V604 was
+                 // double-booked with the live v604_scrap_serial_case_insensitive.
+                 'MIGRATIONS_V606_CHECKLIST_DATA_COLLECTOR_APPROVAL.sql']
+      .map((f) => readFileSync(resolve(__dirname, '../..', f), 'utf8').replace(/\r\n/g, '\n'))
       .join('\n')
     const sqlRoles = (fn) => {
       // Anchor on the DEFINITION, not the bare name: every one of these files

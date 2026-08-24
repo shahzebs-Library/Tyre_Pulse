@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url'
  */
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const read = (rel) => readFileSync(join(ROOT, rel), 'utf8')
+const read = (rel) => readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n')
 
 /** Every file in this session's paging pass, whether or not it gained a pager. */
 const PAGED_SURFACES = [
@@ -86,10 +86,15 @@ describe('a paged register still exports the whole filtered set', () => {
     {
       file: 'pages/SerialTracker.jsx',
       what: 'bulk lookup Excel export',
-      // Deliberately the UNfiltered results: the sheet is the answer to the
-      // whole pasted list, and the chips above it are a view filter. Either way
-      // it is a superset of the page, which is what matters here.
-      required: 'exportToExcel(\n        bulkResults,',
+      // The whole FILTERED set, never the page. This case used to pin
+      // `bulkResults` (the unfiltered list) because at the time there was no
+      // pagination to be wrong about. The page now runs the bulk results through
+      // usePagedRows and renders `bulkPager.pageRows`, so the thing that matters
+      // is that the export is NOT that 20-row slice - a page-sized sheet looks
+      // complete and is the export defect this repo has shipped before.
+      // `filteredBulkResults` is the memo over the full results, so it still
+      // satisfies the invariant: a superset of the page.
+      required: 'exportToExcel(\n        filteredBulkResults,',
     },
     {
       file: 'pages/TyreExchange.jsx',

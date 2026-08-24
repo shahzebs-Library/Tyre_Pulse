@@ -6,7 +6,7 @@ import fs from 'node:fs'
 // border fell back to currentColor. This pins that they stay defined.
 describe('unsuffixed theme aliases', () => {
   let css
-  beforeAll(() => { css = fs.readFileSync('src/index.css', 'utf8') })
+  beforeAll(() => { css = fs.readFileSync('src/index.css', 'utf8').replace(/\r\n/g, '\n') })
 
   it('defines --surface and --border', () => {
     expect(css).toMatch(/--surface:\s*var\(--surface-1\)/)

@@ -1,0 +1,56 @@
+# Normalise line endings so a Windows checkout and a Linux CI checkout hold the
+# SAME bytes.
+#
+# WHY THIS FILE EXISTS. With `core.autocrlf=true` (the Windows default) and no
+# .gitattributes, Git rewrites every text file to CRLF on checkout. Roughly a
+# dozen tests in src/test/ are SOURCE SCANNERS: they read a .js/.jsx/.ts file and
+# assert on its contents, splitting on '\n' and anchoring regexes with '$'. A
+# trailing '\r' breaks every one of those anchors, so those tests fail on a
+# Windows working tree and pass in CI - the worst kind of failure, because the
+# machine that can reproduce it is not the machine that reports it.
+#
+# Measured on 2026-08-24: src/components/VehicleTyreDiagram.jsx was checked out
+# with 1,644 CRLF line endings and 0 bare LF, and the layout scanner in
+# src/test/vehicleTyreLayout.test.js found 0 layouts. With '\r' stripped it found
+# all 13.
+#
+# `eol=lf` pins the WORKING TREE to LF on every platform. The repository itself
+# already stores LF (autocrlf converts on commit), so this changes no committed
+# content - only what lands on disk at checkout.
+#
+# The source scanners were ALSO made line-ending agnostic, so they no longer
+# depend on this file being respected. Both halves are deliberate: this stops the
+# whole class, the per-test normalisation stops it in a tree checked out before
+# this file existed.
+
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.zip   binary
+*.gz    binary
+*.xlsx  binary
+*.xls   binary
+*.pptx  binary
+*.docx  binary
+*.keystore binary
+*.jks   binary
+*.p12   binary
+*.mp4   binary
+*.webm  binary
+
+# Windows-only scripts genuinely need CRLF to run.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf

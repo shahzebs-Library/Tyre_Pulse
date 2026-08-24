@@ -12,6 +12,7 @@ import {
   DollarSign, Activity, Filter, ChevronLeft, ChevronRight, AlertTriangle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { escapeLike } from '../lib/searchFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
@@ -330,7 +331,7 @@ export default function TyreLifecycle() {
     const { data } = await supabase
       .from('tyre_records')
       .select('id,asset_no,serial_number:serial_no,position,brand,size,issue_date,km_at_fitment,km_at_removal,category,risk_level,cost_per_tyre,site')
-      .ilike('serial_no', serial)
+      .ilike('serial_no', escapeLike(serial))
       .order('issue_date')
     setSerialHistory(prev => ({ ...prev, [serial]: data || [] }))
   }

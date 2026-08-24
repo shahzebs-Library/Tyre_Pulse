@@ -312,8 +312,8 @@ describe('an inspector can say "I checked it and it is fine"', () => {
 })
 
 describe('mirror does not drift from mobile/lib/tyreCompleteness.ts', () => {
-  const webSrc = readFileSync(resolve(__dirname, '../lib/tyreCompleteness.js'), 'utf8')
-  const mobSrc = readFileSync(resolve(__dirname, '../../mobile/lib/tyreCompleteness.ts'), 'utf8')
+  const webSrc = readFileSync(resolve(__dirname, '../lib/tyreCompleteness.js'), 'utf8').replace(/\r\n/g, '\n')
+  const mobSrc = readFileSync(resolve(__dirname, '../../mobile/lib/tyreCompleteness.ts'), 'utf8').replace(/\r\n/g, '\n')
 
   /** Pull each "// #mirror: NAME" block (marker to the next blank line). */
   function mirrorBlocks(src) {

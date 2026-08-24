@@ -7,7 +7,7 @@ const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null }, last: null, rpc: { data: null, error: null }, lastRpc: null }
   function rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(state.rpc) }
   function from(table) {
-    const calls = { eq: [], or: [], range: [] }
+    const calls = { eq: [], or: [], range: [], ilike: [] }
     const b = {
       _table: table,
       _calls: calls,
@@ -18,6 +18,10 @@ const h = vi.hoisted(() => {
       insert(v) { calls.insert = v; return b },
       update(v) { calls.update = v; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },
+      // The tyre serial lookup is case-insensitive (.ilike) since the scrap
+      // serial-casing fix. A mock missing a method the service calls throws a
+      // TypeError that the service swallows, so the MOCK fails, not the code.
+      ilike(c, v) { calls.ilike.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
       maybeSingle() { return Promise.resolve(state.result) },
       single() { return Promise.resolve(state.result) },
@@ -84,7 +88,7 @@ describe('service layer - tyres', () => {
   it('getTyreBySerial queries serial_no', async () => {
     h.state.result = { data: { serial_no: 'SN1' }, error: null }
     const t = await tyres.getTyreBySerial('SN1')
-    expect(h.state.last._calls.eq).toContainEqual(['serial_no', 'SN1'])
+    expect(h.state.last._calls.ilike).toContainEqual(['serial_no', 'SN1'])
     expect(t).toEqual({ serial_no: 'SN1' })
   })
 })

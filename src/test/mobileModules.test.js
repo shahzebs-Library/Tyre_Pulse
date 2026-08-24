@@ -81,7 +81,7 @@ describe('mobileModules catalog', () => {
  * of relying on somebody remembering to edit both.
  */
 describe('mirror does not drift from mobile/lib/permissions.ts', () => {
-  const src = readFileSync(resolve(__dirname, '../../mobile/lib/permissions.ts'), 'utf8')
+  const src = readFileSync(resolve(__dirname, '../../mobile/lib/permissions.ts'), 'utf8').replace(/\r\n/g, '\n')
 
   // Each entry is  M('key', 'Label', 'icon', 'Group', ['role', ...]),  possibly
   // wrapped across lines.

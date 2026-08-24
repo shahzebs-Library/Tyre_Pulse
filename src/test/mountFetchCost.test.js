@@ -23,7 +23,7 @@ import { shortcutRange, DEFAULT_SHORTCUT } from '../pages/Dashboard'
  * is a fact about the page file, and importing these pages drags in the app.
  */
 
-const read = (p) => readFileSync(join(process.cwd(), p), 'utf8')
+const read = (p) => readFileSync(join(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n')
 
 /** Source with `//` line comments stripped - the comments discuss these very
  *  patterns by name, so a naive grep matches the explanation, not the code. */

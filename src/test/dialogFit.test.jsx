@@ -14,7 +14,7 @@ afterEach(cleanup)
  * dialogs back in a small fixed box.
  */
 
-const css = fs.readFileSync(path.join(process.cwd(), 'src/index.css'), 'utf8')
+const css = fs.readFileSync(path.join(process.cwd(), 'src/index.css'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('Modal shell', () => {
   it('renders nothing when closed', () => {

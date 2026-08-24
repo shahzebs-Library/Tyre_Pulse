@@ -222,7 +222,7 @@ describe('the tile drill-down narrows the table without zeroing the tiles', () =
  * review, so it is read from source (the same approach as rowCapGuard / consoleSurfaceGuard).
  */
 describe('Inspections.jsx wires the tiles to the filtered rows', () => {
-  const src = readFileSync(join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8')
+  const src = readFileSync(join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
   it('feeds inspectionOverview the scoped rows, never the unfiltered tab list', () => {
     const call = src.match(/inspectionOverview\(([^)]*)\)/)
@@ -266,7 +266,7 @@ describe('Inspections.jsx wires the tiles to the filtered rows', () => {
  * gate and the read-only signed-off view were not.
  */
 describe('Inspections.jsx sign-off', () => {
-  const src = readFileSync(join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8')
+  const src = readFileSync(join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
   it('offers the sign-off controls only to someone allowed to sign', () => {
     expect(src).toMatch(/const canApproveInspection = Boolean\(/)
@@ -340,7 +340,7 @@ describe('Inspections.jsx sign-off', () => {
 })
 
 describe('inspections service: decideInspectionApproval', () => {
-  const src = readFileSync(join(process.cwd(), 'src/lib/api/inspections.js'), 'utf8')
+  const src = readFileSync(join(process.cwd(), 'src/lib/api/inspections.js'), 'utf8').replace(/\r\n/g, '\n')
 
   it('calls the RPC with the signature and lets the server own the rest', () => {
     expect(src).toMatch(/supabase\.rpc\('decide_inspection_approval'/)

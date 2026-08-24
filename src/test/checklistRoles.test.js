@@ -127,7 +127,7 @@ describe('mobile mirror stays in step', () => {
   // Reads the mobile SOURCE rather than importing it: mobile/lib is TypeScript
   // compiled by a different toolchain, and the point is to catch the two files
   // drifting, which is what happened to src/lib/mobileModules.js.
-  const src = readFileSync(resolve(__dirname, '../../mobile/lib/checklistRoles.ts'), 'utf8')
+  const src = readFileSync(resolve(__dirname, '../../mobile/lib/checklistRoles.ts'), 'utf8').replace(/\r\n/g, '\n')
 
   it('exports the same function names', () => {
     for (const fn of [

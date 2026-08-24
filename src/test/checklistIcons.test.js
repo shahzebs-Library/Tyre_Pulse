@@ -111,7 +111,7 @@ describe('checklistIcons resolution', () => {
 })
 
 describe('mobile mirror stays in step', () => {
-  const src = readFileSync(resolve(__dirname, '../../mobile/lib/checklistIcons.ts'), 'utf8')
+  const src = readFileSync(resolve(__dirname, '../../mobile/lib/checklistIcons.ts'), 'utf8').replace(/\r\n/g, '\n')
 
   it('declares the SAME tokens in the SAME order', () => {
     // Drift here is invisible until someone notices a phone showing a different

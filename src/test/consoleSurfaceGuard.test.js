@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 
-const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8')
+const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n')
 
 describe('console surface isolation', () => {
   it('the main-app frontend carries NO console entry at all', () => {

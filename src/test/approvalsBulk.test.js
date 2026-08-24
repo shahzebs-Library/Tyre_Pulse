@@ -178,7 +178,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const pageSrc = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'pages', 'Approvals.jsx'), 'utf8')
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'pages', 'Approvals.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('Approvals bulk-run guard (source)', () => {
   it('loads the approver saved signature before a bulk approve', () => {

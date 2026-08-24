@@ -21,7 +21,7 @@ import fs from 'fs'
 import path from 'path'
 import { COUNTRIES } from '../contexts/SettingsContext'
 
-const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8')
+const read = (p) => fs.readFileSync(path.join(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n')
 
 /** The five create/edit surfaces that used to fabricate a KSA default. */
 const PAGES = [

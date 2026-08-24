@@ -241,8 +241,8 @@ describe('a hidden line must not demand the impossible, but must still block', (
 })
 
 describe('the mobile mirror does not drift', () => {
-  const web = readFileSync(resolve(__dirname, '../lib/checklist/checklistMarks.js'), 'utf8')
-  const mob = readFileSync(resolve(__dirname, '../../mobile/lib/checklistMarks.ts'), 'utf8')
+  const web = readFileSync(resolve(__dirname, '../lib/checklist/checklistMarks.js'), 'utf8').replace(/\r\n/g, '\n')
+  const mob = readFileSync(resolve(__dirname, '../../mobile/lib/checklistMarks.ts'), 'utf8').replace(/\r\n/g, '\n')
 
   it('declares the same mark tokens on both stacks', () => {
     const tokens = (s) => [...s.matchAll(/^\s{2}(\w+):\s*\{\s*(?:lucide|ionicon):/gm)].map((m) => m[1])

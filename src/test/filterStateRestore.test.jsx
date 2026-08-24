@@ -42,13 +42,17 @@ let lastQuery = null
 
 function makeQueryBuilder(rows) {
   const q = {
-    _filters: { eq: {}, or: null, range: null },
+    // `or` keeps the LAST expression for the existing assertions; `ors` collects
+    // every one. The page issues TWO .or() calls - the search, then the null-safe
+    // country scope from applyCountry - so a last-write-wins recorder silently
+    // loses the search and makes a passing search look like a missing one.
+    _filters: { eq: {}, or: null, ors: [], range: null },
     select() { return q },
     order() { return q },
     not() { return q },
     range(from, to) { q._filters.range = [from, to]; return q },
     eq(col, val) { q._filters.eq[col] = val; return q },
-    or(expr) { q._filters.or = expr; return q },
+    or(expr) { q._filters.or = expr; q._filters.ors.push(expr); return q },
     then(resolve) {
       lastQuery = q._filters
       return Promise.resolve(resolve({ data: rows, count: rows.length, error: null }))
@@ -99,8 +103,12 @@ describe('Fleet Master keeps its filters in the URL', () => {
     // A clean first load: nothing added to the URL, and the query carries only
     // the working-country scope the page always applied.
     expect(screen.getByTestId('url').textContent).toBe('')
-    expect(lastQuery.eq).toEqual({ country: 'KSA' })
-    expect(lastQuery.or).toBeNull()
+    // The country scope goes through applyCountry, which emits the NULL-SAFE
+    // form (`country.eq.KSA,country.is.null`) rather than a strict .eq. That is
+    // the house convention and it matters: a strict .eq on country is what once
+    // hid 55,606 country-less job cards from every country view.
+    expect(lastQuery.eq).toEqual({})
+    expect(lastQuery.ors).toEqual(['country.eq.KSA,country.is.null'])
   })
 
   it('puts a chosen status filter in the URL so it survives a remount', async () => {
@@ -136,7 +144,9 @@ describe('Fleet Master keeps its filters in the URL', () => {
     expect(screen.getByTestId('url').textContent).toContain('page=3')
     expect(screen.getByTestId('url').textContent).toContain('search=TM')
     // The restored search is queried immediately rather than after the debounce.
-    expect(lastQuery.or).toContain('TM')
+    // Assert across ALL .or() calls: the country scope is issued as a second
+    // .or() after the search, so checking only the last one tests the wrong call.
+    expect(lastQuery.ors.some(e => e.includes('TM'))).toBe(true)
   })
 
   it('ignores a page size the table does not offer, so the server range stays bounded', async () => {
@@ -270,7 +280,7 @@ describe.each(Object.keys(PAGE_DEFAULTS))('%s filter round trip', page => {
 import { readFileSync } from 'fs'
 
 describe('Inspections deep-link params', () => {
-  const src = readFileSync('src/pages/Inspections.jsx', 'utf8')
+  const src = readFileSync('src/pages/Inspections.jsx', 'utf8').replace(/\r\n/g, '\n')
 
   it('still consumes ?asset= and ?approve=', () => {
     expect(src).toContain("searchParams.get('asset')")

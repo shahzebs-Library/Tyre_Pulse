@@ -170,7 +170,7 @@ describe('layout integrity', () => {
   // (importing the component would drag React and framer-motion into a pure test).
   it('the diagram component draws exactly these layouts and slots', () => {
     const src = fs.readFileSync(
-      path.join(process.cwd(), 'src/components/VehicleTyreDiagram.jsx'), 'utf8')
+      path.join(process.cwd(), 'src/components/VehicleTyreDiagram.jsx'), 'utf8').replace(/\r\n/g, '\n')
     const body = src.slice(src.indexOf('const LAYOUTS = {'))
     expect(body).toBeTruthy()
 
@@ -194,7 +194,7 @@ describe('layout integrity', () => {
   // Web and mobile diverging is what produced this bug in the first place.
   it('matches the mobile tyreless list', () => {
     const src = fs.readFileSync(
-      path.join(process.cwd(), 'mobile/lib/tyreDiagramLayouts.ts'), 'utf8')
+      path.join(process.cwd(), 'mobile/lib/tyreDiagramLayouts.ts'), 'utf8').replace(/\r\n/g, '\n')
     const block = src.slice(src.indexOf('export const NO_TYRE_EQUIPMENT = ['))
     const arr = block
       .slice(block.indexOf('['), block.indexOf(']') + 1)

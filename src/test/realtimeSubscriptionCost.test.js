@@ -27,7 +27,7 @@ import { join } from 'path'
  * layout file, and importing Layout drags in the whole app.
  */
 
-const read = (p) => readFileSync(join(process.cwd(), p), 'utf8')
+const read = (p) => readFileSync(join(process.cwd(), p), 'utf8').replace(/\r\n/g, '\n')
 
 const LAYOUTS = ['src/components/Layout.jsx', 'src/components/LegacyLayout.jsx']
 

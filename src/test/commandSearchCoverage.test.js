@@ -15,8 +15,8 @@ import { dirname, resolve } from 'path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..', '..')
-const layout = readFileSync(resolve(root, 'src/components/Layout.jsx'), 'utf8')
-const commands = readFileSync(resolve(root, 'src/lib/commandSearch.js'), 'utf8')
+const layout = readFileSync(resolve(root, 'src/components/Layout.jsx'), 'utf8').replace(/\r\n/g, '\n')
+const commands = readFileSync(resolve(root, 'src/lib/commandSearch.js'), 'utf8').replace(/\r\n/g, '\n')
 
 const navPaths = (src) =>
   [...src.matchAll(/\{\s*to:\s*'(\/[^']+)'\s*,\s*label:/g)].map((m) => m[1])

@@ -70,7 +70,13 @@ export const MOBILE_MODULES = [
   // V600 - who signs: area manager / PMV manager / the trades' supervisors.
   // Director stays for the checklist FINAL rung only. Mirrors
   // mobile/lib/permissions.ts; change both.
-  { key: 'approvals',      label: 'Approvals',        group: 'Admin',       roles: ['director', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager'] },
+  // tyre_data_collector signs too: the live database lets that role approve
+  // checklists and tyre inspections (checklist_is_supervisor /
+  // decide_inspection_approval, see MIGRATIONS_V606). The phone already granted
+  // it this module and this mirror had not caught up, so the web Access Manager
+  // was reasoning about a different default from the one the device applies -
+  // exactly the drift this mirror exists to prevent.
+  { key: 'approvals',      label: 'Approvals',        group: 'Admin',       roles: ['director', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager', 'tyre_data_collector'] },
   // ADMIN ONLY - no leakage. Mirrors mobile/lib/permissions.ts; change both.
   { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: [] },
   { key: 'users',          label: 'User Management',  group: 'Admin',       roles: [] },

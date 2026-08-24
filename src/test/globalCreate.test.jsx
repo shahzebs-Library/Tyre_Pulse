@@ -222,7 +222,7 @@ describe('GlobalCreate - destinations', () => {
   // Every `path="..."` declared in the router, so a rename here fails loudly
   // instead of shipping a menu entry that lands on a 404.
   const APP_ROUTES = new Set(
-    [...readFileSync('src/App.jsx', 'utf8').matchAll(/path="([^"]+)"/g)].map((m) => m[1]),
+    [...readFileSync('src/App.jsx', 'utf8').replace(/\r\n/g, '\n').matchAll(/path="([^"]+)"/g)].map((m) => m[1]),
   )
 
   it('finds the routes at all, so the scan cannot pass vacuously', () => {

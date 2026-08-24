@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
  */
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const src = readFileSync(join(ROOT, 'pages/CostCenter.jsx'), 'utf8')
+const src = readFileSync(join(ROOT, 'pages/CostCenter.jsx'), 'utf8').replace(/\r\n/g, '\n')
 
 /** Strip block and line comments so prose about a defect cannot satisfy a check. */
 const code = src

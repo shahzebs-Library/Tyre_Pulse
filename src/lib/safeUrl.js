@@ -102,3 +102,45 @@ export function safeImageSrc(url) {
   }
   return undefined
 }
+
+/**
+ * The safe target for a CLIENT-SIDE route change (react-router `navigate()` /
+ * `<Link to>`), or `undefined` when the value cannot be trusted.
+ *
+ * DIFFERENT JOB FROM safeHref. safeHref decides whether a URL may go in an
+ * `<a href>` and deliberately allows absolute http(s) links, because linking off
+ * site is legitimate. A ROUTE target is not: it must stay inside this app, so
+ * anything that could leave it is rejected.
+ *
+ * WHAT IT REJECTS AND WHY:
+ *   - any scheme at all (`javascript:`, `http:`, ...) - a route is a path
+ *   - `//evil.com` - protocol-relative, the classic open redirect
+ *   - `\evil.com` and `/\evil.com` - browsers normalise a backslash to `/`, so
+ *     these reach the same place while looking like a path. This is the shape
+ *     behind the react-router open-redirect advisory (CVE-2025-68470 and its
+ *     bypass), and rejecting it here closes the class regardless of which
+ *     router version is installed.
+ *   - anything not starting with a single `/` - a bare `evil.com` would be
+ *     resolved relative to the current route by some callers
+ *
+ * USE IT for any navigate() target that comes from DATA (a database row, an API
+ * payload, a URL parameter). A target built from a developer constant does not
+ * need it. Reject, do not repair: a caller that gets `undefined` should do
+ * nothing rather than send the user somewhere unintended.
+ *
+ * @param {unknown} path
+ * @returns {string|undefined}
+ */
+export function safeInternalPath(path) {
+  if (typeof path !== 'string') return undefined
+  const s = path.trim()
+  if (!s) return undefined
+  // Normalise backslashes before every check: the browser will.
+  const normalised = s.split('\\').join('/')
+  if (!normalised.startsWith('/')) return undefined   // must be an absolute app path
+  if (normalised.startsWith('//')) return undefined   // protocol-relative
+  if (schemeOf(normalised) !== null) return undefined // any scheme at all
+  // Return the ORIGINAL string once proven safe, so a legitimate path is passed
+  // through byte-for-byte rather than silently rewritten.
+  return s
+}

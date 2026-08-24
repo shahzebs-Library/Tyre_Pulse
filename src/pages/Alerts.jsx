@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { safeInternalPath } from '../lib/safeUrl'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
@@ -377,9 +378,9 @@ export default function Alerts() {
 
                   {/* Actions */}
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    {alert.link && (
+                    {safeInternalPath(alert.link) && (
                       <button
-                        onClick={() => navigate(alert.link)}
+                        onClick={() => { const to = safeInternalPath(alert.link); if (to) navigate(to) }}
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-3 text-gray-300 hover:bg-brand hover:text-white border border-[var(--border-dim)] hover:border-brand-600 transition-all duration-150"
                       >
                         {t('alerts.item.view')} <ArrowRight className="w-3 h-3" />

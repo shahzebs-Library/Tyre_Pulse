@@ -55,7 +55,33 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ SESSION 2026-08-24 — WORK ORDER = THE WHOLE JOB CARD (V605), MIGRATION NUMBERING REPAIRED, TEST SUITE UNBLOCKED, V607 SECURITY. Next free **V608**.
+# ⚑ SESSION 2026-08-24 — CLOSED CLEAN, MERGED, DEPLOYED. Next free migration **V608**.
+### WORK ORDER = THE WHOLE JOB CARD (V605) · MIGRATION NUMBERING REPAIRED · TEST SUITE 146 FAILURES -> 0 · V607 SECURITY · REACT-ROUTER 7
+
+**MERGED TO MAIN AND LIVE.** `main` fast-forwarded `959b51df -> 03cea207`; branch
+`claude/workshop-job-card-flow` == origin/main == HEAD, tree clean.
+**PRODUCTION DEPLOY VERIFIED, not inferred from the merge** (the standing rule):
+`dpl_Bx1J8KB5wdcs1tsxHfEpr56G7aMB`, state READY, `target: production`, ref main,
+sha `03cea207`. Exactly ONE build for the whole session - the branch was added to
+`vercel.json` -> `git.deploymentEnabled: false` in the same change, so pushing the
+branch ref raised no preview.
+
+Six commits, by explicit pathspec so each carries its own reasoning and reverts
+alone:
+- `86ac0e27` feat(workshop): the whole job card + V605
+- `c55932d0` fix(migrations): V604 double-booked, both headers false
+- `0c571b6f` fix(test): 146 failures were two environment faults
+- `63f15b0a` fix(security): V607 + the open-redirect guard
+- `013f35a7` chore(deps): react-router 6.30.4 -> 7.18.2
+- `03cea207` docs(memory) + vercel preview suppression
+
+Final state: **suite 8,721/8,721 across 575 files**, build clean, lint clean,
+production `npm audit` 5 -> 3, security advisors 770 -> 753.
+
+**NOT VERIFIED IN A REAL BROWSER.** React-router 7 changes the runtime router;
+the build and suite are green but nobody has clicked a route. `013f35a7` is the
+revert. Remember the app is a prompt-mode PWA (`skipWaiting:false`), so an open
+tab keeps its old bundle until the prompt is accepted - reload before judging.
 
 **V604 WAS DOUBLE-BOOKED AND THE HEADERS LIED. Verify a number against the live
 `supabase_migrations` AND the live object, never against a repo STATUS line.**

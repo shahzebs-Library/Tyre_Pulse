@@ -34,6 +34,10 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import { WO_STATUSES, normalizeWoStatus, isClosedWoStatus } from '../lib/workOrderStatus'
+import { editableFields, toPayload, readField } from '../lib/jobCard'
+import JobCardForm from '../components/workorders/JobCardForm'
+import JobCardDetail from '../components/workorders/JobCardDetail'
+import { getAssetByNo } from '../lib/api/assets'
 import { loadAutoTable } from '../lib/pdfEngine'
 import { defaultWindow } from '../lib/defaultPeriod'
 import { defaultPeriodFor } from '../lib/api/latestActivity'
@@ -106,18 +110,26 @@ const STATUS_FLOW = {
   'Cancelled':            [],
 }
 
-const EMPTY_FORM = {
-  work_order_no: '',
-  asset_no: '', tyre_serial: '', tyre_position: '',
-  status: 'New', priority: 'Medium', work_type: 'Tyre Change',
-  description: '', technician_name: '', workshop_name: '',
-  site: '', country: '',
-  opened_at: new Date().toISOString().slice(0, 16),
-  target_completion: '',
-  labour_hours: '', labour_rate: '', labour_cost: '',
-  parts_cost: '', notes: '',
-  parts_used: [],
+/**
+ * A blank job card, DERIVED from the field catalog so a field added to
+ * src/lib/jobCard.js is editable here without touching this file. Every field
+ * starts as '' (not 0, not null) because a blank input and a recorded zero are
+ * different claims - Number(null) is 0 and 0 is finite, which is how a value
+ * nobody entered ends up looking like a measurement.
+ */
+function emptyForm() {
+  const base = {}
+  for (const f of editableFields()) base[f.key] = ''
+  return {
+    ...base,
+    status: 'New',
+    priority: 'Medium',
+    work_type: 'Repair',
+    opened_at: new Date().toISOString().slice(0, 16),
+    parts_used: [],
+  }
 }
+const EMPTY_FORM = emptyForm()
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 const fmtDate = (d) => formatDate(d)
@@ -186,6 +198,15 @@ export default function WorkOrders() {
   // workflow is active (pending/in_review/returned) or locked (approved).
   const [wfLocked, setWfLocked]     = useState(false)
   const [formData, setFormData]     = useState(EMPTY_FORM)
+  // An explicit clock for the job card flow. The duration engine takes `now` as
+  // an argument on purpose (it stays deterministic and testable), so the page
+  // owns the tick. 60s: a still-running downtime gap should creep forward, but
+  // re-rendering the drawer every second to move a "3d 4h" figure is waste.
+  const [nowTick, setNowTick]       = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60000)
+    return () => clearInterval(id)
+  }, [])
   const [partRow, setPartRow]       = useState({ part_name: '', quantity: 1, unit_cost: '' })
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -396,15 +417,43 @@ export default function WorkOrders() {
 
   function openEdit(order) {
     setEditOrder(order)
-    setFormData({
-      ...order,
-      opened_at: order.opened_at?.slice(0, 16) || '',
-      target_completion: order.target_completion?.slice(0, 16) || '',
-      parts_used: order.parts_used || [],
-    })
+    // Hydrate EVERY catalog field, not just the handful the old form knew about.
+    // readField follows the custom_data fallback, so a card loaded before the
+    // V605 promotion still opens with its values in place.
+    const next = { ...EMPTY_FORM }
+    for (const f of editableFields()) {
+      const v = readField(order, f.key)
+      next[f.key] = v === null ? '' : v
+    }
+    next.parts_used = order.parts_used || []
+    setFormData(next)
     setPartRow({ part_name: '', quantity: 1, unit_cost: '' })
     setShowForm(true)
   }
+
+  /**
+   * Asset auto-fill source for the form. Country-scoped, because the same asset
+   * code legitimately exists in more than one country and is usually a different
+   * machine (V376). Never throws: an asset that is not in the register is a
+   * normal case, not an error.
+   */
+  /**
+   * Site suggestions for the form, taken from the cards on screen. This is a
+   * convenience datalist, not a closed list: the field stays free text so a site
+   * the current page happens not to contain is still typeable.
+   */
+  const siteOptions = useMemo(
+    () => Array.from(new Set(orders.map(o => o.site).filter(Boolean))).sort(),
+    [orders],
+  )
+
+  const lookupAsset = useCallback(async (assetNo) => {
+    try {
+      return await getAssetByNo(assetNo, activeCountry === 'All' ? undefined : activeCountry)
+    } catch {
+      return null
+    }
+  }, [activeCountry])
 
   function addPart() {
     if (!partRow.part_name.trim()) return
@@ -428,40 +477,31 @@ export default function WorkOrders() {
     }
     setSaving(true)
     try {
-      const computed_parts_cost = partsTotal(formData.parts_used)
-      const labour_cost = parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0) ||
-                          parseFloat(formData.labour_cost || 0)
+      // toPayload walks the field catalog: only editable, non-computed, typed
+      // columns. That is what keeps `total_cost` out of the write - it is a
+      // GENERATED column and Postgres rejects any value sent to it.
+      const payload = toPayload(formData)
 
-      const payload = {
-        asset_no:           formData.asset_no.trim(),
-        tyre_serial:        formData.tyre_serial?.trim() || null,
-        tyre_position:      formData.tyre_position?.trim() || null,
-        status:             normalizeWoStatus(formData.status),
-        priority:           formData.priority,
-        work_type:          formData.work_type,
-        description:        formData.description?.trim() || null,
-        technician_name:    formData.technician_name?.trim() || null,
-        workshop_name:      formData.workshop_name?.trim() || null,
-        site:               formData.site?.trim() || null,
-        country:            formData.country?.trim() || null,
-        opened_at:          formData.opened_at ? new Date(formData.opened_at).toISOString() : new Date().toISOString(),
-        target_completion:  formData.target_completion ? new Date(formData.target_completion).toISOString() : null,
-        labour_hours:       parseFloat(formData.labour_hours) || 0,
-        labour_rate:        parseFloat(formData.labour_rate) || 0,
-        labour_cost:        labour_cost,
-        parts_cost:         computed_parts_cost,
-        parts_used:         formData.parts_used || [],
-        notes:              formData.notes?.trim() || null,
-        created_by:         user?.id || null,
-      }
+      // Parts cost is DERIVED from the parts lines, so it is not a form field.
+      payload.parts_cost = partsTotal(formData.parts_used)
+      payload.parts_used = formData.parts_used || []
+      // Labour cost follows hours x rate unless the user typed an override.
+      const derivedLabour = parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0)
+      payload.labour_cost = derivedLabour || parseFloat(formData.labour_cost || 0) || 0
+      payload.opened_at = payload.opened_at || new Date().toISOString()
+      payload.created_by = user?.id || null
 
       if (editOrder) {
         await workOrders.updateWorkOrderById(editOrder.id, payload)
         logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: payload })
       } else {
-        // Generate work order number
-        const woNo = await workOrders.generateWorkOrderNo()
-        payload.work_order_no = woNo || `WO-${Date.now()}`
+        // The job card number is now an editable field, so only generate one
+        // when the user did not supply the real ERP number. Overwriting a typed
+        // number would silently discard the reference the workshop files by.
+        if (!payload.work_order_no) {
+          const woNo = await workOrders.generateWorkOrderNo()
+          payload.work_order_no = woNo || `WO-${Date.now()}`
+        }
         await workOrders.insertWorkOrder(payload)
         logAudit({ action: 'CREATE', entity: 'work_orders', entityId: payload.work_order_no, after: payload })
         publish('workorder.created', { work_order_no: payload.work_order_no, asset_no: payload.asset_no, work_type: payload.work_type, priority: payload.priority })
@@ -876,168 +916,20 @@ export default function WorkOrders() {
                 <h2 className="text-[var(--text-primary)] font-bold text-lg">{editOrder ? t('workorders.form.editTitle') : t('workorders.form.newTitle')}</h2>
                 <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
               </div>
-              <div className="p-6 space-y-5">
-                {/* Row 1 */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.assetNo')}</label>
-                    <input value={formData.asset_no} onChange={e => setFormData(f => ({ ...f, asset_no: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.assetNo')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.workType')}</label>
-                    <select value={formData.work_type} onChange={e => setFormData(f => ({ ...f, work_type: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
-                      {WORK_TYPES.map(t => <option key={t}>{t}</option>)}
-                    </select>
-                  </div>
-                </div>
-                {/* Row 2 */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.tyreSerial')}</label>
-                    <input value={formData.tyre_serial} onChange={e => setFormData(f => ({ ...f, tyre_serial: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.tyreSerial')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.position')}</label>
-                    <input value={formData.tyre_position} onChange={e => setFormData(f => ({ ...f, tyre_position: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.position')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.priority')}</label>
-                    <select value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
-                      {['Critical','High','Medium','Low'].map(p => <option key={p}>{p}</option>)}
-                    </select>
-                  </div>
-                </div>
-                {/* Row 3 */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.status')}</label>
-                    <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
-                      {Object.keys(STATUS_CONFIG).map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.technician')}</label>
-                    <input value={formData.technician_name} onChange={e => setFormData(f => ({ ...f, technician_name: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.technician')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.workshop')}</label>
-                    <input value={formData.workshop_name} onChange={e => setFormData(f => ({ ...f, workshop_name: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.workshop')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                </div>
-                {/* Row 4 */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.site')}</label>
-                    <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.site')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.country')}</label>
-                    <input value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.country')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                </div>
-                {/* Row 5 */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.openedAt')}</label>
-                    <input type="datetime-local" value={formData.opened_at} onChange={e => setFormData(f => ({ ...f, opened_at: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                  <div>
-                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.targetCompletion')}</label>
-                    <input type="datetime-local" value={formData.target_completion} onChange={e => setFormData(f => ({ ...f, target_completion: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                  </div>
-                </div>
-                {/* Description */}
-                <div>
-                  <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.description')}</label>
-                  <textarea value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    rows={3} placeholder={t('workorders.form.placeholders.description')}
-                    className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500 resize-none" />
-                </div>
-                {/* Labour */}
-                <div>
-                  <label className="text-[var(--text-secondary)] text-xs mb-2 block">{t('workorders.form.labourCost')}</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <input type="number" min="0" step="0.5" value={formData.labour_hours} onChange={e => setFormData(f => ({ ...f, labour_hours: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.hours')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-[var(--text-muted)] text-xs mt-1 block">{t('workorders.form.labourHours')}</span>
-                    </div>
-                    <div>
-                      <input type="number" min="0" step="0.01" value={formData.labour_rate} onChange={e => setFormData(f => ({ ...f, labour_rate: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.rate')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-[var(--text-muted)] text-xs mt-1 block">{t('workorders.form.ratePerHour')}</span>
-                    </div>
-                    <div>
-                      <input type="number" min="0" step="0.01" value={formData.labour_cost} onChange={e => setFormData(f => ({ ...f, labour_cost: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.override')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-[var(--text-muted)] text-xs mt-1 block">{t('workorders.form.labourCostOverride')}</span>
-                    </div>
-                  </div>
-                </div>
-                {/* Parts */}
-                <div>
-                  <label className="text-[var(--text-secondary)] text-xs mb-2 block">{t('workorders.form.partsUsed')}</label>
-                  <div className="space-y-2">
-                    {(formData.parts_used || []).map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2">
-                        <span className="text-[var(--text-primary)] text-sm flex-1">{p.part_name}</span>
-                        <span className="text-[var(--text-secondary)] text-sm">× {p.quantity}</span>
-                        <span className="text-green-400 text-sm">{fmtCurrency(p.unit_cost)}</span>
-                        <span className="text-[var(--text-secondary)] text-xs">= {fmtCurrency(p.unit_cost * p.quantity)}</span>
-                        <button onClick={() => removePart(i)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
-                      </div>
-                    ))}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <input value={partRow.part_name} onChange={e => setPartRow(r => ({ ...r, part_name: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.partName')} className="col-span-2 px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                      <input type="number" min="1" value={partRow.quantity} onChange={e => setPartRow(r => ({ ...r, quantity: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.qty')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                      <div className="flex gap-1">
-                        <input type="number" min="0" step="0.01" value={partRow.unit_cost} onChange={e => setPartRow(r => ({ ...r, unit_cost: e.target.value }))}
-                          placeholder={t('workorders.form.placeholders.unitCost')} className="flex-1 px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
-                        <button onClick={addPart} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"><Plus size={14} /></button>
-                      </div>
-                    </div>
-                    {(formData.parts_used?.length > 0) && (
-                      <div className="text-right text-sm text-green-400 font-medium">{t('workorders.form.partsTotal')}: {fmtCurrency(partsTotal(formData.parts_used))}</div>
-                    )}
-                  </div>
-                </div>
-                {/* Notes */}
-                <div>
-                  <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.notes')}</label>
-                  <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
-                    rows={2} placeholder={t('workorders.form.placeholders.notes')}
-                    className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500 resize-none" />
-                </div>
-              </div>
-              <div className="sticky bottom-0 bg-[var(--surface-1)] border-t border-[var(--border-dim)] px-6 py-4 flex items-center justify-between">
-                <div className="text-[var(--text-secondary)] text-sm">
-                  {t('workorders.form.totalCost')}: <span className="text-green-400 font-bold">
-                    {fmtCurrency((parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0) || parseFloat(formData.labour_cost || 0)) + partsTotal(formData.parts_used))}
-                  </span>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setShowForm(false)} className="btn-secondary">{t('workorders.form.cancel')}</button>
-                  <button onClick={handleSave} disabled={saving || (editOrder && wfLocked)}
-                    title={editOrder && wfLocked ? 'Locked, in approval' : undefined}
-                    className="btn-primary gap-2 disabled:opacity-50">
-                    {editOrder && wfLocked ? <Lock size={16} /> : saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {saving ? t('workorders.form.saving') : editOrder ? t('workorders.form.save') : t('workorders.form.create')}
-                  </button>
-                </div>
+              <div className="p-6">
+                <JobCardForm
+                  value={formData}
+                  onChange={(k, v) => setFormData(f => ({ ...f, [k]: v }))}
+                  row={editOrder}
+                  mode={editOrder ? 'edit' : 'create'}
+                  locked={!!(editOrder && wfLocked)}
+                  onSave={handleSave}
+                  onCancel={() => setShowForm(false)}
+                  saving={saving}
+                  assetLookup={lookupAsset}
+                  siteOptions={siteOptions}
+                  currency={activeCurrency}
+                />
               </div>
             </motion.div>
           </motion.div>
@@ -1161,35 +1053,16 @@ export default function WorkOrders() {
                   </div>
                 )}
 
-                {/* Details */}
-                <div className="space-y-3">
-                  {[
-                    [t('workorders.detail.assetNo'), viewOrder.asset_no],
-                    [t('workorders.detail.tyreSerial'), viewOrder.tyre_serial],
-                    [t('workorders.detail.position'), viewOrder.tyre_position],
-                    [t('workorders.detail.technician'), viewOrder.technician_name],
-                    [t('workorders.detail.workshop'), viewOrder.workshop_name],
-                    [t('workorders.detail.site'), viewOrder.site],
-                    [t('workorders.detail.country'), viewOrder.country],
-                    [t('workorders.detail.opened'), fmtDateTime(viewOrder.opened_at)],
-                    [t('workorders.detail.started'), fmtDateTime(viewOrder.started_at)],
-                    [t('workorders.detail.completed'), fmtDateTime(viewOrder.completed_at)],
-                    [t('workorders.detail.target'), fmtDateTime(viewOrder.target_completion)],
-                    [t('workorders.detail.daysOpen'), daysOpen(viewOrder)],
-                  ].filter(([, v]) => v).map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-[var(--border-dim)]">
-                      <span className="text-[var(--text-secondary)] text-sm">{label}</span>
-                      <span className="text-[var(--text-primary)] text-sm font-medium">{value}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {viewOrder.description && (
-                  <div className="bg-[var(--surface-2)] rounded-xl p-4">
-                    <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.description')}</p>
-                    <p className="text-[var(--text-primary)] text-sm leading-relaxed">{viewOrder.description}</p>
-                  </div>
-                )}
+                {/* The whole uploaded job card: every catalog field, the
+                    availability flow, and the ERP reported figures. Replaces a
+                    12-field grid that showed a fraction of what was stored. */}
+                <JobCardDetail
+                  row={viewOrder}
+                  now={nowTick}
+                  currency={activeCurrency}
+                  canEdit={!wfLocked}
+                  onEdit={() => { setViewOrder(null); openEdit(viewOrder) }}
+                />
 
                 {/* Parts */}
                 {viewOrder.parts_used?.length > 0 && (

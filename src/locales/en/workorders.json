@@ -154,5 +154,28 @@
     "customFields": "Additional imported details",
     "edit": "Edit",
     "jobCardPdf": "Job Card PDF"
+  },
+  "jobcard": {
+    "notRecorded": "Not recorded",
+    "selectBlank": "Select...",
+    "lockedNotice": "This job card is locked by its approval workflow and cannot be edited.",
+    "filledCount": "{filled} of {total} filled",
+    "assetMaster": "Master",
+    "assetLookupFailed": "Could not look up that asset.",
+    "flowHelp1": "Production Out to Workshop In is a scheduling gap: the asset is down and nobody has started.",
+    "flowHelp2": "Workshop In to Workshop Out is the workshop own repair time.",
+    "flowHelp3": "Workshop Out to Production In is a release gap: repaired but not handed back.",
+    "partsUsed": "Parts used",
+    "partName": "Part name",
+    "qty": "Qty",
+    "unitCost": "Unit cost",
+    "partsTotal": "Parts total",
+    "erpCostTitle": "As reported by the ERP",
+    "erpCostNote": "Read only. The expense grid is the authoritative cost source, so these figures are never written back.",
+    "erpTasksTitle": "Job card task lines (from ERP)",
+    "warningsTitle": "Worth checking, but you can still save",
+    "cancel": "Cancel",
+    "saveEdit": "Save job card",
+    "saveNew": "Create job card"
   }
 }

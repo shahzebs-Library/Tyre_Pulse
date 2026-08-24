@@ -5,8 +5,22 @@
  */
 import { supabase, unwrap, applyCountry, applyCountries, countryList, fetchAllPages, ServiceError } from './_client'
 
+/**
+ * The job-card columns the ERP export fills (V381/V385/V386, promoted to typed
+ * columns by V605). These existed on the table but were NOT in any select list,
+ * so the Work Orders page could not read them and the form could not edit them -
+ * two thirds of every uploaded job card was invisible. Kept as its own constant
+ * so the catalog in src/lib/jobCard.js and this list can be diffed at a glance.
+ *
+ * DO NOT add `due_date` or `target_date` here. Neither column exists, and a
+ * column PostgREST cannot find fails the WHOLE request - the only due-date
+ * column is `target_completion`.
+ */
+const JOB_CARD_COLS =
+  'rfr_no,mr_no,sco_no,source_row,plate_no,asset_description,asset_category,truck_category,head_tail,work_location,scope,production_out_at,production_in_at,waiting_parts_hours,waiting_manpower_hours,manpower_hours,qc_status,vor,vor_since,est_minutes,assigned_owner_id'
+
 const COLS =
-  'id,work_order_no,asset_no,tyre_serial,tyre_position,status,priority,work_type,description,technician_name,workshop_name,site,country,opened_at,started_at,completed_at,target_completion,labour_hours,labour_rate,labour_cost,parts_cost,total_cost,created_at'
+  `id,work_order_no,asset_no,tyre_serial,tyre_position,status,priority,work_type,description,technician_name,workshop_name,site,country,opened_at,started_at,completed_at,target_completion,labour_hours,labour_rate,labour_cost,parts_cost,total_cost,created_at,${JOB_CARD_COLS}`
 
 // Superset used by the Work Orders page detail drawer / job-card export, which
 // also surfaces parts, notes, granular cost buckets, hour/meter fields and any
@@ -36,6 +50,11 @@ const PAGE_COLS =
  * column here is `target_completion` (V381). Selecting a column PostgREST
  * cannot find fails the whole request, so a lean column list is one of the few
  * places where a plausible-looking addition takes the page down.
+ *
+ * The V605 job-card columns are deliberately NOT added here. Board Overview
+ * reads the whole table all-time; widening this list would put 21 more columns
+ * on tens of thousands of rows to derive a handful of counts. The job-card
+ * fields are a per-card concern, so they ride on COLS/PAGE_COLS instead.
  */
 const AGGREGATE_COLS =
   'id,asset_no,status,priority,work_type,site,country,opened_at,started_at,completed_at,target_completion,labour_cost,parts_cost,total_cost,created_at'

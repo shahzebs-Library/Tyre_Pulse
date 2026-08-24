@@ -874,7 +874,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
     <LanguageProvider>
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    {/* The v7_startTransition / v7_relativeSplatPath future flags were removed
+        when this moved to react-router 7: both are the DEFAULT behaviour there,
+        and v7 no longer recognises the names at all (checked against the
+        installed dist). Leaving them would read as active configuration while
+        doing nothing. Opting in to them on v6 first is what made this upgrade a
+        version bump rather than a migration. */}
+    <BrowserRouter>
       <Routes>
         {/* ── System Console - completely isolated from main app. The
             ConsoleSurfaceGate keeps BOTH routes (login included) off the

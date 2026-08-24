@@ -40,7 +40,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.81.0",
-    "react-router-dom": "^6.21.0",
+    "react-router-dom": "^7.18.2",
     "tailwind-merge": "^3.6.0",
     "xlsx": "npm:@e965/xlsx@^0.20.3",
     "zod": "^4.4.3"

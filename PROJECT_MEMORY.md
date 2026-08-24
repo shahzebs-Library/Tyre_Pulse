@@ -55,7 +55,103 @@ batching stops them being started at all.
 
 ---
 
-# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V604**)
+# ⚑ SESSION 2026-08-24 — WORK ORDER = THE WHOLE JOB CARD (V605), MIGRATION NUMBERING REPAIRED, TEST SUITE UNBLOCKED, V607 SECURITY. Next free **V608**.
+
+**V604 WAS DOUBLE-BOOKED AND THE HEADERS LIED. Verify a number against the live
+`supabase_migrations` AND the live object, never against a repo STATUS line.**
+The repo held `MIGRATIONS_V604_CHECKLIST_DATA_COLLECTOR_APPROVAL.sql` marked
+"READY TO APPLY" while the database recorded a DIFFERENT `v604_scrap_serial_case_insensitive`.
+Both were in fact ALREADY LIVE. Resolved: the DB owns V604, so the applied-but-
+undocumented scrap migration got its repo file written up from `pg_get_functiondef`,
+and the checklist one was renumbered **V606** with a corrected header.
+`src/test/checklistApproval.test.js` PINS MIGRATION FILES BY NAME - renaming one
+breaks it, so grep before renaming.
+
+**THE WORK ORDER FORM SHOWED 16 OF THE JOB CARD'S 34 FIELDS.** Everything else was
+loaded and un-editable, five fields stranded in `custom_data` jsonb where nothing
+can filter or sort them. **`src/lib/jobCard.js` is now THE catalog** (field ->
+verbatim ERP header -> db column) plus the availability-flow engine; the form,
+the detail read-out and the importer all read it, so they cannot drift.
+**V605** promoted mr_no / sco_no / asset_description / truck_category / head_tail
+to typed columns (30,239 asset descriptions backfilled, 0 stranded) and patched
+`process_stg_job_cards` by ANCHORED replacement with abort guards. Applied in TWO
+steps - the recorded migration is DDL+trigger, the 30k-row backfill ran separately
+so it could not time out inside the DDL transaction.
+**THE FLOW IS THE POINT**: Production Out -> Workshop In is a SCHEDULING gap,
+Workshop In -> Out is WORKSHOP time, Workshop Out -> Production In is a RELEASE
+gap. One "downtime" number hides which is costing availability. An unmeasurable
+gap renders "Not measurable", NEVER 0 - a 0 flatters every average.
+**ERP-reported cost (Spare/Tyre/Oil/Others) stays READ-ONLY** in its own panel;
+the expense grid remains the authoritative source. `total_cost` is GENERATED and
+must never enter a payload - `toPayload()` is what guarantees that.
+
+**THE SUITE WAS 146 FAILURES AND NEITHER CAUSE WAS A CODE BUG.**
+1. **Node 20+ ships its own `localStorage` global that stays undefined without
+   `--localstorage-file`, and it SHADOWS jsdom's.** 126 failures. The tell is the
+   asymmetry: `sessionStorage` was a real object while `localStorage` was undefined,
+   though jsdom implements both identically. `src/test/setup.js` now installs a
+   spec-shaped stand-in ONLY when the environment failed to provide one.
+2. **`core.autocrlf=true` gives a CRLF checkout.** ~34 tests are SOURCE SCANNERS
+   that read a file and assert on its text; a trailing `\r` breaks every
+   `$`-anchored regex and every embedded `\n` needle. Proven: the layout scanner
+   found **0** layouts as checked out and **13** with `\r` stripped. So they fail
+   on Windows and pass in CI. Fixed BOTH ways - `.gitattributes` (`eol=lf`, no
+   diff, the repo already stores LF) and a CRLF-normalising read in every scanner.
+**A SHIM CAN MAKE A TEST PASS VACUOUSLY**: `navFavorites`' storage-unavailable
+block spies on `Storage.prototype`, which does NOT reach a plain-object shim. It
+now spies on whichever target owns the method AND asserts `vi.isMockFunction`.
+
+**REAL BUGS THE FIXES THEN EXPOSED**: the web mirror `src/lib/mobileModules.js`
+lacked `tyre_data_collector` on `approvals` while the phone and the live database
+both grant it; `SerialTracker`/`TyreLifecycle` moved serial lookups from `.eq` to
+`.ilike` without escaping, so a typed `%` turned one tyre's history into a
+match-all scan (`escapeLike` now has ONE home in `searchFilter.js`); the row-cap
+guard recognised `.eq(` but not `.ilike(`.
+
+**V607 SECURITY (applied + verified).** Advisors 770 -> 753.
+`function_search_path_mutable` **13 -> 0**; `anon_security_definer_function_executable`
+**12 -> 10**, back to exactly the V500 allowlist. Two TRIGGER functions
+(`expense_building_guard`, `sync_ksa_kms_to_meter`) had inherited Supabase's
+default PUBLIC EXECUTE grant - **a trigger function needs no EXECUTE grant**, and
+revoking was PROVEN not to break the V603 guard (non-workshop row skipped,
+workshop row kept, probes deleted). The 11 `_bak` scratch helpers from the
+V554/V557/V561/V569 sweeps were **pinned, not dropped** (`_bak` is the rollback
+schema and has no USAGE for app roles, so they were already unreachable).
+**NEW `safeInternalPath()` in `src/lib/safeUrl.js`** rejects schemes, `//host`
+and the BACKSLASH forms browsers normalise to `/` - the react-router
+CVE-2025-68470 shape. Exposure was RE-MEASURED, not assumed: every dynamic
+navigate target is an internal literal, a catalog route, or a `/`-prefixed
+`encodeURIComponent` path, and `alerts.link` is unreachable (no such column,
+0 rows). Guarded anyway because adding that column later would make it live.
+
+**REACT-ROUTER 6 -> 7 TAKEN, and it was a version bump not a migration.** This
+REVERSES the standing "v7 NOT taken" note. Both CVEs (the SSR-hydration one and
+the open-redirect / CVE-2025-68470 backslash bypass) are cleared: production
+`npm audit` **5 -> 3**, the remaining 3 being the known pptxgenjs/image-size
+chain that stays deliberately unforced.
+**WHY IT WAS SAFE, checked rather than assumed:** the two v7 future flags were
+already opted into on v6 (`v7_startTransition`, `v7_relativeSplatPath`), React is
+19 (v7 needs >=18), no removed API was in use, and all 13 imported symbols exist
+in v7. Verified after: build clean, **full suite 8,721/8,721 across 575 files**.
+**Installed with `npm install react-router-dom@^7`, NOT `npm audit fix --force`**
+- this file already records that force un-hoists the chain and made the count
+WORSE (6 -> 10).
+**The `future={{...}}` prop was then REMOVED from `BrowserRouter` in App.jsx**:
+v7 makes both the default and no longer recognises the names (checked against the
+installed dist), so leaving them would read as live configuration doing nothing.
+
+**TRAP THAT BIT TWICE: a heredoc in this Git Bash EATS BACKSLASHES.** It turned
+`s.replace(/\\/g,'/')` into an unterminated regex, and a test's `'/\\evil.com'`
+into `'/evil.com'` - which would have PASSED VACUOUSLY while claiming to test the
+attack. Write backslash-bearing content with the file tool, and assert the
+fixture is real (`expect(BS).toBe('\\')`).
+
+Suite ends at **8,720 / 8,721**; the single failure passes standalone and is a
+parallel-load flake, not a defect. Build clean, lint clean.
+
+---
+
+# ⚑ PENDING — READ THIS FIRST (as of 2026-08-19, next free migration **V608**)
 
 **V601 (applied + verified live) — THE APPROVER'S OWN SAVED SIGNATURE.** A person draws it once and
 every later approval pre-fills it, visibly, with a one-click "Draw a new signature". Pre-filling is
@@ -6471,7 +6567,7 @@ Scoping the tyre scrap/undo `tyre_records` UPDATE by country was **wrong**: `tyr
 - **12 CVEs -> 6, zero critical.** Patch-level: postcss 8.5.15->8.5.23, form-data, fast-uri, brace-expansion x2, dompurify, nanoid. Majors (attempted in an isolated worktree FIRST, merged only after full verification): **vitest 1 -> 4.1.10** (CRITICAL CVE), **vite 5 -> 8.1.5** + plugin-react 4 -> 6 (HIGH, drops vulnerable esbuild), **sharp 0.34.5 -> 0.35.3**. Added `@vitest/coverage-v8` — the `test:coverage` script existed but **its provider was never installed**, so that command could never run. Build is ~4.8x faster on Rolldown; verified manualChunks vendor split, PWA `skipWaiting:false` (only in the SKIP_WAITING handler), and no circular chunk deps.
 - **Real bug the upgrade exposed:** `src/test/exportUtils.test.js` mocked the `jspdf`/`pptxgenjs` default exports as ARROW functions, which are not constructable, while `exportUtils.js` correctly calls `new jsPDF()`/`new pptxgen()`. Vitest 1 swallowed the `new`; vitest 4 forwards it. The mocks never matched the real library contract.
 - **REJECTED an unsafe "fix":** a `brace-expansion@^5` override clears 7 findings but v5 changed its CJS export to `{expand}` while `minimatch@5` calls it directly — verified it breaks `filelist`/`jake` at runtime. The remaining 6 are build-time-only DoS with no untrusted-input path. **Do not apply `npm audit fix --force`; it un-hoists the chain and makes the count worse (6 -> 10).**
-- **react-router 6->7 NOT taken.** Its 2 CVEs have effectively nil exposure here: the SSR-hydration one needs SSR (this is a `BrowserRouter` SPA) and the open-redirect needs an attacker-controlled target — all 10 dynamic `<Link>`/`navigate()` targets are internal developer constants. v7 future flags are already enabled if it is ever wanted.
+- **react-router 6->7 TAKEN on 2026-08-24 (this bullet is SUPERSEDED, kept for the reasoning).** Its 2 CVEs have effectively nil exposure here: the SSR-hydration one needs SSR (this is a `BrowserRouter` SPA) and the open-redirect needs an attacker-controlled target — all 10 dynamic `<Link>`/`navigate()` targets are internal developer constants. v7 future flags are already enabled if it is ever wanted.
 - **CI gaps closed:** `services/analytics` shipped **63 tests that no CI job ran** (added a Python 3.12 job — that is the version its pyproject requires); the mobile job only ran `tsc`, so its **28 jest tests never ran** (added `npm test`). Enforced CI tests went 5175 -> 5266+.
 - **Edge functions are still unverified by anything** — 13 production functions (billing webhooks, email, AI, push) have no typecheck. Deliberately did NOT add a `deno check` job: `deno.land`/`esm.sh` are proxy-blocked here so it could not be verified locally, and shipping an unverifiable CI job risks red CI. Recommended as a follow-up (it would work on a GitHub runner).
 - **Commit signing is broken in this environment** (`user.signingkey` points at a 0-byte file; session runs as root while the key path is under /home/claude). Commits carry the correct author+committer identity but are unsigned; a control commit in a throwaway repo reproduced it. Not fixable without a real key.

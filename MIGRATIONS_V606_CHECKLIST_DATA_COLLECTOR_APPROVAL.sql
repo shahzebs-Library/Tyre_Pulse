@@ -1,6 +1,23 @@
--- V604 - allow Tyre Data Collector to approve checklists and tyre inspections
+-- V606 - allow Tyre Data Collector to approve checklists and tyre inspections
 --
--- STATUS: READY TO APPLY.
+-- STATUS: ALREADY APPLIED LIVE, but with NO row in supabase_migrations.
+--         Verified on jhssdmeruxtrlqnwfksc 2026-08-24: both live functions
+--         already contain 'Tyre Data Collector'.
+--             select pg_get_functiondef(oid) like '%Tyre Data Collector%'
+--               from pg_proc where proname = 'checklist_is_supervisor';   -- true
+--             ... same for 'decide_inspection_approval';                  -- true
+--         Re-running this file is a no-op (both are CREATE OR REPLACE).
+--
+-- RENUMBERED from V604 on 2026-08-24. V604 was double-booked: this file carried
+-- it while the live database had already recorded a DIFFERENT migration under
+-- that number (`v604_scrap_serial_case_insensitive`, now written up in
+-- MIGRATIONS_V604_SCRAP_SERIAL_CASE_INSENSITIVE.sql). The database is the source
+-- of truth for a number, so this one moved to V606. V605 is the job-card field
+-- promotion.
+--
+-- THE HEADER USED TO SAY "READY TO APPLY" AND THAT WAS FALSE. It was applied by
+-- hand without a migrations row, so the file kept its pre-apply status. A STATUS
+-- line is a claim, not evidence: check the live object before trusting one.
 --
 -- Adds 'Tyre Data Collector' to:
 --   1. public.checklist_is_supervisor() to allow them to approve checklists at the supervisor rung.

@@ -574,8 +574,13 @@ export default function EngineeringKpi() {
       : avgTyreLife.avgKm > 20000 ? 'warning' : 'critical'
 
     // KPI 6: Failure Rate
-    const failPct = failureRate.failureRate * 100
-    const failStatus = failPct > 30 ? 'critical' : failPct > 15 ? 'warning' : 'good'
+    // null means no tyre was rated (risk_level populated on none); `null * 100` is
+    // 0, which would flatter an unmeasured metric to "0.0% good". Preserve null and
+    // read neutral, the same honest reading pressure compliance uses below.
+    const failMeasured = failureRate.failureRate != null
+    const failPct = failMeasured ? failureRate.failureRate * 100 : null
+    const failStatus = !failMeasured ? 'neutral'
+      : failPct > 30 ? 'critical' : failPct > 15 ? 'warning' : 'good'
 
     // KPI 8: Pressure Compliance
     const pressPct = pressureCompliance.compliancePct
@@ -676,11 +681,16 @@ export default function EngineeringKpi() {
       {
         title: 'Tyre Failure Rate',
         value: `${fmtPct(failPct)}`,
-        subValue: `${failureRate.failureCount} failures of ${failureRate.totalCount} total`,
-        description: `Critical: ${failureRate.criticalRate > 0 ? fmtPct(failureRate.criticalRate * 100) : '0%'} | High: ${fmtPct(failureRate.highRate * 100)}`,
+        subValue: failMeasured
+          ? `${failureRate.failureCount} failures of ${failureRate.ratedCount} rated`
+          : `No tyres rated of ${failureRate.totalCount} total`,
+        description: failMeasured
+          ? `Critical: ${failureRate.criticalRate > 0 ? fmtPct(failureRate.criticalRate * 100) : '0%'} | High: ${fmtPct(failureRate.highRate * 100)}`
+          : 'Not measured (no risk level recorded)',
         status: failStatus,
-        trend: failPct > 20 ? 'up' : 'down',
-        trendLabel: failPct > 20 ? 'Exceeds 20% threshold' : 'Within acceptable range',
+        trend: failMeasured && failPct > 20 ? 'up' : 'down',
+        trendLabel: !failMeasured ? 'Not measured'
+          : failPct > 20 ? 'Exceeds 20% threshold' : 'Within acceptable range',
       },
       // 7. Tyre Replacement Rate
       {
@@ -1067,10 +1077,11 @@ export default function EngineeringKpi() {
               metricId="failure_rate"
               country={activeCountry}
               title="Failure Rate"
-              value={`${(kpis.failureRate.failureRate * 100).toFixed(1)}%`}
-              sub={`${kpis.failureRate.failureCount} of ${kpis.failureRate.totalCount} records`}
+              value={kpis.failureRate.failureRate == null ? 'N/A' : `${(kpis.failureRate.failureRate * 100).toFixed(1)}%`}
+              sub={kpis.failureRate.failureRate == null ? `No tyres rated of ${kpis.failureRate.totalCount} records` : `${kpis.failureRate.failureCount} of ${kpis.failureRate.ratedCount} rated`}
               status={
-                kpis.failureRate.failureRate * 100 > 30 ? 'critical'
+                kpis.failureRate.failureRate == null ? 'neutral'
+                : kpis.failureRate.failureRate * 100 > 30 ? 'critical'
                 : kpis.failureRate.failureRate * 100 > 15 ? 'warning' : 'good'
               }
             />
@@ -1354,7 +1365,7 @@ export default function EngineeringKpi() {
           kpiSummary={{
             'Fleet CPK':              kpis.cpk.validCount > 0 ? `${activeCurrency} ${kpis.cpk.fleetAvgCpk.toFixed(4)}/km` : 'N/A',
             'Avg Tyre Life':          kpis.avgTyreLife.validCount > 0 ? `${Math.round(kpis.avgTyreLife.avgKm).toLocaleString()} km` : 'N/A',
-            'Failure Rate':           `${(kpis.failureRate.failureRate * 100).toFixed(1)}%`,
+            'Failure Rate':           kpis.failureRate.failureRate == null ? 'N/A' : `${(kpis.failureRate.failureRate * 100).toFixed(1)}%`,
             'Inspection Compliance':  `${kpis.inspectionCompliance.compliancePct.toFixed(1)}%`,
             'Fleet Availability':     `${kpis.fleetAvailability.availabilityPct.toFixed(1)}%`,
             'Scrap Rate':             `${(kpis.scrapRate.scrapRate * 100).toFixed(1)}%`,
@@ -1384,7 +1395,7 @@ function buildKpiSummaryRows(kpis, currency) {
     { kpi: 'Average Tyre Life (km)',           value: avgTyreLife.validCount > 0 ? Math.round(avgTyreLife.avgKm) : 'N/A',       status: avgTyreLife.avgKm > 40000 ? 'Good' : avgTyreLife.avgKm > 20000 ? 'Warning' : 'Critical', description: `Median: ${Math.round(avgTyreLife.medianKm).toLocaleString()} km` },
     { kpi: 'Fleet Avg Tyre Life (km)',         value: avgTyreLife.validCount > 0 ? Math.round(avgTyreLife.avgKm) : 'N/A',       status: 'See Above', description: 'Fleet-wide average' },
     { kpi: 'Tyre Removal Rate (per 1000 km)', value: removalRate.estimatedFleetKm > 0 ? removalRate.removalPer1000Km.toFixed(4) : 'N/A', status: 'Informational', description: `${removalRate.totalRemovals} removals / ${Math.round(removalRate.estimatedFleetKm).toLocaleString()} km` },
-    { kpi: 'Tyre Failure Rate (%)',            value: (failureRate.failureRate * 100).toFixed(2),                                status: failureRate.failureRate > 0.30 ? 'Critical' : failureRate.failureRate > 0.15 ? 'Warning' : 'Good', description: `${failureRate.failureCount} failures (Critical: ${Math.round(failureRate.criticalRate * 100)}%, High: ${Math.round(failureRate.highRate * 100)}%)` },
+    { kpi: 'Tyre Failure Rate (%)',            value: failureRate.failureRate == null ? 'N/A' : (failureRate.failureRate * 100).toFixed(2),                                status: failureRate.failureRate == null ? 'Not measured' : failureRate.failureRate > 0.30 ? 'Critical' : failureRate.failureRate > 0.15 ? 'Warning' : 'Good', description: failureRate.failureRate == null ? `No tyres rated of ${failureRate.totalCount} total` : `${failureRate.failureCount} failures (Critical: ${Math.round(failureRate.criticalRate * 100)}%, High: ${Math.round(failureRate.highRate * 100)}%)` },
     { kpi: 'Tyre Replacement Rate (per veh/mo)', value: replacementRate.avgPerVehiclePerMonth.toFixed(3),                       status: replacementRate.avgPerVehiclePerMonth < 0.5 ? 'Good' : 'Warning', description: `${replacementRate.totalReplacements} total / ${replacementRate.activeVehicles} vehicles` },
     { kpi: 'Pressure Compliance (%)',          value: pctOrNA(pressureCompliance.compliancePct), status: pressureCompliance.compliancePct == null ? 'Not measured' : pressureCompliance.compliancePct > 85 ? 'Good' : pressureCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: pressureCompliance.basis },
     { kpi: 'Inspection Compliance (%)',        value: inspectionCompliance.compliancePct.toFixed(1),                            status: inspectionCompliance.compliancePct > 85 ? 'Good' : inspectionCompliance.compliancePct > 60 ? 'Warning' : 'Critical', description: `On-time: ${inspectionCompliance.onTimeCount}, Overdue: ${inspectionCompliance.overdueCount}` },

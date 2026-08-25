@@ -18,6 +18,7 @@ import {
 import { supabase } from '../lib/supabase'
 import * as assetApi from '../lib/api/assetManagement'
 import { listPmPrograms, listPmServiceRecords } from '../lib/api/pmPrograms'
+import AssetFullHistory from '../components/asset/AssetFullHistory'
 import { loadGridTyreByAsset } from '../lib/api/costSummary'
 import { getAssetMaster, COUNTRY_CURRENCY } from '../lib/api/assetMaster'
 import { getAssetUtilization } from '../lib/api/assetUtilization'
@@ -634,6 +635,10 @@ export default function AssetDetail() {
     { id: 'inspections', label: `Inspections${inspections.length ? ` (${inspections.length})` : ''}`, icon: ClipboardCheck },
     { id: 'pm',         label: `Preventive Maintenance${pmPlans.length ? ` (${pmPlans.length})` : ''}`, icon: CalendarClock },
     { id: 'incidents',  label: `Incidents${accidents.length ? ` (${accidents.length})` : ''}`, icon: ShieldAlert },
+    // Every record that ever touched this machine, merged into one timeline.
+    // Carries no count: the tabs above each read ONE table, this one reads
+    // sixteen and only knows the total once it has loaded them.
+    { id: 'history',    label: 'Full history',                        icon: History },
     { id: 'approvals',  label: t('assetmgmt.detail.tabs.approvals'),  icon: Shield },
   ]
 
@@ -1249,6 +1254,24 @@ export default function AssetDetail() {
                   <div className="p-6 text-center text-[var(--text-muted)] text-sm">No incidents recorded for this asset.</div>
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {/* ── Full history ──────────────────────────────────────────────────
+              The country is the IDENTITY, not a filter: 239 asset codes exist
+              in more than one country and each is a different machine (V376).
+              `asset.country` is the country of the fleet row this page actually
+              resolved, mirroring the `dataCountry` the loader above uses to read
+              this machine's tyres, inspections and incidents; `matches.requested`
+              is the country on screen, used only when the code has no fleet row
+              at all. Passing the raw active country instead would merge two
+              machines' histories. */}
+          {tab === 'history' && (
+            <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <AssetFullHistory
+                assetNo={assetNo}
+                country={asset?.country || matches.requested || undefined}
+              />
             </motion.div>
           )}
 

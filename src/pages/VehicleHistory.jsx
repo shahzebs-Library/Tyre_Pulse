@@ -11,18 +11,27 @@ import {
   Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
-import { Search, AlertTriangle, X, FileText, Car, TrendingUp } from 'lucide-react'
+import { Search, AlertTriangle, X, FileText, Car, TrendingUp, History } from 'lucide-react'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
+import { listAssetOptions } from '../lib/api/assetHistory'
+import { canonAssetNo } from '../lib/assetHistory'
+// The unified per-asset timeline lives in its own seam because Asset Detail
+// renders it too. A page importing it from ANOTHER page would make one route
+// depend on another's module graph.
+import AssetFullHistory from '../components/asset/AssetFullHistory'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
 const loadExportUtils = () => import('../lib/exportUtils')
 
+// This page draws bars and doughnuts only. The line-chart elements the meter
+// panel needs are registered by AssetFullHistory itself, so it stays correct
+// wherever it is mounted rather than depending on its host.
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
 // ── Vehicle type icons ────────────────────────────────────────────────────────
@@ -226,7 +235,11 @@ function getFlagMeta(type) {
 
 // ── Detail Panel Tabs ─────────────────────────────────────────────────────────
 
+// `fullHistory` leads deliberately: it is the ONLY tab that shows every record
+// that ever touched the machine. The four that follow it are the pre-existing
+// tyre-record views, which cover one source of sixteen.
 const DETAIL_TABS = [
+  { key: 'fullHistory',    labelKey: 'fullHistory',    label: 'Full history' },
   { key: 'timeline',       labelKey: 'timeline' },
   { key: 'analysis',       labelKey: 'analysis' },
   { key: 'redFlags',       labelKey: 'redFlags' },
@@ -249,6 +262,11 @@ export default function VehicleHistory() {
   const [error, setError]             = useState(null)
   const [sites, setSites]             = useState([])
   const [selected, setSelected]       = useState(null)   // asset_no string
+  // An asset opened from the FLEET-WIDE search. The table below lists only
+  // assets that carry a tyre record (557 of the 1,377 in the register), so
+  // without this the other 820 machines could not be opened from this page at
+  // all and their history was unreachable.
+  const [directAsset, setDirectAsset] = useState(null)
 
   // Fleet master data
   const [fleetMap, setFleetMap] = useState({})   // asset_no -> vehicle_fleet row
@@ -507,6 +525,28 @@ export default function VehicleHistory() {
         </div>
       )}
 
+      {/* Open ANY asset in the register, not only the ones with tyre records */}
+      <AssetOpener
+        country={activeCountry}
+        onOpen={(assetNo) => {
+          const code = canonAssetNo(assetNo)
+          // Prefer the full analysis panel when the asset also has tyre
+          // records; otherwise open the history-only panel rather than
+          // selecting a row that does not exist.
+          const known = vehicleRows.some(r => canonAssetNo(r.assetNo) === code)
+          if (known) { setSelected(assetNo); setDirectAsset(null) }
+          else { setDirectAsset(assetNo); setSelected(null) }
+        }}
+      />
+
+      {directAsset && (
+        <DirectAssetPanel
+          assetNo={directAsset}
+          country={activeCountry}
+          onClose={() => setDirectAsset(null)}
+        />
+      )}
+
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -681,6 +721,7 @@ export default function VehicleHistory() {
           relatedInspections={relatedInspections}
           fleetRecord={selectedRow.fleetRecord}
           tyrePositions={tyrePositions}
+          country={activeCountry}
         />
       )}
     </div>
@@ -691,9 +732,9 @@ export default function VehicleHistory() {
 // Vehicle Detail Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedActions, relatedRca, relatedInspections, fleetRecord, tyrePositions }) {
+function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedActions, relatedRca, relatedInspections, fleetRecord, tyrePositions, country }) {
   const { t } = useLanguage()
-  const [activeTab, setActiveTab] = useState(0)
+  const [activeTab, setActiveTab] = useState('fullHistory')
 
   // Build set of flagged record IDs for highlighting in timeline
   const flaggedIds = useMemo(() => {
@@ -908,20 +949,22 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs. Keyed by tab KEY, not index: an index-keyed switch silently
+          renders the wrong panel the moment a tab is inserted. */}
       <div className="flex border-b border-[var(--input-border)] gap-1 flex-wrap">
-        {DETAIL_TABS.map((tab, i) => (
+        {DETAIL_TABS.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(i)}
+            onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
-              activeTab === i
+              activeTab === tab.key
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-muted hover:text-[var(--text-primary)]'
             }`}
           >
             {tab.key === 'forecast' && <TrendingUp size={13} />}
-            {t(`vehiclehistory.tabs.${tab.labelKey}`)}
+            {tab.key === 'fullHistory' && <History size={13} />}
+            {tab.label || t(`vehiclehistory.tabs.${tab.labelKey}`)}
             {tab.key === 'redFlags' && row.allFlags.length > 0 && (
               <span className="ml-1.5 text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5 font-bold">
                 {row.allFlags.length}
@@ -931,8 +974,13 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
         ))}
       </div>
 
+      {/* Tab: Full history - every source, one timeline */}
+      {activeTab === 'fullHistory' && (
+        <AssetFullHistory assetNo={row.assetNo} country={country} />
+      )}
+
       {/* Tab: Timeline */}
-      {activeTab === 0 && (
+      {activeTab === 'timeline' && (
         <TimelineTab
           records={timelineRecords}
           flaggedIds={flaggedIds}
@@ -942,7 +990,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       )}
 
       {/* Tab: Analysis */}
-      {activeTab === 1 && (
+      {activeTab === 'analysis' && (
         <AnalysisTab
           monthlyBuckets={monthlyBuckets}
           categoryBreakdown={categoryBreakdown}
@@ -956,12 +1004,12 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       )}
 
       {/* Tab: Red Flags */}
-      {activeTab === 2 && (
+      {activeTab === 'redFlags' && (
         <RedFlagsTab flags={row.allFlags} />
       )}
 
       {/* Tab: Related Records */}
-      {activeTab === 3 && (
+      {activeTab === 'relatedRecords' && (
         <RelatedTab
           assetNo={row.assetNo}
           actions={relatedActions}
@@ -971,7 +1019,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       )}
 
       {/* Tab: Forecast */}
-      {activeTab === 4 && (
+      {activeTab === 'forecast' && (
         <ForecastTab
           row={row}
           tyrePositions={tyrePositions}
@@ -1649,6 +1697,123 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
         )}
       </div>
 
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fleet-wide asset opener
+//
+// The register table above lists only assets that carry a TYRE RECORD: 557 of
+// the 1,377 codes in the fleet. So 820 machines could not be opened from this
+// page at all and their history was unreachable. This search covers the WHOLE
+// register, and it PAGES - PostgREST caps a response at 1,000 rows whatever
+// .limit() claims, so an unpaged picker silently hides several hundred assets
+// and the reader concludes the machine is not in the system.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AssetOpener({ country, onOpen }) {
+  const [options, setOptions] = useState([])
+  const [state, setState]     = useState('loading') // loading | ready | error
+  const [query, setQuery]     = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    async function run() {
+      setState('loading')
+      const res = await listAssetOptions({ country })
+      if (cancelled) return
+      if (!res.ok) { setState('error'); setOptions([]); return }
+      setOptions(res.rows)
+      setState('ready')
+    }
+    run()
+    return () => { cancelled = true }
+  }, [country])
+
+  const matches = useMemo(() => {
+    const q = canonAssetNo(query)
+    if (!q) return []
+    return options.filter(o => canonAssetNo(o.asset_no).includes(q)).slice(0, 12)
+  }, [query, options])
+
+  return (
+    <div className="card">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-56">
+          <History size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            className="input pl-9"
+            placeholder="Open the full history of any asset in the register"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </div>
+        <p className="text-[11px] text-[var(--text-muted)]">
+          {state === 'loading' && 'Loading the register'}
+          {state === 'error' && 'The register could not be read, so this search is unavailable.'}
+          {state === 'ready' && `${options.length.toLocaleString('en-US')} assets in the register`}
+        </p>
+      </div>
+
+      {query && state === 'ready' && (
+        <div className="mt-3">
+          {matches.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)]">
+              No asset in the register matches that code
+              {country && country !== 'All' ? ` in ${country}` : ''}.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {matches.map(o => (
+                <button
+                  key={`${o.country}:${o.asset_no}`}
+                  onClick={() => { onOpen(o.asset_no); setQuery('') }}
+                  className="text-xs px-2.5 py-1.5 rounded border border-[var(--input-border)] bg-[var(--input-bg)] hover:border-blue-600/50 text-left"
+                >
+                  <span className="font-mono text-blue-400">{o.asset_no}</span>
+                  <span className="text-[var(--text-dim)] ml-2">
+                    {[o.country, o.vehicle_type, o.site].filter(Boolean).join(' | ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-[10px] text-[var(--text-dim)] mt-2">
+        The table below lists assets that carry a tyre record. This search covers every asset in the
+        register, including machines that have never had a tyre recorded against them.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Standalone panel for an asset opened from the register search that carries no
+ * tyre records, so no row for it exists in the table above.
+ */
+function DirectAssetPanel({ assetNo, country, onClose }) {
+  return (
+    <div className="card border border-blue-500/30 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-[var(--text-primary)] font-bold text-xl font-mono">{assetNo}</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full border border-[var(--input-border)] text-[var(--text-muted)]">
+              {country && country !== 'All' ? country : 'All countries'}
+            </span>
+          </div>
+          <p className="text-[var(--text-muted)] text-xs mt-1">
+            Opened from the register search. This asset carries no tyre record, so the tyre analysis
+            tabs do not apply to it. Everything recorded against it is below.
+          </p>
+        </div>
+        <button onClick={onClose} className="btn-secondary flex items-center gap-1.5 text-xs">
+          <X size={13} /> Close
+        </button>
+      </div>
+      <AssetFullHistory assetNo={assetNo} country={country} />
     </div>
   )
 }

@@ -29,6 +29,7 @@ export type ModuleKey =
   | 'reports' | 'analytics' | 'ai' | 'admin' | 'users' | 'meter' | 'tasks'
   | 'calendar' | 'reportIssue' | 'checklists' | 'approvals' | 'alerts'
   | 'history' | 'tyreChange' | 'team' | 'pm' | 'washing' | 'workshop'
+  | 'repairRequest'
 
 export interface ModuleDef {
   key: ModuleKey
@@ -108,6 +109,7 @@ export const MODULES: ModuleDef[] = [
   M('meter',          'Meter Log',         'speedometer-outline',    'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
   M('washing',        'Vehicle Washing',   'water-outline',          'Field',      ['manager', 'director', 'inspector', 'driver', 'tyre_man']),
   M('reportIssue',    'Report Issue',      'megaphone-outline',      'Field',      ['manager', 'director', 'reporter', 'driver', 'mechanic', 'electrician', 'maintenance_supervisor', 'workshop_supervisor', 'pmv_manager', 'workshop_area_manager', 'workshop_maintenance_area_manager']),
+  M('repairRequest',  'Repair Request',    'bandage-outline',        'Field',      ['manager', 'director', 'inspector', 'tyre_man', 'reporter', 'driver', 'mechanic', 'electrician']),
   // Fleet ---------------------------------------------------------------------
   M('records',        'Tyre Records',      'layers-outline',         'Fleet',      []),
   // Field staff need to look an asset up (owner instruction 2026-08-06). Safe to

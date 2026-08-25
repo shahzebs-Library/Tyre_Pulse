@@ -153,6 +153,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { module: 'meter',       section: 'Field', icon: 'speedometer-outline',     label: 'Meter Log',         route: '/(app)/meter-logs' },
   { module: 'washing',     section: 'Field', icon: 'water-outline',           label: 'Vehicle Washing',   route: '/(app)/washing' },
   { module: 'reportIssue', section: 'Field', icon: 'megaphone-outline',       label: 'Report Issue',      route: '/(app)/report-issue' },
+  { module: 'repairRequest', section: 'Field', icon: 'bandage-outline',         label: 'Repair Request',    route: '/(app)/repair-request' },
   // Fleet ---------------------------------------------------------------------
   { module: 'records',     section: 'Fleet', icon: 'layers-outline',        label: 'Tyre Records',     route: '/(app)/records' },
   { module: 'vehicles',    section: 'Fleet', icon: 'car-outline',           label: 'Vehicles',         route: '/(app)/vehicles' },

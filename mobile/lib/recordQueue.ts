@@ -64,6 +64,7 @@ export type CommandType =
   | 'REPORT_ACCIDENT'
   | 'WASH_RECORD'
   | 'WORKSHOP_EVENT'
+  | 'REPAIR_REQUEST'
 
 /** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
 export type CommandOp = 'insert' | 'update'
@@ -251,6 +252,18 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'foreman_confirmed', 'confirmed_by',
     ],
   },
+  // Driver-raised RFR (Request For Repair) - the fault report that PRECEDES a
+  // job card (V608 repair_requests). rfr_no is minted SERVER-SIDE and is
+  // deliberately NOT allow-listed: a phone cannot know the next sequence.
+  REPAIR_REQUEST: {
+    table: 'repair_requests',
+    fields: [
+      'asset_no', 'plate_no', 'asset_description', 'site', 'country',
+      'odometer', 'engine_hours', 'fault_category', 'description', 'priority',
+      'status', 'reported_by', 'reported_by_name', 'reported_at',
+      'photos', 'signature', 'client_uuid',
+    ],
+  },
 }
 
 export interface QueuedRecord {
@@ -312,6 +325,7 @@ const TYPE_TO_MODULE: Record<CommandType, string> = {
   REPORT_ACCIDENT: 'accident',
   WASH_RECORD: 'wash',
   WORKSHOP_EVENT: 'workshop',
+  REPAIR_REQUEST: 'repair-request',
 }
 
 /** True when an INSERT command upserts on a stable client_uuid (default). An

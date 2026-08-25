@@ -1341,7 +1341,7 @@ function NewInspectionScreen() {
                     wizard, so stepping back and forward unmounts it. Without it
                     the inspector returned to a blank pad over a signature they
                     had already given, and Clear erased the stored one. */}
-                <SignaturePad value={inspectorSig} onChange={setInspectorSig} height={180} penColor={theme.color.text} />
+                <SignaturePad value={inspectorSig} onChange={setInspectorSig} height={180} />
               </View>
             </View>
 

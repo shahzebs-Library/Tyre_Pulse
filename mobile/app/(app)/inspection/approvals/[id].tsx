@@ -343,7 +343,7 @@ function InspectionApprovalReviewScreen() {
                 {/* `value` is load-bearing: this pad is inside a scroll view that
                     remounts on reload, and without it a captured signature came
                     back blank and Clear then erased it. */}
-                <SignatureField onChange={setApproverSig} height={170} penColor={c.text} />
+                <SignatureField onChange={setApproverSig} height={170} />
                 {!!approverName && (
                   <View style={[styles.signingAs, isRTL && styles.rowR]}>
                     <Ionicons name="person-circle-outline" size={16} color={c.textMuted} />

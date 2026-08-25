@@ -1987,7 +1987,7 @@ function ChecklistFillScreen() {
               </View>
             ) : null}
             <View style={{ marginTop: spacing.sm }}>
-              <SignaturePad value={primarySignature} onChange={setPrimary} height={170} penColor={c.text} />
+              <SignaturePad value={primarySignature} onChange={setPrimary} height={170} />
             </View>
             <AppText variant="label" color="secondary" style={{ marginBottom: 6, marginTop: spacing.md }}>
               {t('modules.checklistFill.printedName')}

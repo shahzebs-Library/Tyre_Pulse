@@ -442,7 +442,7 @@ function MeterLogScreen() {
                     already-captured signature. Without it the pad reopened blank
                     and its Clear emitted null, erasing the stored signature the
                     driver had only come back to check. */}
-                <SignaturePad value={signature} onChange={setSignature} penColor={theme.color.text} />
+                <SignaturePad value={signature} onChange={setSignature} />
                 <TouchableOpacity
                   onPress={() => setSignPad(false)}
                   style={[styles.sigDone, signature ? null : styles.sigDoneDim]}

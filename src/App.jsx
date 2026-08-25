@@ -181,6 +181,7 @@ const DriverDocuments        = lazy(() => import('./pages/DriverDocuments'))
 const Dvir                   = lazy(() => import('./pages/Dvir'))
 const Requisitions           = lazy(() => import('./pages/Requisitions'))
 const GoodsReceipt           = lazy(() => import('./pages/GoodsReceipt'))
+const StoreMaterialIssue     = lazy(() => import('./pages/StoreMaterialIssue'))
 const Customers              = lazy(() => import('./pages/Customers'))
 const FleetRenewal           = lazy(() => import('./pages/FleetRenewal'))
 const DtcDiagnostics         = lazy(() => import('./pages/DtcDiagnostics'))
@@ -287,6 +288,7 @@ const ForecastingEngine      = lazy(() => import('./pages/ForecastingEngine'))
 const ContinuousImprovement  = lazy(() => import('./pages/ContinuousImprovement'))
 const ErpSync                = lazy(() => import('./pages/ErpSync'))
 const WorkOrders             = lazy(() => import('./pages/WorkOrders'))
+const RepairRequests         = lazy(() => import('./pages/RepairRequests'))
 const WorkshopLive           = lazy(() => import('./pages/WorkshopLive'))
 const WorkshopAbsence        = lazy(() => import('./pages/WorkshopAbsence'))
 const WorkshopAnalytics      = lazy(() => import('./pages/WorkshopAnalytics'))
@@ -648,6 +650,7 @@ function MainApp() {
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
                       <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
                       <Route path="/asset-disposals"       element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_disposals"><AssetDisposals /></RoleRoute></Safe>} />
+                      <Route path="/repair-requests"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="repair_requests"><RepairRequests /></RoleRoute></Safe>} />
                       <Route path="/asset-breakdowns"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_breakdowns"><AssetBreakdowns /></RoleRoute></Safe>} />
                       <Route path="/sites"                element={<Safe><ModuleRoute moduleKey="fleet_master"><SiteManagement /></ModuleRoute></Safe>} />
                       <Route path="/inspection-planner"   element={<Safe><InspectionPlanner /></Safe>} />
@@ -773,6 +776,7 @@ function MainApp() {
                       <Route path="/dvir"                  element={<Safe><RoleRoute allowed={['Admin']}><Dvir /></RoleRoute></Safe>} />
                       <Route path="/requisitions"          element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><Requisitions /></RoleRoute></Safe>} />
                       <Route path="/goods-receipt"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><GoodsReceipt /></RoleRoute></Safe>} />
+                      <Route path="/store-material-issue"  element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="store_material_issue"><StoreMaterialIssue /></RoleRoute></Safe>} />
                       <Route path="/customers"             element={<Safe><RoleRoute allowed={['Admin']}><Customers /></RoleRoute></Safe>} />
                       <Route path="/fleet-renewal"         element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FleetRenewal /></RoleRoute></Safe>} />
                       <Route path="/dtc"                   element={<Safe><RoleRoute allowed={['Admin']}><DtcDiagnostics /></RoleRoute></Safe>} />

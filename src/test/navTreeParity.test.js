@@ -233,6 +233,15 @@ const ROUTES_BEFORE_REGROUP = [
   '/workshop-settings',
 ]
 
+// Routes added DELIBERATELY since the re-group. A genuinely new module legitimately
+// adds a route, so the inverse guard below has to admit it - but it is kept in its own
+// list rather than folded into ROUTES_BEFORE_REGROUP, whose name would otherwise become
+// a lie. Adding an entry here is a deliberate act that says "this route is new".
+const ROUTES_ADDED_SINCE_REGROUP = [
+  '/repair-requests',
+  '/store-material-issue',
+]
+
 const catalogItems = () => NAV_CATALOG.flatMap((g) => g.items)
 
 describe('sidebar re-group parity', () => {
@@ -243,7 +252,7 @@ describe('sidebar re-group parity', () => {
   })
 
   it('invents no route that did not exist before', () => {
-    const before = new Set(ROUTES_BEFORE_REGROUP)
+    const before = new Set([...ROUTES_BEFORE_REGROUP, ...ROUTES_ADDED_SINCE_REGROUP])
     const added = catalogItems().map((i) => i.key).filter((r) => !before.has(r))
     expect(added).toEqual([])
   })

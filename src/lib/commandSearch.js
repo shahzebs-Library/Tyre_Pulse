@@ -71,6 +71,7 @@ export const NAV_COMMANDS = [
   { id: 'ai',             label: 'Smart Analytics',      path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center' },
   // Workshop & Downtime
   { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench', keywords: ['job card', 'jobcard', 'jc', 'repair order', 'wo', 'maintenance job'] },
+  { id: 'repair-requests', label: 'Repair Requests (RFR)', path: '/repair-requests', icon: 'ClipboardList', keywords: ['rfr', 'request for repair', 'repair request', 'raise a request', 'fault report', 'job card request'] },
   { id: 'gate-pass',      label: 'Gate Pass',            path: '/gate-pass',    icon: 'ClipboardCheck' },
   { id: 'workshop',       label: 'Workshop Management',  path: '/workshop',     icon: 'Building2',  adminOnly: true, moduleKey: 'work_orders' },
   { id: 'downtime',       label: 'Downtime Tracker',     path: '/downtime',     icon: 'Clock',      adminOnly: true, moduleKey: 'fleet_analytics' },
@@ -179,6 +180,7 @@ export const NAV_COMMANDS = [
   { id: 'parts-catalog', label: 'Parts Catalog', path: '/parts-catalog', icon: 'Boxes' },
   { id: 'requisitions', label: 'Requisitions', path: '/requisitions', icon: 'ClipboardList' },
   { id: 'goods-receipt', label: 'Goods Receipt', path: '/goods-receipt', icon: 'PackageCheck', keywords: ['grn', 'goods received note', 'delivery note', 'receiving'] },
+  { id: 'store-material-issue', label: 'Material Issue (MIS)', path: '/store-material-issue', icon: 'Receipt', keywords: ['mis', 'mrt', 'material issue', 'issue slip', 'material return', 'store issue', 'slip'] },
   { id: 'cost-scenario-planner', label: 'Cost Scenario Planner', path: '/cost-scenario-planner', icon: 'SlidersHorizontal', roles: ANALYTICS_ROLES },
   { id: 'contracts', label: 'Contracts', path: '/contracts', icon: 'FileText' },
   { id: 'ifta-reporting', label: 'IFTA Fuel Tax', path: '/ifta-reporting', icon: 'Landmark', adminOnly: true },

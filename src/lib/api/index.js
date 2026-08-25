@@ -7,6 +7,9 @@
  * reports, organisations, users) are added here as each is migrated.
  */
 export * as assets from './assets'
+export * as repairRequests from './repairRequests'
+export * as materialIssue from './materialIssue'
+export * as assetHistory from './assetHistory'
 export * as tyres from './tyres'
 export * as stock from './stock'
 export * as workOrders from './workOrders'

@@ -1,222 +1,281 @@
 # 09. Migration matrix
 
-Artifact 9 of the nine required by section 75 of the Flutter migration spec, and
-the last of them. Artifacts 01-08 describe WHAT exists. This one decides, per
-feature, **how it crosses over** and **in what order**, in the six axes section
-75 names: source logic, corrections, backend, Flutter target, offline strategy,
-tests.
+Artifact 9 of the nine required by section 75 of the Flutter migration spec.
 
-It deliberately does not restate artifact 01. Where a fact is already recorded
-there, this file carries only the DECISION.
+## What this file is, and what it is not
 
----
+Section 75 asks for a per-feature matrix of SOURCE LOGIC / CORRECTIONS /
+BACKEND / FLUTTER TARGET / OFFLINE STRATEGY / TESTS.
 
-## 1. The four verdicts
+**Artifact 01 already carries exactly those columns for all 72 features.**
+Repeating them here would create a second copy that drifts from the first, which
+is the failure mode AGENTS.md rule 1 and the spec's own anti-duplication stance
+exist to prevent. So this file does the part artifact 01 does not:
 
-Every feature gets exactly one.
+- it SEQUENCES the 72 features into the spec's 12 phases
+- it states what must be TRUE before each phase starts and before it is called done
+- it lists the decisions that BLOCK a phase, and who has to make them
+- it carries the risk register
 
-| Verdict | Meaning |
+Read artifact 01 for "what is this feature". Read this for "when do we build it
+and what stops us".
+
+## Confidence key
+
+| Mark | Meaning |
 |---|---|
-| **PORT** | Behaviour is correct. Move it, keep it identical, pin it with a parity test |
-| **PORT + CORRECT** | Behaviour is correct but something adjacent is wrong - a fabricated figure in the Kotlin build, a payload column that does not exist, a duplicated package. Port the RN behaviour, do not reproduce the defect |
-| **REDESIGN** | The current behaviour is wrong in a way that cannot be carried. Decide the new rule before writing code |
-| **BLOCKED** | Depends on something not yet applied or not yet decided. Do not start |
-
-Spec section 75 closes with the rule this table serves: *Do not remove existing
-production behavior unless there is evidence that it is broken or the product
-owner explicitly changes the requirement.* So PORT is the default, and every
-other verdict below names its evidence.
+| VERIFIED | Read directly from source in this repo |
+| RECORDED | A measured figure quoted from another artifact or PROJECT_MEMORY |
+| UNVERIFIED | Needs a live database check. The Supabase connector was not authenticated when this was written |
 
 ---
 
-## 2. Build order
+## 1. The scale being sequenced
 
-The order is dependency-driven, not importance-driven. Each wave is only
-startable once the one above it holds.
+RECORDED from artifacts 01, 03, 04, 05 and 06:
 
-**Wave 0 - the floor.** Session durability, secure storage, the Drift queue,
-permissions, router, error type. Nothing else can be trusted until these are
-right, and two of them carry data-loss history (section 5).
-
-**Wave 1 - inspections.** The reason the app exists and the heaviest offline
-surface: a four-step wizard, an interactive tyre diagram, a completeness gate
-and a queued submit. It exercises every Wave 0 component under real load, so
-building it second is what proves the floor.
-
-**Wave 2 - checklists.** The dynamic form engine, the draft store and the
-approval ladder. Second-heaviest, and where the one REDESIGN lives.
-
-**Wave 3 - field capture.** Meter logs, washing, accidents, repair request. All
-queued, all observations, all structurally similar once Wave 0 exists.
-
-**Wave 4 - workshop and work orders.** Includes the consolidation in section 4.
-
-**Wave 5 - read surfaces.** Registers, alerts, overview, calendar, notifications.
-
-**Wave 6 - admin, reports, analytics, AI.** Admin-only, online-only, lowest
-field risk, and the largest concentration of Kotlin fabrications to NOT
-reproduce.
-
----
-
-## 3. The matrix
-
-The Offline column uses artifact 06 vocabulary: QUEUED / ONLINE-ONLY / CACHED / n/a.
-
-### Wave 0 - core
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| Session durability, secure storage | PORT + CORRECT | n/a | Port the RULES. Do NOT port the storage FORMAT - see section 5B |
-| Offline queue | PORT + CORRECT | n/a | Port the registry SHAPE and all three load-bearing properties (artifact 06 section 1). Model it as a Drift TABLE, never a serialised blob - see section 5A |
-| Permissions / ModuleGuard | PORT | n/a | 31-module registry. `resolveGuardedAccess` fails CLOSED for admin, users and approvals when the permission RPCs error. Keep that asymmetry, it is deliberate |
-| Route guard registry | REDESIGN | n/a | `lib/routeAccess.ts` maps every deep-linkable route to its ModuleKey and is **imported by nothing**. In Flutter the router must READ it, so a deep link cannot reach a screen the sidebar would deny |
-| Back navigation | PORT | n/a | Pops with history, REPLACES without, never a no-op |
-| Forced update gate | PORT | n/a | Fails OPEN on every error path. Keep that - a gate that fails closed locks the fleet out of an app they cannot update |
-| Login | PORT | ONLINE-ONLY | Server-enforced lockout via four RPCs |
-| Register | PORT | n/a | Invite-only dead end with a Back button. Keep it so old links resolve |
-
-### Wave 1 - inspections
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| New inspection | PORT | QUEUED | Upserts on `client_uuid` with ignoreDuplicates |
-| Completeness engine | PORT | n/a | Pure, 407 lines, already test-pinned. Straight port |
-| Tyre diagram engine | PORT | n/a | Parity tests are artifact 07. The resolver ORDER is load-bearing: specific rules must run before the generic catch-all |
-| Inspection detail, PDF | PORT | ONLINE-ONLY / n/a | |
-| Approvals queue | PORT + CORRECT | ONLINE-ONLY | Kotlin spec 2 flags `GET approvals` as fabricated. Read the real table |
-| Inspection sign-off | PORT | ONLINE-ONLY | Already online-only, and correctly so - it goes through `decide_inspection_approval` |
-
-### Wave 2 - checklists
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| Checklist fill | PORT | QUEUED | 2253 lines. Field engine, conditionals, shared option sets and per-field photos all port as-is |
-| Draft store | PORT | n/a | Drafts live in their OWN folder. Section 5C says why that is not optional |
-| Approval ladder | PORT | n/a | Mirrors the DB trigger `guard_checklist_approval_stages`. Mirror pair - change both together |
-| **Checklist sign-off** | **REDESIGN** | **ONLINE-ONLY** | The single most important decision in this matrix. See section 6 |
-| Checklist history, i18n | PORT | ONLINE-ONLY / n/a | i18n ALWAYS stores the English value. Keep that invariant |
-
-### Wave 3 - field capture
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| Meter log | PORT + CORRECT | QUEUED | Kotlin spec 38 flags payload columns that did not exist. Write only columns artifact 02 verifies. Also collapse `feature/meters` and `feature/odometer` into ONE package |
-| Vehicle washing | PORT | QUEUED | The wash-due rule is derived on-device and drives a LOCAL notification - no server cron |
-| Report accident | PORT | QUEUED | A 50-column allow-list, the largest silent-strip risk in the app, and it has **no test today**. Wave 3 must add one before the port is called done |
-| Accident detail, dashboard | PORT | ONLINE-ONLY | |
-| Case status | PORT + CORRECT | n/a | Kotlin spec 42 invented an Assigned Officer shown for every incident. Render only real workstream rows, and degrade honestly when the case migration is absent |
-| Repair request (RFR) | **BLOCKED** | QUEUED | `repair_requests` does not exist live - V608 is AUTHORED, NOT APPLIED. Classify once it settles |
-
-### Wave 4 - workshop and work orders
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| My Jobs (workshop) | PORT + CORRECT | QUEUED | Kotlin spec 40 invented technicians, bays, job numbers and productivity. Every figure must come from `tech_activity_events` |
-| Live status engine | PORT | n/a | 15 event types, 6 blocked reasons, 11 statuses, 12 actions. Pure and test-pinned |
-| Corrective actions, three surfaces | **REDESIGN** | mixed | Three vocabularies, three write paths, one table. See section 4 |
-| Work orders | PORT + CORRECT | QUEUED | Orphaned - nothing links to it. Kotlin spec 41 flags a route-id mismatch that crashed. Give it a real entry point or drop it deliberately, not by accident |
-| Preventive maintenance | PORT | ONLINE-ONLY | Deliberately online-only: `record_pm_service` is transactional and role-gated. Do not queue it |
-| RCA | PORT | QUEUED | |
-
-### Wave 5 - read surfaces
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| Tyre records, vehicles, history | PORT | ONLINE-ONLY | Paged. Keep the paging - artifact 02 records the 1000-row cap |
-| Serial search | PORT | ONLINE-ONLY | Scrap and unscrap are RPC-gated by design |
-| Scanner and scan routing | PORT + CORRECT | ONLINE-ONLY | Collapse `feature/scan` and `feature/scanner` into ONE package |
-| Stock count | PORT + CORRECT | QUEUED (fallback) | Kotlin spec 45 invented tyre stock at Qiddiya. The offline fallback writes an ABSOLUTE quantity and no ledger row - artifact 06 section 3 explains why that is the only safe form |
-| Alerts, overview, calendar, report-issue, analytics | PORT | ONLINE-ONLY | The spec names no Flutter package for these five. Assign one at Wave 5 rather than leaving them homeless |
-| Notification inbox | PORT + CORRECT | ONLINE-ONLY | Kotlin spec 2 flags the mark-read endpoint as fabricated. Mark-read writes the real table |
-
-### Wave 6 - admin, reports, AI
-
-| Feature | Verdict | Offline | The decision |
-|---|---|---|---|
-| Admin console, users, sites, access, approvals | PORT + CORRECT | ONLINE-ONLY | Kotlin spec 45 invented four sites. All five are RPC-driven; keep them so |
-| Reports, analytics | PORT | ONLINE-ONLY | Both read ONE server aggregate. Currency is NEVER blended: on the All-countries view cost arrives null, the screen renders N/A and ranks by volume. Unrated tyres are stated separately, never folded into Low |
-| Fleet AI, admin AI chat | PORT + CORRECT | ONLINE-ONLY | Kotlin spec 49 flags hard-coded predictions, an invented budget and an invented confidence percentage. Render only what the edge function returns |
-| Saved signature | PORT + CORRECT | ONLINE-ONLY | Kotlin spec 21 stored a placeholder STRING instead of a signature. Store the drawn mark |
-| PDF generation | PORT | n/a | Rendered LOCALLY and shared. Kotlin spec 48 covers the generator |
-
----
-
-## 4. The clearest consolidation target
-
-Three surfaces read `corrective_actions`:
-
-| Surface | Label | Write path |
-|---|---|---|
-| `workorders/index.tsx` | Work Orders | QUEUED via `CORRECTIVE_ACTION_STATUS` |
-| `tasks.tsx` | Tasks | **Direct update** - not queued, same table |
-| `report-issue.tsx` | Report an issue | QUEUED via `REPORT_ISSUE`, write-only |
-
-Three vocabularies and two different offline postures on ONE table. A technician
-resolving a task from `tasks.tsx` with no signal loses the write; the same
-transition from `workorders/index.tsx` survives. That asymmetry is invisible in
-the UI and is exactly what a rewrite should not carry across.
-
-**Decision: one `features/work_orders` package with ONE status vocabulary and
-ONE queued write path.** Keep three ENTRY POINTS if the product wants them; do
-not keep three engines.
-
----
-
-## 5. Structural requirements the Flutter design must make impossible
-
-These are not features. They are shapes that must be wrong by construction.
-
-**A. An empty read that means two different things.** RECORDED: `getQueue()`
-returned an empty list for both nothing-is-queued and storage-refused, and ten
-callers then SAVED what they read - replacing a worker's unsynced inspections
-with an empty list, silently, with the only copy on that device. In Flutter a
-read failure must be an ERROR TYPE, not an empty list, and the queue must be a
-Drift table, never a serialise-and-write-back blob.
-
-**B. A storage format that is not rollback-safe.** RECORDED: the chunked format
-is forward-compatible but not backward. Flutter starts clean, so version the
-on-device format from day one and decide the downgrade policy before shipping.
-
-**C. Draft photos are not queue photos.** The orphan sweep deletes any queued
-photo that no QUEUE ENTRY references, and a draft is not a queue entry. Drafts
-need their own retained folder, or the next sync deletes the operator's work.
-
-**D. Photo uploads must be bounded.** RECORDED: a parallel decode over every
-tyre position handled 13 full-size bitmaps at once and hard-crashed 2 GB
-handsets - and the queue then REPLAYED the crash.
-
----
-
-## 6. The one REDESIGN, stated plainly
-
-`CHECKLIST_APPROVAL` is currently a queued blind update on
-`checklist_submissions` matched by id.
-
-An approval is a **decision**, not an observation, and three things make it
-unqueueable:
-
-1. A checklist's closability depends on its own answers. A single blocking fault
-   mark must refuse closure, and the DATABASE enforces that at approval time
-   with a trigger - so a queued approval can be accepted by the phone and then
-   refused by the server, with the operator already told it succeeded.
-2. The approver's identity and permission must be re-checked server-side at the
-   moment of the write.
-3. `decide_checklist_approval` exists precisely to enforce the rungs and the
-   signature, and the queued path walks straight past it.
-
-**Flutter must route approvals through the RPC and refuse to queue them.**
-
-Reported, not patched. The Expo app is production and these artifacts are an
-audit.
-
----
-
-## 7. Open, and owned by someone else
-
-| Item | Blocked on |
+| Measure | Count |
 |---|---|
-| Repair request (RFR) | V608 applied to the live database |
-| Five features with no named Flutter package | A package assignment at Wave 5 |
-| Accident form parity test | Wave 3 - it is the highest-volume capture surface and has none |
-| Live schema re-verification | The Supabase connector was unauthenticated when artifacts 01-09 were written. Every row marked UNVERIFIED needs one pass against the live database before Wave 0 starts |
+| User-facing features | 72 |
+| Addressable routes | 49 |
+| Access modules | 31 (11 admin-only) |
+| Distinct tables | 33 (32 exist live, 1 does not) |
+| Offline write paths | 17 |
+| Local Drift tables designed | 17 |
+| Existing behaviour-pinning tests to port | 37 |
+| Feature areas with NO test today | 2 of 13 |
+
+The last row is the one that shapes the plan. Accidents, and assets/scanning,
+have no behavioural tests at all - and the accident report form alone is 1,235
+lines. Those areas cannot be migrated by test parity because there is no parity
+to measure. They need characterisation tests written against the CURRENT app
+before the Flutter version is trusted. That is why accidents sits late, at
+phase 9, rather than early where its business importance might suggest.
+
+---
+
+## 2. Phase map
+
+Phases are the spec's, from section 67. The feature-area numbers refer to
+artifact 01 sections 2.1 to 2.13.
+
+| Phase | Scope | Feature areas | Depends on | Status |
+|---|---|---|---|---|
+| 0 | Freeze source apps as reference | none | - | DONE. `mobile/` and `tyre_pulse_app/` are read-only by AGENTS.md, not deleted |
+| 1 | Foundation: structure, config, Supabase, logging, Sentry, secure storage, Drift, Riverpod, GoRouter, localisation, theme, permissions, workspace | 2.13 cross-cutting | - | IN PROGRESS |
+| 2 | Auth and shell: bootstrap, session restore, login, profile, access gate, version gate, workspace, navigation, Home, offline banner | 2.1, 2.2 | 1 | Not started |
+| 3 | Fleet foundation: asset list and detail, search, tyre list/detail/history, serial search, scanner | 2.5, 2.6 | 2 | Not started |
+| 4 | Tyre diagram engine, to TEST PARITY before phase 5 continues | part of 2.3 | 3 | Not started |
+| 5 | Inspection: draft, tyre editor, conditions, photos, completeness, signature, offline submit, history | 2.3 | 4 | Not started |
+| 6 | Generic checklist engine, then approvals | 2.4 | 5 | Not started |
+| 7 | Tyre replacement, meter logs, washing | 2.7, part of 2.5 | 4, 6 | Not started |
+| 8 | Workshop, work orders, maintenance | 2.9 | 2 | Not started |
+| 9 | Accidents, evidence, claims, RCA, PDFs | 2.8 | 2, plus characterisation tests | Not started |
+| 10 | Stock, notifications, reports, team, admin, AI | 2.10, 2.11, 2.12 | 2 | Not started |
+| 11 | iOS completion: APNs, permissions, background modes, deep links, signing, TestFlight | all | 2 onward | Continuous, closed here |
+| 12 | Parallel production validation against the Expo app | all | 11 | Not started |
+
+### Why this order and not another
+
+**Phase 4 is a hard gate before phase 5.** The spec states it and artifact 07
+supplies the fixture. The tyre diagram decides which positions exist, and the
+inspection writes answers keyed to those positions. Build the inspection on a
+wrong position vocabulary and every row written is mis-keyed - and AGENTS.md
+rule 10 forbids changing position IDs later to fix it.
+
+**Phase 6 depends on phase 5, not the reverse.** They look independent - a
+checklist is not an inspection - but they share draft persistence, the photo
+pipeline and signature capture. Building checklists first means building all
+three twice.
+
+**Phase 7 waits for phase 6** only for washing and meters, which are simple.
+Tyre replacement waits for phase 4 because it writes to positions.
+
+**Phases 8, 9 and 10 depend only on phase 2** and can run in parallel with each
+other once the shell is real. They are listed in sequence for a single team, not
+because a dependency forces it.
+
+---
+
+## 3. Per-phase entry and exit
+
+Exit criteria are the spec's Definition of Done (section 72) applied to the
+phase. "Done" is never "the screen looks finished".
+
+### Phase 1 - Foundation
+
+**Entry:** nothing.
+
+**Exit:**
+- CI green on all three jobs: analyze/test, Android build, iOS build
+- Drift schema opens, and a version-1-to-current migration test PROVES rows survive
+- The permission resolver passes its precedence table under both admin-vs-revoke behaviours
+- Config validation refuses a service-role key and explains a missing URL
+- The seven distinguishable states of spec section 58 exist as widgets, and a refusal cannot be rendered as a spinner
+- No business feature exists yet. This is deliberate: the spec forbids feature migration until the foundation passes tests.
+
+### Phase 2 - Auth and shell
+
+**Entry:** phase 1 exit met. **Decisions D1, D6 and D9 answered.**
+
+**Exit:**
+- Session restores across process death
+- A transient network failure does NOT sign a user out. Artifact 01 section 5.8 is explicit: only a definitive server answer may end a session, and the production app got this wrong once
+- The forced-update gate blocks a build below the configured minimum and FAILS OPEN on every error path
+- Back returns to the actual previous destination, proven by a test, never a jump to Home
+- A denied route renders a reason
+- Offline banner shows a real pending count from the Drift queue
+
+### Phase 3 - Fleet foundation
+
+**Entry:** phase 2 exit met. **Decision D8 answered** (is global search in scope).
+
+**Exit:**
+- Lists page rather than loading a fleet. Artifact 01 section 5.19 records that `.limit(N)` above 1000 is not a bound in PostgREST - a paged read is the only bound
+- A failed read renders as failed, never as empty. Section 5.6
+- Scanner routes a scanned code to the right destination and degrades to manual entry
+
+### Phase 4 - Tyre diagram
+
+**Entry:** phase 3 exit met.
+
+**Exit:** artifact 07's full parity suite passes. Position identifiers are
+byte-identical to production storage keys. This phase is not done at partial
+parity - a diagram that is right for eight vehicle types and wrong for the ninth
+silently corrupts that ninth type's inspections.
+
+### Phase 5 - Inspection
+
+**Entry:** phase 4 at full parity.
+
+**Exit:**
+- Completeness matches artifact 07's rules, including the `checked` marker and the mobile `requireEvidence` override, which must be ported AS A PAIR. Artifact 01 section 5.12 records the consequence of splitting them: one inspection in four becomes unsubmittable
+- A pressure of 0 is a real reading and survives. Section 5.22
+- **A draft survives process death.** See risk R2 - this is a NEW capability, not a port
+- Photos queue without blocking the next tyre, and a local file is never deleted before the server confirms
+
+### Phase 6 - Checklists and approvals
+
+**Entry:** phase 5 exit met. **Decisions D2 and D3 answered - both block this phase.**
+
+**Exit:**
+- Artifact 08's parity suite passes
+- The stored answer is the English canonical value, never the translated label. Section 5.24
+- A signature is per field on the fill screen and per rung on the approval screen. Section 5.13
+- Approvals go through the RPC and are NOT blindly queued
+
+### Phase 7 - Replacement, meters, washing
+
+**Entry:** phases 4 and 6 exit met.
+
+**Exit:** replacement is transactional and idempotent - close old fitment,
+update removed tyre, create new fitment, update replacement tyre, record meter,
+write history. Prefer a server RPC so the mutations succeed or fail together.
+The Kotlin replacement screen wrote nothing at all (spec section 36); a Flutter
+version that writes four of six rows is worse than one that writes none.
+
+### Phase 8 - Workshop
+
+**Entry:** phase 2 exit met. **Decision D4 answered - blocks this phase.**
+
+**Exit:** every metric shown is backed by a real column. Anything the backend
+cannot supply renders unavailable, never a plausible number.
+
+### Phase 9 - Accidents
+
+**Entry:** phase 2 exit met, AND characterisation tests written against the
+current Expo accident flow. This phase cannot start on test parity because there
+is no test to have parity with.
+
+**Exit:** the workstream status logic matches production, evidence is linked by
+stable IDs, and no invented field appears.
+
+### Phase 10 - Operational modules
+
+**Entry:** phase 2 exit met. **Decision D7 answered** (where do the seven
+unhomed features live).
+
+**Exit:** an empty table renders "no records", never sample data. Spec section
+45 records that the Kotlin app displayed invented tyre stock at a real site.
+
+### Phase 11 - iOS completion
+
+iOS compiles from phase 1 onward because CI builds it on every commit. This
+phase closes APNs, background modes, signing and TestFlight - not "start iOS".
+
+### Phase 12 - Parallel validation
+
+Run both apps with selected users and compare submission counts, tyre positions,
+photos, signatures, sync, approvals, crash rate and load time. Promote only on
+proven parity. Do not replace the Expo app on a schedule.
+
+---
+
+## 4. Decisions that block phases
+
+These are product-owner calls, not engineering ones. Each names the phase it
+blocks so none is discovered late.
+
+| ID | Decision | Blocks | Source |
+|---|---|---|---|
+| D1 | Can a per-user REVOKE deny an admin? Mobile says yes; the web resolver and the server RPC say no. Three resolvers, three answers | 2 | Artifact 04 |
+| D2 | Which of the three checklist-approval gates is authoritative? The supervisory roles V600 named as signers are refused at the screen TODAY | 6 | Artifact 01 section 5.15b |
+| D3 | Do approvals route through the RPC and stop being queued? | 6 | Artifact 06 section 4 |
+| D4 | `workorders/index.tsx` is labelled Work Orders and reads `corrective_actions`; `work-orders.tsx` reads the real table and is orphaned. Which is live, and does the label or the table change? | 8 | Artifact 01 questions 1-3 |
+| D5 | Is the repair-request/RFR flow in scope, and will V608 be applied? The table does not exist, so every submit fails today | 7 or 10 | Artifact 01 question 6 |
+| D6 | Does `routeAccess.ts` become the source of truth in Flutter, or be deleted? It has zero consumers today and has already drifted from the guards | 2 | Artifact 03 |
+| D7 | Seven live features have no Flutter package in spec section 3: alerts, calendar, analytics, overview, report-an-issue, repair-request, serial search | 10 | Artifact 01 question 7 |
+| D8 | Global search is specified (spec 34) but does not exist on the phone. Build it or drop it? | 3 | Artifact 01 question 8 |
+| D9 | Confirm the field-capture lockdown stands. The registry prose contradicts its own data and the data is right | 2 | Artifact 01 question 9 |
+| D10 | `engine_hours_logs` is written by mobile and never read. Add hours history, or accept write-only? | 7 | Artifact 01 question 8 |
+
+**D1, D6 and D9 block phase 2, which is the next phase.** They should be
+answered first.
+
+---
+
+## 5. Risk register
+
+| ID | Risk | Severity | Mitigation |
+|---|---|---|---|
+| R1 | **Nothing is verifiable locally.** No Flutter SDK, no JDK, no Android SDK, and a Windows host so no Xcode | High | CI is the verification boundary and builds Android AND iOS on every commit. No claim of working code without a green run. See `tyre_pulse_flutter/docs/TOOLCHAIN.md` |
+| R2 | **The inspection capture screen has no draft in production.** Asset, meter and up to 13 tyre positions with photos live only in React state until submit. Backgrounding plus an Android process reclaim loses it silently | High | Flutter must NOT port this. Drafts are in the phase 5 exit criteria as a new capability. Artifact 05 designs the tables |
+| R3 | **Two feature areas have no tests**, one of them a 1,235-line accident form | High | Phase 9 entry requires characterisation tests written first |
+| R4 | **`view` is not a data boundary.** No RLS policy gates on it - VERIFIED by grepping every migration. Module-off hides the tile, it does not stop a read | High | Encoded in the permission layer: capabilities are typed server-enforced vs UI-only, and a repository may not treat module access as authorisation to fetch |
+| R5 | Position ID vocabulary confusion between storage keys and render slot IDs | High | Artifact 07 resolves it. AGENTS.md rule 10 forbids renaming. Parity gate at phase 4 |
+| R6 | A queued approval replayed hours later contradicts a decision somebody already made | High | Spec section 14. Approvals are online-only or use optimistic concurrency. D3 |
+| R7 | Seven parameter-name inconsistencies carried into Flutter routes | Medium | Artifact 03 lists them. One canonical name per concept, chosen at phase 2 and recorded |
+| R8 | Riverpod 3.x and go_router 18.x differ from the majors most examples target | Medium | Recorded in `BOOTSTRAP.md`. Reviewers must check the major before accepting a snippet |
+| R9 | Generated `.g.dart` cannot be produced locally | Medium | Committed to the repo and regenerated in CI, which fails if the committed copy is stale |
+| R10 | A publishing accident creates a second unrelated Play listing | Medium | Spec section 69. Confirm package id, signing key and version code before any release. Nothing is published in phases 1-11 |
+| R11 | Unsynced Expo work is lost at upgrade | Medium | Spec section 68: require the legacy app to drain its queue first, verify pending is zero, warn before upgrade. The server is the migration authority - do NOT read AsyncStorage from Flutter |
+| R12 | A compromised signing key is in repository history | Recorded | Spec section 70. Treat as compromised, never copy into the Flutter repo, rotate. `.gitignore` blocks all signing material |
+
+---
+
+## 6. Explicitly out of scope
+
+Stated so nobody rebuilds them by accident:
+
+- **The web application.** It stays React and Next.js. Spec section 2.
+- **A custom REST backend.** It does not exist. Spec section 2 and AGENTS.md rule 3.
+- **Heavy analytics.** They remain on the web. Spec section 48 limits mobile reporting to field outputs.
+- **Platform configuration.** Stays in the web console. Spec section 50.
+- **Deleting the Expo or Kotlin app.** Phase 0 freezes them as reference. Spec section 67 says no destructive deletion, and phase 12 requires the Expo app running in parallel.
+
+---
+
+## 7. Live checks still outstanding
+
+The Supabase connector was not authenticated for any artifact in this set. These
+must be run before Flutter code depends on them. Artifact 01 section 10 carries
+the SQL; the highest-priority four are:
+
+1. Does `repair_requests` exist? Decides D5.
+2. Which tables carry `client_uuid` AND a unique index? This is what makes queue
+   idempotency real rather than assumed, and artifact 05 flags that the
+   migrations disagree with each other on partial versus plain indexes.
+3. Which `mobile:` module keys exist in `module_permissions`? Settles whether
+   two roles have screens the registry says they do not.
+4. Which roles actually exist in `profiles`? Settles whether `normaliseRole`
+   silently collapses a real role.

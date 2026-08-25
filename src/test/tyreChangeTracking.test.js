@@ -266,6 +266,39 @@ describe('filters, scope label and the site roll-up', () => {
     expect(filterTracking(rows, { search: 's-3b' })).toHaveLength(1)
     expect(filterTracking(rows, { search: 'nothing-here' })).toHaveLength(0)
   })
+  it('site, region and vehicle type filter on SEVERAL values at once', () => {
+    const many = [
+      { ...rows[0], site: 'JED', vehicleType: 'TR-MIXER' },
+      { ...rows[1], site: 'RUH', vehicleType: 'PUMPS' },
+      { asset: 'WL9', serial: 'S-9', position: 'LHF1', site: 'DMM', state: 'on_vehicle', source: 'system', kind: 'Due soon', replacement: null, vehicleType: '' },
+    ]
+    const regionOf = (site) => ({ JED: 'WESTERN', RUH: 'CENTRAL' }[site] || '')
+
+    expect(filterTracking(many, { site: ['JED', 'RUH'] }).map((r) => r.asset))
+      .toEqual(['TM100', 'TM300'])
+    expect(filterTracking(many, { region: ['WESTERN', 'CENTRAL'] }, { regionOf }).map((r) => r.asset))
+      .toEqual(['TM100', 'TM300'])
+    expect(filterTracking(many, { vehicleType: ['TR-MIXER', 'PUMPS'] }).map((r) => r.asset))
+      .toEqual(['TM100', 'TM300'])
+    // An empty selection narrows nothing; a flag with no recorded type is
+    // excluded once a type is chosen (untypedCount is what says how many).
+    expect(filterTracking(many, { site: [], region: [], vehicleType: [] })).toHaveLength(3)
+    expect(filterTracking(many, { vehicleType: ['TR-MIXER'] }).map((r) => r.asset)).toEqual(['TM100'])
+    // No resolver means no site can be placed, so nothing matches - never
+    // everything.
+    expect(filterTracking(many, { region: ['WESTERN'] })).toHaveLength(0)
+  })
+
+  it('the export header names every chosen value, not just the first', () => {
+    const label = trackingScopeLabel({
+      country: 'KSA', region: ['CENTRAL', 'WESTERN'], vehicleType: ['TR-MIXER', 'PUMPS'],
+    })
+    expect(label).toContain('region: CENTRAL, WESTERN')
+    expect(label).toContain('vehicle type: TR-MIXER, PUMPS')
+    expect(trackingScopeLabel({ country: 'KSA', region: [], site: [], vehicleType: [] }))
+      .toBe('Flagged tyres tracked to replacement, KSA')
+  })
+
   it('names the set an export covers', () => {
     const label = trackingScopeLabel({ country: 'KSA', asset: 'TM100', state: 'on_vehicle' })
     expect(label).toContain('KSA')

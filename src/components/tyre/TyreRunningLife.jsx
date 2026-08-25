@@ -5,7 +5,7 @@
  * fleet's own measured life for that tyre size. Honest N/A when a meter or
  * baseline is missing - nothing is fabricated.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Gauge, Search, X, RefreshCw, Target, Trash2, FileDown, FileSpreadsheet, Layers } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -17,7 +17,10 @@ import {
   vehicleTypesIn, measureNote, measureFor, budgetsFor,
   summarize, inFittedRange, filterDescription, coverageNote, bandNeedsFullSet,
 } from '../../lib/tyreRunningLife'
+import { isSelectionActive } from '../../lib/filterSelection'
+import { listSites, siteRegionMap, regionForSite, regionsIn } from '../../lib/api/sites'
 import { toUserMessage } from '../../lib/safeError'
+import MultiSelectFilter from '../ui/MultiSelectFilter'
 import Modal from '../ui/Modal'
 import EnterpriseTable from '../ui/EnterpriseTable'
 import DateField from '../ui/DateField'
@@ -89,8 +92,15 @@ export default function TyreRunningLife() {
   const [unit, setUnit] = useState('all')
   // Asset type is the first cut anybody makes on this table: a mixer tyre and a
   // loader tyre have different sizes, lives and targets, so a table that mixes
-  // them cannot be read.
-  const [vehicleType, setVehicleType] = useState('all')
+  // them cannot be read. MULTI-SELECT, because the real question is usually
+  // "the mixers and the pumps" - a single-select control cannot ask it, and
+  // asking it three times never shows the combined totals.
+  const [vehicleType, setVehicleType] = useState([])
+  // Region is recorded ONCE, on the site register, and a tyre row carries only
+  // its site - so the register is read separately and the site is placed
+  // through it. See siteRegionMap; never add a second region column.
+  const [region, setRegion] = useState([])
+  const [siteRows, setSiteRows] = useState([])
   // Fitment-date range (row.fittedOn). Feeds the SAME filtered set the tiles,
   // life-history strip, table and exports all read, so they stay consistent.
   const [fromDate, setFromDate] = useState('')
@@ -119,9 +129,26 @@ export default function TyreRunningLife() {
   // Switching country always returns to the fast due-only view: the country the
   // owner just picked may be the big one, and it must open, not error.
   useEffect(() => {
-    setScope('due'); setAutoWidened(false); setBand('all')
+    // Region and asset type are country-specific choices: a KSA region left
+    // ticked while UAE is on screen would filter every row away and read as an
+    // empty fleet.
+    setScope('due'); setAutoWidened(false); setBand('all'); setRegion([]); setVehicleType([])
     load('due')
   }, [activeCountry]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Best effort, and deliberately separate from the running-life read: with no
+  // register the region control simply does not render, rather than offering a
+  // filter that can only ever return nothing. It must never block the table.
+  useEffect(() => {
+    let cancelled = false
+    listSites({ country: activeCountry })
+      .then((r) => { if (!cancelled) setSiteRows(Array.isArray(r) ? r : []) })
+      .catch(() => { if (!cancelled) setSiteRows([]) })
+    return () => { cancelled = true }
+  }, [activeCountry])
+
+  const regionMap = useMemo(() => siteRegionMap(siteRows), [siteRows])
+  const regionOf = useCallback((site) => regionForSite(regionMap, site), [regionMap])
 
   const dueOnlyView = state.scope === 'due'
   const countryLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'all countries'
@@ -153,16 +180,29 @@ export default function TyreRunningLife() {
   }
 
   const filtered = useMemo(() => {
-    const base = filterRows(state.rows, { search, band, unit, vehicleType })
+    const base = filterRows(state.rows, { search, band, unit, vehicleType, region }, { regionOf })
     if (!fromDate && !toDate) return base
     return base.filter((r) => inFittedRange(r, fromDate, toDate))
-  }, [state.rows, search, band, unit, vehicleType, fromDate, toDate])
+  }, [state.rows, search, band, unit, vehicleType, region, regionOf, fromDate, toDate])
   // Tiles + life-history strip follow the on-screen filters, same as the table.
   const s = useMemo(() => summarize(filtered), [filtered])
-  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all' || vehicleType !== 'all' || Boolean(fromDate || toDate)
+  const hasFilter = Boolean(search.trim()) || band !== 'all' || unit !== 'all'
+    || isSelectionActive(vehicleType) || isSelectionActive(region) || Boolean(fromDate || toDate)
   // Offered from the loaded rows, so the list can never name a type the fleet
   // does not run or omit one it has just gained.
   const typeOptions = useMemo(() => vehicleTypesIn(state.rows), [state.rows])
+  // Only the regions the sites ON SCREEN actually belong to. Listing every
+  // region in the register would offer choices that return nothing.
+  const regionOptions = useMemo(
+    () => regionsIn(regionMap, [...new Set(state.rows.map((r) => r.site).filter(Boolean))]),
+    [regionMap, state.rows],
+  )
+  // How many rows the register cannot place in any region, stated on screen so
+  // the region filter cannot look like it covers the whole table.
+  const unplaced = useMemo(
+    () => state.rows.filter((r) => !regionOf(r.site)).length,
+    [state.rows, regionOf],
+  )
 
   // Branded PDF report of the FILTERED rows - always matches the screen.
   async function downloadPdfReport() {
@@ -174,7 +214,7 @@ export default function TyreRunningLife() {
         summary: s,
         country: activeCountry,
         company: appSettings?.company_name || 'Tyre Pulse',
-        filters: filterDescription({ search, band, unit, vehicleType, fromDate, toDate, scope: state.scope }),
+        filters: filterDescription({ search, band, unit, vehicleType, region, fromDate, toDate, scope: state.scope }),
       })
     } catch (e) {
       setPdfError(toUserMessage(e))
@@ -221,7 +261,7 @@ export default function TyreRunningLife() {
         {
           title: 'Tyre Running & Remaining Life',
           company: appSettings?.company_name || 'Tyre Pulse',
-          dateRange: filterDescription({ search, band, unit, vehicleType, fromDate, toDate, scope: state.scope }),
+          dateRange: filterDescription({ search, band, unit, vehicleType, region, fromDate, toDate, scope: state.scope }),
         },
       )
     } catch (e) {
@@ -510,11 +550,24 @@ export default function TyreRunningLife() {
               <option value="healthy">Healthy</option>
               <option value="unknown">Not measurable</option>
             </select>
-            <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}
-              className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-              <option value="all">All asset types</option>
-              {typeOptions.map((v) => <option key={v} value={v}>{v}</option>)}
-            </select>
+            {regionOptions.length > 0 && (
+              <MultiSelectFilter
+                label="Region"
+                allLabel="All regions"
+                pluralLabel="regions"
+                options={regionOptions}
+                value={region}
+                onChange={setRegion}
+              />
+            )}
+            <MultiSelectFilter
+              label="Asset type"
+              allLabel="All asset types"
+              pluralLabel="asset types"
+              options={typeOptions}
+              value={vehicleType}
+              onChange={setVehicleType}
+            />
             <select value={unit} onChange={(e) => setUnit(e.target.value)}
               className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
               <option value="all">Km and hours assets</option>
@@ -522,6 +575,12 @@ export default function TyreRunningLife() {
               <option value="hours">Hour-measured assets</option>
             </select>
             <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{filtered.length} tyres</span>
+            {isSelectionActive(region) && unplaced > 0 && (
+              <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
+                {fmtNum(unplaced)} tyres sit on a site the register does not place in any region, so a
+                region filter excludes them - set the region on those sites in Site Management.
+              </span>
+            )}
           </div>
 
           <EnterpriseTable

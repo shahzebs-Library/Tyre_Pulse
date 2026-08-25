@@ -28,8 +28,10 @@ import {
 import { fmtNum } from '../../lib/tyreRunningLife'
 import { toUserMessage } from '../../lib/safeError'
 import { listSites, siteRegionMap, regionForSite } from '../../lib/api/sites'
+import { isSelectionActive } from '../../lib/filterSelection'
 import Modal from '../ui/Modal'
 import EnterpriseTable from '../ui/EnterpriseTable'
+import MultiSelectFilter from '../ui/MultiSelectFilter'
 
 const DOT_COLOR = {
   danger: '#b91c1c', warning: '#b45309', info: '#64748b', good: '#15803d', quiet: '#94a3b8',
@@ -61,9 +63,11 @@ export default function TyreChangeTracking() {
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
-  const [siteFilter, setSiteFilter] = useState('all')
-  const [regionFilter, setRegionFilter] = useState('all')
-  const [vehicleTypeFilter, setVehicleTypeFilter] = useState('all')
+  // Multi-select: 'the two Riyadh sites', 'the mixers and the pumps'. Each holds
+  // an ARRAY; an empty array means no narrowing (see filterSelection.js).
+  const [siteFilter, setSiteFilter] = useState([])
+  const [regionFilter, setRegionFilter] = useState([])
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState([])
   // The site register, read once, purely to place a site in its region. Region
   // is recorded in ONE place and a tyre row does not carry it.
   const [siteRows, setSiteRows] = useState([])
@@ -91,11 +95,24 @@ export default function TyreChangeTracking() {
 
   // Best effort: with no register the region control simply does not render,
   // which is better than a dropdown that can only ever return nothing.
+  //
+  // listSites RESOLVES TO AN ARRAY (it throws on failure). This used to
+  // destructure { data } from it, which is always undefined, so siteRows never
+  // held a row, no site could be placed in a region, and the region control -
+  // correctly hidden when there are no regions to offer - never appeared at all.
+  // Country-scoped too: region is looked up by site NAME, and the same name in
+  // another country would otherwise resolve to that country's region.
   useEffect(() => {
     let cancelled = false
-    listSites().then(({ data }) => { if (!cancelled) setSiteRows(data || []) }).catch(() => {})
+    // Region, site and type are country-specific picks: one left ticked while a
+    // different country is on screen filters every row away, which reads as an
+    // empty report rather than as a stale filter.
+    setRegionFilter([]); setSiteFilter([]); setVehicleTypeFilter([])
+    listSites({ country: activeCountry })
+      .then((r) => { if (!cancelled) setSiteRows(Array.isArray(r) ? r : []) })
+      .catch(() => { if (!cancelled) setSiteRows([]) })
     return () => { cancelled = true }
-  }, [])
+  }, [activeCountry])
 
   // A hash link from another screen must LAND on this section. React Router
   // does not scroll to a hash by itself, so arriving from the inspections flag
@@ -135,7 +152,10 @@ export default function TyreChangeTracking() {
       country: activeCountry, asset: focusAsset, state: stateFilter, source: sourceFilter, search,
       site: siteFilter, region: regionFilter, vehicleType: vehicleTypeFilter,
     }),
-    [activeCountry, focusAsset, stateFilter, sourceFilter, search],
+    // Every value the label PRINTS must be a dependency, or an export carries a
+    // header describing the filters as they were two clicks ago.
+    [activeCountry, focusAsset, stateFilter, sourceFilter, search,
+      siteFilter, regionFilter, vehicleTypeFilter],
   )
   const countryLabel = activeCountry && activeCountry !== 'All' ? activeCountry : 'all countries'
 
@@ -376,28 +396,25 @@ export default function TyreChangeTracking() {
                 rows actually offer a choice: a dropdown holding one option is not
                 a filter, and one holding none can only ever return nothing. */}
             {facets.regions.length > 1 && (
-              <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}
-                className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-                <option value="all">All regions</option>
-                {facets.regions.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <MultiSelectFilter
+                label="Region" allLabel="All regions" pluralLabel="regions"
+                options={facets.regions} value={regionFilter} onChange={setRegionFilter}
+              />
             )}
             {facets.sites.length > 1 && (
-              <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}
-                className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-                <option value="all">All sites</option>
-                {facets.sites.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
+              <MultiSelectFilter
+                label="Site" allLabel="All sites" pluralLabel="sites"
+                options={facets.sites} value={siteFilter} onChange={setSiteFilter}
+              />
             )}
             {facets.vehicleTypes.length > 1 && (
-              <select value={vehicleTypeFilter} onChange={(e) => setVehicleTypeFilter(e.target.value)}
-                className="rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-                <option value="all">All vehicle types</option>
-                {facets.vehicleTypes.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
+              <MultiSelectFilter
+                label="Vehicle type" allLabel="All vehicle types" pluralLabel="vehicle types"
+                options={facets.vehicleTypes} value={vehicleTypeFilter} onChange={setVehicleTypeFilter}
+              />
             )}
             <span className="text-[11px]" style={{ color: 'var(--text-dim)' }}>{filtered.length} flagged tyres</span>
-            {vehicleTypeFilter !== 'all' && untyped > 0 && (
+            {isSelectionActive(vehicleTypeFilter) && untyped > 0 && (
               <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                 {fmtNum(untyped)} flagged {untyped === 1 ? 'tyre carries' : 'tyres carry'} no recorded
                 vehicle type and {untyped === 1 ? 'is' : 'are'} not counted here.

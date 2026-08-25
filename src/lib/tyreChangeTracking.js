@@ -34,6 +34,9 @@ import { displayPositionCode } from './tyreBay'
 import { bandFor } from './tyreRunningLife'
 import { damagedPositions } from './inspectionTyreFlags'
 import { isRemovedOrScrapped } from './tyrePool'
+import {
+  selectionMatches, isSelectionActive, selectionLabel, normVehicleType,
+} from './filterSelection'
 
 const txt = (v) => (v == null ? '' : String(v).trim())
 const day = (v) => (v ? String(v).slice(0, 10) : '')
@@ -505,11 +508,12 @@ export function trackingSummary(rows = []) {
 /** Search + state + source filter over tracking rows. */
 /**
  * One spelling of a vehicle type, so TR-MIXER and "tr-mixer " are one option
- * rather than two. Mirrors normVehicleType in inspectionTyreFlags - change both.
+ * rather than two. This used to be a byte-identical copy of normVehicleType in
+ * inspectionTyreFlags, carrying a "change both" comment; both now delegate to
+ * the one implementation in filterSelection.js. The local name is kept because
+ * callers import it.
  */
-export function normTrackVehicleType(value) {
-  return String(value == null ? '' : value).trim().toUpperCase()
-}
+export const normTrackVehicleType = normVehicleType
 
 /**
  * The sites and vehicle types the flagged rows actually cover.
@@ -552,6 +556,12 @@ export function untypedCount(rows = []) {
     .filter((r) => r && !normTrackVehicleType(r.vehicleType)).length
 }
 
+/**
+ * `site`, `region` and `vehicleType` are MULTI-SELECT: each accepts the sentinel
+ * 'all', one value, or an array (see filterSelection.js). Two sites, or the
+ * mixers and the pumps together, is the ordinary question on this report and a
+ * single-select control cannot ask it.
+ */
 export function filterTracking(rows = [], {
   search = '', state = 'all', source = 'all',
   site = 'all', region = 'all', vehicleType = 'all',
@@ -560,18 +570,17 @@ export function filterTracking(rows = [], {
   return (Array.isArray(rows) ? rows : []).filter((r) => {
     if (state !== 'all' && r.state !== state) return false
     if (source !== 'all' && r.source !== source) return false
-    if (site !== 'all' && txt(r.site) !== site) return false
-    if (region !== 'all') {
+    if (!selectionMatches(site, r.site, txt)) return false
+    if (isSelectionActive(region)) {
       // Region lives on the site register, not on a tyre row, so the resolver is
       // injected and this stays pure. With none supplied nothing matches, rather
       // than sweeping every unplaced site into whichever region was picked.
       if (typeof regionOf !== 'function') return false
-      if (txt(regionOf(r.site)) !== region) return false
+      if (!selectionMatches(region, regionOf(r.site), txt)) return false
     }
     // A row with no recorded type is excluded while a type is chosen: it is not
     // known to be a mixer. untypedCount() is what lets the screen say how many.
-    if (vehicleType !== 'all'
-      && normTrackVehicleType(r.vehicleType) !== normTrackVehicleType(vehicleType)) return false
+    if (!selectionMatches(vehicleType, r.vehicleType, normTrackVehicleType)) return false
     if (!q) return true
     // Both spellings of the wheel are searchable. The row now READS as RHRI, but
     // somebody who saw R2Ri on the phone should still find it - a search that
@@ -594,9 +603,9 @@ export function trackingScopeLabel({
   const parts = ['Flagged tyres tracked to replacement']
   parts.push(country && country !== 'All' ? country : 'all countries')
   if (asset) parts.push(`asset ${asset}`)
-  if (region !== 'all') parts.push(`region: ${region}`)
-  if (site !== 'all') parts.push(`site: ${site}`)
-  if (vehicleType !== 'all') parts.push(`vehicle type: ${vehicleType}`)
+  if (isSelectionActive(region)) parts.push(`region: ${selectionLabel(region)}`)
+  if (isSelectionActive(site)) parts.push(`site: ${selectionLabel(site)}`)
+  if (isSelectionActive(vehicleType)) parts.push(`vehicle type: ${selectionLabel(vehicleType)}`)
   if (state !== 'all') parts.push(`state: ${TRACK_STATE_META[state] ? TRACK_STATE_META[state].label : state}`)
   if (source !== 'all') parts.push(`source: ${SOURCE_META[source] ? SOURCE_META[source].label : source}`)
   const q = txt(search)

@@ -59,6 +59,49 @@ describe('tyreRunningLife', () => {
     expect(s.avgUsedPct).toBeNull()
   })
 
+  it('filterRows: region and asset type are MULTI-SELECT', () => {
+    const rows = [
+      shapeRow(row({ asset_no: 'TM100', site: 'NHC', vehicle_type: 'TR-MIXER' })),
+      shapeRow(row({ asset_no: 'MP200', site: 'JED', vehicle_type: 'PUMPS' })),
+      shapeRow(row({ asset_no: 'WL300', site: 'RUH', vehicle_type: 'WHEEL LOADER' })),
+    ]
+    const regionOf = (site) => ({ NHC: 'CENTRAL', JED: 'WESTERN' }[site] || '')
+
+    // The question this control exists for: two classes at once. A single-select
+    // could only ask it twice, and never show the combined totals.
+    expect(filterRows(rows, { vehicleType: ['TR-MIXER', 'PUMPS'] })
+      .map((r) => r.asset)).toEqual(['TM100', 'MP200'])
+    expect(filterRows(rows, { vehicleType: 'PUMPS' }).map((r) => r.asset)).toEqual(['MP200'])
+    // An empty selection narrows nothing - unticking the last chip must not
+    // empty the table.
+    expect(filterRows(rows, { vehicleType: [] })).toHaveLength(3)
+
+    expect(filterRows(rows, { region: ['CENTRAL', 'WESTERN'] }, { regionOf })
+      .map((r) => r.asset)).toEqual(['TM100', 'MP200'])
+    // A site the register cannot place is EXCLUDED while a region is chosen,
+    // never swept into whichever region was picked.
+    expect(filterRows(rows, { region: ['CENTRAL'] }, { regionOf })
+      .map((r) => r.asset)).toEqual(['TM100'])
+    // Region and type compose, they do not override each other.
+    expect(filterRows(rows, { region: ['CENTRAL', 'WESTERN'], vehicleType: ['PUMPS'] }, { regionOf })
+      .map((r) => r.asset)).toEqual(['MP200'])
+  })
+
+  it('filterRows: with no region resolver a region selection matches NOTHING', () => {
+    // Guessing would sweep every unplaced site into the chosen region, which is
+    // a fabricated answer dressed up as a filter.
+    const rows = [shapeRow(row({ site: 'NHC' }))]
+    expect(filterRows(rows, { region: ['CENTRAL'] })).toHaveLength(0)
+    expect(filterRows(rows, { region: 'all' })).toHaveLength(1)
+  })
+
+  it('filterRows: asset type is matched case- and padding-insensitively', () => {
+    const rows = [shapeRow(row({ vehicle_type: 'TR-MIXER' })), shapeRow(row({ vehicle_type: '' }))]
+    expect(filterRows(rows, { vehicleType: [' tr-mixer '] })).toHaveLength(1)
+    // A row with no recorded type is not known to be a mixer.
+    expect(filterRows(rows, { vehicleType: ['TR-MIXER'] })).toHaveLength(1)
+  })
+
   it('filterRows: search across serial/asset/site, band filter, unit filter', () => {
     const rows = [
       shapeRow(row()),
@@ -115,6 +158,16 @@ describe('inFittedRange', () => {
   })
 })
 
+describe('vehicleTypesIn', () => {
+  it('offers one option per machine class, not one per spelling', async () => {
+    const { vehicleTypesIn } = await import('../lib/tyreRunningLife')
+    expect(vehicleTypesIn([
+      { vehicleType: 'TR-MIXER' }, { vehicleType: ' tr-mixer ' }, { vehicleType: 'PUMPS' },
+      { vehicleType: '' }, { vehicleType: null },
+    ])).toEqual(['PUMPS', 'TR-MIXER'])
+  })
+})
+
 describe('filterDescription', () => {
   it('describes no filters honestly', async () => {
     const { filterDescription } = await import('../lib/tyreRunningLife')
@@ -129,6 +182,16 @@ describe('filterDescription', () => {
     expect(filterDescription({ fromDate: '2026-01-01' })).toBe('fitted from 2026-01-01')
     expect(filterDescription({ toDate: '2026-06-30' })).toBe('fitted up to 2026-06-30')
     expect(filterDescription({ unit: 'hours' })).toBe('hour-measured assets only')
+  })
+
+  it('names the region and EVERY chosen asset type', async () => {
+    const { filterDescription } = await import('../lib/tyreRunningLife')
+    // A report header naming one of three chosen types misdescribes the file
+    // for as long as anyone keeps it.
+    expect(filterDescription({ vehicleType: ['TR-MIXER', 'PUMPS'] }))
+      .toBe('asset type: TR-MIXER, PUMPS')
+    expect(filterDescription({ region: ['CENTRAL'] })).toBe('region: CENTRAL')
+    expect(filterDescription({ region: [], vehicleType: [] })).toBe('All active tyres')
   })
 
   // An export of 465 of 3,595 rows headed "All active tyres" is a false

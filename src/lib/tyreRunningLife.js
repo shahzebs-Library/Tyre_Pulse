@@ -6,6 +6,10 @@
  * Every figure may be null (no meter, placeholder fitment km, no baseline) -
  * callers render N/A, never a fabricated number.
  */
+import {
+  selectionMatches, isSelectionActive, selectionLabel, normVehicleType,
+} from './filterSelection'
+
 
 /**
  * Is this row measured on the hour meter?
@@ -351,17 +355,37 @@ export const BAND_META = {
   unknown: { label: 'Not measurable', tone: 'quiet' },
 }
 
-/** Search + band + unit filter over shaped rows. */
-export function filterRows(rows = [], { search = '', band = 'all', unit = 'all', vehicleType = 'all' } = {}) {
+/**
+ * Search + band + unit + asset-type + region filter over shaped rows.
+ *
+ * `vehicleType` and `region` are MULTI-SELECT: each accepts the sentinel 'all',
+ * one value, or an array of values (see filterSelection.js). Picking three of a
+ * fleet's eleven machine classes is the normal question here - "the mixers and
+ * the pumps, not the loaders" - and a single-select control cannot ask it.
+ *
+ * `regionOf` is INJECTED rather than imported, because region is recorded ONCE
+ * on the site register and never on the tyre row; this module must stay pure.
+ * With no resolver supplied a region selection matches NOTHING rather than
+ * everything - guessing would sweep every unplaced site into whichever region
+ * was picked, which is a fabricated answer dressed as a filter.
+ */
+export function filterRows(rows = [], {
+  search = '', band = 'all', unit = 'all', vehicleType = 'all', region = 'all',
+} = {}, { regionOf = null } = {}) {
   const q = String(search || '').trim().toLowerCase()
   return rows.filter((r) => {
     if (unit !== 'all' && r.unit !== unit) return false
     // Asset type is the first cut anybody makes here: a mixer tyre and a loader
     // tyre have different sizes, different lives and different targets, so a
-    // table mixing them cannot be read. Matched case-insensitively because the
-    // register and the owner's sheet do not always agree on capitalisation.
-    if (vehicleType !== 'all'
-      && String(r.vehicleType || '').toLowerCase() !== String(vehicleType).toLowerCase()) return false
+    // table mixing them cannot be read. Folded through normVehicleType so the
+    // register and the owner's sheet cannot disagree on capitalisation, and so a
+    // row with NO recorded type is excluded while a type is chosen - an untyped
+    // machine is not known to be a mixer.
+    if (!selectionMatches(vehicleType, r.vehicleType, normVehicleType)) return false
+    if (isSelectionActive(region)) {
+      if (typeof regionOf !== 'function') return false
+      if (!selectionMatches(region, regionOf(r.site))) return false
+    }
     if (band !== 'all' && bandFor(r) !== band) return false
     if (!q) return true
     return r.serial.toLowerCase().includes(q)
@@ -379,7 +403,15 @@ export function filterRows(rows = [], { search = '', band = 'all', unit = 'all',
  * itself and one it no longer runs stops being offered.
  */
 export function vehicleTypesIn(rows = []) {
-  return [...new Set((rows || []).map((r) => r?.vehicleType).filter(Boolean))].sort()
+  // Folded through normVehicleType: two spellings of TR-MIXER would otherwise be
+  // offered as two options that both filter the same rows, which reads as a
+  // duplicate machine class in the fleet.
+  const set = new Set()
+  for (const r of rows || []) {
+    const v = normVehicleType(r && r.vehicleType)
+    if (v) set.add(v)
+  }
+  return [...set].sort()
 }
 
 export const fmtNum = (v) => (v == null ? 'N/A' : Math.round(v).toLocaleString('en-US'))
@@ -425,14 +457,17 @@ export const DUE_SCOPE_LABEL = 'Tyres currently due (past expected life or due s
  * Plain-English description of the active filters, for report headers.
  * `scope` is 'due' when only the due subset was fetched, 'all' otherwise.
  */
-export function filterDescription({ search = '', band = 'all', unit = 'all', vehicleType = 'all', fromDate = '', toDate = '', scope = 'all' } = {}) {
+export function filterDescription({ search = '', band = 'all', unit = 'all', vehicleType = 'all', region = 'all', fromDate = '', toDate = '', scope = 'all' } = {}) {
   const parts = []
   if (scope === 'due') parts.push(DUE_SCOPE_LABEL)
   const q = String(search || '').trim()
   if (q) parts.push(`search "${q}"`)
   if (band !== 'all') parts.push(`state: ${BAND_META[band] ? BAND_META[band].label : band}`)
   if (unit !== 'all') parts.push(unit === 'km' ? 'km-measured assets only' : 'hour-measured assets only')
-  if (vehicleType !== 'all') parts.push(`asset type: ${vehicleType}`)
+  // Every chosen value is named: a report headed "asset type" that in fact
+  // covers three of eleven types is a false statement that outlives the screen.
+  if (isSelectionActive(region)) parts.push(`region: ${selectionLabel(region)}`)
+  if (isSelectionActive(vehicleType)) parts.push(`asset type: ${selectionLabel(vehicleType)}`)
   if (fromDate && toDate) parts.push(`fitted ${fromDate} to ${toDate}`)
   else if (fromDate) parts.push(`fitted from ${fromDate}`)
   else if (toDate) parts.push(`fitted up to ${toDate}`)

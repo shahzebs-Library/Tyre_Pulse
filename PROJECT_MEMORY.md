@@ -55,6 +55,69 @@ batching stops them being started at all.
 
 ---
 
+# ⚑ SESSION 2026-08-25 — MULTI-SELECT REGION + ASSET TYPE ON THE TYRE LIFECYCLE FILTERS. No migration; next free **V608**.
+Owner: "in the web tyre life cycle inside the remaining KM and Tyre change tracking / Running and Remaining
+needs the filters of region and vehicle type here, multi selection in the filter."
+
+### **`src/lib/filterSelection.js` IS NOW THE ONE HOME FOR "does this row survive a filter selection"**
+A selection is the sentinel `'all'`, ONE value, or an ARRAY. Three registers needed that rule and TWO had grown
+their own copy - `inspectionTyreFlags.normVehicleType` and `tyreChangeTracking.normTrackVehicleType` were
+byte-identical and carried a "mirrors the other one, change both" comment, which is a drift notice, not a fix.
+Both now delegate; `inspectionTyreFlags` RE-EXPORTS `isSelectionActive`/`selectionMatches`/`normVehicleType` so
+every existing caller is untouched (verified: its own suite 30/30 before and after).
+**The import direction is load-bearing: `inspectionTyreFlags` imports `bandFor` from `tyreRunningLife`, so
+`tyreRunningLife` may NEVER import from `inspectionTyreFlags` - that is a cycle. The shared leaf module is what
+makes the de-duplication possible at all.**
+- **AN EMPTY ARRAY MEANS ALL, NEVER "match nothing".** A filter panel that empties the table the moment the last
+  chip is unticked reads as lost data, and there is no way back except knowing to re-tick something.
+- **A row whose value is MISSING never matches an active selection.** An untyped machine is not known to be a
+  mixer, exactly as an unplaced site is not known to be in a region. Including it would be a fabrication.
+- `selectionLabel` names EVERY chosen value in a report header - a header naming one of three chosen types
+  misdescribes the file for as long as anyone keeps it.
+
+### **RUNNING AND REMAINING: region added (it had none), asset type made multi**
+`filterRows(rows, {..., region}, { regionOf })` - the resolver is INJECTED because region is recorded ONCE on the
+site register and a tyre row carries only its site (see `siteRegionMap`; never add a second region column).
+**With no resolver a region selection matches NOTHING** rather than sweeping every unplaced site into whichever
+region was picked. Region options come from `regionsIn(regionMap, sites on screen)`, so the list can never offer
+a region that returns nothing; the count of rows the register cannot place is stated on screen. `vehicleTypesIn`
+now folds through `normVehicleType` - two spellings of TR-MIXER were two options that filtered the same rows.
+Both report headers (PDF + Excel) carry the region and every chosen type.
+
+### **TYRE CHANGE TRACKING: its region filter had NEVER RENDERED, and that was a one-token bug**
+`listSites` RESOLVES TO AN ARRAY (it throws on failure); the component destructured `{ data }` from it, which is
+always undefined, so `siteRows` never held a row, no site could be placed in a region, `facets.regions` was
+always empty and the control - correctly hidden when there is nothing to offer - never appeared. Now
+country-scoped too: region is looked up by site NAME, so the same name in another country resolved to that
+country's region. Site/region/vehicle type are all multi-select. **Its export scope label was memoised WITHOUT
+the three filters it prints**, so a downloaded report described the filters as they were two clicks ago.
+
+### **`src/components/ui/MultiSelectFilter.jsx` - and the clip that makes portalling mandatory**
+Checkbox popover over the existing `useAnchoredPopover` (focus return, arrow keys, RTL). **It MUST portal: both
+sections render inside `.card`, which sets `overflow:hidden` for its accent hairline, so an absolutely positioned
+panel is CLIPPED and reads as missing rather than broken.** Clicking an option leaves the panel OPEN - a
+multi-select that closes on each pick makes three values three round trips. Only values still ON OFFER count
+towards the summary, so a pick left over from another country cannot claim to be narrowing anything.
+
+### VERIFICATION
+Lint clean, `vite build` clean, 112/112 on the changed modules; every test that touches them passes.
+**FOUR MUTATIONS, ALL CAUGHT**: region fail-open with no resolver (1 fail), match only the FIRST array value
+(7 fails across 4 files), empty array means match-nothing (4 fails), and the control replacing instead of
+accumulating (3 fails). Each restored and re-verified.
+- **THE FULL SUITE ON THIS MACHINE PRODUCES LOAD FLAKES AND THEY LOOK LIKE REAL FAILURES.** A 581-file run took
+  25 minutes and reported 30 failures across 21 files; the three files I isolated (6 failures - `navFavoritesUi`,
+  `inspectionsWorkflow`, `assetDetailHistoryTab`) ALL PASS on their own. They are `waitFor` render tests losing
+  their timeout under contention. Judge a failure by re-running that file alone before believing it.
+- **A TORN READ DURING A PARALLEL SESSION'S WRITE FLAPS A PURE TEST.** `siteSummary > honours the date window`
+  passed, failed, then passed on identical input; the cause was another session writing
+  `src/lib/inspectionTyreFlags.js` mid-run (mtime proved it). Check the file's mtime before diagnosing a
+  deterministic test that is behaving non-deterministically.
+- Committed by explicit pathspec. `src/lib/inspectionTyreFlags.js` + its test carry that parallel session's
+  in-flight work as well as my delegation edit, so they were DELIBERATELY LEFT OUT of this commit - my feature
+  does not depend on them, and `filterSelection.js` lands first so their commit stays correct.
+
+---
+
 # ⚑ SESSION 2026-08-24 — CLOSED CLEAN, MERGED, DEPLOYED. Next free migration **V608**.
 ### WORK ORDER = THE WHOLE JOB CARD (V605) · MIGRATION NUMBERING REPAIRED · TEST SUITE 146 FAILURES -> 0 · V607 SECURITY · REACT-ROUTER 7
 

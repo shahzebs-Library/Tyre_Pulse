@@ -1,0 +1,156 @@
+name: Flutter CI
+
+# This workflow is the verification boundary for the Flutter app.
+# The development machine has no Flutter SDK, no JDK, no Android SDK and is
+# Windows, so it has no Xcode either. See tyre_pulse_flutter/docs/TOOLCHAIN.md.
+# Nothing about the Flutter app is "known to work" until these jobs are green.
+
+on:
+  push:
+    paths:
+      - "tyre_pulse_flutter/**"
+      - ".github/workflows/flutter-ci.yml"
+  pull_request:
+    paths:
+      - "tyre_pulse_flutter/**"
+      - ".github/workflows/flutter-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: flutter-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: tyre_pulse_flutter
+
+jobs:
+  analyze_test:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show toolchain
+        run: flutter --version
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        # Drift and any json/freezed output. Generated files are COMMITTED
+        # (see .gitignore), so this step both produces them for a fresh clone
+        # and proves the committed copies are not stale.
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Fail if generated output is stale
+        # If generation changed a committed file, the committed copy was out of
+        # date. That is a real defect: a reviewer with no SDK reads the
+        # committed file and would be reading fiction.
+        run: |
+          if ! git diff --quiet; then
+            echo "Generated sources differ from the committed copies:"
+            git --no-pager diff --stat
+            exit 1
+          fi
+
+      - name: Check formatting
+        run: dart format --set-exit-if-changed .
+
+      - name: Analyze
+        # --fatal-infos because analysis_options.yaml promotes the rules that
+        # matter to errors already; anything left at info level is still a
+        # signal we chose to keep.
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: tyre_pulse_flutter/coverage/lcov.info
+          if-no-files-found: ignore
+
+  build_android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    needs: analyze_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create platform folders if absent
+        # android/ and ios/ are generated artifacts and are NOT hand-written
+        # into the repository (an Xcode project in particular must not be
+        # fabricated). Until a developer with an SDK commits them via
+        # docs/BOOTSTRAP.md, CI generates them so this job is green from the
+        # first commit. The guard means a real committed folder is never
+        # overwritten.
+        run: |
+          if [ ! -d android ]; then
+            echo "android/ absent - generating"
+            flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
+          else
+            echo "android/ present - using the committed project"
+          fi
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build debug APK
+        # Debug, unsigned. Release signing goes through CI secrets and Play App
+        # Signing only (spec section 70).
+        run: flutter build apk --debug
+
+  build_ios:
+    name: Build iOS
+    runs-on: macos-latest
+    needs: analyze_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create platform folders if absent
+        run: |
+          if [ ! -d ios ]; then
+            echo "ios/ absent - generating"
+            flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
+          else
+            echo "ios/ present - using the committed project"
+          fi
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build iOS without code signing
+        # Spec section 56: iOS is a day-one target, not a later phase. This job
+        # exists so an iOS-breaking change is caught on the commit that causes
+        # it, long before anyone has signing set up.
+        run: flutter build ios --no-codesign

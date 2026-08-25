@@ -1,0 +1,69 @@
+# --- Dart / Flutter ---
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+pubspec.lock.bak
+
+# NOTE ON GENERATED SOURCES - deliberate decision, do not "tidy" this away.
+# *.g.dart and *.freezed.dart are COMMITTED, not ignored. Most contributors on
+# this project have no local Flutter SDK (see docs/TOOLCHAIN.md), so a reviewer
+# cannot regenerate them to read a diff, and CI would be the only place the
+# code exists. Committing them keeps the repository readable and reviewable.
+# CI regenerates and fails if the committed output is stale.
+
+# --- IDE ---
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Android build output (the checked-in android/ folder itself is kept) ---
+android/.gradle/
+android/local.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/.kotlin/
+
+# --- iOS build output ---
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/App.framework
+ios/Flutter/flutter_assets/
+ios/Flutter/ephemeral/
+ios/Runner/GeneratedPluginRegistrant.*
+*.ipa
+
+# --- SECRETS. Spec section 70: a signing key and its password were committed
+# to this project's history once. Treat that key as compromised and never let
+# another one in. Signing happens through CI secrets and Play App Signing. ---
+*.jks
+*.keystore
+key.properties
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+*.cer
+*.certSigningRequest
+.env
+.env.*
+!.env.example
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+service-account*.json
+
+# --- Coverage ---
+coverage/

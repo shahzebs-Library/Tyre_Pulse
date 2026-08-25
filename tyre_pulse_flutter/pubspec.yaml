@@ -1,0 +1,62 @@
+name: tyre_pulse
+description: Tyre Pulse field application for Android and iOS.
+publish_to: "none"
+
+# The Android versionCode is set by CI. Read docs/BOOTSTRAP.md before changing
+# this by hand: the production listing already has a version code and Play
+# rejects a lower one (spec section 69).
+version: 0.1.0+1
+
+environment:
+  # Deliberately broad. CI pins the real SDK by using the Flutter stable
+  # channel; a narrow floor here only breaks a contributor on a slightly older
+  # stable. Every dependency states its own constraint and pub checks those.
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # --- State and navigation (spec sections 4 and 5) ---
+  flutter_riverpod: ^3.4.2
+  go_router: ^18.0.0
+
+  # --- Backend. There is no application server: PostgREST, RPC and Edge
+  # Functions only. See docs/flutter-migration/02-backend-table-rpc-map.md ---
+  supabase_flutter: ^2.17.2
+
+  # --- Offline-first local store (spec section 11) ---
+  drift: ^2.34.3
+  drift_flutter: ^0.3.1
+  path_provider: ^2.1.6
+
+  # --- Platform services ---
+  flutter_secure_storage: ^11.0.0
+  shared_preferences: ^2.5.5
+  connectivity_plus: ^7.3.1
+  workmanager: ^0.10.9
+
+  # --- Observability (spec section 59) ---
+  sentry_flutter: ^9.27.0
+
+  # --- Utilities ---
+  uuid: ^4.6.0
+  intl: ^0.20.2
+
+  # Packages for later phases (camera, image compression, barcode scanner, SVG,
+  # signature capture, PDF, sharing, runtime permissions) are added at the phase
+  # that needs them. Spec section 64: do not add a package to shorten five lines.
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.34.5
+  build_runner: ^2.16.0
+  mocktail: ^1.0.5
+
+flutter:
+  uses-material-design: true
+  generate: true

@@ -1,0 +1,73 @@
+include: package:flutter_lints/flutter.yaml
+
+# Every rule below is here for a reason recorded in
+# docs/Tyre Pulse Flutter Mobile Master Architecture and Migration Specification.md.
+# If you turn one off, say which section you are overruling and why.
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+    strict-inference: true
+
+  errors:
+    # Spec section 57: errors are typed and surfaced, never swallowed. An
+    # unawaited future is how a failed write disappears silently.
+    unawaited_futures: error
+    # Spec section 59: never log secrets. print() is not a logging strategy.
+    avoid_print: error
+    # A dead null check usually means a DTO type is wrong. Spec section 6: the
+    # Kotlin rebuild broke login by assuming a column type.
+    unnecessary_null_comparison: error
+    # Generated sources are verified by CI, not by hand review.
+    todo: ignore
+
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "lib/l10n/generated/**"
+
+linter:
+  rules:
+    # --- Correctness ---
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
+    avoid_slow_async_io: true
+    cancel_subscriptions: true
+    close_sinks: true
+    only_throw_errors: true
+    test_types_in_equals: true
+    throw_in_finally: true
+    unnecessary_statements: true
+
+    # --- Spec section 55: low-memory Android phones in the field. Const
+    # construction and disposal discipline are not style preferences here. ---
+    prefer_const_constructors: true
+    prefer_const_constructors_in_immutables: true
+    prefer_const_declarations: true
+    prefer_const_literals_to_create_immutables: true
+    prefer_final_fields: true
+    prefer_final_locals: true
+    sized_box_for_whitespace: true
+    use_colored_box: true
+    use_decorated_box: true
+
+    # --- Spec sections 3 and 63: layering. A DTO change must not spread into
+    # the UI, and business rules must not live in widgets. ---
+    depend_on_referenced_packages: true
+    implementation_imports: true
+    library_private_types_in_public_api: true
+
+    # --- Spec section 51: no hard-coded English inside feature screens. This
+    # rule is advisory only; the real gate is the localisation review, because
+    # the analyser cannot tell a user-facing string from a map key. ---
+    # prefer_single_quotes is set for consistency, not for i18n.
+    prefer_single_quotes: true
+
+    # --- Readability at review time ---
+    always_use_package_imports: true
+    directives_ordering: true
+    require_trailing_commas: true
+    sort_constructors_first: true
+    unnecessary_parenthesis: true
+    use_super_parameters: true

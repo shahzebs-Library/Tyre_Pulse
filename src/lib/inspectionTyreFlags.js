@@ -5,6 +5,9 @@
  */
 import { bandFor } from './tyreRunningLife'
 import { displayPositionCode, inspectionTypeHint } from './tyreBay'
+import {
+  isSelectionActive, selectionMatches, normVehicleType,
+} from './filterSelection'
 
 /**
  * What a defect says when the inspection recorded no position at all. Kept as a
@@ -190,13 +193,44 @@ export function conditionCounts(inspection) {
  * due soon) on the site's INSPECTED assets only - honest zeros when the
  * running-life feed is unavailable.
  */
-export function siteSummary(inspections = [], flagMap = {}, { from = '', to = '', site = '' } = {}) {
+export function siteSummary(inspections = [], flagMap = {}, filters = {}, opts = {}) {
   const fm = flagMap && typeof flagMap === 'object' ? flagMap : {}
-  const list = (Array.isArray(inspections) ? inspections : []).filter((r) => {
-    if (!r || !inWindow(r, from, to)) return false
-    if (site && String(r.site || '') !== site) return false
-    return true
-  })
+  const { from = '', to = '', site = '' } = filters || {}
+  /**
+   * THE SUMMARY MUST BE SCOPED BY THE SAME RULE AS THE REGISTER.
+   *
+   * This used to filter on `from`, `to` and a single `site` only. The modal that
+   * calls it was handed EVERY row, so a reader who had narrowed the register to
+   * a region and a vehicle type, and then pressed "Share summary", got a summary
+   * covering the whole country - and nothing on the sheet said so. The shared
+   * PDF disagreed with the screen it was shared from.
+   *
+   * It now goes through `inspectionMatchesFilters`, the same predicate the
+   * register uses, so region / vehicle type / inspector / search all apply and
+   * the two can never drift. Every selection may be a single value or an array.
+   *
+   * `regionOf` is injected by the caller for the same reason as everywhere else:
+   * region lives on the site register, not on the inspection.
+   */
+  /**
+   * THE DATE RULE STAYS THE SUMMARY'S OWN, and that is deliberate.
+   *
+   * `inWindow` consults inspection_date as well as scheduled / completed /
+   * created; the register's `registerWindowDate` does not. That difference is
+   * documented on registerWindowDate as intentional - the two answer slightly
+   * different questions. Routing the whole thing through the register predicate
+   * silently dropped inspection_date, so a row carrying only that date fell out
+   * of the summary window. A test caught it.
+   *
+   * So: the FIELD filters come from the shared predicate (which is what gains
+   * region, vehicle type, inspector and multi-select), and the DATE window is
+   * applied separately by this module's own rule. `from`/`to` are blanked in the
+   * object handed to the predicate so the window is never applied twice under
+   * two different rules.
+   */
+  const fieldFilters = { ...filters, from: '', to: '' }
+  const list = (Array.isArray(inspections) ? inspections : [])
+    .filter((r) => r && inWindow(r, from, to) && inspectionMatchesFilters(r, fieldFilters, opts))
   const bySite = {}
   for (const r of list) {
     const key = String(r.site || '') || 'No site'
@@ -359,17 +393,12 @@ export function registerWindowDate(row) {
 }
 
 /**
- * One spelling of a vehicle type, for comparing and for grouping.
- *
- * V245 normalised the stored column to UPPER, but a value can still arrive from
- * an import or an older row with different case or padding, and two spellings of
- * TR-MIXER would split one machine class into two filter options - the exact
- * defect V245/V246 exist to prevent. Blank stays blank so a caller can tell
- * "not recorded" from a real type.
+ * Vehicle-type spelling and the two selection predicates now live in
+ * `filterSelection.js` - ONE home, shared with tyre change tracking and
+ * running-and-remaining, which used to carry their own copies of the same rule.
+ * Re-exported here so every existing caller of this module keeps working.
  */
-export function normVehicleType(value) {
-  return String(value == null ? '' : value).trim().toUpperCase()
-}
+export { normVehicleType, isSelectionActive, selectionMatches }
 
 /**
  * The vehicle types present in the rows ON SCREEN, deduplicated and sorted.
@@ -397,20 +426,20 @@ export function inspectionMatchesFilters(row, filters = {}, { regionOf = null } 
     from = '', to = '', search = '',
   } = filters || {}
 
-  if (site !== 'all' && row.site !== site) return false
+  if (!selectionMatches(site, row.site)) return false
   // Vehicle type comes off the inspection's OWN column, which V245 normalises to
   // upper case - so the compare is case-folded rather than trusting either side.
   // A row with no type is excluded while a type is chosen, for the same reason an
   // unplaced site is: it is not known to be a mixer. Measured before relying on
   // it: 435 of 435 live inspections carry one, so this excludes nothing today.
-  if (vehicleType !== 'all' && normVehicleType(row.vehicle_type) !== normVehicleType(vehicleType)) return false
-  if (region !== 'all') {
+  if (!selectionMatches(vehicleType, row.vehicle_type, normVehicleType)) return false
+  if (isSelectionActive(region)) {
     // No resolver means we cannot place ANY site, so nothing matches. An unplaced
     // site is excluded for the same reason: it is not known to be in this region.
     if (typeof regionOf !== 'function') return false
-    if (regionOf(row.site) !== region) return false
+    if (!selectionMatches(region, regionOf(row.site))) return false
   }
-  if (inspector !== 'all' && row.inspector !== inspector) return false
+  if (!selectionMatches(inspector, row.inspector)) return false
   if (from || to) {
     const d = registerWindowDate(row)
     if (!d) return false
@@ -464,13 +493,44 @@ export function inspectionOverview(inspections = [], flagMap = {}, { from = '', 
   const assets = new Set()
   let approved = 0
   let pendingApproval = 0
-  let damagedFound = 0
+  /**
+   * TWO DIFFERENT QUESTIONS, counted separately on purpose.
+   *
+   * `damagedObservations` is how many times damage was RECORDED - one per damaged
+   * position per inspection. Inspect the same lorry three times with the same two
+   * damaged tyres and this is 6.
+   *
+   * `damagedTyres` is how many DISTINCT tyres are damaged, keyed by
+   * asset + position. The same three inspections give 2.
+   *
+   * The card that shows this states "a flag is the tyre's state today, not an
+   * event in the date range", and the other three tiles beside it are per-VEHICLE
+   * reads of the flag map. Summing observations under that caption double-counts
+   * every re-inspected vehicle and quietly contradicts the sentence directly
+   * above it - measured on the live register: 17 inspections covering only 15
+   * vehicles, so two vehicles were counted twice.
+   *
+   * A position is only a reliable key when it is actually recorded. An entry with
+   * no position cannot be deduplicated against anything, so it counts as its own
+   * observation rather than being silently merged with another blank.
+   */
+  const damagedKeys = new Set()
+  let damagedObservations = 0
+  let damagedWithoutPosition = 0
   for (const r of list) {
     if (r.asset_no) assets.add(r.asset_no)
     if (r.approval_status === 'approved') approved += 1
     else if (r.approval_status === 'pending_approval' || r.approval_status === 'pending') pendingApproval += 1
-    damagedFound += damagedPositions(r).length
+    for (const d of damagedPositions(r)) {
+      damagedObservations += 1
+      const pos = String(d && d.position != null ? d.position : '').trim().toUpperCase()
+      if (!pos) { damagedWithoutPosition += 1; continue }
+      damagedKeys.add(`${String(r.asset_no || '').trim().toUpperCase()}|${pos}`)
+    }
   }
+  // An unpositioned observation cannot be merged with anything, so it stands as
+  // its own damaged tyre rather than being dropped or folded into a phantom one.
+  const damagedFound = damagedKeys.size + damagedWithoutPosition
   let vehiclesWithTyresDue = 0
   let tyresOverdue = 0
   let tyresDueSoon = 0
@@ -489,7 +549,14 @@ export function inspectionOverview(inspections = [], flagMap = {}, { from = '', 
     vehiclesWithTyresDue,
     tyresOverdue,
     tyresDueSoon,
+    // Distinct damaged tyres. This is what the tile shows, so it is in the same
+    // unit as the three flag tiles beside it.
     damagedFound,
+    // Kept alongside so a surface that genuinely wants "how many times was damage
+    // reported" can ask for it, instead of the two meanings being one number that
+    // is right for one reader and wrong for the other.
+    damagedObservations,
+    damagedWithoutPosition,
   }
 }
 

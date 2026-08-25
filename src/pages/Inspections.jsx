@@ -20,6 +20,32 @@ import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
+import MultiSelectFilter from '../components/ui/MultiSelectFilter'
+
+/**
+ * A multi-value filter has to survive in the URL, and the URL holds strings.
+ *
+ * The encoding is a comma-joined list, with the existing 'all' sentinel kept for
+ * "no filter" so a link somebody already saved still resolves. `toList` is the
+ * ONLY place that decoding happens, and it hands the filter engine a real array -
+ * passing the raw string through would be read as ONE value named
+ * "TR-MIXER,PUMPS" and silently match nothing.
+ *
+ * A value containing a comma cannot round-trip. None of the fields this is used
+ * for can hold one: site and region are register names (V246 collapses
+ * whitespace and upper-cases them) and vehicle_type is normalised by V245.
+ */
+function toList(v) {
+  if (Array.isArray(v)) return v.filter(Boolean)
+  if (v == null || v === '' || v === 'all') return []
+  return String(v).split(',').map((s) => s.trim()).filter(Boolean)
+}
+
+/** Back to the URL form. An empty selection is 'all', never an empty string. */
+function fromList(arr) {
+  const list = (Array.isArray(arr) ? arr : []).filter(Boolean)
+  return list.length ? list.join(',') : 'all'
+}
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { legacyPositionCode } from '../lib/tyrePositions'
@@ -149,10 +175,21 @@ function OverviewSlide({ title, items, footer = null, activeFocus = 'all', onFoc
 // The tyre-change half loads on OPEN, not with the page: it is a second read
 // (fitment history for the flagged assets) and the register must stay fast for
 // the people who never share a summary.
-function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country, company, branding, onClose }) {
+function InspectionSummaryModal({
+  rows, flagMap, defaultFrom, defaultTo, country, company, branding, onClose,
+  // The register's OWN filters, so the summary opens showing what the reader was
+  // already looking at. Before this the modal was handed every row and only the
+  // dates, so narrowing the register to a region and a vehicle type and pressing
+  // Share produced a summary of the whole country with nothing saying so.
+  defaultRegion = [], defaultSite = [], defaultVehicleType = [], defaultInspector = [],
+  regionOf = null, regionOptions = [],
+}) {
   const [from, setFrom] = useState(defaultFrom || '')
   const [to, setTo] = useState(defaultTo || '')
-  const [site, setSite] = useState('')
+  const [site, setSite] = useState(defaultSite)
+  const [region, setRegion] = useState(defaultRegion)
+  const [vehicleType, setVehicleType] = useState(defaultVehicleType)
+  const [inspector, setInspector] = useState(defaultInspector)
   const [busy, setBusy] = useState(false)
   const [track, setTrack] = useState({ loading: true, ok: true, reason: '', rows: [] })
 
@@ -180,18 +217,55 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
     () => [...new Set((rows || []).map((r) => r.site).filter(Boolean))].sort(),
     [rows],
   )
-  const summary = useMemo(
-    () => siteSummary(rows, flagMap, { from, to, site }),
-    [rows, flagMap, from, to, site],
+  const inspectors = useMemo(
+    () => [...new Set((rows || []).map((r) => r.inspector).filter(Boolean))].sort(),
+    [rows],
   )
+  const vehicleTypes = useMemo(() => vehicleTypesIn(rows || []), [rows])
+
+  // ONE filter object, handed to the same predicate the register uses. Keeping
+  // it in a single place is what stops the table, the totals and the PDF from
+  // each scoping differently.
+  const activeFilters = useMemo(
+    () => ({ from, to, site, region, vehicleType, inspector }),
+    [from, to, site, region, vehicleType, inspector],
+  )
+  const summary = useMemo(
+    () => siteSummary(rows, flagMap, activeFilters, { regionOf }),
+    [rows, flagMap, activeFilters, regionOf],
+  )
+  // Which inspections the summary is built from, so the modal can state the
+  // count rather than leaving the reader to trust the table.
+  const covered = useMemo(
+    () => scopeInspections(rows || [], activeFilters, { regionOf }),
+    [rows, activeFilters, regionOf],
+  )
+  const anyFilter = [site, region, vehicleType, inspector].some((s) => (s || []).length > 0) || !!from || !!to
   // Flags are a live state ("is this tyre still due"), not an event inside the
   // date range, so only the site filter applies to them - and the note under
   // the table says so rather than letting a reader assume the dates bound both.
-  const tracking = useMemo(
-    () => trackingBySite(site ? track.rows.filter((r) => (r.site || 'No site') === site) : track.rows),
-    [track.rows, site],
-  )
-  const rangeLabel = `${from || 'Start'} to ${to || 'Today'}${site ? ` | Site: ${site}` : ''}${country && country !== 'All' ? ` | ${country}` : ''}`
+  const tracking = useMemo(() => {
+    // Site is a LIST now. A flag is a live state, not an event in the window, so
+    // only the site selection narrows it - and the note under the table says so
+    // rather than letting a reader assume the dates bound both.
+    const picked = new Set((site || []).map(String))
+    const rows_ = picked.size
+      ? track.rows.filter((r) => picked.has(String(r.site || 'No site')))
+      : track.rows
+    return trackingBySite(rows_)
+  }, [track.rows, site])
+
+  /** Human description of everything currently narrowing this summary. */
+  const rangeLabel = useMemo(() => {
+    const bits = [`${from || 'Start'} to ${to || 'Today'}`]
+    const named = (name, list) => { if ((list || []).length) bits.push(`${name}: ${list.join(', ')}`) }
+    named('Region', region)
+    named('Site', site)
+    named('Vehicle type', vehicleType)
+    named('Inspector', inspector)
+    if (country && country !== 'All') bits.push(country)
+    return bits.join(' | ')
+  }, [from, to, region, site, vehicleType, inspector, country])
   const COLS = ['site', 'inspections', 'vehicles', 'good', 'wear', 'damage', 'tyresDue']
   const HEADS = ['Site', 'Inspections', 'Vehicles', 'Good', 'Wear', 'Damage', 'Tyres due']
   const TCOLS = ['site', 'flagged', 'system', 'user', 'onVehicle', 'replaced', 'removed', 'unknown']
@@ -285,13 +359,30 @@ function InspectionSummaryModal({ rows, flagMap, defaultFrom, defaultTo, country
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
               className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }} />
           </label>
+          {/* The SAME filters as the register, multi-select, and pre-filled from
+              whatever the reader had narrowed to before pressing Share. */}
+          {regionOptions.length > 0 && (
+            <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Region
+              <MultiSelectFilter className="mt-1 w-44" label="Region" allLabel="All regions"
+                options={regionOptions} value={region} onChange={setRegion} />
+            </label>
+          )}
           <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Site
-            <select value={site} onChange={(e) => setSite(e.target.value)}
-              className="mt-1 block rounded-md border border-[var(--border-subtle)] bg-transparent px-2 py-1.5 text-xs" style={{ color: 'var(--text-primary)' }}>
-              <option value="">All sites</option>
-              {sites.map((sv) => <option key={sv} value={sv}>{sv}</option>)}
-            </select>
+            <MultiSelectFilter className="mt-1 w-48" label="Site" allLabel="All sites"
+              options={sites} value={site} onChange={setSite} />
           </label>
+          {vehicleTypes.length > 1 && (
+            <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Vehicle type
+              <MultiSelectFilter className="mt-1 w-48" label="Vehicle type" allLabel="All vehicle types"
+                options={vehicleTypes} value={vehicleType} onChange={setVehicleType} />
+            </label>
+          )}
+          {inspectors.length > 0 && (
+            <label className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>Inspector
+              <MultiSelectFilter className="mt-1 w-48" label="Inspector" allLabel="All inspectors"
+                options={inspectors} value={inspector} onChange={setInspector} />
+            </label>
+          )}
           <div className="flex gap-2 ml-auto">
             <button type="button" disabled={busy || !summary.rows.length} onClick={exportExcel}
               className="px-3 py-1.5 rounded-md border border-[var(--border-subtle)] text-xs disabled:opacity-40" style={{ color: 'var(--text-primary)' }}>
@@ -1176,8 +1267,12 @@ export default function Inspections() {
     () => scopeInspections(
       tabFiltered,
       {
-        site: filterSite, region: filterRegion, inspector: filterInspector,
-        vehicleType: filterVehicleType, from: filterFrom, to: filterTo, search,
+        // DECODED here, not passed raw. The URL holds "TR-MIXER,PUMPS"; handing
+        // that string to the predicate would compare it as ONE value and match
+        // nothing, with no error to show for it.
+        site: toList(filterSite), region: toList(filterRegion),
+        inspector: toList(filterInspector), vehicleType: toList(filterVehicleType),
+        from: filterFrom, to: filterTo, search,
       },
       // Region lives on the site register, not on the inspection, so the resolver is
       // injected and the rule itself stays a pure, tested function.
@@ -3077,9 +3172,15 @@ export default function Inspections() {
                  which inspections (and therefore which vehicles) are looked at - it
                  does not put a date on the flag itself. Said plainly rather than left
                  for the reader to assume either way. */
+              /* The caption names BOTH sources, because these four tiles do not
+                 all come from the same place and saying "state today" over all of
+                 them was not true. The first three read the tyre's life TODAY from
+                 the flag map. "Damaged found" is what inspectors RECORDED on the
+                 sheets in range - and it counts distinct tyres, not how many times
+                 damage was written down, so it is in the same unit as the rest. */
               caption={scopeActive
-                ? `Tyres flagged on the ${overview.vehiclesInspected} ${overview.vehiclesInspected === 1 ? 'vehicle' : 'vehicles'} in the filtered inspections. A flag is the tyre's state today, not an event in the date range.`
-                : "Tyres flagged on the vehicles in these inspections. A flag is the tyre's state today, not an event in the date range."}
+                ? `Covers the ${overview.vehiclesInspected} ${overview.vehiclesInspected === 1 ? 'vehicle' : 'vehicles'} in the filtered inspections. Due and past-life read the tyre's life today; damaged is what these inspections recorded. Both count distinct tyres.`
+                : "Covers the vehicles in these inspections. Due and past-life read the tyre's life today; damaged is what these inspections recorded. Both count distinct tyres."}
               activeFocus={filterFocus}
               onFocus={(k) => setFilter('focus', k)}
               items={[
@@ -3120,6 +3221,16 @@ export default function Inspections() {
           flagMap={flagMap || {}}
           defaultFrom={filterFrom}
           defaultTo={filterTo}
+          /* Seeded from the register, so the summary opens on what the reader
+             had narrowed to. It was previously handed every row and only the
+             dates, so a shared PDF could describe the whole country while the
+             screen behind it showed one region. */
+          defaultRegion={toList(filterRegion)}
+          defaultSite={toList(filterSite)}
+          defaultVehicleType={toList(filterVehicleType)}
+          defaultInspector={toList(filterInspector)}
+          regionOptions={regions}
+          regionOf={(s) => regionForSite(regionMap, s)}
           country={activeCountry}
           company={company}
           branding={branding}
@@ -3241,31 +3352,42 @@ export default function Inspections() {
                 {/* Region renders only when the site register actually places
                     these sites in one. An empty dropdown is a control that can
                     only ever return nothing. */}
+                {/* All four are MULTI-select: a fleet question is rarely about one
+                    site or one machine class. "Mixers and pumps at Diriyah and
+                    NHC" was previously four separate passes, each of which had to
+                    be read and remembered separately. */}
                 {regions.length > 0 && (
-                  <select className="input text-sm w-40" value={filterRegion} onChange={e => setFilter('region', e.target.value)}>
-                    <option value="all">All regions</option>
-                    {regions.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    className="w-44" label="Region" allLabel="All regions"
+                    options={regions}
+                    value={toList(filterRegion)}
+                    onChange={(next) => setFilter('region', fromList(next))}
+                  />
                 )}
-                <select className="input text-sm w-44" value={filterSite} onChange={e => setFilter('site', e.target.value)}>
-                  <option value="all">{t('inspections.filters.allSites')}</option>
-                  {sites.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {/* Vehicle type: the pump-versus-mixer split. Same rule as
-                    region - it renders only when the loaded rows actually carry
-                    more than one, since a dropdown with a single choice is not a
-                    filter. */}
+                <MultiSelectFilter
+                  className="w-48" label="Site" allLabel={t('inspections.filters.allSites')}
+                  options={sites}
+                  value={toList(filterSite)}
+                  onChange={(next) => setFilter('site', fromList(next))}
+                />
+                {/* Vehicle type: the pump-versus-mixer split. Rendered only when
+                    the loaded rows carry more than one, since a control with a
+                    single choice is not a filter. */}
                 {vehicleTypes.length > 1 && (
-                  <select className="input text-sm w-44" value={filterVehicleType} onChange={e => setFilter('vehicleType', e.target.value)}>
-                    <option value="all">All vehicle types</option>
-                    {vehicleTypes.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    className="w-48" label="Vehicle type" allLabel="All vehicle types"
+                    options={vehicleTypes}
+                    value={toList(filterVehicleType)}
+                    onChange={(next) => setFilter('vehicleType', fromList(next))}
+                  />
                 )}
                 {inspectors.length > 0 && (
-                  <select className="input text-sm w-44" value={filterInspector} onChange={e => setFilter('inspector', e.target.value)}>
-                    <option value="all">All inspectors</option>
-                    {inspectors.map(i => <option key={i} value={i}>{i}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    className="w-48" label="Inspector" allLabel="All inspectors"
+                    options={inspectors}
+                    value={toList(filterInspector)}
+                    onChange={(next) => setFilter('inspector', fromList(next))}
+                  />
                 )}
                 <DateField className="text-sm w-40" value={filterFrom} onChange={v => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
                 <DateField className="text-sm w-40" value={filterTo} onChange={v => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, conditionCounts, siteSummary } from '../lib/inspectionTyreFlags'
+import {
+  buildAssetFlagMap, damagedPositions, inspectionOverview, conditionCounts, siteSummary,
+  scopeInspections, isSelectionActive,
+} from '../lib/inspectionTyreFlags'
 
 // Shaped running-life rows (bandFor vocabulary):
 // overdue = remainingKm === 0; due-soon = remainingKm < 10000 or used >= 90.
@@ -112,8 +115,44 @@ describe('inspectionOverview', () => {
     expect(o.tyresDueSoon).toBe(2)
   })
 
-  it('totals damaged positions across inspections', () => {
-    expect(inspectionOverview(inspections, flagMap).damagedFound).toBe(2)
+  it('counts DISTINCT damaged tyres, not damage observations', () => {
+    const o = inspectionOverview(inspections, flagMap)
+    expect(o.damagedFound).toBe(2)
+    expect(o.damagedObservations).toBe(2)
+  })
+
+  it('does not count the same damaged tyre twice when a vehicle is re-inspected', () => {
+    // The card this feeds counts per-VEHICLE flags in its other three tiles, so
+    // summing per-INSPECTION observations beside them double-counts every
+    // re-inspected vehicle. Measured live: 17 inspections covering 15 vehicles.
+    const twice = [
+      { asset_no: 'TM100', scheduled_date: '2026-08-01', tyre_conditions: { LHF1: 'Damaged', RHF1: 'Puncture' } },
+      { asset_no: 'TM100', scheduled_date: '2026-08-05', tyre_conditions: { LHF1: 'Damaged', RHF1: 'Puncture' } },
+    ]
+    const o = inspectionOverview(twice, {})
+    expect(o.inspectionsDone).toBe(2)
+    expect(o.vehiclesInspected).toBe(1)
+    expect(o.damagedFound).toBe(2)          // two real tyres
+    expect(o.damagedObservations).toBe(4)   // each reported twice
+  })
+
+  it('keeps the SAME position on DIFFERENT vehicles apart', () => {
+    const o = inspectionOverview([
+      { asset_no: 'TM100', scheduled_date: '2026-08-01', tyre_conditions: { LHF1: 'Damaged' } },
+      { asset_no: 'TM200', scheduled_date: '2026-08-01', tyre_conditions: { LHF1: 'Damaged' } },
+    ], {})
+    expect(o.damagedFound).toBe(2)
+  })
+
+  it('never merges two UNPOSITIONED observations into one phantom tyre', () => {
+    // A blank position cannot be deduplicated against anything, so each stands
+    // alone. Merging them would UNDER-report real damage.
+    const o = inspectionOverview([
+      { asset_no: 'TM100', scheduled_date: '2026-08-01',
+        tyre_conditions: [{ position: '', condition: 'Damaged' }, { position: '', condition: 'Puncture' }] },
+    ], {})
+    expect(o.damagedFound).toBe(2)
+    expect(o.damagedWithoutPosition).toBe(2)
   })
 
   it('respects the from/to window (string prefix compare)', () => {
@@ -134,6 +173,7 @@ describe('inspectionOverview', () => {
     expect(inspectionOverview([], {})).toEqual({
       inspectionsDone: 0, vehiclesInspected: 0, approved: 0, pendingApproval: 0,
       vehiclesWithTyresDue: 0, tyresOverdue: 0, tyresDueSoon: 0, damagedFound: 0,
+      damagedObservations: 0, damagedWithoutPosition: 0,
     })
     const o = inspectionOverview(inspections, null)
     expect(o.vehiclesWithTyresDue).toBe(0)
@@ -177,5 +217,123 @@ describe('siteSummary', () => {
   it('is honest with an empty flag map', () => {
     const { totals } = siteSummary(insp, {}, {})
     expect(totals.tyresDue).toBe(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-select filters. A selection may be 'all', one value, or an array.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('multi-select filter selections', () => {
+  const rows = [
+    { asset_no: 'A1', site: 'NHC',     vehicle_type: 'TR-MIXER', inspector: 'Ali',  inspection_date: '2026-08-01' },
+    { asset_no: 'A2', site: 'DIRIYAH', vehicle_type: 'PUMPS',    inspector: 'Omar', inspection_date: '2026-08-02' },
+    { asset_no: 'A3', site: 'JED',     vehicle_type: 'PICKUP',   inspector: 'Ali',  inspection_date: '2026-08-03' },
+    { asset_no: 'A4', site: 'NHC',     vehicle_type: '',         inspector: 'Sara', inspection_date: '2026-08-04' },
+  ]
+
+  it('a single value still works, unchanged', () => {
+    expect(scopeInspections(rows, { site: 'NHC' })).toHaveLength(2)
+    expect(scopeInspections(rows, { vehicleType: 'TR-MIXER' })).toHaveLength(1)
+  })
+
+  it('an array selects the UNION of the chosen values', () => {
+    expect(scopeInspections(rows, { site: ['NHC', 'JED'] })).toHaveLength(3)
+    expect(scopeInspections(rows, { vehicleType: ['TR-MIXER', 'PUMPS'] })).toHaveLength(2)
+  })
+
+  it('an EMPTY array means no filter, never "match nothing"', () => {
+    // A panel that empties the table when the last chip is unticked reads as lost
+    // data, and there is no way back except knowing to re-tick something.
+    expect(scopeInspections(rows, { site: [] })).toHaveLength(4)
+    expect(scopeInspections(rows, { vehicleType: [], region: [] })).toHaveLength(4)
+  })
+
+  it('folds case on vehicle type, on both sides', () => {
+    expect(scopeInspections(rows, { vehicleType: ['tr-mixer'] })).toHaveLength(1)
+  })
+
+  it('excludes a row whose value is MISSING while a selection is active', () => {
+    // A4 has no vehicle_type: it is not KNOWN to be a mixer, so it is not one.
+    expect(scopeInspections(rows, { vehicleType: ['TR-MIXER', 'PUMPS', 'PICKUP'] })).toHaveLength(3)
+  })
+
+  it('combines two multi-selects as AND across fields, OR within a field', () => {
+    const out = scopeInspections(rows, { site: ['NHC', 'JED'], inspector: ['Ali'] })
+    expect(out.map(r => r.asset_no)).toEqual(['A1', 'A3'])
+  })
+
+  it('region multi-select goes through the injected resolver', () => {
+    const regionOf = (s) => ({ NHC: 'CENTRAL', DIRIYAH: 'CENTRAL', JED: 'WESTERN' }[s] || '')
+    expect(scopeInspections(rows, { region: ['WESTERN'] }, { regionOf })).toHaveLength(1)
+    // All four rows resolve: A1/A4 NHC and A2 DIRIYAH are CENTRAL, A3 JED is WESTERN.
+    expect(scopeInspections(rows, { region: ['CENTRAL', 'WESTERN'] }, { regionOf })).toHaveLength(4)
+    // A site the register cannot place is excluded rather than swept into
+    // whichever region happened to be picked.
+    expect(scopeInspections(rows, { region: ['CENTRAL'] }, { regionOf: () => '' })).toHaveLength(0)
+  })
+
+  it('isSelectionActive tells a real selection from an empty one', () => {
+    expect(isSelectionActive('all')).toBe(false)
+    expect(isSelectionActive([])).toBe(false)
+    expect(isSelectionActive(['all'])).toBe(false)
+    expect(isSelectionActive('NHC')).toBe(true)
+    expect(isSelectionActive(['NHC'])).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The SHARE SUMMARY must be scoped by the same rule as the register.
+// It used to accept only from/to/site, while the modal was handed EVERY row - so
+// a reader who narrowed to a region and a vehicle type and pressed Share got a
+// summary of the whole country, with nothing on the sheet saying so.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('siteSummary scoping', () => {
+  const regionOf = (s) => ({ NHC: 'CENTRAL', DIRIYAH: 'CENTRAL', JED: 'WESTERN' }[s] || '')
+  const rows = [
+    { asset_no: 'A1', site: 'NHC',     vehicle_type: 'TR-MIXER', inspector: 'Ali',  scheduled_date: '2026-08-01', tyre_conditions: { LHF1: 'Good' } },
+    { asset_no: 'A2', site: 'DIRIYAH', vehicle_type: 'PUMPS',    inspector: 'Omar', scheduled_date: '2026-08-02', tyre_conditions: { LHF1: 'Damaged' } },
+    { asset_no: 'A3', site: 'JED',     vehicle_type: 'TR-MIXER', inspector: 'Ali',  scheduled_date: '2026-08-03', tyre_conditions: { LHF1: 'Worn' } },
+  ]
+
+  it('with no filters it covers every site', () => {
+    const s = siteSummary(rows, {}, {}, { regionOf })
+    expect(s.rows.map(r => r.site).sort()).toEqual(['DIRIYAH', 'JED', 'NHC'])
+    expect(s.totals.inspections).toBe(3)
+  })
+
+  it('narrows by REGION, which it could not do before', () => {
+    const s = siteSummary(rows, {}, { region: ['WESTERN'] }, { regionOf })
+    expect(s.rows.map(r => r.site)).toEqual(['JED'])
+    expect(s.totals.inspections).toBe(1)
+  })
+
+  it('narrows by VEHICLE TYPE, which it could not do before', () => {
+    const s = siteSummary(rows, {}, { vehicleType: ['TR-MIXER'] }, { regionOf })
+    expect(s.totals.inspections).toBe(2)
+    expect(s.rows.map(r => r.site).sort()).toEqual(['JED', 'NHC'])
+  })
+
+  it('takes a MULTI-value site selection', () => {
+    const s = siteSummary(rows, {}, { site: ['NHC', 'JED'] }, { regionOf })
+    expect(s.totals.inspections).toBe(2)
+  })
+
+  it('still accepts a single site string, so old callers are unchanged', () => {
+    const s = siteSummary(rows, {}, { site: 'NHC' }, { regionOf })
+    expect(s.rows.map(r => r.site)).toEqual(['NHC'])
+  })
+
+  it('combines region and vehicle type as AND', () => {
+    const s = siteSummary(rows, {}, { region: ['CENTRAL'], vehicleType: ['TR-MIXER'] }, { regionOf })
+    expect(s.rows.map(r => r.site)).toEqual(['NHC'])
+  })
+
+  it('KEEPS its own date rule, which also reads inspection_date', () => {
+    // The register's window reads scheduled -> completed -> created only. That
+    // difference is deliberate and documented, so a row carrying ONLY
+    // inspection_date must still fall inside the summary window.
+    const only = [{ asset_no: 'B1', site: 'NHC', inspection_date: '2026-08-02', tyre_conditions: {} }]
+    expect(siteSummary(only, {}, { from: '2026-08-01', to: '2026-08-03' }, { regionOf }).totals.inspections).toBe(1)
+    expect(siteSummary(only, {}, { from: '2026-09-01' }, { regionOf }).totals.inspections).toBe(0)
   })
 })

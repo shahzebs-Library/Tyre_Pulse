@@ -363,6 +363,36 @@ export function defectsForAction(inspection, flagMap = {}) {
 }
 
 /**
+ * The field selections that are actually narrowing a view, in a fixed order, as
+ * [label, values] pairs.
+ *
+ * ONE place decides what "active" means, because AN EMPTY ARRAY IS TRUTHY in
+ * JavaScript. Every caller that tested the selection itself instead of its
+ * length silently rendered nothing where it meant to render a fallback - the
+ * tyre-change-flags export was named "... Flags " with a trailing space and
+ * nothing saying what it covered, rather than "all sites".
+ *
+ * A bare string is admitted so a caller that has not moved to lists yet still
+ * works, and the 'all' sentinel counts as no selection.
+ */
+export function activeSelections(filters = {}) {
+  const f = filters || {}
+  return [
+    ['Region', f.region],
+    ['Site', f.site],
+    ['Vehicle type', f.vehicleType],
+    ['Inspector', f.inspector],
+  ]
+    .map(([label, v]) => {
+      const values = Array.isArray(v)
+        ? v.filter((x) => x != null && x !== '' && x !== 'all')
+        : (v != null && v !== '' && v !== 'all' ? [v] : [])
+      return [label, values]
+    })
+    .filter(([, values]) => values.length > 0)
+}
+
+/**
  * THE REGISTER'S FILTER RULE, IN ONE PLACE.
  *
  * Extracted from the page because three surfaces have to agree about which rows are

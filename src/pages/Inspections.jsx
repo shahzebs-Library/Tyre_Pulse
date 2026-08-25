@@ -10,7 +10,7 @@ import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, ExternalLink, Trash2, AlertTriangle, ChevronDown } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
@@ -64,7 +64,7 @@ import { loadAutoTable } from '../lib/pdfEngine'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
-import { buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections , vehicleTypesIn } from '../lib/inspectionTyreFlags'
+import { activeSelections, buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections , vehicleTypesIn } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
 import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
 import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
@@ -258,14 +258,22 @@ function InspectionSummaryModal({
   /** Human description of everything currently narrowing this summary. */
   const rangeLabel = useMemo(() => {
     const bits = [`${from || 'Start'} to ${to || 'Today'}`]
-    const named = (name, list) => { if ((list || []).length) bits.push(`${name}: ${list.join(', ')}`) }
-    named('Region', region)
-    named('Site', site)
-    named('Vehicle type', vehicleType)
-    named('Inspector', inspector)
+    for (const [label, values] of activeSelections(activeFilters)) {
+      bits.push(`${label}: ${values.join(', ')}`)
+    }
     if (country && country !== 'All') bits.push(country)
     return bits.join(' | ')
-  }, [from, to, region, site, vehicleType, inspector, country])
+  }, [from, to, activeFilters, country])
+  /**
+   * The same description, shortened for a file name. The PDF carries rangeLabel
+   * in its header, but an exported SHEET carried only the dates - so a summary
+   * narrowed to one region and one vehicle type was named exactly like a
+   * whole-fleet one, and was indistinguishable from it months later.
+   */
+  const scopeSuffix = useMemo(
+    () => activeSelections(activeFilters).map(([l, v]) => `${l} ${v.join(' ')}`).join(' '),
+    [activeFilters],
+  )
   const COLS = ['site', 'inspections', 'vehicles', 'good', 'wear', 'damage', 'tyresDue']
   const HEADS = ['Site', 'Inspections', 'Vehicles', 'Good', 'Wear', 'Damage', 'Tyres due']
   const TCOLS = ['site', 'flagged', 'system', 'user', 'onVehicle', 'replaced', 'removed', 'unknown']
@@ -336,12 +344,16 @@ function InspectionSummaryModal({
     try {
       await exportToExcel(
         [...summary.rows, summary.totals], COLS, HEADS,
-        `TyrePulse Inspection Summary ${from || 'all'} to ${to || 'today'}`,
+        reportFileName('TyrePulse Inspection Summary', `${from || 'all'} to ${to || 'today'}`, scopeSuffix),
       )
       if (hasTracking) {
+        // site is a LIST. An empty array is TRUTHY in JavaScript, so the old
+        // `site || 'all sites'` never fell back - it rendered an empty string
+        // and produced a file named "... Flags " with nothing saying what it
+        // covered. Test the length, never the array.
         await exportToExcel(
           [...tracking.rows, tracking.totals], TCOLS, THEADS,
-          `TyrePulse Tyre Change Flags ${site || 'all sites'}`,
+          reportFileName('TyrePulse Tyre Change Flags', (site || []).length ? site.join(' ') : 'all sites'),
           'Tyre change flags',
         )
       }

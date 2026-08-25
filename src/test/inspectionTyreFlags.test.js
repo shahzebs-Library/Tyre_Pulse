@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildAssetFlagMap, damagedPositions, inspectionOverview, conditionCounts, siteSummary,
-  scopeInspections, isSelectionActive,
+  scopeInspections, isSelectionActive, activeSelections,
 } from '../lib/inspectionTyreFlags'
 
 // Shaped running-life rows (bandFor vocabulary):
@@ -335,5 +335,34 @@ describe('siteSummary scoping', () => {
     const only = [{ asset_no: 'B1', site: 'NHC', inspection_date: '2026-08-02', tyre_conditions: {} }]
     expect(siteSummary(only, {}, { from: '2026-08-01', to: '2026-08-03' }, { regionOf }).totals.inspections).toBe(1)
     expect(siteSummary(only, {}, { from: '2026-09-01' }, { regionOf }).totals.inspections).toBe(0)
+  })
+})
+
+describe("activeSelections", () => {
+  it("reports nothing when no field is narrowed", () => {
+    expect(activeSelections({})).toEqual([])
+    expect(activeSelections()).toEqual([])
+  })
+
+  it("treats an EMPTY ARRAY as no selection, because [] is truthy in JS", () => {
+    expect([] ? true : false).toBe(true)
+    expect(activeSelections({ site: [], region: [] })).toEqual([])
+  })
+
+  it("treats the all sentinel and blanks as no selection", () => {
+    expect(activeSelections({ site: "all" })).toEqual([])
+    expect(activeSelections({ site: ["all", "", null] })).toEqual([])
+  })
+
+  it("admits a bare string so a caller not yet on lists still works", () => {
+    expect(activeSelections({ site: "NHC" })).toEqual([["Site", ["NHC"]]])
+  })
+
+  it("keeps a fixed order so a file name is stable", () => {
+    const out = activeSelections({
+      inspector: ["AHMED"], site: ["NHC"],
+      vehicleType: ["TR-MIXER"], region: ["WESTERN"],
+    })
+    expect(out.map((x) => x[0])).toEqual(["Region", "Site", "Vehicle type", "Inspector"])
   })
 })

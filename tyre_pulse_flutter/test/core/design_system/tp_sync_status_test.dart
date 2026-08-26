@@ -9,8 +9,9 @@ import 'design_system_test_support.dart';
 
 void main() {
   group('TpOfflineBanner renders nothing when there is nothing to say', () {
-    testWidgets('a fully quiet summary collapses to nothing',
-        (WidgetTester tester) async {
+    testWidgets('a fully quiet summary collapses to nothing', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -21,8 +22,9 @@ void main() {
       expect(tester.getSize(find.byType(TpOfflineBanner)), Size.zero);
     });
 
-    testWidgets('one pending change is enough to show the banner',
-        (WidgetTester tester) async {
+    testWidgets('one pending change is enough to show the banner', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -38,28 +40,28 @@ void main() {
   });
 
   group('TpOfflineBanner is ordered by urgency', () {
-    testWidgets(
-      'attention wins even while offline with changes pending',
-      (WidgetTester tester) async {
-        await pumpTp(
-          tester,
-          const TpOfflineBanner(
-            summary: TpSyncSummary(
-              connectivity: TpConnectivity.offline,
-              pendingCount: 5,
-              attentionCount: 2,
-            ),
+    testWidgets('attention wins even while offline with changes pending', (
+      WidgetTester tester,
+    ) async {
+      await pumpTp(
+        tester,
+        const TpOfflineBanner(
+          summary: TpSyncSummary(
+            connectivity: TpConnectivity.offline,
+            pendingCount: 5,
+            attentionCount: 2,
           ),
-        );
+        ),
+      );
 
-        expect(find.text('2 items need attention'), findsOneWidget);
-        expect(find.text('5 changes waiting to sync'), findsOneWidget);
-        expect(find.text('Offline'), findsNothing);
-      },
-    );
+      expect(find.text('2 items need attention'), findsOneWidget);
+      expect(find.text('5 changes waiting to sync'), findsOneWidget);
+      expect(find.text('Offline'), findsNothing);
+    });
 
-    testWidgets('attention with nothing else pending shows no detail line',
-        (WidgetTester tester) async {
+    testWidgets('attention with nothing else pending shows no detail line', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -74,8 +76,9 @@ void main() {
       expect(find.textContaining('waiting to sync'), findsNothing);
     });
 
-    testWidgets('a sync in progress shows completed of total',
-        (WidgetTester tester) async {
+    testWidgets('a sync in progress shows completed of total', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -90,8 +93,9 @@ void main() {
       expect(find.text('Syncing 8 of 12'), findsOneWidget);
     });
 
-    testWidgets('offline with nothing queued shows the reassurance message',
-        (WidgetTester tester) async {
+    testWidgets('offline with nothing queued shows the reassurance message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -101,15 +105,14 @@ void main() {
 
       expect(find.text('Offline'), findsOneWidget);
       expect(
-        find.text(
-          'You can keep working. Everything is saved on this device.',
-        ),
+        find.text('You can keep working. Everything is saved on this device.'),
         findsOneWidget,
       );
     });
 
-    testWidgets('offline with changes queued shows the count instead',
-        (WidgetTester tester) async {
+    testWidgets('offline with changes queued shows the count instead', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -124,23 +127,23 @@ void main() {
       expect(find.text('3 changes waiting to sync'), findsOneWidget);
     });
 
-    testWidgets(
-      'connectivity that could not be read is its own message',
-      (WidgetTester tester) async {
-        await pumpTp(
-          tester,
-          const TpOfflineBanner(
-            summary: TpSyncSummary(connectivity: TpConnectivity.unknown),
-          ),
-        );
+    testWidgets('connectivity that could not be read is its own message', (
+      WidgetTester tester,
+    ) async {
+      await pumpTp(
+        tester,
+        const TpOfflineBanner(
+          summary: TpSyncSummary(connectivity: TpConnectivity.unknown),
+        ),
+      );
 
-        expect(find.text('Connection status unknown'), findsOneWidget);
-        expect(find.text('Offline'), findsNothing);
-      },
-    );
+      expect(find.text('Connection status unknown'), findsOneWidget);
+      expect(find.text('Offline'), findsNothing);
+    });
 
-    testWidgets('online with changes queued and nothing else wrong',
-        (WidgetTester tester) async {
+    testWidgets('online with changes queued and nothing else wrong', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineBanner(
@@ -155,8 +158,9 @@ void main() {
     });
   });
 
-  testWidgets('TpOfflineBanner: onTap fires when the banner is tapped',
-      (WidgetTester tester) async {
+  testWidgets('TpOfflineBanner: onTap fires when the banner is tapped', (
+    WidgetTester tester,
+  ) async {
     int taps = 0;
     await pumpTp(
       tester,
@@ -172,25 +176,25 @@ void main() {
     expect(taps, 1);
   });
 
-  testWidgets(
-    'TpSyncIndicator does not hide itself when everything is fine',
-    (WidgetTester tester) async {
-      // Unlike TpOfflineBanner, the compact indicator is meant to sit
-      // permanently in an app bar, so it must always say something.
-      await pumpTp(
-        tester,
-        const TpSyncIndicator(
-          summary: TpSyncSummary(connectivity: TpConnectivity.online),
-        ),
-      );
+  testWidgets('TpSyncIndicator does not hide itself when everything is fine', (
+    WidgetTester tester,
+  ) async {
+    // Unlike TpOfflineBanner, the compact indicator is meant to sit
+    // permanently in an app bar, so it must always say something.
+    await pumpTp(
+      tester,
+      const TpSyncIndicator(
+        summary: TpSyncSummary(connectivity: TpConnectivity.online),
+      ),
+    );
 
-      expect(find.text('All changes synced'), findsOneWidget);
-    },
-  );
+    expect(find.text('All changes synced'), findsOneWidget);
+  });
 
   group('TpSyncIndicator: the compact label per situation', () {
-    testWidgets('attention shows a bare digit, not the sentence',
-        (WidgetTester tester) async {
+    testWidgets('attention shows a bare digit, not the sentence', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpSyncIndicator(
@@ -205,8 +209,9 @@ void main() {
       expect(find.textContaining('needs attention'), findsNothing);
     });
 
-    testWidgets('syncing shows a completed/total fraction',
-        (WidgetTester tester) async {
+    testWidgets('syncing shows a completed/total fraction', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpSyncIndicator(
@@ -221,8 +226,9 @@ void main() {
       expect(find.text('8/12'), findsOneWidget);
     });
 
-    testWidgets('offline with nothing queued shows the word Offline',
-        (WidgetTester tester) async {
+    testWidgets('offline with nothing queued shows the word Offline', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpSyncIndicator(
@@ -233,8 +239,9 @@ void main() {
       expect(find.text('Offline'), findsOneWidget);
     });
 
-    testWidgets('offline with changes queued shows the count instead',
-        (WidgetTester tester) async {
+    testWidgets('offline with changes queued shows the count instead', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpSyncIndicator(
@@ -249,8 +256,9 @@ void main() {
       expect(find.text('Offline'), findsNothing);
     });
 
-    testWidgets('online with changes queued shows the bare count',
-        (WidgetTester tester) async {
+    testWidgets('online with changes queued shows the bare count', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpSyncIndicator(
@@ -264,8 +272,9 @@ void main() {
       expect(find.text('2'), findsOneWidget);
     });
 
-    testWidgets('connectivity that could not be read shows a dash',
-        (WidgetTester tester) async {
+    testWidgets('connectivity that could not be read shows a dash', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpSyncIndicator(
@@ -277,8 +286,9 @@ void main() {
     });
   });
 
-  testWidgets('TpSyncIndicator: onTap fires when tapped',
-      (WidgetTester tester) async {
+  testWidgets('TpSyncIndicator: onTap fires when tapped', (
+    WidgetTester tester,
+  ) async {
     int taps = 0;
     await pumpTp(
       tester,
@@ -294,8 +304,9 @@ void main() {
     expect(taps, 1);
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await pumpTpRtl(
       tester,
       const TpSyncIndicator(

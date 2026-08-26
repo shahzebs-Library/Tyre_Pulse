@@ -47,7 +47,8 @@ const ChecklistOptionSet _legend = ChecklistOptionSet(
       value: 'Not OK',
       icon: 'fault',
       tone: 'bad',
-      meaning: 'A fault is present and has NOT been put right. Say what is wrong.',
+      meaning:
+          'A fault is present and has NOT been put right. Say what is wrong.',
     ),
     ChecklistOptionMeta(
       value: 'Not applicable',
@@ -100,10 +101,10 @@ final ChecklistTemplate _template = const ChecklistTemplate(
 
 void main() {
   test('H1: blockingAnswers NAMES the lines', () {
-    final List<BlockingAnswer> b = blockingAnswers(
-      _template,
-      <String, Object?>{'c1': 'Not OK', 'c2': 'OK'},
-    );
+    final List<BlockingAnswer> b = blockingAnswers(_template, <String, Object?>{
+      'c1': 'Not OK',
+      'c2': 'OK',
+    });
     expect(b, hasLength(1));
     expect(b.single.id, 'c1');
     expect(b.single.label, 'Glasses and mirrors');
@@ -113,10 +114,16 @@ void main() {
 
   test('H2: a corrected item stops blocking', () {
     expect(
-      canClose(_template, <String, Object?>{'c1': 'Repaired', 'c2': 'Adjusted'}).ok,
+      canClose(_template, <String, Object?>{
+        'c1': 'Repaired',
+        'c2': 'Adjusted',
+      }).ok,
       isTrue,
     );
-    expect(canClose(_template, <String, Object?>{'c1': 'Lubricated'}).ok, isTrue);
+    expect(
+      canClose(_template, <String, Object?>{'c1': 'Lubricated'}).ok,
+      isTrue,
+    );
   });
 
   test('H3: an unanswered sheet does not block', () {
@@ -138,12 +145,9 @@ void main() {
   });
 
   test('H5: an array answer blocks on ANY member, reported once', () {
-    final List<BlockingAnswer> b = blockingAnswers(
-      _template,
-      <String, Object?>{
-        'c1': <String>['OK', 'Not OK'],
-      },
-    );
+    final List<BlockingAnswer> b = blockingAnswers(_template, <String, Object?>{
+      'c1': <String>['OK', 'Not OK'],
+    });
     expect(b, hasLength(1));
     expect(b.single.id, 'c1');
     expect(b.single.value, 'Not OK');
@@ -159,7 +163,10 @@ void main() {
     // The six original marks were stored for months with no meta at all. A
     // row carrying an unknown value must degrade, never crash the line it
     // sits on.
-    final MarkInfo r = markMeta(const ChecklistOptionSet(options: <String>['OK']), 'OK');
+    final MarkInfo r = markMeta(
+      const ChecklistOptionSet(options: <String>['OK']),
+      'OK',
+    );
     expect(r.value, 'OK');
     expect(r.icon, 'na');
     expect(r.tone, MarkTone.muted);
@@ -171,7 +178,11 @@ void main() {
     const ChecklistOptionSet set = ChecklistOptionSet(
       options: <String>['X'],
       meta: <ChecklistOptionMeta>[
-        ChecklistOptionMeta(value: 'X', icon: 'invented', meaning: 'Something odd'),
+        ChecklistOptionMeta(
+          value: 'X',
+          icon: 'invented',
+          meaning: 'Something odd',
+        ),
       ],
     );
     final MarkInfo r = markMeta(set, 'X');

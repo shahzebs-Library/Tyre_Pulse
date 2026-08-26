@@ -30,40 +30,37 @@ void main() {
       expect(light.labelSmall!.fontSize, 12);
     });
 
-    test(
-      'display, headline, title, then the 15pt tier, then label-medium and '
-      'label-small strictly decrease',
-      () {
-        expect(
-          light.displaySmall!.fontSize,
-          greaterThan(light.headlineMedium!.fontSize),
-        );
-        expect(
-          light.headlineMedium!.fontSize,
-          greaterThan(light.headlineSmall!.fontSize),
-        );
-        expect(
-          light.headlineSmall!.fontSize,
-          greaterThan(light.titleLarge!.fontSize),
-        );
-        expect(
-          light.titleLarge!.fontSize,
-          greaterThan(light.titleMedium!.fontSize),
-        );
-        expect(
-          light.titleMedium!.fontSize,
-          greaterThan(light.bodyLarge!.fontSize),
-        );
-        expect(
-          light.bodyLarge!.fontSize,
-          greaterThan(light.labelMedium!.fontSize),
-        );
-        expect(
-          light.labelMedium!.fontSize,
-          greaterThan(light.labelSmall!.fontSize),
-        );
-      },
-    );
+    test('display, headline, title, then the 15pt tier, then label-medium and '
+        'label-small strictly decrease', () {
+      expect(
+        light.displaySmall!.fontSize,
+        greaterThan(light.headlineMedium!.fontSize),
+      );
+      expect(
+        light.headlineMedium!.fontSize,
+        greaterThan(light.headlineSmall!.fontSize),
+      );
+      expect(
+        light.headlineSmall!.fontSize,
+        greaterThan(light.titleLarge!.fontSize),
+      );
+      expect(
+        light.titleLarge!.fontSize,
+        greaterThan(light.titleMedium!.fontSize),
+      );
+      expect(
+        light.titleMedium!.fontSize,
+        greaterThan(light.bodyLarge!.fontSize),
+      );
+      expect(
+        light.bodyLarge!.fontSize,
+        greaterThan(light.labelMedium!.fontSize),
+      );
+      expect(
+        light.labelMedium!.fontSize,
+        greaterThan(light.labelSmall!.fontSize),
+      );
+    });
 
     test('bodyLarge, bodyMedium and labelLarge deliberately tie at 15pt', () {
       // They are distinguished by weight and colour, not size - see the
@@ -89,14 +86,16 @@ void main() {
       expect(light.labelSmall!.fontWeight, FontWeight.w600);
     });
 
-    test('labelLarge is bold at the same size bodyLarge is regular weight at',
-        () {
-      expect(light.labelLarge!.fontSize, light.bodyLarge!.fontSize);
-      expect(
-        light.labelLarge!.fontWeight,
-        isNot(light.bodyLarge!.fontWeight),
-      );
-    });
+    test(
+      'labelLarge is bold at the same size bodyLarge is regular weight at',
+      () {
+        expect(light.labelLarge!.fontSize, light.bodyLarge!.fontSize);
+        expect(
+          light.labelLarge!.fontWeight,
+          isNot(light.bodyLarge!.fontWeight),
+        );
+      },
+    );
   });
 
   group('TpTypography.textThemeFor - letter spacing', () {
@@ -158,35 +157,36 @@ void main() {
       expect(light.labelMedium!.color, TpPalette.light.textSecondary);
     });
 
-    test('only labelSmall uses the muted ink - the scale uses it sparingly',
-        () {
-      expect(light.labelSmall!.color, TpPalette.light.textMuted);
-      expect(light.displaySmall!.color, isNot(TpPalette.light.textMuted));
-      expect(light.bodyLarge!.color, isNot(TpPalette.light.textMuted));
-      expect(light.bodyMedium!.color, isNot(TpPalette.light.textMuted));
-    });
+    test(
+      'only labelSmall uses the muted ink - the scale uses it sparingly',
+      () {
+        expect(light.labelSmall!.color, TpPalette.light.textMuted);
+        expect(light.displaySmall!.color, isNot(TpPalette.light.textMuted));
+        expect(light.bodyLarge!.color, isNot(TpPalette.light.textMuted));
+        expect(light.bodyMedium!.color, isNot(TpPalette.light.textMuted));
+      },
+    );
   });
 
   group('TpTypography.textThemeFor - light and dark differ', () {
-    test('every text colour slot resolves to a different colour per palette',
-        () {
-      final TextTheme light = TpTypography.textThemeFor(TpPalette.light);
-      final TextTheme dark = TpTypography.textThemeFor(TpPalette.dark);
+    test(
+      'every text colour slot resolves to a different colour per palette',
+      () {
+        final TextTheme light = TpTypography.textThemeFor(TpPalette.light);
+        final TextTheme dark = TpTypography.textThemeFor(TpPalette.dark);
 
-      expect(light.displaySmall!.color, isNot(dark.displaySmall!.color));
-      expect(
-        light.headlineMedium!.color,
-        isNot(dark.headlineMedium!.color),
-      );
-      expect(light.headlineSmall!.color, isNot(dark.headlineSmall!.color));
-      expect(light.titleLarge!.color, isNot(dark.titleLarge!.color));
-      expect(light.titleMedium!.color, isNot(dark.titleMedium!.color));
-      expect(light.bodyLarge!.color, isNot(dark.bodyLarge!.color));
-      expect(light.bodyMedium!.color, isNot(dark.bodyMedium!.color));
-      expect(light.labelLarge!.color, isNot(dark.labelLarge!.color));
-      expect(light.labelMedium!.color, isNot(dark.labelMedium!.color));
-      expect(light.labelSmall!.color, isNot(dark.labelSmall!.color));
-    });
+        expect(light.displaySmall!.color, isNot(dark.displaySmall!.color));
+        expect(light.headlineMedium!.color, isNot(dark.headlineMedium!.color));
+        expect(light.headlineSmall!.color, isNot(dark.headlineSmall!.color));
+        expect(light.titleLarge!.color, isNot(dark.titleLarge!.color));
+        expect(light.titleMedium!.color, isNot(dark.titleMedium!.color));
+        expect(light.bodyLarge!.color, isNot(dark.bodyLarge!.color));
+        expect(light.bodyMedium!.color, isNot(dark.bodyMedium!.color));
+        expect(light.labelLarge!.color, isNot(dark.labelLarge!.color));
+        expect(light.labelMedium!.color, isNot(dark.labelMedium!.color));
+        expect(light.labelSmall!.color, isNot(dark.labelSmall!.color));
+      },
+    );
 
     test('sizes, weights and heights do not change between palettes', () {
       // Only colour is palette-dependent; the scale itself is one constant
@@ -214,10 +214,7 @@ void main() {
 
     test('carries tabular figures so a column of codes stays aligned', () {
       final TextStyle style = TpTypography.identifier(TpPalette.light);
-      expect(
-        style.fontFeatures,
-        contains(const FontFeature.tabularFigures()),
-      );
+      expect(style.fontFeatures, contains(const FontFeature.tabularFigures()));
     });
 
     test('colour differs between palettes, same as every other slot', () {

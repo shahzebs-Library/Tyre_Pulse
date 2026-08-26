@@ -28,10 +28,10 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dar
 import 'package:uuid/uuid.dart';
 
 final NotifierProvider<InspectionWizardController, InspectionWizardState>
-    inspectionWizardControllerProvider = NotifierProvider<
-        InspectionWizardController, InspectionWizardState>(
-  InspectionWizardController.new,
-);
+inspectionWizardControllerProvider =
+    NotifierProvider<InspectionWizardController, InspectionWizardState>(
+      InspectionWizardController.new,
+    );
 
 final class InspectionWizardController extends Notifier<InspectionWizardState> {
   Timer? _headerDebounce;
@@ -112,23 +112,24 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
     String? prefillPosition,
   }) async {
     if (_userId.isEmpty) return;
-    final String draftKey = (ref.read(inspectionDraftRepositoryProvider)
-            as DriftInspectionDraftRepository)
-        .draftKeyFor(userId: _userId, assetNo: assetNo);
+    final String draftKey =
+        (ref.read(inspectionDraftRepositoryProvider)
+                as DriftInspectionDraftRepository)
+            .draftKeyFor(userId: _userId, assetNo: assetNo);
 
-    final Map<String, TyrePositionReading> existingReadings =
-        await _draftRepo.tyreReadingsWithPhotos(draftKey);
-    final InspectionDraftSignature? existingSignature =
-        await _draftRepo.signature(draftKey);
+    final Map<String, TyrePositionReading> existingReadings = await _draftRepo
+        .tyreReadingsWithPhotos(draftKey);
+    final InspectionDraftSignature? existingSignature = await _draftRepo
+        .signature(draftKey);
 
     final String resolvedType = vehicleType ?? state.selectedVehicleType;
     final List<String> positions = diagramPositions(resolvedType, assetNo);
 
     final Map<String, TyrePositionReading> seeded =
         <String, TyrePositionReading>{
-      for (final String p in positions)
-        p: existingReadings[p] ?? TyrePositionReading.seed(p),
-    };
+          for (final String p in positions)
+            p: existingReadings[p] ?? TyrePositionReading.seed(p),
+        };
 
     String? seededActivePosition;
     if (prefillSerial != null && prefillSerial.trim().isNotEmpty) {
@@ -138,8 +139,9 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
         orElse: () => '',
       );
       if (target.isNotEmpty) {
-        final TyrePositionReading updated =
-            seeded[target]!.copyWith(serialNumber: prefillSerial);
+        final TyrePositionReading updated = seeded[target]!.copyWith(
+          serialNumber: prefillSerial,
+        );
         seeded[target] = updated;
         await _draftRepo.saveTyreReading(draftKey, updated);
         seededActivePosition = target;
@@ -311,8 +313,7 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       );
 
       final TyrePositionReading current =
-          state.tyreConditions[position] ??
-              TyrePositionReading.seed(position);
+          state.tyreConditions[position] ?? TyrePositionReading.seed(position);
       await updateTyreReading(
         current.copyWith(photoLocalPath: photo.localPath),
       );

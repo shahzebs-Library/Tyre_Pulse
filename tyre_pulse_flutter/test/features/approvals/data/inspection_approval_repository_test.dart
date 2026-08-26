@@ -200,12 +200,9 @@ void main() {
       expect(fromInts.odometerKm, 100);
       expect(fromInts.hourMeter, 5.0);
 
-      final InspectionApprovalItem fromDoubles =
-          InspectionApprovalItem.fromRow(<String, Object?>{
-            'id': 'b',
-            'odometer_km': 100.0,
-            'hour_meter': 5.5,
-          });
+      final InspectionApprovalItem fromDoubles = InspectionApprovalItem.fromRow(
+        <String, Object?>{'id': 'b', 'odometer_km': 100.0, 'hour_meter': 5.5},
+      );
       expect(fromDoubles.odometerKm, 100);
       expect(fromDoubles.hourMeter, 5.5);
     });

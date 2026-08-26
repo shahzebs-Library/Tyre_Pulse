@@ -141,7 +141,9 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
 
     setState(() => _submitting = true);
     try {
-      await ref.read(meterLogRepositoryProvider).submitMeterReading(
+      await ref
+          .read(meterLogRepositoryProvider)
+          .submitMeterReading(
             workspace: widget.workspace,
             input: SubmitMeterLogInput(
               assetNo: widget.assetNo,
@@ -156,9 +158,8 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
             ),
           );
       if (!mounted) return;
-      Navigator.of(context).pop(
-        MeterLogReviewSaved(flaggedForReview: widget.flaggedForReview),
-      );
+      Navigator.of(context)
+          .pop(MeterLogReviewSaved(flaggedForReview: widget.flaggedForReview));
     } on Object {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -218,9 +219,7 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
                   Expanded(
                     child: Text(
                       l10n.meterLogFlaggedNote,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
+                      style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: palette.warning.onSoft),
                     ),
                   ),
@@ -283,9 +282,7 @@ class _SummaryRow extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.end,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
+              style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),

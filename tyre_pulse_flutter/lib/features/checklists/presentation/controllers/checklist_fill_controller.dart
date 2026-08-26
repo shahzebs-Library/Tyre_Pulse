@@ -16,7 +16,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
-import 'package:tyre_pulse/core/database/database_constants.dart' show primarySignatureFieldKey;
+import 'package:tyre_pulse/core/database/database_constants.dart'
+    show primarySignatureFieldKey;
 import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -37,10 +38,10 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_template.dart';
 import 'package:tyre_pulse/features/checklists/presentation/state/checklist_fill_state.dart';
 
 final NotifierProvider<ChecklistFillController, ChecklistFillState>
-    checklistFillControllerProvider =
+checklistFillControllerProvider =
     NotifierProvider<ChecklistFillController, ChecklistFillState>(
-  ChecklistFillController.new,
-);
+      ChecklistFillController.new,
+    );
 
 class ChecklistFillController extends Notifier<ChecklistFillState> {
   @override
@@ -58,30 +59,36 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     if (workspace == null) {
       state = state.copyWith(
         phase: ChecklistFillPhase.error,
-        errorMessage: 'Your workspace is still loading. Try again in a '
+        errorMessage:
+            'Your workspace is still loading. Try again in a '
             'moment.',
       );
       return;
     }
 
-    final ChecklistRemoteRepository remote =
-        ref.read(checklistRemoteRepositoryProvider);
-    final ChecklistDraftRepository drafts =
-        ref.read(checklistDraftRepositoryProvider);
+    final ChecklistRemoteRepository remote = ref.read(
+      checklistRemoteRepositoryProvider,
+    );
+    final ChecklistDraftRepository drafts = ref.read(
+      checklistDraftRepositoryProvider,
+    );
 
-    final ChecklistTemplateRecord? templateRecord =
-        await remote.getTemplate(route.templateId.value);
+    final ChecklistTemplateRecord? templateRecord = await remote.getTemplate(
+      route.templateId.value,
+    );
     if (templateRecord == null) {
       state = state.copyWith(
         phase: ChecklistFillPhase.error,
-        errorMessage: 'This checklist could not be found. It may have been '
+        errorMessage:
+            'This checklist could not be found. It may have been '
             'unpublished.',
       );
       return;
     }
 
     final String initialAssetNo = route.assetNo?.value ?? '';
-    final String draftKey = route.draftKey?.value ??
+    final String draftKey =
+        route.draftKey?.value ??
         drafts.draftKeyFor(
           userId: workspace.userId,
           templateId: templateRecord.template.id ?? route.templateId.value,
@@ -126,8 +133,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       } on Object {
         userName = null;
       }
-      final ChecklistAutoValueContext autoCtx =
-          ChecklistAutoValueContext(userName: userName);
+      final ChecklistAutoValueContext autoCtx = ChecklistAutoValueContext(
+        userName: userName,
+      );
       for (final field in templateRecord.template.fields) {
         if (isAutoField(field)) {
           answers[field.id] = resolveAutoValue(field, autoCtx);
@@ -139,11 +147,14 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     final List<ChecklistDraftPhoto> photos = await drafts.photosFor(draftKey);
     photosByField = <String, List<ChecklistDraftPhoto>>{};
     for (final ChecklistDraftPhoto p in photos) {
-      photosByField.putIfAbsent(p.fieldKey, () => <ChecklistDraftPhoto>[]).add(p);
+      photosByField
+          .putIfAbsent(p.fieldKey, () => <ChecklistDraftPhoto>[])
+          .add(p);
     }
 
-    final List<ChecklistDraftSignature> signatures =
-        await drafts.signaturesFor(draftKey);
+    final List<ChecklistDraftSignature> signatures = await drafts.signaturesFor(
+      draftKey,
+    );
     signaturesByField = <String, String>{};
     for (final ChecklistDraftSignature s in signatures) {
       if (s.fieldKey == primarySignatureFieldKey) {
@@ -158,8 +169,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     // something the operator already typed (autoFillAnswers' own rule),
     // and a readOnly field always takes the register value.
     if (assetNo != null && assetNo.trim().isNotEmpty) {
-      final ChecklistAssetContext? assetContext =
-          await _loadAssetContext(assetNo);
+      final ChecklistAssetContext? assetContext = await _loadAssetContext(
+        assetNo,
+      );
       if (assetContext != null) {
         final Map<String, String> patch = autoFillAnswers(
           templateRecord.template,
@@ -171,8 +183,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       }
     }
 
-    final List<String> siteOptions =
-        await remote.listSiteOptions(country: workspace.activeCountry);
+    final List<String> siteOptions = await remote.listSiteOptions(
+      country: workspace.activeCountry,
+    );
 
     ChecklistLastSubmissionInfo? warning;
     if (assetNo != null &&
@@ -207,8 +220,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
   Future<ChecklistAssetContext?> _loadAssetContext(String assetNo) async {
     try {
       final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-      final VehicleFleetRepository repository =
-          ref.read(vehicleFleetRepositoryProvider);
+      final VehicleFleetRepository repository = ref.read(
+        vehicleFleetRepositoryProvider,
+      );
       final VehicleDetailOutcome outcome = await repository.byAssetNo(
         scope: vehicleCacheScopeFor(workspace),
         assetNo: assetNo,
@@ -280,8 +294,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     final ChecklistDraftPhotoCaptureResult? captured = await capture();
     if (captured == null) return;
 
-    final ChecklistDraftRepository drafts =
-        ref.read(checklistDraftRepositoryProvider);
+    final ChecklistDraftRepository drafts = ref.read(
+      checklistDraftRepositoryProvider,
+    );
     await drafts.addPhoto(
       draftKey: draftKey,
       fieldKey: fieldId,
@@ -303,15 +318,18 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
   Future<void> saveSignature(String fieldId, String? svgOrDataUrl) async {
     final String? draftKey = state.draftKey;
     if (draftKey == null || svgOrDataUrl == null) return;
-    final ChecklistDraftRepository drafts =
-        ref.read(checklistDraftRepositoryProvider);
+    final ChecklistDraftRepository drafts = ref.read(
+      checklistDraftRepositoryProvider,
+    );
     await drafts.saveSignature(
       draftKey: draftKey,
       fieldKey: fieldId,
       payload: svgOrDataUrl,
       source: 'drawn',
     );
-    final Map<String, String> next = <String, String>{...state.signaturesByField};
+    final Map<String, String> next = <String, String>{
+      ...state.signaturesByField,
+    };
     next[fieldId] = svgOrDataUrl;
     state = state.copyWith(signaturesByField: next);
     _recomputeGate();
@@ -320,8 +338,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
   Future<void> savePrimarySignature(String? svgOrDataUrl) async {
     final String? draftKey = state.draftKey;
     if (draftKey == null || svgOrDataUrl == null) return;
-    final ChecklistDraftRepository drafts =
-        ref.read(checklistDraftRepositoryProvider);
+    final ChecklistDraftRepository drafts = ref.read(
+      checklistDraftRepositoryProvider,
+    );
     await drafts.saveSignature(
       draftKey: draftKey,
       fieldKey: primarySignatureFieldKey,
@@ -362,8 +381,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     if (draftKey == null || templateRecord == null || workspace == null) {
       return;
     }
-    final ChecklistDraftRepository drafts =
-        ref.read(checklistDraftRepositoryProvider);
+    final ChecklistDraftRepository drafts = ref.read(
+      checklistDraftRepositoryProvider,
+    );
     final int total = templateRecord.template.fields
         .where((f) => f.type != 'section')
         .length;
@@ -402,9 +422,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     for (final field in templateRecord.template.fields) {
       if (field.type == 'section') continue;
       final Object? v = answers[field.id];
-      final bool isFilled = v != null &&
-          v != '' &&
-          !(v is List && v.isEmpty);
+      final bool isFilled = v != null && v != '' && !(v is List && v.isEmpty);
       if (isFilled) count += 1;
     }
     return count;
@@ -427,8 +445,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
 
     state = state.copyWith(phase: ChecklistFillPhase.submitting);
 
-    final ChecklistSubmissionRepository submissions =
-        ref.read(checklistSubmissionRepositoryProvider);
+    final ChecklistSubmissionRepository submissions = ref.read(
+      checklistSubmissionRepositoryProvider,
+    );
     final int total = templateRecord.template.fields
         .where((f) => f.type != 'section')
         .length;
@@ -463,7 +482,8 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     } on Object {
       state = state.copyWith(
         phase: ChecklistFillPhase.ready,
-        errorMessage: 'This checklist could not be saved. It has not been '
+        errorMessage:
+            'This checklist could not be saved. It has not been '
             'lost - try again.',
       );
       return false;

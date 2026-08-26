@@ -207,10 +207,7 @@ final class DriftInspectionDraftRepository
   }
 
   @override
-  Future<void> saveTyreReading(
-    String draftKey,
-    TyrePositionReading reading,
-  ) {
+  Future<void> saveTyreReading(String draftKey, TyrePositionReading reading) {
     return _draftsDao.saveInspectionPosition(
       draftKey: draftKey,
       position: reading.position,
@@ -228,9 +225,7 @@ final class DriftInspectionDraftRepository
   }
 
   @override
-  Future<Map<String, TyrePositionReading>> tyreReadings(
-    String draftKey,
-  ) async {
+  Future<Map<String, TyrePositionReading>> tyreReadings(String draftKey) async {
     final rows = await _draftsDao.inspectionPositions(draftKey);
     return <String, TyrePositionReading>{
       for (final row in rows)
@@ -249,8 +244,9 @@ final class DriftInspectionDraftRepository
   Future<Map<String, TyrePositionReading>> tyreReadingsWithPhotos(
     String draftKey,
   ) async {
-    final Map<String, TyrePositionReading> readings =
-        await tyreReadings(draftKey);
+    final Map<String, TyrePositionReading> readings = await tyreReadings(
+      draftKey,
+    );
     final List<InspectionDraftPhoto> photos = await photosFor(draftKey);
 
     final Map<String, InspectionDraftPhoto> latestByPosition =

@@ -16,16 +16,36 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_scoring.dart';
 void main() {
   test('only finite, positive-weight fields count; a section never does', () {
     final List<ChecklistField> fields = <ChecklistField>[
-      const ChecklistField(id: 's', type: 'section', label: 'Heading', weight: 99),
-      const ChecklistField(id: 'zero', type: 'select', weight: 0, passValues: <Object?>['OK']),
-      const ChecklistField(id: 'neg', type: 'select', weight: -1, passValues: <Object?>['OK']),
+      const ChecklistField(
+        id: 's',
+        type: 'section',
+        label: 'Heading',
+        weight: 99,
+      ),
+      const ChecklistField(
+        id: 'zero',
+        type: 'select',
+        weight: 0,
+        passValues: <Object?>['OK'],
+      ),
+      const ChecklistField(
+        id: 'neg',
+        type: 'select',
+        weight: -1,
+        passValues: <Object?>['OK'],
+      ),
       ChecklistField(
         id: 'nan',
         type: 'select',
         weight: double.nan,
         passValues: const <Object?>['OK'],
       ),
-      const ChecklistField(id: 'counts', type: 'select', weight: 2, passValues: <Object?>['OK']),
+      const ChecklistField(
+        id: 'counts',
+        type: 'select',
+        weight: 2,
+        passValues: <Object?>['OK'],
+      ),
     ];
     final ChecklistScore score = computeScore(fields, <String, Object?>{
       'zero': 'OK',
@@ -89,20 +109,35 @@ void main() {
 
   test('with no passValues, merely non-empty passes', () {
     const ChecklistField f = ChecklistField(id: 'x', type: 'text', weight: 1);
-    expect(computeScore(<ChecklistField>[f], <String, Object?>{'x': 'anything'}).earned, 1);
-    expect(computeScore(<ChecklistField>[f], <String, Object?>{'x': ''}).earned, 0);
     expect(
-      computeScore(<ChecklistField>[f], <String, Object?>{
-        'x': const <String>[],
-      }).earned,
+      computeScore(
+        <ChecklistField>[f],
+        <String, Object?>{'x': 'anything'},
+      ).earned,
+      1,
+    );
+    expect(
+      computeScore(<ChecklistField>[f], <String, Object?>{'x': ''}).earned,
       0,
     );
-    expect(computeScore(<ChecklistField>[f], const <String, Object?>{}).earned, 0);
+    expect(
+      computeScore(
+        <ChecklistField>[f],
+        <String, Object?>{'x': const <String>[]},
+      ).earned,
+      0,
+    );
+    expect(
+      computeScore(<ChecklistField>[f], const <String, Object?>{}).earned,
+      0,
+    );
   });
 
   test('pct is null when nothing was scored, never a fabricated 0 or 100', () {
     final ChecklistScore score = computeScore(
-      <ChecklistField>[const ChecklistField(id: 's', type: 'section', weight: 5)],
+      <ChecklistField>[
+        const ChecklistField(id: 's', type: 'section', weight: 5),
+      ],
       const <String, Object?>{},
       80,
     );
@@ -111,20 +146,45 @@ void main() {
     expect(score.passed, isNull);
   });
 
-  test('passed is null whenever no threshold was supplied, even with a real pct', () {
-    final List<ChecklistField> fields = <ChecklistField>[
-      const ChecklistField(id: 'x', type: 'select', weight: 1, passValues: <Object?>['OK']),
-    ];
-    final ChecklistScore score = computeScore(fields, <String, Object?>{'x': 'OK'});
-    expect(score.pct, 100);
-    expect(score.passed, isNull);
-  });
+  test(
+    'passed is null whenever no threshold was supplied, even with a real pct',
+    () {
+      final List<ChecklistField> fields = <ChecklistField>[
+        const ChecklistField(
+          id: 'x',
+          type: 'select',
+          weight: 1,
+          passValues: <Object?>['OK'],
+        ),
+      ];
+      final ChecklistScore score = computeScore(fields, <String, Object?>{
+        'x': 'OK',
+      });
+      expect(score.pct, 100);
+      expect(score.passed, isNull);
+    },
+  );
 
   test('rounds, and passed compares pct against the threshold both ways', () {
     final List<ChecklistField> fields = <ChecklistField>[
-      const ChecklistField(id: 'a', type: 'select', weight: 1, passValues: <Object?>['OK']),
-      const ChecklistField(id: 'b', type: 'select', weight: 1, passValues: <Object?>['OK']),
-      const ChecklistField(id: 'c', type: 'select', weight: 1, passValues: <Object?>['OK']),
+      const ChecklistField(
+        id: 'a',
+        type: 'select',
+        weight: 1,
+        passValues: <Object?>['OK'],
+      ),
+      const ChecklistField(
+        id: 'b',
+        type: 'select',
+        weight: 1,
+        passValues: <Object?>['OK'],
+      ),
+      const ChecklistField(
+        id: 'c',
+        type: 'select',
+        weight: 1,
+        passValues: <Object?>['OK'],
+      ),
     ];
     final Map<String, Object?> twoOfThree = <String, Object?>{
       'a': 'OK',

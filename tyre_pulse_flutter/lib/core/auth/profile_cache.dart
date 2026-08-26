@@ -181,11 +181,7 @@ final class ProfileCache {
       if (row is! Map<String, dynamic>) {
         return null;
       }
-      return CachedProfile(
-        userId: userId,
-        cachedAt: cachedAt,
-        row: row,
-      );
+      return CachedProfile(userId: userId, cachedAt: cachedAt, row: row);
     } on FormatException {
       // Written by an earlier, incompatible version of this cache, or
       // corrupted. Read as "nothing cached", never as a crash.

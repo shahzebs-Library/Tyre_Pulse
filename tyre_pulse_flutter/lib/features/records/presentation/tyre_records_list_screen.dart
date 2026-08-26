@@ -88,8 +88,9 @@ class TyreRecordsListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AccessDecision decision =
-        ref.watch(moduleAccessProvider(ModuleKey.records));
+    final AccessDecision decision = ref.watch(
+      moduleAccessProvider(ModuleKey.records),
+    );
 
     if (decision.isDenied) {
       return TpScaffold(
@@ -116,10 +117,12 @@ class _TyreRecordsListBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TyreRecordsListState state =
-        ref.watch(tyreRecordsListControllerProvider);
-    final TyreRecordsListController controller =
-        ref.read(tyreRecordsListControllerProvider.notifier);
+    final TyreRecordsListState state = ref.watch(
+      tyreRecordsListControllerProvider,
+    );
+    final TyreRecordsListController controller = ref.read(
+      tyreRecordsListControllerProvider.notifier,
+    );
 
     return TpScaffold(
       backFallback: backFallback,
@@ -175,11 +178,11 @@ class _TyreRecordsListBody extends ConsumerWidget {
       TyreRecordsListPhase.loading => const TpLoadingState(),
       TyreRecordsListPhase.failed => _failedBody(state, controller),
       TyreRecordsListPhase.ready => RefreshIndicator(
-          onRefresh: controller.refresh,
-          child: state.isEmpty
-              ? _EmptyBody(query: state.query, controller: controller)
-              : _RecordsListView(state: state, controller: controller),
-        ),
+        onRefresh: controller.refresh,
+        child: state.isEmpty
+            ? _EmptyBody(query: state.query, controller: controller)
+            : _RecordsListView(state: state, controller: controller),
+      ),
     };
   }
 
@@ -187,7 +190,8 @@ class _TyreRecordsListBody extends ConsumerWidget {
     TyreRecordsListState state,
     TyreRecordsListController controller,
   ) {
-    final AppError error = state.loadError ??
+    final AppError error =
+        state.loadError ??
         const AppError(
           kind: AppErrorKind.unknown,
           message: 'Something went wrong. Please try again.',
@@ -196,7 +200,8 @@ class _TyreRecordsListBody extends ConsumerWidget {
     // retryable, reads as "the server could not be reached" rather than as
     // a generic error - see the library comment on why this distinction
     // earns its own state rather than folding into TpErrorState.
-    final bool looksLikeBackendUnavailable = error.kind == AppErrorKind.network ||
+    final bool looksLikeBackendUnavailable =
+        error.kind == AppErrorKind.network ||
         (error.kind == AppErrorKind.server && error.isRetryable);
     if (looksLikeBackendUnavailable) {
       return TpBackendUnavailableState(onRetry: controller.refresh);
@@ -235,7 +240,9 @@ class _EmptyBody extends ConsumerWidget {
             title: l10n.recordsEmptyTitle,
             message: l10n.recordsEmptyMessage,
             icon: Icons.layers_outlined,
-            actionLabel: query.hasActiveFilters ? l10n.recordsClearFilters : null,
+            actionLabel: query.hasActiveFilters
+                ? l10n.recordsClearFilters
+                : null,
             onAction: query.hasActiveFilters ? controller.clearFilters : null,
           ),
         ),
@@ -262,8 +269,7 @@ class _RecordsListView extends StatelessWidget {
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) {
         final ScrollMetrics metrics = notification.metrics;
-        final double remaining =
-            metrics.maxScrollExtent - metrics.pixels;
+        final double remaining = metrics.maxScrollExtent - metrics.pixels;
         if (remaining <= _kLoadMoreTriggerDistance) {
           unawaited(controller.loadMore());
         }
@@ -332,9 +338,7 @@ class _PagingFooter extends StatelessWidget {
             Text(
               l10n.recordsLoadMoreError,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
+              style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: palette.textMuted),
             ),
             const SizedBox(height: TpSpace.xs),
@@ -353,9 +357,7 @@ class _PagingFooter extends StatelessWidget {
         child: Center(
           child: Text(
             l10n.recordsEndOfList,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
+            style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: palette.textMuted),
           ),
         ),
@@ -382,7 +384,9 @@ class _TyreRecordCard extends StatelessWidget {
 
     return TpCard(
       onTap: onTap,
-      borderColor: record.riskLevel == null ? null : palette.forStatus(status).base,
+      borderColor: record.riskLevel == null
+          ? null
+          : palette.forStatus(status).base,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -424,7 +428,10 @@ class _TyreRecordCard extends StatelessWidget {
                   runSpacing: TpSpace.xs,
                   children: <Widget>[
                     if (record.site != null)
-                      _MetaItem(icon: Icons.location_on_outlined, text: record.site!),
+                      _MetaItem(
+                        icon: Icons.location_on_outlined,
+                        text: record.site!,
+                      ),
                     if (record.issueDate != null)
                       _MetaItem(
                         icon: Icons.event_outlined,
@@ -467,9 +474,7 @@ class _MetaItem extends StatelessWidget {
         const SizedBox(width: TpSpace.xs),
         Text(
           text,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
+          style: Theme.of(context).textTheme.labelSmall
               ?.copyWith(color: palette.textMuted),
         ),
       ],
@@ -549,9 +554,7 @@ class _RemovableChip extends StatelessWidget {
             children: <Widget>[
               Text(
                 label,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelMedium
+                style: Theme.of(context).textTheme.labelMedium
                     ?.copyWith(color: colors.onSoft),
               ),
               const SizedBox(width: TpSpace.xs),
@@ -626,10 +629,12 @@ class _FilterSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TyreRecordsListState state =
-        ref.watch(tyreRecordsListControllerProvider);
-    final TyreRecordsListController controller =
-        ref.read(tyreRecordsListControllerProvider.notifier);
+    final TyreRecordsListState state = ref.watch(
+      tyreRecordsListControllerProvider,
+    );
+    final TyreRecordsListController controller = ref.read(
+      tyreRecordsListControllerProvider.notifier,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: TpSpace.xl),
@@ -637,9 +642,15 @@ class _FilterSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(l10n.recordsFilterTitle, style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            l10n.recordsFilterTitle,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: TpSpace.lg),
-          Text(l10n.recordsRiskLevel, style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            l10n.recordsRiskLevel,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
           const SizedBox(height: TpSpace.sm),
           Wrap(
             spacing: TpSpace.sm,
@@ -658,7 +669,10 @@ class _FilterSheet extends ConsumerWidget {
           ),
           if (state.availableSites.isNotEmpty) ...<Widget>[
             const SizedBox(height: TpSpace.lg),
-            Text(l10n.recordsSite, style: Theme.of(context).textTheme.labelMedium),
+            Text(
+              l10n.recordsSite,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
             const SizedBox(height: TpSpace.sm),
             SizedBox(
               height: 44,

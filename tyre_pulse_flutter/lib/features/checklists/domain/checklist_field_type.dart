@@ -80,114 +80,116 @@ final class ChecklistFieldTypeDef {
 /// them - `FIELD_TYPES` in `src/lib/checklist/fieldTypes.js:29-45`, mirrored
 /// as a union type at `mobile/lib/checklistFields.ts:20-22`. Both stacks
 /// agree exactly (artifact A1).
-const List<ChecklistFieldTypeDef> kChecklistFieldTypes = <ChecklistFieldTypeDef>[
-  ChecklistFieldTypeDef(
-    type: 'section',
-    label: 'Section heading',
-    hasOptions: false,
-    group: 'layout',
-    desc: 'A titled divider to group fields.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'text',
-    label: 'Short text',
-    hasOptions: false,
-    group: 'input',
-    desc: 'A single line of free text.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'textarea',
-    label: 'Long text',
-    hasOptions: false,
-    group: 'input',
-    desc: 'A multi-line note.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'number',
-    label: 'Number',
-    hasOptions: false,
-    group: 'input',
-    desc: 'A numeric value with optional min/max.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'select',
-    label: 'Single choice',
-    hasOptions: true,
-    group: 'choice',
-    desc: 'Pick one from a list.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'multiselect',
-    label: 'Multiple choice',
-    hasOptions: true,
-    group: 'choice',
-    desc: 'Pick any number from a list.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'boolean',
-    label: 'Yes / No',
-    hasOptions: false,
-    group: 'choice',
-    desc: 'A pass/fail or yes/no toggle.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'date',
-    label: 'Date',
-    hasOptions: false,
-    group: 'input',
-    desc: 'A calendar date.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'rating',
-    label: 'Rating (1-5)',
-    hasOptions: false,
-    group: 'choice',
-    desc: 'A 1 to 5 star/score rating.',
-  ),
-  // Reference fields resolve real data at fill time (no manual options).
-  ChecklistFieldTypeDef(
-    type: 'asset',
-    label: 'Asset / Vehicle',
-    hasOptions: false,
-    group: 'reference',
-    source: 'asset',
-    desc: 'Pick a real asset from the fleet.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'site',
-    label: 'Site',
-    hasOptions: false,
-    group: 'reference',
-    source: 'site',
-    desc: 'Pick a real site from your live fleet data.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'user',
-    label: 'User / Person',
-    hasOptions: false,
-    group: 'reference',
-    source: 'user',
-    desc: 'Pick a real user from your organisation.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'photo',
-    label: 'Photo capture',
-    hasOptions: false,
-    group: 'media',
-    desc: 'One or more photos.',
-  ),
-  ChecklistFieldTypeDef(
-    type: 'signature',
-    label: 'Signature',
-    hasOptions: false,
-    group: 'media',
-    desc: 'A captured signature.',
-  ),
-];
+const List<ChecklistFieldTypeDef> kChecklistFieldTypes =
+    <ChecklistFieldTypeDef>[
+      ChecklistFieldTypeDef(
+        type: 'section',
+        label: 'Section heading',
+        hasOptions: false,
+        group: 'layout',
+        desc: 'A titled divider to group fields.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'text',
+        label: 'Short text',
+        hasOptions: false,
+        group: 'input',
+        desc: 'A single line of free text.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'textarea',
+        label: 'Long text',
+        hasOptions: false,
+        group: 'input',
+        desc: 'A multi-line note.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'number',
+        label: 'Number',
+        hasOptions: false,
+        group: 'input',
+        desc: 'A numeric value with optional min/max.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'select',
+        label: 'Single choice',
+        hasOptions: true,
+        group: 'choice',
+        desc: 'Pick one from a list.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'multiselect',
+        label: 'Multiple choice',
+        hasOptions: true,
+        group: 'choice',
+        desc: 'Pick any number from a list.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'boolean',
+        label: 'Yes / No',
+        hasOptions: false,
+        group: 'choice',
+        desc: 'A pass/fail or yes/no toggle.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'date',
+        label: 'Date',
+        hasOptions: false,
+        group: 'input',
+        desc: 'A calendar date.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'rating',
+        label: 'Rating (1-5)',
+        hasOptions: false,
+        group: 'choice',
+        desc: 'A 1 to 5 star/score rating.',
+      ),
+      // Reference fields resolve real data at fill time (no manual options).
+      ChecklistFieldTypeDef(
+        type: 'asset',
+        label: 'Asset / Vehicle',
+        hasOptions: false,
+        group: 'reference',
+        source: 'asset',
+        desc: 'Pick a real asset from the fleet.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'site',
+        label: 'Site',
+        hasOptions: false,
+        group: 'reference',
+        source: 'site',
+        desc: 'Pick a real site from your live fleet data.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'user',
+        label: 'User / Person',
+        hasOptions: false,
+        group: 'reference',
+        source: 'user',
+        desc: 'Pick a real user from your organisation.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'photo',
+        label: 'Photo capture',
+        hasOptions: false,
+        group: 'media',
+        desc: 'One or more photos.',
+      ),
+      ChecklistFieldTypeDef(
+        type: 'signature',
+        label: 'Signature',
+        hasOptions: false,
+        group: 'media',
+        desc: 'A captured signature.',
+      ),
+    ];
 
-final Map<String, ChecklistFieldTypeDef> _kByType = <String, ChecklistFieldTypeDef>{
-  for (final ChecklistFieldTypeDef d in kChecklistFieldTypes) d.type: d,
-};
+final Map<String, ChecklistFieldTypeDef> _kByType =
+    <String, ChecklistFieldTypeDef>{
+      for (final ChecklistFieldTypeDef d in kChecklistFieldTypes) d.type: d,
+    };
 
 final ChecklistFieldTypeDef _kTextTypeDef = _kByType['text']!;
 

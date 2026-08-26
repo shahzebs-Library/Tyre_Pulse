@@ -137,8 +137,10 @@ void main() {
       'why': 'Left rear brake pad worn',
     };
     expect(
-      visibleChecklistFields(template.fields, answers)
-          .map((ChecklistField f) => f.id),
+      visibleChecklistFields(
+        template.fields,
+        answers,
+      ).map((ChecklistField f) => f.id),
       contains('why'),
     );
 
@@ -148,8 +150,10 @@ void main() {
     // do to compute what is now visible.
     answers['q1'] = 'Pass';
     expect(
-      visibleChecklistFields(template.fields, answers)
-          .map((ChecklistField f) => f.id),
+      visibleChecklistFields(
+        template.fields,
+        answers,
+      ).map((ChecklistField f) => f.id),
       isNot(contains('why')),
     );
     // The raw answer is still there, byte for byte - this is what a submit

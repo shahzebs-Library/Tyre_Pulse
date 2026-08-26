@@ -241,15 +241,16 @@ final class SupabaseWorkOrderRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      var query =
-          _client.from(SupabaseTables.workOrders).select(workOrderListColumns);
-      final String? filter = workOrderCountryFilter(country);
-      if (filter != null) {
-        query = query.or(filter);
-      }
-      return await query.order('opened_at', ascending: false).limit(limit)
-          as List<Map<String, dynamic>>;
-    });
+          var query = _client
+              .from(SupabaseTables.workOrders)
+              .select(workOrderListColumns);
+          final String? filter = workOrderCountryFilter(country);
+          if (filter != null) {
+            query = query.or(filter);
+          }
+          return await query.order('opened_at', ascending: false).limit(limit)
+              as List<Map<String, dynamic>>;
+        });
     return <WorkOrderItem>[
       for (final Map<String, dynamic> row in rows) WorkOrderItem.fromRow(row),
     ];

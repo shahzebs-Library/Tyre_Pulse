@@ -29,14 +29,16 @@ class StorageReadFailure implements Exception {
   /// "not found": we do not know that, and saying it is how the original bug
   /// reached the screen.
   AppError toAppError() => AppError(
-        kind: AppErrorKind.storage,
-        message: 'This device could not read its saved data just now. '
-            'Nothing has been changed. Try again in a moment.',
-        technical: 'secure storage read failed for slot "$key" '
-            '(${status.name})',
-        cause: this,
-        isRetryable: true,
-      );
+    kind: AppErrorKind.storage,
+    message:
+        'This device could not read its saved data just now. '
+        'Nothing has been changed. Try again in a moment.',
+    technical:
+        'secure storage read failed for slot "$key" '
+        '(${status.name})',
+    cause: this,
+    isRetryable: true,
+  );
 
   @override
   String toString() => 'StorageReadFailure($key, ${status.name})';

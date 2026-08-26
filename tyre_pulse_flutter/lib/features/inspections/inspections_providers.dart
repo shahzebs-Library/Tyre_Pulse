@@ -21,39 +21,39 @@ import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart
 
 final Provider<InspectionDraftRepository> inspectionDraftRepositoryProvider =
     Provider<InspectionDraftRepository>((ref) {
-  final AppDatabase db = ref.watch(appDatabaseProvider);
-  return DriftInspectionDraftRepository(db.draftsDao, db.mediaDao);
-});
+      final AppDatabase db = ref.watch(appDatabaseProvider);
+      return DriftInspectionDraftRepository(db.draftsDao, db.mediaDao);
+    });
 
 final Provider<InspectionRemoteRepository> inspectionRemoteRepositoryProvider =
     Provider<InspectionRemoteRepository>(
-  (ref) => SupabaseInspectionRemoteRepository(
-    ref.watch(supabaseClientProvider),
-  ),
-);
+      (ref) =>
+          SupabaseInspectionRemoteRepository(ref.watch(supabaseClientProvider)),
+    );
 
 final Provider<InspectionPhotoUploader> inspectionPhotoUploaderProvider =
     Provider<InspectionPhotoUploader>(
-  (ref) => SupabaseInspectionPhotoUploader(ref.watch(supabaseClientProvider)),
-);
+      (ref) =>
+          SupabaseInspectionPhotoUploader(ref.watch(supabaseClientProvider)),
+    );
 
 /// Real by default - unlike [appDatabaseProvider], this needs nothing
 /// overridden to work: `path_provider` resolves the app's own documents
 /// directory the same way on every real device.
 final Provider<InspectionSubmissionQueue> inspectionSubmissionQueueProvider =
     Provider<InspectionSubmissionQueue>(
-  (ref) => FileInspectionSubmissionQueue(),
-);
+      (ref) => FileInspectionSubmissionQueue(),
+    );
 
 final Provider<InspectionSyncEngine> inspectionSyncEngineProvider =
     Provider<InspectionSyncEngine>(
-  (ref) => InspectionSyncEngine(
-    draftRepository: ref.watch(inspectionDraftRepositoryProvider),
-    queue: ref.watch(inspectionSubmissionQueueProvider),
-    remote: ref.watch(inspectionRemoteRepositoryProvider),
-    photoUploader: ref.watch(inspectionPhotoUploaderProvider),
-  ),
-);
+      (ref) => InspectionSyncEngine(
+        draftRepository: ref.watch(inspectionDraftRepositoryProvider),
+        queue: ref.watch(inspectionSubmissionQueueProvider),
+        remote: ref.watch(inspectionRemoteRepositoryProvider),
+        photoUploader: ref.watch(inspectionPhotoUploaderProvider),
+      ),
+    );
 
 final Provider<InspectionPhotoCapture> inspectionPhotoCaptureProvider =
     Provider<InspectionPhotoCapture>((ref) => InspectionPhotoCapture());
@@ -67,7 +67,6 @@ final Provider<InspectionGpsSource> inspectionGpsSourceProvider =
 /// project's existing polling-over-watching choices elsewhere (spec
 /// section 64: no dependency added to watch a folder for a count a screen
 /// can simply re-ask for on its own lifecycle events).
-final FutureProvider<int> inspectionPendingCountProvider =
-    FutureProvider<int>(
+final FutureProvider<int> inspectionPendingCountProvider = FutureProvider<int>(
   (ref) => ref.watch(inspectionSubmissionQueueProvider).pendingCount(),
 );

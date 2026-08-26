@@ -41,5 +41,6 @@ final class ChecklistAssetContext {
   final String? model;
 
   @override
-  String toString() => 'ChecklistAssetContext(site: $site, fleetNumber: $fleetNumber)';
+  String toString() =>
+      'ChecklistAssetContext(site: $site, fleetNumber: $fleetNumber)';
 }

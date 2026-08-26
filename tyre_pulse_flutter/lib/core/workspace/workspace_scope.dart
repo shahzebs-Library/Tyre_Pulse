@@ -153,18 +153,15 @@ final class CountryScope extends WorkspaceScope {
   static const String allSentinel = 'all';
 
   /// True when the scope carries the `all` sentinel in any casing.
-  bool get seesAllCountries => values.any(
-        (String value) => value.trim().toLowerCase() == allSentinel,
-      );
+  bool get seesAllCountries =>
+      values.any((String value) => value.trim().toLowerCase() == allSentinel);
 
   /// The named countries, sentinel removed. Empty when the user is scoped to
   /// everything, because "everything" is not a list this client can enumerate -
   /// the set of countries in the platform is server data, not a constant.
   List<String> get namedCountries => List<String>.unmodifiable(
-        values.where(
-          (String value) => value.trim().toLowerCase() != allSentinel,
-        ),
-      );
+    values.where((String value) => value.trim().toLowerCase() != allSentinel),
+  );
 
   /// Whether a row stamped [country] is visible.
   ///
@@ -219,15 +216,15 @@ final class SiteScope extends WorkspaceScope {
 
   /// True when the scope is organisation-wide.
   bool get isOrganisationWide => values.any(
-        (String value) => allSentinels.contains(value.trim().toUpperCase()),
-      );
+    (String value) => allSentinels.contains(value.trim().toUpperCase()),
+  );
 
   /// The named sites, sentinels removed.
   List<String> get namedSites => List<String>.unmodifiable(
-        values.where(
-          (String value) => !allSentinels.contains(value.trim().toUpperCase()),
-        ),
-      );
+    values.where(
+      (String value) => !allSentinels.contains(value.trim().toUpperCase()),
+    ),
+  );
 
   /// Whether a row stamped [site] is visible.
   ///

@@ -41,9 +41,7 @@ final class FakeScanLookupSource implements ScanLookupSource {
   }
 
   @override
-  Future<AssetLookupRecord?> findAssetByNumberIgnoringCase(
-    String code,
-  ) async {
+  Future<AssetLookupRecord?> findAssetByNumberIgnoringCase(String code) async {
     calls.add('numberIgnoringCase:$code');
     _throwIfConfigured();
     return assetByNumberIgnoringCase[code];

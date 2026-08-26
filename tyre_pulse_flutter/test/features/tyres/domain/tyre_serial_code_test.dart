@@ -55,10 +55,7 @@ void main() {
     });
 
     test('falls back through the alias list in order', () {
-      expect(
-        extractScanCode('{"serialNumber":"XYZ111"}'),
-        'XYZ111',
-      );
+      expect(extractScanCode('{"serialNumber":"XYZ111"}'), 'XYZ111');
       expect(extractScanCode('{"asset_no":"TM514"}'), 'TM514');
       expect(extractScanCode('{"code":"Q999"}'), 'Q999');
     });

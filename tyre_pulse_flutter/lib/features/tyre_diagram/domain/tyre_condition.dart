@@ -71,12 +71,11 @@ TyreCondition normaliseCondition(String? raw) {
 
 /// Maps [condition] onto a design-system status. See the library comment
 /// for why [TyreCondition.flat] resolves to [TpStatus.warning].
-TpStatus tyreConditionStatus(TyreCondition condition) =>
-    switch (condition) {
-      TyreCondition.good => TpStatus.ok,
-      TyreCondition.worn => TpStatus.warning,
-      TyreCondition.damaged => TpStatus.critical,
-      TyreCondition.puncture => TpStatus.critical,
-      TyreCondition.flat => TpStatus.warning,
-      TyreCondition.missing => TpStatus.unknown,
-    };
+TpStatus tyreConditionStatus(TyreCondition condition) => switch (condition) {
+  TyreCondition.good => TpStatus.ok,
+  TyreCondition.worn => TpStatus.warning,
+  TyreCondition.damaged => TpStatus.critical,
+  TyreCondition.puncture => TpStatus.critical,
+  TyreCondition.flat => TpStatus.warning,
+  TyreCondition.missing => TpStatus.unknown,
+};

@@ -52,8 +52,9 @@ String escapeLikeTerm(String term) {
 String? orIlikeFilter(List<String> columns, String term) {
   final String safe = escapeLikeTerm(term);
   if (safe.isEmpty) return null;
-  final List<String> cols =
-      columns.where((String column) => column.isNotEmpty).toList();
+  final List<String> cols = columns
+      .where((String column) => column.isNotEmpty)
+      .toList();
   if (cols.isEmpty) return null;
   return cols.map((String column) => '$column.ilike.%$safe%').join(',');
 }

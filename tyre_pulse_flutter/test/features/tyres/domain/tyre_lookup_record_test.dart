@@ -51,8 +51,9 @@ void main() {
     });
 
     test('every optional column may be absent', () {
-      final TyreLookupRecord record =
-          TyreLookupRecord.fromRow(<String, dynamic>{'id': 'row-2'});
+      final TyreLookupRecord record = TyreLookupRecord.fromRow(
+        <String, dynamic>{'id': 'row-2'},
+      );
 
       expect(record.brand, isNull);
       expect(record.size, isNull);
@@ -99,28 +100,30 @@ void main() {
     });
 
     test('is null when neither column was recorded', () {
-      final TyreLookupRecord record =
-          TyreLookupRecord.fromRow(<String, dynamic>{'id': 'row-7'});
+      final TyreLookupRecord record = TyreLookupRecord.fromRow(
+        <String, dynamic>{'id': 'row-7'},
+      );
       expect(record.bestPosition, isNull);
     });
   });
 
   group('equality', () {
     test('two records with identical fields are equal', () {
-      TyreLookupRecord build() => TyreLookupRecord.fromRow(
-            <String, dynamic>{'id': 'row-8', 'brand': 'Bridgestone'},
-          );
+      TyreLookupRecord build() => TyreLookupRecord.fromRow(<String, dynamic>{
+        'id': 'row-8',
+        'brand': 'Bridgestone',
+      });
       expect(build(), build());
       expect(build().hashCode, build().hashCode);
     });
 
     test('a different id makes two records unequal', () {
-      final TyreLookupRecord a = TyreLookupRecord.fromRow(
-        <String, dynamic>{'id': 'row-a'},
-      );
-      final TyreLookupRecord b = TyreLookupRecord.fromRow(
-        <String, dynamic>{'id': 'row-b'},
-      );
+      final TyreLookupRecord a = TyreLookupRecord.fromRow(<String, dynamic>{
+        'id': 'row-a',
+      });
+      final TyreLookupRecord b = TyreLookupRecord.fromRow(<String, dynamic>{
+        'id': 'row-b',
+      });
       expect(a, isNot(b));
     });
   });

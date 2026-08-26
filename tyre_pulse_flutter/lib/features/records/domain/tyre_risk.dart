@@ -42,8 +42,8 @@ const List<String> kTyreRiskLevels = <String>[
 /// this mirrors - "a tyre nobody has assessed must not default to looking
 /// healthy".
 TpStatus tyreRiskStatus(String? riskLevel) => switch (riskLevel) {
-      'Critical' => TpStatus.critical,
-      'High' || 'Medium' => TpStatus.warning,
-      'Low' => TpStatus.ok,
-      _ => TpStatus.unknown,
-    };
+  'Critical' => TpStatus.critical,
+  'High' || 'Medium' => TpStatus.warning,
+  'Low' => TpStatus.ok,
+  _ => TpStatus.unknown,
+};

@@ -35,7 +35,8 @@ void main() {
       expect(
         updateWasCalled,
         isFalse,
-        reason: 'the update function must never run over a read that failed '
+        reason:
+            'the update function must never run over a read that failed '
             '- a caller cannot fold an unreadable read into "[]" and lose '
             'what was actually queued',
       );
@@ -43,7 +44,9 @@ void main() {
       // The real assertion: nothing was written. Not "an exception was
       // thrown", which could be true even if a write happened first.
       final writeOrDeleteCalls = fake.calls
-          .where((c) => c.startsWith('write:queue') || c.startsWith('delete:queue'))
+          .where(
+            (c) => c.startsWith('write:queue') || c.startsWith('delete:queue'),
+          )
           .toList();
       expect(
         writeOrDeleteCalls,
@@ -68,18 +71,23 @@ void main() {
     test('a torn read also refuses, exactly like unreadable', () async {
       // Commit a chunked value for real, then take one chunk away - the
       // shape a torn read is built from throughout this suite.
-      final chunkStore =
-          StagedSecureStore(slots: fake, chunkSize: 4, sleep: _noSleep);
+      final chunkStore = StagedSecureStore(
+        slots: fake,
+        chunkSize: 4,
+        sleep: _noSleep,
+      );
       await chunkStore.write('note', 'a value long enough to need chunks');
-      final chunkKey =
-          fake.raw.keys.firstWhere((k) => k.contains('_chunk_'));
+      final chunkKey = fake.raw.keys.firstWhere((k) => k.contains('_chunk_'));
       fake.corrupt(chunkKey);
 
       await expectLater(
         () => chunkStore.updateValue('note', (current) => current),
         throwsA(
-          isA<StorageReadFailure>()
-              .having((f) => f.status, 'status', SecureReadStatus.torn),
+          isA<StorageReadFailure>().having(
+            (f) => f.status,
+            'status',
+            SecureReadStatus.torn,
+          ),
         ),
       );
     });
@@ -148,13 +156,15 @@ void main() {
       expect(await store.readValue('session'), 'abc');
     });
 
-    test('returns null for absent, unreadable AND torn alike - this method '
-        'exists because the Supabase storage interface cannot express more',
-        () async {
-      expect(await store.readValue('never-written'), isNull);
+    test(
+      'returns null for absent, unreadable AND torn alike - this method '
+      'exists because the Supabase storage interface cannot express more',
+      () async {
+        expect(await store.readValue('never-written'), isNull);
 
-      fake.failReadFor('broken_meta', StagedSecureStore.defaultReadAttempts);
-      expect(await store.readValue('broken'), isNull);
-    });
+        fake.failReadFor('broken_meta', StagedSecureStore.defaultReadAttempts);
+        expect(await store.readValue('broken'), isNull);
+      },
+    );
   });
 }

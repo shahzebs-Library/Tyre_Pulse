@@ -13,8 +13,8 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart';
 void main() {
   group('ChecklistApprovalTemplateInfo.fromRow', () {
     test('decodes every column', () {
-      final ChecklistApprovalTemplateInfo? info =
-          ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
+      final ChecklistApprovalTemplateInfo?
+      info = ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
         'id': 'tpl-1',
         'require_area_manager': true,
         'require_signature': true,
@@ -40,8 +40,8 @@ void main() {
         'the same way', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-        'id': 'tpl-2',
-      });
+            'id': 'tpl-2',
+          });
       expect(info, isNotNull);
       expect(info!.requireAreaManager, isNull);
       expect(info.requireSignature, isFalse);
@@ -52,32 +52,30 @@ void main() {
         'guessing', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-        'id': 'tpl-3',
-        'require_area_manager': 'yes',
-      });
+            'id': 'tpl-3',
+            'require_area_manager': 'yes',
+          });
       expect(info!.requireAreaManager, isNull);
     });
 
-    test('a non-list fields column decodes to an empty list, not a throw',
-        () {
+    test('a non-list fields column decodes to an empty list, not a throw', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-        'id': 'tpl-4',
-        'fields': 'not a list',
-      });
+            'id': 'tpl-4',
+            'fields': 'not a list',
+          });
       expect(info!.fields, isEmpty);
     });
 
-    test('a non-map entry inside fields is skipped, not fatal to the rest',
-        () {
+    test('a non-map entry inside fields is skipped, not fatal to the rest', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-        'id': 'tpl-5',
-        'fields': <Object?>[
-          'not a map',
-          <String, Object?>{'id': 'q1', 'type': 'text'},
-        ],
-      });
+            'id': 'tpl-5',
+            'fields': <Object?>[
+              'not a map',
+              <String, Object?>{'id': 'q1', 'type': 'text'},
+            ],
+          });
       expect(info!.fields, hasLength(1));
       expect(info.fields.single.id, 'q1');
     });

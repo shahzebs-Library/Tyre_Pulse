@@ -104,6 +104,7 @@ final class TyreRecordsQuery {
       Object.hash(search, site, riskLevel, country, restrictToSite);
 
   @override
-  String toString() => 'TyreRecordsQuery(search: "$search", site: $site, '
+  String toString() =>
+      'TyreRecordsQuery(search: "$search", site: $site, '
       'risk: $riskLevel, country: $country, restrictToSite: $restrictToSite)';
 }

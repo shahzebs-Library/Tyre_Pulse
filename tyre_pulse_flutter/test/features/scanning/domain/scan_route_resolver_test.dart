@@ -101,8 +101,7 @@ void main() {
       expect(actions[0].intent, ScanActionIntent.viewTyre);
       expect(actions[1].intent, ScanActionIntent.startInspection);
 
-      final NewInspectionRoute inspect =
-          actions[1].route as NewInspectionRoute;
+      final NewInspectionRoute inspect = actions[1].route as NewInspectionRoute;
       expect(inspect.assetNo, const AssetNo('TM514'));
       expect(inspect.siteName, const SiteName('NHC'));
       expect(inspect.tyreSerial, const TyreSerial('EP0604207'));
@@ -128,8 +127,7 @@ void main() {
     });
 
     test('a tyre not fitted to any asset offers ONLY the view action - '
-        'starting an inspection with nothing to inspect is never offered',
-        () {
+        'starting an inspection with nothing to inspect is never offered', () {
       const TyreLookupRecord unfitted = TyreLookupRecord(id: 't3');
       const TyreScanMatch match = TyreScanMatch(
         rawInput: 'S2',
@@ -181,7 +179,10 @@ void main() {
       );
 
       expect(primaryRouteFor(failure), primaryRouteFor(miss));
-      expect(actionsFor(failure).single.intent, ScanActionIntent.searchManually);
+      expect(
+        actionsFor(failure).single.intent,
+        ScanActionIntent.searchManually,
+      );
     });
   });
 

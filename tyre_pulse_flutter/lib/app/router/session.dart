@@ -65,19 +65,19 @@ class TpSession {
   const TpSession({required this.phase, this.gate = TpShellGate.none});
 
   const TpSession.resolving()
-      : phase = TpSessionPhase.resolving,
-        gate = TpShellGate.none;
+    : phase = TpSessionPhase.resolving,
+      gate = TpShellGate.none;
 
   const TpSession.timedOut()
-      : phase = TpSessionPhase.timedOut,
-        gate = TpShellGate.none;
+    : phase = TpSessionPhase.timedOut,
+      gate = TpShellGate.none;
 
   const TpSession.signedOut()
-      : phase = TpSessionPhase.signedOut,
-        gate = TpShellGate.none;
+    : phase = TpSessionPhase.signedOut,
+      gate = TpShellGate.none;
 
   const TpSession.signedIn({this.gate = TpShellGate.none})
-      : phase = TpSessionPhase.signedIn;
+    : phase = TpSessionPhase.signedIn;
 
   final TpSessionPhase phase;
 
@@ -108,5 +108,6 @@ class TpSession {
 }
 
 /// Override this from the authentication layer.
-final Provider<TpSession> sessionProvider =
-    Provider<TpSession>((ref) => const TpSession.signedOut());
+final Provider<TpSession> sessionProvider = Provider<TpSession>(
+  (ref) => const TpSession.signedOut(),
+);

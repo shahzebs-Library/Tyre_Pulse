@@ -18,10 +18,9 @@ import 'package:tyre_pulse/features/records/records_screen_registrations.dart';
 
 void main() {
   test('registers exactly the tyre records route, and nothing else', () {
-    expect(
-      recordsScreenRegistrations.keys.toList(),
-      <String>[TpRouteId.tyreRecords],
-    );
+    expect(recordsScreenRegistrations.keys.toList(), <String>[
+      TpRouteId.tyreRecords,
+    ]);
   });
 
   testWidgets(
@@ -45,30 +44,27 @@ void main() {
       expect(
         (built as TyreRecordsListScreen).backFallback,
         isNotEmpty,
-        reason: 'a route with no fallback would leave Back with nowhere '
+        reason:
+            'a route with no fallback would leave Back with nowhere '
             'to go if this screen is ever reached with an empty stack',
       );
     },
   );
 
-  test(
-    'merges cleanly into a larger registry without dropping or '
-    'overwriting an entry that was already there',
-    () {
-      const String otherRouteId = 'someOtherFeatureRoute';
-      final TpScreenRegistry base = TpScreenRegistry.empty.withAll(
-        <String, TpScreenBuilder>{
-          otherRouteId: (BuildContext context, TpRoute route) =>
-              const SizedBox.shrink(),
-        },
-      );
+  test('merges cleanly into a larger registry without dropping or '
+      'overwriting an entry that was already there', () {
+    const String otherRouteId = 'someOtherFeatureRoute';
+    final TpScreenRegistry base = TpScreenRegistry.empty.withAll(
+      <String, TpScreenBuilder>{
+        otherRouteId: (BuildContext context, TpRoute route) =>
+            const SizedBox.shrink(),
+      },
+    );
 
-      final TpScreenRegistry merged =
-          base.withAll(recordsScreenRegistrations);
+    final TpScreenRegistry merged = base.withAll(recordsScreenRegistrations);
 
-      expect(merged.builders.containsKey(otherRouteId), isTrue);
-      expect(merged.builders.containsKey(TpRouteId.tyreRecords), isTrue);
-      expect(merged.builders.length, 2);
-    },
-  );
+    expect(merged.builders.containsKey(otherRouteId), isTrue);
+    expect(merged.builders.containsKey(TpRouteId.tyreRecords), isTrue);
+    expect(merged.builders.length, 2);
+  });
 }

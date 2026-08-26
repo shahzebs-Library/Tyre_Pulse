@@ -29,8 +29,7 @@ void main() {
     });
 
     test('admin ai chat requires admin, NOT the grantable ai module', () {
-      final RouteGuard guard =
-          TpRouteGuards.forRouteId(TpRouteId.adminAiChat);
+      final RouteGuard guard = TpRouteGuards.forRouteId(TpRouteId.adminAiChat);
       expect(guard, isA<ModuleGuarded>());
       expect((guard as ModuleGuarded).module, RouteModule.admin);
     });
@@ -38,8 +37,9 @@ void main() {
     test('repair request has a rule at all', () {
       // The production registry has no rule for this route, so it fell through
       // to authenticated-only while the screen enforced a module.
-      final RouteGuard guard =
-          TpRouteGuards.forRouteId(TpRouteId.repairRequest);
+      final RouteGuard guard = TpRouteGuards.forRouteId(
+        TpRouteId.repairRequest,
+      );
       expect(guard, isA<ModuleGuarded>());
       expect((guard as ModuleGuarded).module, RouteModule.repairRequest);
     });
@@ -69,38 +69,39 @@ void main() {
       // Home, notifications and profile. All three are explicit in the
       // production app; anything else being unguarded would be an omission.
       final List<String> authenticatedOnly = TpRouteGuards.byRouteId.entries
-          .where((MapEntry<String, RouteGuard> e) => e.value is AuthenticatedOnly)
+          .where(
+            (MapEntry<String, RouteGuard> e) => e.value is AuthenticatedOnly,
+          )
           .map((MapEntry<String, RouteGuard> e) => e.key)
           .toList();
 
-      expect(
-        authenticatedOnly.toSet(),
-        <String>{
-          TpRouteId.home,
-          TpRouteId.notifications,
-          TpRouteId.profile,
-        },
-      );
+      expect(authenticatedOnly.toSet(), <String>{
+        TpRouteId.home,
+        TpRouteId.notifications,
+        TpRouteId.profile,
+      });
     });
 
     test('filing an accident is a different module from reading them', () {
       expect(
-        (TpRouteGuards.forRouteId(TpRouteId.accidentReport) as ModuleGuarded)
-            .module,
+        (TpRouteGuards.forRouteId(
+          TpRouteId.accidentReport,
+        ) as ModuleGuarded).module,
         RouteModule.reportAccident,
       );
       expect(
-        (TpRouteGuards.forRouteId(TpRouteId.accidentDashboard)
-                as ModuleGuarded)
-            .module,
+        (TpRouteGuards.forRouteId(
+          TpRouteId.accidentDashboard,
+        ) as ModuleGuarded).module,
         RouteModule.accidents,
       );
     });
 
     test('an inspection detail is gated on inspect, not on history', () {
       expect(
-        (TpRouteGuards.forRouteId(TpRouteId.inspectionDetail) as ModuleGuarded)
-            .module,
+        (TpRouteGuards.forRouteId(
+          TpRouteId.inspectionDetail,
+        ) as ModuleGuarded).module,
         RouteModule.inspect,
       );
     });
@@ -128,8 +129,9 @@ void main() {
 
     test('sensitive modules fail CLOSED', () {
       for (final RouteModule module in RouteModule.sensitive) {
-        final ModuleAccessDecision decision =
-            resolver.decide(ModuleGuarded(module));
+        final ModuleAccessDecision decision = resolver.decide(
+          ModuleGuarded(module),
+        );
         expect(decision, isA<ModuleAccessDenied>());
         expect(
           (decision as ModuleAccessDenied).reason,
@@ -181,15 +183,19 @@ void main() {
   group('module keys', () {
     test('compare by value', () {
       expect(const RouteModule('inspect'), RouteModule.inspect);
-      expect(const RouteModule('inspect').hashCode, RouteModule.inspect.hashCode);
+      expect(
+        const RouteModule('inspect').hashCode,
+        RouteModule.inspect.hashCode,
+      );
       expect(RouteModule.inspect, isNot(RouteModule.admin));
     });
 
     test('the sensitive set is exactly the production one', () {
-      expect(
-        RouteModule.sensitive,
-        <RouteModule>{RouteModule.admin, RouteModule.users, RouteModule.approvals},
-      );
+      expect(RouteModule.sensitive, <RouteModule>{
+        RouteModule.admin,
+        RouteModule.users,
+        RouteModule.approvals,
+      });
     });
   });
 }

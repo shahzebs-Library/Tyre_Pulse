@@ -43,9 +43,9 @@ class TpStatCard extends StatelessWidget {
     this.icon,
     this.onTap,
     super.key,
-  })  : _count = count,
-        _text = null,
-        _isUnavailable = false;
+  }) : _count = count,
+       _text = null,
+       _isUnavailable = false;
 
   /// A measured value that is not a plain count - a percentage, a distance.
   /// The caller formats it, because only the caller knows the unit and the
@@ -58,9 +58,9 @@ class TpStatCard extends StatelessWidget {
     this.icon,
     this.onTap,
     super.key,
-  })  : _count = null,
-        _text = value,
-        _isUnavailable = false;
+  }) : _count = null,
+       _text = value,
+       _isUnavailable = false;
 
   /// Nothing was measured.
   ///
@@ -73,10 +73,10 @@ class TpStatCard extends StatelessWidget {
     this.icon,
     this.onTap,
     super.key,
-  })  : _count = null,
-        _text = null,
-        _isUnavailable = true,
-        status = TpStatus.unknown;
+  }) : _count = null,
+       _text = null,
+       _isUnavailable = true,
+       status = TpStatus.unknown;
 
   final String label;
 
@@ -108,8 +108,9 @@ class TpStatCard extends StatelessWidget {
         ? l10n.valueNotMeasured
         : (_count?.toString() ?? _text ?? l10n.valueNotMeasured);
 
-    final String? displayCaption =
-        _isUnavailable ? (caption ?? l10n.valueUnavailable) : caption;
+    final String? displayCaption = _isUnavailable
+        ? (caption ?? l10n.valueUnavailable)
+        : caption;
 
     return TpCard(
       key: _isUnavailable ? TpStatCardKeys.unavailable : TpStatCardKeys.value,
@@ -123,11 +124,7 @@ class TpStatCard extends StatelessWidget {
           Row(
             children: <Widget>[
               if (icon != null) ...<Widget>[
-                Icon(
-                  icon,
-                  size: TpSizing.iconSm,
-                  color: palette.textMuted,
-                ),
+                Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
                 const SizedBox(width: TpSpace.xs),
               ],
               Expanded(

@@ -22,10 +22,7 @@ import 'package:tyre_pulse/app/theme/tp_theme.dart';
 /// common case. A widget that is itself a page frame ([TpScaffold]), or a
 /// control meant to sit in `Scaffold.appBar`, is passed directly as [home]
 /// so the test can build its own surrounding `Scaffold`.
-Widget tpApp({
-  required Widget home,
-  Locale locale = const Locale('en'),
-}) {
+Widget tpApp({required Widget home, Locale locale = const Locale('en')}) {
   return MaterialApp(
     debugShowCheckedModeBanner: false,
     theme: TpTheme.light,
@@ -47,7 +44,10 @@ Future<void> pumpTp(
   Locale locale = const Locale('en'),
 }) {
   return tester.pumpWidget(
-    tpApp(home: Scaffold(body: body), locale: locale),
+    tpApp(
+      home: Scaffold(body: body),
+      locale: locale,
+    ),
   );
 }
 

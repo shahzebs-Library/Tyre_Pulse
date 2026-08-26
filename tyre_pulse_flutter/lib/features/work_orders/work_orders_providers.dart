@@ -14,14 +14,14 @@ import 'package:tyre_pulse/features/work_orders/data/work_order_repository.dart'
 
 final workOrderQueuedCommandRepositoryProvider =
     Provider<QueuedCommandRepository>((ref) {
-  final AppDatabase db = ref.watch(appDatabaseProvider);
-  return QueuedCommandRepository(db.queueDao);
-});
+      final AppDatabase db = ref.watch(appDatabaseProvider);
+      return QueuedCommandRepository(db.queueDao);
+    });
 
 final Provider<WorkOrderRepository> workOrderRepositoryProvider =
     Provider<WorkOrderRepository>(
-  (ref) => SupabaseWorkOrderRepository(
-    ref.watch(supabaseClientProvider),
-    ref.watch(workOrderQueuedCommandRepositoryProvider),
-  ),
-);
+      (ref) => SupabaseWorkOrderRepository(
+        ref.watch(supabaseClientProvider),
+        ref.watch(workOrderQueuedCommandRepositoryProvider),
+      ),
+    );

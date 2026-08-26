@@ -77,7 +77,8 @@ final class WorkspaceProfile {
     if (rawId is! String || rawId.isEmpty) {
       throw const AppError(
         kind: AppErrorKind.validation,
-        message: 'Your profile could not be read. Sign in again, and contact '
+        message:
+            'Your profile could not be read. Sign in again, and contact '
             'your administrator if this keeps happening.',
         technical: 'profiles row has no usable id column',
       );
@@ -187,20 +188,19 @@ final class WorkspaceContext {
     String? activeCountry,
     List<String>? activeSites,
     String? currency,
-  }) =>
-      WorkspaceContext(
-        userId: profile.userId,
-        role: profile.role,
-        effectivePermissions: effectivePermissions,
-        countryScope: profile.countryScope,
-        siteScope: profile.siteScope,
-        tenantId: profile.tenantId,
-        companyId: profile.companyId,
-        activeCountry: activeCountry,
-        activeSites: List<String>.unmodifiable(activeSites ?? const <String>[]),
-        currency: currency,
-        legacySite: profile.legacySite,
-      );
+  }) => WorkspaceContext(
+    userId: profile.userId,
+    role: profile.role,
+    effectivePermissions: effectivePermissions,
+    countryScope: profile.countryScope,
+    siteScope: profile.siteScope,
+    tenantId: profile.tenantId,
+    companyId: profile.companyId,
+    activeCountry: activeCountry,
+    activeSites: List<String>.unmodifiable(activeSites ?? const <String>[]),
+    currency: currency,
+    legacySite: profile.legacySite,
+  );
 
   final String userId;
   final UserRole role;
@@ -263,8 +263,7 @@ final class WorkspaceContext {
   /// it.
   Set<ModuleKey> allowedModules({
     AdminRevokePrecedence precedence = AdminRevokePrecedence.serverAppUserCan,
-  }) =>
-      allowedModulesFor(effectivePermissions, precedence: precedence);
+  }) => allowedModulesFor(effectivePermissions, precedence: precedence);
 
   WorkspaceContext copyWith({
     UserRole? role,
@@ -279,23 +278,23 @@ final class WorkspaceContext {
     String? currency,
     bool clearCurrency = false,
     String? legacySite,
-  }) =>
-      WorkspaceContext(
-        userId: userId,
-        role: role ?? this.role,
-        effectivePermissions: effectivePermissions ?? this.effectivePermissions,
-        countryScope: countryScope ?? this.countryScope,
-        siteScope: siteScope ?? this.siteScope,
-        tenantId: tenantId ?? this.tenantId,
-        companyId: companyId ?? this.companyId,
-        activeCountry:
-            clearActiveCountry ? null : (activeCountry ?? this.activeCountry),
-        activeSites: activeSites == null
-            ? this.activeSites
-            : List<String>.unmodifiable(activeSites),
-        currency: clearCurrency ? null : (currency ?? this.currency),
-        legacySite: legacySite ?? this.legacySite,
-      );
+  }) => WorkspaceContext(
+    userId: userId,
+    role: role ?? this.role,
+    effectivePermissions: effectivePermissions ?? this.effectivePermissions,
+    countryScope: countryScope ?? this.countryScope,
+    siteScope: siteScope ?? this.siteScope,
+    tenantId: tenantId ?? this.tenantId,
+    companyId: companyId ?? this.companyId,
+    activeCountry: clearActiveCountry
+        ? null
+        : (activeCountry ?? this.activeCountry),
+    activeSites: activeSites == null
+        ? this.activeSites
+        : List<String>.unmodifiable(activeSites),
+    currency: clearCurrency ? null : (currency ?? this.currency),
+    legacySite: legacySite ?? this.legacySite,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -315,18 +314,18 @@ final class WorkspaceContext {
 
   @override
   int get hashCode => Object.hash(
-        userId,
-        role,
-        effectivePermissions,
-        countryScope,
-        siteScope,
-        tenantId,
-        companyId,
-        activeCountry,
-        currency,
-        legacySite,
-        Object.hashAll(activeSites),
-      );
+    userId,
+    role,
+    effectivePermissions,
+    countryScope,
+    siteScope,
+    tenantId,
+    companyId,
+    activeCountry,
+    currency,
+    legacySite,
+    Object.hashAll(activeSites),
+  );
 
   @override
   String toString() {

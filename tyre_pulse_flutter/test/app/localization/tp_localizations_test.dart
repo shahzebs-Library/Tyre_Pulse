@@ -42,19 +42,20 @@ File _locateArbFile(String fileName) {
 
 /// Reads one translatable value straight out of the committed ARB source.
 String _arbValue(String fileName, String key) {
-  final Map<String, dynamic> arb =
-      jsonDecode(_locateArbFile(fileName).readAsStringSync())
-          as Map<String, dynamic>;
+  final Map<String, dynamic> arb = jsonDecode(
+    _locateArbFile(fileName).readAsStringSync(),
+  ) as Map<String, dynamic>;
   return arb[key] as String;
 }
 
 void main() {
   group('supportedLocales', () {
     test('is exactly English, Arabic and Urdu, in that order', () {
-      expect(
-        TpLocalizations.supportedLocales,
-        const <Locale>[Locale('en'), Locale('ar'), Locale('ur')],
-      );
+      expect(TpLocalizations.supportedLocales, const <Locale>[
+        Locale('en'),
+        Locale('ar'),
+        Locale('ur'),
+      ]);
     });
 
     test('carries no more and no fewer than three locales', () {
@@ -138,8 +139,7 @@ void main() {
       );
     });
 
-    test('a device locale with a country subtag matches on language alone',
-        () {
+    test('a device locale with a country subtag matches on language alone', () {
       // The device might report ar_SA; the app only ships bare ar, and
       // resolve must hand back the SUPPORTED candidate, not the device
       // locale verbatim.
@@ -190,8 +190,9 @@ void main() {
     };
 
     for (final Locale locale in TpLocalizations.supportedLocales) {
-      testWidgets('resolves locale ${locale.languageCode} correctly',
-          (WidgetTester tester) async {
+      testWidgets('resolves locale ${locale.languageCode} correctly', (
+        WidgetTester tester,
+      ) async {
         late TextDirection ambientDirection;
         late Locale resolvedLocale;
         late String tabHome;
@@ -225,7 +226,8 @@ void main() {
         expect(
           tabHome,
           _arbValue(arbFileByLocale[locale]!, 'tabHome'),
-          reason: 'wrong locale content resolved for '
+          reason:
+              'wrong locale content resolved for '
               '${locale.languageCode}',
         );
       });

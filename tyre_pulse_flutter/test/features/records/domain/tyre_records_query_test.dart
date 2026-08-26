@@ -6,13 +6,17 @@ import 'package:tyre_pulse/features/records/domain/models/tyre_records_query.dar
 void main() {
   group('TyreRecordsQuery.effectiveSite', () {
     test('is the explicit site when one is chosen', () {
-      const TyreRecordsQuery query =
-          TyreRecordsQuery(site: 'NHC', restrictToSite: 'DIRIYAH');
+      const TyreRecordsQuery query = TyreRecordsQuery(
+        site: 'NHC',
+        restrictToSite: 'DIRIYAH',
+      );
       expect(query.effectiveSite, 'NHC');
     });
 
     test('falls back to the scope restriction when nothing was chosen', () {
-      const TyreRecordsQuery query = TyreRecordsQuery(restrictToSite: 'DIRIYAH');
+      const TyreRecordsQuery query = TyreRecordsQuery(
+        restrictToSite: 'DIRIYAH',
+      );
       expect(query.effectiveSite, 'DIRIYAH');
     });
 
@@ -41,14 +45,15 @@ void main() {
 
     test('counts both together', () {
       expect(
-        const TyreRecordsQuery(site: 'NHC', riskLevel: 'Critical')
-            .activeFilterCount,
+        const TyreRecordsQuery(
+          site: 'NHC',
+          riskLevel: 'Critical',
+        ).activeFilterCount,
         2,
       );
     });
 
-    test('never counts restrictToSite - it is scope, not a chosen filter',
-        () {
+    test('never counts restrictToSite - it is scope, not a chosen filter', () {
       expect(
         const TyreRecordsQuery(restrictToSite: 'DIRIYAH').activeFilterCount,
         0,
@@ -57,8 +62,10 @@ void main() {
 
     test('never counts country or search', () {
       expect(
-        const TyreRecordsQuery(country: 'KSA', search: 'TM514')
-            .activeFilterCount,
+        const TyreRecordsQuery(
+          country: 'KSA',
+          search: 'TM514',
+        ).activeFilterCount,
         0,
       );
     });
@@ -66,8 +73,11 @@ void main() {
 
   group('TyreRecordsQuery.copyWith', () {
     test('replaces a field without touching the others', () {
-      const TyreRecordsQuery base =
-          TyreRecordsQuery(search: 'a', site: 'NHC', riskLevel: 'Low');
+      const TyreRecordsQuery base = TyreRecordsQuery(
+        search: 'a',
+        site: 'NHC',
+        riskLevel: 'Low',
+      );
       final TyreRecordsQuery next = base.copyWith(search: 'b');
       expect(next.search, 'b');
       expect(next.site, 'NHC');
@@ -82,8 +92,10 @@ void main() {
     });
 
     test('clearing one field leaves the others untouched', () {
-      const TyreRecordsQuery base =
-          TyreRecordsQuery(site: 'NHC', riskLevel: 'Low');
+      const TyreRecordsQuery base = TyreRecordsQuery(
+        site: 'NHC',
+        riskLevel: 'Low',
+      );
       final TyreRecordsQuery cleared = base.copyWith(clearSite: true);
       expect(cleared.site, isNull);
       expect(cleared.riskLevel, 'Low');

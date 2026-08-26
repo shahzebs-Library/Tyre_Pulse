@@ -237,7 +237,7 @@ Future<void> registerBackgroundSync() async {
 /// `connectivity_plus` and `workmanager`.
 class ConnectivitySyncTrigger {
   ConnectivitySyncTrigger({Connectivity? connectivity})
-      : _connectivity = connectivity ?? Connectivity();
+    : _connectivity = connectivity ?? Connectivity();
 
   final Connectivity _connectivity;
   StreamSubscription<List<ConnectivityResult>>? _subscription;

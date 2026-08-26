@@ -79,7 +79,10 @@ void main() {
   });
 
   test('A7: blank answers match the field kind', () {
-    expect(blankAnswer(const ChecklistField(id: 'x', type: 'multiselect')), <Object?>[]);
+    expect(
+      blankAnswer(const ChecklistField(id: 'x', type: 'multiselect')),
+      <Object?>[],
+    );
     expect(blankAnswer(const ChecklistField(id: 'x', type: 'boolean')), isNull);
     expect(blankAnswer(const ChecklistField(id: 'x', type: 'rating')), 0);
     expect(blankAnswer(const ChecklistField(id: 'x', type: 'number')), '');
@@ -96,7 +99,12 @@ void main() {
   test('A8: a reference field validates like text', () {
     expect(
       validateAnswer(
-        const ChecklistField(id: 'x', type: 'site', label: 'Site', required: true),
+        const ChecklistField(
+          id: 'x',
+          type: 'site',
+          label: 'Site',
+          required: true,
+        ),
         '',
       ),
       matches(RegExp('required', caseSensitive: false)),

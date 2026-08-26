@@ -83,32 +83,34 @@ void main() {
         workspaceId: workspaceA,
         now: testNow.add(const Duration(hours: 1)),
       );
-      expect(
-        claimed.map((PendingCommand c) => c.id).toList(),
-        <String>['cmd-older', 'cmd-newer'],
-      );
+      expect(claimed.map((PendingCommand c) => c.id).toList(), <String>[
+        'cmd-older',
+        'cmd-newer',
+      ]);
     });
   });
 
   group('retry', () {
-    test('a failure increments the count and schedules 30 seconds out',
-        () async {
-      await seedCommand(db, id: 'cmd-1');
+    test(
+      'a failure increments the count and schedules 30 seconds out',
+      () async {
+        await seedCommand(db, id: 'cmd-1');
 
-      final after = await db.queueDao.markAttemptFailed(
-        'cmd-1',
-        now: testNow,
-        message: 'The server could not be reached.',
-      );
+        final after = await db.queueDao.markAttemptFailed(
+          'cmd-1',
+          now: testNow,
+          message: 'The server could not be reached.',
+        );
 
-      expect(after.retryCount, 1);
-      expect(after.status, CommandStatus.retry);
-      expect(after.lastError, 'The server could not be reached.');
-      expectSameInstant(
-        after.nextRetryAt,
-        testNow.add(QueueRetryPolicy.baseBackoff),
-      );
-    });
+        expect(after.retryCount, 1);
+        expect(after.status, CommandStatus.retry);
+        expect(after.lastError, 'The server could not be reached.');
+        expectSameInstant(
+          after.nextRetryAt,
+          testNow.add(QueueRetryPolicy.baseBackoff),
+        );
+      },
+    );
 
     test('the backoff doubles on each attempt', () async {
       await seedCommand(db, id: 'cmd-1');
@@ -181,7 +183,8 @@ void main() {
       expect(
         await db.queueDao.commandById('cmd-1'),
         isNotNull,
-        reason: 'nothing that has not reached the server is ever removed '
+        reason:
+            'nothing that has not reached the server is ever removed '
             'automatically',
       );
     });
@@ -233,22 +236,24 @@ void main() {
       expect(await db.queueDao.pendingCount(), 1);
     });
 
-    test('unblocking returns it to the queue when the workspace is active',
-        () async {
-      await seedCommand(db, id: 'cmd-1');
-      await db.queueDao.blockCommand('cmd-1', reason: 'Another workspace.');
+    test(
+      'unblocking returns it to the queue when the workspace is active',
+      () async {
+        await seedCommand(db, id: 'cmd-1');
+        await db.queueDao.blockCommand('cmd-1', reason: 'Another workspace.');
 
-      await db.queueDao.unblockForWorkspace(
-        workspaceId: workspaceA,
-        now: testNow,
-      );
+        await db.queueDao.unblockForWorkspace(
+          workspaceId: workspaceA,
+          now: testNow,
+        );
 
-      final claimed = await db.queueDao.claimNextBatch(
-        workspaceId: workspaceA,
-        now: testNow,
-      );
-      expect(claimed, hasLength(1));
-    });
+        final claimed = await db.queueDao.claimNextBatch(
+          workspaceId: workspaceA,
+          now: testNow,
+        );
+        expect(claimed, hasLength(1));
+      },
+    );
 
     test('a command captured in another workspace is not claimed', () async {
       await seedCommand(db, id: 'cmd-b', workspaceId: workspaceB);
@@ -261,7 +266,8 @@ void main() {
       expect(
         claimed,
         isEmpty,
-        reason: 'pushing it under the active context would be a cross-tenant '
+        reason:
+            'pushing it under the active context would be a cross-tenant '
             'write',
       );
       expect(
@@ -271,32 +277,34 @@ void main() {
       );
     });
 
-    test('a command waiting on an unsynced predecessor is blocked, not run',
-        () async {
-      await seedCommand(db, id: 'cmd-first');
-      await db.queueDao.enqueue(
-        id: 'cmd-second',
-        commandType: 'WORKSHOP_EVENT',
-        entityType: 'tech_activity_events',
-        payloadJson: '{"event":"complete"}',
-        createdBy: testUser,
-        workspaceId: workspaceA,
-        now: testNow.add(const Duration(minutes: 1)),
-        idempotencyKey: 'idem-second',
-        dependsOn: 'cmd-first',
-      );
+    test(
+      'a command waiting on an unsynced predecessor is blocked, not run',
+      () async {
+        await seedCommand(db, id: 'cmd-first');
+        await db.queueDao.enqueue(
+          id: 'cmd-second',
+          commandType: 'WORKSHOP_EVENT',
+          entityType: 'tech_activity_events',
+          payloadJson: '{"event":"complete"}',
+          createdBy: testUser,
+          workspaceId: workspaceA,
+          now: testNow.add(const Duration(minutes: 1)),
+          idempotencyKey: 'idem-second',
+          dependsOn: 'cmd-first',
+        );
 
-      final claimed = await db.queueDao.claimNextBatch(
-        workspaceId: workspaceA,
-        now: testNow.add(const Duration(hours: 1)),
-      );
+        final claimed = await db.queueDao.claimNextBatch(
+          workspaceId: workspaceA,
+          now: testNow.add(const Duration(hours: 1)),
+        );
 
-      expect(claimed.map((PendingCommand c) => c.id).toList(), <String>[
-        'cmd-first',
-      ]);
-      final second = await db.queueDao.commandById('cmd-second');
-      expect(second!.status, CommandStatus.blocked);
-    });
+        expect(claimed.map((PendingCommand c) => c.id).toList(), <String>[
+          'cmd-first',
+        ]);
+        final second = await db.queueDao.commandById('cmd-second');
+        expect(second!.status, CommandStatus.blocked);
+      },
+    );
   });
 
   group('idempotency key', () {
@@ -313,7 +321,8 @@ void main() {
         expect(
           after.idempotencyKey,
           key,
-          reason: 'a fresh key on retry is the exact double-insert the '
+          reason:
+              'a fresh key on retry is the exact double-insert the '
               'mechanism exists to prevent',
         );
       }
@@ -323,26 +332,29 @@ void main() {
       expect(reset!.idempotencyKey, key);
     });
 
-    test('is unique, so two screens cannot queue the same write twice',
-        () async {
-      await seedCommand(db, id: 'cmd-1', idempotencyKey: 'shared-key');
+    test(
+      'is unique, so two screens cannot queue the same write twice',
+      () async {
+        await seedCommand(db, id: 'cmd-1', idempotencyKey: 'shared-key');
 
-      await expectLater(
-        seedCommand(db, id: 'cmd-2', idempotencyKey: 'shared-key'),
-        throwsA(isA<Exception>()),
-      );
+        await expectLater(
+          seedCommand(db, id: 'cmd-2', idempotencyKey: 'shared-key'),
+          throwsA(isA<Exception>()),
+        );
 
-      expect(
-        await db.queueDao.commandByIdempotencyKey('shared-key'),
-        isNotNull,
-      );
-      expect(
-        await db.queueDao.commandById('cmd-2'),
-        isNull,
-        reason: 'the whole enqueue is one transaction, so a refused key leaves '
-            'nothing behind',
-      );
-    });
+        expect(
+          await db.queueDao.commandByIdempotencyKey('shared-key'),
+          isNotNull,
+        );
+        expect(
+          await db.queueDao.commandById('cmd-2'),
+          isNull,
+          reason:
+              'the whole enqueue is one transaction, so a refused key leaves '
+              'nothing behind',
+        );
+      },
+    );
 
     test('is generated when the caller does not supply one', () async {
       final first = await db.queueDao.enqueue(
@@ -385,7 +397,8 @@ void main() {
       expect(
         await db.queueDao.pendingCount(),
         2,
-        reason: 'counting only pending made every badge read 0 the moment an '
+        reason:
+            'counting only pending made every badge read 0 the moment an '
             'item failed, and the technician was shown all synced while an '
             'inspection sat unsent',
       );
@@ -401,29 +414,31 @@ void main() {
   });
 
   group('pruning', () {
-    test('removes a synced command and hands back its files to delete',
-        () async {
-      await seedCommand(
-        db,
-        id: 'cmd-1',
-        attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
-      );
-      await db.queueDao.markSynced('cmd-1', testNow);
-      await db.mediaDao.markUploaded(
-        (await db.mediaDao.mediaForCommand('cmd-1')).single.id,
-        bucket: 'tyre-photos',
-        remotePath: 'org-a/q_1.jpg',
-        remoteRef: 'tp-storage://tyre-photos/org-a/q_1.jpg',
-        at: testNow,
-      );
-      await db.mediaDao.markCommandMediaVerified('cmd-1');
+    test(
+      'removes a synced command and hands back its files to delete',
+      () async {
+        await seedCommand(
+          db,
+          id: 'cmd-1',
+          attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
+        );
+        await db.queueDao.markSynced('cmd-1', testNow);
+        await db.mediaDao.markUploaded(
+          (await db.mediaDao.mediaForCommand('cmd-1')).single.id,
+          bucket: 'tyre-photos',
+          remotePath: 'org-a/q_1.jpg',
+          remoteRef: 'tp-storage://tyre-photos/org-a/q_1.jpg',
+          at: testNow,
+        );
+        await db.mediaDao.markCommandMediaVerified('cmd-1');
 
-      final List<String> files = await db.queueDao.pruneSyncedCommands();
+        final List<String> files = await db.queueDao.pruneSyncedCommands();
 
-      expect(files, <String>['/data/user/0/app/files/queue-media/q_1.jpg']);
-      expect(await db.queueDao.commandById('cmd-1'), isNull);
-      expect(await db.mediaDao.mediaForCommand('cmd-1'), isEmpty);
-    });
+        expect(files, <String>['/data/user/0/app/files/queue-media/q_1.jpg']);
+        expect(await db.queueDao.commandById('cmd-1'), isNull);
+        expect(await db.mediaDao.mediaForCommand('cmd-1'), isEmpty);
+      },
+    );
 
     test('keeps a synced command whose photo is not yet confirmed', () async {
       await seedCommand(
@@ -439,7 +454,8 @@ void main() {
       expect(
         await db.queueDao.commandById('cmd-1'),
         isNotNull,
-        reason: 'the command row is the only thing keeping the photo file '
+        reason:
+            'the command row is the only thing keeping the photo file '
             'alive until the upload is confirmed',
       );
     });
@@ -487,21 +503,20 @@ void main() {
   });
 
   group('stale claims', () {
-    test('a claim abandoned by a crashed run is returned to the queue',
-        () async {
-      await seedCommand(db, id: 'cmd-1');
-      await db.queueDao.claimNextBatch(
-        workspaceId: workspaceA,
-        now: testNow,
-      );
+    test(
+      'a claim abandoned by a crashed run is returned to the queue',
+      () async {
+        await seedCommand(db, id: 'cmd-1');
+        await db.queueDao.claimNextBatch(workspaceId: workspaceA, now: testNow);
 
-      final DateTime later = testNow.add(const Duration(minutes: 30));
-      final int reclaimed = await db.queueDao.reclaimStaleClaims(now: later);
+        final DateTime later = testNow.add(const Duration(minutes: 30));
+        final int reclaimed = await db.queueDao.reclaimStaleClaims(now: later);
 
-      expect(reclaimed, 1);
-      final stored = await db.queueDao.commandById('cmd-1');
-      expect(stored!.status, CommandStatus.pending);
-    });
+        expect(reclaimed, 1);
+        final stored = await db.queueDao.commandById('cmd-1');
+        expect(stored!.status, CommandStatus.pending);
+      },
+    );
   });
 
   group('sync lock', () {
@@ -519,18 +534,20 @@ void main() {
       );
     });
 
-    test('a stale lock can be broken so the queue is not stuck forever',
-        () async {
-      await db.queueDao.acquireSyncLock(holder: 'engine-1', now: testNow);
+    test(
+      'a stale lock can be broken so the queue is not stuck forever',
+      () async {
+        await db.queueDao.acquireSyncLock(holder: 'engine-1', now: testNow);
 
-      expect(
-        await db.queueDao.acquireSyncLock(
-          holder: 'engine-2',
-          now: testNow.add(const Duration(hours: 1)),
-        ),
-        isTrue,
-      );
-    });
+        expect(
+          await db.queueDao.acquireSyncLock(
+            holder: 'engine-2',
+            now: testNow.add(const Duration(hours: 1)),
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('releasing lets the next engine in', () async {
       await db.queueDao.acquireSyncLock(holder: 'engine-1', now: testNow);

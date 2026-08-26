@@ -34,8 +34,9 @@ const Map<String, Widget> _nonLoadingStates = <String, Widget>{
 
 void main() {
   group('TpLoadingState is the only state with a spinner', () {
-    testWidgets('shows the default loading message',
-        (WidgetTester tester) async {
+    testWidgets('shows the default loading message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpLoadingState());
 
       expect(find.byKey(TpStateKeys.loading), findsOneWidget);
@@ -43,8 +44,9 @@ void main() {
       expect(find.text('Loading'), findsOneWidget);
     });
 
-    testWidgets('a custom message replaces the default',
-        (WidgetTester tester) async {
+    testWidgets('a custom message replaces the default', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpLoadingState(message: 'Fetching your queue'),
@@ -56,8 +58,9 @@ void main() {
   });
 
   for (final MapEntry<String, Widget> entry in _nonLoadingStates.entries) {
-    testWidgets('${entry.key} never shows a spinner',
-        (WidgetTester tester) async {
+    testWidgets('${entry.key} never shows a spinner', (
+      WidgetTester tester,
+    ) async {
       // The production incident this file documents: a screen that is
       // denied, or has failed, or is empty must never look like it is still
       // working - that spinner never stops.
@@ -69,8 +72,9 @@ void main() {
 
   group('each state key identifies a genuinely different rendering', () {
     for (final MapEntry<String, Widget> entry in _nonLoadingStates.entries) {
-      testWidgets('${entry.key} renders under its own key only',
-          (WidgetTester tester) async {
+      testWidgets('${entry.key} renders under its own key only', (
+        WidgetTester tester,
+      ) async {
         await pumpTp(tester, entry.value);
 
         const Map<String, Key> keys = <String, Key>{
@@ -85,8 +89,9 @@ void main() {
         };
 
         for (final MapEntry<String, Key> keyEntry in keys.entries) {
-          final Matcher expected =
-              keyEntry.key == entry.key ? findsOneWidget : findsNothing;
+          final Matcher expected = keyEntry.key == entry.key
+              ? findsOneWidget
+              : findsNothing;
           expect(
             find.byKey(keyEntry.value),
             expected,
@@ -98,8 +103,9 @@ void main() {
   });
 
   group('TpEmptyState', () {
-    testWidgets('shows the default title and message',
-        (WidgetTester tester) async {
+    testWidgets('shows the default title and message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpEmptyState());
 
       expect(find.text('Nothing here yet'), findsOneWidget);
@@ -109,8 +115,9 @@ void main() {
       );
     });
 
-    testWidgets('a custom title, message and icon replace the defaults',
-        (WidgetTester tester) async {
+    testWidgets('a custom title, message and icon replace the defaults', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpEmptyState(
@@ -129,22 +136,25 @@ void main() {
       expect(find.text('Nothing here yet'), findsNothing);
     });
 
-    testWidgets('an action label with no handler shows no button',
-        (WidgetTester tester) async {
+    testWidgets('an action label with no handler shows no button', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpEmptyState(actionLabel: 'Start one'));
 
       expect(find.byType(TpButton), findsNothing);
     });
 
-    testWidgets('a handler with no label shows no button',
-        (WidgetTester tester) async {
+    testWidgets('a handler with no label shows no button', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, TpEmptyState(onAction: () {}));
 
       expect(find.byType(TpButton), findsNothing);
     });
 
-    testWidgets('a label with a handler shows a working button',
-        (WidgetTester tester) async {
+    testWidgets('a label with a handler shows a working button', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(
         tester,
@@ -159,8 +169,9 @@ void main() {
   });
 
   group('TpOfflineCachedState', () {
-    testWidgets('shows the default title and message',
-        (WidgetTester tester) async {
+    testWidgets('shows the default title and message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpOfflineCachedState());
 
       expect(find.text('Showing saved data'), findsOneWidget);
@@ -173,15 +184,17 @@ void main() {
       );
     });
 
-    testWidgets('an omitted cachedAtLabel shows no timestamp detail',
-        (WidgetTester tester) async {
+    testWidgets('an omitted cachedAtLabel shows no timestamp detail', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpOfflineCachedState());
 
       expect(find.textContaining('Saved '), findsNothing);
     });
 
-    testWidgets('a cachedAtLabel says when the copy was taken',
-        (WidgetTester tester) async {
+    testWidgets('a cachedAtLabel says when the copy was taken', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpOfflineCachedState(cachedAtLabel: '12 Aug, 14:05'),
@@ -190,15 +203,17 @@ void main() {
       expect(find.text('Saved 12 Aug, 14:05'), findsOneWidget);
     });
 
-    testWidgets('no retry handler means no retry button',
-        (WidgetTester tester) async {
+    testWidgets('no retry handler means no retry button', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpOfflineCachedState());
 
       expect(find.text('Try again'), findsNothing);
     });
 
-    testWidgets('a retry handler renders a button that calls it',
-        (WidgetTester tester) async {
+    testWidgets('a retry handler renders a button that calls it', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(tester, TpOfflineCachedState(onRetry: () => taps++));
 
@@ -210,8 +225,9 @@ void main() {
   });
 
   group('TpPermissionDeniedState requires a reason', () {
-    testWidgets('the reason renders exactly as given',
-        (WidgetTester tester) async {
+    testWidgets('the reason renders exactly as given', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpPermissionDeniedState(
@@ -226,19 +242,18 @@ void main() {
       );
     });
 
-    testWidgets('with no onBack there is nothing to press',
-        (WidgetTester tester) async {
-      await pumpTp(
-        tester,
-        const TpPermissionDeniedState(reason: 'No access.'),
-      );
+    testWidgets('with no onBack there is nothing to press', (
+      WidgetTester tester,
+    ) async {
+      await pumpTp(tester, const TpPermissionDeniedState(reason: 'No access.'));
 
       expect(find.text('Back'), findsNothing);
       expect(find.byType(TpButton), findsNothing);
     });
 
-    testWidgets('onBack renders Back and calls it, without navigating away',
-        (WidgetTester tester) async {
+    testWidgets('onBack renders Back and calls it, without navigating away', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(
         tester,
@@ -256,8 +271,9 @@ void main() {
   });
 
   group('TpBackendUnavailableState', () {
-    testWidgets('shows the default reassurance about queued work',
-        (WidgetTester tester) async {
+    testWidgets('shows the default reassurance about queued work', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpBackendUnavailableState());
 
       expect(find.text('The server is not responding'), findsOneWidget);
@@ -270,8 +286,9 @@ void main() {
       );
     });
 
-    testWidgets('an optional detail line renders alongside the message',
-        (WidgetTester tester) async {
+    testWidgets('an optional detail line renders alongside the message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpBackendUnavailableState(detail: 'Last tried 09:41'),
@@ -280,8 +297,9 @@ void main() {
       expect(find.text('Last tried 09:41'), findsOneWidget);
     });
 
-    testWidgets('a retry handler renders a button that calls it',
-        (WidgetTester tester) async {
+    testWidgets('a retry handler renders a button that calls it', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(tester, TpBackendUnavailableState(onRetry: () => taps++));
 
@@ -293,8 +311,9 @@ void main() {
   });
 
   group('TpNotConfiguredState', () {
-    testWidgets('shows the default title and message',
-        (WidgetTester tester) async {
+    testWidgets('shows the default title and message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpNotConfiguredState());
 
       expect(find.text('Not set up'), findsOneWidget);
@@ -307,8 +326,9 @@ void main() {
       );
     });
 
-    testWidgets('a custom title and a detail line both render',
-        (WidgetTester tester) async {
+    testWidgets('a custom title and a detail line both render', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpNotConfiguredState(
@@ -324,18 +344,19 @@ void main() {
       );
     });
 
-    testWidgets('offers no action at all - there is nothing to retry',
-        (WidgetTester tester) async {
+    testWidgets('offers no action at all - there is nothing to retry', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpNotConfiguredState());
 
       expect(find.byType(TpButton), findsNothing);
     });
   });
 
-  group('TpErrorState shows only the message its AppError decided is safe',
-      () {
-    testWidgets('shows the message, never the technical detail',
-        (WidgetTester tester) async {
+  group('TpErrorState shows only the message its AppError decided is safe', () {
+    testWidgets('shows the message, never the technical detail', (
+      WidgetTester tester,
+    ) async {
       // Spec section 57: a user must never see a raw driver message such as
       // PostgrestException PGRST116. AppError.technical exists precisely to
       // keep that out of what this widget renders.
@@ -353,8 +374,9 @@ void main() {
       expect(find.textContaining('PGRST116'), findsNothing);
     });
 
-    testWidgets('a retryable error with a handler shows a working retry',
-        (WidgetTester tester) async {
+    testWidgets('a retryable error with a handler shows a working retry', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(
         tester,
@@ -367,8 +389,9 @@ void main() {
       expect(taps, 1);
     });
 
-    testWidgets('a non-retryable error offers no retry, even with a handler',
-        (WidgetTester tester) async {
+    testWidgets('a non-retryable error offers no retry, even with a handler', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpErrorState(error: const AppError.authentication(), onRetry: () {}),
@@ -377,8 +400,9 @@ void main() {
       expect(find.text('Try again'), findsNothing);
     });
 
-    testWidgets('a retryable error with no handler offers no retry either',
-        (WidgetTester tester) async {
+    testWidgets('a retryable error with no handler offers no retry either', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpErrorState(error: AppError.network()));
 
       expect(find.text('Try again'), findsNothing);
@@ -386,25 +410,25 @@ void main() {
   });
 
   group('TpScreenNotAvailableState', () {
-    testWidgets('shows the default title and message',
-        (WidgetTester tester) async {
+    testWidgets('shows the default title and message', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpScreenNotAvailableState());
 
       expect(find.text('This screen is not built yet'), findsOneWidget);
     });
 
-    testWidgets('an optional route id renders as the detail line',
-        (WidgetTester tester) async {
-      await pumpTp(
-        tester,
-        const TpScreenNotAvailableState(routeId: '/alerts'),
-      );
+    testWidgets('an optional route id renders as the detail line', (
+      WidgetTester tester,
+    ) async {
+      await pumpTp(tester, const TpScreenNotAvailableState(routeId: '/alerts'));
 
       expect(find.text('/alerts'), findsOneWidget);
     });
 
-    testWidgets('an onBack handler renders Back and calls it',
-        (WidgetTester tester) async {
+    testWidgets('an onBack handler renders Back and calls it', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(tester, TpScreenNotAvailableState(onBack: () => taps++));
 
@@ -416,8 +440,9 @@ void main() {
   });
 
   group('TpStateView is the shared shape every state above builds on', () {
-    testWidgets('a detail line only shows when one is supplied',
-        (WidgetTester tester) async {
+    testWidgets('a detail line only shows when one is supplied', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpStateView(
@@ -440,8 +465,9 @@ void main() {
       expect(find.text('Extra detail line'), findsOneWidget);
     });
 
-    testWidgets('the primary and secondary actions are independent controls',
-        (WidgetTester tester) async {
+    testWidgets('the primary and secondary actions are independent controls', (
+      WidgetTester tester,
+    ) async {
       int primaryTaps = 0;
       int secondaryTaps = 0;
       await pumpTp(
@@ -469,8 +495,9 @@ void main() {
     });
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await pumpTpRtl(
       tester,
       const TpPermissionDeniedState(reason: 'You do not have access.'),

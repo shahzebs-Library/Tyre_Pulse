@@ -232,15 +232,15 @@ final class SupabaseMeterLogRepository
     try {
       final List<Map<String, dynamic>> rows =
           await guard<List<Map<String, dynamic>>>(
-        () => _client
-            .from(SupabaseTables.odometerLogs)
-            .select('odometer_km,reading_date,created_at')
-            .eq('asset_no', asset)
-            .not('odometer_km', 'is', null)
-            .order('reading_date', ascending: false, nullsFirst: false)
-            .order('created_at', ascending: false)
-            .limit(1),
-      );
+            () => _client
+                .from(SupabaseTables.odometerLogs)
+                .select('odometer_km,reading_date,created_at')
+                .eq('asset_no', asset)
+                .not('odometer_km', 'is', null)
+                .order('reading_date', ascending: false, nullsFirst: false)
+                .order('created_at', ascending: false)
+                .limit(1),
+          );
       if (rows.isEmpty) return null;
       final Map<String, dynamic> row = rows.first;
       return LastOdometerReading(
@@ -257,13 +257,13 @@ final class SupabaseMeterLogRepository
   Future<List<MeterReading>> listRecentReadings({int limit = 50}) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-      () => _client
-          .from(SupabaseTables.odometerLogs)
-          .select(_odoColumns)
-          .order('reading_date', ascending: false, nullsFirst: false)
-          .order('created_at', ascending: false)
-          .limit(limit),
-    );
+          () => _client
+              .from(SupabaseTables.odometerLogs)
+              .select(_odoColumns)
+              .order('reading_date', ascending: false, nullsFirst: false)
+              .order('created_at', ascending: false)
+              .limit(limit),
+        );
     return <MeterReading>[
       for (final Map<String, dynamic> row in rows) MeterReading.fromRow(row),
     ];

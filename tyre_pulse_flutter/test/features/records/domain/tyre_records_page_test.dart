@@ -16,19 +16,26 @@ void main() {
 
   group('equality', () {
     test('two pages with the same items and hasMore are equal', () {
-      final TyreRecordsPage a =
-          TyreRecordsPage(items: <TyreRecord>[_r('1'), _r('2')], hasMore: true);
-      final TyreRecordsPage b =
-          TyreRecordsPage(items: <TyreRecord>[_r('1'), _r('2')], hasMore: true);
+      final TyreRecordsPage a = TyreRecordsPage(
+        items: <TyreRecord>[_r('1'), _r('2')],
+        hasMore: true,
+      );
+      final TyreRecordsPage b = TyreRecordsPage(
+        items: <TyreRecord>[_r('1'), _r('2')],
+        hasMore: true,
+      );
       expect(a, b);
     });
 
-    test('a different hasMore makes two otherwise-identical pages unequal',
-        () {
-      final TyreRecordsPage a =
-          TyreRecordsPage(items: <TyreRecord>[_r('1')], hasMore: true);
-      final TyreRecordsPage b =
-          TyreRecordsPage(items: <TyreRecord>[_r('1')], hasMore: false);
+    test('a different hasMore makes two otherwise-identical pages unequal', () {
+      final TyreRecordsPage a = TyreRecordsPage(
+        items: <TyreRecord>[_r('1')],
+        hasMore: true,
+      );
+      final TyreRecordsPage b = TyreRecordsPage(
+        items: <TyreRecord>[_r('1')],
+        hasMore: false,
+      );
       expect(a, isNot(equals(b)));
     });
 

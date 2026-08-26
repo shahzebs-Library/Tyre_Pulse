@@ -79,11 +79,7 @@ class TpCard extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         borderRadius: radius,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: radius,
-          child: body,
-        ),
+        child: InkWell(onTap: onTap, borderRadius: radius, child: body),
       ),
     );
   }
@@ -118,8 +114,9 @@ class _DashedBorderPainter extends CustomPainter {
     for (final PathMetric metric in path.computeMetrics()) {
       double distance = 0;
       while (distance < metric.length) {
-        final double end =
-            distance + dash > metric.length ? metric.length : distance + dash;
+        final double end = distance + dash > metric.length
+            ? metric.length
+            : distance + dash;
         canvas.drawPath(metric.extractPath(distance, end), paint);
         distance = end + gap;
       }

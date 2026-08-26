@@ -34,39 +34,41 @@ void main() {
     });
   });
 
-  group('fail-safe on anything unrecognised - never blocks a sign-in itself',
-      () {
-    test('null - the RPC could not be reached', () {
-      expect(LoginLockStatus.fromRpcResult(null).locked, isFalse);
-    });
+  group(
+    'fail-safe on anything unrecognised - never blocks a sign-in itself',
+    () {
+      test('null - the RPC could not be reached', () {
+        expect(LoginLockStatus.fromRpcResult(null).locked, isFalse);
+      });
 
-    test('a bare scalar instead of the expected object', () {
-      expect(LoginLockStatus.fromRpcResult('unexpected').locked, isFalse);
-      expect(LoginLockStatus.fromRpcResult(42).locked, isFalse);
-    });
+      test('a bare scalar instead of the expected object', () {
+        expect(LoginLockStatus.fromRpcResult('unexpected').locked, isFalse);
+        expect(LoginLockStatus.fromRpcResult(42).locked, isFalse);
+      });
 
-    test('an object missing `locked` entirely', () {
-      expect(
-        LoginLockStatus.fromRpcResult(<String, Object?>{'enabled': true})
-            .locked,
-        isFalse,
-      );
-    });
+      test('an object missing `locked` entirely', () {
+        expect(
+          LoginLockStatus.fromRpcResult(<String, Object?>{'enabled': true})
+              .locked,
+          isFalse,
+        );
+      });
 
-    test('a `locked` value that is not literally true is never truthy', () {
-      // Mirrors the codebase-wide rule: a nullable boolean is compared to
-      // `true`, never treated as truthy. A string "true" must not pass.
-      expect(
-        LoginLockStatus.fromRpcResult(<String, Object?>{'locked': 'true'})
-            .locked,
-        isFalse,
-      );
-      expect(
-        LoginLockStatus.fromRpcResult(<String, Object?>{'locked': 1}).locked,
-        isFalse,
-      );
-    });
-  });
+      test('a `locked` value that is not literally true is never truthy', () {
+        // Mirrors the codebase-wide rule: a nullable boolean is compared to
+        // `true`, never treated as truthy. A string "true" must not pass.
+        expect(
+          LoginLockStatus.fromRpcResult(<String, Object?>{'locked': 'true'})
+              .locked,
+          isFalse,
+        );
+        expect(
+          LoginLockStatus.fromRpcResult(<String, Object?>{'locked': 1}).locked,
+          isFalse,
+        );
+      });
+    },
+  );
 
   group('lockoutMinutes', () {
     test('rounds up, and is never less than one minute', () {
@@ -85,17 +87,18 @@ void main() {
       expect(overAMinute.lockoutMinutes, 2);
     });
 
-    test('a lock with no reported duration still reads as at least a minute',
-        () {
-      const LoginLockStatus noDuration = LoginLockStatus(
-        enabled: true,
-        locked: true,
-      );
-      expect(noDuration.lockoutMinutes, 1);
-    });
+    test(
+      'a lock with no reported duration still reads as at least a minute',
+      () {
+        const LoginLockStatus noDuration = LoginLockStatus(
+          enabled: true,
+          locked: true,
+        );
+        expect(noDuration.lockoutMinutes, 1);
+      },
+    );
 
-    test('LoginLockStatus.notLocked reports zero minutes worth of nothing',
-        () {
+    test('LoginLockStatus.notLocked reports zero minutes worth of nothing', () {
       const LoginLockStatus notLocked = LoginLockStatus.notLocked();
       expect(notLocked.locked, isFalse);
       // lockoutMinutes is still well-defined (floors at 1) even though no

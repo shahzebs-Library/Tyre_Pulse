@@ -60,27 +60,28 @@ void main() {
   });
 
   group('enqueue / list / byId', () {
-    test('a freshly enqueued decision is readable back by id and by list()',
-        () async {
-      final QueuedChecklistApprovalDecision item = _decision(
-        id: 'approve_sub-1_pending_area_manager',
-        submissionId: 'sub-1',
-      );
-      await queue.enqueue(item);
+    test(
+      'a freshly enqueued decision is readable back by id and by list()',
+      () async {
+        final QueuedChecklistApprovalDecision item = _decision(
+          id: 'approve_sub-1_pending_area_manager',
+          submissionId: 'sub-1',
+        );
+        await queue.enqueue(item);
 
-      final QueuedChecklistApprovalDecision? found = await queue.byId(
-        'approve_sub-1_pending_area_manager',
-      );
-      expect(found, isNotNull);
-      expect(found!.status, ChecklistApprovalQueueStatus.pending);
+        final QueuedChecklistApprovalDecision? found = await queue.byId(
+          'approve_sub-1_pending_area_manager',
+        );
+        expect(found, isNotNull);
+        expect(found!.status, ChecklistApprovalQueueStatus.pending);
 
-      final ChecklistApprovalQueueReadResult listed = await queue.list();
-      expect(listed.isReadable, isTrue);
-      expect(
-        listed.items.map((d) => d.id),
-        <String>['approve_sub-1_pending_area_manager'],
-      );
-    });
+        final ChecklistApprovalQueueReadResult listed = await queue.list();
+        expect(listed.isReadable, isTrue);
+        expect(listed.items.map((d) => d.id), <String>[
+          'approve_sub-1_pending_area_manager',
+        ]);
+      },
+    );
 
     test('byId returns null for an id that was never enqueued', () async {
       expect(await queue.byId('does-not-exist'), isNull);
@@ -100,34 +101,37 @@ void main() {
 
       final ChecklistApprovalQueueReadResult listed = await queue.list();
       expect(listed.items.length, 2);
-      final Set<String> submissionIds =
-          listed.items.map((d) => d.submissionId).toSet();
+      final Set<String> submissionIds = listed.items
+          .map((d) => d.submissionId)
+          .toSet();
       expect(submissionIds, <String>{'sub-1', 'sub-2'});
     });
 
-    test('a supervisor sign-off and a later area-manager approval on the '
-        'SAME submission are two DIFFERENT queue entries, both present',
-        () async {
-      await queue.enqueue(
-        _decision(
-          id: 'approve_sub-1_pending_area_manager',
-          submissionId: 'sub-1',
-          stage: ApprovalStage.supervisor,
-          targetStatus: 'pending_area_manager',
-        ),
-      );
-      await queue.enqueue(
-        _decision(
-          id: 'approve_sub-1_approved',
-          submissionId: 'sub-1',
-          stage: ApprovalStage.areaManager,
-          targetStatus: 'approved',
-        ),
-      );
+    test(
+      'a supervisor sign-off and a later area-manager approval on the '
+      'SAME submission are two DIFFERENT queue entries, both present',
+      () async {
+        await queue.enqueue(
+          _decision(
+            id: 'approve_sub-1_pending_area_manager',
+            submissionId: 'sub-1',
+            stage: ApprovalStage.supervisor,
+            targetStatus: 'pending_area_manager',
+          ),
+        );
+        await queue.enqueue(
+          _decision(
+            id: 'approve_sub-1_approved',
+            submissionId: 'sub-1',
+            stage: ApprovalStage.areaManager,
+            targetStatus: 'approved',
+          ),
+        );
 
-      final ChecklistApprovalQueueReadResult listed = await queue.list();
-      expect(listed.items, hasLength(2));
-    });
+        final ChecklistApprovalQueueReadResult listed = await queue.list();
+        expect(listed.items, hasLength(2));
+      },
+    );
   });
 
   group('markSynced / markFailed / remove', () {
@@ -145,8 +149,9 @@ void main() {
       final DateTime syncedAt = DateTime.utc(2026, 8, 20, 10);
       await queue.markSynced('approve_sub-1_approved', syncedAt);
 
-      final QueuedChecklistApprovalDecision? after =
-          await queue.byId('approve_sub-1_approved');
+      final QueuedChecklistApprovalDecision? after = await queue.byId(
+        'approve_sub-1_approved',
+      );
       expect(after!.status, ChecklistApprovalQueueStatus.synced);
       expect(after.syncedAt, syncedAt);
       expect(after.error, isNull);
@@ -168,8 +173,9 @@ void main() {
         status: ChecklistApprovalQueueStatus.pending,
       );
 
-      final QueuedChecklistApprovalDecision? after =
-          await queue.byId('approve_sub-1_approved');
+      final QueuedChecklistApprovalDecision? after = await queue.byId(
+        'approve_sub-1_approved',
+      );
       expect(after!.status, ChecklistApprovalQueueStatus.pending);
       expect(after.error, 'network unreachable');
       expect(after.attempts, 2);
@@ -187,13 +193,11 @@ void main() {
         status: ChecklistApprovalQueueStatus.blocked,
       );
 
-      final QueuedChecklistApprovalDecision? after =
-          await queue.byId('approve_sub-1_approved');
-      expect(after!.status, ChecklistApprovalQueueStatus.blocked);
-      expect(
-        after.error,
-        'checklist submission stage changed since decision',
+      final QueuedChecklistApprovalDecision? after = await queue.byId(
+        'approve_sub-1_approved',
       );
+      expect(after!.status, ChecklistApprovalQueueStatus.blocked);
+      expect(after.error, 'checklist submission stage changed since decision');
     });
 
     test('markSynced/markFailed on an unknown id is a safe no-op', () async {
@@ -206,24 +210,24 @@ void main() {
       expect((await queue.list()).items, isEmpty);
     });
 
-    test('remove deletes the entry so it no longer appears in list()',
-        () async {
-      await queue.enqueue(
-        _decision(id: 'approve_sub-1_approved', submissionId: 'sub-1'),
-      );
-      await queue.remove('approve_sub-1_approved');
-      expect((await queue.list()).items, isEmpty);
-      expect(await queue.byId('approve_sub-1_approved'), isNull);
-    });
+    test(
+      'remove deletes the entry so it no longer appears in list()',
+      () async {
+        await queue.enqueue(
+          _decision(id: 'approve_sub-1_approved', submissionId: 'sub-1'),
+        );
+        await queue.remove('approve_sub-1_approved');
+        expect((await queue.list()).items, isEmpty);
+        expect(await queue.byId('approve_sub-1_approved'), isNull);
+      },
+    );
   });
 
   group('pendingCount', () {
     test('counts BOTH pending and blocked entries - both still represent a '
         'decision this device has not confirmed reached the server - and '
         'ignores synced ones', () async {
-      await queue.enqueue(
-        _decision(id: 'a', submissionId: 'sub-a'),
-      );
+      await queue.enqueue(_decision(id: 'a', submissionId: 'sub-a'));
       await queue.enqueue(
         _decision(
           id: 'b',
@@ -248,27 +252,26 @@ void main() {
     });
   });
 
-  group('a corrupt individual file is skipped, not fatal to the whole read',
-      () {
-    test('list() omits an unparsable file but returns every other item',
-        () async {
-      await queue.enqueue(
-        _decision(id: 'good-1', submissionId: 'sub-good'),
-      );
+  group('a corrupt individual file is skipped, not fatal to the whole read', () {
+    test(
+      'list() omits an unparsable file but returns every other item',
+      () async {
+        await queue.enqueue(_decision(id: 'good-1', submissionId: 'sub-good'));
 
-      // Write a corrupt sibling file directly, bypassing the queue's own
-      // atomic-write path - simulating a file truncated by a process kill
-      // mid-write.
-      final File corrupt = File(
-        '${tempDir.path}${Platform.pathSeparator}checklist_approval_decisions'
-        '${Platform.pathSeparator}corrupt.json',
-      );
-      await corrupt.writeAsString('{not valid json');
+        // Write a corrupt sibling file directly, bypassing the queue's own
+        // atomic-write path - simulating a file truncated by a process kill
+        // mid-write.
+        final File corrupt = File(
+          '${tempDir.path}${Platform.pathSeparator}checklist_approval_decisions'
+          '${Platform.pathSeparator}corrupt.json',
+        );
+        await corrupt.writeAsString('{not valid json');
 
-      final ChecklistApprovalQueueReadResult result = await queue.list();
-      expect(result.isReadable, isTrue);
-      expect(result.items.map((d) => d.id), <String>['good-1']);
-    });
+        final ChecklistApprovalQueueReadResult result = await queue.list();
+        expect(result.isReadable, isTrue);
+        expect(result.items.map((d) => d.id), <String>['good-1']);
+      },
+    );
   });
 
   group('atomic write leaves no stray .tmp file behind on success', () {

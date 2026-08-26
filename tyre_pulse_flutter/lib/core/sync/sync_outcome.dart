@@ -154,7 +154,8 @@ final class SyncRunSummary {
   final int photosFailed;
 
   @override
-  String toString() => 'SyncRunSummary('
+  String toString() =>
+      'SyncRunSummary('
       'lockAcquired: $lockAcquired, claimed: $claimed, synced: $synced, '
       'failed: $failed, conflicted: $conflicted, mediaPending: $mediaPending, '
       'photosUploaded: $photosUploaded, photosFailed: $photosFailed)';

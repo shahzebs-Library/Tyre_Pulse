@@ -57,8 +57,9 @@ class TpAppShell extends ConsumerWidget {
         break;
     }
 
-    final ModuleAccessResolver resolver =
-        ref.watch(moduleAccessResolverProvider);
+    final ModuleAccessResolver resolver = ref.watch(
+      moduleAccessResolverProvider,
+    );
     final TpShellTabLayout layout = ensureActiveBranchVisible(
       resolveShellTabs(
         destinations: TpShell.destinations,
@@ -98,10 +99,7 @@ class _TabBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(
-            color: palette.border,
-            width: TpBorderWidth.hairline,
-          ),
+          top: BorderSide(color: palette.border, width: TpBorderWidth.hairline),
         ),
       ),
       child: NavigationBar(
@@ -140,8 +138,7 @@ class _TabBar extends StatelessWidget {
     // is the only way to unwind a deep stack without pressing Back repeatedly.
     navigationShell.goBranch(
       destination.branchIndex,
-      initialLocation:
-          destination.branchIndex == navigationShell.currentIndex,
+      initialLocation: destination.branchIndex == navigationShell.currentIndex,
     );
   }
 }

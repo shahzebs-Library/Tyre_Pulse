@@ -16,21 +16,12 @@ void main() {
   // Each entry: input, expected layout key, expected tyre count, expected
   // ordered slot ids (V1). The ordered-id assertion is what makes this a
   // parity suite rather than a count check.
-  const List<(String, String, int, List<String>)> cases = <(
-    String,
-    String,
-    int,
-    List<String>,
-  )>[
+  const List<(String, String, int, List<String>)>
+  cases = <(String, String, int, List<String>)>[
     ('PICKUP', 'Pickup', 4, <String>['FL', 'FR', 'RL', 'RR']),
     ('WHEEL_LOADER', 'Wheel loader', 4, <String>['FL', 'FR', 'RL', 'RR']),
     ('SKID LOADER', 'Skid loader', 4, <String>['FL', 'FR', 'RL', 'RR']),
-    (
-      'CANTER',
-      'Canter',
-      6,
-      <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
-    ),
+    ('CANTER', 'Canter', 6, <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo']),
     ('BUS', 'Bus', 6, <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo']),
     ('TATA', 'Tata', 6, <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo']),
     (
@@ -39,12 +30,7 @@ void main() {
       6,
       <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
     ),
-    (
-      'D TANKER',
-      'Tanker',
-      6,
-      <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
-    ),
+    ('D TANKER', 'Tanker', 6, <String>['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo']),
     (
       'TRAILER',
       'Trailer',

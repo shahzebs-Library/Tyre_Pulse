@@ -152,9 +152,8 @@ class VehicleTyreDiagram extends StatelessWidget {
             const SizedBox(height: TpSpace.sm),
             Text(
               l10n.tyreDiagramPendingLeadIn(pendingOnScreen.length),
-              style: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(color: palette.warning.base),
+              style: Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(color: palette.warning.base),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: TpSpace.xs),
@@ -298,17 +297,16 @@ class _ResolvedWheel {
   final bool isOutstanding;
   final String? pressureText;
 
-  TyreWheelPaintData paintData({bool isSelected = false}) =>
-      TyreWheelPaintData(
-        svgX: tyre.x,
-        svgY: tyre.y,
-        svgW: tyre.w,
-        svgH: tyre.h,
-        status: status,
-        isSelected: isSelected,
-        isOutstanding: isOutstanding,
-        isRecorded: isRecorded,
-      );
+  TyreWheelPaintData paintData({bool isSelected = false}) => TyreWheelPaintData(
+    svgX: tyre.x,
+    svgY: tyre.y,
+    svgW: tyre.w,
+    svgH: tyre.h,
+    status: status,
+    isSelected: isSelected,
+    isOutstanding: isOutstanding,
+    isRecorded: isRecorded,
+  );
 }
 
 class _WheelHitTarget extends StatelessWidget {

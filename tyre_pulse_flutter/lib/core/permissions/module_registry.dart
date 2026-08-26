@@ -170,8 +170,8 @@ final class ModuleDef {
     required this.key,
     required this.defaultLabel,
     required this.group,
-  })  : isAdminOnly = true,
-        defaultRoles = const <RoleId>{};
+  }) : isAdminOnly = true,
+       defaultRoles = const <RoleId>{};
 
   final ModuleKey key;
 
@@ -268,11 +268,7 @@ abstract final class ModuleRegistry {
       key: ModuleKey.tyreChange,
       defaultLabel: 'Tyre Change',
       group: ModuleGroup.field,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.checklists,
@@ -397,11 +393,7 @@ abstract final class ModuleRegistry {
       key: ModuleKey.alerts,
       defaultLabel: 'Alerts',
       group: ModuleGroup.fleet,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.calendar,
@@ -424,21 +416,13 @@ abstract final class ModuleRegistry {
       key: ModuleKey.accidents,
       defaultLabel: 'Accidents',
       group: ModuleGroup.maintenance,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.reportAccident,
       defaultLabel: 'File Accident',
       group: ModuleGroup.maintenance,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
     ),
     ModuleDef.adminOnly(
       key: ModuleKey.workorders,
@@ -449,39 +433,25 @@ abstract final class ModuleRegistry {
       key: ModuleKey.rca,
       defaultLabel: 'Root Cause',
       group: ModuleGroup.maintenance,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.tasks,
       defaultLabel: 'Tasks',
       group: ModuleGroup.maintenance,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.stock,
       defaultLabel: 'Stock Count',
       group: ModuleGroup.maintenance,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.inspector,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.inspector},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.pm,
       defaultLabel: 'Maintenance Due',
       group: ModuleGroup.maintenance,
-      defaultRoles: <RoleId>{
-        RoleId.manager,
-        RoleId.director,
-      },
+      defaultRoles: <RoleId>{RoleId.manager, RoleId.director},
     ),
     ModuleDef.forRoles(
       key: ModuleKey.workshop,

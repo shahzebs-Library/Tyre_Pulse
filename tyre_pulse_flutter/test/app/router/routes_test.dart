@@ -71,10 +71,7 @@ void main() {
         const NewInspectionRoute(assetNo: asset),
         const MeterLogRoute(assetNo: asset),
         const VehiclesRoute(assetNo: asset),
-        const ChecklistFillRoute(
-          templateId: TemplateId('t1'),
-          assetNo: asset,
-        ),
+        const ChecklistFillRoute(templateId: TemplateId('t1'), assetNo: asset),
       ]) {
         expect(route.location, isNot(contains('asset=')));
         expect(route.location, isNot(contains('asset_no=')));
@@ -89,8 +86,8 @@ void main() {
         const NewInspectionRoute(tyrePosition: position).location,
         contains('tyrePosition=LHF1'),
       );
-      final String tyreChange =
-          const TyreChangeRoute(tyrePosition: position).location;
+      final String tyreChange = const TyreChangeRoute(tyrePosition: position)
+          .location;
       expect(tyreChange, contains('tyrePosition=LHF1'));
       // `position=` on its own would match `tyrePosition=` as a substring, so
       // the assertion is on the separator.
@@ -190,17 +187,13 @@ void main() {
         InspectionApprovalReviewRoute.parse(
           params(path: <String, String>{'inspectionId': 'i-1'}),
         ),
-        const InspectionApprovalReviewRoute(
-          inspectionId: InspectionId('i-1'),
-        ),
+        const InspectionApprovalReviewRoute(inspectionId: InspectionId('i-1')),
       );
       expect(
         ChecklistApprovalReviewRoute.parse(
           params(path: <String, String>{'submissionId': 's-1'}),
         ),
-        const ChecklistApprovalReviewRoute(
-          submissionId: SubmissionId('s-1'),
-        ),
+        const ChecklistApprovalReviewRoute(submissionId: SubmissionId('s-1')),
       );
     });
 
@@ -309,10 +302,7 @@ void main() {
     test('the same identifier type compares by value', () {
       expect(const AccidentId('x'), const AccidentId('x'));
       expect(const AccidentId('x'), isNot(const AccidentId('y')));
-      expect(
-        const AccidentId('x').hashCode,
-        const AccidentId('x').hashCode,
-      );
+      expect(const AccidentId('x').hashCode, const AccidentId('x').hashCode);
     });
 
     test('routes of different types are never equal', () {

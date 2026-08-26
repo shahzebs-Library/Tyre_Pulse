@@ -167,9 +167,7 @@ class QueuedInspection {
     final Object? rawId = json['id'];
     final Object? rawDraftKey = json['draftKey'];
     if (rawId is! String || rawId.isEmpty) {
-      throw const FormatException(
-        'Queued inspection JSON has no usable "id".',
-      );
+      throw const FormatException('Queued inspection JSON has no usable "id".');
     }
     if (rawDraftKey is! String || rawDraftKey.isEmpty) {
       throw const FormatException(
@@ -310,8 +308,7 @@ class QueuedInspection {
       serialNumber: json['serialNumber'] as String?,
       pressurePsi: (json['pressurePsi'] as num?)?.toDouble(),
       treadDepthMm: (json['treadDepthMm'] as num?)?.toDouble(),
-      condition:
-          json['condition'] as String? ?? TyreReadingCondition.good,
+      condition: json['condition'] as String? ?? TyreReadingCondition.good,
       checked: json['checked'] == true,
       photoLocalPath: json['photoLocalPath'] as String?,
       photoUrl: json['photoUrl'] as String?,
@@ -350,13 +347,13 @@ class InspectionQueueReadResult {
   });
 
   const InspectionQueueReadResult.ok(List<QueuedInspection> items)
-      : this._(status: InspectionQueueReadStatus.ok, items: items);
+    : this._(status: InspectionQueueReadStatus.ok, items: items);
 
   const InspectionQueueReadResult.unreadable()
-      : this._(
-          status: InspectionQueueReadStatus.unreadable,
-          items: const <QueuedInspection>[],
-        );
+    : this._(
+        status: InspectionQueueReadStatus.unreadable,
+        items: const <QueuedInspection>[],
+      );
 
   final InspectionQueueReadStatus status;
   final List<QueuedInspection> items;

@@ -137,8 +137,9 @@ void main() {
       expect(find.text(TpRouteId.tyreRecords), findsNothing);
     });
 
-    testWidgets('a refusal carries a reason a person can read',
-        (WidgetTester tester) async {
+    testWidgets('a refusal carries a reason a person can read', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -156,8 +157,9 @@ void main() {
       );
     });
 
-    testWidgets('a refusal does NOT navigate away',
-        (WidgetTester tester) async {
+    testWidgets('a refusal does NOT navigate away', (
+      WidgetTester tester,
+    ) async {
       // The guard used to call replace('/'). A screen that vanishes and dumps
       // you on the main page reads as the app malfunctioning, not as a
       // permission boundary.
@@ -173,8 +175,9 @@ void main() {
       expect(locationOf(router), TpRoutePaths.tyreRecords);
     });
 
-    testWidgets('an allowed route renders its screen',
-        (WidgetTester tester) async {
+    testWidgets('an allowed route renders its screen', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -189,8 +192,9 @@ void main() {
   });
 
   group('back returns to where the user came from', () {
-    testWidgets('a pushed detail pops back to the list, not to Home',
-        (WidgetTester tester) async {
+    testWidgets('a pushed detail pops back to the list, not to Home', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -214,8 +218,9 @@ void main() {
       expect(locationOf(router), isNot(TpRoutePaths.home));
     });
 
-    testWidgets('scanner to inspection pops back to the scanner',
-        (WidgetTester tester) async {
+    testWidgets('scanner to inspection pops back to the scanner', (
+      WidgetTester tester,
+    ) async {
       // Spec section 5 draws this journey: Search, Vehicle, Inspection, and
       // Back must give Inspection, Scanner - not Inspection, Home. The push
       // stays in the branch the task started in.
@@ -227,9 +232,7 @@ void main() {
       router.go(TpRoutePaths.scanner);
       await tester.pumpAndSettle();
 
-      router.push(
-        const NewInspectionRoute(assetNo: AssetNo('TM514')).location,
-      );
+      router.push(const NewInspectionRoute(assetNo: AssetNo('TM514')).location);
       await tester.pumpAndSettle();
       expect(find.text(TpRouteId.newInspection), findsOneWidget);
 
@@ -239,8 +242,9 @@ void main() {
       expect(locationOf(router), TpRoutePaths.scanner);
     });
 
-    testWidgets('an accident case pops back to its own accident',
-        (WidgetTester tester) async {
+    testWidgets('an accident case pops back to its own accident', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -261,8 +265,9 @@ void main() {
       expect(locationOf(router), '/accidents/acc-1');
     });
 
-    testWidgets('with no history at all, Back uses the fallback',
-        (WidgetTester tester) async {
+    testWidgets('with no history at all, Back uses the fallback', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -294,8 +299,9 @@ void main() {
       expect(locationOf(router), startsWith(TpRoutePaths.login));
     });
 
-    testWidgets('a deep link survives the sign in gate',
-        (WidgetTester tester) async {
+    testWidgets('a deep link survives the sign in gate', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedOut(),
@@ -312,8 +318,9 @@ void main() {
       );
     });
 
-    testWidgets('signing in resumes the remembered destination',
-        (WidgetTester tester) async {
+    testWidgets('signing in resumes the remembered destination', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -325,8 +332,9 @@ void main() {
       expect(locationOf(router), TpRoutePaths.meterLog);
     });
 
-    testWidgets('a hostile from target is ignored, not followed',
-        (WidgetTester tester) async {
+    testWidgets('a hostile from target is ignored, not followed', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -340,8 +348,9 @@ void main() {
       expect(locationOf(router), TpRoutePaths.home);
     });
 
-    testWidgets('a session still resolving holds on the boot screen',
-        (WidgetTester tester) async {
+    testWidgets('a session still resolving holds on the boot screen', (
+      WidgetTester tester,
+    ) async {
       // Deciding anything on a half-read session denies every role, admin
       // included.
       final GoRouter router = await pumpApp(
@@ -354,14 +363,12 @@ void main() {
       expect(find.byKey(TpStateKeys.loading), findsOneWidget);
     });
 
-    testWidgets('a timed out session is a third state, not a spinner',
-        (WidgetTester tester) async {
+    testWidgets('a timed out session is a third state, not a spinner', (
+      WidgetTester tester,
+    ) async {
       // Artifact 03 section 1.1: the keystore read stalls on low-end hardware
       // and this screen used to spin forever.
-      await pumpApp(
-        tester,
-        session: const TpSession.timedOut(),
-      );
+      await pumpApp(tester, session: const TpSession.timedOut());
 
       expect(find.text('This is taking longer than usual'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -369,8 +376,9 @@ void main() {
   });
 
   group('the shell gates run before the tabs', () {
-    testWidgets('an update requirement blocks the whole app',
-        (WidgetTester tester) async {
+    testWidgets('an update requirement blocks the whole app', (
+      WidgetTester tester,
+    ) async {
       await pumpApp(
         tester,
         session: const TpSession.signedIn(gate: TpShellGate.updateRequired),
@@ -381,8 +389,9 @@ void main() {
       expect(find.text(TpRouteId.home), findsNothing);
     });
 
-    testWidgets('a deep link cannot skip a shell gate',
-        (WidgetTester tester) async {
+    testWidgets('a deep link cannot skip a shell gate', (
+      WidgetTester tester,
+    ) async {
       // The gates are states rather than routes precisely so this is true.
       final GoRouter router = await pumpApp(
         tester,
@@ -399,9 +408,7 @@ void main() {
     testWidgets('a profile failure fails closed', (WidgetTester tester) async {
       await pumpApp(
         tester,
-        session: const TpSession.signedIn(
-          gate: TpShellGate.profileUnavailable,
-        ),
+        session: const TpSession.signedIn(gate: TpShellGate.profileUnavailable),
       );
 
       expect(find.text('We could not load your profile'), findsOneWidget);
@@ -409,8 +416,9 @@ void main() {
   });
 
   group('a route that does not exist', () {
-    testWidgets('renders an explanation, not a developer error page',
-        (WidgetTester tester) async {
+    testWidgets('renders an explanation, not a developer error page', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),
@@ -424,8 +432,9 @@ void main() {
   });
 
   group('an unregistered screen says so', () {
-    testWidgets('a route with no screen renders the not-built state',
-        (WidgetTester tester) async {
+    testWidgets('a route with no screen renders the not-built state', (
+      WidgetTester tester,
+    ) async {
       final GoRouter router = await pumpApp(
         tester,
         session: const TpSession.signedIn(),

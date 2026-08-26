@@ -14,7 +14,10 @@ void main() {
     });
 
     test('rejected is sentBack', () {
-      expect(checklistHistoryStateOf('rejected'), ChecklistHistoryState.sentBack);
+      expect(
+        checklistHistoryStateOf('rejected'),
+        ChecklistHistoryState.sentBack,
+      );
     });
 
     test('pending is waiting', () {
@@ -29,9 +32,15 @@ void main() {
     });
 
     test('not_required, null and an unrecognised value are all noApproval', () {
-      expect(checklistHistoryStateOf('not_required'), ChecklistHistoryState.noApproval);
+      expect(
+        checklistHistoryStateOf('not_required'),
+        ChecklistHistoryState.noApproval,
+      );
       expect(checklistHistoryStateOf(null), ChecklistHistoryState.noApproval);
-      expect(checklistHistoryStateOf('garbage'), ChecklistHistoryState.noApproval);
+      expect(
+        checklistHistoryStateOf('garbage'),
+        ChecklistHistoryState.noApproval,
+      );
     });
   });
 

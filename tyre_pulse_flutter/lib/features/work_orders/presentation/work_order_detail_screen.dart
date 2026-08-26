@@ -58,8 +58,7 @@ class WorkOrderDetailScreen extends ConsumerStatefulWidget {
       _WorkOrderDetailScreenState();
 }
 
-class _WorkOrderDetailScreenState
-    extends ConsumerState<WorkOrderDetailScreen> {
+class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
   bool _loading = true;
   AppError? _error;
   WorkOrderItem? _item;
@@ -79,8 +78,9 @@ class _WorkOrderDetailScreenState
       _error = null;
     });
     try {
-      final WorkOrderItem? item =
-          await ref.read(workOrderRepositoryProvider).byId(_workOrderId);
+      final WorkOrderItem? item = await ref
+          .read(workOrderRepositoryProvider)
+          .byId(_workOrderId);
       if (!mounted) return;
       setState(() {
         _item = item;
@@ -103,10 +103,9 @@ class _WorkOrderDetailScreenState
 
     setState(() => _advancing = true);
     try {
-      await ref.read(workOrderRepositoryProvider).advanceStatus(
-            workspace: workspace,
-            current: item,
-          );
+      await ref
+          .read(workOrderRepositoryProvider)
+          .advanceStatus(workspace: workspace, current: item);
       if (!mounted) return;
       // Reload IN PLACE rather than navigating away - mirrors
       // `InspectionApprovalReviewScreen._decide`'s own choice: this is the
@@ -332,10 +331,7 @@ class _FieldRow extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Expanded(
-            flex: 2,
-            child: Text(label, style: text.labelMedium),
-          ),
+          Expanded(flex: 2, child: Text(label, style: text.labelMedium)),
           Expanded(
             flex: 3,
             child: Text(

@@ -29,8 +29,7 @@ void main() {
   });
 
   group('serial search builder', () {
-    test('a SerialSearchRoute builds a SerialSearchScreen carrying it',
-        () {
+    test('a SerialSearchRoute builds a SerialSearchScreen carrying it', () {
       const SerialSearchRoute route = SerialSearchRoute(
         tyreSerial: TyreSerial('EP0604207'),
       );

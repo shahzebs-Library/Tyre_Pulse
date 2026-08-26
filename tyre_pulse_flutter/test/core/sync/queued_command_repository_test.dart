@@ -64,8 +64,7 @@ void main() {
       });
     });
 
-    test('reports no dropped fields when every key is allow-listed',
-        () async {
+    test('reports no dropped fields when every key is allow-listed', () async {
       final EnqueueResult result = await repository.enqueue(
         type: CommandType.rca,
         payload: <String, Object?>{'asset_no': 'TM514', 'brand': 'Michelin'},
@@ -76,8 +75,7 @@ void main() {
       expect(result.droppedFields, isEmpty);
     });
 
-    test(
-        'an update command keeps its match column in the stored payload, '
+    test('an update command keeps its match column in the stored payload, '
         'and drops the rest', () async {
       final EnqueueResult result = await repository.enqueue(
         type: CommandType.stockAdjust,
@@ -101,20 +99,17 @@ void main() {
   });
 
   group('round trip', () {
-    test('a real row lands in pending_commands and can be read back',
-        () async {
+    test('a real row lands in pending_commands and can be read back', () async {
       final EnqueueResult result = await repository.enqueue(
         type: CommandType.washRecord,
-        payload: <String, Object?>{
-          'asset_no': 'TM514',
-          'wash_type': 'full',
-        },
+        payload: <String, Object?>{'asset_no': 'TM514', 'wash_type': 'full'},
         workspace: _workspace(),
         now: testNow,
       );
 
-      final PendingCommand? stored =
-          await db.queueDao.commandById(result.command.id);
+      final PendingCommand? stored = await db.queueDao.commandById(
+        result.command.id,
+      );
 
       expect(stored, isNotNull);
       expect(stored!.commandType, 'WASH_RECORD');
@@ -142,8 +137,7 @@ void main() {
       expect(result.command.entityId, 'stock-42');
     });
 
-    test('throws when entityId is missing, and nothing is enqueued',
-        () async {
+    test('throws when entityId is missing, and nothing is enqueued', () async {
       await expectLater(
         repository.enqueue(
           type: CommandType.workOrderStatus,
@@ -157,8 +151,7 @@ void main() {
       expect(await db.queueDao.pendingCount(), 0);
     });
 
-    test('throws when entityId is blank, matching the missing case',
-        () async {
+    test('throws when entityId is blank, matching the missing case', () async {
       await expectLater(
         repository.enqueue(
           type: CommandType.correctiveActionStatus,
@@ -196,8 +189,7 @@ void main() {
       expect(result.command.country, 'UAE');
     });
 
-    test('falls back to the workspace active country when omitted',
-        () async {
+    test('falls back to the workspace active country when omitted', () async {
       final EnqueueResult result = await repository.enqueue(
         type: CommandType.washRecord,
         payload: <String, Object?>{'asset_no': 'TM514'},
@@ -221,47 +213,51 @@ void main() {
   });
 
   group('idempotency and id minting', () {
-    test('two commands enqueued with neither id nor key both get real rows',
-        () async {
-      final EnqueueResult first = await repository.enqueue(
-        type: CommandType.odometerLog,
-        payload: <String, Object?>{'asset_no': 'TM514', 'odometer_km': 1000},
-        workspace: _workspace(),
-        now: testNow,
-      );
-      final EnqueueResult second = await repository.enqueue(
-        type: CommandType.odometerLog,
-        payload: <String, Object?>{'asset_no': 'TM514', 'odometer_km': 1050},
-        workspace: _workspace(),
-        now: testNow,
-      );
+    test(
+      'two commands enqueued with neither id nor key both get real rows',
+      () async {
+        final EnqueueResult first = await repository.enqueue(
+          type: CommandType.odometerLog,
+          payload: <String, Object?>{'asset_no': 'TM514', 'odometer_km': 1000},
+          workspace: _workspace(),
+          now: testNow,
+        );
+        final EnqueueResult second = await repository.enqueue(
+          type: CommandType.odometerLog,
+          payload: <String, Object?>{'asset_no': 'TM514', 'odometer_km': 1050},
+          workspace: _workspace(),
+          now: testNow,
+        );
 
-      expect(first.command.id, isNotEmpty);
-      expect(second.command.id, isNotEmpty);
-      expect(first.command.id, isNot(second.command.id));
-      expect(first.command.idempotencyKey, isNotEmpty);
-      expect(second.command.idempotencyKey, isNotEmpty);
-      expect(
-        first.command.idempotencyKey,
-        isNot(second.command.idempotencyKey),
-      );
-      expect(await db.queueDao.pendingCount(), 2);
-    });
+        expect(first.command.id, isNotEmpty);
+        expect(second.command.id, isNotEmpty);
+        expect(first.command.id, isNot(second.command.id));
+        expect(first.command.idempotencyKey, isNotEmpty);
+        expect(second.command.idempotencyKey, isNotEmpty);
+        expect(
+          first.command.idempotencyKey,
+          isNot(second.command.idempotencyKey),
+        );
+        expect(await db.queueDao.pendingCount(), 2);
+      },
+    );
 
-    test('an explicit id and key are honoured instead of being minted',
-        () async {
-      final EnqueueResult result = await repository.enqueue(
-        type: CommandType.engineHoursLog,
-        payload: <String, Object?>{'asset_no': 'TM514', 'engine_hours': 12},
-        workspace: _workspace(),
-        now: testNow,
-        id: 'cmd-fixed',
-        idempotencyKey: 'idem-fixed',
-      );
+    test(
+      'an explicit id and key are honoured instead of being minted',
+      () async {
+        final EnqueueResult result = await repository.enqueue(
+          type: CommandType.engineHoursLog,
+          payload: <String, Object?>{'asset_no': 'TM514', 'engine_hours': 12},
+          workspace: _workspace(),
+          now: testNow,
+          id: 'cmd-fixed',
+          idempotencyKey: 'idem-fixed',
+        );
 
-      expect(result.command.id, 'cmd-fixed');
-      expect(result.command.idempotencyKey, 'idem-fixed');
-    });
+        expect(result.command.id, 'cmd-fixed');
+        expect(result.command.idempotencyKey, 'idem-fixed');
+      },
+    );
   });
 
   group('workspace', () {

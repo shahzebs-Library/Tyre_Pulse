@@ -39,8 +39,9 @@ class TpModuleGuard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ModuleAccessResolver resolver =
-        ref.watch(moduleAccessResolverProvider);
+    final ModuleAccessResolver resolver = ref.watch(
+      moduleAccessResolverProvider,
+    );
     final ModuleAccessDecision decision = resolver.decide(guard);
 
     return switch (decision) {
@@ -49,13 +50,12 @@ class TpModuleGuard extends ConsumerWidget {
       // itself. Loading and denied are separate branches on purpose: fusing
       // them is what produced a spinner that ran forever.
       ModuleAccessResolving() => const TpScaffold(body: TpLoadingState()),
-      ModuleAccessDenied(reason: final ModuleDenialReason reason) =>
-        TpScaffold(
-          body: TpPermissionDeniedState(
-            reason: describeDenial(AppLocalizations.of(context), reason),
-            onBack: () => _goBack(context),
-          ),
+      ModuleAccessDenied(reason: final ModuleDenialReason reason) => TpScaffold(
+        body: TpPermissionDeniedState(
+          reason: describeDenial(AppLocalizations.of(context), reason),
+          onBack: () => _goBack(context),
         ),
+      ),
     };
   }
 

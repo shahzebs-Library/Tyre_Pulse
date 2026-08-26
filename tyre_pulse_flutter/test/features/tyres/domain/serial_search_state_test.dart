@@ -55,26 +55,22 @@ void main() {
 
     test('offerScrap is false until the server has answered true', () {
       expect(found.offerScrap, isFalse, reason: 'canScrap is null');
-      expect(
-        found.copyWith(canScrap: false).offerScrap,
-        isFalse,
-      );
+      expect(found.copyWith(canScrap: false).offerScrap, isFalse);
       expect(found.copyWith(canScrap: true).offerScrap, isTrue);
     });
 
     test('offerScrap is false once the tyre is already scrapped', () {
-      final SerialSearchState scrapped =
-          found.copyWith(canScrap: true, scrapMark: _mark);
+      final SerialSearchState scrapped = found.copyWith(
+        canScrap: true,
+        scrapMark: _mark,
+      );
       expect(scrapped.offerScrap, isFalse);
     });
 
     test('offerUnscrap is false until canUnscrap is explicitly true', () {
       final SerialSearchState scrapped = found.copyWith(scrapMark: _mark);
       expect(scrapped.offerUnscrap, isFalse);
-      expect(
-        scrapped.copyWith(canUnscrap: true).offerUnscrap,
-        isTrue,
-      );
+      expect(scrapped.copyWith(canUnscrap: true).offerUnscrap, isTrue);
     });
 
     test('offerUnscrap is false when the tyre is not scrapped, even if '
@@ -112,8 +108,7 @@ void main() {
         lastError: _error,
       );
 
-      final SerialSearchState clearedMark =
-          full.copyWith(clearScrapMark: true);
+      final SerialSearchState clearedMark = full.copyWith(clearScrapMark: true);
       expect(clearedMark.scrapMark, isNull);
       expect(clearedMark.resolvedSerial, 'EP0604207');
       expect(clearedMark.lastError, _error);
@@ -122,8 +117,9 @@ void main() {
       expect(clearedError.lastError, isNull);
       expect(clearedError.scrapMark, _mark);
 
-      final SerialSearchState clearedSerial =
-          full.copyWith(clearResolvedSerial: true);
+      final SerialSearchState clearedSerial = full.copyWith(
+        clearResolvedSerial: true,
+      );
       expect(clearedSerial.resolvedSerial, isNull);
       expect(clearedSerial.scrapMark, _mark);
     });
@@ -138,7 +134,8 @@ void main() {
       expect(
         result.tyre,
         isNull,
-        reason: 'copyWith checks the clear flag before the replacement '
+        reason:
+            'copyWith checks the clear flag before the replacement '
             'value, matching WorkspaceContext.copyWith',
       );
     });
@@ -147,10 +144,10 @@ void main() {
   group('equality', () {
     test('two states built the same way are equal', () {
       SerialSearchState build() => const SerialSearchState(
-            phase: SerialSearchPhase.found,
-            tyre: _tyre,
-            canScrap: true,
-          );
+        phase: SerialSearchPhase.found,
+        tyre: _tyre,
+        canScrap: true,
+      );
       expect(build(), build());
       expect(build().hashCode, build().hashCode);
     });

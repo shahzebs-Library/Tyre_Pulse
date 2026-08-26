@@ -172,30 +172,32 @@ final class SupabaseChecklistApprovalRepository
   Future<List<ChecklistApprovalItem>> listPending({String? country}) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      // Two chained `.or()` calls, not a batched "IN" filter - this
-      // codebase has no existing call site to check an "IN" method name
-      // against (no resolvable pub cache in this environment - see this
-      // port's final report), while `.or()` is already proven correct
-      // elsewhere in this exact file (the country scope below) and in
-      // `checklist_remote_repository.dart`. Chained filter calls combine
-      // with AND, so this expresses exactly `(approval_status IN
-      // ('pending','pending_area_manager')) AND (country condition)` -
-      // both waiting states, matching `mobile/lib/checklists.ts`'s own
-      // `.in('approval_status', ['pending', 'pending_area_manager'])`.
-      var query = _client
-          .from(SupabaseTables.checklistSubmissions)
-          .select(checklistApprovalListColumns)
-          .or('approval_status.eq.pending,'
-              'approval_status.eq.pending_area_manager');
-      final String? filter = checklistApprovalCountryFilter(country);
-      if (filter != null) {
-        query = query.or(filter);
-      }
-      return await query
-              .order('submitted_at', ascending: false, nullsFirst: false)
-              .limit(200)
-          as List<Map<String, dynamic>>;
-    });
+          // Two chained `.or()` calls, not a batched "IN" filter - this
+          // codebase has no existing call site to check an "IN" method name
+          // against (no resolvable pub cache in this environment - see this
+          // port's final report), while `.or()` is already proven correct
+          // elsewhere in this exact file (the country scope below) and in
+          // `checklist_remote_repository.dart`. Chained filter calls combine
+          // with AND, so this expresses exactly `(approval_status IN
+          // ('pending','pending_area_manager')) AND (country condition)` -
+          // both waiting states, matching `mobile/lib/checklists.ts`'s own
+          // `.in('approval_status', ['pending', 'pending_area_manager'])`.
+          var query = _client
+              .from(SupabaseTables.checklistSubmissions)
+              .select(checklistApprovalListColumns)
+              .or(
+                'approval_status.eq.pending,'
+                'approval_status.eq.pending_area_manager',
+              );
+          final String? filter = checklistApprovalCountryFilter(country);
+          if (filter != null) {
+            query = query.or(filter);
+          }
+          return await query
+                  .order('submitted_at', ascending: false, nullsFirst: false)
+                  .limit(200)
+              as List<Map<String, dynamic>>;
+        });
     return <ChecklistApprovalItem>[
       for (final Map<String, dynamic> row in rows)
         ChecklistApprovalItem.fromRow(row),
@@ -216,9 +218,7 @@ final class SupabaseChecklistApprovalRepository
   }
 
   @override
-  Future<ChecklistApprovalTemplateInfo?> templateInfo(
-    String templateId,
-  ) async {
+  Future<ChecklistApprovalTemplateInfo?> templateInfo(String templateId) async {
     if (templateId.isEmpty) return null;
     try {
       final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
@@ -265,13 +265,12 @@ final class SupabaseChecklistApprovalRepository
     try {
       final List<Map<String, dynamic>> rows =
           await guard<List<Map<String, dynamic>>>(() async {
-        return await _client
-                .from(SupabaseTables.checklistTemplates)
-                .select(checklistApprovalTemplateColumns)
-                .or(
-                  distinct.map((String id) => 'id.eq.$id').join(','),
-                ) as List<Map<String, dynamic>>;
-      });
+            return await _client
+                    .from(SupabaseTables.checklistTemplates)
+                    .select(checklistApprovalTemplateColumns)
+                    .or(distinct.map((String id) => 'id.eq.$id').join(','))
+                as List<Map<String, dynamic>>;
+          });
       final Map<String, ChecklistApprovalTemplateInfo> out =
           <String, ChecklistApprovalTemplateInfo>{};
       for (final Map<String, dynamic> row in rows) {
@@ -315,13 +314,14 @@ final class SupabaseChecklistApprovalRepository
     final Map<String, Object?> patch = _patchFor(item);
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      return await _client
-              .from(SupabaseTables.checklistSubmissions)
-              .update(patch)
-              .eq('id', item.submissionId)
-              .eq('approval_status', item.priorApprovalStatus)
-              .select('id') as List<Map<String, dynamic>>;
-    });
+          return await _client
+                  .from(SupabaseTables.checklistSubmissions)
+                  .update(patch)
+                  .eq('id', item.submissionId)
+                  .eq('approval_status', item.priorApprovalStatus)
+                  .select('id')
+              as List<Map<String, dynamic>>;
+        });
     return rows.isEmpty
         ? ChecklistApprovalApplyResult.conflict
         : ChecklistApprovalApplyResult.applied;
@@ -334,26 +334,24 @@ final class SupabaseChecklistApprovalRepository
   /// other resulting status (both `'approved'` and `'rejected'`) writes
   /// the APPROVER columns - writing both would make one person look like
   /// two, which is the entire reason the two column sets exist at all.
-  static Map<String, Object?> _patchFor(
-    QueuedChecklistApprovalDecision item,
-  ) {
+  static Map<String, Object?> _patchFor(QueuedChecklistApprovalDecision item) {
     final String? nameOrNull = _blankToNull(item.approverName);
     final String nowIso = item.decidedAt.toIso8601String();
 
     final Map<String, Object?> stageFields =
         item.targetStatus == 'pending_area_manager'
-            ? <String, Object?>{
-                'supervisor_name': nameOrNull,
-                'supervisor_signature': item.approverSignature,
-                'supervisor_by': item.approverId,
-                'supervisor_at': nowIso,
-              }
-            : <String, Object?>{
-                'approver_name': nameOrNull,
-                'approver_signature': item.approverSignature,
-                'approved_by': item.approverId,
-                'approved_at': nowIso,
-              };
+        ? <String, Object?>{
+            'supervisor_name': nameOrNull,
+            'supervisor_signature': item.approverSignature,
+            'supervisor_by': item.approverId,
+            'supervisor_at': nowIso,
+          }
+        : <String, Object?>{
+            'approver_name': nameOrNull,
+            'approver_signature': item.approverSignature,
+            'approved_by': item.approverId,
+            'approved_at': nowIso,
+          };
 
     return <String, Object?>{
       'approval_status': item.targetStatus,

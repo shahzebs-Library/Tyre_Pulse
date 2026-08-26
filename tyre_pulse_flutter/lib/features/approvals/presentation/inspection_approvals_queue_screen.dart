@@ -88,9 +88,8 @@ class _InspectionApprovalsQueueScreenState
 
   void _open(InspectionApprovalItem item) {
     context.push(
-      InspectionApprovalReviewRoute(
-        inspectionId: InspectionId(item.id),
-      ).location,
+      InspectionApprovalReviewRoute(inspectionId: InspectionId(item.id))
+          .location,
     );
   }
 
@@ -271,13 +270,11 @@ class _QueueRow extends StatelessWidget {
   /// `title` and then to [fallbackTitle] - mirrors the mobile queue row's
   /// own `[s.asset_no, s.vehicle_type].filter(Boolean).join(' · ') ||
   /// s.title || 'Inspection'`.
-  static String _headingFor(
-    InspectionApprovalItem item,
-    String fallbackTitle,
-  ) {
-    final String assetAndType = <String?>[item.assetNo, item.vehicleType]
-        .where((String? v) => v != null && v.trim().isNotEmpty)
-        .join(' - ');
+  static String _headingFor(InspectionApprovalItem item, String fallbackTitle) {
+    final String assetAndType = <String?>[
+      item.assetNo,
+      item.vehicleType,
+    ].where((String? v) => v != null && v.trim().isNotEmpty).join(' - ');
     if (assetAndType.isNotEmpty) return assetAndType;
     final String title = item.title?.trim() ?? '';
     return title.isNotEmpty ? title : fallbackTitle;
@@ -305,9 +302,8 @@ class _MetaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TextStyle? style = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: palette.textMuted);
+    final TextStyle? style = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: palette.textMuted);
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Row(

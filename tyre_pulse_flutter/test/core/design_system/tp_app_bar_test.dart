@@ -32,8 +32,9 @@ void main() {
   });
 
   group('the subtitle', () {
-    testWidgets('renders as a second line when supplied',
-        (WidgetTester tester) async {
+    testWidgets('renders as a second line when supplied', (
+      WidgetTester tester,
+    ) async {
       await _pumpAppBar(
         tester,
         const TpAppBar(title: 'Tyre Records', subtitle: 'TM514'),
@@ -43,8 +44,9 @@ void main() {
       expect(find.text('TM514'), findsOneWidget);
     });
 
-    testWidgets('when omitted, no subtitle text renders at all',
-        (WidgetTester tester) async {
+    testWidgets('when omitted, no subtitle text renders at all', (
+      WidgetTester tester,
+    ) async {
       await _pumpAppBar(
         tester,
         const TpAppBar(title: 'Tyre Records', subtitle: 'TM514'),
@@ -57,15 +59,17 @@ void main() {
   });
 
   group('showBack', () {
-    testWidgets('true, the default, renders a leading Back control',
-        (WidgetTester tester) async {
+    testWidgets('true, the default, renders a leading Back control', (
+      WidgetTester tester,
+    ) async {
       await _pumpAppBar(tester, const TpAppBar(title: 'Tyre Records'));
 
       expect(find.byIcon(Icons.arrow_back), findsOneWidget);
     });
 
-    testWidgets('false renders no leading control at all',
-        (WidgetTester tester) async {
+    testWidgets('false renders no leading control at all', (
+      WidgetTester tester,
+    ) async {
       await _pumpAppBar(
         tester,
         const TpAppBar(title: 'Tyre Records', showBack: false),
@@ -78,8 +82,9 @@ void main() {
     });
   });
 
-  testWidgets('under a right-to-left locale the chevron mirrors',
-      (WidgetTester tester) async {
+  testWidgets('under a right-to-left locale the chevron mirrors', (
+    WidgetTester tester,
+  ) async {
     // Spec section 52: Flutter does not flip arrow_back for us, so the
     // widget has to choose the glyph itself from the ambient locale.
     await _pumpAppBar(
@@ -93,8 +98,9 @@ void main() {
   });
 
   group('the Back control', () {
-    testWidgets('onBack, when supplied, is called on tap',
-        (WidgetTester tester) async {
+    testWidgets('onBack, when supplied, is called on tap', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await _pumpAppBar(
         tester,
@@ -107,8 +113,9 @@ void main() {
       expect(taps, 1);
     });
 
-    testWidgets('with no onBack and no router, tapping it does not throw',
-        (WidgetTester tester) async {
+    testWidgets('with no onBack and no router, tapping it does not throw', (
+      WidgetTester tester,
+    ) async {
       // "A Back control that throws is worse than one that reports it could
       // not act" - tp_back.dart. This harness has no GoRouter, which is
       // exactly the case that comment names.

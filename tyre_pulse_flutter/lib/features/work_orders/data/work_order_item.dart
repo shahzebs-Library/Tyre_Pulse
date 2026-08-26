@@ -35,13 +35,15 @@ library;
 /// Every column [WorkOrderItem.fromRow] can read for the LIST. Matches
 /// `work-orders.tsx`'s own `.select(...)` string verbatim, column for
 /// column and in the same order.
-const String workOrderListColumns = 'id,work_order_no,asset_no,work_type,'
+const String workOrderListColumns =
+    'id,work_order_no,asset_no,work_type,'
     'status,priority,description,site,total_cost,opened_at';
 
 /// Every column [WorkOrderItem.fromRow] can read for the DETAIL screen.
 /// The list columns plus the three real, already-written columns the
 /// detail screen additionally renders. See the library comment.
-const String workOrderDetailColumns = '$workOrderListColumns,'
+const String workOrderDetailColumns =
+    '$workOrderListColumns,'
     'started_at,completed_at,country';
 
 String? _asString(Object? raw) {

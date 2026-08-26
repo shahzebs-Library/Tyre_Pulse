@@ -23,8 +23,10 @@ const List<String> _kMixerSlots = <String>[
   'R2Ro',
 ];
 
-Map<String, Object?> _filled() =>
-    <String, Object?>{'condition': 'Good', 'pressure_psi': '110'};
+Map<String, Object?> _filled() => <String, Object?>{
+  'condition': 'Good',
+  'pressure_psi': '110',
+};
 
 Map<String, Object?> _seeded() => <String, Object?>{
   'position': '',
@@ -106,45 +108,39 @@ void main() {
     expect(res.summary, '2 of 12 tyres still need details.');
   });
 
-  test(
-    'case 75: blank reports but does not block, unless requireEvidence',
-    () {
-      final Map<String, Object?> tc = <String, Object?>{
-        for (final String slot in _kMixerSlots)
-          slot: slot == 'R2Ro' ? _seeded() : _filled(),
-      };
-      final TyreCompletenessResult res = _mixer(tc);
-      expect(res.ok, isTrue);
-      expect(res.pending.length, 1);
+  test('case 75: blank reports but does not block, unless requireEvidence', () {
+    final Map<String, Object?> tc = <String, Object?>{
+      for (final String slot in _kMixerSlots)
+        slot: slot == 'R2Ro' ? _seeded() : _filled(),
+    };
+    final TyreCompletenessResult res = _mixer(tc);
+    expect(res.ok, isTrue);
+    expect(res.pending.length, 1);
 
-      final TyreCompletenessResult blocked = _mixer(
-        tc,
-        const TyreCompletenessOptions(requireEvidence: true),
-      );
-      expect(blocked.ok, isFalse);
-    },
-  );
+    final TyreCompletenessResult blocked = _mixer(
+      tc,
+      const TyreCompletenessOptions(requireEvidence: true),
+    );
+    expect(blocked.ok, isFalse);
+  });
 
-  test(
-    'case 76: missing pressure is advisory, unless requirePressure',
-    () {
-      final Map<String, Object?> tc = <String, Object?>{
-        for (final String slot in _kMixerSlots)
-          slot: slot == 'R2Ro'
-              ? <String, Object?>{'condition': 'Worn'}
-              : _filled(),
-      };
-      final TyreCompletenessResult res = _mixer(tc);
-      expect(res.ok, isTrue);
-      expect(res.incomplete.length, 1);
+  test('case 76: missing pressure is advisory, unless requirePressure', () {
+    final Map<String, Object?> tc = <String, Object?>{
+      for (final String slot in _kMixerSlots)
+        slot: slot == 'R2Ro'
+            ? <String, Object?>{'condition': 'Worn'}
+            : _filled(),
+    };
+    final TyreCompletenessResult res = _mixer(tc);
+    expect(res.ok, isTrue);
+    expect(res.incomplete.length, 1);
 
-      final TyreCompletenessResult blocked = _mixer(
-        tc,
-        const TyreCompletenessOptions(requirePressure: true),
-      );
-      expect(blocked.ok, isFalse);
-    },
-  );
+    final TyreCompletenessResult blocked = _mixer(
+      tc,
+      const TyreCompletenessOptions(requirePressure: true),
+    );
+    expect(blocked.ok, isFalse);
+  });
 
   test('case 77: an unknown layout blocks nothing', () {
     final TyreCompletenessResult res = tyreCompleteness(
@@ -157,31 +153,25 @@ void main() {
     expect(res.ok, isTrue);
   });
 
-  test(
-    'case 78: tyreless is "not applicable", never "0 of 0"',
-    () {
-      final TyreCompletenessResult res = tyreCompleteness(
-        'STATIONARY PUMP',
-        null,
-        <String, Object?>{},
-      );
-      expect(res.applicable, isFalse);
-      expect(res.ok, isTrue);
-      expect(res.pending, isEmpty);
-      expect(res.summary, 'No tyres to inspect on this equipment.');
-    },
-  );
+  test('case 78: tyreless is "not applicable", never "0 of 0"', () {
+    final TyreCompletenessResult res = tyreCompleteness(
+      'STATIONARY PUMP',
+      null,
+      <String, Object?>{},
+    );
+    expect(res.applicable, isFalse);
+    expect(res.ok, isTrue);
+    expect(res.pending, isEmpty);
+    expect(res.summary, 'No tyres to inspect on this equipment.');
+  });
 
-  test(
-    'case 79: layoutIsKnown needs something to have said Pickup',
-    () {
-      expect(layoutIsKnown('HEAVY EQP', 'TM640'), isTrue);
-      expect(layoutIsKnown('HEAVY EQP', null), isFalse);
-      // A forklift resolves to Pickup by fallback, so its wheel count is a
-      // guess and must not gate.
-      expect(layoutIsKnown('FORKLIFT', null), isFalse);
-    },
-  );
+  test('case 79: layoutIsKnown needs something to have said Pickup', () {
+    expect(layoutIsKnown('HEAVY EQP', 'TM640'), isTrue);
+    expect(layoutIsKnown('HEAVY EQP', null), isFalse);
+    // A forklift resolves to Pickup by fallback, so its wheel count is a
+    // guess and must not gate.
+    expect(layoutIsKnown('FORKLIFT', null), isFalse);
+  });
 
   test('case 80: a spare is extra and cannot block', () {
     final Map<String, Object?> tc = <String, Object?>{

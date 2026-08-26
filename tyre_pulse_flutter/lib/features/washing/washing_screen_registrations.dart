@@ -18,9 +18,7 @@ import 'package:tyre_pulse/features/washing/presentation/washing_screen.dart';
 
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> washingScreenRegistrations =
-    <String, TpScreenBuilder>{
-  TpRouteId.washing: _buildWashingScreen,
-};
+    <String, TpScreenBuilder>{TpRouteId.washing: _buildWashingScreen};
 
 /// See `meter_logs_screen_registrations.dart`'s own
 /// `_buildMeterLogScreen` for why this guard exists.

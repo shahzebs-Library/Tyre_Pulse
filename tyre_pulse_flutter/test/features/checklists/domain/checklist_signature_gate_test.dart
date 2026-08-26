@@ -17,10 +17,10 @@ void main() {
         ChecklistField(id: 'x', type: 'text'),
         ChecklistField(id: 'sign_b', type: 'signature'),
       ];
-      expect(
-        signatureFields(fields).map((f) => f.id),
-        <String>['sign_a', 'sign_b'],
-      );
+      expect(signatureFields(fields).map((f) => f.id), <String>[
+        'sign_a',
+        'sign_b',
+      ]);
     });
   });
 
@@ -37,10 +37,17 @@ void main() {
 
     test('a required, unsigned field errors by id', () {
       const List<ChecklistField> fields = <ChecklistField>[
-        ChecklistField(id: 'sign_a', type: 'signature', required: true, label: 'Mechanic'),
+        ChecklistField(
+          id: 'sign_a',
+          type: 'signature',
+          required: true,
+          label: 'Mechanic',
+        ),
       ];
-      final Map<String, String> errors =
-          validateSignatureFields(fields, const <String, Object?>{});
+      final Map<String, String> errors = validateSignatureFields(
+        fields,
+        const <String, Object?>{},
+      );
       expect(errors.keys, <String>['sign_a']);
       expect(errors['sign_a'], contains('Mechanic'));
     });
@@ -72,10 +79,9 @@ void main() {
         ChecklistField(id: 'sign_a', type: 'signature', required: true),
       ];
       expect(
-        validateSignatureFields(
-          fields,
-          <String, Object?>{'sign_a': '<svg></svg>'},
-        ),
+        validateSignatureFields(fields, <String, Object?>{
+          'sign_a': '<svg></svg>',
+        }),
         isEmpty,
       );
     });
@@ -95,7 +101,10 @@ void main() {
   group('primarySignatureSatisfied', () {
     test('always satisfied when the template does not require one', () {
       expect(
-        primarySignatureSatisfied(templateRequiresSignature: false, fields: null),
+        primarySignatureSatisfied(
+          templateRequiresSignature: false,
+          fields: null,
+        ),
         isTrue,
       );
     });
@@ -125,7 +134,9 @@ void main() {
       expect(
         primarySignatureSatisfied(
           templateRequiresSignature: true,
-          fields: const <ChecklistField>[ChecklistField(id: 's', type: 'signature')],
+          fields: const <ChecklistField>[
+            ChecklistField(id: 's', type: 'signature'),
+          ],
           signatures: <String, Object?>{'s': '<svg></svg>'},
         ),
         isTrue,

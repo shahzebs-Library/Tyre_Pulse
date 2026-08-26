@@ -64,32 +64,29 @@ void main() {
   });
 
   group('resolveScanLookup - the asset chain stops at the first hit', () {
-    test('an exact asset_no match short-circuits the rest of the chain',
-        () async {
-      final FakeScanLookupSource fake = FakeScanLookupSource()
-        ..exactAssetByCode['TM514'] = _asset;
+    test(
+      'an exact asset_no match short-circuits the rest of the chain',
+      () async {
+        final FakeScanLookupSource fake = FakeScanLookupSource()
+          ..exactAssetByCode['TM514'] = _asset;
 
-      final ScanLookupResult result =
-          await resolveScanLookup('TM514', fake);
+        final ScanLookupResult result = await resolveScanLookup('TM514', fake);
 
-      expect(result, isA<AssetScanMatch>());
-      expect((result as AssetScanMatch).asset, _asset);
-      expect(fake.calls, <String>['exact:TM514']);
-    });
+        expect(result, isA<AssetScanMatch>());
+        expect((result as AssetScanMatch).asset, _asset);
+        expect(fake.calls, <String>['exact:TM514']);
+      },
+    );
 
     test('a case-insensitive asset_no match is tried only after an exact '
         'miss, and also short-circuits', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..assetByNumberIgnoringCase['tm514'] = _asset;
 
-      final ScanLookupResult result =
-          await resolveScanLookup('tm514', fake);
+      final ScanLookupResult result = await resolveScanLookup('tm514', fake);
 
       expect(result, isA<AssetScanMatch>());
-      expect(
-        fake.calls,
-        <String>['exact:tm514', 'numberIgnoringCase:tm514'],
-      );
+      expect(fake.calls, <String>['exact:tm514', 'numberIgnoringCase:tm514']);
     });
 
     test('a fleet_number match is tried only after both asset_no steps '
@@ -100,59 +97,56 @@ void main() {
       final ScanLookupResult result = await resolveScanLookup('F900', fake);
 
       expect(result, isA<AssetScanMatch>());
-      expect(
-        fake.calls,
-        <String>[
-          'exact:F900',
-          'numberIgnoringCase:F900',
-          'fleetNumberIgnoringCase:F900',
-        ],
-      );
+      expect(fake.calls, <String>[
+        'exact:F900',
+        'numberIgnoringCase:F900',
+        'fleetNumberIgnoringCase:F900',
+      ]);
     });
   });
 
   group('resolveScanLookup - tyre is tried only once every asset step '
       'misses', () {
-    test('a tyre match is returned only after all three asset steps miss',
-        () async {
-      final FakeScanLookupSource fake = FakeScanLookupSource()
-        ..tyreBySerial['EP0604207'] = _tyre;
+    test(
+      'a tyre match is returned only after all three asset steps miss',
+      () async {
+        final FakeScanLookupSource fake = FakeScanLookupSource()
+          ..tyreBySerial['EP0604207'] = _tyre;
 
-      final ScanLookupResult result =
-          await resolveScanLookup('EP0604207', fake);
+        final ScanLookupResult result = await resolveScanLookup(
+          'EP0604207',
+          fake,
+        );
 
-      expect(result, isA<TyreScanMatch>());
-      expect((result as TyreScanMatch).tyre, _tyre);
-      expect(
-        fake.calls,
-        <String>[
+        expect(result, isA<TyreScanMatch>());
+        expect((result as TyreScanMatch).tyre, _tyre);
+        expect(fake.calls, <String>[
           'exact:EP0604207',
           'numberIgnoringCase:EP0604207',
           'fleetNumberIgnoringCase:EP0604207',
           'tyreSerial:EP0604207',
-        ],
-      );
-    });
+        ]);
+      },
+    );
 
     test('when nothing matches at all, every step ran once and the result '
         'is ScanNoMatch carrying the extracted code', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource();
 
-      final ScanLookupResult result =
-          await resolveScanLookup(' NOTHING-HERE ', fake);
+      final ScanLookupResult result = await resolveScanLookup(
+        ' NOTHING-HERE ',
+        fake,
+      );
 
       expect(result, isA<ScanNoMatch>());
       expect(result.code, 'NOTHING-HERE');
       expect(result.rawInput, ' NOTHING-HERE ');
-      expect(
-        fake.calls,
-        <String>[
-          'exact:NOTHING-HERE',
-          'numberIgnoringCase:NOTHING-HERE',
-          'fleetNumberIgnoringCase:NOTHING-HERE',
-          'tyreSerial:NOTHING-HERE',
-        ],
-      );
+      expect(fake.calls, <String>[
+        'exact:NOTHING-HERE',
+        'numberIgnoringCase:NOTHING-HERE',
+        'fleetNumberIgnoringCase:NOTHING-HERE',
+        'tyreSerial:NOTHING-HERE',
+      ]);
     });
   });
 
@@ -162,8 +156,7 @@ void main() {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..assetByNumberIgnoringCase['tm514'] = _asset;
 
-      final ScanLookupResult result =
-          await resolveScanLookup('tm514', fake);
+      final ScanLookupResult result = await resolveScanLookup('tm514', fake);
 
       expect(result.code, 'TM514');
       expect(result.rawInput, 'tm514');
@@ -194,8 +187,7 @@ void main() {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..errorToThrow = Exception('offline');
 
-      final ScanLookupResult result =
-          await resolveScanLookup('TM514', fake);
+      final ScanLookupResult result = await resolveScanLookup('TM514', fake);
 
       expect(result, isA<ScanLookupFailed>());
       final ScanLookupFailed failed = result as ScanLookupFailed;
@@ -213,8 +205,7 @@ void main() {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..errorToThrow = original;
 
-      final ScanLookupResult result =
-          await resolveScanLookup('TM514', fake);
+      final ScanLookupResult result = await resolveScanLookup('TM514', fake);
 
       expect(result, isA<ScanLookupFailed>());
       expect((result as ScanLookupFailed).error, same(original));

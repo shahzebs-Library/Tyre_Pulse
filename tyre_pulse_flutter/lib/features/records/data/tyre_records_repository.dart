@@ -71,7 +71,8 @@ import 'package:tyre_pulse/features/records/domain/tyre_records_search.dart';
 /// The columns [TyreRecord.fromRow] reads. Kept as one constant, exactly
 /// like `_lookupColumns` in the sibling serial-search repository, so the
 /// query and the decoder cannot silently drift apart.
-const String _tyreRecordColumns = 'id,asset_no,serial_no,brand,site,'
+const String _tyreRecordColumns =
+    'id,asset_no,serial_no,brand,site,'
     'position,tyre_position,issue_date,risk_level,category,cost_per_tyre,'
     'km_at_fitment,km_at_removal,description,remarks,country';
 
@@ -141,8 +142,9 @@ final class SupabaseTyreRecordsRepository
     return guard<TyreRecordsPage>(() async {
       final ({int from, int to}) range = rangeForPage(pageIndex);
 
-      var builder =
-          _client.from(SupabaseTables.tyreRecords).select(_tyreRecordColumns);
+      var builder = _client
+          .from(SupabaseTables.tyreRecords)
+          .select(_tyreRecordColumns);
 
       final String? searchOr = orIlikeFilter(_searchColumns, query.search);
       if (searchOr != null) {
@@ -184,8 +186,9 @@ final class SupabaseTyreRecordsRepository
           .order('id', ascending: false)
           .range(range.from, range.to);
 
-      final List<TyreRecord> items =
-          rows.map(TyreRecord.fromRow).toList(growable: false);
+      final List<TyreRecord> items = rows
+          .map(TyreRecord.fromRow)
+          .toList(growable: false);
 
       return TyreRecordsPage(
         items: items,

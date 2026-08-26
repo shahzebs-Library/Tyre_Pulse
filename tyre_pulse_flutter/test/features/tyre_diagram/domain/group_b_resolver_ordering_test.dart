@@ -39,17 +39,13 @@ void main() {
   // test asserts case 15's REAL underlying claim (the prefix regex itself
   // does not match) rather than restating a value case 22 explicitly
   // overrides.
-  test(
-    'case 15 (R2 the real subject): the asset-code prefix regex does not '
-    'match PLACING BOOM at all, so a naive PL-prefix bug cannot produce '
-    'Pickup for the wrong reason',
-    () {
-      final Match? m = RegExp(
-        r'^([A-Za-z]{2,3})\s*\d',
-      ).firstMatch('PLACING BOOM');
-      expect(m, isNull);
-    },
-  );
+  test('case 15 (R2 the real subject): the asset-code prefix regex does not '
+      'match PLACING BOOM at all, so a naive PL-prefix bug cannot produce '
+      'Pickup for the wrong reason', () {
+    final Match? m = RegExp(r'^([A-Za-z]{2,3})\s*\d')
+        .firstMatch('PLACING BOOM');
+    expect(m, isNull);
+  });
 
   test('case 16: SLURRY TANKER resolves to Tanker, not Skid loader', () {
     expect(resolveVehicleType('SLURRY TANKER'), 'Tanker');
@@ -81,10 +77,7 @@ void main() {
       kTyreDiagramLayouts[resolveVehicleType('SPIDER PUMP')]!.tyres.length,
       10,
     );
-    expect(
-      kTyreDiagramLayouts[resolveVehicleType('PUMPS')]!.tyres.length,
-      14,
-    );
+    expect(kTyreDiagramLayouts[resolveVehicleType('PUMPS')]!.tyres.length, 14);
     expect(
       kTyreDiagramLayouts[resolveVehicleType('CONCRETE PUMP')]!.tyres.length,
       14,
@@ -108,14 +101,11 @@ void main() {
     expect(resolveVehicleType('STATIONARY PUMP'), 'Pickup');
   });
 
-  test(
-    'case 22b: PLACING BOOM resolves to Pickup - the web-form guard, '
-    'ported deliberately over mobile\'s own shadowed rule (artifact '
-    'section 3.1, section 8 decision 6)',
-    () {
-      expect(resolveVehicleType('PLACING BOOM'), 'Pickup');
-    },
-  );
+  test('case 22b: PLACING BOOM resolves to Pickup - the web-form guard, '
+      'ported deliberately over mobile\'s own shadowed rule (artifact '
+      'section 3.1, section 8 decision 6)', () {
+    expect(resolveVehicleType('PLACING BOOM'), 'Pickup');
+  });
 
   test('case 23: an unrecognised string never invents extra axles', () {
     expect(resolveVehicleType('SOMETHING NOBODY MAPPED'), 'Pickup');

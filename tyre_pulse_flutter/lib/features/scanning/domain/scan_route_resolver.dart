@@ -93,49 +93,49 @@ TpRoute primaryRouteFor(ScanLookupResult result) =>
 List<ScanRouteAction> actionsFor(ScanLookupResult result) {
   return switch (result) {
     AssetScanMatch(asset: final AssetLookupRecord asset) => <ScanRouteAction>[
-        ScanRouteAction(
-          intent: ScanActionIntent.viewAsset,
-          route: _assetRoute(asset),
+      ScanRouteAction(
+        intent: ScanActionIntent.viewAsset,
+        route: _assetRoute(asset),
+      ),
+      ScanRouteAction(
+        intent: ScanActionIntent.startInspection,
+        route: NewInspectionRoute(
+          siteName: _siteNameOrNull(asset.site),
+          assetNo: _assetNoOrNull(asset.assetNo),
         ),
+      ),
+    ],
+    TyreScanMatch(tyre: final TyreLookupRecord tyre) => <ScanRouteAction>[
+      ScanRouteAction(
+        intent: ScanActionIntent.viewTyre,
+        route: _serialSearchRoute(result.code),
+      ),
+      // Only offered when the tyre is actually fitted somewhere - starting
+      // an inspection with no asset to inspect would be an action that
+      // does nothing, which repository rule 7 forbids.
+      if (_isNotBlank(tyre.assetNo))
         ScanRouteAction(
           intent: ScanActionIntent.startInspection,
           route: NewInspectionRoute(
-            siteName: _siteNameOrNull(asset.site),
-            assetNo: _assetNoOrNull(asset.assetNo),
+            siteName: _siteNameOrNull(tyre.site),
+            assetNo: _assetNoOrNull(tyre.assetNo),
+            tyreSerial: _tyreSerialOrNull(result.code),
+            tyrePosition: _tyrePositionOrNull(tyre.bestPosition),
           ),
         ),
-      ],
-    TyreScanMatch(tyre: final TyreLookupRecord tyre) => <ScanRouteAction>[
-        ScanRouteAction(
-          intent: ScanActionIntent.viewTyre,
-          route: _serialSearchRoute(result.code),
-        ),
-        // Only offered when the tyre is actually fitted somewhere - starting
-        // an inspection with no asset to inspect would be an action that
-        // does nothing, which repository rule 7 forbids.
-        if (_isNotBlank(tyre.assetNo))
-          ScanRouteAction(
-            intent: ScanActionIntent.startInspection,
-            route: NewInspectionRoute(
-              siteName: _siteNameOrNull(tyre.site),
-              assetNo: _assetNoOrNull(tyre.assetNo),
-              tyreSerial: _tyreSerialOrNull(result.code),
-              tyrePosition: _tyrePositionOrNull(tyre.bestPosition),
-            ),
-          ),
-      ],
+    ],
     ScanNoMatch() => <ScanRouteAction>[
-        ScanRouteAction(
-          intent: ScanActionIntent.searchManually,
-          route: _serialSearchRoute(result.code),
-        ),
-      ],
+      ScanRouteAction(
+        intent: ScanActionIntent.searchManually,
+        route: _serialSearchRoute(result.code),
+      ),
+    ],
     ScanLookupFailed() => <ScanRouteAction>[
-        ScanRouteAction(
-          intent: ScanActionIntent.searchManually,
-          route: _serialSearchRoute(result.code),
-        ),
-      ],
+      ScanRouteAction(
+        intent: ScanActionIntent.searchManually,
+        route: _serialSearchRoute(result.code),
+      ),
+    ],
   };
 }
 

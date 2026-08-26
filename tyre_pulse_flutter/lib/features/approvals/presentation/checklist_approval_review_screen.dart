@@ -149,17 +149,17 @@ class _ChecklistApprovalReviewScreenState
       _loadError = null;
     });
     try {
-      final ChecklistApprovalItem? item =
-          await ref.read(checklistApprovalRepositoryProvider).byId(_submissionId);
+      final ChecklistApprovalItem? item = await ref
+          .read(checklistApprovalRepositoryProvider)
+          .byId(_submissionId);
       ChecklistApprovalTemplateInfo? templateInfo;
       final String? templateId = item?.templateId;
       if (templateId != null && templateId.isNotEmpty) {
         // Best-effort - see the library comment: labels degrade to field
         // ids and the ladder is treated as single-stage when this fails.
-        templateInfo =
-            await ref.read(checklistApprovalRepositoryProvider).templateInfo(
-                  templateId,
-                );
+        templateInfo = await ref
+            .read(checklistApprovalRepositoryProvider)
+            .templateInfo(templateId);
       }
       if (!mounted) return;
       setState(() {
@@ -201,8 +201,7 @@ class _ChecklistApprovalReviewScreenState
   ApprovalTemplateLike get _templateLike =>
       _templateInfo?.asTemplateLike ?? const ApprovalTemplateLike();
 
-  ApprovalStage? get _stage =>
-      stageFor(_templateLike, _item?.asSubmissionLike);
+  ApprovalStage? get _stage => stageFor(_templateLike, _item?.asSubmissionLike);
 
   Future<void> _decide(bool approved) async {
     final ChecklistApprovalItem? item = _item;
@@ -300,7 +299,8 @@ class _ChecklistApprovalReviewScreenState
           await _showInfoDialog(
             context,
             title: l10n.checklistApprovalSaveFailedTitle,
-            message: result.error?.message ??
+            message:
+                result.error?.message ??
                 l10n.checklistApprovalDecideGenericError,
           );
           break;
@@ -322,7 +322,11 @@ class _ChecklistApprovalReviewScreenState
     }
   }
 
-  String _outcomeTitle(AppLocalizations l10n, bool approved, String targetStatus) {
+  String _outcomeTitle(
+    AppLocalizations l10n,
+    bool approved,
+    String targetStatus,
+  ) {
     if (!approved) return l10n.checklistApprovalSentBackTitle;
     return targetStatus == 'pending_area_manager'
         ? l10n.checklistApprovalSignedOffTitle
@@ -431,7 +435,8 @@ class _ChecklistApprovalReviewScreenState
         else
           _DecisionForm(
             l10n: l10n,
-            closing: nextStatusFor(_templateLike, item.asSubmissionLike, true) ==
+            closing:
+                nextStatusFor(_templateLike, item.asSubmissionLike, true) ==
                 'approved',
             approverSignature: _approverSignature,
             onSignatureChanged: (capture) =>
@@ -494,7 +499,10 @@ Future<void> _showInfoDialog(
           borderRadius: BorderRadius.circular(TpRadius.lg),
         ),
         title: Text(title, style: Theme.of(dialogContext).textTheme.titleLarge),
-        content: Text(message, style: Theme.of(dialogContext).textTheme.bodyMedium),
+        content: Text(
+          message,
+          style: Theme.of(dialogContext).textTheme.bodyMedium,
+        ),
         actionsPadding: const EdgeInsets.fromLTRB(
           TpSpace.lg,
           0,
@@ -574,9 +582,10 @@ class _SummaryCard extends StatelessWidget {
           if (item.site != null || item.assetNo != null)
             _SummaryRow(
               icon: Icons.place_outlined,
-              text: <String?>[item.site, item.assetNo]
-                  .where((v) => v != null && v.isNotEmpty)
-                  .join(' | '),
+              text: <String?>[
+                item.site,
+                item.assetNo,
+              ].where((v) => v != null && v.isNotEmpty).join(' | '),
             ),
           _SummaryRow(
             icon: Icons.event_outlined,
@@ -638,8 +647,10 @@ class _SignOffLadder extends StatelessWidget {
   Widget build(BuildContext context) {
     final ApprovalTemplateLike templateLike =
         templateInfo?.asTemplateLike ?? const ApprovalTemplateLike();
-    final List<ApprovalRung> progress =
-        approvalProgress(templateLike, item.asSubmissionLike);
+    final List<ApprovalRung> progress = approvalProgress(
+      templateLike,
+      item.asSubmissionLike,
+    );
     final bool twoStage = isTwoStage(templateLike);
 
     return TpCard(
@@ -660,8 +671,8 @@ class _SignOffLadder extends StatelessWidget {
               label: progress[i].key == ApprovalStage.areaManager
                   ? l10n.checklistApprovalStageAreaManager
                   : twoStage
-                      ? l10n.checklistApprovalStageSupervisor
-                      : l10n.checklistApprovalStageApproval,
+                  ? l10n.checklistApprovalStageSupervisor
+                  : l10n.checklistApprovalStageApproval,
               name: progress[i].name,
               at: progress[i].at,
               done: progress[i].done,
@@ -711,9 +722,10 @@ class _RungRow extends StatelessWidget {
         ? TpDirection.isolateLtr(name!.trim())
         : null;
     final String metaText = (done || isolatedName != null)
-        ? <String?>[isolatedName, whenText]
-            .where((v) => v != null && v.isNotEmpty)
-            .join(' | ')
+        ? <String?>[
+            isolatedName,
+            whenText,
+          ].where((v) => v != null && v.isNotEmpty).join(' | ')
         : l10n.checklistApprovalNotSignedYet;
 
     final Widget row = Padding(
@@ -751,15 +763,18 @@ class _RungRow extends StatelessWidget {
                 Text(label, style: Theme.of(context).textTheme.labelLarge),
                 Text(
                   metaText,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
               ],
             ),
           ),
-          if (hasSignature) Icon(Icons.remove_red_eye_outlined, size: 18, color: palette.textMuted),
+          if (hasSignature)
+            Icon(
+              Icons.remove_red_eye_outlined,
+              size: 18,
+              color: palette.textMuted,
+            ),
         ],
       ),
     );
@@ -788,7 +803,10 @@ class _RungRow extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(TpRadius.lg),
           ),
-          title: Text(title, style: Theme.of(dialogContext).textTheme.titleLarge),
+          title: Text(
+            title,
+            style: Theme.of(dialogContext).textTheme.titleLarge,
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -803,7 +821,10 @@ class _RungRow extends StatelessWidget {
               ),
               if (name != null && name.trim().isNotEmpty) ...<Widget>[
                 const SizedBox(height: TpSpace.sm),
-                Text(name.trim(), style: Theme.of(dialogContext).textTheme.bodyMedium),
+                Text(
+                  name.trim(),
+                  style: Theme.of(dialogContext).textTheme.bodyMedium,
+                ),
               ],
             ],
           ),
@@ -831,7 +852,8 @@ class _ResponsesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final List<ChecklistField> fields = templateInfo?.fields ?? const <ChecklistField>[];
+    final List<ChecklistField> fields =
+        templateInfo?.fields ?? const <ChecklistField>[];
 
     if (fields.isEmpty) {
       // No template could be read (or it genuinely has no fields) - fall
@@ -860,7 +882,8 @@ class _ResponsesSection extends StatelessWidget {
                 value: item.answers[key],
                 readOnly: true,
                 note: item.notes[key]?.toString(),
-                showNoteField: (item.notes[key]?.toString().trim().isNotEmpty ?? false),
+                showNoteField:
+                    (item.notes[key]?.toString().trim().isNotEmpty ?? false),
               ),
           ],
         ),
@@ -870,8 +893,7 @@ class _ResponsesSection extends StatelessWidget {
     return TpCard(
       child: Column(
         children: <Widget>[
-          for (final ChecklistField field in fields)
-            _buildTile(context, field),
+          for (final ChecklistField field in fields) _buildTile(context, field),
         ],
       ),
     );
@@ -894,7 +916,8 @@ class _ResponsesSection extends StatelessWidget {
     // AND no other field's signature is recorded either - see the library
     // comment on why a stronger reconstruction is not possible from the
     // read side alone.
-    final String? fieldSignature = item.signatures[field.id] ??
+    final String? fieldSignature =
+        item.signatures[field.id] ??
         (item.signatures.isEmpty ? item.signatureData : null);
 
     return ChecklistFieldAnswerTile(
@@ -905,10 +928,12 @@ class _ResponsesSection extends StatelessWidget {
       options: options,
       readOnly: true,
       note: note,
-      showNoteField: field.allowNote != false && (note?.trim().isNotEmpty ?? false),
+      showNoteField:
+          field.allowNote != false && (note?.trim().isNotEmpty ?? false),
       photos: photos,
       signatureBuilder: field.type == 'signature'
-          ? (BuildContext context) => _ReadOnlySignature(dataUrl: fieldSignature)
+          ? (BuildContext context) =>
+                _ReadOnlySignature(dataUrl: fieldSignature)
           : null,
     );
   }

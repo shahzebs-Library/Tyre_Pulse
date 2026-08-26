@@ -63,10 +63,7 @@ final class QueuedChecklistSubmission {
 /// A single, already-merged "my checklist history" view: completed
 /// submissions plus whatever of the operator's own work is still queued.
 final class ChecklistHistory {
-  const ChecklistHistory({
-    required this.completed,
-    required this.queued,
-  });
+  const ChecklistHistory({required this.completed, required this.queued});
 
   final List<ChecklistHistoryRow> completed;
   final List<QueuedChecklistSubmission> queued;
@@ -96,13 +93,13 @@ final class DefaultChecklistHistoryRepository
   DefaultChecklistHistoryRepository({
     required QueueDao queueDao,
     required Future<List<ChecklistHistoryRow>> Function(String submittedBy)
-        loadCompleted,
-  })  : _queueDao = queueDao,
-        _loadCompleted = loadCompleted;
+    loadCompleted,
+  }) : _queueDao = queueDao,
+       _loadCompleted = loadCompleted;
 
   final QueueDao _queueDao;
   final Future<List<ChecklistHistoryRow>> Function(String submittedBy)
-      _loadCompleted;
+  _loadCompleted;
 
   @override
   Future<ChecklistHistory> load({
@@ -118,12 +115,14 @@ final class DefaultChecklistHistoryRepository
       }
     }
 
-    List<QueuedChecklistSubmission> queued = const <QueuedChecklistSubmission>[];
+    List<QueuedChecklistSubmission> queued =
+        const <QueuedChecklistSubmission>[];
     try {
       final List<PendingCommand> rows = await _queueDao.outstandingCommands(
         workspaceId: workspaceId,
       );
-      final List<QueuedChecklistSubmission> built = <QueuedChecklistSubmission>[];
+      final List<QueuedChecklistSubmission> built =
+          <QueuedChecklistSubmission>[];
       for (final PendingCommand row in rows) {
         if (row.commandType != CommandType.checklistSubmission.wireName) {
           continue;

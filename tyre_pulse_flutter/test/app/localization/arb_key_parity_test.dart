@@ -77,19 +77,21 @@ void main() {
   });
 
   group('english is the reference locale', () {
-    test('english carries at least as many translatable keys as the others',
-        () {
-      // Measured directly against the committed files, not assumed: today
-      // en/ar/ur are exactly equal at 66 keys each, so English trivially
-      // qualifies as the reference. If a future edit ever makes a
-      // translated file the larger one, that is the signal this file's
-      // "english is the reference" premise needs re-pointing at whichever
-      // file is actually the superset - do not just raise the pinned
-      // count below without checking which file changed.
-      final int enCount = _translatableKeys(en).length;
-      expect(enCount, greaterThanOrEqualTo(_translatableKeys(ar).length));
-      expect(enCount, greaterThanOrEqualTo(_translatableKeys(ur).length));
-    });
+    test(
+      'english carries at least as many translatable keys as the others',
+      () {
+        // Measured directly against the committed files, not assumed: today
+        // en/ar/ur are exactly equal at 66 keys each, so English trivially
+        // qualifies as the reference. If a future edit ever makes a
+        // translated file the larger one, that is the signal this file's
+        // "english is the reference" premise needs re-pointing at whichever
+        // file is actually the superset - do not just raise the pinned
+        // count below without checking which file changed.
+        final int enCount = _translatableKeys(en).length;
+        expect(enCount, greaterThanOrEqualTo(_translatableKeys(ar).length));
+        expect(enCount, greaterThanOrEqualTo(_translatableKeys(ur).length));
+      },
+    );
   });
 
   group('key counts, pinned against the real committed files', () {
@@ -310,16 +312,16 @@ void main() {
 
   group('every english key exists in the translated files', () {
     test('nothing is missing from app_ar.arb', () {
-      final List<String> missing =
-          _translatableKeys(en).difference(_translatableKeys(ar)).toList()
-            ..sort();
+      final List<String> missing = _translatableKeys(
+        en,
+      ).difference(_translatableKeys(ar)).toList()..sort();
       expect(missing, isEmpty, reason: 'app_ar.arb is missing: $missing');
     });
 
     test('nothing is missing from app_ur.arb', () {
-      final List<String> missing =
-          _translatableKeys(en).difference(_translatableKeys(ur)).toList()
-            ..sort();
+      final List<String> missing = _translatableKeys(
+        en,
+      ).difference(_translatableKeys(ur)).toList()..sort();
       expect(missing, isEmpty, reason: 'app_ur.arb is missing: $missing');
     });
   });
@@ -330,9 +332,9 @@ void main() {
     // presence is a sign the template and a translation have drifted
     // apart in the other direction.
     test('app_ar.arb has no extra keys', () {
-      final List<String> extra =
-          _translatableKeys(ar).difference(_translatableKeys(en)).toList()
-            ..sort();
+      final List<String> extra = _translatableKeys(
+        ar,
+      ).difference(_translatableKeys(en)).toList()..sort();
       expect(
         extra,
         isEmpty,
@@ -341,9 +343,9 @@ void main() {
     });
 
     test('app_ur.arb has no extra keys', () {
-      final List<String> extra =
-          _translatableKeys(ur).difference(_translatableKeys(en)).toList()
-            ..sort();
+      final List<String> extra = _translatableKeys(
+        ur,
+      ).difference(_translatableKeys(en)).toList()..sort();
       expect(
         extra,
         isEmpty,

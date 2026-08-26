@@ -38,11 +38,12 @@ Future<void> _settle() => Future<void>.delayed(Duration.zero);
 ({ProviderContainer container, FakeTyreRecordsRepository repo}) _harness({
   List<TyreRecord> dataset = const <TyreRecord>[],
   int pageSize = 5,
-  AccessState access =
-      const AccessState(role: UserRole.known(RoleId.admin)),
+  AccessState access = const AccessState(role: UserRole.known(RoleId.admin)),
 }) {
-  final FakeTyreRecordsRepository repo =
-      FakeTyreRecordsRepository(dataset: dataset, pageSize: pageSize);
+  final FakeTyreRecordsRepository repo = FakeTyreRecordsRepository(
+    dataset: dataset,
+    pageSize: pageSize,
+  );
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       accessStateProvider.overrideWithValue(access),
@@ -56,7 +57,10 @@ void main() {
   group('page zero is fetched by exactly one call path', () {
     test('creating the controller fetches page zero exactly once', () async {
       final harness = _harness(
-        dataset: List<TyreRecord>.generate(3, (int i) => buildTyreRecord(id: '$i')),
+        dataset: List<TyreRecord>.generate(
+          3,
+          (int i) => buildTyreRecord(id: '$i'),
+        ),
       );
       addTearDown(harness.container.dispose);
 
@@ -64,12 +68,14 @@ void main() {
       harness.container.read(tyreRecordsListControllerProvider);
       await _settle();
 
-      final List<FetchPageCall> pageZeroCalls =
-          harness.repo.fetchPageCalls.where((c) => c.pageIndex == 0).toList();
+      final List<FetchPageCall> pageZeroCalls = harness.repo.fetchPageCalls
+          .where((c) => c.pageIndex == 0)
+          .toList();
       expect(
         pageZeroCalls,
         hasLength(1),
-        reason: 'page zero must be reachable from exactly one call path - '
+        reason:
+            'page zero must be reachable from exactly one call path - '
             'a second path is the exact defect that duplicated every row '
             'on the first page of the production register',
       );
@@ -78,7 +84,10 @@ void main() {
     test('reading the controller state provider a second time does not '
         're-fetch', () async {
       final harness = _harness(
-        dataset: List<TyreRecord>.generate(3, (int i) => buildTyreRecord(id: '$i')),
+        dataset: List<TyreRecord>.generate(
+          3,
+          (int i) => buildTyreRecord(id: '$i'),
+        ),
       );
       addTearDown(harness.container.dispose);
 
@@ -99,14 +108,16 @@ void main() {
       final Completer<TyreRecordsPage> hold = Completer<TyreRecordsPage>();
       harness.repo.queueResponder((_, __) => hold.future);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await controller.loadMore();
 
       expect(
         harness.repo.fetchPageCalls,
         hasLength(1),
-        reason: 'loadMore must be a no-op until the phase is ready - '
+        reason:
+            'loadMore must be a no-op until the phase is ready - '
             'that guard is what makes page zero reachable from exactly '
             'one place',
       );
@@ -137,14 +148,20 @@ void main() {
       final harness = _harness(dataset: dataset, pageSize: 5);
       addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await _settle();
 
-      TyreRecordsListState state =
-          harness.container.read(tyreRecordsListControllerProvider);
+      TyreRecordsListState state = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(state.items.map((r) => r.id).toList(), <String>[
-        'a0', 'a1', 'a2', 'a3', 'a4',
+        'a0',
+        'a1',
+        'a2',
+        'a3',
+        'a4',
       ]);
       expect(state.hasMore, isTrue);
 
@@ -154,11 +171,18 @@ void main() {
       final List<String> ids = state.items.map((r) => r.id).toList();
       expect(ids, hasLength(10));
       expect(ids.toSet(), hasLength(10), reason: 'no id was duplicated');
-      expect(
-        ids,
-        <String>['a0', 'a1', 'a2', 'a3', 'a4', 'b0', 'b1', 'b2', 'b3', 'b4'],
-        reason: 'the full set is present, in order, with nothing dropped',
-      );
+      expect(ids, <String>[
+        'a0',
+        'a1',
+        'a2',
+        'a3',
+        'a4',
+        'b0',
+        'b1',
+        'b2',
+        'b3',
+        'b4',
+      ], reason: 'the full set is present, in order, with nothing dropped');
       expect(state.hasMore, isFalse);
     });
 
@@ -170,18 +194,22 @@ void main() {
       // `TyreRecordsPage.hasMore`'s own doc comment names as the accepted
       // trade-off of deriving hasMore from page fullness rather than an
       // exact count.
-      final List<TyreRecord> dataset =
-          List<TyreRecord>.generate(10, (int i) => buildTyreRecord(id: '$i'));
+      final List<TyreRecord> dataset = List<TyreRecord>.generate(
+        10,
+        (int i) => buildTyreRecord(id: '$i'),
+      );
       final harness = _harness(dataset: dataset, pageSize: 5);
       addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await _settle();
       await controller.loadMore();
 
-      TyreRecordsListState state =
-          harness.container.read(tyreRecordsListControllerProvider);
+      TyreRecordsListState state = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(state.items, hasLength(10));
       expect(
         state.hasMore,
@@ -215,8 +243,9 @@ void main() {
       );
       addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await _settle();
       expect(
         harness.container
@@ -243,8 +272,9 @@ void main() {
       );
       await controller.refresh();
 
-      final TyreRecordsListState afterFresh =
-          harness.container.read(tyreRecordsListControllerProvider);
+      final TyreRecordsListState afterFresh = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(afterFresh.items.map((r) => r.id), <String>['fresh']);
 
       // Ticket 2 now resolves, with data DIFFERENT from both ticket 1's
@@ -260,12 +290,14 @@ void main() {
       await staleRefresh;
       await _settle();
 
-      final TyreRecordsListState afterStale =
-          harness.container.read(tyreRecordsListControllerProvider);
+      final TyreRecordsListState afterStale = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(
         afterStale.items.map((r) => r.id),
         <String>['fresh'],
-        reason: 'the stale response must never have painted, even though '
+        reason:
+            'the stale response must never have painted, even though '
             'it carried real, distinct data and resolved after the newer '
             'request that correctly won',
       );
@@ -278,8 +310,9 @@ void main() {
       );
       addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await _settle();
 
       // Ticket 2: held open, will FAIL late.
@@ -296,8 +329,9 @@ void main() {
       );
       await controller.refresh();
 
-      final TyreRecordsListState afterFresh =
-          harness.container.read(tyreRecordsListControllerProvider);
+      final TyreRecordsListState afterFresh = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(afterFresh.phase, TyreRecordsListPhase.ready);
       expect(afterFresh.items.map((r) => r.id), <String>['fresh']);
 
@@ -307,19 +341,22 @@ void main() {
       await staleRefresh;
       await _settle();
 
-      final TyreRecordsListState afterStaleFailure =
-          harness.container.read(tyreRecordsListControllerProvider);
+      final TyreRecordsListState afterStaleFailure = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(
         afterStaleFailure.phase,
         TyreRecordsListPhase.ready,
-        reason: 'a superseded failure must not turn a successfully loaded '
+        reason:
+            'a superseded failure must not turn a successfully loaded '
             'list into an error screen',
       );
       expect(afterStaleFailure.loadError, isNull);
       expect(
         afterStaleFailure.items.map((r) => r.id),
         <String>['fresh'],
-        reason: 'the real, successfully loaded content must survive a '
+        reason:
+            'the real, successfully loaded content must survive a '
             'stale failure arriving after it',
       );
     });
@@ -327,13 +364,16 @@ void main() {
 
   group('a load-more failure never becomes "reached the end"', () {
     test('the failed page is retried, never skipped', () async {
-      final List<TyreRecord> dataset =
-          List<TyreRecord>.generate(10, (int i) => buildTyreRecord(id: '$i'));
+      final List<TyreRecord> dataset = List<TyreRecord>.generate(
+        10,
+        (int i) => buildTyreRecord(id: '$i'),
+      );
       final harness = _harness(dataset: dataset, pageSize: 5);
       addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await _settle();
 
       harness.repo.queueFailure(
@@ -341,14 +381,16 @@ void main() {
       );
       await controller.loadMore();
 
-      TyreRecordsListState state =
-          harness.container.read(tyreRecordsListControllerProvider);
+      TyreRecordsListState state = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(state.loadMoreError, isNotNull);
       expect(state.isLoadingMore, isFalse);
       expect(
         state.items,
         hasLength(5),
-        reason: 'the page already on screen must survive a failed '
+        reason:
+            'the page already on screen must survive a failed '
             'load-more attempt',
       );
       expect(
@@ -365,67 +407,79 @@ void main() {
       expect(
         harness.repo.fetchPageCalls.map((c) => c.pageIndex).toList(),
         <int>[0, 1, 1],
-        reason: 'page one was requested, failed, and requested again - '
+        reason:
+            'page one was requested, failed, and requested again - '
             'never silently advanced past',
       );
     });
   });
 
   group('filter changes reset to a fresh page zero', () {
-    test('setSiteFilter clears accumulated items and starts a new fetch',
-        () async {
-      final List<TyreRecord> dataset =
-          List<TyreRecord>.generate(10, (int i) => buildTyreRecord(id: '$i'));
-      final harness = _harness(dataset: dataset, pageSize: 5);
-      addTearDown(harness.container.dispose);
+    test(
+      'setSiteFilter clears accumulated items and starts a new fetch',
+      () async {
+        final List<TyreRecord> dataset = List<TyreRecord>.generate(
+          10,
+          (int i) => buildTyreRecord(id: '$i'),
+        );
+        final harness = _harness(dataset: dataset, pageSize: 5);
+        addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
-      await _settle();
-      await controller.loadMore();
+        final TyreRecordsListController controller = harness.container.read(
+          tyreRecordsListControllerProvider.notifier,
+        );
+        await _settle();
+        await controller.loadMore();
 
-      expect(
-        harness.container.read(tyreRecordsListControllerProvider).items,
-        hasLength(10),
-      );
+        expect(
+          harness.container.read(tyreRecordsListControllerProvider).items,
+          hasLength(10),
+        );
 
-      controller.setSiteFilter('NHC');
-      await _settle();
+        controller.setSiteFilter('NHC');
+        await _settle();
 
-      final TyreRecordsListState state =
-          harness.container.read(tyreRecordsListControllerProvider);
-      expect(state.query.site, 'NHC');
-      // The fake ignores the filter for its own slicing, so the assertion
-      // that matters here is the RESET itself: page zero was re-requested
-      // rather than the old accumulated pages being kept.
-      final List<FetchPageCall> pageZeroCalls =
-          harness.repo.fetchPageCalls.where((c) => c.pageIndex == 0).toList();
-      expect(pageZeroCalls, hasLength(2));
-      expect(pageZeroCalls.last.query.site, 'NHC');
-    });
+        final TyreRecordsListState state = harness.container.read(
+          tyreRecordsListControllerProvider,
+        );
+        expect(state.query.site, 'NHC');
+        // The fake ignores the filter for its own slicing, so the assertion
+        // that matters here is the RESET itself: page zero was re-requested
+        // rather than the old accumulated pages being kept.
+        final List<FetchPageCall> pageZeroCalls = harness.repo.fetchPageCalls
+            .where((c) => c.pageIndex == 0)
+            .toList();
+        expect(pageZeroCalls, hasLength(2));
+        expect(pageZeroCalls.last.query.site, 'NHC');
+      },
+    );
 
-    test('clearFilters removes site and risk but keeps the search text',
-        () async {
-      final harness = _harness(dataset: const <TyreRecord>[]);
-      addTearDown(harness.container.dispose);
+    test(
+      'clearFilters removes site and risk but keeps the search text',
+      () async {
+        final harness = _harness(dataset: const <TyreRecord>[]);
+        addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
-      await _settle();
+        final TyreRecordsListController controller = harness.container.read(
+          tyreRecordsListControllerProvider.notifier,
+        );
+        await _settle();
 
-      controller.setSiteFilter('NHC');
-      await _settle();
-      controller.setRiskFilter('Critical');
-      await _settle();
+        controller.setSiteFilter('NHC');
+        await _settle();
+        controller.setRiskFilter('Critical');
+        await _settle();
 
-      controller.clearFilters();
-      await _settle();
+        controller.clearFilters();
+        await _settle();
 
-      final TyreRecordsListState state =
-          harness.container.read(tyreRecordsListControllerProvider);
-      expect(state.query.site, isNull);
-      expect(state.query.riskLevel, isNull);
-    });
+        final TyreRecordsListState state = harness.container.read(
+          tyreRecordsListControllerProvider,
+        );
+        expect(state.query.site, isNull);
+        expect(state.query.riskLevel, isNull);
+      },
+    );
   });
 
   group('search is debounced', () {
@@ -434,8 +488,9 @@ void main() {
       final harness = _harness(dataset: const <TyreRecord>[]);
       addTearDown(harness.container.dispose);
 
-      final TyreRecordsListController controller =
-          harness.container.read(tyreRecordsListControllerProvider.notifier);
+      final TyreRecordsListController controller = harness.container.read(
+        tyreRecordsListControllerProvider.notifier,
+      );
       await _settle();
       final int callsAfterMount = harness.repo.fetchPageCalls.length;
 
@@ -461,13 +516,15 @@ void main() {
         kTyreRecordsSearchDebounce + const Duration(milliseconds: 150),
       );
 
-      final TyreRecordsListState state =
-          harness.container.read(tyreRecordsListControllerProvider);
+      final TyreRecordsListState state = harness.container.read(
+        tyreRecordsListControllerProvider,
+      );
       expect(state.query.search, 'TM514');
       expect(
         harness.repo.fetchPageCalls.length - callsAfterMount,
         1,
-        reason: 'five keystrokes inside one debounce window must produce '
+        reason:
+            'five keystrokes inside one debounce window must produce '
             'exactly one fetch, not five',
       );
     });

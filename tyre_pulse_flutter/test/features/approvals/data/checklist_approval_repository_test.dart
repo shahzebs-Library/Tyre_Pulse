@@ -72,9 +72,7 @@ void main() {
             'q1': <String>['tp-storage://a.jpg'],
           },
           'notes': <String, Object?>{'q1': 'All clear'},
-          'signatures': <String, Object?>{
-            'sig1': 'data:image/png;base64,aaa',
-          },
+          'signatures': <String, Object?>{'sig1': 'data:image/png;base64,aaa'},
           'signature_data': 'data:image/png;base64,primary',
           'printed_name': 'Ahmed',
           'submitted_by': 'user-1',

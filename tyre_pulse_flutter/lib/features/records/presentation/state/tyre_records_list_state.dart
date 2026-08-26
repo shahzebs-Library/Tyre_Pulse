@@ -115,7 +115,8 @@ final class TyreRecordsListState {
 
   /// True once real content fills the screen. While this is false the
   /// paging footer never applies - see the library comment.
-  bool get hasContent => phase == TyreRecordsListPhase.ready && items.isNotEmpty;
+  bool get hasContent =>
+      phase == TyreRecordsListPhase.ready && items.isNotEmpty;
 
   TyreRecordsListState copyWith({
     TyreRecordsListPhase? phase,
@@ -136,8 +137,9 @@ final class TyreRecordsListState {
       hasMore: hasMore ?? this.hasMore,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       loadError: clearLoadError ? null : (loadError ?? this.loadError),
-      loadMoreError:
-          clearLoadMoreError ? null : (loadMoreError ?? this.loadMoreError),
+      loadMoreError: clearLoadMoreError
+          ? null
+          : (loadMoreError ?? this.loadMoreError),
       query: query ?? this.query,
       searchInput: searchInput ?? this.searchInput,
       availableSites: availableSites ?? this.availableSites,
@@ -145,7 +147,8 @@ final class TyreRecordsListState {
   }
 
   @override
-  String toString() => 'TyreRecordsListState(phase: $phase, '
+  String toString() =>
+      'TyreRecordsListState(phase: $phase, '
       'items: ${items.length}, hasMore: $hasMore, '
       'isLoadingMore: $isLoadingMore, loadError: $loadError, '
       'loadMoreError: $loadMoreError, query: $query)';

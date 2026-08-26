@@ -35,8 +35,10 @@ void main() {
       );
 
       final Map<String, Object?> entry = original.toEntry();
-      final TyrePositionReading decoded =
-          TyrePositionReading.fromEntry('RHR1-O', entry);
+      final TyrePositionReading decoded = TyrePositionReading.fromEntry(
+        'RHR1-O',
+        entry,
+      );
 
       expect(decoded.position, original.position);
       expect(decoded.serialNumber, original.serialNumber);
@@ -61,15 +63,19 @@ void main() {
       final Map<String, Object?> entry = flat.toEntry();
       expect(entry['pressure_psi'], 0.0);
 
-      final TyrePositionReading decoded =
-          TyrePositionReading.fromEntry('LHF2', entry);
+      final TyrePositionReading decoded = TyrePositionReading.fromEntry(
+        'LHF2',
+        entry,
+      );
       expect(decoded.pressurePsi, 0.0);
       expect(decoded.pressurePsi, isNotNull);
     });
 
     test('a null entry decodes to the seed', () {
-      final TyrePositionReading decoded =
-          TyrePositionReading.fromEntry('LHR1', null);
+      final TyrePositionReading decoded = TyrePositionReading.fromEntry(
+        'LHR1',
+        null,
+      );
       expect(decoded.condition, TyreReadingCondition.good);
       expect(decoded.checked, isFalse);
     });
@@ -88,8 +94,7 @@ void main() {
       expect(decoded.treadDepthMm, 7.0);
     });
 
-    test('toEntry omits photo_uri once photo_url exists - the URL wins',
-        () {
+    test('toEntry omits photo_uri once photo_url exists - the URL wins', () {
       const TyrePositionReading r = TyrePositionReading(
         position: 'LHF1',
         photoLocalPath: '/tmp/local.jpg',
@@ -106,8 +111,7 @@ void main() {
       expect(TyrePositionReading.seed('LHF1').isTouched, isFalse);
     });
 
-    test('true once checked is explicitly set, with nothing else filled',
-        () {
+    test('true once checked is explicitly set, with nothing else filled', () {
       const TyrePositionReading r = TyrePositionReading(
         position: 'LHF1',
         checked: true,
@@ -139,8 +143,7 @@ void main() {
         position: 'LHF1',
         pressurePsi: 100,
       );
-      final TyrePositionReading cleared =
-          r.copyWith(clearPressurePsi: true);
+      final TyrePositionReading cleared = r.copyWith(clearPressurePsi: true);
       expect(cleared.pressurePsi, isNull);
     });
   });

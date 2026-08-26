@@ -163,8 +163,9 @@ class _InspectionDetailScreenState
     });
     final String id = widget.route.inspectionId.value;
     try {
-      final QueuedInspection? queued =
-          await ref.read(inspectionSubmissionQueueProvider).byId(id);
+      final QueuedInspection? queued = await ref
+          .read(inspectionSubmissionQueueProvider)
+          .byId(id);
       if (queued != null) {
         setState(() {
           _view = _InspectionView.fromQueued(queued);
@@ -173,8 +174,9 @@ class _InspectionDetailScreenState
         return;
       }
 
-      final InspectionRecord? record =
-          await ref.read(inspectionRemoteRepositoryProvider).byId(id);
+      final InspectionRecord? record = await ref
+          .read(inspectionRemoteRepositoryProvider)
+          .byId(id);
       setState(() {
         _view = record == null ? null : _InspectionView.fromRecord(record);
         _loading = false;
@@ -237,11 +239,7 @@ class _InspectionDetailScreenState
         message: l10n.inspectionNotFoundMessage,
       );
     }
-    return _DetailBody(
-      view: view,
-      isRetrying: _isRetrying,
-      onRetry: _retry,
-    );
+    return _DetailBody(view: view, isRetrying: _isRetrying, onRetry: _retry);
   }
 }
 
@@ -260,8 +258,10 @@ class _DetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final List<String> positions =
-        diagramPositions(view.vehicleType, view.assetNo);
+    final List<String> positions = diagramPositions(
+      view.vehicleType,
+      view.assetNo,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(TpSpace.lg),
@@ -365,9 +365,7 @@ class _DetailBody extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: TpSpace.sm),
-          TpCard(
-            child: Text((view.findings ?? view.notes ?? '').trim()),
-          ),
+          TpCard(child: Text((view.findings ?? view.notes ?? '').trim())),
         ],
         const SizedBox(height: TpSpace.lg),
         Text(
@@ -376,16 +374,11 @@ class _DetailBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         if (view.signature != null && view.signature!.isNotEmpty)
-          InspectionSignaturePad(
-            value: view.signature,
-            onChanged: (_) {},
-          )
+          InspectionSignaturePad(value: view.signature, onChanged: (_) {})
         else
           Text(
             l10n.inspectionSignatureMissing,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
+            style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: palette.textMuted),
           ),
         const SizedBox(height: TpSpace.lg),
@@ -406,9 +399,7 @@ class _DetailBody extends StatelessWidget {
         else
           Text(
             l10n.inspectionGpsUnavailable,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
+            style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: palette.textMuted),
           ),
       ],
@@ -489,17 +480,13 @@ class _QueueBanner extends StatelessWidget {
                   failed
                       ? l10n.inspectionQueueFailedLabel
                       : l10n.inspectionQueuePendingLabel,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelLarge
+                  style: Theme.of(context).textTheme.labelLarge
                       ?.copyWith(color: colors.onSoft),
                 ),
                 if (failed && view.queueError != null)
                   Text(
                     view.queueError!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
+                    style: Theme.of(context).textTheme.labelSmall
                         ?.copyWith(color: colors.onSoft),
                   ),
               ],
@@ -572,10 +559,7 @@ class _PositionSummaryRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  position,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
+                Text(position, style: Theme.of(context).textTheme.labelLarge),
                 Text(
                   tyreConditionLabel(
                     l10n,
@@ -586,8 +570,7 @@ class _PositionSummaryRow extends StatelessWidget {
               ],
             ),
           ),
-          if (reading.pressurePsi != null)
-            Text('${reading.pressurePsi} psi'),
+          if (reading.pressurePsi != null) Text('${reading.pressurePsi} psi'),
         ],
       ),
     );

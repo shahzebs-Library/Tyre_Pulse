@@ -271,9 +271,10 @@ class _InspectionApprovalReviewScreenState
   }
 
   static String _titleFor(InspectionApprovalItem item, String fallback) {
-    final String assetAndType = <String?>[item.assetNo, item.vehicleType]
-        .where((String? v) => v != null && v.trim().isNotEmpty)
-        .join(' - ');
+    final String assetAndType = <String?>[
+      item.assetNo,
+      item.vehicleType,
+    ].where((String? v) => v != null && v.trim().isNotEmpty).join(' - ');
     return assetAndType.isNotEmpty ? assetAndType : fallback;
   }
 }
@@ -300,10 +301,7 @@ Future<void> _showInfoDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(TpRadius.lg),
         ),
-        title: Text(
-          title,
-          style: Theme.of(dialogContext).textTheme.titleLarge,
-        ),
+        title: Text(title, style: Theme.of(dialogContext).textTheme.titleLarge),
         content: Text(
           message,
           style: Theme.of(dialogContext).textTheme.bodyMedium,
@@ -388,8 +386,8 @@ class _ReviewBody extends StatelessWidget {
     final List<TyreEntryPair> entries = readTyreEntries(item.tyreConditions);
     final Map<String, Map<String, Object?>> tyreData =
         <String, Map<String, Object?>>{
-      for (final TyreEntryPair pair in entries) pair.key: pair.entry,
-    };
+          for (final TyreEntryPair pair in entries) pair.key: pair.entry,
+        };
     final List<String> positions = diagramPositions(
       item.vehicleType ?? '',
       item.assetNo,
@@ -430,9 +428,7 @@ class _ReviewBody extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: TpSpace.sm),
-          TpCard(
-            child: Text((item.findings ?? item.notes ?? '').trim()),
-          ),
+          TpCard(child: Text((item.findings ?? item.notes ?? '').trim())),
         ],
         const SizedBox(height: TpSpace.lg),
         Text(
@@ -441,7 +437,8 @@ class _ReviewBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         TpCard(
-          child: item.inspectorSignature != null &&
+          child:
+              item.inspectorSignature != null &&
                   item.inspectorSignature!.isNotEmpty
               ? Image.memory(
                   _decodeSignatureDataUrl(item.inspectorSignature!),
@@ -549,10 +546,7 @@ class _SummaryRow extends StatelessWidget {
           Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
           const SizedBox(width: TpSpace.sm),
           Expanded(
-            child: Text(
-              text,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            child: Text(text, style: Theme.of(context).textTheme.bodySmall),
           ),
         ],
       ),
@@ -730,9 +724,7 @@ class _DecidedSection extends StatelessWidget {
                   padding: const EdgeInsets.only(top: TpSpace.sm),
                   child: Text(
                     decidedByLine,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: palette.textMuted),
                   ),
                 ),
@@ -741,9 +733,7 @@ class _DecidedSection extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     approvedAt,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: palette.textMuted),
                   ),
                 ),
@@ -847,9 +837,7 @@ class _DecisionForm extends StatelessWidget {
                     l10n.inspectionApprovalSigningAs(
                       TpDirection.isolateLtr(approverName!.trim()),
                     ),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: TpPalette.of(context).textMuted),
                   ),
                 ),

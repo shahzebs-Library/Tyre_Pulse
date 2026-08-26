@@ -66,8 +66,10 @@ void main() {
 
     test('the backslash forms a browser would normalise', () {
       expect(sanitizeInternalLocation('/${backslash}evil.example'), isNull);
-      expect(sanitizeInternalLocation('$backslash${backslash}evil.example'),
-          isNull);
+      expect(
+        sanitizeInternalLocation('$backslash${backslash}evil.example'),
+        isNull,
+      );
       expect(sanitizeInternalLocation('/home${backslash}x'), isNull);
     });
 

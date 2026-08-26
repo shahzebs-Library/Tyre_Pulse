@@ -64,132 +64,116 @@ const List<String> _kDomainFiles = <String>[
 ];
 
 void main() {
-  test(
-    'case O3: the supervisor rung accepts a sheet regardless of any '
-    'fault, because this engine has no notion of "answers" at all',
-    () {
-      // Blocking marks ("Not OK" and similar) live entirely in the
-      // checklist FIELD/marks engine and in the database trigger - this
-      // library never reads `answers`, so it structurally cannot gate a
-      // stage transition on one. That is the correct division of labour
-      // (the artifact's own table marks the blocking-mark check "ADVISORY
-      // only" on the client even at the CLOSING rung - see O4 above), and
-      // this proves the approval ladder holds up its half: a two-stage
-      // supervisor sign-off always reaches the second rung, whatever the
-      // sheet's real-world answers contain. `nextStatusFor` and
-      // `canDecide` both take no `answers` parameter, so there is no
-      // faulty/not-faulty input to even construct - the guarantee is
-      // structural, not a case the engine happens to handle correctly.
-      const ApprovalTemplateLike template = ApprovalTemplateLike(
-        requireAreaManager: true,
-      );
-      const ApprovalSubmissionLike submission = ApprovalSubmissionLike(
-        approvalStatus: 'pending',
-      );
-      expect(
-        canDecide(template, submission, 'Workshop Supervisor'),
-        isTrue,
-      );
-      expect(
-        nextStatusFor(template, submission, true),
-        'pending_area_manager',
-      );
-    },
-  );
-
-  group('case O5: an approval is never queued', () {
-    test(
-      'the approval domain has no way to reach a network or a queue at '
-      'all - it imports nothing outside its own three sibling files',
-      () {
-        // AGENTS.md: "Approvals and other decisions that depend on current
-        // server state are NOT blindly queued." A pure library cannot
-        // enforce "refuse while offline" on its own - it has no notion of
-        // connectivity at all, and never will, since that belongs to
-        // whichever repository/queue layer eventually calls it. What it
-        // CAN guarantee, and what this test checks by reading its own
-        // source text (the same technique
-        // test/core/permissions/module_registry_drift_test.dart already
-        // uses for a cross-repo drift guard), is that it structurally
-        // cannot reach a queue, a socket, or a database client itself:
-        // every import line in this folder, if one exists at all, names
-        // only another file inside this same domain folder.
-        for (final String path in _kDomainFiles) {
-          final File file = _locate(path);
-          final List<String> lines = file.readAsStringSync().split('\n');
-          for (final String line in lines) {
-            final String trimmed = line.trimLeft();
-            if (!trimmed.startsWith('import ')) continue;
-            expect(
-              trimmed,
-              contains('package:tyre_pulse/features/approvals/domain/'),
-              reason:
-                  '$path imports something outside this domain folder '
-                  '("$line"). This library must stay pure Dart, dependent '
-                  'on nothing but its own sibling files - no Flutter, no '
-                  'networking, no queue, no other feature\'s domain.',
-            );
-          }
-        }
-        // checklist_approval.dart specifically is the base of the graph
-        // and must import literally nothing - not even a sibling.
-        final String base = _locate(_kDomainFiles.first).readAsStringSync();
-        final bool baseHasAnyImport = base
-            .split('\n')
-            .any((String l) => l.trimLeft().startsWith('import '));
-        expect(
-          baseHasAnyImport,
-          isFalse,
-          reason:
-              'checklist_approval.dart must be the base of this folder\'s '
-              'dependency graph and import nothing at all.',
-        );
-      },
+  test('case O3: the supervisor rung accepts a sheet regardless of any '
+      'fault, because this engine has no notion of "answers" at all', () {
+    // Blocking marks ("Not OK" and similar) live entirely in the
+    // checklist FIELD/marks engine and in the database trigger - this
+    // library never reads `answers`, so it structurally cannot gate a
+    // stage transition on one. That is the correct division of labour
+    // (the artifact's own table marks the blocking-mark check "ADVISORY
+    // only" on the client even at the CLOSING rung - see O4 above), and
+    // this proves the approval ladder holds up its half: a two-stage
+    // supervisor sign-off always reaches the second rung, whatever the
+    // sheet's real-world answers contain. `nextStatusFor` and
+    // `canDecide` both take no `answers` parameter, so there is no
+    // faulty/not-faulty input to even construct - the guarantee is
+    // structural, not a case the engine happens to handle correctly.
+    const ApprovalTemplateLike template = ApprovalTemplateLike(
+      requireAreaManager: true,
     );
-
-    test(
-      'a decision can never be silently ready to persist - it is refused '
-      'until it carries a name AND a signature (or, for a rejection, a '
-      'reason) - so even a caller that mistakenly tried to build an '
-      'offline write from an incomplete decision would be stopped here '
-      'first, before it ever reached a queue',
-      () {
-        const ApprovalStage stage = ApprovalStage.supervisor;
-        // Approving with nothing at all: refused.
-        expect(
-          decisionRequirementError(
-            stage,
-            const ApprovalDecisionInput(approved: true),
-          ),
-          isNotNull,
-        );
-        // Approving with a name but no signature: still refused - a
-        // decision object must never both approve and carry no signature.
-        expect(
-          decisionRequirementError(
-            stage,
-            const ApprovalDecisionInput(approved: true, name: 'A. Khan'),
-          ),
-          isNotNull,
-        );
-        // Only once both are present does it clear.
-        expect(
-          decisionRequirementError(
-            stage,
-            const ApprovalDecisionInput(
-              approved: true,
-              name: 'A. Khan',
-              signature: '<svg/>',
-            ),
-          ),
-          isNull,
-        );
-      },
+    const ApprovalSubmissionLike submission = ApprovalSubmissionLike(
+      approvalStatus: 'pending',
     );
+    expect(canDecide(template, submission, 'Workshop Supervisor'), isTrue);
+    expect(nextStatusFor(template, submission, true), 'pending_area_manager');
   });
 
-  group('decisionRequirementError - direct coverage of the added contract',
-      () {
+  group('case O5: an approval is never queued', () {
+    test('the approval domain has no way to reach a network or a queue at '
+        'all - it imports nothing outside its own three sibling files', () {
+      // AGENTS.md: "Approvals and other decisions that depend on current
+      // server state are NOT blindly queued." A pure library cannot
+      // enforce "refuse while offline" on its own - it has no notion of
+      // connectivity at all, and never will, since that belongs to
+      // whichever repository/queue layer eventually calls it. What it
+      // CAN guarantee, and what this test checks by reading its own
+      // source text (the same technique
+      // test/core/permissions/module_registry_drift_test.dart already
+      // uses for a cross-repo drift guard), is that it structurally
+      // cannot reach a queue, a socket, or a database client itself:
+      // every import line in this folder, if one exists at all, names
+      // only another file inside this same domain folder.
+      for (final String path in _kDomainFiles) {
+        final File file = _locate(path);
+        final List<String> lines = file.readAsStringSync().split('\n');
+        for (final String line in lines) {
+          final String trimmed = line.trimLeft();
+          if (!trimmed.startsWith('import ')) continue;
+          expect(
+            trimmed,
+            contains('package:tyre_pulse/features/approvals/domain/'),
+            reason:
+                '$path imports something outside this domain folder '
+                '("$line"). This library must stay pure Dart, dependent '
+                'on nothing but its own sibling files - no Flutter, no '
+                'networking, no queue, no other feature\'s domain.',
+          );
+        }
+      }
+      // checklist_approval.dart specifically is the base of the graph
+      // and must import literally nothing - not even a sibling.
+      final String base = _locate(_kDomainFiles.first).readAsStringSync();
+      final bool baseHasAnyImport = base
+          .split('\n')
+          .any((String l) => l.trimLeft().startsWith('import '));
+      expect(
+        baseHasAnyImport,
+        isFalse,
+        reason:
+            'checklist_approval.dart must be the base of this folder\'s '
+            'dependency graph and import nothing at all.',
+      );
+    });
+
+    test('a decision can never be silently ready to persist - it is refused '
+        'until it carries a name AND a signature (or, for a rejection, a '
+        'reason) - so even a caller that mistakenly tried to build an '
+        'offline write from an incomplete decision would be stopped here '
+        'first, before it ever reached a queue', () {
+      const ApprovalStage stage = ApprovalStage.supervisor;
+      // Approving with nothing at all: refused.
+      expect(
+        decisionRequirementError(
+          stage,
+          const ApprovalDecisionInput(approved: true),
+        ),
+        isNotNull,
+      );
+      // Approving with a name but no signature: still refused - a
+      // decision object must never both approve and carry no signature.
+      expect(
+        decisionRequirementError(
+          stage,
+          const ApprovalDecisionInput(approved: true, name: 'A. Khan'),
+        ),
+        isNotNull,
+      );
+      // Only once both are present does it clear.
+      expect(
+        decisionRequirementError(
+          stage,
+          const ApprovalDecisionInput(
+            approved: true,
+            name: 'A. Khan',
+            signature: '<svg/>',
+          ),
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('decisionRequirementError - direct coverage of the added contract', () {
     test('no outstanding stage refuses outright, whatever the input', () {
       expect(
         decisionRequirementError(
@@ -232,47 +216,44 @@ void main() {
       );
     });
 
-    test(
-      'an approval needs a non-blank name and a non-blank signature, '
-      'independently',
-      () {
-        expect(
-          decisionRequirementError(
-            ApprovalStage.areaManager,
-            const ApprovalDecisionInput(
-              approved: true,
-              name: '   ',
-              signature: '<svg/>',
-            ),
+    test('an approval needs a non-blank name and a non-blank signature, '
+        'independently', () {
+      expect(
+        decisionRequirementError(
+          ApprovalStage.areaManager,
+          const ApprovalDecisionInput(
+            approved: true,
+            name: '   ',
+            signature: '<svg/>',
           ),
-          isNotNull,
-          reason: 'whitespace is not a name',
-        );
-        expect(
-          decisionRequirementError(
-            ApprovalStage.areaManager,
-            const ApprovalDecisionInput(
-              approved: true,
-              name: 'A. Khan',
-              signature: '',
-            ),
+        ),
+        isNotNull,
+        reason: 'whitespace is not a name',
+      );
+      expect(
+        decisionRequirementError(
+          ApprovalStage.areaManager,
+          const ApprovalDecisionInput(
+            approved: true,
+            name: 'A. Khan',
+            signature: '',
           ),
-          isNotNull,
-          reason: 'an empty string is not a signature',
-        );
-        expect(
-          decisionRequirementError(
-            ApprovalStage.areaManager,
-            const ApprovalDecisionInput(
-              approved: true,
-              name: 'A. Khan',
-              signature: '<svg/>',
-            ),
+        ),
+        isNotNull,
+        reason: 'an empty string is not a signature',
+      );
+      expect(
+        decisionRequirementError(
+          ApprovalStage.areaManager,
+          const ApprovalDecisionInput(
+            approved: true,
+            name: 'A. Khan',
+            signature: '<svg/>',
           ),
-          isNull,
-        );
-      },
-    );
+        ),
+        isNull,
+      );
+    });
   });
 }
 

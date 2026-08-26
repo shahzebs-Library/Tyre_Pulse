@@ -14,9 +14,10 @@ void main() {
 
   group('fromKeys', () {
     test('normalises via keyOf, so punctuation/case differences collapse', () {
-      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(
-        <String>['LHR1-O', 'r2ri'],
-      );
+      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>[
+        'LHR1-O',
+        'r2ri',
+      ]);
       final Set<String> keys = pending.resolveKeys();
       expect(keys, contains(keyOf('LHR1O')));
       expect(keys, contains(keyOf('R2RI')));
@@ -25,16 +26,18 @@ void main() {
 
     test('accepts a Set<String> - the same constructor covers both list '
         'and Set shapes the RN union offers', () {
-      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(
-        <String>{'FL', 'FR'},
-      );
+      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>{
+        'FL',
+        'FR',
+      });
       expect(pending.resolveKeys(), <String>{keyOf('FL'), keyOf('FR')});
     });
 
     test('an empty-string entry contributes nothing', () {
-      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(
-        <String>['', 'FL'],
-      );
+      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>[
+        '',
+        'FL',
+      ]);
       expect(pending.resolveKeys(), <String>{keyOf('FL')});
     });
   });
@@ -46,10 +49,7 @@ void main() {
         'TR-MIXER',
         'TM123',
         <String, Object?>{
-          'F1L': <String, Object?>{
-            'condition': 'Good',
-            'pressure_psi': '110',
-          },
+          'F1L': <String, Object?>{'condition': 'Good', 'pressure_psi': '110'},
         },
       );
       final TyreDiagramPending pending = TyreDiagramPending.fromCompleteness(

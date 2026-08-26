@@ -102,32 +102,31 @@ void main() {
     },
   );
 
-  testWidgets(
-    'a matched asset shows its number and an action to view it',
-    (WidgetTester tester) async {
-      final FakeScanLookupSource fake = FakeScanLookupSource();
-      fake.exactAssetByCode['TM514'] = const AssetLookupRecord(
-        id: 'a1',
-        assetNo: 'TM514',
-        site: 'NHC',
-        vehicleType: 'Tr-Mixer',
-      );
-      await _pumpScanner(tester, fake);
+  testWidgets('a matched asset shows its number and an action to view it', (
+    WidgetTester tester,
+  ) async {
+    final FakeScanLookupSource fake = FakeScanLookupSource();
+    fake.exactAssetByCode['TM514'] = const AssetLookupRecord(
+      id: 'a1',
+      assetNo: 'TM514',
+      site: 'NHC',
+      vehicleType: 'Tr-Mixer',
+    );
+    await _pumpScanner(tester, fake);
 
-      await tester.enterText(find.byType(TextField), 'TM514');
-      await tester.tap(find.widgetWithText(FilledButton, 'Look up'));
-      await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'TM514');
+    await tester.tap(find.widgetWithText(FilledButton, 'Look up'));
+    await tester.pumpAndSettle();
 
-      // Not asserting `find.text('TM514')` here: `find.text` also matches
-      // the `EditableText` inside the manual-entry field, which still
-      // reads 'TM514' at this point, so that assertion would ambiguously
-      // match two widgets rather than the one intended. The action labels
-      // below are unambiguous and are what actually proves the match
-      // rendered.
-      expect(find.text('View asset'), findsOneWidget);
-      expect(find.text('Start inspection'), findsOneWidget);
-    },
-  );
+    // Not asserting `find.text('TM514')` here: `find.text` also matches
+    // the `EditableText` inside the manual-entry field, which still
+    // reads 'TM514' at this point, so that assertion would ambiguously
+    // match two widgets rather than the one intended. The action labels
+    // below are unambiguous and are what actually proves the match
+    // rendered.
+    expect(find.text('View asset'), findsOneWidget);
+    expect(find.text('Start inspection'), findsOneWidget);
+  });
 
   testWidgets(
     'a matched tyre with no fitted asset offers only the view action',
@@ -184,33 +183,28 @@ void main() {
     },
   );
 
-  testWidgets(
-    'look up another (offered on a match card) returns the screen to '
-    'idle, clearing the field',
-    (WidgetTester tester) async {
-      // A match card is what offers this action - see _MatchCard - so an
-      // asset match is used here rather than the no-match state, which
-      // relies on the always-present field instead of a dedicated button.
-      final FakeScanLookupSource fake = FakeScanLookupSource();
-      fake.exactAssetByCode['TM514'] = const AssetLookupRecord(
-        id: 'a1',
-        assetNo: 'TM514',
-      );
-      await _pumpScanner(tester, fake);
+  testWidgets('look up another (offered on a match card) returns the screen to '
+      'idle, clearing the field', (WidgetTester tester) async {
+    // A match card is what offers this action - see _MatchCard - so an
+    // asset match is used here rather than the no-match state, which
+    // relies on the always-present field instead of a dedicated button.
+    final FakeScanLookupSource fake = FakeScanLookupSource();
+    fake.exactAssetByCode['TM514'] = const AssetLookupRecord(
+      id: 'a1',
+      assetNo: 'TM514',
+    );
+    await _pumpScanner(tester, fake);
 
-      await tester.enterText(find.byType(TextField), 'TM514');
-      await tester.tap(find.widgetWithText(FilledButton, 'Look up'));
-      await tester.pumpAndSettle();
-      expect(find.text('View asset'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'TM514');
+    await tester.tap(find.widgetWithText(FilledButton, 'Look up'));
+    await tester.pumpAndSettle();
+    expect(find.text('View asset'), findsOneWidget);
 
-      await tester.tap(find.text('Look up another'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Look up another'));
+    await tester.pumpAndSettle();
 
-      expect(find.text('View asset'), findsNothing);
-      final TextField field = tester.widget<TextField>(
-        find.byType(TextField),
-      );
-      expect(field.controller?.text, isEmpty);
-    },
-  );
+    expect(find.text('View asset'), findsNothing);
+    final TextField field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller?.text, isEmpty);
+  });
 }

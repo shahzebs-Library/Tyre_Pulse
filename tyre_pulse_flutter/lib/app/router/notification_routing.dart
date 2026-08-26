@@ -48,8 +48,7 @@ class TpNotificationTarget {
 
   /// The key the entity rules match on: the entity type, falling back to the
   /// type, lowercased. Mirrors the production `entity_type ?? type`.
-  String get entityKey =>
-      (entityType ?? type ?? '').toLowerCase().trim();
+  String get entityKey => (entityType ?? type ?? '').toLowerCase().trim();
 
   /// The exact type, lowercased.
   String get typeKey => (type ?? '').toLowerCase().trim();

@@ -71,18 +71,20 @@ import 'package:tyre_pulse/core/storage/secure_slot_store.dart';
 /// reports as [SecureReadStatus.unreadable] - never `absent`.
 final class FlutterSecureSlotStore implements SecureSlotStore {
   FlutterSecureSlotStore({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            FlutterSecureStorage(
-              aOptions: _androidOptions,
-              iOptions: _iosOptions,
-            );
+    : _storage =
+          storage ??
+          FlutterSecureStorage(
+            aOptions: _androidOptions,
+            iOptions: _iosOptions,
+          );
 
   final FlutterSecureStorage _storage;
 
   /// See the class doc: this is a correctness requirement, not a tuning
   /// choice. Never remove it and never flip it to `true`.
-  static const AndroidOptions _androidOptions =
-      AndroidOptions(resetOnError: false);
+  static const AndroidOptions _androidOptions = AndroidOptions(
+    resetOnError: false,
+  );
 
   /// Survives a device restart (the value is still readable once the device
   /// has been unlocked once since boot) but not a full device wipe or
@@ -91,8 +93,9 @@ final class FlutterSecureSlotStore implements SecureSlotStore {
   /// requires the device to be unlocked on every read and is unnecessarily
   /// strict for a background sync queue), longer than "until next lock"
   /// (`.passcode`, which is wrong for a device with no passcode set at all).
-  static const IOSOptions _iosOptions =
-      IOSOptions(accessibility: KeychainAccessibility.first_unlock);
+  static const IOSOptions _iosOptions = IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock,
+  );
 
   @override
   Future<String?> readSlot(String key) => _storage.read(key: key);

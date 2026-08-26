@@ -60,8 +60,7 @@ class VehiclesListScreen extends ConsumerStatefulWidget {
   final String backFallback;
 
   @override
-  ConsumerState<VehiclesListScreen> createState() =>
-      _VehiclesListScreenState();
+  ConsumerState<VehiclesListScreen> createState() => _VehiclesListScreenState();
 }
 
 class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
@@ -108,8 +107,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final AsyncValue<VehicleFleetListOutcome> outcomeAsync =
-        ref.watch(vehicleFleetListProvider);
+    final AsyncValue<VehicleFleetListOutcome> outcomeAsync = ref.watch(
+      vehicleFleetListProvider,
+    );
 
     return TpScaffold(
       backFallback: widget.backFallback,
@@ -195,8 +195,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     // Chips are built from the WHOLE loaded set, never the already-filtered
     // one - narrowing by class must not narrow the chips that let you widen
     // it again.
-    final List<AssetClassChip> classesPresent =
-        classChips(assets.map((VehicleAsset a) => a.assetNo));
+    final List<AssetClassChip> classesPresent = classChips(
+      assets.map((VehicleAsset a) => a.assetNo),
+    );
 
     return Column(
       children: <Widget>[
@@ -264,10 +265,10 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   }
 
   static AppError _unexpectedError() => const AppError(
-        kind: AppErrorKind.unknown,
-        message: 'Something went wrong. Please try again.',
-        isRetryable: true,
-      );
+    kind: AppErrorKind.unknown,
+    message: 'Something went wrong. Please try again.',
+    isRetryable: true,
+  );
 
   static String? _formatCachedAt(DateTime? cachedAt) {
     if (cachedAt == null) {
@@ -343,9 +344,7 @@ class _TruncatedNotice extends StatelessWidget {
       ),
       child: Text(
         message,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
+        style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: colors.onSoft),
       ),
     );
@@ -426,9 +425,8 @@ class _ClassChip extends StatelessWidget {
       showCheckmark: false,
       backgroundColor: palette.surface,
       selectedColor: palette.primary,
-      labelStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: isSelected ? palette.onPrimary : palette.text,
-          ),
+      labelStyle: Theme.of(context).textTheme.labelMedium
+          ?.copyWith(color: isSelected ? palette.onPrimary : palette.text),
       side: BorderSide(
         color: isSelected ? palette.primary : palette.border,
         width: TpBorderWidth.hairline,

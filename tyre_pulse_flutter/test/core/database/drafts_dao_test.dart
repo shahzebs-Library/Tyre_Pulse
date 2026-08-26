@@ -34,21 +34,24 @@ void main() {
   }
 
   group('draft identity', () {
-    test('the same machine typed differently is one sheet, not three',
-        () async {
-      await saveInspection(assetNo: 'tm514');
-      await saveInspection(assetNo: 'TM514');
-      await saveInspection(assetNo: '  TM514  ');
+    test(
+      'the same machine typed differently is one sheet, not three',
+      () async {
+        await saveInspection(assetNo: 'tm514');
+        await saveInspection(assetNo: 'TM514');
+        await saveInspection(assetNo: '  TM514  ');
 
-      final drafts = await db.draftsDao.inspectionDraftsForUser(testUser);
-      expect(
-        drafts,
-        hasLength(1),
-        reason: 'without normalising the asset the operator finishes one of '
-            'three drafts of the same job',
-      );
-      expect(drafts.single.assetNo, 'TM514');
-    });
+        final drafts = await db.draftsDao.inspectionDraftsForUser(testUser);
+        expect(
+          drafts,
+          hasLength(1),
+          reason:
+              'without normalising the asset the operator finishes one of '
+              'three drafts of the same job',
+        );
+        expect(drafts.single.assetNo, 'TM514');
+      },
+    );
 
     test('two people on one handset keep separate work', () async {
       await saveInspection(userId: 'tyre-man');
@@ -65,12 +68,10 @@ void main() {
       expect(
         DraftsDao.inspectionDraftKey(userId: 'tyre-man', assetNo: 'TM514'),
         isNot(
-          DraftsDao.inspectionDraftKey(
-            userId: 'electrician',
-            assetNo: 'TM514',
-          ),
+          DraftsDao.inspectionDraftKey(userId: 'electrician', assetNo: 'TM514'),
         ),
-        reason: 'the user id is inside the primary key, so overwriting is not '
+        reason:
+            'the user id is inside the primary key, so overwriting is not '
             'possible rather than merely avoided',
       );
     });
@@ -117,10 +118,10 @@ void main() {
       );
 
       final drafts = await db.draftsDao.inspectionDraftsForUser(testUser);
-      expect(
-        drafts.map((InspectionDraft d) => d.assetNo).toList(),
-        <String>['TM200', 'TM100'],
-      );
+      expect(drafts.map((InspectionDraft d) => d.assetNo).toList(), <String>[
+        'TM200',
+        'TM100',
+      ]);
     });
   });
 
@@ -136,7 +137,9 @@ void main() {
         assetNo: 'TM514',
       );
 
-      await db.into(db.inspectionDraftPositions).insert(
+      await db
+          .into(db.inspectionDraftPositions)
+          .insert(
             InspectionDraftPositionsCompanion.insert(
               id: 'seeded-lhf1',
               draftKey: key,
@@ -190,7 +193,8 @@ void main() {
       expect(
         positions.single.pressurePsi,
         0,
-        reason: 'a truthiness check throws away the most important reading on '
+        reason:
+            'a truthiness check throws away the most important reading on '
             'the screen',
       );
       expect(positions.single.pressurePsi, isNot(isNull));
@@ -243,14 +247,16 @@ void main() {
       }
     });
 
-    test('offers every sheet for the template while no machine is picked',
-        () async {
-      final candidates = await db.draftsDao.resumeCandidates(
-        userId: testUser,
-        templateId: 'tpl-1',
-      );
-      expect(candidates, hasLength(2));
-    });
+    test(
+      'offers every sheet for the template while no machine is picked',
+      () async {
+        final candidates = await db.draftsDao.resumeCandidates(
+          userId: testUser,
+          templateId: 'tpl-1',
+        );
+        expect(candidates, hasLength(2));
+      },
+    );
 
     test('narrows to one machine once an asset is known', () async {
       final candidates = await db.draftsDao.resumeCandidates(
@@ -263,68 +269,71 @@ void main() {
     });
 
     test('the version pin travels with the draft', () async {
-      final draft =
-          await db.draftsDao.checklistDraft('$testUser|tpl-1|TM514');
+      final draft = await db.draftsDao.checklistDraft('$testUser|tpl-1|TM514');
       expect(
         draft!.templateVersion,
         2,
-        reason: 'a resume against a changed version must warn rather than '
+        reason:
+            'a resume against a changed version must warn rather than '
             'silently re-map answers given to different questions',
       );
     });
   });
 
   group('discard', () {
-    test('takes the photos, the signatures and the positions with it',
-        () async {
-      await saveInspection();
-      final String key = DraftsDao.inspectionDraftKey(
-        userId: testUser,
-        assetNo: 'TM514',
-      );
-      await db.draftsDao.saveInspectionPosition(
-        draftKey: key,
-        position: 'LHF1',
-        now: testNow,
-        condition: 'Good',
-      );
-      await db.mediaDao.addDraftPhoto(
-        ownerKind: OwnerKind.inspectionDraft,
-        ownerKey: key,
-        localPath: '/data/user/0/app/files/draft-media/d_1.jpg',
-        fileName: 'd_1.jpg',
-        capturedAt: testNow,
-      );
-      await db.mediaDao.saveSignature(
-        ownerKind: OwnerKind.inspectionDraft,
-        ownerKey: key,
-        fieldKey: primaryField,
-        payload: testSignatureSvg,
-        source: SignatureSource.drawn,
-        signedAt: testNow,
-      );
-
-      final List<String> files =
-          await db.draftsDao.discardInspectionDraft(key);
-
-      expect(files, <String>['/data/user/0/app/files/draft-media/d_1.jpg']);
-      expect(await db.draftsDao.inspectionDraft(key), isNull);
-      expect(await db.draftsDao.inspectionPositions(key), isEmpty);
-      expect(
-        await db.mediaDao.draftPhotosFor(
+    test(
+      'takes the photos, the signatures and the positions with it',
+      () async {
+        await saveInspection();
+        final String key = DraftsDao.inspectionDraftKey(
+          userId: testUser,
+          assetNo: 'TM514',
+        );
+        await db.draftsDao.saveInspectionPosition(
+          draftKey: key,
+          position: 'LHF1',
+          now: testNow,
+          condition: 'Good',
+        );
+        await db.mediaDao.addDraftPhoto(
           ownerKind: OwnerKind.inspectionDraft,
           ownerKey: key,
-        ),
-        isEmpty,
-      );
-      expect(
-        await db.mediaDao.hasAnySignature(
+          localPath: '/data/user/0/app/files/draft-media/d_1.jpg',
+          fileName: 'd_1.jpg',
+          capturedAt: testNow,
+        );
+        await db.mediaDao.saveSignature(
           ownerKind: OwnerKind.inspectionDraft,
           ownerKey: key,
-        ),
-        isFalse,
-      );
-    });
+          fieldKey: primaryField,
+          payload: testSignatureSvg,
+          source: SignatureSource.drawn,
+          signedAt: testNow,
+        );
+
+        final List<String> files = await db.draftsDao.discardInspectionDraft(
+          key,
+        );
+
+        expect(files, <String>['/data/user/0/app/files/draft-media/d_1.jpg']);
+        expect(await db.draftsDao.inspectionDraft(key), isNull);
+        expect(await db.draftsDao.inspectionPositions(key), isEmpty);
+        expect(
+          await db.mediaDao.draftPhotosFor(
+            ownerKind: OwnerKind.inspectionDraft,
+            ownerKey: key,
+          ),
+          isEmpty,
+        );
+        expect(
+          await db.mediaDao.hasAnySignature(
+            ownerKind: OwnerKind.inspectionDraft,
+            ownerKey: key,
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('leaves another user work untouched', () async {
       await saveInspection(userId: 'tyre-man');
@@ -369,25 +378,27 @@ void main() {
       );
     });
 
-    test('a sheet whose only content is a photograph of a fault is real work',
-        () async {
-      await db.mediaDao.addDraftPhoto(
-        ownerKind: OwnerKind.checklistDraft,
-        ownerKey: 'draft-1',
-        localPath: '/data/user/0/app/files/draft-media/d_1.jpg',
-        fileName: 'd_1.jpg',
-        capturedAt: testNow,
-      );
-
-      expect(
-        await db.draftsDao.draftHasContent(
+    test(
+      'a sheet whose only content is a photograph of a fault is real work',
+      () async {
+        await db.mediaDao.addDraftPhoto(
           ownerKind: OwnerKind.checklistDraft,
           ownerKey: 'draft-1',
-          filled: 0,
-        ),
-        isTrue,
-      );
-    });
+          localPath: '/data/user/0/app/files/draft-media/d_1.jpg',
+          fileName: 'd_1.jpg',
+          capturedAt: testNow,
+        );
+
+        expect(
+          await db.draftsDao.draftHasContent(
+            ownerKind: OwnerKind.checklistDraft,
+            ownerKey: 'draft-1',
+            filled: 0,
+          ),
+          isTrue,
+        );
+      },
+    );
 
     test('a signature alone is real work', () async {
       await db.mediaDao.saveSignature(

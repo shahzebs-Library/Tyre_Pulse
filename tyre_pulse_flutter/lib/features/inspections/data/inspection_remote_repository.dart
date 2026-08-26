@@ -96,11 +96,13 @@ final class SupabaseInspectionRemoteRepository
     required String clientUuid,
   }) {
     return guard<void>(() async {
-      await _client.from(SupabaseTables.inspections).upsert(
-        <String, Object?>{...payload.toRow(), 'client_uuid': clientUuid},
-        onConflict: 'client_uuid',
-        ignoreDuplicates: true,
-      );
+      await _client
+          .from(SupabaseTables.inspections)
+          .upsert(
+            <String, Object?>{...payload.toRow(), 'client_uuid': clientUuid},
+            onConflict: 'client_uuid',
+            ignoreDuplicates: true,
+          );
     });
   }
 
@@ -124,13 +126,15 @@ final class SupabaseInspectionRemoteRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-      () async => await _client
-          .from(SupabaseTables.inspections)
-          .select(inspectionRecordColumns)
-          .eq('created_by', createdBy)
-          .order('inspection_date', ascending: false)
-          .limit(limit) as List<Map<String, dynamic>>,
-    );
+          () async =>
+              await _client
+                      .from(SupabaseTables.inspections)
+                      .select(inspectionRecordColumns)
+                      .eq('created_by', createdBy)
+                      .order('inspection_date', ascending: false)
+                      .limit(limit)
+                  as List<Map<String, dynamic>>,
+        );
     return <InspectionRecord>[
       for (final row in rows) InspectionRecord.fromRow(row),
     ];

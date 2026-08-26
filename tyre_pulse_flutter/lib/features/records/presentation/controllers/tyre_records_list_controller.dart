@@ -58,8 +58,8 @@ const Duration kTyreRecordsSearchDebounce = Duration(milliseconds: 350);
 
 final tyreRecordsListControllerProvider =
     NotifierProvider<TyreRecordsListController, TyreRecordsListState>(
-  TyreRecordsListController.new,
-);
+      TyreRecordsListController.new,
+    );
 
 final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
   Timer? _debounce;
@@ -105,13 +105,14 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
   TyreRecordsQuery _scopedQuery(TyreRecordsQuery base) {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
     final String? country = ref.read(activeCountryProvider);
-    final AccessDecision decision =
-        ref.read(moduleAccessProvider(ModuleKey.records));
+    final AccessDecision decision = ref.read(
+      moduleAccessProvider(ModuleKey.records),
+    );
 
-    final bool isElevated = decision.reason == AccessReason.superAdmin ||
+    final bool isElevated =
+        decision.reason == AccessReason.superAdmin ||
         decision.reason == AccessReason.adminRole;
-    final String? restrictToSite =
-        isElevated ? null : workspace?.legacySite;
+    final String? restrictToSite = isElevated ? null : workspace?.legacySite;
 
     return base.copyWith(
       country: country,
@@ -246,10 +247,7 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
         // Roll back: the page that just failed is retried on the next
         // `loadMore`, never skipped.
         _page = pageIndex - 1;
-        state = state.copyWith(
-          isLoadingMore: false,
-          loadMoreError: appError,
-        );
+        state = state.copyWith(isLoadingMore: false, loadMoreError: appError);
       }
     }
   }

@@ -38,8 +38,9 @@ void main() {
       assetNo: 'TM514',
     );
 
-    final Future<void> pending =
-        container.read(scannerControllerProvider.notifier).submit('TM514');
+    final Future<void> pending = container
+        .read(scannerControllerProvider.notifier)
+        .submit('TM514');
 
     // The state assignment at the top of `submit` runs synchronously, before
     // the first `await` inside it - this checks that promise without
@@ -57,9 +58,7 @@ void main() {
 
   test('submit reads the source through the injected fake, not a real '
       'client', () async {
-    await container
-        .read(scannerControllerProvider.notifier)
-        .submit('anything');
+    await container.read(scannerControllerProvider.notifier).submit('anything');
 
     expect(fake.calls, isNotEmpty);
   });
@@ -68,16 +67,11 @@ void main() {
       'ScanLookupFailed - submit itself never throws', () async {
     fake.errorToThrow = Exception('offline');
 
-    await container
-        .read(scannerControllerProvider.notifier)
-        .submit('TM514');
+    await container.read(scannerControllerProvider.notifier).submit('TM514');
 
     final ScannerState finalState = container.read(scannerControllerProvider);
     expect(finalState, isA<ScannerResolved>());
-    expect(
-      (finalState as ScannerResolved).result,
-      isA<ScanLookupFailed>(),
-    );
+    expect((finalState as ScannerResolved).result, isA<ScanLookupFailed>());
   });
 
   test('reset returns to idle after a result was shown', () async {
@@ -93,24 +87,27 @@ void main() {
 
   test('a second submit after a result replaces it, rather than requiring '
       'a reset first', () async {
-    fake.exactAssetByCode['A1'] =
-        const AssetLookupRecord(id: 'a1', assetNo: 'A1');
-    fake.exactAssetByCode['A2'] =
-        const AssetLookupRecord(id: 'a2', assetNo: 'A2');
+    fake.exactAssetByCode['A1'] = const AssetLookupRecord(
+      id: 'a1',
+      assetNo: 'A1',
+    );
+    fake.exactAssetByCode['A2'] = const AssetLookupRecord(
+      id: 'a2',
+      assetNo: 'A2',
+    );
 
-    final ScannerController controller =
-        container.read(scannerControllerProvider.notifier);
+    final ScannerController controller = container.read(
+      scannerControllerProvider.notifier,
+    );
 
     await controller.submit('A1');
     final ScanLookupResult first =
-        (container.read(scannerControllerProvider) as ScannerResolved)
-            .result;
+        (container.read(scannerControllerProvider) as ScannerResolved).result;
     expect((first as AssetScanMatch).asset.assetNo, 'A1');
 
     await controller.submit('A2');
     final ScanLookupResult second =
-        (container.read(scannerControllerProvider) as ScannerResolved)
-            .result;
+        (container.read(scannerControllerProvider) as ScannerResolved).result;
     expect((second as AssetScanMatch).asset.assetNo, 'A2');
   });
 }

@@ -40,13 +40,12 @@ Map<String, Object?> rowFor({
   String id = 'user-1',
   bool locked = false,
   bool approved = true,
-}) =>
-    <String, Object?>{
-      'id': id,
-      'role': 'Manager',
-      'locked': locked,
-      'approved': approved,
-    };
+}) => <String, Object?>{
+  'id': id,
+  'role': 'Manager',
+  'locked': locked,
+  'approved': approved,
+};
 
 void main() {
   group('save then load round-trips the raw row for the same user', () {
@@ -116,15 +115,17 @@ void main() {
       expect(await cache.load('user-1'), isNull);
     });
 
-    test('a read failure is treated as "no usable cache", not a crash',
-        () async {
-      final FakeStore store = FakeStore();
-      final ProfileCache cache = ProfileCache(store);
-      await cache.save('user-1', rowFor());
+    test(
+      'a read failure is treated as "no usable cache", not a crash',
+      () async {
+        final FakeStore store = FakeStore();
+        final ProfileCache cache = ProfileCache(store);
+        await cache.save('user-1', rowFor());
 
-      store.failReads = true;
-      expect(await cache.load('user-1'), isNull);
-    });
+        store.failReads = true;
+        expect(await cache.load('user-1'), isNull);
+      },
+    );
   });
 
   group('the cached row survives a fresh decode through WorkspaceProfile', () {

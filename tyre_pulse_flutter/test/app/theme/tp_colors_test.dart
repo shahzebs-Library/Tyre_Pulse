@@ -32,11 +32,7 @@ void main() {
         TpPalette.light.background,
         TpPalette.dark.background,
       );
-      expectDiffers(
-        'surface',
-        TpPalette.light.surface,
-        TpPalette.dark.surface,
-      );
+      expectDiffers('surface', TpPalette.light.surface, TpPalette.dark.surface);
       expectDiffers(
         'surfaceAlt',
         TpPalette.light.surfaceAlt,
@@ -63,11 +59,7 @@ void main() {
         TpPalette.light.textInverse,
         TpPalette.dark.textInverse,
       );
-      expectDiffers(
-        'primary',
-        TpPalette.light.primary,
-        TpPalette.dark.primary,
-      );
+      expectDiffers('primary', TpPalette.light.primary, TpPalette.dark.primary);
       expectDiffers(
         'primaryDark',
         TpPalette.light.primaryDark,
@@ -90,11 +82,7 @@ void main() {
         TpPalette.dark.borderStrong,
       );
       expectDiffers('focus', TpPalette.light.focus, TpPalette.dark.focus);
-      expectDiffers(
-        'overlay',
-        TpPalette.light.overlay,
-        TpPalette.dark.overlay,
-      );
+      expectDiffers('overlay', TpPalette.light.overlay, TpPalette.dark.overlay);
     });
 
     test('every leg of every status colour', () {
@@ -145,14 +133,8 @@ void main() {
       // "bright near-white surfaces". Relative luminance is 0 for pure
       // black and 1 for pure white.
       expect(TpPalette.light.text.computeLuminance(), lessThan(0.05));
-      expect(
-        TpPalette.light.background.computeLuminance(),
-        greaterThan(0.85),
-      );
-      expect(
-        TpPalette.light.surface.computeLuminance(),
-        greaterThan(0.85),
-      );
+      expect(TpPalette.light.background.computeLuminance(), greaterThan(0.85));
+      expect(TpPalette.light.surface.computeLuminance(), greaterThan(0.85));
     });
   });
 
@@ -197,27 +179,29 @@ void main() {
       expect(p.forStatus(TpStatus.critical), same(p.critical));
     });
 
-    test('unknown is a different hue family from neutral, not a shade of it',
-        () {
-      double hueDiff(Color a, Color b) {
-        final double raw =
-            (HSLColor.fromColor(a).hue - HSLColor.fromColor(b).hue).abs();
-        return raw > 180 ? 360 - raw : raw;
-      }
+    test(
+      'unknown is a different hue family from neutral, not a shade of it',
+      () {
+        double hueDiff(Color a, Color b) {
+          final double raw =
+              (HSLColor.fromColor(a).hue - HSLColor.fromColor(b).hue).abs();
+          return raw > 180 ? 360 - raw : raw;
+        }
 
-      // Spec section 32, and the doc comment on TpPalette.light.unknown:
-      // "not measured" must never be mistaken for "measured and
-      // unremarkable" (neutral), so the two colours are deliberately from
-      // different hue families rather than different shades of one hue.
-      expect(
-        hueDiff(TpPalette.light.neutral.base, TpPalette.light.unknown.base),
-        greaterThan(30),
-      );
-      expect(
-        hueDiff(TpPalette.dark.neutral.base, TpPalette.dark.unknown.base),
-        greaterThan(30),
-      );
-    });
+        // Spec section 32, and the doc comment on TpPalette.light.unknown:
+        // "not measured" must never be mistaken for "measured and
+        // unremarkable" (neutral), so the two colours are deliberately from
+        // different hue families rather than different shades of one hue.
+        expect(
+          hueDiff(TpPalette.light.neutral.base, TpPalette.light.unknown.base),
+          greaterThan(30),
+        );
+        expect(
+          hueDiff(TpPalette.dark.neutral.base, TpPalette.dark.unknown.base),
+          greaterThan(30),
+        );
+      },
+    );
   });
 
   group('TpStatusColors', () {
@@ -236,8 +220,9 @@ void main() {
   });
 
   group('TpPalette.of resolves from the ambient Theme brightness', () {
-    testWidgets('a light Theme resolves TpPalette.light',
-        (WidgetTester tester) async {
+    testWidgets('a light Theme resolves TpPalette.light', (
+      WidgetTester tester,
+    ) async {
       late TpPalette resolved;
       await tester.pumpWidget(
         MaterialApp(
@@ -256,8 +241,9 @@ void main() {
       expect(resolved, same(TpPalette.light));
     });
 
-    testWidgets('a dark Theme resolves TpPalette.dark',
-        (WidgetTester tester) async {
+    testWidgets('a dark Theme resolves TpPalette.dark', (
+      WidgetTester tester,
+    ) async {
       late TpPalette resolved;
       await tester.pumpWidget(
         MaterialApp(

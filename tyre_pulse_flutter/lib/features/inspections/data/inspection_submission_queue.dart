@@ -65,10 +65,9 @@ abstract interface class InspectionSubmissionQueue {
 }
 
 /// The real, file-backed implementation.
-final class FileInspectionSubmissionQueue
-    implements InspectionSubmissionQueue {
+final class FileInspectionSubmissionQueue implements InspectionSubmissionQueue {
   FileInspectionSubmissionQueue({Directory? overrideDirectory})
-      : _overrideDirectory = overrideDirectory;
+    : _overrideDirectory = overrideDirectory;
 
   /// Test seam: a fixed temp directory instead of
   /// [getApplicationDocumentsDirectory], which needs a platform channel
@@ -80,8 +79,10 @@ final class FileInspectionSubmissionQueue
   Future<Directory> _directory() async {
     final Directory base =
         _overrideDirectory ?? await getApplicationDocumentsDirectory();
-    final Directory dir = Directory('${base.path}${Platform.pathSeparator}'
-        '$_folderName');
+    final Directory dir = Directory(
+      '${base.path}${Platform.pathSeparator}'
+      '$_folderName',
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

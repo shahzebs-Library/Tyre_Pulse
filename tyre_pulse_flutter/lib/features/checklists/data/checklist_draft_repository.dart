@@ -216,12 +216,11 @@ final class DriftChecklistDraftRepository implements ChecklistDraftRepository {
     required String userId,
     required String templateId,
     required String assetNo,
-  }) =>
-      DraftsDao.checklistDraftKey(
-        userId: userId,
-        templateId: templateId,
-        assetNo: assetNo,
-      );
+  }) => DraftsDao.checklistDraftKey(
+    userId: userId,
+    templateId: templateId,
+    assetNo: assetNo,
+  );
 
   @override
   Future<void> saveHeader({
@@ -410,20 +409,20 @@ final class DriftChecklistDraftRepository implements ChecklistDraftRepository {
   }
 
   ChecklistDraftHeader _toHeader(ChecklistDraft row) => ChecklistDraftHeader(
-        draftKey: row.draftKey,
-        templateId: row.templateId,
-        templateName: row.templateName,
-        templateVersion: row.templateVersion,
-        assetNo: row.assetNo,
-        filled: row.filled,
-        total: row.total,
-        updatedAt: row.updatedAt,
-        assignmentId: row.assignmentId,
-        site: row.site,
-        title: row.title,
-        readLang: row.readLang,
-        printedName: row.printedName,
-      );
+    draftKey: row.draftKey,
+    templateId: row.templateId,
+    templateName: row.templateName,
+    templateVersion: row.templateVersion,
+    assetNo: row.assetNo,
+    filled: row.filled,
+    total: row.total,
+    updatedAt: row.updatedAt,
+    assignmentId: row.assignmentId,
+    site: row.site,
+    title: row.title,
+    readLang: row.readLang,
+    printedName: row.printedName,
+  );
 
   static String _basename(String path) {
     final int slash = path.lastIndexOf(RegExp(r'[\\/]'));

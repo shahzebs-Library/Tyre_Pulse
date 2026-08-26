@@ -81,18 +81,17 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool canOpenWorkOrders =
-        ref.watch(canAccessModuleProvider(ModuleKey.workorders));
+    final bool canOpenWorkOrders = ref.watch(
+      canAccessModuleProvider(ModuleKey.workorders),
+    );
     // Hoisted rather than computed inline where it is used - the quick
     // action tile below nests six widgets deep, and the wrapped chain
     // does not fit at that indent. Mirrors
     // `checklist_approvals_queue_screen.dart`'s own `style` local, just
     // computed once at the top of this flat single-method build rather
     // than in a nested helper this file does not have.
-    final TextStyle? tileSubtitleStyle =
-        Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: TpPalette.of(context).textMuted,
-            );
+    final TextStyle? tileSubtitleStyle = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: TpPalette.of(context).textMuted);
 
     return TpScaffold(
       // No back fallback: Home is the root of its own branch, and of the

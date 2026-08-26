@@ -96,23 +96,23 @@ class _ChecklistApprovalsQueueScreenState
         for (final ChecklistApprovalItem item in items)
           if (item.templateId != null) item.templateId!,
       };
-      final Map<String, ChecklistApprovalTemplateInfo> templates =
-          await ref
-              .read(checklistApprovalRepositoryProvider)
-              .templateInfoBatch(templateIds);
+      final Map<String, ChecklistApprovalTemplateInfo> templates = await ref
+          .read(checklistApprovalRepositoryProvider)
+          .templateInfoBatch(templateIds);
 
       // Opportunistic: connectivity may have returned since the last
       // decision was queued - never blocks the list itself.
-      final ChecklistApprovalSyncEngine engine =
-          ref.read(checklistApprovalSyncEngineProvider);
+      final ChecklistApprovalSyncEngine engine = ref.read(
+        checklistApprovalSyncEngineProvider,
+      );
       unawaited(engine.flushQueue());
 
       // Read back whatever is still on-device: a `pending` entry from the
       // flush just kicked off may still be in flight, but a `blocked` one
       // never resolves without the reviewer's own action, so it is worth
       // showing even mid-flush.
-      final List<QueuedChecklistApprovalDecision> queued =
-          await engine.listQueued();
+      final List<QueuedChecklistApprovalDecision> queued = await engine
+          .listQueued();
 
       if (!mounted) return;
       setState(() {
@@ -139,8 +139,9 @@ class _ChecklistApprovalsQueueScreenState
   }
 
   ApprovalTemplateLike _templateLikeFor(ChecklistApprovalItem item) {
-    final ChecklistApprovalTemplateInfo? info =
-        item.templateId == null ? null : _templates[item.templateId];
+    final ChecklistApprovalTemplateInfo? info = item.templateId == null
+        ? null
+        : _templates[item.templateId];
     return info?.asTemplateLike ?? const ApprovalTemplateLike();
   }
 
@@ -161,7 +162,8 @@ class _ChecklistApprovalsQueueScreenState
 
   void _open(ChecklistApprovalItem item) {
     context.push(
-      ChecklistApprovalReviewRoute(submissionId: SubmissionId(item.id)).location,
+      ChecklistApprovalReviewRoute(submissionId: SubmissionId(item.id))
+          .location,
     );
   }
 
@@ -379,14 +381,16 @@ class _BlockedDecisionsPanel extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Icon(Icons.error_outline, color: colors.base, size: TpSizing.iconMd),
+              Icon(
+                Icons.error_outline,
+                color: colors.base,
+                size: TpSizing.iconMd,
+              ),
               const SizedBox(width: TpSpace.sm),
               Expanded(
                 child: Text(
                   l10n.checklistApprovalsBlockedTitle(items.length),
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
+                  style: Theme.of(context).textTheme.titleSmall
                       ?.copyWith(color: colors.onSoft),
                 ),
               ),
@@ -395,9 +399,7 @@ class _BlockedDecisionsPanel extends StatelessWidget {
           const SizedBox(height: TpSpace.xs),
           Text(
             l10n.checklistApprovalsBlockedMessage,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
+            style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: colors.onSoft),
           ),
           for (final QueuedChecklistApprovalDecision item in items)
@@ -408,9 +410,7 @@ class _BlockedDecisionsPanel extends StatelessWidget {
                   Expanded(
                     child: Text(
                       item.error ?? l10n.checklistApprovalsBlockedMessage,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
+                      style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: colors.onSoft),
                     ),
                   ),
@@ -458,8 +458,8 @@ class _QueueRow extends StatelessWidget {
     final String heading = (item.title?.trim().isNotEmpty ?? false)
         ? item.title!.trim()
         : (item.templateName?.trim().isNotEmpty ?? false)
-            ? item.templateName!.trim()
-            : fallbackTitle;
+        ? item.templateName!.trim()
+        : fallbackTitle;
     final String when = _formatDate(item.submittedAt) ?? unavailableLabel;
 
     return TpCard(
@@ -498,9 +498,10 @@ class _QueueRow extends StatelessWidget {
                 if (item.site != null || item.assetNo != null)
                   _MetaRow(
                     icon: Icons.place_outlined,
-                    text: <String?>[item.site, item.assetNo]
-                        .where((v) => v != null && v.isNotEmpty)
-                        .join(' - '),
+                    text: <String?>[
+                      item.site,
+                      item.assetNo,
+                    ].where((v) => v != null && v.isNotEmpty).join(' - '),
                   ),
                 _MetaRow(icon: Icons.event_outlined, text: when),
                 Padding(
@@ -555,8 +556,8 @@ class _MetaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TextStyle? style =
-        Theme.of(context).textTheme.bodySmall?.copyWith(color: palette.textMuted);
+    final TextStyle? style = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: palette.textMuted);
     return Padding(
       padding: const EdgeInsets.only(top: 2),
       child: Row(

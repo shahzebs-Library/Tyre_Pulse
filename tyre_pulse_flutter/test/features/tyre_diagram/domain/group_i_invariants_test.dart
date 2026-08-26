@@ -74,16 +74,13 @@ void main() {
     }
   });
 
-  test(
-    'case 90: diagramPositions agrees with kTyreDiagramLayouts for all 13 '
-    'layouts',
-    () {
-      for (final String key in kTyreDiagramLayouts.keys) {
-        final List<String> ids = <String>[
-          for (final TyreSlot t in kTyreDiagramLayouts[key]!.tyres) t.id,
-        ];
-        expect(diagramPositions(key), ids, reason: key);
-      }
-    },
-  );
+  test('case 90: diagramPositions agrees with kTyreDiagramLayouts for all 13 '
+      'layouts', () {
+    for (final String key in kTyreDiagramLayouts.keys) {
+      final List<String> ids = <String>[
+        for (final TyreSlot t in kTyreDiagramLayouts[key]!.tyres) t.id,
+      ];
+      expect(diagramPositions(key), ids, reason: key);
+    }
+  });
 }

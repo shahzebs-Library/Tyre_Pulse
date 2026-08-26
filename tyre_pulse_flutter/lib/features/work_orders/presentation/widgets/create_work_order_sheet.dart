@@ -114,12 +114,13 @@ class _CreateWorkOrderSheetState extends ConsumerState<CreateWorkOrderSheet> {
 
   Future<void> _performLookup(String asset) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-    final VehicleDetailOutcome outcome =
-        await ref.read(vehicleFleetRepositoryProvider).byAssetNo(
-              scope: vehicleCacheScopeFor(workspace),
-              assetNo: asset,
-              country: workspace?.activeCountry,
-            );
+    final VehicleDetailOutcome outcome = await ref
+        .read(vehicleFleetRepositoryProvider)
+        .byAssetNo(
+          scope: vehicleCacheScopeFor(workspace),
+          assetNo: asset,
+          country: workspace?.activeCountry,
+        );
 
     if (!mounted) return;
     if (_assetController.text.trim() != asset) return;
@@ -150,7 +151,9 @@ class _CreateWorkOrderSheetState extends ConsumerState<CreateWorkOrderSheet> {
 
     setState(() => _saving = true);
     try {
-      await ref.read(workOrderRepositoryProvider).create(
+      await ref
+          .read(workOrderRepositoryProvider)
+          .create(
             workspace: workspace,
             input: CreateWorkOrderInput(
               assetNo: asset,
@@ -262,9 +265,10 @@ class _FoundAssetLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final String joinedMakeModel = <String?>[asset.make, asset.model]
-        .where((String? v) => v != null && v.trim().isNotEmpty)
-        .join(' ');
+    final String joinedMakeModel = <String?>[
+      asset.make,
+      asset.model,
+    ].where((String? v) => v != null && v.trim().isNotEmpty).join(' ');
 
     final List<String> parts = <String>[
       if (asset.vehicleType != null && asset.vehicleType!.trim().isNotEmpty)
@@ -298,9 +302,9 @@ class _FoundAssetLine extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: palette.info.onSoft,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: palette.info.onSoft,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

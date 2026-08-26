@@ -114,8 +114,9 @@ Future<PagedRows<T>> fetchAllPages<T>(
 
   final List<T> rows = <T>[];
   for (int from = 0; from < cap; from += boundedPageSize) {
-    final int windowEnd =
-        (from + boundedPageSize > cap) ? cap : from + boundedPageSize;
+    final int windowEnd = (from + boundedPageSize > cap)
+        ? cap
+        : from + boundedPageSize;
     final int windowSize = windowEnd - from;
 
     final List<T> page = await fetchPage(from, windowEnd - 1);
@@ -136,7 +137,8 @@ Future<PagedRows<T>> fetchAllPages<T>(
 /// constant so the query and [VehicleAsset.fromRow] cannot silently drift
 /// apart - the same discipline `auth_profile_repository.dart` applies to
 /// `_profileColumns`.
-const String vehicleFleetColumns = 'id, asset_no, fleet_number, make, '
+const String vehicleFleetColumns =
+    'id, asset_no, fleet_number, make, '
     'model, vehicle_type, site, status, operator_name, tyre_size, '
     'current_km, country, department, region, registration_no, year';
 
@@ -212,10 +214,10 @@ final class SupabaseVehicleFleetSource
       final List<Map<String, dynamic>> rows = country == null
           ? await query.order('asset_no').order('id').range(from, to)
           : await query
-              .or('country.eq.$country,country.is.null')
-              .order('asset_no')
-              .order('id')
-              .range(from, to);
+                .or('country.eq.$country,country.is.null')
+                .order('asset_no')
+                .order('id')
+                .range(from, to);
       return rows;
     });
   }
@@ -233,9 +235,7 @@ final class SupabaseVehicleFleetSource
 
       final List<Map<String, dynamic>> rows = country == null
           ? await query.limit(1)
-          : await query
-              .or('country.eq.$country,country.is.null')
-              .limit(1);
+          : await query.or('country.eq.$country,country.is.null').limit(1);
 
       if (rows.isEmpty) {
         return null;
@@ -416,7 +416,7 @@ WorkspaceScopeFilter? vehicleCacheScopeFor(WorkspaceContext? workspace) {
 /// contract.
 final class VehicleFleetRepository {
   VehicleFleetRepository(this._source, {CacheDao? cacheDao})
-      : _cacheDao = cacheDao;
+    : _cacheDao = cacheDao;
 
   final VehicleFleetSource _source;
 
@@ -454,13 +454,14 @@ final class VehicleFleetRepository {
     try {
       final PagedRows<Map<String, dynamic>> paged =
           await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) =>
-            _source.fetchPage(from: from, to: to, country: country),
-        pageSize: _pageSize,
-        maxRows: _maxRows,
-      );
-      final List<VehicleAsset> assets =
-          paged.rows.map(VehicleAsset.fromRow).toList(growable: false);
+            (int from, int to) =>
+                _source.fetchPage(from: from, to: to, country: country),
+            pageSize: _pageSize,
+            maxRows: _maxRows,
+          );
+      final List<VehicleAsset> assets = paged.rows
+          .map(VehicleAsset.fromRow)
+          .toList(growable: false);
       return VehicleFleetListLoaded(assets: assets, truncated: paged.truncated);
     } on AppError catch (error) {
       // Either a row failed to decode (see VehicleAsset.fromRow, always
@@ -547,8 +548,10 @@ final class VehicleFleetRepository {
     }
 
     try {
-      final Map<String, dynamic>? row =
-          await _source.fetchByAssetNo(assetNo: trimmed, country: country);
+      final Map<String, dynamic>? row = await _source.fetchByAssetNo(
+        assetNo: trimmed,
+        country: country,
+      );
       if (row == null) {
         return const VehicleDetailNotFound();
       }
@@ -578,8 +581,10 @@ final class VehicleFleetRepository {
     required bool isConnectivity,
   }) async {
     if (isConnectivity) {
-      final VehicleDetailFromCache? cached =
-          await _readCachedDetail(scope, assetNo);
+      final VehicleDetailFromCache? cached = await _readCachedDetail(
+        scope,
+        assetNo,
+      );
       if (cached != null) {
         return cached;
       }
@@ -596,8 +601,10 @@ final class VehicleFleetRepository {
       return null;
     }
     try {
-      final CachedAsset? row =
-          await dao.assetByCode(scope: scope, code: assetNo);
+      final CachedAsset? row = await dao.assetByCode(
+        scope: scope,
+        code: assetNo,
+      );
       if (row == null) {
         return null;
       }
@@ -622,16 +629,16 @@ final class VehicleFleetRepository {
   /// unmeasured-value placeholder, so this degrades exactly the way a live
   /// row with a genuinely blank column already does.
   VehicleAsset _fromCachedAsset(CachedAsset row) => VehicleAsset(
-        id: row.id,
-        assetNo: row.assetNo,
-        fleetNumber: row.fleetNumber,
-        make: row.make,
-        model: row.model,
-        vehicleType: row.vehicleType,
-        site: row.site,
-        status: row.status,
-        currentKm: row.currentKm,
-        country: row.country,
-        registrationNo: row.registrationNo,
-      );
+    id: row.id,
+    assetNo: row.assetNo,
+    fleetNumber: row.fleetNumber,
+    make: row.make,
+    model: row.model,
+    vehicleType: row.vehicleType,
+    site: row.site,
+    status: row.status,
+    currentKm: row.currentKm,
+    country: row.country,
+    registrationNo: row.registrationNo,
+  );
 }

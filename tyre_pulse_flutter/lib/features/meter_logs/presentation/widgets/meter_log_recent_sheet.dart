@@ -49,8 +49,9 @@ class _MeterLogRecentSheetState extends ConsumerState<MeterLogRecentSheet> {
       _error = null;
     });
     try {
-      final List<MeterReading> readings =
-          await ref.read(meterLogRepositoryProvider).listRecentReadings();
+      final List<MeterReading> readings = await ref
+          .read(meterLogRepositoryProvider)
+          .listRecentReadings();
       if (!mounted) return;
       setState(() {
         _readings = readings;
@@ -145,9 +146,7 @@ class _RecentRow extends StatelessWidget {
               if (subtitleParts.isNotEmpty)
                 Text(
                   subtitleParts.join(' · '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
             ],

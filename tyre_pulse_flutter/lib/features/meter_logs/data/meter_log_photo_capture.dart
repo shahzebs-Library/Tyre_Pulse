@@ -74,10 +74,10 @@ final class CapturedMeterLogPhoto {
 
 const List<({int maxDimension, int quality})> _kResizeLadder =
     <({int maxDimension, int quality})>[
-  (maxDimension: 1600, quality: 50),
-  (maxDimension: 1024, quality: 45),
-  (maxDimension: 720, quality: 40),
-];
+      (maxDimension: 1600, quality: 50),
+      (maxDimension: 1024, quality: 45),
+      (maxDimension: 720, quality: 40),
+    ];
 
 /// Captures one gauge photo for [sessionKey] and copies it into a durable,
 /// feature-owned folder.
@@ -88,7 +88,8 @@ const List<({int maxDimension, int quality})> _kResizeLadder =
 /// Returns `null` when the user cancelled the picker - not an error, and
 /// callers must not report a failure for it.
 final class MeterLogPhotoCapture {
-  MeterLogPhotoCapture({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
+  MeterLogPhotoCapture({ImagePicker? picker})
+    : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;
 
@@ -125,8 +126,9 @@ final class MeterLogPhotoCapture {
     final String ext = _extensionOf(picked.name);
     final String fileName =
         '${_sanitise(slot)}_${now.millisecondsSinceEpoch}$ext';
-    final File destination =
-        File('${folder.path}${Platform.pathSeparator}$fileName');
+    final File destination = File(
+      '${folder.path}${Platform.pathSeparator}$fileName',
+    );
 
     await File(picked.path).copy(destination.path);
     int? sizeBytes;

@@ -56,10 +56,10 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
     _treadController = TextEditingController(
       text: widget.reading.treadDepthMm?.toString() ?? '',
     );
-    _serialController =
-        TextEditingController(text: widget.reading.serialNumber ?? '');
-    _notesController =
-        TextEditingController(text: widget.reading.notes ?? '');
+    _serialController = TextEditingController(
+      text: widget.reading.serialNumber ?? '',
+    );
+    _notesController = TextEditingController(text: widget.reading.notes ?? '');
   }
 
   @override
@@ -88,8 +88,10 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
           Text(r.position, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: TpSpace.lg),
 
-          Text(l10n.inspectionConditionLabel,
-              style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            l10n.inspectionConditionLabel,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
           const SizedBox(height: TpSpace.sm),
           Wrap(
             spacing: TpSpace.sm,
@@ -159,25 +161,22 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
             controller: _serialController,
             textCapitalization: TextCapitalization.characters,
             onChanged: (String v) => _emit(
-              r.copyWith(
-                serialNumber: v,
-                clearSerialNumber: v.trim().isEmpty,
-              ),
+              r.copyWith(serialNumber: v, clearSerialNumber: v.trim().isEmpty),
             ),
           ),
           const SizedBox(height: TpSpace.lg),
 
-          Text(l10n.inspectionPhotoLabel,
-              style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            l10n.inspectionPhotoLabel,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
           const SizedBox(height: TpSpace.sm),
           if (r.hasPhoto)
             _PhotoPreview(reading: r)
           else
             Text(
               l10n.inspectionPhotoNone,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
+              style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: palette.textMuted),
             ),
           const SizedBox(height: TpSpace.sm),
@@ -201,8 +200,7 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
                   isBusy: widget.isCapturingPhoto,
                   onPressed: widget.isCapturingPhoto
                       ? null
-                      : () =>
-                          widget.onCapturePhoto(PhotoCaptureSource.gallery),
+                      : () => widget.onCapturePhoto(PhotoCaptureSource.gallery),
                 ),
               ),
             ],
@@ -213,9 +211,8 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
             label: l10n.inspectionNotesLabel,
             controller: _notesController,
             maxLines: 3,
-            onChanged: (String v) => _emit(
-              r.copyWith(notes: v, clearNotes: v.trim().isEmpty),
-            ),
+            onChanged: (String v) =>
+                _emit(r.copyWith(notes: v, clearNotes: v.trim().isEmpty)),
           ),
           const SizedBox(height: TpSpace.xl),
 
@@ -263,9 +260,9 @@ class _ConditionChip extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isSelected ? colors.onBase : colors.onSoft,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: isSelected ? colors.onBase : colors.onSoft,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),

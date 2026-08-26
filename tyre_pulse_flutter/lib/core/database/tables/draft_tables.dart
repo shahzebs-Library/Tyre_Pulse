@@ -30,10 +30,7 @@ import 'package:tyre_pulse/core/database/database_constants.dart';
 /// one sheet; without it the operator finishes one of three drafts of the same
 /// job.
 @DataClassName('InspectionDraft')
-@TableIndex(
-  name: 'idx_inspection_drafts_user',
-  columns: {#userId, #updatedAt},
-)
+@TableIndex(name: 'idx_inspection_drafts_user', columns: {#userId, #updatedAt})
 class InspectionDrafts extends Table {
   /// `userId|ASSETNO`. Built by the repository, never by a screen.
   TextColumn get draftKey => text()();
@@ -104,10 +101,10 @@ class InspectionDraftPositions extends Table {
   TextColumn get id => text()();
 
   TextColumn get draftKey => text().references(
-        InspectionDrafts,
-        #draftKey,
-        onDelete: KeyAction.cascade,
-      )();
+    InspectionDrafts,
+    #draftKey,
+    onDelete: KeyAction.cascade,
+  )();
 
   /// Canonical label, e.g. `LHF1`. AGENTS.md rule 10: never change a tyre
   /// position id.

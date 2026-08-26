@@ -29,26 +29,28 @@ import 'package:tyre_pulse/features/checklists/data/checklist_submission_reposit
 
 final Provider<ChecklistRemoteRepository> checklistRemoteRepositoryProvider =
     Provider<ChecklistRemoteRepository>(
-  (ref) => SupabaseChecklistRemoteRepository(ref.watch(supabaseClientProvider)),
-);
+      (ref) =>
+          SupabaseChecklistRemoteRepository(ref.watch(supabaseClientProvider)),
+    );
 
 final Provider<ChecklistDraftRepository> checklistDraftRepositoryProvider =
     Provider<ChecklistDraftRepository>((ref) {
-  final AppDatabase db = ref.watch(appDatabaseProvider);
-  return DriftChecklistDraftRepository(db.draftsDao, db.mediaDao);
-});
+      final AppDatabase db = ref.watch(appDatabaseProvider);
+      return DriftChecklistDraftRepository(db.draftsDao, db.mediaDao);
+    });
 
 /// See the library comment on why this is declared in this feature's own
 /// provider file rather than a cross-feature one.
-final Provider<QueuedCommandRepository> checklistQueuedCommandRepositoryProvider =
-    Provider<QueuedCommandRepository>((ref) {
+final Provider<QueuedCommandRepository>
+checklistQueuedCommandRepositoryProvider = Provider<QueuedCommandRepository>((
+  ref,
+) {
   final AppDatabase db = ref.watch(appDatabaseProvider);
   return QueuedCommandRepository(db.queueDao);
 });
 
 final Provider<ChecklistSubmissionRepository>
-    checklistSubmissionRepositoryProvider =
-    Provider<ChecklistSubmissionRepository>(
+checklistSubmissionRepositoryProvider = Provider<ChecklistSubmissionRepository>(
   (ref) => DefaultChecklistSubmissionRepository(
     commandRepository: ref.watch(checklistQueuedCommandRepositoryProvider),
     draftRepository: ref.watch(checklistDraftRepositoryProvider),
@@ -57,14 +59,14 @@ final Provider<ChecklistSubmissionRepository>
 
 final Provider<ChecklistHistoryRepository> checklistHistoryRepositoryProvider =
     Provider<ChecklistHistoryRepository>((ref) {
-  final AppDatabase db = ref.watch(appDatabaseProvider);
-  return DefaultChecklistHistoryRepository(
-    queueDao: db.queueDao,
-    loadCompleted: (String submittedBy) => ref
-        .read(checklistRemoteRepositoryProvider)
-        .myHistory(submittedBy: submittedBy),
-  );
-});
+      final AppDatabase db = ref.watch(appDatabaseProvider);
+      return DefaultChecklistHistoryRepository(
+        queueDao: db.queueDao,
+        loadCompleted: (String submittedBy) => ref
+            .read(checklistRemoteRepositoryProvider)
+            .myHistory(submittedBy: submittedBy),
+      );
+    });
 
 /// Real by default - `image_picker`/`path_provider` resolve the same way on
 /// every real device, matching `inspectionPhotoCaptureProvider`'s own note.

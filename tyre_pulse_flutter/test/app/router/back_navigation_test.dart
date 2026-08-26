@@ -77,13 +77,15 @@ void main() {
       expect(router.goCalls, <String>[TpRoutePaths.home]);
     });
 
-    test('a blank fallback degrades to Home rather than navigating nowhere',
-        () {
-      final FakeBackRouter router = FakeBackRouter();
+    test(
+      'a blank fallback degrades to Home rather than navigating nowhere',
+      () {
+        final FakeBackRouter router = FakeBackRouter();
 
-      expect(backTo(router, fallback: '   '), BackOutcome.replaced);
-      expect(router.goCalls, <String>[TpRoutePaths.home]);
-    });
+        expect(backTo(router, fallback: '   '), BackOutcome.replaced);
+        expect(router.goCalls, <String>[TpRoutePaths.home]);
+      },
+    );
 
     test('no router at all reports unavailable and calls nothing', () {
       expect(backTo(null), BackOutcome.unavailable);
@@ -152,9 +154,7 @@ void main() {
       );
       expect(
         TpBackFallbacks.forRoute(
-          const ChecklistApprovalReviewRoute(
-            submissionId: SubmissionId('s-1'),
-          ),
+          const ChecklistApprovalReviewRoute(submissionId: SubmissionId('s-1')),
         ),
         TpRoutePaths.checklistApprovals,
       );
@@ -170,8 +170,10 @@ void main() {
     });
 
     test('anything unlisted falls back to Home', () {
-      expect(TpBackFallbacks.forRoute(const StockCountRoute()),
-          TpRoutePaths.home);
+      expect(
+        TpBackFallbacks.forRoute(const StockCountRoute()),
+        TpRoutePaths.home,
+      );
     });
 
     test('every fallback resolves to a real route path', () {

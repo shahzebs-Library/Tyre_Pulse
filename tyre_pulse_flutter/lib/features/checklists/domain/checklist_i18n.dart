@@ -95,7 +95,10 @@ String? _usable(Object? v) {
 /// The field's label in [lang], falling back to English, falling back to
 /// `''` when there is no label at all. See the library comment for why
 /// this does NOT fall back to the field id, unlike the web stack.
-String fieldLabel(ChecklistField? field, [Object? lang = kChecklistDefaultLang]) {
+String fieldLabel(
+  ChecklistField? field, [
+  Object? lang = kChecklistDefaultLang,
+]) {
   if (field == null) return '';
   final String code = normalizeLang(lang);
   if (code != kChecklistDefaultLang) {
@@ -160,7 +163,10 @@ List<ChecklistFieldOption> fieldOptions(
 ]) {
   if (field == null) return const <ChecklistFieldOption>[];
   final String code = normalizeLang(lang);
-  final ChecklistOptionSet? shared = _usableOptionSet(template, field.optionsRef);
+  final ChecklistOptionSet? shared = _usableOptionSet(
+    template,
+    field.optionsRef,
+  );
   final List<String> values = shared?.options ?? field.options;
   final List<String>? translated = code == kChecklistDefaultLang
       ? null
@@ -171,7 +177,11 @@ List<ChecklistFieldOption> fieldOptions(
       ChecklistFieldOption(
         value: values[i],
         label:
-            _usable(translated != null && i < translated.length ? translated[i] : null) ??
+            _usable(
+              translated != null && i < translated.length
+                  ? translated[i]
+                  : null,
+            ) ??
             values[i],
       ),
   ];
@@ -180,8 +190,12 @@ List<ChecklistFieldOption> fieldOptions(
 /// Just the storable English values, in display order. Use THIS to
 /// validate a select/multiselect answer - never the field's raw `options`
 /// list directly, which may be stale relative to a shared set (B8).
-List<String> fieldOptionValues(ChecklistField? field, [ChecklistTemplate? template]) =>
-    <String>[for (final ChecklistFieldOption o in fieldOptions(field, template)) o.value];
+List<String> fieldOptionValues(
+  ChecklistField? field, [
+  ChecklistTemplate? template,
+]) => <String>[
+  for (final ChecklistFieldOption o in fieldOptions(field, template)) o.value,
+];
 
 /// The display label for an already-stored (English) [value]. An unknown
 /// value renders AS ITSELF rather than blank (B7) - a retired option must

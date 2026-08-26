@@ -339,9 +339,7 @@ String? _resolveOne(String? vt) {
   if (s.contains('bus') || s.contains('coaster')) return 'Bus';
   if (s.contains('tata')) return 'Tata';
   if (s.contains('ashok') || s.contains('leyland')) return 'Ashok Leyland';
-  if (s.contains('pickup') ||
-      s.contains('pick up') ||
-      s.contains('pick-up')) {
+  if (s.contains('pickup') || s.contains('pick up') || s.contains('pick-up')) {
     return 'Pickup';
   }
   // Tankers are 2-axle rigids: 6 tyres, not the 10 a generic truck match

@@ -137,11 +137,8 @@ class PendingMediaUploads extends Table {
   ///
   /// This is inert without `PRAGMA foreign_keys = ON`, which the database's
   /// `beforeOpen` sets on every connection.
-  TextColumn get commandId => text().references(
-        PendingCommands,
-        #id,
-        onDelete: KeyAction.restrict,
-      )();
+  TextColumn get commandId =>
+      text().references(PendingCommands, #id, onDelete: KeyAction.restrict)();
 
   /// Checklist field id, or tyre position, or null for a flat list. Photos are
   /// a keyed MAP for checklists and a flat ARRAY elsewhere; code that assumes

@@ -108,8 +108,9 @@ class InspectionHistoryEntry {
 List<InspectionHistoryEntry> sortInspectionHistory(
   List<InspectionHistoryEntry> entries,
 ) {
-  final List<InspectionHistoryEntry> sorted =
-      List<InspectionHistoryEntry>.of(entries);
+  final List<InspectionHistoryEntry> sorted = List<InspectionHistoryEntry>.of(
+    entries,
+  );
   sorted.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   return sorted;
 }

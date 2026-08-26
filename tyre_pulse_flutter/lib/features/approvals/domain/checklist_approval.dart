@@ -337,8 +337,7 @@ bool canDecide(
 
 /// The English label for [stage], or `''` for `null`. See the library
 /// comment on English text in this file. #mirror: `stageLabel`.
-String stageLabel(ApprovalStage? stage) =>
-    stage == null ? '' : _labelOf(stage);
+String stageLabel(ApprovalStage? stage) => stage == null ? '' : _labelOf(stage);
 
 /// One rung of the ladder, with what has actually happened on it - who
 /// signed, when, and their mark - so a "tap to see who approved this" panel

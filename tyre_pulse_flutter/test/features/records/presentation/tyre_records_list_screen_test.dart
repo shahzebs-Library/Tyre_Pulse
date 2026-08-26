@@ -30,8 +30,9 @@ import 'package:tyre_pulse/features/records/records_providers.dart';
 import '../records_test_support.dart';
 
 const AccessState _admin = AccessState(role: UserRole.known(RoleId.admin));
-const AccessState _reporter =
-    AccessState(role: UserRole.known(RoleId.reporter));
+const AccessState _reporter = AccessState(
+  role: UserRole.known(RoleId.reporter),
+);
 
 Future<FakeTyreRecordsRepository> _pump(
   WidgetTester tester, {
@@ -66,38 +67,41 @@ Future<FakeTyreRecordsRepository> _pump(
 
 void main() {
   group('the module gate runs before any fetch', () {
-    testWidgets(
-      'a denied user sees the refusal, never a spinner, and the '
-      'repository is never called',
-      (WidgetTester tester) async {
-        final FakeTyreRecordsRepository repo =
-            await _pump(tester, access: _reporter);
-        await tester.pump();
+    testWidgets('a denied user sees the refusal, never a spinner, and the '
+        'repository is never called', (WidgetTester tester) async {
+      final FakeTyreRecordsRepository repo = await _pump(
+        tester,
+        access: _reporter,
+      );
+      await tester.pump();
 
-        expect(find.byKey(TpStateKeys.permissionDenied), findsOneWidget);
-        expect(find.byType(CircularProgressIndicator), findsNothing);
-        expect(
-          repo.fetchPageCalls,
-          isEmpty,
-          reason: 'ModuleKey.records is admin-only; a Reporter must be '
-              'refused before the controller provider is ever read',
-        );
-      },
-    );
+      expect(find.byKey(TpStateKeys.permissionDenied), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        repo.fetchPageCalls,
+        isEmpty,
+        reason:
+            'ModuleKey.records is admin-only; a Reporter must be '
+            'refused before the controller provider is ever read',
+      );
+    });
 
-    testWidgets('the refusal names a reason a person can read',
-        (WidgetTester tester) async {
+    testWidgets('the refusal names a reason a person can read', (
+      WidgetTester tester,
+    ) async {
       await _pump(tester, access: _reporter);
       await tester.pump();
 
-      final TpPermissionDeniedState widget = tester.widget<TpPermissionDeniedState>(
-        find.byType(TpPermissionDeniedState),
-      );
+      final TpPermissionDeniedState widget = tester
+          .widget<TpPermissionDeniedState>(
+            find.byType(TpPermissionDeniedState),
+          );
       expect(widget.reason, isNotEmpty);
     });
 
-    testWidgets('an admin is allowed through to the register',
-        (WidgetTester tester) async {
+    testWidgets('an admin is allowed through to the register', (
+      WidgetTester tester,
+    ) async {
       await _pump(tester, access: _admin);
       await tester.pumpAndSettle();
 
@@ -106,8 +110,9 @@ void main() {
   });
 
   group('loading', () {
-    testWidgets('renders while the first page is in flight',
-        (WidgetTester tester) async {
+    testWidgets('renders while the first page is in flight', (
+      WidgetTester tester,
+    ) async {
       final FakeTyreRecordsRepository repo = FakeTyreRecordsRepository();
       final Completer<TyreRecordsPage> hold = Completer<TyreRecordsPage>();
       repo.queueResponder((_, __) => hold.future);
@@ -123,13 +128,10 @@ void main() {
   });
 
   group('empty', () {
-    testWidgets('renders when the query resolves with nothing',
-        (WidgetTester tester) async {
-      await _pump(
-        tester,
-        access: _admin,
-        repo: FakeTyreRecordsRepository(),
-      );
+    testWidgets('renders when the query resolves with nothing', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, access: _admin, repo: FakeTyreRecordsRepository());
       await tester.pumpAndSettle();
 
       expect(find.byKey(TpStateKeys.empty), findsOneWidget);
@@ -171,8 +173,9 @@ void main() {
   });
 
   group('content', () {
-    testWidgets('a successful page renders one row per record',
-        (WidgetTester tester) async {
+    testWidgets('a successful page renders one row per record', (
+      WidgetTester tester,
+    ) async {
       final List<TyreRecord> dataset = <TyreRecord>[
         buildTyreRecord(id: '1', assetNo: 'TM514', riskLevel: 'Critical'),
         buildTyreRecord(id: '2', assetNo: 'TM515', riskLevel: 'Low'),
@@ -190,8 +193,9 @@ void main() {
       expect(find.text('TM515'), findsOneWidget);
     });
 
-    testWidgets('tapping a row opens the detail sheet for that record',
-        (WidgetTester tester) async {
+    testWidgets('tapping a row opens the detail sheet for that record', (
+      WidgetTester tester,
+    ) async {
       final List<TyreRecord> dataset = <TyreRecord>[
         buildTyreRecord(
           id: '1',

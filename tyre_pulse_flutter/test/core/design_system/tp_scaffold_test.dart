@@ -29,8 +29,7 @@ void main() {
     expect(find.text('body content'), findsOneWidget);
   });
 
-  testWidgets('renders an app bar when supplied',
-      (WidgetTester tester) async {
+  testWidgets('renders an app bar when supplied', (WidgetTester tester) async {
     await _pumpScaffold(
       tester,
       TpScaffold(
@@ -44,8 +43,9 @@ void main() {
   });
 
   group('the banner', () {
-    testWidgets('sits above the body, not inside it',
-        (WidgetTester tester) async {
+    testWidgets('sits above the body, not inside it', (
+      WidgetTester tester,
+    ) async {
       await _pumpScaffold(
         tester,
         const TpScaffold(banner: Text('banner'), body: Text('body content')),
@@ -57,28 +57,24 @@ void main() {
     });
 
     testWidgets('is absent when not supplied', (WidgetTester tester) async {
-      await _pumpScaffold(
-        tester,
-        const TpScaffold(body: Text('body content')),
-      );
+      await _pumpScaffold(tester, const TpScaffold(body: Text('body content')));
 
       expect(find.text('banner'), findsNothing);
     });
   });
 
   group('backFallback controls whether a system Back is intercepted', () {
-    testWidgets('null, the default, installs no PopScope',
-        (WidgetTester tester) async {
-      await _pumpScaffold(
-        tester,
-        const TpScaffold(body: Text('body content')),
-      );
+    testWidgets('null, the default, installs no PopScope', (
+      WidgetTester tester,
+    ) async {
+      await _pumpScaffold(tester, const TpScaffold(body: Text('body content')));
 
       expect(find.byType(PopScope<Object?>), findsNothing);
     });
 
-    testWidgets('a real fallback installs a PopScope',
-        (WidgetTester tester) async {
+    testWidgets('a real fallback installs a PopScope', (
+      WidgetTester tester,
+    ) async {
       await _pumpScaffold(
         tester,
         const TpScaffold(body: Text('body content'), backFallback: '/home'),
@@ -88,8 +84,9 @@ void main() {
     });
   });
 
-  testWidgets('resizeToAvoidBottomInset passes through',
-      (WidgetTester tester) async {
+  testWidgets('resizeToAvoidBottomInset passes through', (
+    WidgetTester tester,
+  ) async {
     await _pumpScaffold(
       tester,
       const TpScaffold(
@@ -103,8 +100,9 @@ void main() {
   });
 
   group('backgroundColor', () {
-    testWidgets('a supplied colour replaces the palette background',
-        (WidgetTester tester) async {
+    testWidgets('a supplied colour replaces the palette background', (
+      WidgetTester tester,
+    ) async {
       await _pumpScaffold(
         tester,
         const TpScaffold(
@@ -113,26 +111,21 @@ void main() {
         ),
       );
 
-      final Scaffold scaffold =
-          tester.widget<Scaffold>(find.byType(Scaffold));
+      final Scaffold scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
       expect(scaffold.backgroundColor, Colors.red);
     });
 
-    testWidgets('the default comes from the palette',
-        (WidgetTester tester) async {
-      await _pumpScaffold(
-        tester,
-        const TpScaffold(body: Text('body content')),
-      );
+    testWidgets('the default comes from the palette', (
+      WidgetTester tester,
+    ) async {
+      await _pumpScaffold(tester, const TpScaffold(body: Text('body content')));
 
-      final Scaffold scaffold =
-          tester.widget<Scaffold>(find.byType(Scaffold));
+      final Scaffold scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
       expect(scaffold.backgroundColor, TpPalette.light.background);
     });
   });
 
-  testWidgets('a floating action button renders',
-      (WidgetTester tester) async {
+  testWidgets('a floating action button renders', (WidgetTester tester) async {
     await _pumpScaffold(
       tester,
       TpScaffold(
@@ -159,8 +152,9 @@ void main() {
     expect(find.byType(BottomAppBar), findsOneWidget);
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await _pumpScaffold(
       tester,
       const TpScaffold(body: Text('body content')),

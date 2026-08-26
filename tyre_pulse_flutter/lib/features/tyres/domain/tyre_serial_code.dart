@@ -83,7 +83,7 @@ String extractScanCode(String raw) {
 
   final bool looksLikeUrl =
       RegExp(r'^https?://', caseSensitive: false).hasMatch(trimmed) ||
-          trimmed.contains('?');
+      trimmed.contains('?');
   if (looksLikeUrl) {
     final String? fromUrl = _fromUrlPayload(trimmed);
     if (fromUrl != null && fromUrl.isNotEmpty) {
@@ -113,8 +113,9 @@ String? _fromJsonPayload(String source) {
 }
 
 String? _fromUrlPayload(String source) {
-  final String withScheme =
-      source.contains('://') ? source : 'https://x/$source';
+  final String withScheme = source.contains('://')
+      ? source
+      : 'https://x/$source';
   final Uri? uri = Uri.tryParse(withScheme);
   if (uri == null) return null;
 
@@ -125,8 +126,9 @@ String? _fromUrlPayload(String source) {
     }
   }
 
-  final List<String> segments =
-      uri.pathSegments.where((String segment) => segment.isNotEmpty).toList();
+  final List<String> segments = uri.pathSegments
+      .where((String segment) => segment.isNotEmpty)
+      .toList();
   if (segments.isEmpty) return null;
 
   final String lastSegment = segments.last;

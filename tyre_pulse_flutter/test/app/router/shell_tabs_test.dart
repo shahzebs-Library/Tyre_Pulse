@@ -38,13 +38,12 @@ TpShellDestination destination({
 /// Allows a fixed set of modules and nothing else.
 bool Function(RouteGuard) allowing(Set<RouteModule> modules) {
   return (RouteGuard guard) => switch (guard) {
-        AuthenticatedOnly() => true,
-        PublicRoute() => true,
-        ModuleGuarded(module: final RouteModule module) =>
-          modules.contains(module),
-        AdminOnly() => false,
-        SuperAdminOnly() => false,
-      };
+    AuthenticatedOnly() => true,
+    PublicRoute() => true,
+    ModuleGuarded(module: final RouteModule module) => modules.contains(module),
+    AdminOnly() => false,
+    SuperAdminOnly() => false,
+  };
 }
 
 void main() {
@@ -58,8 +57,9 @@ void main() {
     });
 
     test('every branch route id is unique', () {
-      final List<String> ids =
-          TpShell.destinations.map((TpShellDestination d) => d.routeId).toList();
+      final List<String> ids = TpShell.destinations
+          .map((TpShellDestination d) => d.routeId)
+          .toList();
       expect(ids.toSet().length, ids.length);
     });
 
@@ -84,7 +84,10 @@ void main() {
     test('a driver gets Home, Meter, Washing and Profile', () {
       final TpShellTabLayout layout = resolveShellTabs(
         destinations: TpShell.destinations,
-        canAccess: allowing(<RouteModule>{RouteModule.meter, RouteModule.washing}),
+        canAccess: allowing(<RouteModule>{
+          RouteModule.meter,
+          RouteModule.washing,
+        }),
       );
       expect(
         layout.visible.map((TpShellDestination d) => d.routeId).toList(),
@@ -162,8 +165,9 @@ void main() {
         destinations: destinations,
         canAccess: (RouteGuard _) => true,
       );
-      final Set<String> visible =
-          layout.visible.map((TpShellDestination d) => d.routeId).toSet();
+      final Set<String> visible = layout.visible
+          .map((TpShellDestination d) => d.routeId)
+          .toSet();
       expect(visible.contains('home'), isTrue);
       expect(visible.contains('profile'), isTrue);
     });
@@ -193,8 +197,9 @@ void main() {
         isFalse,
       );
       expect(
-        layout.overflow
-            .any((TpShellDestination d) => d.routeId == 'nonPrimary'),
+        layout.overflow.any(
+          (TpShellDestination d) => d.routeId == 'nonPrimary',
+        ),
         isTrue,
       );
     });
@@ -216,8 +221,9 @@ void main() {
         destinations: destinations,
         canAccess: (RouteGuard _) => true,
       );
-      final List<int> indexes =
-          layout.visible.map((TpShellDestination d) => d.branchIndex).toList();
+      final List<int> indexes = layout.visible
+          .map((TpShellDestination d) => d.branchIndex)
+          .toList();
       final List<int> sorted = List<int>.of(indexes)..sort();
       expect(indexes, sorted);
     });
@@ -302,8 +308,9 @@ void main() {
         canAccess: (RouteGuard _) => true,
       );
       final TpShellTabLayout promoted = ensureActiveBranchVisible(base, 4);
-      final Set<String> visible =
-          promoted.visible.map((TpShellDestination d) => d.routeId).toSet();
+      final Set<String> visible = promoted.visible
+          .map((TpShellDestination d) => d.routeId)
+          .toSet();
       expect(visible.contains('home'), isTrue);
       expect(visible.contains('profile'), isTrue);
     });

@@ -62,7 +62,8 @@ enum Capability {
   view(
     wireName: 'view',
     enforcement: CapabilityEnforcement.uiOnly,
-    serverNote: 'No RLS policy gates on view. It hides tiles and blocks '
+    serverNote:
+        'No RLS policy gates on view. It hides tiles and blocks '
         'routes; it does not stop a PostgREST read.',
   ),
 
@@ -71,7 +72,8 @@ enum Capability {
   create(
     wireName: 'create',
     enforcement: CapabilityEnforcement.serverAdditiveOnly,
-    serverNote: 'PERMISSIVE INSERT policies on 11 tables (V238, V241). Adds '
+    serverNote:
+        'PERMISSIVE INSERT policies on 11 tables (V238, V241). Adds '
         'access; never removes it.',
   ),
 
@@ -79,7 +81,8 @@ enum Capability {
   edit(
     wireName: 'edit',
     enforcement: CapabilityEnforcement.serverAdditiveOnly,
-    serverNote: 'PERMISSIVE UPDATE policies on the same 11 tables, plus '
+    serverNote:
+        'PERMISSIVE UPDATE policies on the same 11 tables, plus '
         'hand-written checks in V382, V608 and V609.',
   ),
 
@@ -94,7 +97,8 @@ enum Capability {
   export(
     wireName: 'export',
     enforcement: CapabilityEnforcement.uiOnly,
-    serverNote: 'No server enforcement anywhere. The export is assembled on '
+    serverNote:
+        'No server enforcement anywhere. The export is assembled on '
         'the device from rows RLS already returned.',
   ),
 
@@ -107,7 +111,8 @@ enum Capability {
   approve(
     wireName: 'approve',
     enforcement: CapabilityEnforcement.serverNegativeOnly,
-    serverNote: 'V242 refuses a status change when the caller is explicitly '
+    serverNote:
+        'V242 refuses a status change when the caller is explicitly '
         'revoked approve, on accidents and work_orders only. The real gates '
         'are the domain RPCs, which have their own role lists.',
   );

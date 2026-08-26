@@ -55,9 +55,7 @@ final class InspectionGpsSource {
     try {
       final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        return const GpsCaptureResult(
-          status: InspectionGpsStatus.unavailable,
-        );
+        return const GpsCaptureResult(status: InspectionGpsStatus.unavailable);
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
@@ -66,9 +64,7 @@ final class InspectionGpsSource {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return const GpsCaptureResult(
-          status: InspectionGpsStatus.unavailable,
-        );
+        return const GpsCaptureResult(status: InspectionGpsStatus.unavailable);
       }
 
       final Position position = await Geolocator.getCurrentPosition(
@@ -83,9 +79,7 @@ final class InspectionGpsSource {
         fix: InspectionGpsFix(
           latitude: position.latitude,
           longitude: position.longitude,
-          accuracyMeters: position.accuracy.isFinite
-              ? position.accuracy
-              : null,
+          accuracyMeters: position.accuracy.isFinite ? position.accuracy : null,
           capturedAt: DateTime.now().toUtc(),
         ),
       );

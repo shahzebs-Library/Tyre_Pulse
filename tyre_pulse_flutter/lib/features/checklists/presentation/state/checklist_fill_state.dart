@@ -110,7 +110,8 @@ class ChecklistFillState {
       templateRecord: templateRecord ?? this.templateRecord,
       draftKey: draftKey ?? this.draftKey,
       assignmentId: assignmentId ?? this.assignmentId,
-      assignmentPriorStatus: assignmentPriorStatus ?? this.assignmentPriorStatus,
+      assignmentPriorStatus:
+          assignmentPriorStatus ?? this.assignmentPriorStatus,
       answers: answers ?? this.answers,
       notes: notes ?? this.notes,
       photosByField: photosByField ?? this.photosByField,

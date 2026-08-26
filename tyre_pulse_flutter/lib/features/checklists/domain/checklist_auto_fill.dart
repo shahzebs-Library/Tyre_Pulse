@@ -32,20 +32,20 @@ String? _preferring(String? primary, String? secondary) {
 /// nothing rather than to a guess (E8) - adding a source is therefore a
 /// template edit (naming an existing token) or a code change (adding a new
 /// entry here), never an inference.
-final Map<String, Object? Function(ChecklistAssetContext)> kChecklistAutoFillSources =
-    <String, Object? Function(ChecklistAssetContext)>{
-      'asset.site': (ChecklistAssetContext a) => a.site,
-      'asset.fleet_no': (ChecklistAssetContext a) =>
-          _preferring(a.fleetNumber, a.registrationNo),
-      'asset.registration': (ChecklistAssetContext a) =>
-          _preferring(a.registrationNo, a.fleetNumber),
-      'asset.chassis_no': (ChecklistAssetContext a) =>
-          _preferring(a.chassisNo, a.serialNo),
-      'asset.current_km': (ChecklistAssetContext a) => a.currentKm,
-      'asset.vehicle_type': (ChecklistAssetContext a) => a.vehicleType,
-      'asset.make': (ChecklistAssetContext a) => a.make,
-      'asset.model': (ChecklistAssetContext a) => a.model,
-    };
+final Map<String, Object? Function(ChecklistAssetContext)>
+kChecklistAutoFillSources = <String, Object? Function(ChecklistAssetContext)>{
+  'asset.site': (ChecklistAssetContext a) => a.site,
+  'asset.fleet_no': (ChecklistAssetContext a) =>
+      _preferring(a.fleetNumber, a.registrationNo),
+  'asset.registration': (ChecklistAssetContext a) =>
+      _preferring(a.registrationNo, a.fleetNumber),
+  'asset.chassis_no': (ChecklistAssetContext a) =>
+      _preferring(a.chassisNo, a.serialNo),
+  'asset.current_km': (ChecklistAssetContext a) => a.currentKm,
+  'asset.vehicle_type': (ChecklistAssetContext a) => a.vehicleType,
+  'asset.make': (ChecklistAssetContext a) => a.make,
+  'asset.model': (ChecklistAssetContext a) => a.model,
+};
 
 /// The value [asset] supplies for [field]'s `autoFrom` token, or `''` when
 /// it supplies nothing at all - no token (E8's own `'asset.invented'`), no
@@ -53,7 +53,8 @@ final Map<String, Object? Function(ChecklistAssetContext)> kChecklistAutoFillSou
 String resolveAutoFill(ChecklistField? field, ChecklistAssetContext? asset) {
   final String? token = field?.autoFrom;
   if (token == null || token.isEmpty || asset == null) return '';
-  final Object? Function(ChecklistAssetContext)? fn = kChecklistAutoFillSources[token];
+  final Object? Function(ChecklistAssetContext)? fn =
+      kChecklistAutoFillSources[token];
   if (fn == null) return '';
   final Object? v = fn(asset);
   if (v == null) return '';

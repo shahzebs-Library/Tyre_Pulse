@@ -22,19 +22,19 @@ void main() {
     test('opens at the current version', () async {
       expect(db.schemaVersion, AppDatabase.latestSchemaVersion);
 
-      final QueryRow row =
-          await db.customSelect('PRAGMA user_version').getSingle();
+      final QueryRow row = await db
+          .customSelect('PRAGMA user_version')
+          .getSingle();
       expect(row.read<int>('user_version'), AppDatabase.latestSchemaVersion);
     });
 
     test('creates every table artifact 05 specifies', () async {
       final List<QueryRow> rows = await db
-          .customSelect(
-            "SELECT name FROM sqlite_master WHERE type = 'table'",
-          )
+          .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
           .get();
-      final Set<String> names =
-          rows.map((QueryRow r) => r.read<String>('name')).toSet();
+      final Set<String> names = rows
+          .map((QueryRow r) => r.read<String>('name'))
+          .toSet();
 
       // The 12 from spec section 11, with `pending_uploads` renamed to
       // `pending_media_uploads` because the former is a real REMOTE table, plus
@@ -73,8 +73,9 @@ void main() {
       // Forces the connection to open, which is when beforeOpen runs.
       await db.queueDao.pendingCount();
 
-      final entry =
-          await db.cacheDao.readMetadata(SyncMetadataKeys.schemaMigratedAt);
+      final entry = await db.cacheDao.readMetadata(
+        SyncMetadataKeys.schemaMigratedAt,
+      );
       expect(entry, isNotNull);
       expect(DateTime.tryParse(entry!.valueJson), isNotNull);
     });
@@ -82,34 +83,38 @@ void main() {
 
   group('foreign keys', () {
     test('are enabled on every connection', () async {
-      final QueryRow row =
-          await db.customSelect('PRAGMA foreign_keys').getSingle();
+      final QueryRow row = await db
+          .customSelect('PRAGMA foreign_keys')
+          .getSingle();
       expect(
         row.read<int>('foreign_keys'),
         1,
-        reason: 'without this pragma the RESTRICT that protects an unconfirmed '
+        reason:
+            'without this pragma the RESTRICT that protects an unconfirmed '
             'photo from its own pruner does nothing at all',
       );
     });
 
-    test('RESTRICT refuses to delete a command that still holds a photo',
-        () async {
-      await seedCommand(
-        db,
-        id: 'cmd-1',
-        attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
-      );
+    test(
+      'RESTRICT refuses to delete a command that still holds a photo',
+      () async {
+        await seedCommand(
+          db,
+          id: 'cmd-1',
+          attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
+        );
 
-      await expectLater(
-        (db.delete(db.pendingCommands)
-              ..where((t) => t.id.equals('cmd-1')))
-            .go(),
-        throwsA(isA<Exception>()),
-      );
+        await expectLater(
+          (db.delete(
+            db.pendingCommands,
+          )..where((t) => t.id.equals('cmd-1'))).go(),
+          throwsA(isA<Exception>()),
+        );
 
-      // The command survived, so the photo's only reference survived with it.
-      expect(await db.queueDao.commandById('cmd-1'), isNotNull);
-    });
+        // The command survived, so the photo's only reference survived with it.
+        expect(await db.queueDao.commandById('cmd-1'), isNotNull);
+      },
+    );
 
     test('a draft position cascades when its draft is deleted', () async {
       await db.draftsDao.saveInspectionDraft(

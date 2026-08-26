@@ -26,9 +26,9 @@ import 'package:tyre_pulse/features/records/presentation/tyre_records_list_scree
 /// [TpScreenRegistry.withAll].
 final Map<String, TpScreenBuilder> recordsScreenRegistrations =
     <String, TpScreenBuilder>{
-  TpRouteId.tyreRecords: (BuildContext context, TpRoute route) {
-    return TyreRecordsListScreen(
-      backFallback: TpBackFallbacks.forRoute(route),
-    );
-  },
-};
+      TpRouteId.tyreRecords: (BuildContext context, TpRoute route) {
+        return TyreRecordsListScreen(
+          backFallback: TpBackFallbacks.forRoute(route),
+        );
+      },
+    };

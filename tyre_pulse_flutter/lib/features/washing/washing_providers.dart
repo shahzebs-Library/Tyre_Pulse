@@ -15,17 +15,17 @@ import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
 
 final Provider<QueuedCommandRepository> washQueuedCommandRepositoryProvider =
     Provider<QueuedCommandRepository>((ref) {
-  final AppDatabase db = ref.watch(appDatabaseProvider);
-  return QueuedCommandRepository(db.queueDao);
-});
+      final AppDatabase db = ref.watch(appDatabaseProvider);
+      return QueuedCommandRepository(db.queueDao);
+    });
 
 final Provider<WashRepository> washRepositoryProvider =
     Provider<WashRepository>(
-  (ref) => SupabaseWashRepository(
-    ref.watch(supabaseClientProvider),
-    ref.watch(washQueuedCommandRepositoryProvider),
-  ),
-);
+      (ref) => SupabaseWashRepository(
+        ref.watch(supabaseClientProvider),
+        ref.watch(washQueuedCommandRepositoryProvider),
+      ),
+    );
 
 /// Real by default, matching `meterLogPhotoCaptureProvider`'s own note.
 final Provider<WashPhotoCapture> washPhotoCaptureProvider =

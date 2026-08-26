@@ -79,10 +79,7 @@ void main() {
 
   group('equality and hashCode', () {
     test('two reads with the same value and status are equal', () {
-      expect(
-        const SecureRead.ok('abc'),
-        const SecureRead.ok('abc'),
-      );
+      expect(const SecureRead.ok('abc'), const SecureRead.ok('abc'));
       expect(
         const SecureRead.ok('abc').hashCode,
         const SecureRead.ok('abc').hashCode,
@@ -93,8 +90,7 @@ void main() {
       expect(const SecureRead.absent(), isNot(const SecureRead.unreadable()));
     });
 
-    test('reads with the same status but different values are not equal',
-        () {
+    test('reads with the same status but different values are not equal', () {
       expect(const SecureRead.ok('abc'), isNot(const SecureRead.ok('xyz')));
     });
   });

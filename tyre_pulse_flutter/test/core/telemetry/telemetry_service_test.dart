@@ -15,8 +15,7 @@ const _configWithNoDsn = AppConfig(
 
 void main() {
   group('no DSN means a true no-op', () {
-    test('initialize never activates the service and never throws',
-        () async {
+    test('initialize never activates the service and never throws', () async {
       final service = TelemetryService();
 
       await service.initialize(config: _configWithNoDsn);
@@ -293,10 +292,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(captured, isNotNull);
-      expect(
-        captured.toString(),
-        isNot(contains('eyJhbGciOiJIUzI1NiJ9')),
-      );
+      expect(captured.toString(), isNot(contains('eyJhbGciOiJIUzI1NiJ9')));
     });
 
     test('reportPlatformDispatcherError reaches the sink when active and '

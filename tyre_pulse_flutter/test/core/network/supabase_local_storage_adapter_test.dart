@@ -27,7 +27,8 @@ final class FakeSecureKeyValueStore extends SecureKeyValueStore {
   Future<SecureRead> read(String key) async {
     calls.add('read:$key');
 
-    final SecureReadStatus status = forcedReadStatus ??
+    final SecureReadStatus status =
+        forcedReadStatus ??
         (_values.containsKey(key)
             ? SecureReadStatus.ok
             : SecureReadStatus.absent);
@@ -61,8 +62,9 @@ void main() {
   group('round trip', () {
     test('before anything is persisted, there is no session', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       expect(await adapter.accessToken(), isNull);
       expect(await adapter.hasAccessToken(), isFalse);
@@ -70,8 +72,9 @@ void main() {
 
     test('persistSession then accessToken returns the same string', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       await adapter.persistSession('the-session-blob');
 
@@ -79,24 +82,28 @@ void main() {
       expect(await adapter.hasAccessToken(), isTrue);
     });
 
-    test('removePersistedSession clears a previously persisted session',
-        () async {
-      final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+    test(
+      'removePersistedSession clears a previously persisted session',
+      () async {
+        final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
+        final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+          store,
+        );
 
-      await adapter.persistSession('the-session-blob');
-      await adapter.removePersistedSession();
+        await adapter.persistSession('the-session-blob');
+        await adapter.removePersistedSession();
 
-      expect(await adapter.accessToken(), isNull);
-      expect(await adapter.hasAccessToken(), isFalse);
-    });
+        expect(await adapter.accessToken(), isNull);
+        expect(await adapter.hasAccessToken(), isFalse);
+      },
+    );
 
     test('persist and remove land under the documented storage key, and '
         'nothing else', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       await adapter.persistSession('blob');
       await adapter.removePersistedSession();
@@ -109,8 +116,9 @@ void main() {
 
     test('initialize completes without touching the store', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       await adapter.initialize();
 
@@ -119,24 +127,28 @@ void main() {
   });
 
   group('a failed underlying read does not silently report "no session"', () {
-    test('accessToken answers null - the only thing a bool/String? '
-        'contract can say - rather than throwing out of session restore',
-        () async {
-      final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
-        ..forcedReadStatus = SecureReadStatus.unreadable;
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+    test(
+      'accessToken answers null - the only thing a bool/String? '
+      'contract can say - rather than throwing out of session restore',
+      () async {
+        final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
+          ..forcedReadStatus = SecureReadStatus.unreadable;
+        final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+          store,
+        );
 
-      expect(await adapter.accessToken(), isNull);
-      expect(await adapter.hasAccessToken(), isFalse);
-    });
+        expect(await adapter.accessToken(), isNull);
+        expect(await adapter.hasAccessToken(), isFalse);
+      },
+    );
 
     test('never compounds the failure into a destructive write or delete: '
         'only read calls are made', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
         ..forcedReadStatus = SecureReadStatus.unreadable;
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       await adapter.accessToken();
       await adapter.hasAccessToken();
@@ -148,8 +160,9 @@ void main() {
     test('a session persisted before reads started failing is still there '
         'once reads work again - the adapter never deleted it', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
       await adapter.persistSession('still-there');
 
       store.forcedReadStatus = SecureReadStatus.unreadable;
@@ -163,8 +176,9 @@ void main() {
         'is handled the same way: null, and nothing destroyed', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
         ..forcedReadStatus = SecureReadStatus.torn;
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       expect(await adapter.accessToken(), isNull);
       expect(store.calls, everyElement(startsWith('read:')));
@@ -175,8 +189,9 @@ void main() {
         'contract itself cannot carry it', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
         ..forcedReadStatus = SecureReadStatus.unreadable;
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       expect(adapter.readFailureCount, 0);
 
@@ -189,8 +204,9 @@ void main() {
     test('a genuinely absent session increments nothing, so the failure '
         'count really does distinguish the two cases', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
-      final SupabaseLocalStorageAdapter adapter =
-          SupabaseLocalStorageAdapter(store);
+      final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
+        store,
+      );
 
       await adapter.accessToken();
 

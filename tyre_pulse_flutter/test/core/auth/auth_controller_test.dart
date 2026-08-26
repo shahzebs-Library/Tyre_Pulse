@@ -167,27 +167,27 @@ Map<String, Object?> profileRow({
   String id = 'user-1',
   bool approved = true,
   bool locked = false,
-}) =>
-    <String, Object?>{
-      'id': id,
-      'role': 'Manager',
-      'country': const <String>['ALL'],
-      'sites': const <String>['ALL'],
-      'org_id': 'org-1',
-      'organisation_id': 'org-1',
-      'is_super_admin': false,
-      'approved': approved,
-      'locked': locked,
-      'site': null,
-      'full_name': 'Test User',
-    };
+}) => <String, Object?>{
+  'id': id,
+  'role': 'Manager',
+  'country': const <String>['ALL'],
+  'sites': const <String>['ALL'],
+  'org_id': 'org-1',
+  'organisation_id': 'org-1',
+  'is_super_admin': false,
+  'approved': approved,
+  'locked': locked,
+  'site': null,
+  'full_name': 'Test User',
+};
 
 WorkspaceProfile profileWith({
   String id = 'user-1',
   bool approved = true,
   bool locked = false,
-}) =>
-    WorkspaceProfile.fromRow(profileRow(id: id, approved: approved, locked: locked));
+}) => WorkspaceProfile.fromRow(
+  profileRow(id: id, approved: approved, locked: locked),
+);
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -218,7 +218,8 @@ final class Harness {
 
   late final ProviderContainer container;
 
-  AuthController get controller => container.read(authControllerProvider.notifier);
+  AuthController get controller =>
+      container.read(authControllerProvider.notifier);
 
   AuthState get state => container.read(authControllerProvider);
 
@@ -244,8 +245,9 @@ void main() {
         'without waiting for the stream to deliver it', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
       // Seed the "already restored" session BEFORE the controller is ever
       // read, so build() observes it via `currentSession` rather than
       // through a later stream event.
@@ -264,7 +266,9 @@ void main() {
   group('THE TIMEOUT PATH', () {
     test('a session that never resolves ends in timedOut, not a spinner that '
         'runs forever', () async {
-      final Harness h = Harness(restoreTimeout: const Duration(milliseconds: 15));
+      final Harness h = Harness(
+        restoreTimeout: const Duration(milliseconds: 15),
+      );
       addTearDown(h.dispose);
 
       // Force the read so build() runs and arms the timer.
@@ -281,10 +285,13 @@ void main() {
     test('a session that resolves AFTER the timeout still recovers - the '
         'stream keeps listening and this is a temporary state, not a dead '
         'end', () async {
-      final Harness h = Harness(restoreTimeout: const Duration(milliseconds: 10));
+      final Harness h = Harness(
+        restoreTimeout: const Duration(milliseconds: 10),
+      );
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
 
       expect(h.state.sessionPhase, AuthSessionPhase.restoring);
       await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -305,8 +312,9 @@ void main() {
         'signed in with no gate', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
       h.versionGate.result = const VersionGateResult(
         reason: VersionGateReason.buildMeetsMinimum,
         currentVersion: '2.0.0',
@@ -323,24 +331,28 @@ void main() {
       expect(h.versionGate.callCount, greaterThanOrEqualTo(1));
     });
 
-    test('a locked profile resolves accessBlocked through the real wiring',
-        () async {
-      final Harness h = Harness();
-      addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith(locked: true));
+    test(
+      'a locked profile resolves accessBlocked through the real wiring',
+      () async {
+        final Harness h = Harness();
+        addTearDown(h.dispose);
+        h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+          profileWith(locked: true),
+        );
 
-      h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
-      await pumpEventQueue(times: 40);
+        h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+        await pumpEventQueue(times: 40);
 
-      expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
-    });
+        expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
+      },
+    );
 
     test('an unapproved profile resolves accessBlocked', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith(approved: false));
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(approved: false),
+      );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
       await pumpEventQueue(times: 40);
@@ -353,10 +365,7 @@ void main() {
       final Harness h = Harness();
       addTearDown(h.dispose);
       h.profiles.outcomeByUserId['user-1'] = ProfileFetchFailed(
-        const AppError(
-          kind: AppErrorKind.network,
-          message: 'offline',
-        ),
+        const AppError(kind: AppErrorKind.network, message: 'offline'),
       );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
@@ -365,8 +374,9 @@ void main() {
       expect(deriveSession(h.state).gate, TpShellGate.profileUnavailable);
 
       // Retry, now with a working fixture, recovers it.
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
       await h.controller.retryProfile();
       await pumpEventQueue(times: 40);
 
@@ -377,8 +387,9 @@ void main() {
         'wiring', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
       h.versionGate.result = const VersionGateResult(
         reason: VersionGateReason.buildBelowMinimum,
         currentVersion: '1.0.0',
@@ -404,30 +415,34 @@ void main() {
       expect(h.state.sessionPhase, AuthSessionPhase.signedOut);
     });
 
-    test('it reaches signedOut even when no session event follows the '
-        'signOut() call - it does not depend on the SDK reporting back',
-        () async {
-      final Harness h = Harness();
-      addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
-      h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
-      await pumpEventQueue(times: 40);
-      expect(h.state.sessionPhase, AuthSessionPhase.authenticated);
+    test(
+      'it reaches signedOut even when no session event follows the '
+      'signOut() call - it does not depend on the SDK reporting back',
+      () async {
+        final Harness h = Harness();
+        addTearDown(h.dispose);
+        h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+          profileWith(),
+        );
+        h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+        await pumpEventQueue(times: 40);
+        expect(h.state.sessionPhase, AuthSessionPhase.authenticated);
 
-      await h.controller.signOut();
+        await h.controller.signOut();
 
-      // FakeAuthRepository.signOut() deliberately never calls `emit(...)`.
-      expect(h.state.sessionPhase, AuthSessionPhase.signedOut);
-    });
+        // FakeAuthRepository.signOut() deliberately never calls `emit(...)`.
+        expect(h.state.sessionPhase, AuthSessionPhase.signedOut);
+      },
+    );
 
     test('the fake auth repository is called with EXACTLY signOut and '
         'stopAutoRefresh, and the fake profile cache store sees EXACTLY one '
         'delete - nothing more, nothing else', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
 
       // Force the sign-in to fully settle BEFORE taking the baseline, so the
@@ -459,35 +474,36 @@ void main() {
     test('signing out clears the adopted workspace', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
       await pumpEventQueue(times: 40);
 
       await h.controller.signOut();
 
-      expect(
-        h.container.read(workspaceContextProvider),
-        isNull,
-      );
+      expect(h.container.read(workspaceContextProvider), isNull);
     });
   });
 
   group('a session becoming null - however it happens - is signedOut', () {
-    test('an organic sign-out event (not through signOut()) is honoured too',
-        () async {
-      final Harness h = Harness();
-      addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] =
-          ProfileFetchSucceeded(profileWith());
-      h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
-      await pumpEventQueue(times: 40);
-      expect(h.state.sessionPhase, AuthSessionPhase.authenticated);
+    test(
+      'an organic sign-out event (not through signOut()) is honoured too',
+      () async {
+        final Harness h = Harness();
+        addTearDown(h.dispose);
+        h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+          profileWith(),
+        );
+        h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+        await pumpEventQueue(times: 40);
+        expect(h.state.sessionPhase, AuthSessionPhase.authenticated);
 
-      h.auth.emit(const AuthSessionSignal.none());
-      await pumpEventQueue(times: 40);
+        h.auth.emit(const AuthSessionSignal.none());
+        await pumpEventQueue(times: 40);
 
-      expect(h.state.sessionPhase, AuthSessionPhase.signedOut);
-    });
+        expect(h.state.sessionPhase, AuthSessionPhase.signedOut);
+      },
+    );
   });
 }

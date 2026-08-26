@@ -63,8 +63,10 @@ import 'package:tyre_pulse/features/work_orders/'
 /// device that ever reaches the shell out of a build that was never actually
 /// below anything. `999.0.0` can never lose that comparison, so an
 /// unconfigured build fails open exactly the way a missing minimum does.
-const String _fallbackAppVersion =
-    String.fromEnvironment('APP_VERSION', defaultValue: '999.0.0');
+const String _fallbackAppVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '999.0.0',
+);
 
 /// The application-lifetime watcher that asks for an immediate sync pass the
 /// moment connectivity returns. Held here, not disposed: it lives exactly as
@@ -270,8 +272,7 @@ class TyrePulseApp extends ConsumerWidget {
       localeResolutionCallback: (
         Locale? deviceLocale,
         Iterable<Locale> supported,
-      ) =>
-          TpLocalizations.resolve(deviceLocale, supported),
+      ) => TpLocalizations.resolve(deviceLocale, supported),
     );
   }
 }

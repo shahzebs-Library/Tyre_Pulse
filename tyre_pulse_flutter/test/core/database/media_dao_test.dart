@@ -48,13 +48,15 @@ void main() {
     test('KEEPS a photo referenced only by a draft', () async {
       await seedDraftPhoto('d_1.jpg');
 
-      final List<String> orphans =
-          await db.mediaDao.orphanFileNames(<String>['d_1.jpg']);
+      final List<String> orphans = await db.mediaDao.orphanFileNames(<String>[
+        'd_1.jpg',
+      ]);
 
       expect(
         orphans,
         isEmpty,
-        reason: 'a draft is not a queue entry, so a sweep that only consults '
+        reason:
+            'a draft is not a queue entry, so a sweep that only consults '
             'the queue deletes the operator part-filled sheet photographs',
       );
     });
@@ -66,13 +68,15 @@ void main() {
         attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
       );
 
-      final List<String> orphans =
-          await db.mediaDao.orphanFileNames(<String>['q_1.jpg']);
+      final List<String> orphans = await db.mediaDao.orphanFileNames(<String>[
+        'q_1.jpg',
+      ]);
 
       expect(
         orphans,
         isEmpty,
-        reason: 'a sweep that only consults drafts deletes evidence an '
+        reason:
+            'a sweep that only consults drafts deletes evidence an '
             'inspection is still waiting to upload',
       );
     });
@@ -98,9 +102,10 @@ void main() {
     test('deletes a file nothing references at all', () async {
       await seedDraftPhoto('d_1.jpg');
 
-      final List<String> orphans = await db.mediaDao.orphanFileNames(
-        <String>['d_1.jpg', 'left_behind.jpg'],
-      );
+      final List<String> orphans = await db.mediaDao.orphanFileNames(<String>[
+        'd_1.jpg',
+        'left_behind.jpg',
+      ]);
 
       expect(orphans, <String>['left_behind.jpg']);
     });
@@ -123,16 +128,16 @@ void main() {
       expect(
         await db.mediaDao.orphanFileNames(<String>['q_1.jpg']),
         isEmpty,
-        reason: 'uploaded is not far enough: an object in a bucket that no '
+        reason:
+            'uploaded is not far enough: an object in a bucket that no '
             'database row references is unreachable',
       );
 
       await db.mediaDao.markCommandMediaVerified('cmd-1');
 
-      expect(
-        await db.mediaDao.orphanFileNames(<String>['q_1.jpg']),
-        <String>['q_1.jpg'],
-      );
+      expect(await db.mediaDao.orphanFileNames(<String>['q_1.jpg']), <String>[
+        'q_1.jpg',
+      ]);
     });
 
     test('sweeping nothing asks the database nothing', () async {
@@ -147,8 +152,9 @@ void main() {
         'd_1.jpg',
       ];
 
-      final List<String> orphans =
-          await db.mediaDao.orphanFileNames(candidates);
+      final List<String> orphans = await db.mediaDao.orphanFileNames(
+        candidates,
+      );
 
       expect(orphans, hasLength(950));
       expect(orphans, isNot(contains('d_1.jpg')));
@@ -170,33 +176,38 @@ void main() {
       expect(
         claimed,
         hasLength(uploadConcurrency),
-        reason: 'thirteen simultaneous full-size decodes is a hard native '
+        reason:
+            'thirteen simultaneous full-size decodes is a hard native '
             'out-of-memory crash on a 2 GB handset',
       );
       expect(claimed.first.state, MediaUploadState.uploading);
     });
 
-    test('a photo that keeps failing is reported, not retried forever',
-        () async {
-      await seedCommand(
-        db,
-        id: 'cmd-1',
-        attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
-      );
-      final String id = (await db.mediaDao.mediaForCommand('cmd-1')).single.id;
-
-      late PendingMediaUpload latest;
-      for (int attempt = 0; attempt < maxUploadAttempts; attempt++) {
-        latest = await db.mediaDao.markUploadAttemptFailed(
-          id,
-          messageSafe: 'The photo could not be uploaded.',
+    test(
+      'a photo that keeps failing is reported, not retried forever',
+      () async {
+        await seedCommand(
+          db,
+          id: 'cmd-1',
+          attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
         );
-      }
+        final String id = (await db.mediaDao.mediaForCommand('cmd-1'))
+            .single
+            .id;
 
-      expect(latest.attempts, maxUploadAttempts);
-      expect(latest.state, MediaUploadState.failed);
-      expect(await db.mediaDao.claimNextUploads(), isEmpty);
-    });
+        late PendingMediaUpload latest;
+        for (int attempt = 0; attempt < maxUploadAttempts; attempt++) {
+          latest = await db.mediaDao.markUploadAttemptFailed(
+            id,
+            messageSafe: 'The photo could not be uploaded.',
+          );
+        }
+
+        expect(latest.attempts, maxUploadAttempts);
+        expect(latest.state, MediaUploadState.failed);
+        expect(await db.mediaDao.claimNextUploads(), isEmpty);
+      },
+    );
 
     test('a command is not ready while any photo is unconfirmed', () async {
       await seedCommand(
@@ -329,52 +340,55 @@ void main() {
       );
     });
 
-    test('one mark per FIELD, so three trades do not overwrite each other',
-        () async {
-      await db.mediaDao.saveSignature(
-        ownerKind: OwnerKind.checklistDraft,
-        ownerKey: 'draft-1',
-        fieldKey: 'sig-mechanic',
-        payload: testSignatureSvg,
-        source: SignatureSource.drawn,
-        signedAt: testNow,
-      );
-      await db.mediaDao.saveSignature(
-        ownerKind: OwnerKind.checklistDraft,
-        ownerKey: 'draft-1',
-        fieldKey: 'sig-electrician',
-        payload: testSignatureSvg,
-        source: SignatureSource.drawn,
-        signedAt: testNow,
-      );
-      await db.mediaDao.saveSignature(
-        ownerKind: OwnerKind.checklistDraft,
-        ownerKey: 'draft-1',
-        fieldKey: primaryField,
-        payload: testSignatureSvg,
-        source: SignatureSource.drawn,
-        signedAt: testNow,
-      );
+    test(
+      'one mark per FIELD, so three trades do not overwrite each other',
+      () async {
+        await db.mediaDao.saveSignature(
+          ownerKind: OwnerKind.checklistDraft,
+          ownerKey: 'draft-1',
+          fieldKey: 'sig-mechanic',
+          payload: testSignatureSvg,
+          source: SignatureSource.drawn,
+          signedAt: testNow,
+        );
+        await db.mediaDao.saveSignature(
+          ownerKind: OwnerKind.checklistDraft,
+          ownerKey: 'draft-1',
+          fieldKey: 'sig-electrician',
+          payload: testSignatureSvg,
+          source: SignatureSource.drawn,
+          signedAt: testNow,
+        );
+        await db.mediaDao.saveSignature(
+          ownerKind: OwnerKind.checklistDraft,
+          ownerKey: 'draft-1',
+          fieldKey: primaryField,
+          payload: testSignatureSvg,
+          source: SignatureSource.drawn,
+          signedAt: testNow,
+        );
 
-      final signatures = await db.mediaDao.signaturesFor(
-        ownerKind: OwnerKind.checklistDraft,
-        ownerKey: 'draft-1',
-      );
-      expect(
-        signatures,
-        hasLength(3),
-        reason: 'a shared slot let only the last signature reach the database '
-            'while every tile read signed',
-      );
-      expect(
-        signatures.map((CapturedSignature s) => s.fieldKey),
-        unorderedEquals(<String>[
-          'sig-mechanic',
-          'sig-electrician',
-          primaryField,
-        ]),
-      );
-    });
+        final signatures = await db.mediaDao.signaturesFor(
+          ownerKind: OwnerKind.checklistDraft,
+          ownerKey: 'draft-1',
+        );
+        expect(
+          signatures,
+          hasLength(3),
+          reason:
+              'a shared slot let only the last signature reach the database '
+              'while every tile read signed',
+        );
+        expect(
+          signatures.map((CapturedSignature s) => s.fieldKey),
+          unorderedEquals(<String>[
+            'sig-mechanic',
+            'sig-electrician',
+            primaryField,
+          ]),
+        );
+      },
+    );
 
     test('re-signing one field replaces that field and nothing else', () async {
       await db.mediaDao.saveSignature(
@@ -416,7 +430,8 @@ void main() {
       expect(
         mechanic.source,
         SignatureSource.drawn,
-        reason: 'a mark drawn now always beats the saved one, and the screen '
+        reason:
+            'a mark drawn now always beats the saved one, and the screen '
             'must be able to say which',
       );
     });
@@ -445,7 +460,8 @@ void main() {
           ownerKey: 'draft-1',
         ),
         isTrue,
-        reason: 'a template with require_signature and no signature FIELD was '
+        reason:
+            'a template with require_signature and no signature FIELD was '
             'unsubmittable, and the work was lost on back-out',
       );
     });

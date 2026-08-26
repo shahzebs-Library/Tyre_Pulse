@@ -133,10 +133,7 @@ class TpInput extends StatelessWidget {
               palette.critical.base,
               TpBorderWidth.strong,
             ),
-            disabledBorder: borderWith(
-              palette.border,
-              TpBorderWidth.hairline,
-            ),
+            disabledBorder: borderWith(palette.border, TpBorderWidth.hairline),
           ),
         ),
       ],

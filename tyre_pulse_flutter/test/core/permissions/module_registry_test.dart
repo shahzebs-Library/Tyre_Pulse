@@ -122,11 +122,7 @@ const Map<ModuleKey, Set<RoleId>> expectedDefaults = <ModuleKey, Set<RoleId>>{
     RoleId.workshopMaintenanceAreaManager,
   },
   ModuleKey.history: <RoleId>{},
-  ModuleKey.alerts: <RoleId>{
-    RoleId.manager,
-    RoleId.director,
-    RoleId.inspector,
-  },
+  ModuleKey.alerts: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
   ModuleKey.calendar: <RoleId>{
     RoleId.manager,
     RoleId.director,
@@ -149,24 +145,10 @@ const Map<ModuleKey, Set<RoleId>> expectedDefaults = <ModuleKey, Set<RoleId>>{
     RoleId.inspector,
   },
   ModuleKey.workorders: <RoleId>{},
-  ModuleKey.rca: <RoleId>{
-    RoleId.manager,
-    RoleId.director,
-    RoleId.inspector,
-  },
-  ModuleKey.tasks: <RoleId>{
-    RoleId.manager,
-    RoleId.director,
-    RoleId.inspector,
-  },
-  ModuleKey.stock: <RoleId>{
-    RoleId.manager,
-    RoleId.inspector,
-  },
-  ModuleKey.pm: <RoleId>{
-    RoleId.manager,
-    RoleId.director,
-  },
+  ModuleKey.rca: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
+  ModuleKey.tasks: <RoleId>{RoleId.manager, RoleId.director, RoleId.inspector},
+  ModuleKey.stock: <RoleId>{RoleId.manager, RoleId.inspector},
+  ModuleKey.pm: <RoleId>{RoleId.manager, RoleId.director},
   ModuleKey.workshop: <RoleId>{
     RoleId.manager,
     RoleId.director,
@@ -216,10 +198,14 @@ void main() {
       expect(ModuleRegistry.all, hasLength(31));
       expect(ModuleKey.values, hasLength(31));
 
-      final Set<ModuleKey> defined =
-          ModuleRegistry.all.map((ModuleDef d) => d.key).toSet();
-      expect(defined, hasLength(ModuleRegistry.all.length),
-          reason: 'a module key is defined twice');
+      final Set<ModuleKey> defined = ModuleRegistry.all
+          .map((ModuleDef d) => d.key)
+          .toSet();
+      expect(
+        defined,
+        hasLength(ModuleRegistry.all.length),
+        reason: 'a module key is defined twice',
+      );
       expect(defined, containsAll(ModuleKey.values));
     });
 
@@ -228,7 +214,8 @@ void main() {
         expect(
           () => ModuleRegistry.definitionFor(key),
           returnsNormally,
-          reason: 'ModuleKey.${key.name} has no ModuleDef. In the TypeScript '
+          reason:
+              'ModuleKey.${key.name} has no ModuleDef. In the TypeScript '
               'app the same gap left MODULE_BY_KEY[key] undefined and denied '
               'the whole fleet at runtime while compiling cleanly.',
         );
@@ -239,8 +226,11 @@ void main() {
       final Set<String> wireKeys = <String>{};
       for (final ModuleKey key in ModuleKey.values) {
         expect(key.wireKey, key.name);
-        expect(wireKeys.add(key.wireKey), isTrue,
-            reason: 'duplicate wire key ${key.wireKey}');
+        expect(
+          wireKeys.add(key.wireKey),
+          isTrue,
+          reason: 'duplicate wire key ${key.wireKey}',
+        );
       }
     });
 
@@ -270,8 +260,11 @@ void main() {
       // put the break-glass in two places, and the resolver is the one place
       // it belongs.
       for (final ModuleDef def in ModuleRegistry.all) {
-        expect(def.defaultRoles.contains(RoleId.admin), isFalse,
-            reason: '${def.key.wireKey} lists admin explicitly');
+        expect(
+          def.defaultRoles.contains(RoleId.admin),
+          isFalse,
+          reason: '${def.key.wireKey} lists admin explicitly',
+        );
       }
     });
   });
@@ -299,8 +292,11 @@ void main() {
       // registry.
       for (final ModuleDef def in ModuleRegistry.all) {
         if (!def.isAdminOnly) {
-          expect(def.defaultRoles, isNotEmpty,
-              reason: '${def.key.wireKey} has neither roles nor adminOnly');
+          expect(
+            def.defaultRoles,
+            isNotEmpty,
+            reason: '${def.key.wireKey} has neither roles nor adminOnly',
+          );
         }
       }
     });
@@ -321,10 +317,11 @@ void main() {
 
   group('sensitive modules', () {
     test('are exactly admin, users and approvals', () {
-      expect(
-        ModuleRegistry.sensitive,
-        <ModuleKey>{ModuleKey.admin, ModuleKey.users, ModuleKey.approvals},
-      );
+      expect(ModuleRegistry.sensitive, <ModuleKey>{
+        ModuleKey.admin,
+        ModuleKey.users,
+        ModuleKey.approvals,
+      });
     });
 
     test('isSensitive agrees with the set', () {

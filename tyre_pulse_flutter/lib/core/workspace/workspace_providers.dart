@@ -39,8 +39,8 @@ final workspaceSwitcherProvider = Provider<WorkspaceSwitcher>(
 /// The active workspace and its lifecycle.
 final workspaceControllerProvider =
     NotifierProvider<WorkspaceController, WorkspaceState>(
-  WorkspaceController.new,
-);
+      WorkspaceController.new,
+    );
 
 /// Holds the active workspace.
 ///
@@ -86,11 +86,9 @@ final class WorkspaceController extends Notifier<WorkspaceState> {
 
     state = state.copyWith(isResolving: true, clearLastError: true);
 
-    final WorkspaceSwitchOutcome outcome =
-        await ref.read(workspaceSwitcherProvider).switchTo(
-              current: current,
-              selection: selection,
-            );
+    final WorkspaceSwitchOutcome outcome = await ref
+        .read(workspaceSwitcherProvider)
+        .switchTo(current: current, selection: selection);
 
     state = switch (outcome) {
       WorkspaceSwitchApplied(
@@ -98,8 +96,10 @@ final class WorkspaceController extends Notifier<WorkspaceState> {
         warnings: final List<AppError> warnings,
       ) =>
         WorkspaceState(workspace: next, warnings: warnings),
-      WorkspaceSwitchRefused(error: final AppError error) =>
-        state.copyWith(isResolving: false, lastError: error),
+      WorkspaceSwitchRefused(error: final AppError error) => state.copyWith(
+        isResolving: false,
+        lastError: error,
+      ),
     };
   }
 }
@@ -119,8 +119,8 @@ final activeCountryProvider = Provider<String?>(
 
 /// The country scope from `profiles.country`, the ARRAY.
 final countryScopeProvider = Provider<CountryScope>(
-  (ref) => ref.watch(workspaceContextProvider)?.countryScope ??
-      CountryScope.none,
+  (ref) =>
+      ref.watch(workspaceContextProvider)?.countryScope ?? CountryScope.none,
 );
 
 /// The site scope from `profiles.sites`, the ARRAY. Not the legacy scalar.

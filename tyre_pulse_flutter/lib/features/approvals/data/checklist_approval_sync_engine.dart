@@ -125,8 +125,8 @@ final class ChecklistApprovalSyncEngine {
   ChecklistApprovalSyncEngine({
     required ChecklistApprovalDecisionQueue queue,
     required ChecklistApprovalRepository repository,
-  })  : _queue = queue,
-        _repository = repository;
+  }) : _queue = queue,
+       _repository = repository;
 
   final ChecklistApprovalDecisionQueue _queue;
   final ChecklistApprovalRepository _repository;
@@ -155,26 +155,27 @@ final class ChecklistApprovalSyncEngine {
     String? approverId,
     String? reviewNote,
   }) async {
-    final QueuedChecklistApprovalDecision item = QueuedChecklistApprovalDecision(
-      id: QueuedChecklistApprovalDecision.dedupeKeyFor(
-        submissionId: submissionId,
-        targetStatus: targetStatus,
-      ),
-      submissionId: submissionId,
-      stage: stage,
-      priorApprovalStatus: priorApprovalStatus,
-      targetStatus: targetStatus,
-      approved: approved,
-      decidedAt: DateTime.now(),
-      // Already resolved to `approved ? theSignature : null` - a rejection
-      // never carries a signature, matching `mobile/lib/checklists.ts`'s
-      // own `const signature = input.approved ? (input.approverSignature
-      // ?? null) : null`.
-      approverSignature: approved ? approverSignature : null,
-      approverName: approverName,
-      approverId: approverId,
-      reviewNote: reviewNote,
-    );
+    final QueuedChecklistApprovalDecision item =
+        QueuedChecklistApprovalDecision(
+          id: QueuedChecklistApprovalDecision.dedupeKeyFor(
+            submissionId: submissionId,
+            targetStatus: targetStatus,
+          ),
+          submissionId: submissionId,
+          stage: stage,
+          priorApprovalStatus: priorApprovalStatus,
+          targetStatus: targetStatus,
+          approved: approved,
+          decidedAt: DateTime.now(),
+          // Already resolved to `approved ? theSignature : null` - a rejection
+          // never carries a signature, matching `mobile/lib/checklists.ts`'s
+          // own `const signature = input.approved ? (input.approverSignature
+          // ?? null) : null`.
+          approverSignature: approved ? approverSignature : null,
+          approverName: approverName,
+          approverId: approverId,
+          reviewNote: reviewNote,
+        );
 
     // Durable commit point FIRST - see the library comment.
     await _queue.enqueue(item);
@@ -202,8 +203,9 @@ final class ChecklistApprovalSyncEngine {
     for (final QueuedChecklistApprovalDecision item in read.items) {
       if (item.status != ChecklistApprovalQueueStatus.pending) continue;
       attempted++;
-      final ChecklistApprovalDecisionResult result =
-          await _attemptDelivery(item);
+      final ChecklistApprovalDecisionResult result = await _attemptDelivery(
+        item,
+      );
       if (result.outcome == ChecklistApprovalDecisionOutcome.deliveredNow) {
         delivered++;
       } else if (result.outcome == ChecklistApprovalDecisionOutcome.blocked) {
@@ -253,14 +255,16 @@ final class ChecklistApprovalSyncEngine {
       // retried, exactly as `InspectionSyncEngine._attemptDelivery`
       // re-resolves photo paths from the draft on every attempt rather
       // than trusting a possibly-stale snapshot.
-      final ChecklistApprovalItem? current =
-          await _repository.byId(item.submissionId);
+      final ChecklistApprovalItem? current = await _repository.byId(
+        item.submissionId,
+      );
       if (current == null) {
         return _block(
           item,
           const AppError(
             kind: AppErrorKind.validation,
-            message: 'This checklist could not be found. It may have '
+            message:
+                'This checklist could not be found. It may have '
                 'been removed.',
           ),
         );
@@ -271,8 +275,8 @@ final class ChecklistApprovalSyncEngine {
       if (templateId != null && templateId.isNotEmpty) {
         templateInfo = await _repository.templateInfo(templateId);
       }
-      final ApprovalTemplateLike templateLike = templateInfo?.asTemplateLike ??
-          const ApprovalTemplateLike();
+      final ApprovalTemplateLike templateLike =
+          templateInfo?.asTemplateLike ?? const ApprovalTemplateLike();
 
       final ApprovalStage? currentStage = stageFor(
         templateLike,
@@ -290,8 +294,8 @@ final class ChecklistApprovalSyncEngine {
         );
       }
 
-      final ChecklistApprovalApplyResult applied =
-          await _repository.applyDecision(item);
+      final ChecklistApprovalApplyResult applied = await _repository
+          .applyDecision(item);
       if (applied == ChecklistApprovalApplyResult.conflict) {
         // The database's own optimistic-concurrency guard caught what the
         // stage re-check above did not - the narrow window between that
@@ -299,7 +303,8 @@ final class ChecklistApprovalSyncEngine {
         return _block(
           item,
           const AppError.conflict(
-            technical: 'checklist submission approval_status changed '
+            technical:
+                'checklist submission approval_status changed '
                 'since decision (server-side guard)',
           ),
         );

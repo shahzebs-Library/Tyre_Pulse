@@ -44,7 +44,8 @@ void main() {
         expect(
           next.from,
           current.to + 1,
-          reason: 'page $page ends at ${current.to}, '
+          reason:
+              'page $page ends at ${current.to}, '
               'page ${page + 1} must start at ${current.to + 1}',
         );
       }

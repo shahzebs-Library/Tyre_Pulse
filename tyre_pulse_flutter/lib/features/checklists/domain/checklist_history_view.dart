@@ -71,10 +71,7 @@ final class ChecklistHistorySearchRow {
 
 /// Case-insensitive match over the fields a history row actually shows.
 /// Mirrors `matchesHistorySearch`.
-bool matchesChecklistHistorySearch(
-  ChecklistHistorySearchRow row,
-  String term,
-) {
+bool matchesChecklistHistorySearch(ChecklistHistorySearchRow row, String term) {
   final String q = term.trim().toLowerCase();
   if (q.isEmpty) return true;
   for (final String? v in <String?>[

@@ -13,8 +13,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/query_scope.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -33,9 +32,9 @@ import '../../../core/database/database_test_support.dart';
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _row(int n) => <String, dynamic>{
-      'id': 'row-$n',
-      'asset_no': 'TM${n.toString().padLeft(4, '0')}',
-    };
+  'id': 'row-$n',
+  'asset_no': 'TM${n.toString().padLeft(4, '0')}',
+};
 
 // ---------------------------------------------------------------------------
 // fetchAllPages - pure, no Supabase type involved.
@@ -52,71 +51,77 @@ void main() {
       final List<(int, int)> windows = <(int, int)>[];
       final PagedRows<Map<String, dynamic>> result =
           await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async {
-          windows.add((from, to));
-          if (from >= 6) {
-            return const <Map<String, dynamic>>[];
-          }
-          final int end = (from + 3).clamp(0, 6);
-          return List<Map<String, dynamic>>.generate(
-            end - from,
-            (int i) => _row(from + i),
+            (int from, int to) async {
+              windows.add((from, to));
+              if (from >= 6) {
+                return const <Map<String, dynamic>>[];
+              }
+              final int end = (from + 3).clamp(0, 6);
+              return List<Map<String, dynamic>>.generate(
+                end - from,
+                (int i) => _row(from + i),
+              );
+            },
+            pageSize: 3,
+            maxRows: 100,
           );
-        },
-        pageSize: 3,
-        maxRows: 100,
-      );
 
       expect(result.rows.length, 6);
       expect(result.truncated, isFalse);
       expect(windows, <(int, int)>[(0, 2), (3, 5), (6, 8)]);
     });
 
-    test('a short final page stops the loop without a further round trip',
-        () async {
-      int calls = 0;
-      final PagedRows<Map<String, dynamic>> result =
-          await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async {
-          calls++;
-          if (from == 0) {
-            return List<Map<String, dynamic>>.generate(3, _row);
-          }
-          return const <Map<String, dynamic>>[];
-        },
-        pageSize: 5,
-        maxRows: 100,
-      );
+    test(
+      'a short final page stops the loop without a further round trip',
+      () async {
+        int calls = 0;
+        final PagedRows<Map<String, dynamic>> result =
+            await fetchAllPages<Map<String, dynamic>>(
+              (int from, int to) async {
+                calls++;
+                if (from == 0) {
+                  return List<Map<String, dynamic>>.generate(3, _row);
+                }
+                return const <Map<String, dynamic>>[];
+              },
+              pageSize: 5,
+              maxRows: 100,
+            );
 
-      expect(result.rows.length, 3);
-      expect(result.truncated, isFalse);
-      expect(calls, 1);
-    });
+        expect(result.rows.length, 3);
+        expect(result.truncated, isFalse);
+        expect(calls, 1);
+      },
+    );
 
-    test('an empty first page returns an empty, non-truncated result',
-        () async {
-      final PagedRows<Map<String, dynamic>> result =
-          await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async => const <Map<String, dynamic>>[],
-        pageSize: 10,
-        maxRows: 100,
-      );
-      expect(result.rows, isEmpty);
-      expect(result.truncated, isFalse);
-    });
+    test(
+      'an empty first page returns an empty, non-truncated result',
+      () async {
+        final PagedRows<Map<String, dynamic>> result =
+            await fetchAllPages<Map<String, dynamic>>(
+              (int from, int to) async => const <Map<String, dynamic>>[],
+              pageSize: 10,
+              maxRows: 100,
+            );
+        expect(result.rows, isEmpty);
+        expect(result.truncated, isFalse);
+      },
+    );
 
-    test('reaching maxRows with every window still full reports truncated',
-        () async {
-      final PagedRows<Map<String, dynamic>> result =
-          await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async =>
-            List<Map<String, dynamic>>.generate(to - from + 1, _row),
-        pageSize: 4,
-        maxRows: 12,
-      );
-      expect(result.rows.length, 12);
-      expect(result.truncated, isTrue);
-    });
+    test(
+      'reaching maxRows with every window still full reports truncated',
+      () async {
+        final PagedRows<Map<String, dynamic>> result =
+            await fetchAllPages<Map<String, dynamic>>(
+              (int from, int to) async =>
+                  List<Map<String, dynamic>>.generate(to - from + 1, _row),
+              pageSize: 4,
+              maxRows: 12,
+            );
+        expect(result.rows.length, 12);
+        expect(result.truncated, isTrue);
+      },
+    );
 
     test('pageSize above 1000 is clamped to 1000, PostgREST own response '
         'cap', () async {
@@ -138,37 +143,39 @@ void main() {
       int calls = 0;
       final PagedRows<Map<String, dynamic>> result =
           await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async {
-          calls++;
-          return const <Map<String, dynamic>>[];
-        },
-        pageSize: 0,
-        maxRows: 3,
-      );
+            (int from, int to) async {
+              calls++;
+              return const <Map<String, dynamic>>[];
+            },
+            pageSize: 0,
+            maxRows: 3,
+          );
       expect(result.rows, isEmpty);
       expect(calls, 1);
     });
 
-    test('a maxRows narrower than pageSize is raised to pageSize rather than '
-        'reporting a full page as truncated when it could not have been',
-        () async {
-      // pageSize 10 but maxRows 3: the cap must be raised to 10 (the
-      // boundedPageSize), so a single window of the FULL 10 is requested,
-      // and returning fewer than 10 correctly reports NOT truncated.
-      final List<(int, int)> windows = <(int, int)>[];
-      final PagedRows<Map<String, dynamic>> result =
-          await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async {
-          windows.add((from, to));
-          return List<Map<String, dynamic>>.generate(2, _row);
-        },
-        pageSize: 10,
-        maxRows: 3,
-      );
-      expect(windows.single, (0, 9));
-      expect(result.rows.length, 2);
-      expect(result.truncated, isFalse);
-    });
+    test(
+      'a maxRows narrower than pageSize is raised to pageSize rather than '
+      'reporting a full page as truncated when it could not have been',
+      () async {
+        // pageSize 10 but maxRows 3: the cap must be raised to 10 (the
+        // boundedPageSize), so a single window of the FULL 10 is requested,
+        // and returning fewer than 10 correctly reports NOT truncated.
+        final List<(int, int)> windows = <(int, int)>[];
+        final PagedRows<Map<String, dynamic>> result =
+            await fetchAllPages<Map<String, dynamic>>(
+              (int from, int to) async {
+                windows.add((from, to));
+                return List<Map<String, dynamic>>.generate(2, _row);
+              },
+              pageSize: 10,
+              maxRows: 3,
+            );
+        expect(windows.single, (0, 9));
+        expect(result.rows.length, 2);
+        expect(result.truncated, isFalse);
+      },
+    );
 
     test('a narrowed final window that comes back exactly full is judged '
         'against ITS OWN width, not the nominal pageSize, and correctly '
@@ -180,13 +187,13 @@ void main() {
       final List<(int, int)> windows = <(int, int)>[];
       final PagedRows<Map<String, dynamic>> result =
           await fetchAllPages<Map<String, dynamic>>(
-        (int from, int to) async {
-          windows.add((from, to));
-          return List<Map<String, dynamic>>.generate(to - from + 1, _row);
-        },
-        pageSize: 5,
-        maxRows: 12,
-      );
+            (int from, int to) async {
+              windows.add((from, to));
+              return List<Map<String, dynamic>>.generate(to - from + 1, _row);
+            },
+            pageSize: 5,
+            maxRows: 12,
+          );
       expect(windows, <(int, int)>[(0, 4), (5, 9), (10, 11)]);
       expect(result.rows.length, 12);
       expect(result.truncated, isTrue);
@@ -250,17 +257,21 @@ void main() {
 
     test('the tyreAssetClassFilter sentinel narrows to tyre-carrying '
         'classes only', () {
-      final List<VehicleAsset> result =
-          applyVehicleFilters(assets, assetClassFilter: tyreAssetClassFilter);
-      expect(
-        result.map((VehicleAsset a) => a.assetNo).toSet(),
-        <String>{'TM001', 'MP001'},
+      final List<VehicleAsset> result = applyVehicleFilters(
+        assets,
+        assetClassFilter: tyreAssetClassFilter,
       );
+      expect(result.map((VehicleAsset a) => a.assetNo).toSet(), <String>{
+        'TM001',
+        'MP001',
+      });
     });
 
     test('a specific class code narrows to exactly that class', () {
-      final List<VehicleAsset> result =
-          applyVehicleFilters(assets, assetClassFilter: 'GN');
+      final List<VehicleAsset> result = applyVehicleFilters(
+        assets,
+        assetClassFilter: 'GN',
+      );
       expect(result.map((VehicleAsset a) => a.assetNo), <String>['GN001']);
     });
 
@@ -293,17 +304,19 @@ void main() {
       expect(vehicleCacheScopeFor(workspace), isNull);
     });
 
-    test('a workspace with a companyId and an active country resolves both',
-        () {
-      final WorkspaceContext workspace = _workspace(
-        companyId: workspaceA,
-        activeCountry: 'KSA',
-      );
-      final WorkspaceScopeFilter? scope = vehicleCacheScopeFor(workspace);
-      expect(scope, isNotNull);
-      expect(scope!.workspaceId, workspaceA);
-      expect(scope.country, 'KSA');
-    });
+    test(
+      'a workspace with a companyId and an active country resolves both',
+      () {
+        final WorkspaceContext workspace = _workspace(
+          companyId: workspaceA,
+          activeCountry: 'KSA',
+        );
+        final WorkspaceScopeFilter? scope = vehicleCacheScopeFor(workspace);
+        expect(scope, isNotNull);
+        expect(scope!.workspaceId, workspaceA);
+        expect(scope.country, 'KSA');
+      },
+    );
 
     test('a workspace with a companyId but no active country resolves a '
         'country-less scope - "every country this workspace may see", not '
@@ -330,64 +343,75 @@ void main() {
       );
       final VehicleFleetRepository repo = VehicleFleetRepository(source);
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: null, country: 'KSA');
+      final VehicleFleetListOutcome outcome = await repo.loadAll(
+        scope: null,
+        country: 'KSA',
+      );
 
       expect(outcome, isA<VehicleFleetListLoaded>());
-      final VehicleFleetListLoaded loaded =
-          outcome as VehicleFleetListLoaded;
+      final VehicleFleetListLoaded loaded = outcome as VehicleFleetListLoaded;
       expect(loaded.assets.length, 1003);
       expect(loaded.truncated, isFalse);
       expect(source.fetchPageCalls, 2);
     });
 
-    test('a connectivity failure falls back to a matching cache entry',
-        () async {
-      final AppDatabase db = newMemoryDatabase();
-      addTearDown(db.close);
-      await db.cacheDao.replaceAssets(
-        scope: scopeA,
-        rows: <CachedAssetsCompanion>[
-          assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
-          assetRow(id: 'c2', workspaceId: workspaceA, assetNo: 'TM515'),
-        ],
-        now: testNow,
-      );
+    test(
+      'a connectivity failure falls back to a matching cache entry',
+      () async {
+        final AppDatabase db = newMemoryDatabase();
+        addTearDown(db.close);
+        await db.cacheDao.replaceAssets(
+          scope: scopeA,
+          rows: <CachedAssetsCompanion>[
+            assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
+            assetRow(id: 'c2', workspaceId: workspaceA, assetNo: 'TM515'),
+          ],
+          now: testNow,
+        );
 
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
-        throwOnFetch: const SocketException('no route to host'),
-      );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+          throwOnFetch: const SocketException('no route to host'),
+        );
+        final VehicleFleetRepository repo = VehicleFleetRepository(
+          source,
+          cacheDao: db.cacheDao,
+        );
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: scopeA, country: null);
+        final VehicleFleetListOutcome outcome = await repo.loadAll(
+          scope: scopeA,
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleFleetListFromCache>());
-      final VehicleFleetListFromCache fromCache =
-          outcome as VehicleFleetListFromCache;
-      expect(fromCache.assets.length, 2);
-      expect(
-        fromCache.assets.map((VehicleAsset a) => a.assetNo).toSet(),
-        <String>{'TM514', 'TM515'},
-      );
-      expectSameInstant(fromCache.cachedAt!, testNow);
-    });
+        expect(outcome, isA<VehicleFleetListFromCache>());
+        final VehicleFleetListFromCache fromCache =
+            outcome as VehicleFleetListFromCache;
+        expect(fromCache.assets.length, 2);
+        expect(
+          fromCache.assets.map((VehicleAsset a) => a.assetNo).toSet(),
+          <String>{'TM514', 'TM515'},
+        );
+        expectSameInstant(fromCache.cachedAt!, testNow);
+      },
+    );
 
-    test('a connectivity failure with no CacheDao configured fails cleanly',
-        () async {
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
-        throwOnFetch: const SocketException('no route to host'),
-      );
-      final VehicleFleetRepository repo = VehicleFleetRepository(source);
+    test(
+      'a connectivity failure with no CacheDao configured fails cleanly',
+      () async {
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+          throwOnFetch: const SocketException('no route to host'),
+        );
+        final VehicleFleetRepository repo = VehicleFleetRepository(source);
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: scopeA, country: null);
+        final VehicleFleetListOutcome outcome = await repo.loadAll(
+          scope: scopeA,
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleFleetListFailed>());
-      final VehicleFleetListFailed failed = outcome as VehicleFleetListFailed;
-      expect(failed.error.kind, AppErrorKind.network);
-    });
+        expect(outcome, isA<VehicleFleetListFailed>());
+        final VehicleFleetListFailed failed = outcome as VehicleFleetListFailed;
+        expect(failed.error.kind, AppErrorKind.network);
+      },
+    );
 
     test('a connectivity failure with a CacheDao but a null scope fails - '
         'there is nothing to filter the cache read by', () async {
@@ -404,39 +428,49 @@ void main() {
       final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
         throwOnFetch: const SocketException('no route to host'),
       );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+      final VehicleFleetRepository repo = VehicleFleetRepository(
+        source,
+        cacheDao: db.cacheDao,
+      );
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: null, country: null);
+      final VehicleFleetListOutcome outcome = await repo.loadAll(
+        scope: null,
+        country: null,
+      );
 
       expect(outcome, isA<VehicleFleetListFailed>());
     });
 
-    test('a connectivity failure with a CacheDao but no rows for that '
-        'scope fails, rather than surfacing another workspace\'s cache',
-        () async {
-      final AppDatabase db = newMemoryDatabase();
-      addTearDown(db.close);
-      await db.cacheDao.replaceAssets(
-        scope: scopeB,
-        rows: <CachedAssetsCompanion>[
-          assetRow(id: 'c1', workspaceId: workspaceB, assetNo: 'TM999'),
-        ],
-        now: testNow,
-      );
+    test(
+      'a connectivity failure with a CacheDao but no rows for that '
+      'scope fails, rather than surfacing another workspace\'s cache',
+      () async {
+        final AppDatabase db = newMemoryDatabase();
+        addTearDown(db.close);
+        await db.cacheDao.replaceAssets(
+          scope: scopeB,
+          rows: <CachedAssetsCompanion>[
+            assetRow(id: 'c1', workspaceId: workspaceB, assetNo: 'TM999'),
+          ],
+          now: testNow,
+        );
 
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
-        throwOnFetch: const SocketException('no route to host'),
-      );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+          throwOnFetch: const SocketException('no route to host'),
+        );
+        final VehicleFleetRepository repo = VehicleFleetRepository(
+          source,
+          cacheDao: db.cacheDao,
+        );
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: scopeA, country: null);
+        final VehicleFleetListOutcome outcome = await repo.loadAll(
+          scope: scopeA,
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleFleetListFailed>());
-    });
+        expect(outcome, isA<VehicleFleetListFailed>());
+      },
+    );
 
     test('a NON-connectivity failure never consults the cache, even when a '
         'matching entry exists - a permission refusal is a fact about this '
@@ -457,11 +491,15 @@ void main() {
           code: '42501',
         ),
       );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+      final VehicleFleetRepository repo = VehicleFleetRepository(
+        source,
+        cacheDao: db.cacheDao,
+      );
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: scopeA, country: null);
+      final VehicleFleetListOutcome outcome = await repo.loadAll(
+        scope: scopeA,
+        country: null,
+      );
 
       expect(outcome, isA<VehicleFleetListFailed>());
       final VehicleFleetListFailed failed = outcome as VehicleFleetListFailed;
@@ -488,11 +526,15 @@ void main() {
           ],
         ],
       );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+      final VehicleFleetRepository repo = VehicleFleetRepository(
+        source,
+        cacheDao: db.cacheDao,
+      );
 
-      final VehicleFleetListOutcome outcome =
-          await repo.loadAll(scope: scopeA, country: null);
+      final VehicleFleetListOutcome outcome = await repo.loadAll(
+        scope: scopeA,
+        country: null,
+      );
 
       expect(outcome, isA<VehicleFleetListFailed>());
       final VehicleFleetListFailed failed = outcome as VehicleFleetListFailed;
@@ -521,19 +563,21 @@ void main() {
       expect((outcome as VehicleDetailLoaded).asset.id, 'row-1');
     });
 
-    test('the source returning null is a genuine not-found, not an error',
-        () async {
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource();
-      final VehicleFleetRepository repo = VehicleFleetRepository(source);
+    test(
+      'the source returning null is a genuine not-found, not an error',
+      () async {
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource();
+        final VehicleFleetRepository repo = VehicleFleetRepository(source);
 
-      final VehicleDetailOutcome outcome = await repo.byAssetNo(
-        scope: null,
-        assetNo: 'TM9999',
-        country: null,
-      );
+        final VehicleDetailOutcome outcome = await repo.byAssetNo(
+          scope: null,
+          assetNo: 'TM9999',
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleDetailNotFound>());
-    });
+        expect(outcome, isA<VehicleDetailNotFound>());
+      },
+    );
 
     test('a blank asset number is not-found WITHOUT ever calling the '
         'source - there is no value in `vehicle_fleet` an empty string '
@@ -553,93 +597,105 @@ void main() {
       expect(source.fetchByAssetNoCalls, 0);
     });
 
-    test('a connectivity failure falls back to a matching cached detail row',
-        () async {
-      final AppDatabase db = newMemoryDatabase();
-      addTearDown(db.close);
-      await db.cacheDao.replaceAssets(
-        scope: scopeA,
-        rows: <CachedAssetsCompanion>[
-          assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
-        ],
-        now: testNow,
-      );
+    test(
+      'a connectivity failure falls back to a matching cached detail row',
+      () async {
+        final AppDatabase db = newMemoryDatabase();
+        addTearDown(db.close);
+        await db.cacheDao.replaceAssets(
+          scope: scopeA,
+          rows: <CachedAssetsCompanion>[
+            assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
+          ],
+          now: testNow,
+        );
 
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
-        throwOnDetail: const SocketException('no route to host'),
-      );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+          throwOnDetail: const SocketException('no route to host'),
+        );
+        final VehicleFleetRepository repo = VehicleFleetRepository(
+          source,
+          cacheDao: db.cacheDao,
+        );
 
-      final VehicleDetailOutcome outcome = await repo.byAssetNo(
-        scope: scopeA,
-        assetNo: 'TM514',
-        country: null,
-      );
+        final VehicleDetailOutcome outcome = await repo.byAssetNo(
+          scope: scopeA,
+          assetNo: 'TM514',
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleDetailFromCache>());
-      final VehicleDetailFromCache fromCache =
-          outcome as VehicleDetailFromCache;
-      expect(fromCache.asset.assetNo, 'TM514');
-      expectSameInstant(fromCache.cachedAt!, testNow);
-    });
+        expect(outcome, isA<VehicleDetailFromCache>());
+        final VehicleDetailFromCache fromCache =
+            outcome as VehicleDetailFromCache;
+        expect(fromCache.asset.assetNo, 'TM514');
+        expectSameInstant(fromCache.cachedAt!, testNow);
+      },
+    );
 
-    test('a connectivity failure with no cached match for that asset fails',
-        () async {
-      final AppDatabase db = newMemoryDatabase();
-      addTearDown(db.close);
-      await db.cacheDao.replaceAssets(
-        scope: scopeA,
-        rows: <CachedAssetsCompanion>[
-          assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
-        ],
-        now: testNow,
-      );
+    test(
+      'a connectivity failure with no cached match for that asset fails',
+      () async {
+        final AppDatabase db = newMemoryDatabase();
+        addTearDown(db.close);
+        await db.cacheDao.replaceAssets(
+          scope: scopeA,
+          rows: <CachedAssetsCompanion>[
+            assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
+          ],
+          now: testNow,
+        );
 
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
-        throwOnDetail: const SocketException('no route to host'),
-      );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+          throwOnDetail: const SocketException('no route to host'),
+        );
+        final VehicleFleetRepository repo = VehicleFleetRepository(
+          source,
+          cacheDao: db.cacheDao,
+        );
 
-      final VehicleDetailOutcome outcome = await repo.byAssetNo(
-        scope: scopeA,
-        assetNo: 'TM999',
-        country: null,
-      );
+        final VehicleDetailOutcome outcome = await repo.byAssetNo(
+          scope: scopeA,
+          assetNo: 'TM999',
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleDetailFailed>());
-    });
+        expect(outcome, isA<VehicleDetailFailed>());
+      },
+    );
 
-    test('a NON-connectivity failure fails without consulting the cache',
-        () async {
-      final AppDatabase db = newMemoryDatabase();
-      addTearDown(db.close);
-      await db.cacheDao.replaceAssets(
-        scope: scopeA,
-        rows: <CachedAssetsCompanion>[
-          assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
-        ],
-        now: testNow,
-      );
+    test(
+      'a NON-connectivity failure fails without consulting the cache',
+      () async {
+        final AppDatabase db = newMemoryDatabase();
+        addTearDown(db.close);
+        await db.cacheDao.replaceAssets(
+          scope: scopeA,
+          rows: <CachedAssetsCompanion>[
+            assetRow(id: 'c1', workspaceId: workspaceA, assetNo: 'TM514'),
+          ],
+          now: testNow,
+        );
 
-      final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
-        throwOnDetail: const PostgrestException(
-          message: 'permission denied for table vehicle_fleet',
-          code: '42501',
-        ),
-      );
-      final VehicleFleetRepository repo =
-          VehicleFleetRepository(source, cacheDao: db.cacheDao);
+        final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
+          throwOnDetail: const PostgrestException(
+            message: 'permission denied for table vehicle_fleet',
+            code: '42501',
+          ),
+        );
+        final VehicleFleetRepository repo = VehicleFleetRepository(
+          source,
+          cacheDao: db.cacheDao,
+        );
 
-      final VehicleDetailOutcome outcome = await repo.byAssetNo(
-        scope: scopeA,
-        assetNo: 'TM514',
-        country: null,
-      );
+        final VehicleDetailOutcome outcome = await repo.byAssetNo(
+          scope: scopeA,
+          assetNo: 'TM514',
+          country: null,
+        );
 
-      expect(outcome, isA<VehicleDetailFailed>());
-    });
+        expect(outcome, isA<VehicleDetailFailed>());
+      },
+    );
   });
 }
 

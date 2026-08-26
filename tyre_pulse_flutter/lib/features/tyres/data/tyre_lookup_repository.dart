@@ -76,7 +76,8 @@ typedef RpcCaller = Future<Object?> Function(
 
 /// The columns [TyreLookupRecord.fromRow] reads. Kept as one constant so the
 /// query and the decoder cannot silently drift apart.
-const String _lookupColumns = 'id, brand, size, position, tyre_position, '
+const String _lookupColumns =
+    'id, brand, size, position, tyre_position, '
     'asset_no, site, tread_depth, pressure_reading';
 
 /// The columns [ScrapMark.fromRow] reads.
@@ -129,8 +130,8 @@ final class SupabaseTyreLookupRepository
   /// The production constructor. Reads go through [client]; RPC calls go
   /// through the caller [_defaultRpcCaller] builds from the same client.
   SupabaseTyreLookupRepository(SupabaseClient client)
-      : _client = client,
-        _rpc = _defaultRpcCaller(client);
+    : _client = client,
+      _rpc = _defaultRpcCaller(client);
 
   /// For tests only.
   ///
@@ -173,14 +174,12 @@ final class SupabaseTyreLookupRepository
     if (code.isEmpty) return null;
 
     final SupabaseClient client = _requireClient('lookupBySerial');
-    final List<Map<String, dynamic>> rows =
-        await guard<List<Map<String, dynamic>>>(() async {
+    final List<Map<String, dynamic>>
+    rows = await guard<List<Map<String, dynamic>>>(() async {
       final List<Map<String, dynamic>> result = await client
           .from(SupabaseTables.tyreRecords)
           .select(_lookupColumns)
-          .or(
-            'serial_no.eq.$code,serial_number.eq.$code,tyre_serial.eq.$code',
-          )
+          .or('serial_no.eq.$code,serial_number.eq.$code,tyre_serial.eq.$code')
           .limit(1);
       return result;
     });
@@ -195,16 +194,17 @@ final class SupabaseTyreLookupRepository
     if (code.isEmpty) return null;
 
     final SupabaseClient client = _requireClient('getScrapMark');
-    final Map<String, dynamic>? row =
-        await guard<Map<String, dynamic>?>(() async {
-      final Map<String, dynamic>? result = await client
-          .from(SupabaseTables.tyreStatusMarks)
-          .select(_scrapMarkColumns)
-          .eq('serial', code)
-          .eq('mark_type', 'scrap')
-          .maybeSingle();
-      return result;
-    });
+    final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
+      () async {
+        final Map<String, dynamic>? result = await client
+            .from(SupabaseTables.tyreStatusMarks)
+            .select(_scrapMarkColumns)
+            .eq('serial', code)
+            .eq('mark_type', 'scrap')
+            .maybeSingle();
+        return result;
+      },
+    );
 
     if (row == null) return null;
     return ScrapMark.fromRow(row);
@@ -235,7 +235,8 @@ final class SupabaseTyreLookupRepository
       throw const AppError(
         kind: AppErrorKind.authorization,
         message: 'You do not have permission to mark a tyre as scrapped.',
-        technical: 'tyre_scrap_allowed did not answer true before '
+        technical:
+            'tyre_scrap_allowed did not answer true before '
             'scrap_tyre_by_serial was attempted',
       );
     }
@@ -252,14 +253,14 @@ final class SupabaseTyreLookupRepository
 
   @override
   Future<void> unscrapBySerial(String rawSerial) async {
-    final String code =
-        _requireSerial(rawSerial, forMethod: 'unscrapBySerial');
+    final String code = _requireSerial(rawSerial, forMethod: 'unscrapBySerial');
 
     if (!await canUnscrap()) {
       throw const AppError(
         kind: AppErrorKind.authorization,
         message: 'You do not have permission to undo a scrap.',
-        technical: 'tyre_unscrap_allowed did not answer true before '
+        technical:
+            'tyre_unscrap_allowed did not answer true before '
             'unscrap_tyre_by_serial was attempted',
       );
     }

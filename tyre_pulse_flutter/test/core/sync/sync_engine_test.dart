@@ -72,8 +72,9 @@ class _FakeCommandPusher implements CommandPusher {
     final String? key = matchValue ?? payload['client_uuid'] as String?;
     final Queue<Object> queue =
         (key != null ? _scripts[key] : null) ?? _unkeyed;
-    final Object outcome =
-        queue.isNotEmpty ? queue.removeFirst() : const <Map<String, Object?>>[];
+    final Object outcome = queue.isNotEmpty
+        ? queue.removeFirst()
+        : const <Map<String, Object?>>[];
 
     if (outcome is SupabaseFailure) {
       throw outcome;
@@ -184,8 +185,7 @@ void main() {
 
   group('successful inserts', () {
     test('a successful insert reaches synced, is pruned, and carries a '
-        'defensively re-filtered payload with client_uuid attached',
-        () async {
+        'defensively re-filtered payload with client_uuid attached', () async {
       await seedCommand(
         db,
         id: 'cmd-1',
@@ -207,8 +207,10 @@ void main() {
         ..willReturnFor('idem-cmd-1', <Map<String, Object?>>[
           <String, Object?>{'id': 'row-1'},
         ]);
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -229,20 +231,23 @@ void main() {
       expect(
         call.payload.containsKey('not_a_real_column'),
         isFalse,
-        reason: 'anything outside the field allow-list must never reach '
+        reason:
+            'anything outside the field allow-list must never reach '
             'the pusher, even if it somehow reached the stored payload',
       );
       expect(
         call.payload['client_uuid'],
         'idem-cmd-1',
-        reason: "every insert must carry the command's own idempotency key "
+        reason:
+            "every insert must carry the command's own idempotency key "
             'so a duplicate on replay is a duplicate of a KNOWN row',
       );
 
       expect(
         await db.queueDao.commandById('cmd-1'),
         isNull,
-        reason: 'a synced command with no attached media has nothing left '
+        reason:
+            'a synced command with no attached media has nothing left '
             'to wait on and is pruned within the same pass',
       );
     });
@@ -262,8 +267,10 @@ void main() {
 
       final _FakeCommandPusher pusher = _FakeCommandPusher()
         ..willThrowFor('idem-cmd-1', _uniqueViolationFailure());
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -278,7 +285,8 @@ void main() {
       expect(
         stored,
         isNotNull,
-        reason: 'a conflict is recorded and stays in the queue - nothing '
+        reason:
+            'a conflict is recorded and stays in the queue - nothing '
             'that has not reached the server is ever discarded',
       );
       expect(stored!.status, CommandStatus.retry);
@@ -313,8 +321,10 @@ void main() {
       final DateTime later = testNow.add(const Duration(minutes: 1));
       final _FakeCommandPusher pusher = _FakeCommandPusher()
         ..willThrowFor('idem-cmd-1', _uniqueViolationFailure());
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -328,7 +338,8 @@ void main() {
       expect(
         await db.queueDao.commandById('cmd-1'),
         isNull,
-        reason: 'treated as synced, and pruned since it has no attached '
+        reason:
+            'treated as synced, and pruned since it has no attached '
             'media to wait on',
       );
     });
@@ -354,8 +365,10 @@ void main() {
 
       final _FakeCommandPusher pusher = _FakeCommandPusher()
         ..willReturnFor('wo-row-1', const <Map<String, Object?>>[]);
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -371,13 +384,15 @@ void main() {
       expect(
         call.payload.containsKey('id'),
         isFalse,
-        reason: 'the match column must never appear in the SET clause an '
+        reason:
+            'the match column must never appear in the SET clause an '
             'update sends, or the primary key would be rewritten',
       );
       expect(
         call.payload.containsKey(expectedPriorStatusPayloadKey),
         isFalse,
-        reason: 'the expected-prior-status hint is read to build the '
+        reason:
+            'the expected-prior-status hint is read to build the '
             'filter, never sent as a column',
       );
       expect(call.payload['status'], 'Completed');
@@ -386,7 +401,8 @@ void main() {
       expect(
         stored!.status,
         CommandStatus.retry,
-        reason: 'a stale-conflict update is recorded like any other '
+        reason:
+            'a stale-conflict update is recorded like any other '
             'failure - a person needs to see it, not have it silently '
             'dropped',
       );
@@ -413,8 +429,10 @@ void main() {
         ..willReturnFor('ca-row-1', <Map<String, Object?>>[
           <String, Object?>{'id': 'ca-row-1', 'status': 'closed'},
         ]);
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -428,8 +446,7 @@ void main() {
 
   group('media readiness gate', () {
     test('a requiresMediaReady command whose photo has not uploaded is '
-        'returned to pending and the pusher is never called for it',
-        () async {
+        'returned to pending and the pusher is never called for it', () async {
       await seedCommand(
         db,
         id: 'cmd-1',
@@ -450,7 +467,8 @@ void main() {
       expect(
         pusher.calls,
         isEmpty,
-        reason: 'the business row must never be written before its '
+        reason:
+            'the business row must never be written before its '
             'evidence is confirmed',
       );
       expect(summary.claimed, 1);
@@ -464,7 +482,8 @@ void main() {
       expect(
         stored.retryCount,
         0,
-        reason: 'waiting on evidence is not a failed attempt - '
+        reason:
+            'waiting on evidence is not a failed attempt - '
             'QueueDao.returnToPending must never touch the retry counter',
       );
       expect(stored.lastError, isNull);
@@ -505,7 +524,8 @@ void main() {
       expect(
         summary.synced,
         1,
-        reason: 'only the command whose photo actually reached the server '
+        reason:
+            'only the command whose photo actually reached the server '
             'this pass was pushed',
       );
       expect(summary.mediaPending, 1);
@@ -513,20 +533,23 @@ void main() {
       expect(
         await db.queueDao.commandById('cmd-ready'),
         isNull,
-        reason: 'synced with its one photo verified, so it was pruned in '
+        reason:
+            'synced with its one photo verified, so it was pruned in '
             'the same pass',
       );
 
       expect(
         pusher.calls,
         hasLength(1),
-        reason: 'the blocked command must never have reached the pusher '
+        reason:
+            'the blocked command must never have reached the pusher '
             'at all',
       );
       expect(pusher.calls.single.payload['client_uuid'], 'idem-cmd-ready');
 
-      final PendingCommand? blocked =
-          await db.queueDao.commandById('cmd-blocked');
+      final PendingCommand? blocked = await db.queueDao.commandById(
+        'cmd-blocked',
+      );
       expect(blocked!.status, CommandStatus.pending);
 
       final PendingMediaUpload blockedMedia =
@@ -534,7 +557,8 @@ void main() {
       expect(
         blockedMedia.state,
         MediaUploadState.queued,
-        reason: 'one failed attempt of maxUploadAttempts leaves it queued '
+        reason:
+            'one failed attempt of maxUploadAttempts leaves it queued '
             'for another try, not exhausted',
       );
     });
@@ -558,8 +582,10 @@ void main() {
         ..willReturnFor('idem-cmd-1', <Map<String, Object?>>[
           <String, Object?>{'id': 'row-1'},
         ]);
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -584,8 +610,10 @@ void main() {
       );
 
       final _FakeCommandPusher pusher = _FakeCommandPusher();
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -602,35 +630,38 @@ void main() {
   });
 
   group('the sync lock', () {
-    test('prevents two overlapping runs from both claiming the same batch',
-        () async {
-      await seedCommand(db, id: 'cmd-1');
-      await db.queueDao.acquireSyncLock(holder: 'someone-else', now: testNow);
+    test(
+      'prevents two overlapping runs from both claiming the same batch',
+      () async {
+        await seedCommand(db, id: 'cmd-1');
+        await db.queueDao.acquireSyncLock(holder: 'someone-else', now: testNow);
 
-      final _FakeCommandPusher pusher = _FakeCommandPusher();
-      final SyncEngine engine = buildEngine(
-        pusher: pusher,
-        uploader: _FakeMediaUploader(),
-        holderId: 'engine-under-test',
-      );
+        final _FakeCommandPusher pusher = _FakeCommandPusher();
+        final SyncEngine engine = buildEngine(
+          pusher: pusher,
+          uploader: _FakeMediaUploader(),
+          holderId: 'engine-under-test',
+        );
 
-      final SyncRunSummary summary = await engine.runOnce(
-        workspaceId: workspaceA,
-        now: testNow.add(const Duration(seconds: 1)),
-      );
+        final SyncRunSummary summary = await engine.runOnce(
+          workspaceId: workspaceA,
+          now: testNow.add(const Duration(seconds: 1)),
+        );
 
-      expect(summary.lockAcquired, isFalse);
-      expect(summary.claimed, 0);
-      expect(pusher.calls, isEmpty);
+        expect(summary.lockAcquired, isFalse);
+        expect(summary.claimed, 0);
+        expect(pusher.calls, isEmpty);
 
-      final PendingCommand? stored = await db.queueDao.commandById('cmd-1');
-      expect(
-        stored!.status,
-        CommandStatus.pending,
-        reason: 'a run that could not take the lock must not touch the '
-            'queue at all',
-      );
-    });
+        final PendingCommand? stored = await db.queueDao.commandById('cmd-1');
+        expect(
+          stored!.status,
+          CommandStatus.pending,
+          reason:
+              'a run that could not take the lock must not touch the '
+              'queue at all',
+        );
+      },
+    );
   });
 
   group('unblocking the active workspace', () {
@@ -653,8 +684,10 @@ void main() {
         ..willReturnFor('idem-cmd-1', <Map<String, Object?>>[
           <String, Object?>{'id': 'row-1'},
         ]);
-      final SyncEngine engine =
-          buildEngine(pusher: pusher, uploader: _FakeMediaUploader());
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
 
       final SyncRunSummary summary = await engine.runOnce(
         workspaceId: workspaceA,
@@ -664,7 +697,8 @@ void main() {
       expect(
         summary.synced,
         1,
-        reason: 'unblockForWorkspace runs before the claim step, so a row '
+        reason:
+            'unblockForWorkspace runs before the claim step, so a row '
             'blocked for the workspace that is active RIGHT NOW becomes '
             'claimable again within the same pass',
       );
@@ -675,8 +709,7 @@ void main() {
       );
     });
 
-    test('a command blocked for a DIFFERENT workspace stays blocked',
-        () async {
+    test('a command blocked for a DIFFERENT workspace stays blocked', () async {
       await seedCommand(db, id: 'cmd-a', workspaceId: workspaceA);
       await db.queueDao.blockCommand('cmd-a', reason: 'Another workspace.');
 
@@ -691,7 +724,8 @@ void main() {
       expect(
         stored!.status,
         CommandStatus.blocked,
-        reason: 'this run only unblocks rows captured in the workspace it '
+        reason:
+            'this run only unblocks rows captured in the workspace it '
             'was told is active - never a different one, which would be a '
             'cross-tenant write',
       );

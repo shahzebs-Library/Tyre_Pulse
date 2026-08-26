@@ -50,14 +50,14 @@ class TpButton extends StatelessWidget {
     bool isCompact = false,
     Key? key,
   }) : this(
-          label: label,
-          onPressed: onPressed,
-          icon: icon,
-          isBusy: isBusy,
-          isFullWidth: isFullWidth,
-          isCompact: isCompact,
-          key: key,
-        );
+         label: label,
+         onPressed: onPressed,
+         icon: icon,
+         isBusy: isBusy,
+         isFullWidth: isFullWidth,
+         isCompact: isCompact,
+         key: key,
+       );
 
   const TpButton.secondary({
     required String label,
@@ -68,15 +68,15 @@ class TpButton extends StatelessWidget {
     bool isCompact = false,
     Key? key,
   }) : this(
-          label: label,
-          onPressed: onPressed,
-          variant: TpButtonVariant.secondary,
-          icon: icon,
-          isBusy: isBusy,
-          isFullWidth: isFullWidth,
-          isCompact: isCompact,
-          key: key,
-        );
+         label: label,
+         onPressed: onPressed,
+         variant: TpButtonVariant.secondary,
+         icon: icon,
+         isBusy: isBusy,
+         isFullWidth: isFullWidth,
+         isCompact: isCompact,
+         key: key,
+       );
 
   const TpButton.danger({
     required String label,
@@ -87,15 +87,15 @@ class TpButton extends StatelessWidget {
     bool isCompact = false,
     Key? key,
   }) : this(
-          label: label,
-          onPressed: onPressed,
-          variant: TpButtonVariant.danger,
-          icon: icon,
-          isBusy: isBusy,
-          isFullWidth: isFullWidth,
-          isCompact: isCompact,
-          key: key,
-        );
+         label: label,
+         onPressed: onPressed,
+         variant: TpButtonVariant.danger,
+         icon: icon,
+         isBusy: isBusy,
+         isFullWidth: isFullWidth,
+         isCompact: isCompact,
+         key: key,
+       );
 
   const TpButton.text({
     required String label,
@@ -104,13 +104,13 @@ class TpButton extends StatelessWidget {
     bool isCompact = false,
     Key? key,
   }) : this(
-          label: label,
-          onPressed: onPressed,
-          variant: TpButtonVariant.text,
-          icon: icon,
-          isCompact: isCompact,
-          key: key,
-        );
+         label: label,
+         onPressed: onPressed,
+         variant: TpButtonVariant.text,
+         icon: icon,
+         isCompact: isCompact,
+         key: key,
+       );
 
   final String label;
 
@@ -138,14 +138,16 @@ class TpButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final double height =
-        isCompact ? TpSizing.controlHeightCompact : TpSizing.controlHeight;
+    final double height = isCompact
+        ? TpSizing.controlHeightCompact
+        : TpSizing.controlHeight;
     final Size minimumSize = Size(
       isFullWidth ? double.infinity : 0,
       height < TpSizing.minTouchTarget ? TpSizing.minTouchTarget : height,
     );
 
-    final TextStyle textStyle = Theme.of(context).textTheme.labelLarge ??
+    final TextStyle textStyle =
+        Theme.of(context).textTheme.labelLarge ??
         const TextStyle(fontWeight: FontWeight.w700);
 
     final Widget content = _Content(

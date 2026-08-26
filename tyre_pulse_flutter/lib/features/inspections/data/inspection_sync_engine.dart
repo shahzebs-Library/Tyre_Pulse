@@ -101,10 +101,10 @@ final class InspectionSyncEngine {
     required InspectionSubmissionQueue queue,
     required InspectionRemoteRepository remote,
     required InspectionPhotoUploader photoUploader,
-  })  : _draftRepository = draftRepository,
-        _queue = queue,
-        _remote = remote,
-        _photoUploader = photoUploader;
+  }) : _draftRepository = draftRepository,
+       _queue = queue,
+       _remote = remote,
+       _photoUploader = photoUploader;
 
   final InspectionDraftRepository _draftRepository;
   final InspectionSubmissionQueue _queue;
@@ -165,9 +165,7 @@ final class InspectionSyncEngine {
     );
   }
 
-  Future<InspectionSubmitResult> _attemptDelivery(
-    QueuedInspection item,
-  ) async {
+  Future<InspectionSubmitResult> _attemptDelivery(QueuedInspection item) async {
     try {
       // Re-resolve photos and signature from the DRAFT every attempt -
       // see the library comment. A position may have gained a photo
@@ -175,17 +173,18 @@ final class InspectionSyncEngine {
       // the earlier attempt's own upload may have partially succeeded;
       // re-reading is what makes a retry pick up exactly where the last
       // one left off rather than re-uploading everything.
-      final Map<String, TyrePositionReading> current =
-          await _draftRepository.tyreReadingsWithPhotos(item.draftKey);
+      final Map<String, TyrePositionReading> current = await _draftRepository
+          .tyreReadingsWithPhotos(item.draftKey);
 
       final Map<String, TyrePositionReading> resolved =
           await _uploadOutstandingPhotos(
-        inspectionId: item.id,
-        readings: current,
-      );
+            inspectionId: item.id,
+            readings: current,
+          );
 
-      final InspectionPayload resolvedPayload =
-          item.payload.copyWith(tyreConditions: resolved);
+      final InspectionPayload resolvedPayload = item.payload.copyWith(
+        tyreConditions: resolved,
+      );
 
       await _remote.upsertInspection(
         payload: resolvedPayload,
@@ -199,8 +198,9 @@ final class InspectionSyncEngine {
       // now. `discardInspectionDraft` hands back the local photo paths
       // it removed; they are already durably represented by [photoUrl]
       // on the server row, so deleting the local copies loses nothing.
-      final List<String> orphanedPaths =
-          await _draftRepository.discardDraft(item.draftKey);
+      final List<String> orphanedPaths = await _draftRepository.discardDraft(
+        item.draftKey,
+      );
       await _deleteFilesBestEffort(orphanedPaths);
       await _queue.remove(item.id);
 

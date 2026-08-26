@@ -131,7 +131,8 @@ MarkTone _markToneOf(String v) => MarkTone.values.byName(v);
 MarkInfo markMeta(ChecklistOptionSet? optionSet, Object? value) {
   final String v = value?.toString() ?? '';
   ChecklistOptionMeta? hit;
-  for (final ChecklistOptionMeta m in optionSet?.meta ?? const <ChecklistOptionMeta>[]) {
+  for (final ChecklistOptionMeta m
+      in optionSet?.meta ?? const <ChecklistOptionMeta>[]) {
     if ((m.value ?? '') == v) {
       hit = m;
       break;
@@ -147,7 +148,9 @@ MarkInfo markMeta(ChecklistOptionSet? optionSet, Object? value) {
     value: v,
     icon: icon,
     tone: tone,
-    meaning: (hit?.meaning != null && hit!.meaning!.isNotEmpty) ? hit.meaning! : '',
+    meaning: (hit?.meaning != null && hit!.meaning!.isNotEmpty)
+        ? hit.meaning!
+        : '',
     known: hit != null,
   );
 }
@@ -177,17 +180,23 @@ ChecklistOptionSet? fieldOptionSet(
 ) {
   if (field == null) return null;
   final String? ref = field.optionsRef;
-  final ChecklistOptionSet? shared =
-      (ref != null && ref.isNotEmpty) ? template?.optionSets[ref] : null;
+  final ChecklistOptionSet? shared = (ref != null && ref.isNotEmpty)
+      ? template?.optionSets[ref]
+      : null;
   if (shared != null) return shared;
-  if (field.options.isNotEmpty) return ChecklistOptionSet(options: field.options);
+  if (field.options.isNotEmpty)
+    return ChecklistOptionSet(options: field.options);
   return null;
 }
 
 /// One answer that blocks a close: which field, its label, and the
 /// matching value.
 final class BlockingAnswer {
-  const BlockingAnswer({required this.id, required this.label, required this.value});
+  const BlockingAnswer({
+    required this.id,
+    required this.label,
+    required this.value,
+  });
 
   final String id;
   final String label;
@@ -266,7 +275,10 @@ List<ChecklistFieldRef> missingNotes(
   Map<String, Object?> notes,
 ) {
   final List<ChecklistFieldRef> out = <ChecklistFieldRef>[];
-  for (final ChecklistField field in visibleAnswerableFields(template, answers)) {
+  for (final ChecklistField field in visibleAnswerableFields(
+    template,
+    answers,
+  )) {
     if (field.allowNote == false) continue;
     final ChecklistOptionSet? set = fieldOptionSet(template, field);
     final Set<String> needs = <String>{
@@ -295,8 +307,12 @@ Map<String, List<ChecklistField>> meterGroups(
   ChecklistTemplate? template,
   Map<String, Object?> answers,
 ) {
-  final Map<String, List<ChecklistField>> groups = <String, List<ChecklistField>>{};
-  for (final ChecklistField field in visibleAnswerableFields(template, answers)) {
+  final Map<String, List<ChecklistField>> groups =
+      <String, List<ChecklistField>>{};
+  for (final ChecklistField field in visibleAnswerableFields(
+    template,
+    answers,
+  )) {
     final String? g = field.groupRequireOne;
     if (g == null || g.isEmpty) continue;
     groups.putIfAbsent(g, () => <ChecklistField>[]).add(field);
@@ -325,7 +341,10 @@ List<UnsatisfiedGroup> unsatisfiedGroups(
   Map<String, Object?> answers,
 ) {
   final List<UnsatisfiedGroup> out = <UnsatisfiedGroup>[];
-  meterGroups(template, answers).forEach((String name, List<ChecklistField> fields) {
+  meterGroups(template, answers).forEach((
+    String name,
+    List<ChecklistField> fields,
+  ) {
     final bool any = fields.any((ChecklistField f) {
       final Object? v = answers[f.id];
       return v != null && v.toString().trim().isNotEmpty;
@@ -432,7 +451,8 @@ List<String> serverBlockingMatches(
   ChecklistTemplate? template,
   Map<String, Object?> answers,
 ) {
-  final List<String> blocking = template?.optionSets['legend']?.blocking ?? const <String>[];
+  final List<String> blocking =
+      template?.optionSets['legend']?.blocking ?? const <String>[];
   if (blocking.isEmpty) return const <String>[];
   final Set<String> matched = <String>{};
   for (final Object? raw in answers.values) {

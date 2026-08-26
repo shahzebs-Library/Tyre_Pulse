@@ -88,7 +88,7 @@ abstract interface class ChecklistApprovalDecisionQueue {
 final class FileChecklistApprovalDecisionQueue
     implements ChecklistApprovalDecisionQueue {
   FileChecklistApprovalDecisionQueue({Directory? overrideDirectory})
-      : _overrideDirectory = overrideDirectory;
+    : _overrideDirectory = overrideDirectory;
 
   /// Test seam: a fixed temp directory instead of
   /// [getApplicationDocumentsDirectory], which needs a platform channel
@@ -238,10 +238,10 @@ class ChecklistApprovalQueueReadResult {
   ) : this._(status: ChecklistApprovalQueueReadStatus.ok, items: items);
 
   const ChecklistApprovalQueueReadResult.unreadable()
-      : this._(
-          status: ChecklistApprovalQueueReadStatus.unreadable,
-          items: const <QueuedChecklistApprovalDecision>[],
-        );
+    : this._(
+        status: ChecklistApprovalQueueReadStatus.unreadable,
+        items: const <QueuedChecklistApprovalDecision>[],
+      );
 
   final ChecklistApprovalQueueReadStatus status;
   final List<QueuedChecklistApprovalDecision> items;

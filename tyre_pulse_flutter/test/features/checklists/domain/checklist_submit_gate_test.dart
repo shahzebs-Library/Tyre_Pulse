@@ -37,8 +37,7 @@ ChecklistTemplate _templateWithLegend({
 
 void main() {
   group('a blocking mark never blocks submission', () {
-    test(
-        'a "Not OK" answer on an otherwise-complete, non-required field '
+    test('a "Not OK" answer on an otherwise-complete, non-required field '
         'still allows submission', () {
       final ChecklistTemplate template = _templateWithLegend(
         fields: const <ChecklistField>[
@@ -62,8 +61,7 @@ void main() {
       expect(gate.fieldErrors, isEmpty);
     });
 
-    test(
-        'a "Not OK" answer on a REQUIRED select field still allows '
+    test('a "Not OK" answer on a REQUIRED select field still allows '
         'submission - required only means non-empty, not non-blocking', () {
       final ChecklistTemplate template = _templateWithLegend(
         fields: const <ChecklistField>[
@@ -112,7 +110,12 @@ void main() {
     test('a required, empty field blocks', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
-          ChecklistField(id: 'km', type: 'number', label: 'Odometer', required: true),
+          ChecklistField(
+            id: 'km',
+            type: 'number',
+            label: 'Odometer',
+            required: true,
+          ),
         ],
       );
 
@@ -205,8 +208,18 @@ void main() {
     test('a group_require_one group with no member answered blocks', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
-          ChecklistField(id: 'odo_km', type: 'number', label: 'Odometer', groupRequireOne: 'meter'),
-          ChecklistField(id: 'odo_hrs', type: 'number', label: 'Hours', groupRequireOne: 'meter'),
+          ChecklistField(
+            id: 'odo_km',
+            type: 'number',
+            label: 'Odometer',
+            groupRequireOne: 'meter',
+          ),
+          ChecklistField(
+            id: 'odo_hrs',
+            type: 'number',
+            label: 'Hours',
+            groupRequireOne: 'meter',
+          ),
         ],
       );
 
@@ -225,8 +238,18 @@ void main() {
         'is a reading', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
-          ChecklistField(id: 'odo_km', type: 'number', label: 'Odometer', groupRequireOne: 'meter'),
-          ChecklistField(id: 'odo_hrs', type: 'number', label: 'Hours', groupRequireOne: 'meter'),
+          ChecklistField(
+            id: 'odo_km',
+            type: 'number',
+            label: 'Odometer',
+            groupRequireOne: 'meter',
+          ),
+          ChecklistField(
+            id: 'odo_hrs',
+            type: 'number',
+            label: 'Hours',
+            groupRequireOne: 'meter',
+          ),
         ],
       );
 
@@ -243,7 +266,12 @@ void main() {
     test('a required signature field with no mark blocks', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
-          ChecklistField(id: 'sign_mechanic', type: 'signature', label: 'Mechanic', required: true),
+          ChecklistField(
+            id: 'sign_mechanic',
+            type: 'signature',
+            label: 'Mechanic',
+            required: true,
+          ),
         ],
       );
 
@@ -261,7 +289,12 @@ void main() {
     test('signing the field clears its own block', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
-          ChecklistField(id: 'sign_mechanic', type: 'signature', label: 'Mechanic', required: true),
+          ChecklistField(
+            id: 'sign_mechanic',
+            type: 'signature',
+            label: 'Mechanic',
+            required: true,
+          ),
         ],
       );
 
@@ -275,8 +308,7 @@ void main() {
       expect(gate.canSubmit, isTrue);
     });
 
-    test(
-        'a template flagged require_signature with no field pad and no '
+    test('a template flagged require_signature with no field pad and no '
         'signed field blocks', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[

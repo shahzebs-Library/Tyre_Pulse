@@ -59,8 +59,9 @@ class _NewInspectionScreenState extends ConsumerState<NewInspectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final InspectionWizardState state =
-        ref.watch(inspectionWizardControllerProvider);
+    final InspectionWizardState state = ref.watch(
+      inspectionWizardControllerProvider,
+    );
 
     return switch (state.step) {
       InspectionWizardStep.header => _HeaderStep(state: state),
@@ -99,8 +100,9 @@ class _StepTrack extends StatelessWidget {
             ),
           CircleAvatar(
             radius: 12,
-            backgroundColor:
-                i <= current ? palette.primary : palette.surfaceAlt,
+            backgroundColor: i <= current
+                ? palette.primary
+                : palette.surfaceAlt,
             child: i < current
                 ? Icon(Icons.check, size: 14, color: palette.onPrimary)
                 : Text(
@@ -220,9 +222,8 @@ class _HeaderStep extends ConsumerWidget {
                   ),
                   TpButton.text(
                     label: l10n.inspectionChangeVehicleButton,
-                    onPressed: () => controller.pickVehicleByAssetNo(
-                      assetNo: '',
-                    ),
+                    onPressed: () =>
+                        controller.pickVehicleByAssetNo(assetNo: ''),
                   ),
                 ],
               ),
@@ -308,7 +309,8 @@ class _VehiclePicker extends ConsumerStatefulWidget {
     required String assetNo,
     String? vehicleType,
     String? site,
-  }) onPicked;
+  })
+  onPicked;
 
   @override
   ConsumerState<_VehiclePicker> createState() => _VehiclePickerState();
@@ -393,8 +395,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
                   .where(
                     (v) =>
                         (v.assetNo?.toLowerCase().contains(query) ?? false) ||
-                        (v.vehicleType?.toLowerCase().contains(query) ??
-                            false),
+                        (v.vehicleType?.toLowerCase().contains(query) ?? false),
                   )
                   .take(30)
                   .toList(growable: false);
@@ -547,9 +548,7 @@ class _TyresStep extends ConsumerWidget {
                         state.completeness.expected ??
                             state.completeness.pending.length,
                       ),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
+                style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: palette.warning.base),
               ),
             ),
@@ -572,11 +571,12 @@ class _TyresStep extends ConsumerWidget {
       context: context,
       builder: (sheetContext) => Consumer(
         builder: (sheetContext, sheetRef, _) {
-          final InspectionWizardState liveState =
-              sheetRef.watch(inspectionWizardControllerProvider);
+          final InspectionWizardState liveState = sheetRef.watch(
+            inspectionWizardControllerProvider,
+          );
           final TyrePositionReading reading =
               liveState.tyreConditions[position] ??
-                  TyrePositionReading.seed(position);
+              TyrePositionReading.seed(position);
           return TyrePositionEditorSheet(
             reading: reading,
             isCapturingPhoto: liveState.isCapturingPhoto,
@@ -637,28 +637,31 @@ class _GpsChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final (IconData icon, TpStatus status, String label) = switch (
-        state.gpsStatus) {
+    final (
+      IconData icon,
+      TpStatus status,
+      String label,
+    ) = switch (state.gpsStatus) {
       InspectionGpsStatus.captured => (
-          Icons.location_on,
-          TpStatus.ok,
-          l10n.inspectionGpsCaptured,
-        ),
+        Icons.location_on,
+        TpStatus.ok,
+        l10n.inspectionGpsCaptured,
+      ),
       InspectionGpsStatus.unavailable => (
-          Icons.location_off,
-          TpStatus.warning,
-          l10n.inspectionGpsUnavailable,
-        ),
+        Icons.location_off,
+        TpStatus.warning,
+        l10n.inspectionGpsUnavailable,
+      ),
       InspectionGpsStatus.capturing => (
-          Icons.my_location,
-          TpStatus.info,
-          l10n.inspectionGpsCapturing,
-        ),
+        Icons.my_location,
+        TpStatus.info,
+        l10n.inspectionGpsCapturing,
+      ),
       InspectionGpsStatus.idle => (
-          Icons.my_location,
-          TpStatus.neutral,
-          l10n.inspectionGpsCapturing,
-        ),
+        Icons.my_location,
+        TpStatus.neutral,
+        l10n.inspectionGpsCapturing,
+      ),
     };
     return Row(
       children: <Widget>[
@@ -754,9 +757,8 @@ class _ReviewStep extends ConsumerWidget {
               padding: const EdgeInsets.only(top: TpSpace.sm),
               child: Text(
                 l10n.inspectionSignatureRequiredMsg,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: TpPalette.of(context).critical.base,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
               // `.critical.base` matches the confirmed `TpStatusColors`
               // member set (`.base`/`.soft`/`.onBase`/`.onSoft`), same as
@@ -820,9 +822,7 @@ class _SubmittedStep extends ConsumerWidget {
                 Text(
                   state.submitWarning!.message,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: palette.warning.base),
                 ),
               ],

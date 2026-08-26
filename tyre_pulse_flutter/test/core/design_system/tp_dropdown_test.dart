@@ -43,8 +43,9 @@ void main() {
       expect(find.text('Select'), findsOneWidget);
     });
 
-    testWidgets('a custom hint replaces the default',
-        (WidgetTester tester) async {
+    testWidgets('a custom hint replaces the default', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpDropdown<String>(
@@ -60,8 +61,9 @@ void main() {
       expect(find.text('Select'), findsNothing);
     });
 
-    testWidgets("a chosen value shows that item's label, not the hint",
-        (WidgetTester tester) async {
+    testWidgets("a chosen value shows that item's label, not the hint", (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpDropdown<String>(
@@ -77,8 +79,9 @@ void main() {
     });
   });
 
-  testWidgets('choosing an option calls onChanged with its value',
-      (WidgetTester tester) async {
+  testWidgets('choosing an option calls onChanged with its value', (
+    WidgetTester tester,
+  ) async {
     String? chosen;
     await pumpTp(
       tester,
@@ -110,15 +113,14 @@ void main() {
         ),
       );
 
-      final DropdownButton<String> button =
-          tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
-      );
+      final DropdownButton<String> button = tester
+          .widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
       expect(button.onChanged, isNull);
     });
 
-    testWidgets('enabled: false disables it even with a real onChanged',
-        (WidgetTester tester) async {
+    testWidgets('enabled: false disables it even with a real onChanged', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpDropdown<String>(
@@ -130,39 +132,35 @@ void main() {
         ),
       );
 
-      final DropdownButton<String> button =
-          tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
-      );
+      final DropdownButton<String> button = tester
+          .widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
       expect(button.onChanged, isNull);
     });
 
-    testWidgets(
-      'an empty item list disables it even with a real onChanged',
-      (WidgetTester tester) async {
-        // Repository rule 7: a control that opens and has nothing it could
-        // possibly change to is not being honest about what it can do.
-        await pumpTp(
-          tester,
-          TpDropdown<String>(
-            label: 'Severity',
-            value: null,
-            items: const <TpDropdownItem<String>>[],
-            onChanged: (String? v) {},
-          ),
-        );
+    testWidgets('an empty item list disables it even with a real onChanged', (
+      WidgetTester tester,
+    ) async {
+      // Repository rule 7: a control that opens and has nothing it could
+      // possibly change to is not being honest about what it can do.
+      await pumpTp(
+        tester,
+        TpDropdown<String>(
+          label: 'Severity',
+          value: null,
+          items: const <TpDropdownItem<String>>[],
+          onChanged: (String? v) {},
+        ),
+      );
 
-        final DropdownButton<String> button =
-            tester.widget<DropdownButton<String>>(
-          find.byType(DropdownButton<String>),
-        );
-        expect(button.onChanged, isNull);
-      },
-    );
+      final DropdownButton<String> button = tester
+          .widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
+      expect(button.onChanged, isNull);
+    });
   });
 
-  testWidgets('isRequired shows the required marker',
-      (WidgetTester tester) async {
+  testWidgets('isRequired shows the required marker', (
+    WidgetTester tester,
+  ) async {
     await pumpTp(
       tester,
       TpDropdown<String>(
@@ -177,8 +175,9 @@ void main() {
     expect(find.text('Required'), findsOneWidget);
   });
 
-  testWidgets('errorText renders below the control',
-      (WidgetTester tester) async {
+  testWidgets('errorText renders below the control', (
+    WidgetTester tester,
+  ) async {
     await pumpTp(
       tester,
       TpDropdown<String>(
@@ -193,8 +192,9 @@ void main() {
     expect(find.text('Pick a severity'), findsOneWidget);
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await pumpTpRtl(
       tester,
       TpDropdown<String>(

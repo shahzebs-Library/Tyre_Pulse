@@ -28,22 +28,26 @@ void main() {
       expect(RoleId.values, hasLength(15));
     });
 
-    test('normalisation matches the phone: trim, lowercase, collapse spaces',
-        () {
-      expect(normaliseRoleToken('  Tyre Man  '), 'tyre_man');
-      expect(normaliseRoleToken('TYRE   MAN'), 'tyre_man');
-      expect(normaliseRoleToken('tyre_man'), 'tyre_man');
-      expect(normaliseRoleToken('PMV Manager'), 'pmv_manager');
-      expect(
-        normaliseRoleToken('Workshop Maintenance Area Manager'),
-        'workshop_maintenance_area_manager',
-      );
-    });
+    test(
+      'normalisation matches the phone: trim, lowercase, collapse spaces',
+      () {
+        expect(normaliseRoleToken('  Tyre Man  '), 'tyre_man');
+        expect(normaliseRoleToken('TYRE   MAN'), 'tyre_man');
+        expect(normaliseRoleToken('tyre_man'), 'tyre_man');
+        expect(normaliseRoleToken('PMV Manager'), 'pmv_manager');
+        expect(
+          normaliseRoleToken('Workshop Maintenance Area Manager'),
+          'workshop_maintenance_area_manager',
+        );
+      },
+    );
 
     test('a padded or oddly cased value still resolves', () {
       expect(UserRole.fromDatabase('  tyre   MAN ').id, RoleId.tyreMan);
-      expect(UserRole.fromDatabase('Tyre Data Collector').id,
-          RoleId.tyreDataCollector);
+      expect(
+        UserRole.fromDatabase('Tyre Data Collector').id,
+        RoleId.tyreDataCollector,
+      );
     });
   });
 
@@ -58,9 +62,13 @@ void main() {
       expect(role.id, isNot(RoleId.reporter));
       expect(role.rawValue, 'Chief Tyre Whisperer');
       expect(role.displayName, 'Chief Tyre Whisperer');
-      expect(role.token, isEmpty,
-          reason: 'an unknown role has no token; inventing one is the '
-              'coercion this model exists to prevent');
+      expect(
+        role.token,
+        isEmpty,
+        reason:
+            'an unknown role has no token; inventing one is the '
+            'coercion this model exists to prevent',
+      );
     });
 
     test('every catalogued but unmapped database role is flagged as such', () {
@@ -71,7 +79,8 @@ void main() {
         expect(
           role.isRecognisedButUnmapped,
           isTrue,
-          reason: '$name should be reported as a configuration gap, not as '
+          reason:
+              '$name should be reported as a configuration gap, not as '
               'corrupt data',
         );
       }
@@ -142,8 +151,10 @@ void main() {
     });
 
     test('an unknown role is never an administrator', () {
-      expect(UserRole.fromDatabase('Integration Admin').isAdministrator,
-          isFalse);
+      expect(
+        UserRole.fromDatabase('Integration Admin').isAdministrator,
+        isFalse,
+      );
       expect(UserRole.absent.isAdministrator, isFalse);
     });
   });

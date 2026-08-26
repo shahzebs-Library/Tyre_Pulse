@@ -22,8 +22,8 @@ import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
 /// elsewhere in this project.
 final Provider<ScanLookupSource> scanLookupRepositoryProvider =
     Provider<ScanLookupSource>(
-  (ref) => ScanLookupRepository(ref.watch(supabaseClientProvider)),
-);
+      (ref) => ScanLookupRepository(ref.watch(supabaseClientProvider)),
+    );
 
 /// Where the scanning screen is in its own lifecycle.
 sealed class ScannerState {
@@ -105,5 +105,6 @@ final class ScannerController extends Notifier<ScannerState> {
 }
 
 final NotifierProvider<ScannerController, ScannerState>
-    scannerControllerProvider =
-    NotifierProvider<ScannerController, ScannerState>(ScannerController.new);
+scannerControllerProvider = NotifierProvider<ScannerController, ScannerState>(
+  ScannerController.new,
+);

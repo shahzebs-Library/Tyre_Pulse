@@ -17,25 +17,20 @@ AccessState state({
   Map<ModuleKey, GrantEffect> grants = const <ModuleKey, GrantEffect>{},
   Map<ModuleKey, bool> matrix = const <ModuleKey, bool>{},
   bool permissionsError = false,
-}) =>
-    AccessState(
-      role: role,
-      isSuperAdmin: isSuperAdmin,
-      grants: grants,
-      roleMatrix: matrix,
-      permissionsError: permissionsError,
-    );
+}) => AccessState(
+  role: role,
+  isSuperAdmin: isSuperAdmin,
+  grants: grants,
+  roleMatrix: matrix,
+  permissionsError: permissionsError,
+);
 
 AccessDecision decide(
   ModuleKey module,
   AccessState access, [
   AdminRevokePrecedence precedence = AdminRevokePrecedence.serverAppUserCan,
 ]) =>
-    resolveModuleAccess(
-      module: module,
-      access: access,
-      precedence: precedence,
-    );
+    resolveModuleAccess(module: module, access: access, precedence: precedence);
 
 void main() {
   // `serial` admits manager, director, reporter and nine others by default.
@@ -101,7 +96,10 @@ void main() {
           ModuleKey.serial: GrantEffect.revoke,
         },
       );
-      expect(decide(ModuleKey.serial, state()).reason, AccessReason.roleDefault);
+      expect(
+        decide(ModuleKey.serial, state()).reason,
+        AccessReason.roleDefault,
+      );
       expect(
         decide(ModuleKey.serial, access).reason,
         AccessReason.perUserRevoke,
@@ -144,12 +142,17 @@ void main() {
 
     test('an ABSENT matrix key falls through to the role default', () {
       // Absent means "no override on mobile", not "no".
-      expect(decide(ModuleKey.serial, state()).reason, AccessReason.roleDefault);
+      expect(
+        decide(ModuleKey.serial, state()).reason,
+        AccessReason.roleDefault,
+      );
     });
 
     test('a role not on the list is denied, and the reason says which', () {
-      final AccessDecision result =
-          decide(ModuleKey.inspect, state(role: reporterRole));
+      final AccessDecision result = decide(
+        ModuleKey.inspect,
+        state(role: reporterRole),
+      );
       expect(result.isDenied, isTrue);
       expect(result.reason, AccessReason.roleNotInDefaults);
     });
@@ -221,9 +224,13 @@ void main() {
             expect(server, isTrue);
             expect(mobile, isFalse);
           } else {
-            expect(server, mobile,
-                reason: 'unexpected divergence for ${id.token} on '
-                    '${key.wireKey}');
+            expect(
+              server,
+              mobile,
+              reason:
+                  'unexpected divergence for ${id.token} on '
+                  '${key.wireKey}',
+            );
           }
         }
       }
@@ -246,8 +253,10 @@ void main() {
     });
 
     test('an ordinary module fails OPEN and keeps the field user working', () {
-      final AccessDecision result =
-          decide(ModuleKey.serial, state(permissionsError: true));
+      final AccessDecision result = decide(
+        ModuleKey.serial,
+        state(permissionsError: true),
+      );
       expect(result.isAllowed, isTrue);
       expect(result.reason, AccessReason.roleDefault);
     });
@@ -318,15 +327,21 @@ void main() {
     test('an unknown role is NOT quietly given a reporter list', () {
       // A reporter reaches `serial` by default. If the unknown role were
       // coerced, this would pass - which is exactly the defect.
-      expect(decide(ModuleKey.serial, state(role: reporterRole)).isAllowed,
-          isTrue);
       expect(
-          decide(ModuleKey.serial, state(role: unknownRole)).isAllowed, isFalse);
+        decide(ModuleKey.serial, state(role: reporterRole)).isAllowed,
+        isTrue,
+      );
+      expect(
+        decide(ModuleKey.serial, state(role: unknownRole)).isAllowed,
+        isFalse,
+      );
     });
 
     test('an absent role reports that it is absent, not unrecognised', () {
-      final AccessDecision result =
-          decide(ModuleKey.serial, state(role: UserRole.absent));
+      final AccessDecision result = decide(
+        ModuleKey.serial,
+        state(role: UserRole.absent),
+      );
       expect(result.reason, AccessReason.noRoleAssigned);
     });
 
@@ -393,8 +408,11 @@ void main() {
         expect(reason.message, isNotEmpty);
         expect(reason.message.contains('module_permissions'), isFalse);
         expect(reason.message.contains('user_access_grants'), isFalse);
-        expect(reason.message.contains('_'), isFalse,
-            reason: '${reason.name} looks like it contains an identifier');
+        expect(
+          reason.message.contains('_'),
+          isFalse,
+          reason: '${reason.name} looks like it contains an identifier',
+        );
       }
     });
 
@@ -421,8 +439,10 @@ void main() {
       // The dangerous reading is "the module is on, therefore the fetch is
       // authorised". No RLS policy gates on the view capability, so an allow
       // here says nothing about what the server will return.
-      final AccessDecision result =
-          decide(ModuleKey.records, state(role: adminRole));
+      final AccessDecision result = decide(
+        ModuleKey.records,
+        state(role: adminRole),
+      );
       expect(result.isAllowed, isTrue);
       expect(result.isAuthorisationBoundary, isFalse);
     });
@@ -442,17 +462,14 @@ void main() {
     });
 
     test('a reporter reaches the six the registry gives them', () {
-      expect(
-        allowedModulesFor(state(role: reporterRole)),
-        <ModuleKey>{
-          ModuleKey.serial,
-          ModuleKey.meter,
-          ModuleKey.reportIssue,
-          ModuleKey.repairRequest,
-          ModuleKey.vehicles,
-          ModuleKey.calendar,
-        },
-      );
+      expect(allowedModulesFor(state(role: reporterRole)), <ModuleKey>{
+        ModuleKey.serial,
+        ModuleKey.meter,
+        ModuleKey.reportIssue,
+        ModuleKey.repairRequest,
+        ModuleKey.vehicles,
+        ModuleKey.calendar,
+      });
     });
 
     test('a tyre data collector reaches serial and approvals only', () {
@@ -461,7 +478,9 @@ void main() {
       // checklist or run an inspection by default. Artifact 04 section 3.3
       // lists this as an open product question, not a bug to fix here.
       expect(
-        allowedModulesFor(state(role: UserRole.known(RoleId.tyreDataCollector))),
+        allowedModulesFor(
+          state(role: UserRole.known(RoleId.tyreDataCollector)),
+        ),
         <ModuleKey>{ModuleKey.serial, ModuleKey.approvals},
       );
     });
@@ -565,9 +584,11 @@ void main() {
           in AdminRevokePrecedence.values) {
         for (final ModuleKey key in ModuleKey.values) {
           expect(
-            decide(key, state(role: unknownRole, isSuperAdmin: true),
-                    precedence)
-                .isAllowed,
+            decide(
+              key,
+              state(role: unknownRole, isSuperAdmin: true),
+              precedence,
+            ).isAllowed,
             isTrue,
           );
         }
@@ -579,8 +600,11 @@ void main() {
           in AdminRevokePrecedence.values) {
         for (final ModuleKey key in ModuleKey.values) {
           for (final RoleId id in RoleId.values) {
-            final AccessDecision result =
-                decide(key, state(role: UserRole.known(id)), precedence);
+            final AccessDecision result = decide(
+              key,
+              state(role: UserRole.known(id)),
+              precedence,
+            );
             expect(result.isAllowed, isNot(result.isDenied));
             expect(result.reason.allows, result.isAllowed);
             expect(result.module, key);

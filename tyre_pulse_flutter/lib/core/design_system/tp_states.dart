@@ -239,11 +239,7 @@ class TpEmptyState extends StatelessWidget {
 /// data, it is just not fresh. Saying so is the difference between a field
 /// worker trusting a number and acting on a stale one.
 class TpOfflineCachedState extends StatelessWidget {
-  const TpOfflineCachedState({
-    this.cachedAtLabel,
-    this.onRetry,
-    super.key,
-  });
+  const TpOfflineCachedState({this.cachedAtLabel, this.onRetry, super.key});
 
   /// A formatted timestamp. Formatting belongs to the caller, which knows the
   /// locale and the user's timezone.
@@ -274,11 +270,7 @@ class TpOfflineCachedState extends StatelessWidget {
 /// [reason] is REQUIRED and has no default. That is the whole point: there is
 /// no way to construct a refusal that does not explain itself.
 class TpPermissionDeniedState extends StatelessWidget {
-  const TpPermissionDeniedState({
-    required this.reason,
-    this.onBack,
-    super.key,
-  });
+  const TpPermissionDeniedState({required this.reason, this.onBack, super.key});
 
   /// A sentence in the user's language. Not an error code, not a module key.
   final String reason;

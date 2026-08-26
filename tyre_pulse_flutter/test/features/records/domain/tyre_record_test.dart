@@ -50,7 +50,11 @@ void main() {
       expect(
         () => TyreRecord.fromRow(row),
         throwsA(
-          isA<AppError>().having((AppError e) => e.kind, 'kind', AppErrorKind.validation),
+          isA<AppError>().having(
+            (AppError e) => e.kind,
+            'kind',
+            AppErrorKind.validation,
+          ),
         ),
       );
     });
@@ -62,9 +66,10 @@ void main() {
       );
     });
 
-    test('every other column is optional and decodes to null when absent',
-        () {
-      final TyreRecord record = TyreRecord.fromRow(<String, dynamic>{'id': 'x'});
+    test('every other column is optional and decodes to null when absent', () {
+      final TyreRecord record = TyreRecord.fromRow(<String, dynamic>{
+        'id': 'x',
+      });
       expect(record.assetNo, isNull);
       expect(record.serialNo, isNull);
       expect(record.brand, isNull);
@@ -73,8 +78,9 @@ void main() {
     });
 
     test('a blank string column decodes to null, not an empty string', () {
-      final TyreRecord record =
-          TyreRecord.fromRow(_row(<String, dynamic>{'brand': '   '}));
+      final TyreRecord record = TyreRecord.fromRow(
+        _row(<String, dynamic>{'brand': '   '}),
+      );
       expect(record.brand, isNull);
     });
 
@@ -157,8 +163,12 @@ void main() {
     });
 
     test('records with a different id are not equal', () {
-      final TyreRecord a = TyreRecord.fromRow(_row(<String, dynamic>{'id': 'a'}));
-      final TyreRecord b = TyreRecord.fromRow(_row(<String, dynamic>{'id': 'b'}));
+      final TyreRecord a = TyreRecord.fromRow(
+        _row(<String, dynamic>{'id': 'a'}),
+      );
+      final TyreRecord b = TyreRecord.fromRow(
+        _row(<String, dynamic>{'id': 'b'}),
+      );
       expect(a, isNot(equals(b)));
     });
   });

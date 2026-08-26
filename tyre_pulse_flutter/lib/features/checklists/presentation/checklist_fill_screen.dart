@@ -89,7 +89,9 @@ class _ChecklistFillScreenState extends ConsumerState<ChecklistFillScreen> {
     }
 
     if (state.phase == ChecklistFillPhase.submitted) {
-      return _SubmittedView(onDone: () => GoRouter.of(context).go(TpRoutePaths.checklists));
+      return _SubmittedView(
+        onDone: () => GoRouter.of(context).go(TpRoutePaths.checklists),
+      );
     }
 
     return _FillFormView(state: state);
@@ -126,10 +128,13 @@ class _FillFormView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ChecklistTemplate template = state.templateRecord!.template;
-    final List<ChecklistField> fields =
-        visibleChecklistFields(template.fields, state.answers);
-    final ChecklistFillController controller =
-        ref.read(checklistFillControllerProvider.notifier);
+    final List<ChecklistField> fields = visibleChecklistFields(
+      template.fields,
+      state.answers,
+    );
+    final ChecklistFillController controller = ref.read(
+      checklistFillControllerProvider.notifier,
+    );
     final ChecklistSubmitGate? gate = state.submitGate;
 
     return TpScaffold(
@@ -185,7 +190,8 @@ class _FillFormView extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: TpSpace.xl),
-          if (gate != null && !gate.canSubmit) _GateSummary(gate: gate, l10n: l10n),
+          if (gate != null && !gate.canSubmit)
+            _GateSummary(gate: gate, l10n: l10n),
           const SizedBox(height: TpSpace.md),
           TpButton.primary(
             label: l10n.checklistSubmitAction,
@@ -245,33 +251,33 @@ class _FillFormView extends ConsumerWidget {
           .toList(growable: false),
       onCapturePhoto: field.type == 'photo'
           ? (ChecklistPhotoPickSource source) => controller.capturePhoto(
-                fieldId: field.id,
-                capture: () async {
-                  final String? draftKey = state.draftKey;
-                  if (draftKey == null) return null;
-                  final CapturedChecklistPhoto? captured = await ChecklistPhotoCapture()
-                      .captureAndStore(
-                    draftKey: draftKey,
-                    fieldKey: field.id,
-                    source: source == ChecklistPhotoPickSource.camera
-                        ? ChecklistPhotoSource.camera
-                        : ChecklistPhotoSource.gallery,
-                  );
-                  if (captured == null) return null;
-                  return ChecklistDraftPhotoCaptureResult(
-                    localPath: captured.localPath,
-                    capturedAt: captured.capturedAt,
-                    sizeBytes: captured.sizeBytes,
-                  );
-                },
-              )
+              fieldId: field.id,
+              capture: () async {
+                final String? draftKey = state.draftKey;
+                if (draftKey == null) return null;
+                final CapturedChecklistPhoto? captured =
+                    await ChecklistPhotoCapture().captureAndStore(
+                      draftKey: draftKey,
+                      fieldKey: field.id,
+                      source: source == ChecklistPhotoPickSource.camera
+                          ? ChecklistPhotoSource.camera
+                          : ChecklistPhotoSource.gallery,
+                    );
+                if (captured == null) return null;
+                return ChecklistDraftPhotoCaptureResult(
+                  localPath: captured.localPath,
+                  capturedAt: captured.capturedAt,
+                  sizeBytes: captured.sizeBytes,
+                );
+              },
+            )
           : null,
       signatureBuilder: field.type == 'signature'
           ? (BuildContext context) => ChecklistSignaturePad(
-                value: state.signaturesByField[field.id],
-                onChanged: (capture) =>
-                    controller.saveSignature(field.id, capture?.dataUrl),
-              )
+              value: state.signaturesByField[field.id],
+              onChanged: (capture) =>
+                  controller.saveSignature(field.id, capture?.dataUrl),
+            )
           : null,
     );
   }
@@ -293,7 +299,9 @@ class _HeaderCardState extends State<_HeaderCard> {
   @override
   void initState() {
     super.initState();
-    _printedNameController = TextEditingController(text: widget.state.printedName);
+    _printedNameController = TextEditingController(
+      text: widget.state.printedName,
+    );
   }
 
   @override
@@ -391,7 +399,8 @@ class _Banner extends StatelessWidget {
       ),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSoft),
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: colors.onSoft),
       ),
     );
   }

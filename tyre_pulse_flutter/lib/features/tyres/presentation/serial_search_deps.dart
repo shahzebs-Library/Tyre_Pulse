@@ -17,5 +17,5 @@ import 'package:tyre_pulse/features/tyres/data/tyre_lookup_repository.dart';
 /// why there is exactly one.
 final Provider<TyreLookupRepository> tyreLookupRepositoryProvider =
     Provider<TyreLookupRepository>(
-  (ref) => SupabaseTyreLookupRepository(ref.watch(supabaseClientProvider)),
-);
+      (ref) => SupabaseTyreLookupRepository(ref.watch(supabaseClientProvider)),
+    );

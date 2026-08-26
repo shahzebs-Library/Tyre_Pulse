@@ -39,8 +39,7 @@ class SerialSearchScreen extends ConsumerStatefulWidget {
   final SerialSearchRoute route;
 
   @override
-  ConsumerState<SerialSearchScreen> createState() =>
-      _SerialSearchScreenState();
+  ConsumerState<SerialSearchScreen> createState() => _SerialSearchScreenState();
 }
 
 class _SerialSearchScreenState extends ConsumerState<SerialSearchScreen> {
@@ -62,8 +61,9 @@ class _SerialSearchScreenState extends ConsumerState<SerialSearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _didPrefill) return;
       _didPrefill = true;
-      final SerialSearchController controller =
-          ref.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = ref.read(
+        serialSearchControllerProvider.notifier,
+      );
       unawaited(controller.search(prefill));
     });
   }
@@ -75,8 +75,9 @@ class _SerialSearchScreenState extends ConsumerState<SerialSearchScreen> {
   }
 
   void _handleQueryChanged(String value) {
-    final SerialSearchController controller =
-        ref.read(serialSearchControllerProvider.notifier);
+    final SerialSearchController controller = ref.read(
+      serialSearchControllerProvider.notifier,
+    );
     controller.setQuery(value);
     if (value.isEmpty) controller.clear();
   }
@@ -217,8 +218,9 @@ class _SearchBar extends StatelessWidget {
                     label: l10n.searchHint,
                     icon: Icons.search,
                     isBusy: isSearching,
-                    onPressed:
-                        canSearch && !isSearching ? onSearchPressed : null,
+                    onPressed: canSearch && !isSearching
+                        ? onSearchPressed
+                        : null,
                   );
                 },
               ),
@@ -367,10 +369,7 @@ class _FoundResult extends StatelessWidget {
                 isIdentifier: true,
               ),
               _Detail(label: l10n.serialSearchSite, value: tyre.site),
-              _Detail(
-                label: l10n.serialSearchLastReading,
-                value: lastReading,
-              ),
+              _Detail(label: l10n.serialSearchLastReading, value: lastReading),
             ],
           ),
           if (state.scrapMark?.reason != null) ...<Widget>[
@@ -409,8 +408,7 @@ class _FoundResult extends StatelessWidget {
               icon: Icons.block,
               isFullWidth: true,
               isBusy: state.isScrapBusy,
-              onPressed:
-                  state.isScrapBusy ? null : () => onMarkScrap(tyre),
+              onPressed: state.isScrapBusy ? null : () => onMarkScrap(tyre),
             ),
         ],
       ),
@@ -489,9 +487,7 @@ class _NoAssetNote extends StatelessWidget {
             Expanded(
               child: Text(
                 message,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
+                style: Theme.of(context).textTheme.bodyMedium
                     ?.copyWith(color: colors.onSoft),
               ),
             ),

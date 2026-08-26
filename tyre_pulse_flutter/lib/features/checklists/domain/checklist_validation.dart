@@ -84,13 +84,16 @@ String? validateAnswer(
   final List<String> allowed = (options != null && options.isNotEmpty)
       ? options
       : field.options;
-  if (field.type == 'select' && allowed.isNotEmpty && !allowed.contains(value)) {
+  if (field.type == 'select' &&
+      allowed.isNotEmpty &&
+      !allowed.contains(value)) {
     return 'Choose a valid option for ${name.isEmpty ? 'this field' : name}';
   }
   if (field.type == 'multiselect' && allowed.isNotEmpty) {
     final List<Object?> values = value is List ? value : const <Object?>[];
     final bool hasBad = values.any((Object? v) => !allowed.contains(v));
-    if (hasBad) return 'Invalid option(s) for ${name.isEmpty ? 'this field' : name}';
+    if (hasBad)
+      return 'Invalid option(s) for ${name.isEmpty ? 'this field' : name}';
   }
 
   if (field.type == 'rating') {

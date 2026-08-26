@@ -55,23 +55,16 @@ void main() {
   test('throws ArgumentError when both organisation columns are absent', () {
     final WorkspaceContext context = _context();
 
-    expect(
-      () => workspaceIdFor(context),
-      throwsA(isA<ArgumentError>()),
-    );
+    expect(() => workspaceIdFor(context), throwsA(isA<ArgumentError>()));
   });
 
   test('throws ArgumentError when both organisation columns are blank', () {
     final WorkspaceContext context = _context(companyId: '', tenantId: '  ');
 
-    expect(
-      () => workspaceIdFor(context),
-      throwsA(isA<ArgumentError>()),
-    );
+    expect(() => workspaceIdFor(context), throwsA(isA<ArgumentError>()));
   });
 
-  test(
-      'this is the exact meaning WorkspaceScopeFilter already uses for '
+  test('this is the exact meaning WorkspaceScopeFilter already uses for '
       'cached reads', () {
     final WorkspaceContext context = _context(
       companyId: 'company-a',

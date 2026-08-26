@@ -103,8 +103,7 @@ class _FakeRemoteRepository implements InspectionRemoteRepository {
   Future<List<InspectionRecord>> myInspections({
     required String createdBy,
     int limit = 100,
-  }) async =>
-      <InspectionRecord>[];
+  }) async => <InspectionRecord>[];
 }
 
 class _FakePhotoUploader implements InspectionPhotoUploader {
@@ -159,8 +158,7 @@ class _FakeDraftRepository implements InspectionDraftRepository {
     String draftKey,
     TyrePositionReading reading,
   ) async {
-    final Map<String, TyrePositionReading> map =
-        readingsByDraft.putIfAbsent(
+    final Map<String, TyrePositionReading> map = readingsByDraft.putIfAbsent(
       draftKey,
       () => <String, TyrePositionReading>{},
     );
@@ -170,16 +168,14 @@ class _FakeDraftRepository implements InspectionDraftRepository {
   @override
   Future<Map<String, TyrePositionReading>> tyreReadings(
     String draftKey,
-  ) async =>
-      Map<String, TyrePositionReading>.of(
-        readingsByDraft[draftKey] ?? <String, TyrePositionReading>{},
-      );
+  ) async => Map<String, TyrePositionReading>.of(
+    readingsByDraft[draftKey] ?? <String, TyrePositionReading>{},
+  );
 
   @override
   Future<Map<String, TyrePositionReading>> tyreReadingsWithPhotos(
     String draftKey,
-  ) async =>
-      tyreReadings(draftKey);
+  ) async => tyreReadings(draftKey);
 
   @override
   Future<void> addPhoto({
@@ -263,27 +259,29 @@ void main() {
   });
 
   group('submitNow - the commit-then-attempt order', () {
-    test('the item is durably enqueued BEFORE any delivery attempt - the '
-        'queue write happens even if delivery has not been reached yet',
-        () async {
-      // A deliberately-failing remote makes this observable: even though
-      // delivery never succeeds, the enqueue call is recorded first.
-      // Thrown as a real SupabaseFailure so `error is SupabaseFailure`
-      // short-circuits inside the engine and the outcome does not depend
-      // on classifySupabaseError's dispatch for a bare AppError, which
-      // this test has no need to assume anything about.
-      remote.failWith = const SupabaseFailure(
-        error: AppError.network(),
-        cause: SupabaseFailureCause.offline,
-      );
-      await engine.submitNow(
-        draftKey: 'draft-1',
-        payload: _payload(),
-        clientUuid: 'c-1',
-      );
-      expect(queue.enqueueCalls, isNotEmpty);
-      expect(queue.enqueueCalls.first, 'c-1');
-    });
+    test(
+      'the item is durably enqueued BEFORE any delivery attempt - the '
+      'queue write happens even if delivery has not been reached yet',
+      () async {
+        // A deliberately-failing remote makes this observable: even though
+        // delivery never succeeds, the enqueue call is recorded first.
+        // Thrown as a real SupabaseFailure so `error is SupabaseFailure`
+        // short-circuits inside the engine and the outcome does not depend
+        // on classifySupabaseError's dispatch for a bare AppError, which
+        // this test has no need to assume anything about.
+        remote.failWith = const SupabaseFailure(
+          error: AppError.network(),
+          cause: SupabaseFailureCause.offline,
+        );
+        await engine.submitNow(
+          draftKey: 'draft-1',
+          payload: _payload(),
+          clientUuid: 'c-1',
+        );
+        expect(queue.enqueueCalls, isNotEmpty);
+        expect(queue.enqueueCalls.first, 'c-1');
+      },
+    );
 
     test('a successful delivery returns deliveredNow, marks the queue '
         'entry synced, removes it, and discards the draft', () async {
@@ -365,33 +363,35 @@ void main() {
   });
 
   group('photo upload during delivery', () {
-    test('a position with a local-only photo is uploaded and the payload '
-        'sent to the server carries the resulting URL, not the local path',
-        () async {
-      draftRepo.readingsByDraft['draft-1'] = <String, TyrePositionReading>{
-        'LHF1': const TyrePositionReading(
-          position: 'LHF1',
-          photoLocalPath: '/tmp/lhf1.jpg',
-          checked: true,
-        ),
-      };
+    test(
+      'a position with a local-only photo is uploaded and the payload '
+      'sent to the server carries the resulting URL, not the local path',
+      () async {
+        draftRepo.readingsByDraft['draft-1'] = <String, TyrePositionReading>{
+          'LHF1': const TyrePositionReading(
+            position: 'LHF1',
+            photoLocalPath: '/tmp/lhf1.jpg',
+            checked: true,
+          ),
+        };
 
-      await engine.submitNow(
-        draftKey: 'draft-1',
-        payload: _payload(
-          tyreConditions: <String, TyrePositionReading>{
-            'LHF1': const TyrePositionReading(
-              position: 'LHF1',
-              photoLocalPath: '/tmp/lhf1.jpg',
-              checked: true,
-            ),
-          },
-        ),
-        clientUuid: 'c-1',
-      );
+        await engine.submitNow(
+          draftKey: 'draft-1',
+          payload: _payload(
+            tyreConditions: <String, TyrePositionReading>{
+              'LHF1': const TyrePositionReading(
+                position: 'LHF1',
+                photoLocalPath: '/tmp/lhf1.jpg',
+                checked: true,
+              ),
+            },
+          ),
+          clientUuid: 'c-1',
+        );
 
-      expect(uploader.uploadedPaths, <String>['/tmp/lhf1.jpg']);
-    });
+        expect(uploader.uploadedPaths, <String>['/tmp/lhf1.jpg']);
+      },
+    );
 
     test('a photo that fails to upload keeps its local path and does not '
         'block the rest of the submission from delivering', () async {
@@ -424,8 +424,7 @@ void main() {
       expect(result.outcome, InspectionSubmitOutcome.deliveredNow);
     });
 
-    test('a position that already has photoUrl is never re-uploaded',
-        () async {
+    test('a position that already has photoUrl is never re-uploaded', () async {
       draftRepo.readingsByDraft['draft-1'] = <String, TyrePositionReading>{
         'LHF1': const TyrePositionReading(
           position: 'LHF1',
@@ -446,35 +445,37 @@ void main() {
   });
 
   group('flushQueue', () {
-    test('retries every non-synced entry and reports how many delivered',
-        () async {
-      await queue.enqueue(
-        QueuedInspection(
-          id: 'a',
-          draftKey: 'draft-a',
-          payload: _payload(),
-          createdAt: DateTime.utc(2026, 8, 20),
-        ),
-      );
-      await queue.enqueue(
-        QueuedInspection(
-          id: 'b',
-          draftKey: 'draft-b',
-          payload: _payload(),
-          createdAt: DateTime.utc(2026, 8, 20),
-          status: InspectionQueueStatus.synced,
-          syncedAt: DateTime.utc(2026, 8, 20),
-        ),
-      );
+    test(
+      'retries every non-synced entry and reports how many delivered',
+      () async {
+        await queue.enqueue(
+          QueuedInspection(
+            id: 'a',
+            draftKey: 'draft-a',
+            payload: _payload(),
+            createdAt: DateTime.utc(2026, 8, 20),
+          ),
+        );
+        await queue.enqueue(
+          QueuedInspection(
+            id: 'b',
+            draftKey: 'draft-b',
+            payload: _payload(),
+            createdAt: DateTime.utc(2026, 8, 20),
+            status: InspectionQueueStatus.synced,
+            syncedAt: DateTime.utc(2026, 8, 20),
+          ),
+        );
 
-      final InspectionFlushSummary summary = await engine.flushQueue();
+        final InspectionFlushSummary summary = await engine.flushQueue();
 
-      // Only the non-synced entry ('a') was attempted; 'b' was already
-      // synced and is skipped.
-      expect(summary.attempted, 1);
-      expect(summary.delivered, 1);
-      expect(summary.stillPending, 0);
-    });
+        // Only the non-synced entry ('a') was attempted; 'b' was already
+        // synced and is skipped.
+        expect(summary.attempted, 1);
+        expect(summary.delivered, 1);
+        expect(summary.stillPending, 0);
+      },
+    );
 
     test('an unreadable queue store refuses rather than guessing - '
         'reports nothing attempted, never "everything is fine"', () async {
@@ -485,8 +486,8 @@ void main() {
         remote: remote,
         photoUploader: uploader,
       );
-      final InspectionFlushSummary summary =
-          await engineOverUnreadable.flushQueue();
+      final InspectionFlushSummary summary = await engineOverUnreadable
+          .flushQueue();
       expect(summary.attempted, 0);
       expect(summary.delivered, 0);
     });

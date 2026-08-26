@@ -21,9 +21,7 @@ import 'package:tyre_pulse/features/meter_logs/presentation/meter_log_screen.dar
 
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> meterLogsScreenRegistrations =
-    <String, TpScreenBuilder>{
-  TpRouteId.meterLog: _buildMeterLogScreen,
-};
+    <String, TpScreenBuilder>{TpRouteId.meterLog: _buildMeterLogScreen};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [MeterLogRoute]. The registry is keyed by [TpRouteId.meterLog], so

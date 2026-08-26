@@ -25,7 +25,8 @@ void expectClearlyDifferent(String label, Color a, Color b) {
   expect(
     diff,
     greaterThan(_kMinLuminanceDiff),
-    reason: '$label: luminance difference was only ${diff.toStringAsFixed(4)}, '
+    reason:
+        '$label: luminance difference was only ${diff.toStringAsFixed(4)}, '
         'below the $_kMinLuminanceDiff floor for legible ink on a fill',
   );
 }
@@ -52,27 +53,28 @@ void main() {
       expect(TpTheme.dark.dividerColor, TpPalette.dark.border);
     });
 
-    test('splashFactory is disabled, per spec section 55 on low-memory phones',
-        () {
-      expect(TpTheme.light.splashFactory, NoSplash.splashFactory);
-      expect(TpTheme.dark.splashFactory, NoSplash.splashFactory);
-    });
+    test(
+      'splashFactory is disabled, per spec section 55 on low-memory phones',
+      () {
+        expect(TpTheme.light.splashFactory, NoSplash.splashFactory);
+        expect(TpTheme.dark.splashFactory, NoSplash.splashFactory);
+      },
+    );
 
-    test('visualDensity is standard so touch targets never shrink below 48dp',
-        () {
-      expect(TpTheme.light.visualDensity, VisualDensity.standard);
-      expect(TpTheme.dark.visualDensity, VisualDensity.standard);
-    });
+    test(
+      'visualDensity is standard so touch targets never shrink below 48dp',
+      () {
+        expect(TpTheme.light.visualDensity, VisualDensity.standard);
+        expect(TpTheme.dark.visualDensity, VisualDensity.standard);
+      },
+    );
 
     test('textTheme is exactly what TpTypography builds for the palette', () {
       expect(
         TpTheme.light.textTheme,
         TpTypography.textThemeFor(TpPalette.light),
       );
-      expect(
-        TpTheme.dark.textTheme,
-        TpTypography.textThemeFor(TpPalette.dark),
-      );
+      expect(TpTheme.dark.textTheme, TpTypography.textThemeFor(TpPalette.dark));
     });
   });
 
@@ -133,22 +135,15 @@ void main() {
     test('onError against error', () {
       final ColorScheme light = TpTheme.light.colorScheme;
       final ColorScheme dark = TpTheme.dark.colorScheme;
-      expectClearlyDifferent(
-        'light onError/error',
-        light.onError,
-        light.error,
-      );
-      expectClearlyDifferent(
-        'dark onError/error',
-        dark.onError,
-        dark.error,
-      );
+      expectClearlyDifferent('light onError/error', light.onError, light.error);
+      expectClearlyDifferent('dark onError/error', dark.onError, dark.error);
     });
   });
 
   group('building a real app on these themes', () {
-    testWidgets('MaterialApp with both themes registered does not throw',
-        (WidgetTester tester) async {
+    testWidgets('MaterialApp with both themes registered does not throw', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: TpTheme.light,

@@ -35,7 +35,12 @@ void main() {
   test('G1: required + empty names the field', () {
     expect(
       validateAnswer(
-        const ChecklistField(id: 'x', type: 'text', label: 'Name', required: true),
+        const ChecklistField(
+          id: 'x',
+          type: 'text',
+          label: 'Name',
+          required: true,
+        ),
         '',
       ),
       'Name is required',
@@ -44,16 +49,18 @@ void main() {
 
   test('G2: optional + empty short-circuits every later check', () {
     expect(
-      validateAnswer(
-        const ChecklistField(id: 'x', type: 'number', min: 1),
-        '',
-      ),
+      validateAnswer(const ChecklistField(id: 'x', type: 'number', min: 1), ''),
       isNull,
     );
   });
 
   test('G3: number bounds', () {
-    const ChecklistField f = ChecklistField(id: 'x', type: 'number', min: 1, max: 10);
+    const ChecklistField f = ChecklistField(
+      id: 'x',
+      type: 'number',
+      min: 1,
+      max: 10,
+    );
     expect(validateAnswer(f, 0), isNotNull);
     expect(validateAnswer(f, 5), isNull);
     expect(validateAnswer(f, 11), isNotNull);
@@ -146,10 +153,10 @@ void main() {
       const <String, Object?>{},
     );
     expect(missing, hasLength(1));
-    expect(
-      missing.first.fields.map((ChecklistFieldRef f) => f.id),
-      <String>['f_ws_km', 'f_ws_hr'],
-    );
+    expect(missing.first.fields.map((ChecklistFieldRef f) => f.id), <String>[
+      'f_ws_km',
+      'f_ws_hr',
+    ]);
   });
 
   test('G11: zero IS a reading', () {

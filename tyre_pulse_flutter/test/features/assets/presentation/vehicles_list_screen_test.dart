@@ -152,70 +152,65 @@ void main() {
     },
   );
 
-  testWidgets(
-    'truncated is a slim notice ABOVE a still-usable list, never a '
-    'full-screen state - there is real content underneath it',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        _resolved(
-          const VehicleFleetListLoaded(
-            assets: <VehicleAsset>[
-              VehicleAsset(id: 'v1', assetNo: 'TM514'),
-            ],
-            truncated: true,
-          ),
+  testWidgets('truncated is a slim notice ABOVE a still-usable list, never a '
+      'full-screen state - there is real content underneath it', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _resolved(
+        const VehicleFleetListLoaded(
+          assets: <VehicleAsset>[VehicleAsset(id: 'v1', assetNo: 'TM514')],
+          truncated: true,
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        find.text(
-          'Showing part of the fleet. Narrow your search to find a '
-          'specific vehicle.',
+    expect(
+      find.text(
+        'Showing part of the fleet. Narrow your search to find a '
+        'specific vehicle.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(TpAssetCard), findsOneWidget);
+    _expectNoStateWidget();
+  });
+
+  testWidgets('a failed live read with a usable cached copy renders '
+      'TpOfflineCachedState, distinct from the empty and error states', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _resolved(
+        VehicleFleetListFromCache(
+          assets: const <VehicleAsset>[
+            VehicleAsset(id: 'v1', assetNo: 'TM514'),
+          ],
+          cachedAt: DateTime.utc(2026, 8, 20, 9),
         ),
-        findsOneWidget,
-      );
-      expect(find.byType(TpAssetCard), findsOneWidget);
-      _expectNoStateWidget();
-    },
-  );
+      ),
+    );
+    await tester.pumpAndSettle();
 
-  testWidgets(
-    'a failed live read with a usable cached copy renders '
-    'TpOfflineCachedState, distinct from the empty and error states',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        _resolved(
-          VehicleFleetListFromCache(
-            assets: const <VehicleAsset>[
-              VehicleAsset(id: 'v1', assetNo: 'TM514'),
-            ],
-            cachedAt: DateTime.utc(2026, 8, 20, 9),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
+    expect(find.byType(TpAssetCard), findsNothing);
+  });
 
-      expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
-      expect(find.byType(TpAssetCard), findsNothing);
-    },
-  );
+  testWidgets('a network-classified failure with no cache renders '
+      'TpBackendUnavailableState, not the plain error state', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _resolved(VehicleFleetListFailed(const AppError.network())),
+    );
+    await tester.pumpAndSettle();
 
-  testWidgets(
-    'a network-classified failure with no cache renders '
-    'TpBackendUnavailableState, not the plain error state',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        _resolved(VehicleFleetListFailed(const AppError.network())),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(TpStateKeys.backendUnavailable), findsOneWidget);
-    },
-  );
+    expect(find.byKey(TpStateKeys.backendUnavailable), findsOneWidget);
+  });
 
   testWidgets(
     'a non-network failure with no cache renders the plain TpErrorState, '
@@ -295,36 +290,31 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(TpAssetCard), findsOneWidget);
-      final TextField field = tester.widget<TextField>(
-        find.byType(TextField),
-      );
+      final TextField field = tester.widget<TextField>(find.byType(TextField));
       expect(field.controller?.text, 'TM515');
     },
   );
 
-  testWidgets(
-    'the All chip lifts the default tyre-only filter, revealing a '
-    'non-tyre-carrying asset that was hidden',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        _resolved(
-          const VehicleFleetListLoaded(
-            assets: <VehicleAsset>[
-              VehicleAsset(id: 'v1', assetNo: 'TM514'),
-              VehicleAsset(id: 'v2', assetNo: 'GN101'),
-            ],
-            truncated: false,
-          ),
+  testWidgets('the All chip lifts the default tyre-only filter, revealing a '
+      'non-tyre-carrying asset that was hidden', (WidgetTester tester) async {
+    await _pump(
+      tester,
+      _resolved(
+        const VehicleFleetListLoaded(
+          assets: <VehicleAsset>[
+            VehicleAsset(id: 'v1', assetNo: 'TM514'),
+            VehicleAsset(id: 'v2', assetNo: 'GN101'),
+          ],
+          truncated: false,
         ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(TpAssetCard), findsOneWidget);
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TpAssetCard), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await tester.pumpAndSettle();
 
-      expect(find.byType(TpAssetCard), findsNWidgets(2));
-    },
-  );
+    expect(find.byType(TpAssetCard), findsNWidgets(2));
+  });
 }

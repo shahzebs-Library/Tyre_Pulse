@@ -49,16 +49,17 @@ final class SupabaseInspectionPhotoUploader
     return guard<String>(() async {
       final File file = File(localPath);
       final String ext = _extensionOf(localPath);
-      final String safePosition =
-          position.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-      final String path = 'inspections/$inspectionId/'
+      final String safePosition = position.replaceAll(
+        RegExp(r'[^A-Za-z0-9_-]'),
+        '_',
+      );
+      final String path =
+          'inspections/$inspectionId/'
           '${safePosition}_${DateTime.now().millisecondsSinceEpoch}$ext';
 
-      await _client.storage.from(inspectionPhotoBucket).upload(
-            path,
-            file,
-            fileOptions: const FileOptions(upsert: true),
-          );
+      await _client.storage
+          .from(inspectionPhotoBucket)
+          .upload(path, file, fileOptions: const FileOptions(upsert: true));
 
       return _client.storage.from(inspectionPhotoBucket).getPublicUrl(path);
     });

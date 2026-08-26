@@ -17,9 +17,7 @@ import 'package:tyre_pulse/features/tyres/presentation/'
 
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> tyresScreenRegistrations =
-    <String, TpScreenBuilder>{
-  TpRouteId.serialSearch: _buildSerialSearchScreen,
-};
+    <String, TpScreenBuilder>{TpRouteId.serialSearch: _buildSerialSearchScreen};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [SerialSearchRoute]. The registry is keyed by [TpRouteId.serialSearch], so

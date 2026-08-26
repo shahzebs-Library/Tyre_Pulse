@@ -24,5 +24,5 @@ import 'package:tyre_pulse/features/records/data/tyre_records_repository.dart';
 
 final Provider<TyreRecordsRepository> tyreRecordsRepositoryProvider =
     Provider<TyreRecordsRepository>(
-  (ref) => SupabaseTyreRecordsRepository(ref.watch(supabaseClientProvider)),
-);
+      (ref) => SupabaseTyreRecordsRepository(ref.watch(supabaseClientProvider)),
+    );

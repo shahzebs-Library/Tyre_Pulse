@@ -42,23 +42,26 @@ void main() {
   });
 
   group('enqueue / list / byId', () {
-    test('a freshly enqueued item is readable back by id and by list()', () async {
-      final QueuedInspection item = QueuedInspection(
-        id: 'q-1',
-        draftKey: 'user-1::TM514',
-        payload: _payload(),
-        createdAt: DateTime.utc(2026, 8, 20, 9, 1),
-      );
-      await queue.enqueue(item);
+    test(
+      'a freshly enqueued item is readable back by id and by list()',
+      () async {
+        final QueuedInspection item = QueuedInspection(
+          id: 'q-1',
+          draftKey: 'user-1::TM514',
+          payload: _payload(),
+          createdAt: DateTime.utc(2026, 8, 20, 9, 1),
+        );
+        await queue.enqueue(item);
 
-      final QueuedInspection? found = await queue.byId('q-1');
-      expect(found, isNotNull);
-      expect(found!.status, InspectionQueueStatus.pending);
+        final QueuedInspection? found = await queue.byId('q-1');
+        expect(found, isNotNull);
+        expect(found!.status, InspectionQueueStatus.pending);
 
-      final InspectionQueueReadResult listed = await queue.list();
-      expect(listed.isReadable, isTrue);
-      expect(listed.items.map((q) => q.id), <String>['q-1']);
-    });
+        final InspectionQueueReadResult listed = await queue.list();
+        expect(listed.isReadable, isTrue);
+        expect(listed.items.map((q) => q.id), <String>['q-1']);
+      },
+    );
 
     test('byId returns null for an id that was never enqueued', () async {
       expect(await queue.byId('does-not-exist'), isNull);
@@ -85,8 +88,9 @@ void main() {
 
       final InspectionQueueReadResult listed = await queue.list();
       expect(listed.items.length, 2);
-      final Set<String> assetNumbers =
-          listed.items.map((q) => q.payload.assetNo).toSet();
+      final Set<String> assetNumbers = listed.items
+          .map((q) => q.payload.assetNo)
+          .toSet();
       expect(assetNumbers, <String>{'TM514', 'TM515'});
     });
   });
@@ -138,20 +142,22 @@ void main() {
       expect((await queue.list()).items, isEmpty);
     });
 
-    test('remove deletes the entry so it no longer appears in list()',
-        () async {
-      await queue.enqueue(
-        QueuedInspection(
-          id: 'q-1',
-          draftKey: 'k',
-          payload: _payload(),
-          createdAt: DateTime.utc(2026, 8, 20),
-        ),
-      );
-      await queue.remove('q-1');
-      expect((await queue.list()).items, isEmpty);
-      expect(await queue.byId('q-1'), isNull);
-    });
+    test(
+      'remove deletes the entry so it no longer appears in list()',
+      () async {
+        await queue.enqueue(
+          QueuedInspection(
+            id: 'q-1',
+            draftKey: 'k',
+            payload: _payload(),
+            createdAt: DateTime.utc(2026, 8, 20),
+          ),
+        );
+        await queue.remove('q-1');
+        expect((await queue.list()).items, isEmpty);
+        expect(await queue.byId('q-1'), isNull);
+      },
+    );
   });
 
   group('pendingCount', () {
@@ -193,33 +199,37 @@ void main() {
     });
   });
 
-  group('a corrupt individual file is skipped, not fatal to the whole read',
-      () {
-    test('list() omits an unparsable file but returns every other item',
+  group(
+    'a corrupt individual file is skipped, not fatal to the whole read',
+    () {
+      test(
+        'list() omits an unparsable file but returns every other item',
         () async {
-      await queue.enqueue(
-        QueuedInspection(
-          id: 'good-1',
-          draftKey: 'k',
-          payload: _payload(),
-          createdAt: DateTime.utc(2026, 8, 20),
-        ),
-      );
+          await queue.enqueue(
+            QueuedInspection(
+              id: 'good-1',
+              draftKey: 'k',
+              payload: _payload(),
+              createdAt: DateTime.utc(2026, 8, 20),
+            ),
+          );
 
-      // Write a corrupt sibling file directly, bypassing the queue's own
-      // atomic-write path - simulating a file that was truncated by a
-      // process kill mid-write.
-      final File corrupt = File(
-        '${tempDir.path}${Platform.pathSeparator}inspection_submissions'
-        '${Platform.pathSeparator}corrupt.json',
-      );
-      await corrupt.writeAsString('{not valid json');
+          // Write a corrupt sibling file directly, bypassing the queue's own
+          // atomic-write path - simulating a file that was truncated by a
+          // process kill mid-write.
+          final File corrupt = File(
+            '${tempDir.path}${Platform.pathSeparator}inspection_submissions'
+            '${Platform.pathSeparator}corrupt.json',
+          );
+          await corrupt.writeAsString('{not valid json');
 
-      final InspectionQueueReadResult result = await queue.list();
-      expect(result.isReadable, isTrue);
-      expect(result.items.map((q) => q.id), <String>['good-1']);
-    });
-  });
+          final InspectionQueueReadResult result = await queue.list();
+          expect(result.isReadable, isTrue);
+          expect(result.items.map((q) => q.id), <String>['good-1']);
+        },
+      );
+    },
+  );
 
   group('atomic write leaves no stray .tmp file behind on success', () {
     test('after enqueue, only the real .json file exists', () async {

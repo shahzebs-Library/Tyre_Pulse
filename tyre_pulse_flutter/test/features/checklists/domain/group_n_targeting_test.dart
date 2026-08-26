@@ -55,7 +55,9 @@ void main() {
     );
     expect(
       templateAllowsRole(
-        const ChecklistTemplate(assigneeRoles: <String>['Maintenance Supervisor']),
+        const ChecklistTemplate(
+          assigneeRoles: <String>['Maintenance Supervisor'],
+        ),
         'maintenance_supervisor',
       ),
       isTrue,
@@ -72,21 +74,33 @@ void main() {
       assigneeRoles: <String>['Driver'],
     );
     const ChecklistTemplate shared = ChecklistTemplate(name: 'Site safety');
-    final List<ChecklistTemplate> all = <ChecklistTemplate>[workshop, driver, shared];
+    final List<ChecklistTemplate> all = <ChecklistTemplate>[
+      workshop,
+      driver,
+      shared,
+    ];
 
     expect(
-      filterTemplatesForRole(all, 'mechanic').map((ChecklistTemplate t) => t.name),
+      filterTemplatesForRole(
+        all,
+        'mechanic',
+      ).map((ChecklistTemplate t) => t.name),
       <String>['Workshop daily', 'Site safety'],
     );
     expect(
-      filterTemplatesForRole(all, 'driver').map((ChecklistTemplate t) => t.name),
+      filterTemplatesForRole(
+        all,
+        'driver',
+      ).map((ChecklistTemplate t) => t.name),
       <String>['Pre-trip check', 'Site safety'],
     );
     expect(templateAllowsRole(workshop, 'driver'), isFalse);
   });
 
   test('N5: oversight sees everything, a mechanic does not', () {
-    const ChecklistTemplate t = ChecklistTemplate(assigneeRoles: <String>['Electrician']);
+    const ChecklistTemplate t = ChecklistTemplate(
+      assigneeRoles: <String>['Electrician'],
+    );
     expect(isOversightRole('manager'), isTrue);
     expect(templateAllowsRole(t, 'manager'), isTrue);
     expect(templateAllowsRole(t, 'director'), isTrue);
@@ -120,10 +134,10 @@ void main() {
       const ChecklistAssignment(assigneeRole: 'Driver'),
       const ChecklistAssignment(),
     ];
-    expect(
-      filterAssignmentsForRole(rows, 'mechanic'),
-      <ChecklistAssignment>[rows[0], rows[2]],
-    );
+    expect(filterAssignmentsForRole(rows, 'mechanic'), <ChecklistAssignment>[
+      rows[0],
+      rows[2],
+    ]);
     expect(assignmentAllowsRole(rows[2], 'reporter'), isTrue);
     expect(assignmentAllowsRole(rows[1], 'mechanic'), isFalse);
   });
@@ -132,7 +146,9 @@ void main() {
     expect(roleTargetLabel(const ChecklistTemplate()), isNull);
     expect(
       roleTargetLabel(
-        const ChecklistTemplate(assigneeRoles: <String>['Mechanic', 'Electrician']),
+        const ChecklistTemplate(
+          assigneeRoles: <String>['Mechanic', 'Electrician'],
+        ),
       ),
       'Mechanic, Electrician',
     );

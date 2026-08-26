@@ -62,9 +62,7 @@ Future<void> _pump(
 /// The override every test that reaches `_DetailView` needs. See the
 /// library comment.
 Override _canStartInspection(bool value) =>
-    canAccessModuleProvider(ModuleKey.inspect).overrideWith(
-      (Ref ref) => value,
-    );
+    canAccessModuleProvider(ModuleKey.inspect).overrideWith((Ref ref) => value);
 
 Override _resolved(VehicleDetailOutcome outcome, {String assetNo = _assetNo}) =>
     vehicleDetailProvider(assetNo).overrideWith((Ref ref) async => outcome);
@@ -72,9 +70,8 @@ Override _resolved(VehicleDetailOutcome outcome, {String assetNo = _assetNo}) =>
 void main() {
   testWidgets('loading renders TpLoadingState', (WidgetTester tester) async {
     await _pump(tester, <Override>[
-      vehicleDetailProvider(_assetNo).overrideWith(
-        (Ref ref) => Completer<VehicleDetailOutcome>().future,
-      ),
+      vehicleDetailProvider(_assetNo)
+          .overrideWith((Ref ref) => Completer<VehicleDetailOutcome>().future),
       _canStartInspection(false),
     ]);
     await tester.pump();
@@ -82,74 +79,72 @@ void main() {
     expect(find.byKey(TpStateKeys.loading), findsOneWidget);
   });
 
-  testWidgets(
-    'a provider failure (defensive only) renders TpErrorState',
-    (WidgetTester tester) async {
-      await _pump(tester, <Override>[
-        vehicleDetailProvider(_assetNo).overrideWith(
-          (Ref ref) => Future<VehicleDetailOutcome>.error(
-            Exception('provider construction bug'),
-          ),
+  testWidgets('a provider failure (defensive only) renders TpErrorState', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, <Override>[
+      vehicleDetailProvider(_assetNo).overrideWith(
+        (Ref ref) => Future<VehicleDetailOutcome>.error(
+          Exception('provider construction bug'),
         ),
-        _canStartInspection(false),
-      ]);
-      await tester.pumpAndSettle();
+      ),
+      _canStartInspection(false),
+    ]);
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(TpStateKeys.error), findsOneWidget);
-    },
-  );
+    expect(find.byKey(TpStateKeys.error), findsOneWidget);
+  });
 
-  testWidgets(
-    'a loaded vehicle shows its identity and every field, joined and '
-    'formatted the way the production screen expects',
-    (WidgetTester tester) async {
-      const VehicleAsset asset = VehicleAsset(
-        id: 'v1',
-        assetNo: _assetNo,
-        fleetNumber: 'FN-88',
-        make: 'Sinotruk',
-        model: 'HOWO',
-        vehicleType: 'TR-MIXER',
-        site: 'NHC',
-        status: 'Active',
-        operatorName: 'A. Rahman',
-        tyreSize: '315/80R22.5',
-        currentKm: 128000,
-        country: 'KSA',
-        department: 'Operations',
-        region: 'Central',
-        registrationNo: 'ABC-1234',
-        year: 2019,
-      );
-      await _pump(tester, <Override>[
-        _resolved(const VehicleDetailLoaded(asset)),
-        _canStartInspection(false),
-      ]);
-      await tester.pumpAndSettle();
+  testWidgets('a loaded vehicle shows its identity and every field, joined and '
+      'formatted the way the production screen expects', (
+    WidgetTester tester,
+  ) async {
+    const VehicleAsset asset = VehicleAsset(
+      id: 'v1',
+      assetNo: _assetNo,
+      fleetNumber: 'FN-88',
+      make: 'Sinotruk',
+      model: 'HOWO',
+      vehicleType: 'TR-MIXER',
+      site: 'NHC',
+      status: 'Active',
+      operatorName: 'A. Rahman',
+      tyreSize: '315/80R22.5',
+      currentKm: 128000,
+      country: 'KSA',
+      department: 'Operations',
+      region: 'Central',
+      registrationNo: 'ABC-1234',
+      year: 2019,
+    );
+    await _pump(tester, <Override>[
+      _resolved(const VehicleDetailLoaded(asset)),
+      _canStartInspection(false),
+    ]);
+    await tester.pumpAndSettle();
 
-      // The header identity goes through TpIdentifierText (bidi isolate
-      // marks), so textContaining rather than an exact match - see
-      // vehicles_list_screen_test.dart's identical note.
-      expect(find.textContaining(_assetNo), findsWidgets);
-      expect(find.text('FN-88'), findsOneWidget);
-      // make + model, joined with a single space by _DetailView's own
-      // _join - NOT the comma-separated join the list screen's summary
-      // uses. Getting this separator wrong is exactly the kind of thing
-      // that would silently pass a looser assertion.
-      expect(find.text('Sinotruk HOWO'), findsOneWidget);
-      expect(find.text('2019'), findsOneWidget);
-      expect(find.text('128,000 km'), findsOneWidget);
-      expect(find.text('A. Rahman'), findsOneWidget);
-      expect(find.text('Operations'), findsOneWidget);
-      expect(find.text('NHC'), findsOneWidget);
-      expect(find.text('Central'), findsOneWidget);
-      expect(find.text('KSA'), findsOneWidget);
-      expect(find.text('315/80R22.5'), findsOneWidget);
-      expect(find.text('ABC-1234'), findsOneWidget);
-      expect(find.text('TR-MIXER'), findsOneWidget);
-      _expectNoStateWidget();
-    },
-  );
+    // The header identity goes through TpIdentifierText (bidi isolate
+    // marks), so textContaining rather than an exact match - see
+    // vehicles_list_screen_test.dart's identical note.
+    expect(find.textContaining(_assetNo), findsWidgets);
+    expect(find.text('FN-88'), findsOneWidget);
+    // make + model, joined with a single space by _DetailView's own
+    // _join - NOT the comma-separated join the list screen's summary
+    // uses. Getting this separator wrong is exactly the kind of thing
+    // that would silently pass a looser assertion.
+    expect(find.text('Sinotruk HOWO'), findsOneWidget);
+    expect(find.text('2019'), findsOneWidget);
+    expect(find.text('128,000 km'), findsOneWidget);
+    expect(find.text('A. Rahman'), findsOneWidget);
+    expect(find.text('Operations'), findsOneWidget);
+    expect(find.text('NHC'), findsOneWidget);
+    expect(find.text('Central'), findsOneWidget);
+    expect(find.text('KSA'), findsOneWidget);
+    expect(find.text('315/80R22.5'), findsOneWidget);
+    expect(find.text('ABC-1234'), findsOneWidget);
+    expect(find.text('TR-MIXER'), findsOneWidget);
+    _expectNoStateWidget();
+  });
 
   testWidgets(
     'a field with no value renders the design system\'s "not measured" '
@@ -182,70 +177,58 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Start inspection is withheld when the inspect module is not '
-    'reachable, rather than shown disabled',
-    (WidgetTester tester) async {
-      const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
+  testWidgets('Start inspection is withheld when the inspect module is not '
+      'reachable, rather than shown disabled', (WidgetTester tester) async {
+    const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
 
-      await _pump(tester, <Override>[
-        _resolved(const VehicleDetailLoaded(asset)),
-        _canStartInspection(false),
-      ]);
-      await tester.pumpAndSettle();
-      expect(find.text('Start inspection'), findsNothing);
-    },
-  );
+    await _pump(tester, <Override>[
+      _resolved(const VehicleDetailLoaded(asset)),
+      _canStartInspection(false),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('Start inspection'), findsNothing);
+  });
 
-  testWidgets(
-    'a failed live read with a usable cached copy renders '
-    'TpOfflineCachedState',
-    (WidgetTester tester) async {
-      const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
-      await _pump(tester, <Override>[
-        _resolved(
-          VehicleDetailFromCache(
-            asset: asset,
-            cachedAt: DateTime.utc(2026, 8, 20, 9),
-          ),
+  testWidgets('a failed live read with a usable cached copy renders '
+      'TpOfflineCachedState', (WidgetTester tester) async {
+    const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
+    await _pump(tester, <Override>[
+      _resolved(
+        VehicleDetailFromCache(
+          asset: asset,
+          cachedAt: DateTime.utc(2026, 8, 20, 9),
         ),
-        _canStartInspection(false),
-      ]);
-      await tester.pumpAndSettle();
+      ),
+      _canStartInspection(false),
+    ]);
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
-    },
-  );
+    expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
+  });
 
-  testWidgets(
-    'a genuine not-found (the query ran and matched nothing) renders '
-    'TpEmptyState, not TpErrorState - this is a fact about the fleet, '
-    'not a malfunction',
-    (WidgetTester tester) async {
-      await _pump(tester, <Override>[
-        _resolved(const VehicleDetailNotFound()),
-        _canStartInspection(false),
-      ]);
-      await tester.pumpAndSettle();
+  testWidgets('a genuine not-found (the query ran and matched nothing) renders '
+      'TpEmptyState, not TpErrorState - this is a fact about the fleet, '
+      'not a malfunction', (WidgetTester tester) async {
+    await _pump(tester, <Override>[
+      _resolved(const VehicleDetailNotFound()),
+      _canStartInspection(false),
+    ]);
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(TpStateKeys.empty), findsOneWidget);
-      expect(find.byKey(TpStateKeys.error), findsNothing);
-    },
-  );
+    expect(find.byKey(TpStateKeys.empty), findsOneWidget);
+    expect(find.byKey(TpStateKeys.error), findsNothing);
+  });
 
-  testWidgets(
-    'a network-classified failure with no cache renders '
-    'TpBackendUnavailableState',
-    (WidgetTester tester) async {
-      await _pump(tester, <Override>[
-        _resolved(VehicleDetailFailed(const AppError.network())),
-        _canStartInspection(false),
-      ]);
-      await tester.pumpAndSettle();
+  testWidgets('a network-classified failure with no cache renders '
+      'TpBackendUnavailableState', (WidgetTester tester) async {
+    await _pump(tester, <Override>[
+      _resolved(VehicleDetailFailed(const AppError.network())),
+      _canStartInspection(false),
+    ]);
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(TpStateKeys.backendUnavailable), findsOneWidget);
-    },
-  );
+    expect(find.byKey(TpStateKeys.backendUnavailable), findsOneWidget);
+  });
 
   testWidgets(
     'a non-network failure with no cache renders the plain TpErrorState',

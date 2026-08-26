@@ -61,24 +61,18 @@ void main() {
     });
 
     test('a record with no asset number is skipped', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: '', washDate: '2026-01-01'),
-          WashHistoryRecord(assetNo: null, washDate: '2026-01-01'),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: '', washDate: '2026-01-01'),
+        WashHistoryRecord(assetNo: null, washDate: '2026-01-01'),
+      ], now: DateTime.utc(2026, 1, 20));
       expect(due, isEmpty);
     });
 
     test('a record with an unparseable wash date is skipped', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM514', washDate: 'not-a-date'),
-          WashHistoryRecord(assetNo: 'TM515', washDate: null),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM514', washDate: 'not-a-date'),
+        WashHistoryRecord(assetNo: 'TM515', washDate: null),
+      ], now: DateTime.utc(2026, 1, 20));
       expect(due, isEmpty);
     });
   });
@@ -102,51 +96,39 @@ void main() {
     });
 
     test('different assets are tracked independently', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
-          WashHistoryRecord(assetNo: 'TM515', washDate: '2026-01-15'),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
-      expect(
-        due.map((WashDueEntry e) => e.assetNo),
-        <String>['TM514', 'TM515'],
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
+        WashHistoryRecord(assetNo: 'TM515', washDate: '2026-01-15'),
+      ], now: DateTime.utc(2026, 1, 20));
+      expect(due.map((WashDueEntry e) => e.assetNo), <String>[
+        'TM514',
+        'TM515',
+      ]);
     });
   });
 
   group('washDueList - the daysOverdue >= 0 inclusion boundary', () {
     test('exactly on the due date is included at 0 days overdue', () {
       // Last wash 01-01 + 7 days = due 01-08. "Now" is exactly 01-08.
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
-        ],
-        now: DateTime.utc(2026, 1, 8),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
+      ], now: DateTime.utc(2026, 1, 8));
       expect(due, hasLength(1));
       expect(due.single.daysOverdue, 0);
       expect(due.single.nextDueDate, '2026-01-08');
     });
 
     test('one day before the due date is excluded entirely', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
-        ],
-        now: DateTime.utc(2026, 1, 7),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
+      ], now: DateTime.utc(2026, 1, 7));
       expect(due, isEmpty);
     });
 
     test('one day past the due date is included at 1 day overdue', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
-        ],
-        now: DateTime.utc(2026, 1, 9),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
+      ], now: DateTime.utc(2026, 1, 9));
       expect(due, hasLength(1));
       expect(due.single.daysOverdue, 1);
     });
@@ -175,64 +157,53 @@ void main() {
 
   group('washDueList - sort order', () {
     test('most overdue first', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          // Due 01-17, 3 days overdue as of 01-20.
-          WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-10'),
-          // Due 01-08, 12 days overdue as of 01-20.
-          WashHistoryRecord(assetNo: 'TM515', washDate: '2026-01-01'),
-          // Due 01-22 - not yet due as of 01-20, so excluded entirely.
-          WashHistoryRecord(assetNo: 'TM516', washDate: '2026-01-15'),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
-      expect(
-        due.map((WashDueEntry e) => e.assetNo),
-        <String>['TM515', 'TM514'],
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        // Due 01-17, 3 days overdue as of 01-20.
+        WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-10'),
+        // Due 01-08, 12 days overdue as of 01-20.
+        WashHistoryRecord(assetNo: 'TM515', washDate: '2026-01-01'),
+        // Due 01-22 - not yet due as of 01-20, so excluded entirely.
+        WashHistoryRecord(assetNo: 'TM516', washDate: '2026-01-15'),
+      ], now: DateTime.utc(2026, 1, 20));
+      expect(due.map((WashDueEntry e) => e.assetNo), <String>[
+        'TM515',
+        'TM514',
+      ]);
       expect(due.map((WashDueEntry e) => e.daysOverdue), <int>[12, 3]);
     });
 
     test('a tie on days overdue breaks by asset number ascending', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM520', washDate: '2026-01-01'),
-          WashHistoryRecord(assetNo: 'TM501', washDate: '2026-01-01'),
-          WashHistoryRecord(assetNo: 'TM510', washDate: '2026-01-01'),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
-      expect(
-        due.map((WashDueEntry e) => e.assetNo),
-        <String>['TM501', 'TM510', 'TM520'],
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM520', washDate: '2026-01-01'),
+        WashHistoryRecord(assetNo: 'TM501', washDate: '2026-01-01'),
+        WashHistoryRecord(assetNo: 'TM510', washDate: '2026-01-01'),
+      ], now: DateTime.utc(2026, 1, 20));
+      expect(due.map((WashDueEntry e) => e.assetNo), <String>[
+        'TM501',
+        'TM510',
+        'TM520',
+      ]);
     });
   });
 
   group('washDueList - carries through site and vehicle type', () {
     test('site and vehicle type from the winning row are preserved', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(
-            assetNo: 'TM514',
-            washDate: '2026-01-01',
-            site: 'NHC',
-            vehicleType: 'TR-MIXER',
-          ),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(
+          assetNo: 'TM514',
+          washDate: '2026-01-01',
+          site: 'NHC',
+          vehicleType: 'TR-MIXER',
+        ),
+      ], now: DateTime.utc(2026, 1, 20));
       expect(due.single.site, 'NHC');
       expect(due.single.vehicleType, 'TR-MIXER');
     });
 
     test('a missing site or vehicle type stays null, never fabricated', () {
-      final List<WashDueEntry> due = washDueList(
-        const <WashHistoryRecord>[
-          WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
-        ],
-        now: DateTime.utc(2026, 1, 20),
-      );
+      final List<WashDueEntry> due = washDueList(const <WashHistoryRecord>[
+        WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
+      ], now: DateTime.utc(2026, 1, 20));
       expect(due.single.site, isNull);
       expect(due.single.vehicleType, isNull);
     });

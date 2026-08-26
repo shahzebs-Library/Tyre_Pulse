@@ -99,17 +99,20 @@ void main() {
 
       // Tyre classes first, in tyreAssetClasses order (TM before MP before
       // BH, regardless of count), then non-tyre classes.
-      final List<String> order =
-          chips.map((AssetClassChip c) => c.assetClass).toList();
+      final List<String> order = chips
+          .map((AssetClassChip c) => c.assetClass)
+          .toList();
       expect(order, <String>['TM', 'MP', 'BH', 'GN']);
 
-      final AssetClassChip tm =
-          chips.firstWhere((AssetClassChip c) => c.assetClass == 'TM');
+      final AssetClassChip tm = chips.firstWhere(
+        (AssetClassChip c) => c.assetClass == 'TM',
+      );
       expect(tm.count, 2);
       expect(tm.isTyreClass, isTrue);
 
-      final AssetClassChip gn =
-          chips.firstWhere((AssetClassChip c) => c.assetClass == 'GN');
+      final AssetClassChip gn = chips.firstWhere(
+        (AssetClassChip c) => c.assetClass == 'GN',
+      );
       expect(gn.count, 2);
       expect(gn.isTyreClass, isFalse);
     });
@@ -120,10 +123,11 @@ void main() {
         'BP001',
         'GN001',
       ]);
-      expect(
-        chips.map((AssetClassChip c) => c.assetClass).toList(),
-        <String>['BP', 'GN', 'IP'],
-      );
+      expect(chips.map((AssetClassChip c) => c.assetClass).toList(), <String>[
+        'BP',
+        'GN',
+        'IP',
+      ]);
     });
 
     test('non-tyre classes with a higher count sort before a lower one, '
@@ -134,14 +138,13 @@ void main() {
         'GN002',
         'GN003',
       ]);
-      expect(
-        chips.map((AssetClassChip c) => c.assetClass).toList(),
-        <String>['GN', 'IP'],
-      );
+      expect(chips.map((AssetClassChip c) => c.assetClass).toList(), <String>[
+        'GN',
+        'IP',
+      ]);
     });
 
-    test('a row with no recognisable class contributes to no chip at all',
-        () {
+    test('a row with no recognisable class contributes to no chip at all', () {
       final List<AssetClassChip> chips = classChips(<String?>[
         '123',
         null,
@@ -160,19 +163,31 @@ void main() {
 
   group('AssetClassChip value equality', () {
     test('two chips with the same fields are equal', () {
-      const AssetClassChip a =
-          AssetClassChip(assetClass: 'TM', count: 3, isTyreClass: true);
-      const AssetClassChip b =
-          AssetClassChip(assetClass: 'TM', count: 3, isTyreClass: true);
+      const AssetClassChip a = AssetClassChip(
+        assetClass: 'TM',
+        count: 3,
+        isTyreClass: true,
+      );
+      const AssetClassChip b = AssetClassChip(
+        assetClass: 'TM',
+        count: 3,
+        isTyreClass: true,
+      );
       expect(a, b);
       expect(a.hashCode, b.hashCode);
     });
 
     test('a different count is a different chip', () {
-      const AssetClassChip a =
-          AssetClassChip(assetClass: 'TM', count: 3, isTyreClass: true);
-      const AssetClassChip b =
-          AssetClassChip(assetClass: 'TM', count: 4, isTyreClass: true);
+      const AssetClassChip a = AssetClassChip(
+        assetClass: 'TM',
+        count: 3,
+        isTyreClass: true,
+      );
+      const AssetClassChip b = AssetClassChip(
+        assetClass: 'TM',
+        count: 4,
+        isTyreClass: true,
+      );
       expect(a, isNot(b));
     });
   });

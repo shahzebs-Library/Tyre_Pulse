@@ -39,7 +39,11 @@ void main() {
               'blocking': <String>['Not OK'],
               'require_note': <String>['Not OK'],
               'meta': <Map<String, dynamic>>[
-                <String, dynamic>{'value': 'Not OK', 'icon': 'fault', 'tone': 'bad'},
+                <String, dynamic>{
+                  'value': 'Not OK',
+                  'icon': 'fault',
+                  'tone': 'bad',
+                },
               ],
               'i18n': <String, dynamic>{
                 'ar': <String>['جيد', 'غير جيد'],
@@ -53,7 +57,10 @@ void main() {
       expect(record.template.name, 'Workshop Daily Checklist');
       expect(record.template.fields, hasLength(1));
       expect(record.template.fields.single.id, 'f1');
-      expect(record.template.assigneeRoles, <String>['Mechanic', 'Electrician']);
+      expect(record.template.assigneeRoles, <String>[
+        'Mechanic',
+        'Electrician',
+      ]);
       expect(record.version, 2);
       expect(record.requireSignature, isTrue);
       expect(record.requireApproval, isTrue);
@@ -80,17 +87,19 @@ void main() {
     });
 
     test('require_approval absent also yields not_required', () {
-      final ChecklistTemplateRecord record =
-          ChecklistTemplateRecord.fromRow(<String, dynamic>{'id': 't1'});
+      final ChecklistTemplateRecord record = ChecklistTemplateRecord.fromRow(
+        <String, dynamic>{'id': 't1'},
+      );
       expect(record.freshApprovalStatus, 'not_required');
     });
 
     test('a malformed option_sets (not a map) degrades to empty, never '
         'throws', () {
       expect(
-        () => ChecklistTemplateRecord.fromRow(
-          <String, dynamic>{'id': 't1', 'option_sets': 'garbage'},
-        ),
+        () => ChecklistTemplateRecord.fromRow(<String, dynamic>{
+          'id': 't1',
+          'option_sets': 'garbage',
+        }),
         returnsNormally,
       );
       final ChecklistTemplateRecord record = ChecklistTemplateRecord.fromRow(
@@ -104,7 +113,12 @@ void main() {
       final ChecklistTemplateRecord record = ChecklistTemplateRecord.fromRow(
         <String, dynamic>{
           'id': 't1',
-          'option_sets': <String, dynamic>{'legend': 'garbage', 'ok_one': <String, dynamic>{'options': <String>['A']}},
+          'option_sets': <String, dynamic>{
+            'legend': 'garbage',
+            'ok_one': <String, dynamic>{
+              'options': <String>['A'],
+            },
+          },
         },
       );
       expect(record.template.optionSets.containsKey('legend'), isFalse);
@@ -141,27 +155,27 @@ void main() {
     });
 
     test('a missing version falls back to 1', () {
-      final ChecklistTemplateRecord record =
-          ChecklistTemplateRecord.fromRow(<String, dynamic>{'id': 't1'});
+      final ChecklistTemplateRecord record = ChecklistTemplateRecord.fromRow(
+        <String, dynamic>{'id': 't1'},
+      );
       expect(record.version, 1);
     });
   });
 
   group('ChecklistAssignmentRecord.fromRow', () {
     test('decodes a well-formed row', () {
-      final ChecklistAssignmentRecord? record = ChecklistAssignmentRecord.fromRow(
-        <String, dynamic>{
-          'id': 'a1',
-          'template_id': 't1',
-          'template_name': 'Workshop Daily Checklist',
-          'site': 'NHC',
-          'asset_no': 'TM514',
-          'assignee_role': 'Mechanic',
-          'due_date': '2026-08-26',
-          'status': 'pending',
-          'submission_id': null,
-        },
-      );
+      final ChecklistAssignmentRecord? record =
+          ChecklistAssignmentRecord.fromRow(<String, dynamic>{
+            'id': 'a1',
+            'template_id': 't1',
+            'template_name': 'Workshop Daily Checklist',
+            'site': 'NHC',
+            'asset_no': 'TM514',
+            'assignee_role': 'Mechanic',
+            'due_date': '2026-08-26',
+            'status': 'pending',
+            'submission_id': null,
+          });
       expect(record, isNotNull);
       expect(record!.id, 'a1');
       expect(record.templateId, 't1');
@@ -172,29 +186,36 @@ void main() {
     test('a row with no usable id decodes to null rather than a garbage '
         'record', () {
       expect(
-        ChecklistAssignmentRecord.fromRow(<String, dynamic>{'template_id': 't1'}),
+        ChecklistAssignmentRecord.fromRow(<String, dynamic>{
+          'template_id': 't1',
+        }),
         isNull,
       );
     });
 
     test('completed and skipped are not open', () {
-      final ChecklistAssignmentRecord completed = ChecklistAssignmentRecord.fromRow(
-        <String, dynamic>{'id': 'a1', 'status': 'completed'},
-      )!;
-      final ChecklistAssignmentRecord skipped = ChecklistAssignmentRecord.fromRow(
-        <String, dynamic>{'id': 'a2', 'status': 'skipped'},
-      )!;
+      final ChecklistAssignmentRecord completed =
+          ChecklistAssignmentRecord.fromRow(<String, dynamic>{
+            'id': 'a1',
+            'status': 'completed',
+          })!;
+      final ChecklistAssignmentRecord skipped =
+          ChecklistAssignmentRecord.fromRow(<String, dynamic>{
+            'id': 'a2',
+            'status': 'skipped',
+          })!;
       expect(completed.isOpen, isFalse);
       expect(skipped.isOpen, isFalse);
     });
 
     test('overdue and a null status are both open', () {
-      final ChecklistAssignmentRecord overdue = ChecklistAssignmentRecord.fromRow(
-        <String, dynamic>{'id': 'a1', 'status': 'overdue'},
-      )!;
-      final ChecklistAssignmentRecord noStatus = ChecklistAssignmentRecord.fromRow(
-        <String, dynamic>{'id': 'a2'},
-      )!;
+      final ChecklistAssignmentRecord overdue =
+          ChecklistAssignmentRecord.fromRow(<String, dynamic>{
+            'id': 'a1',
+            'status': 'overdue',
+          })!;
+      final ChecklistAssignmentRecord noStatus =
+          ChecklistAssignmentRecord.fromRow(<String, dynamic>{'id': 'a2'})!;
       expect(overdue.isOpen, isTrue);
       expect(noStatus.isOpen, isTrue);
     });

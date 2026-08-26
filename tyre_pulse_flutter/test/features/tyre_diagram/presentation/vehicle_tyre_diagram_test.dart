@@ -22,9 +22,7 @@ Future<void> _pump(
       supportedLocales: TpLocalizations.supportedLocales,
       localizationsDelegates: TpLocalizations.delegates,
       home: Scaffold(
-        body: Center(
-          child: SingleChildScrollView(child: diagram),
-        ),
+        body: Center(child: SingleChildScrollView(child: diagram)),
       ),
     ),
   );
@@ -102,33 +100,32 @@ void main() {
     expect(<String>['FL', 'FR', 'RL', 'RR'], contains(tapped));
   });
 
-  testWidgets(
-    'the diagram body stays left-to-right regardless of the ambient '
-    'locale direction (artifact section 7.3, rule 1)',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        const VehicleTyreDiagram(
-          vehicleType: 'PICKUP',
-          positions: <String>['FL', 'FR', 'RL', 'RR'],
-          tyreData: <String, Map<String, Object?>>{},
-        ),
-        locale: const Locale('ar'),
-      );
+  testWidgets('the diagram body stays left-to-right regardless of the ambient '
+      'locale direction (artifact section 7.3, rule 1)', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const VehicleTyreDiagram(
+        vehicleType: 'PICKUP',
+        positions: <String>['FL', 'FR', 'RL', 'RR'],
+        tyreData: <String, Map<String, Object?>>{},
+      ),
+      locale: const Locale('ar'),
+    );
 
-      final Iterable<Directionality> directionalities = tester
-          .widgetList<Directionality>(find.byType(Directionality));
-      // At least one Directionality in the tree is forced ltr - the one
-      // this widget wraps its own diagram body in - even though the
-      // ambient MaterialApp locale is Arabic (rtl).
-      expect(
-        directionalities.any(
-          (Directionality d) => d.textDirection == TextDirection.ltr,
-        ),
-        isTrue,
-      );
-    },
-  );
+    final Iterable<Directionality> directionalities = tester
+        .widgetList<Directionality>(find.byType(Directionality));
+    // At least one Directionality in the tree is forced ltr - the one
+    // this widget wraps its own diagram body in - even though the
+    // ambient MaterialApp locale is Arabic (rtl).
+    expect(
+      directionalities.any(
+        (Directionality d) => d.textDirection == TextDirection.ltr,
+      ),
+      isTrue,
+    );
+  });
 
   testWidgets(
     'a wheel with a recorded condition exposes an accessibility label '
@@ -179,10 +176,7 @@ void main() {
     final SemanticsNode node = tester.getSemantics(
       find.bySemanticsLabel(RegExp('LHF1')),
     );
-    expect(
-      node.hasFlag(SemanticsFlag.isSelected),
-      isTrue,
-    );
+    expect(node.hasFlag(SemanticsFlag.isSelected), isTrue);
   });
 
   testWidgets('the condition legend shows all six conditions', (
@@ -223,40 +217,39 @@ void main() {
     expect(find.textContaining('4'), findsWidgets);
   });
 
-  testWidgets(
-    'every wheel hit target measures at least the Material minimum '
-    'touch size, even on the smallest production layout geometry',
-    (WidgetTester tester) async {
-      await _pump(
-        tester,
-        const VehicleTyreDiagram(
-          vehicleType: 'Line pump',
-          positions: <String>[
-            'F1L',
-            'F1R',
-            'F2L',
-            'F2R',
-            'R1Lo',
-            'R1Li',
-            'R1Ri',
-            'R1Ro',
-            'R2Lo',
-            'R2Li',
-            'R2Ri',
-            'R2Ro',
-          ],
-          tyreData: <String, Map<String, Object?>>{},
-          width: 300,
-        ),
-      );
-      final Finder targets = find.byType(GestureDetector);
-      final int count = tester.widgetList(targets).length;
-      expect(count, greaterThan(0));
-      for (int i = 0; i < count; i++) {
-        final Size size = tester.getSize(targets.at(i));
-        expect(size.width, greaterThanOrEqualTo(48));
-        expect(size.height, greaterThanOrEqualTo(48));
-      }
-    },
-  );
+  testWidgets('every wheel hit target measures at least the Material minimum '
+      'touch size, even on the smallest production layout geometry', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const VehicleTyreDiagram(
+        vehicleType: 'Line pump',
+        positions: <String>[
+          'F1L',
+          'F1R',
+          'F2L',
+          'F2R',
+          'R1Lo',
+          'R1Li',
+          'R1Ri',
+          'R1Ro',
+          'R2Lo',
+          'R2Li',
+          'R2Ri',
+          'R2Ro',
+        ],
+        tyreData: <String, Map<String, Object?>>{},
+        width: 300,
+      ),
+    );
+    final Finder targets = find.byType(GestureDetector);
+    final int count = tester.widgetList(targets).length;
+    expect(count, greaterThan(0));
+    for (int i = 0; i < count; i++) {
+      final Size size = tester.getSize(targets.at(i));
+      expect(size.width, greaterThanOrEqualTo(48));
+      expect(size.height, greaterThanOrEqualTo(48));
+    }
+  });
 }

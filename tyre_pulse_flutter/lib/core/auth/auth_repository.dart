@@ -140,12 +140,14 @@ final class SupabaseAuthRepository implements AuthRepository {
     // identifier-resolution RPC failed", and "wrong password" - see the file
     // header. Distinguishing them would tell an attacker which accounts exist.
     message: 'Invalid username, employee ID, or password.',
-    technical: 'sign-in rejected: identifier could not be resolved, or '
+    technical:
+        'sign-in rejected: identifier could not be resolved, or '
         'signInWithPassword rejected the credentials',
   );
 
   @override
-  AuthSessionSignal get currentSession => _signalFor(_client.auth.currentSession);
+  AuthSessionSignal get currentSession =>
+      _signalFor(_client.auth.currentSession);
 
   @override
   Stream<AuthSessionSignal> get sessionChanges => _client.auth.onAuthStateChange
@@ -233,7 +235,9 @@ final class SupabaseAuthRepository implements AuthRepository {
         // counts against a REAL account (`_login_identifier_exists`), so
         // calling it for an identifier that does not exist is safe and adds
         // no enumeration signal - see MIGRATIONS_V287's header.
-        final LoginLockStatus lockAfter = await _recordFailure(trimmedIdentifier);
+        final LoginLockStatus lockAfter = await _recordFailure(
+          trimmedIdentifier,
+        );
         return lockAfter.locked
             ? SignInLocked(lockAfter.lockoutMinutes)
             : const SignInRejected(_invalidCredentialsError);

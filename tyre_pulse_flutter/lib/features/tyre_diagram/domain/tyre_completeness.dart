@@ -124,11 +124,7 @@ const List<String> _kSerialFields = <String>[
   'serial',
 ];
 const List<String> _kNotesFields = <String>['notes', 'note'];
-const List<String> _kPhotoFields = <String>[
-  'photo_url',
-  'photo_uri',
-  'photo',
-];
+const List<String> _kPhotoFields = <String>['photo_url', 'photo_uri', 'photo'];
 
 /// #mirror: REASONS. English-only - see the library comment.
 const Map<TyreSlotState, String> kPendingReasons = <TyreSlotState, String>{
@@ -182,8 +178,7 @@ class TyreEntryPair {
 /// cannot make sense of decodes to an empty list rather than an error.
 List<TyreEntryPair> readTyreEntries(Object? source) {
   Object? tc = source;
-  if (source is Map<String, Object?> &&
-      source.containsKey('tyre_conditions')) {
+  if (source is Map<String, Object?> && source.containsKey('tyre_conditions')) {
     tc = source['tyre_conditions'];
   }
   if (tc is String) {
@@ -310,10 +305,7 @@ bool layoutIsKnown(String? vehicleType, String? assetNo) {
   if (vt.isEmpty && an.isEmpty) return false;
   if (resolveVehicleType(vt, an) != 'Pickup') return true;
   // Pickup is also a real answer, but only when something actually said so.
-  return RegExp(
-        r'pickup|pick[\s-]?up',
-        caseSensitive: false,
-      ).hasMatch(vt) ||
+  return RegExp(r'pickup|pick[\s-]?up', caseSensitive: false).hasMatch(vt) ||
       RegExp(r'^PL\s*\d', caseSensitive: false).hasMatch(vt) ||
       RegExp(r'^PL\s*\d', caseSensitive: false).hasMatch(an);
 }
@@ -566,9 +558,7 @@ TyreSlotStatus _statusFor(
     slot: slot,
     code: code,
     state: c.state,
-    reason: c.state == TyreSlotState.complete
-        ? null
-        : kPendingReasons[c.state],
+    reason: c.state == TyreSlotState.complete ? null : kPendingReasons[c.state],
     blocking: c.state != TyreSlotState.complete && (blocking[c.state] ?? false),
   );
 }

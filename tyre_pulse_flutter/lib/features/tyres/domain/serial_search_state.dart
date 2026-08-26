@@ -96,21 +96,20 @@ final class SerialSearchState {
     bool? canUnscrap,
     bool? isScrapBusy,
     bool? isUnscrapBusy,
-  }) =>
-      SerialSearchState(
-        phase: phase ?? this.phase,
-        query: query ?? this.query,
-        resolvedSerial: clearResolvedSerial
-            ? null
-            : (resolvedSerial ?? this.resolvedSerial),
-        tyre: clearTyre ? null : (tyre ?? this.tyre),
-        scrapMark: clearScrapMark ? null : (scrapMark ?? this.scrapMark),
-        lastError: clearError ? null : (lastError ?? this.lastError),
-        canScrap: canScrap ?? this.canScrap,
-        canUnscrap: canUnscrap ?? this.canUnscrap,
-        isScrapBusy: isScrapBusy ?? this.isScrapBusy,
-        isUnscrapBusy: isUnscrapBusy ?? this.isUnscrapBusy,
-      );
+  }) => SerialSearchState(
+    phase: phase ?? this.phase,
+    query: query ?? this.query,
+    resolvedSerial: clearResolvedSerial
+        ? null
+        : (resolvedSerial ?? this.resolvedSerial),
+    tyre: clearTyre ? null : (tyre ?? this.tyre),
+    scrapMark: clearScrapMark ? null : (scrapMark ?? this.scrapMark),
+    lastError: clearError ? null : (lastError ?? this.lastError),
+    canScrap: canScrap ?? this.canScrap,
+    canUnscrap: canUnscrap ?? this.canUnscrap,
+    isScrapBusy: isScrapBusy ?? this.isScrapBusy,
+    isUnscrapBusy: isUnscrapBusy ?? this.isUnscrapBusy,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -129,17 +128,17 @@ final class SerialSearchState {
 
   @override
   int get hashCode => Object.hash(
-        phase,
-        query,
-        resolvedSerial,
-        tyre,
-        scrapMark,
-        lastError,
-        canScrap,
-        canUnscrap,
-        isScrapBusy,
-        isUnscrapBusy,
-      );
+    phase,
+    query,
+    resolvedSerial,
+    tyre,
+    scrapMark,
+    lastError,
+    canScrap,
+    canUnscrap,
+    isScrapBusy,
+    isUnscrapBusy,
+  );
 
   @override
   String toString() =>

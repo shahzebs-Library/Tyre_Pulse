@@ -61,19 +61,16 @@ void main() {
       expect(hit.height, greaterThan(wheel.height));
     });
 
-    test(
-      'never falls below the Material minimum on either axis, even for '
-      'a Line pump dual wheel (19x33 SVG units at a 300px-wide diagram)',
-      () {
-        const TyreDiagramViewport viewport = TyreDiagramViewport(
-          width: 300,
-          viewH: 375,
-        );
-        final Rect hit = viewport.hitRect(13, 258, 19, 33);
-        expect(hit.width, greaterThanOrEqualTo(kDiagramMinHitTarget));
-        expect(hit.height, greaterThanOrEqualTo(kDiagramMinHitTarget));
-      },
-    );
+    test('never falls below the Material minimum on either axis, even for '
+        'a Line pump dual wheel (19x33 SVG units at a 300px-wide diagram)', () {
+      const TyreDiagramViewport viewport = TyreDiagramViewport(
+        width: 300,
+        viewH: 375,
+      );
+      final Rect hit = viewport.hitRect(13, 258, 19, 33);
+      expect(hit.width, greaterThanOrEqualTo(kDiagramMinHitTarget));
+      expect(hit.height, greaterThanOrEqualTo(kDiagramMinHitTarget));
+    });
 
     test('the minimum expansion grows the rect from its own centre, never '
         'moving the visually painted wheel', () {
@@ -87,22 +84,19 @@ void main() {
       expect(hit.center.dy, closeTo(wheel.center.dy, 0.01));
     });
 
-    test(
-      'a wheel already at or above the minimum after padding is not '
-      'expanded further',
-      () {
-        // At a wider render (scale 2), Pickup's front-left wheel
-        // (23x44 SVG units) pads out to 54x96 screen pixels - already
-        // above the 48px minimum on both axes, so the minimum-expansion
-        // step is a genuine no-op here, not merely satisfied by luck.
-        const TyreDiagramViewport viewport = TyreDiagramViewport(
-          width: 440,
-          viewH: 320,
-        );
-        final Rect padded = viewport.hitRect(32, 48, 23, 44);
-        expect(padded.width, greaterThan(kDiagramMinHitTarget));
-        expect(padded.height, greaterThan(kDiagramMinHitTarget));
-      },
-    );
+    test('a wheel already at or above the minimum after padding is not '
+        'expanded further', () {
+      // At a wider render (scale 2), Pickup's front-left wheel
+      // (23x44 SVG units) pads out to 54x96 screen pixels - already
+      // above the 48px minimum on both axes, so the minimum-expansion
+      // step is a genuine no-op here, not merely satisfied by luck.
+      const TyreDiagramViewport viewport = TyreDiagramViewport(
+        width: 440,
+        viewH: 320,
+      );
+      final Rect padded = viewport.hitRect(32, 48, 23, 44);
+      expect(padded.width, greaterThan(kDiagramMinHitTarget));
+      expect(padded.height, greaterThan(kDiagramMinHitTarget));
+    });
   });
 }

@@ -135,8 +135,7 @@ List<MatchedTyreSlot> matchPositionsToLayout(
   List<String>? positions,
 ) {
   final List<MatchedTyreSlot> all = <MatchedTyreSlot>[
-    for (final TyreSlot t in layout.tyres)
-      MatchedTyreSlot._fromSlot(t, t.id),
+    for (final TyreSlot t in layout.tyres) MatchedTyreSlot._fromSlot(t, t.id),
   ];
 
   final List<String> list = (positions ?? const <String>[])
@@ -201,8 +200,8 @@ List<MatchedTyreSlot> matchPositionsToLayout(
         final String key = rowKeys[rowIndex];
         final List<_Candidate> rowSlots = <_Candidate>[];
         for (final _Candidate c in slots) {
-          final bool sameSide = c.struct.side == ps.side ||
-              c.struct.side == null;
+          final bool sameSide =
+              c.struct.side == ps.side || c.struct.side == null;
           if (!c.used && _rowKey(c.struct) == key && sameSide) {
             rowSlots.add(c);
           }
@@ -211,9 +210,7 @@ List<MatchedTyreSlot> matchPositionsToLayout(
           (_Candidate a, _Candidate b) => a.tyre.x.compareTo(b.tyre.x),
         );
         if (rowSlots.isNotEmpty) {
-          slot = ps.side == PositionSide.right
-              ? rowSlots.last
-              : rowSlots.first;
+          slot = ps.side == PositionSide.right ? rowSlots.last : rowSlots.first;
         }
       }
     }

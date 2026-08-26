@@ -78,9 +78,10 @@ List<String>? _asStringListOrNull(Object? raw) {
 /// an empty map rather than taking the whole template decode down with it.
 ChecklistOptionSet _decodeOptionSet(Map<Object?, Object?> raw) {
   final List<String> options = <String>[
-    for (final Object? v in (raw['options'] is List)
-        ? raw['options']! as List<Object?>
-        : const <Object?>[])
+    for (final Object? v
+        in (raw['options'] is List)
+            ? raw['options']! as List<Object?>
+            : const <Object?>[])
       if (v is String) v,
   ];
 
@@ -246,7 +247,8 @@ final class ChecklistTemplateRecord {
   /// template should carry. See [requireApproval]'s own doc comment for why
   /// this is the only place that decision is made, and why it never
   /// consults [requireAreaManager].
-  String get freshApprovalStatus => requireApproval ? 'pending' : 'not_required';
+  String get freshApprovalStatus =>
+      requireApproval ? 'pending' : 'not_required';
 
   @override
   String toString() =>
@@ -305,9 +307,11 @@ final class ChecklistAssignmentRecord {
     );
   }
 
-  bool get isOpen => status == null || status == 'pending' || status == 'overdue';
+  bool get isOpen =>
+      status == null || status == 'pending' || status == 'overdue';
 
   @override
-  String toString() => 'ChecklistAssignmentRecord(id: $id, '
+  String toString() =>
+      'ChecklistAssignmentRecord(id: $id, '
       'templateId: $templateId, assetNo: $assetNo)';
 }

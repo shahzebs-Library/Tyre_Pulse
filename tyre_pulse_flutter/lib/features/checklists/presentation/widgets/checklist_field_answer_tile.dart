@@ -239,9 +239,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
       maxLines: maxLines,
       errorText: widget.errorText,
       helperText: widget.field.help,
-      onChanged: _isEditable
-          ? (String v) => widget.onChanged?.call(v)
-          : null,
+      onChanged: _isEditable ? (String v) => widget.onChanged?.call(v) : null,
     );
   }
 
@@ -249,7 +247,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
     final String? helper = widget.field.unit == null
         ? widget.field.help
         : '${widget.field.help ?? ''}${(widget.field.help ?? '').isEmpty ? '' : ' '}'
-            '(${widget.field.unit})';
+              '(${widget.field.unit})';
     return TpInput(
       label: widget.label,
       controller: _controller,
@@ -265,13 +263,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           ? null
           : Padding(
               padding: const EdgeInsets.only(right: TpSpace.md),
-              child: Center(
-                widthFactor: 1,
-                child: Text(widget.field.unit!),
-              ),
+              child: Center(widthFactor: 1, child: Text(widget.field.unit!)),
             ),
-      onChanged:
-          _isEditable ? (String v) => widget.onChanged?.call(v) : null,
+      onChanged: _isEditable ? (String v) => widget.onChanged?.call(v) : null,
     );
   }
 
@@ -294,8 +288,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
 
   Future<void> _pickDate(BuildContext context) async {
     final DateTime now = DateTime.now();
-    final DateTime initial =
-        DateTime.tryParse(_controller?.text ?? '') ?? now;
+    final DateTime initial = DateTime.tryParse(_controller?.text ?? '') ?? now;
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -331,8 +324,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
   }
 
   Widget _multiselectField(BuildContext context) {
-    final List<Object?> current =
-        widget.value is List ? widget.value! as List<Object?> : const <Object?>[];
+    final List<Object?> current = widget.value is List
+        ? widget.value! as List<Object?>
+        : const <Object?>[];
     final Set<String> selected = <String>{
       for (final Object? v in current) v?.toString() ?? '',
     };
@@ -352,9 +346,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 AppLocalizations.of(context).fieldRequired,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
+                style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -387,9 +379,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           const SizedBox(height: TpSpace.xs),
           Text(
             widget.errorText!,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
+            style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: TpPalette.of(context).critical.base),
           ),
         ],
@@ -415,9 +405,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 l10n.fieldRequired,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
+                style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -448,7 +436,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
   }
 
   Widget _ratingField(BuildContext context) {
-    final int current = widget.value is num ? (widget.value! as num).round() : 0;
+    final int current = widget.value is num
+        ? (widget.value! as num).round()
+        : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -516,9 +506,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 l10n.fieldRequired,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
+                style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -544,9 +532,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           const SizedBox(height: TpSpace.xs),
           Text(
             widget.errorText!,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
+            style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: TpPalette.of(context).critical.base),
           ),
         ],
@@ -558,28 +544,30 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ChecklistPhotoPickSource? source =
         await TpBottomSheet.show<ChecklistPhotoPickSource>(
-      context: context,
-      title: l10n.checklistAddPhotoTitle,
-      builder: (BuildContext sheetContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
-              title: Text(l10n.checklistPhotoSourceCamera),
-              onTap: () => Navigator.of(sheetContext)
-                  .pop(ChecklistPhotoPickSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(l10n.checklistPhotoSourceGallery),
-              onTap: () => Navigator.of(sheetContext)
-                  .pop(ChecklistPhotoPickSource.gallery),
-            ),
-          ],
+          context: context,
+          title: l10n.checklistAddPhotoTitle,
+          builder: (BuildContext sheetContext) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: Text(l10n.checklistPhotoSourceCamera),
+                  onTap: () =>
+                      Navigator.of(sheetContext)
+                          .pop(ChecklistPhotoPickSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text(l10n.checklistPhotoSourceGallery),
+                  onTap: () =>
+                      Navigator.of(sheetContext)
+                          .pop(ChecklistPhotoPickSource.gallery),
+                ),
+              ],
+            );
+          },
         );
-      },
-    );
     if (source == null) return;
     await widget.onCapturePhoto?.call(source);
   }
@@ -600,9 +588,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 AppLocalizations.of(context).fieldRequired,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
+                style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -614,9 +600,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           const SizedBox(height: TpSpace.xs),
           Text(
             widget.errorText!,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
+            style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: TpPalette.of(context).critical.base),
           ),
         ],
@@ -691,7 +675,10 @@ class _PhotoThumbnail extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (context, error, stack) => ColoredBox(
                 color: palette.surfaceAlt,
-                child: Icon(Icons.broken_image_outlined, color: palette.textMuted),
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: palette.textMuted,
+                ),
               ),
             ),
           ),

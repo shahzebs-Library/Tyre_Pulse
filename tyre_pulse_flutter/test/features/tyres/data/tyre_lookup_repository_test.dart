@@ -80,10 +80,9 @@ void main() {
         'call, and no other request reaches the server', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..answerWith(SupabaseRpcs.tyreScrapAllowed, true)
-        ..answerWith(
-          SupabaseRpcs.scrapTyreBySerial,
-          <String, Object?>{'updated': 2},
-        );
+        ..answerWith(SupabaseRpcs.scrapTyreBySerial, <String, Object?>{
+          'updated': 2,
+        });
       final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
 
       final int updated = await repository.scrapBySerial(
@@ -125,33 +124,36 @@ void main() {
       expect(rpc.calls.last.params['p_reason'], isNull);
     });
 
-    test('refuses LOCALLY, with an authorization AppError, and NEVER '
-        'reaches the mutating RPC, when the precondition answers false',
-        () async {
-      final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
-        ..answerWith(SupabaseRpcs.tyreScrapAllowed, false);
-      final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
+    test(
+      'refuses LOCALLY, with an authorization AppError, and NEVER '
+      'reaches the mutating RPC, when the precondition answers false',
+      () async {
+        final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
+          ..answerWith(SupabaseRpcs.tyreScrapAllowed, false);
+        final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
 
-      await expectLater(
-        () => repository.scrapBySerial('EP0604207'),
-        throwsA(
-          isA<AppError>().having(
-            (AppError e) => e.kind,
-            'kind',
-            AppErrorKind.authorization,
+        await expectLater(
+          () => repository.scrapBySerial('EP0604207'),
+          throwsA(
+            isA<AppError>().having(
+              (AppError e) => e.kind,
+              'kind',
+              AppErrorKind.authorization,
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(rpc.calls, hasLength(1));
-      expect(rpc.calls.single.function, SupabaseRpcs.tyreScrapAllowed);
-      expect(
-        rpc.wasCalled(SupabaseRpcs.scrapTyreBySerial),
-        isFalse,
-        reason: 'the mutating write must never be attempted when the '
-            'precondition was not confirmed',
-      );
-    });
+        expect(rpc.calls, hasLength(1));
+        expect(rpc.calls.single.function, SupabaseRpcs.tyreScrapAllowed);
+        expect(
+          rpc.wasCalled(SupabaseRpcs.scrapTyreBySerial),
+          isFalse,
+          reason:
+              'the mutating write must never be attempted when the '
+              'precondition was not confirmed',
+        );
+      },
+    );
 
     test('refuses locally, without a network round trip for the mutating '
         'RPC, when the precondition RPC itself fails', () async {
@@ -163,10 +165,7 @@ void main() {
         () => repository.scrapBySerial('EP0604207'),
         throwsA(isA<AppError>()),
       );
-      expect(
-        rpc.wasCalled(SupabaseRpcs.scrapTyreBySerial),
-        isFalse,
-      );
+      expect(rpc.wasCalled(SupabaseRpcs.scrapTyreBySerial), isFalse);
     });
 
     test('refuses locally, with a validation AppError, for a blank '
@@ -220,39 +219,43 @@ void main() {
   });
 
   group('unscrapBySerial - the same invariant, in the other direction', () {
-    test('asks canUnscrap once, then makes exactly one mutating call',
-        () async {
-      final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
-        ..answerWith(SupabaseRpcs.tyreUnscrapAllowed, true)
-        ..answerWith(SupabaseRpcs.unscrapTyreBySerial, null);
-      final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
+    test(
+      'asks canUnscrap once, then makes exactly one mutating call',
+      () async {
+        final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
+          ..answerWith(SupabaseRpcs.tyreUnscrapAllowed, true)
+          ..answerWith(SupabaseRpcs.unscrapTyreBySerial, null);
+        final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
 
-      await repository.unscrapBySerial('EP0604207');
+        await repository.unscrapBySerial('EP0604207');
 
-      expect(rpc.calls, hasLength(2));
-      expect(rpc.calls[0].function, SupabaseRpcs.tyreUnscrapAllowed);
-      expect(rpc.calls[1].function, SupabaseRpcs.unscrapTyreBySerial);
-      expect(rpc.calls[1].params['p_serial'], 'EP0604207');
-    });
+        expect(rpc.calls, hasLength(2));
+        expect(rpc.calls[0].function, SupabaseRpcs.tyreUnscrapAllowed);
+        expect(rpc.calls[1].function, SupabaseRpcs.unscrapTyreBySerial);
+        expect(rpc.calls[1].params['p_serial'], 'EP0604207');
+      },
+    );
 
-    test('never reaches the mutating RPC when canUnscrap answers false',
-        () async {
-      final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
-        ..answerWith(SupabaseRpcs.tyreUnscrapAllowed, false);
-      final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
+    test(
+      'never reaches the mutating RPC when canUnscrap answers false',
+      () async {
+        final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
+          ..answerWith(SupabaseRpcs.tyreUnscrapAllowed, false);
+        final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
 
-      await expectLater(
-        () => repository.unscrapBySerial('EP0604207'),
-        throwsA(
-          isA<AppError>().having(
-            (AppError e) => e.kind,
-            'kind',
-            AppErrorKind.authorization,
+        await expectLater(
+          () => repository.unscrapBySerial('EP0604207'),
+          throwsA(
+            isA<AppError>().having(
+              (AppError e) => e.kind,
+              'kind',
+              AppErrorKind.authorization,
+            ),
           ),
-        ),
-      );
-      expect(rpc.wasCalled(SupabaseRpcs.unscrapTyreBySerial), isFalse);
-    });
+        );
+        expect(rpc.wasCalled(SupabaseRpcs.unscrapTyreBySerial), isFalse);
+      },
+    );
 
     test('scrap rights and undo rights are asked through DIFFERENT RPCs - '
         'undo never piggybacks on the scrap precondition', () async {
@@ -270,8 +273,7 @@ void main() {
   });
 
   group('canScrap / canUnscrap fail closed', () {
-    test('canScrap answers false, never throws, when the RPC fails',
-        () async {
+    test('canScrap answers false, never throws, when the RPC fails', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..fail(SupabaseRpcs.tyreScrapAllowed, StateError('offline'));
       final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
@@ -288,13 +290,15 @@ void main() {
       expect(await repository.canScrap(), isFalse);
     });
 
-    test('canUnscrap answers false, never throws, when the RPC fails',
-        () async {
-      final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
-        ..fail(SupabaseRpcs.tyreUnscrapAllowed, StateError('offline'));
-      final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
+    test(
+      'canUnscrap answers false, never throws, when the RPC fails',
+      () async {
+        final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
+          ..fail(SupabaseRpcs.tyreUnscrapAllowed, StateError('offline'));
+        final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
 
-      expect(await repository.canUnscrap(), isFalse);
-    });
+        expect(await repository.canUnscrap(), isFalse);
+      },
+    );
   });
 }

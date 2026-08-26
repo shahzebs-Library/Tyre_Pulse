@@ -83,14 +83,13 @@ void main() {
         printedName: 'A. Mechanic',
       );
 
-      expect(
-        await repo.answers(key),
-        <String, Object?>{'brakes': 'OK', 'km': 1500},
-      );
-      expect(
-        await repo.notes(key),
-        <String, Object?>{'brakes': 'Checked pads'},
-      );
+      expect(await repo.answers(key), <String, Object?>{
+        'brakes': 'OK',
+        'km': 1500,
+      });
+      expect(await repo.notes(key), <String, Object?>{
+        'brakes': 'Checked pads',
+      });
 
       final ChecklistDraftHeader? header = await repo.header(key);
       expect(header, isNotNull);
@@ -136,8 +135,9 @@ void main() {
         total: 12,
       );
 
-      final List<ChecklistDraftHeader> drafts =
-          await repo.draftsForUser('user-1');
+      final List<ChecklistDraftHeader> drafts = await repo.draftsForUser(
+        'user-1',
+      );
       expect(drafts, hasLength(1));
       expect(drafts.single.filled, 5);
     });
@@ -203,36 +203,41 @@ void main() {
   });
 
   group('photos - keyed per field', () {
-    test('a photo attached to one field does not appear under another', () async {
-      final String key = repo.draftKeyFor(
-        userId: 'user-1',
-        templateId: 't1',
-        assetNo: 'TM514',
-      );
-      await repo.addPhoto(
-        draftKey: key,
-        fieldKey: 'engine_bay',
-        localPath: '/tmp/engine.jpg',
-        capturedAt: DateTime.utc(2026, 8, 20, 9),
-      );
-      await repo.addPhoto(
-        draftKey: key,
-        fieldKey: 'brakes',
-        localPath: '/tmp/brakes.jpg',
-        capturedAt: DateTime.utc(2026, 8, 20, 9, 5),
-      );
+    test(
+      'a photo attached to one field does not appear under another',
+      () async {
+        final String key = repo.draftKeyFor(
+          userId: 'user-1',
+          templateId: 't1',
+          assetNo: 'TM514',
+        );
+        await repo.addPhoto(
+          draftKey: key,
+          fieldKey: 'engine_bay',
+          localPath: '/tmp/engine.jpg',
+          capturedAt: DateTime.utc(2026, 8, 20, 9),
+        );
+        await repo.addPhoto(
+          draftKey: key,
+          fieldKey: 'brakes',
+          localPath: '/tmp/brakes.jpg',
+          capturedAt: DateTime.utc(2026, 8, 20, 9, 5),
+        );
 
-      final List<ChecklistDraftPhoto> photos = await repo.photosFor(key);
-      expect(photos, hasLength(2));
-      expect(
-        photos.map((ChecklistDraftPhoto p) => p.fieldKey),
-        containsAll(<String>['engine_bay', 'brakes']),
-      );
-      expect(
-        photos.firstWhere((ChecklistDraftPhoto p) => p.fieldKey == 'engine_bay').localPath,
-        '/tmp/engine.jpg',
-      );
-    });
+        final List<ChecklistDraftPhoto> photos = await repo.photosFor(key);
+        expect(photos, hasLength(2));
+        expect(
+          photos.map((ChecklistDraftPhoto p) => p.fieldKey),
+          containsAll(<String>['engine_bay', 'brakes']),
+        );
+        expect(
+          photos
+              .firstWhere((ChecklistDraftPhoto p) => p.fieldKey == 'engine_bay')
+              .localPath,
+          '/tmp/engine.jpg',
+        );
+      },
+    );
   });
 
   group('signatures - multiple independent slots', () {
@@ -258,14 +263,17 @@ void main() {
         signerName: 'Electrician One',
       );
 
-      final List<ChecklistDraftSignature> signatures =
-          await repo.signaturesFor(key);
+      final List<ChecklistDraftSignature> signatures = await repo.signaturesFor(
+        key,
+      );
       expect(signatures, hasLength(2));
 
-      final ChecklistDraftSignature mechanic = signatures
-          .firstWhere((ChecklistDraftSignature s) => s.fieldKey == 'sign_mechanic');
-      final ChecklistDraftSignature electrician = signatures
-          .firstWhere((ChecklistDraftSignature s) => s.fieldKey == 'sign_electrician');
+      final ChecklistDraftSignature mechanic = signatures.firstWhere(
+        (ChecklistDraftSignature s) => s.fieldKey == 'sign_mechanic',
+      );
+      final ChecklistDraftSignature electrician = signatures.firstWhere(
+        (ChecklistDraftSignature s) => s.fieldKey == 'sign_electrician',
+      );
 
       expect(mechanic.payload, contains('M0 0'));
       expect(electrician.payload, contains('M1 1'));
@@ -291,11 +299,14 @@ void main() {
         source: 'drawn',
       );
 
-      final List<ChecklistDraftSignature> signatures =
-          await repo.signaturesFor(key);
+      final List<ChecklistDraftSignature> signatures = await repo.signaturesFor(
+        key,
+      );
       expect(signatures, hasLength(2));
       expect(
-        signatures.any((ChecklistDraftSignature s) => s.fieldKey == primaryField),
+        signatures.any(
+          (ChecklistDraftSignature s) => s.fieldKey == primaryField,
+        ),
         isTrue,
       );
     });
@@ -326,18 +337,23 @@ void main() {
         source: 'drawn',
       );
 
-      final List<ChecklistDraftSignature> signatures =
-          await repo.signaturesFor(key);
+      final List<ChecklistDraftSignature> signatures = await repo.signaturesFor(
+        key,
+      );
       expect(signatures, hasLength(2));
       expect(
         signatures
-            .firstWhere((ChecklistDraftSignature s) => s.fieldKey == 'sign_mechanic')
+            .firstWhere(
+              (ChecklistDraftSignature s) => s.fieldKey == 'sign_mechanic',
+            )
             .payload,
         contains('M7 7'),
       );
       expect(
         signatures
-            .firstWhere((ChecklistDraftSignature s) => s.fieldKey == 'sign_electrician')
+            .firstWhere(
+              (ChecklistDraftSignature s) => s.fieldKey == 'sign_electrician',
+            )
             .payload,
         contains('M5 5'),
       );
@@ -518,12 +534,16 @@ void main() {
         );
       }
 
-      final List<ChecklistDraftHeader> before = await repo.draftsForUser('user-1');
+      final List<ChecklistDraftHeader> before = await repo.draftsForUser(
+        'user-1',
+      );
       expect(before, hasLength(cap + 2));
 
       await repo.pruneToCap('user-1');
 
-      final List<ChecklistDraftHeader> after = await repo.draftsForUser('user-1');
+      final List<ChecklistDraftHeader> after = await repo.draftsForUser(
+        'user-1',
+      );
       expect(after, hasLength(cap));
     });
   });

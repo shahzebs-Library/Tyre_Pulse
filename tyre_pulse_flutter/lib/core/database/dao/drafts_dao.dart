@@ -51,8 +51,7 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
   static String inspectionDraftKey({
     required String userId,
     required String assetNo,
-  }) =>
-      '$userId|${normaliseLookupKey(assetNo)}';
+  }) => '$userId|${normaliseLookupKey(assetNo)}';
 
   /// `userId|templateId|ASSETNO`. An empty asset is a legitimate component: a
   /// sheet started before a machine is picked gets its own slot, and the row is
@@ -61,8 +60,7 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
     required String userId,
     required String templateId,
     required String assetNo,
-  }) =>
-      '$userId|$templateId|${normaliseLookupKey(assetNo)}';
+  }) => '$userId|$templateId|${normaliseLookupKey(assetNo)}';
 
   // -- Inspection drafts ----------------------------------------------------
 
@@ -160,12 +158,14 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
     bool checked = true,
   }) async {
     await transaction(() async {
-      final existing = await (select(inspectionDraftPositions)
-            ..where(
-              (t) => t.draftKey.equals(draftKey) & t.position.equals(position),
-            )
-            ..limit(1))
-          .getSingleOrNull();
+      final existing =
+          await (select(inspectionDraftPositions)
+                ..where(
+                  (t) =>
+                      t.draftKey.equals(draftKey) & t.position.equals(position),
+                )
+                ..limit(1))
+              .getSingleOrNull();
 
       if (existing == null) {
         await into(inspectionDraftPositions).insert(
@@ -184,9 +184,9 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
         return;
       }
 
-      await (update(inspectionDraftPositions)
-            ..where((t) => t.id.equals(existing.id)))
-          .write(
+      await (update(
+        inspectionDraftPositions,
+      )..where((t) => t.id.equals(existing.id))).write(
         InspectionDraftPositionsCompanion(
           condition: Value<String?>(condition),
           pressurePsi: Value<double?>(pressurePsi),
@@ -213,9 +213,11 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
   /// evidence"; this answers the second half without being fooled by a seeded
   /// default.
   Future<Set<String>> checkedPositions(String draftKey) async {
-    final rows = await (select(inspectionDraftPositions)
-          ..where((t) => t.draftKey.equals(draftKey) & t.checked.equals(true)))
-        .get();
+    final rows =
+        await (select(inspectionDraftPositions)..where(
+              (t) => t.draftKey.equals(draftKey) & t.checked.equals(true),
+            ))
+            .get();
     return rows.map((InspectionDraftPosition r) => r.position).toSet();
   }
 
@@ -311,8 +313,9 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
     if (userId.isEmpty) {
       return Future<List<ChecklistDraft>>.value(const <ChecklistDraft>[]);
     }
-    final String? normalised =
-        assetNo == null ? null : normaliseLookupKey(assetNo);
+    final String? normalised = assetNo == null
+        ? null
+        : normaliseLookupKey(assetNo);
 
     return (select(checklistDrafts)
           ..where((t) {
@@ -344,9 +347,9 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
       ownerKind: OwnerKind.inspectionDraft,
       ownerKey: draftKey,
       deleteHeader: () async {
-        await (delete(inspectionDrafts)
-              ..where((t) => t.draftKey.equals(draftKey)))
-            .go();
+        await (delete(
+          inspectionDrafts,
+        )..where((t) => t.draftKey.equals(draftKey))).go();
       },
     );
   }
@@ -356,9 +359,9 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
       ownerKind: OwnerKind.checklistDraft,
       ownerKey: draftKey,
       deleteHeader: () async {
-        await (delete(checklistDrafts)
-              ..where((t) => t.draftKey.equals(draftKey)))
-            .go();
+        await (delete(
+          checklistDrafts,
+        )..where((t) => t.draftKey.equals(draftKey))).go();
       },
     );
   }
@@ -410,21 +413,25 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
     if (filled > 0) {
       return true;
     }
-    final photos = await (select(draftPhotos)
-          ..where(
-            (t) => t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
-          )
-          ..limit(1))
-        .get();
+    final photos =
+        await (select(draftPhotos)
+              ..where(
+                (t) =>
+                    t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
+              )
+              ..limit(1))
+            .get();
     if (photos.isNotEmpty) {
       return true;
     }
-    final signatures = await (select(capturedSignatures)
-          ..where(
-            (t) => t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
-          )
-          ..limit(1))
-        .get();
+    final signatures =
+        await (select(capturedSignatures)
+              ..where(
+                (t) =>
+                    t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
+              )
+              ..limit(1))
+            .get();
     return signatures.isNotEmpty;
   }
 
@@ -434,26 +441,23 @@ class DraftsDao extends DatabaseAccessor<AppDatabase> with _$DraftsDaoMixin {
     required Future<void> Function() deleteHeader,
   }) async {
     return transaction(() async {
-      final photos = await (select(draftPhotos)
-            ..where(
-              (t) =>
-                  t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
-            ))
-          .get();
-      final List<String> paths =
-          photos.map((DraftPhoto p) => p.localPath).toList(growable: false);
+      final photos =
+          await (select(draftPhotos)..where(
+                (t) =>
+                    t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
+              ))
+              .get();
+      final List<String> paths = photos
+          .map((DraftPhoto p) => p.localPath)
+          .toList(growable: false);
 
-      await (delete(draftPhotos)
-            ..where(
-              (t) =>
-                  t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
-            ))
+      await (delete(draftPhotos)..where(
+            (t) => t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
+          ))
           .go();
-      await (delete(capturedSignatures)
-            ..where(
-              (t) =>
-                  t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
-            ))
+      await (delete(capturedSignatures)..where(
+            (t) => t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
+          ))
           .go();
       await deleteHeader();
 

@@ -101,7 +101,10 @@ final class FakeTyreRecordsRepository implements TyreRecordsRepository {
 
   /// Queues a plain failure for the next call.
   void queueFailure(Object error) {
-    queueResponder((int pageIndex, TyreRecordsQuery query) => Future<TyreRecordsPage>.error(error));
+    queueResponder(
+      (int pageIndex, TyreRecordsQuery query) =>
+          Future<TyreRecordsPage>.error(error),
+    );
   }
 
   @override

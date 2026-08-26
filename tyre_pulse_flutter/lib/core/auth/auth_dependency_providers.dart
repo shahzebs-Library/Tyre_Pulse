@@ -67,26 +67,26 @@ final Provider<ProfileCache> profileCacheProvider = Provider<ProfileCache>(
 /// Sign-in, sign-out and session-change observation.
 final Provider<AuthRepository> authRepositoryProvider =
     Provider<AuthRepository>(
-  (ref) => SupabaseAuthRepository(ref.watch(supabaseClientProvider)),
-);
+      (ref) => SupabaseAuthRepository(ref.watch(supabaseClientProvider)),
+    );
 
 /// Loading the `profiles` row, with an offline fallback.
 final Provider<ProfileRepository> profileRepositoryProvider =
     Provider<ProfileRepository>(
-  (ref) => SupabaseProfileRepository(
-    ref.watch(supabaseClientProvider),
-    ref.watch(profileCacheProvider),
-  ),
-);
+      (ref) => SupabaseProfileRepository(
+        ref.watch(supabaseClientProvider),
+        ref.watch(profileCacheProvider),
+      ),
+    );
 
 /// The minimum-supported-version check.
 final Provider<VersionGateRepository> versionGateRepositoryProvider =
     Provider<VersionGateRepository>(
-  (ref) => SupabaseVersionGateRepository(
-    ref.watch(supabaseClientProvider),
-    currentVersion: ref.watch(currentAppVersionProvider),
-  ),
-);
+      (ref) => SupabaseVersionGateRepository(
+        ref.watch(supabaseClientProvider),
+        currentVersion: ref.watch(currentAppVersionProvider),
+      ),
+    );
 
 /// The app-lifecycle foreground signal. See `foreground_signal.dart` for why
 /// this sits behind a provider rather than being constructed inline: it is the
@@ -94,10 +94,10 @@ final Provider<VersionGateRepository> versionGateRepositoryProvider =
 /// test of [AuthController] has neither reason nor obligation to provide one.
 final Provider<ForegroundSignal> foregroundSignalProvider =
     Provider<ForegroundSignal>((ref) {
-  final ForegroundSignal signal = AppLifecycleForegroundSignal();
-  ref.onDispose(signal.dispose);
-  return signal;
-});
+      final ForegroundSignal signal = AppLifecycleForegroundSignal();
+      ref.onDispose(signal.dispose);
+      return signal;
+    });
 
 /// How long to wait for the stored session before reporting `timedOut`.
 /// Overridable so a test can exercise the timeout path in milliseconds rather

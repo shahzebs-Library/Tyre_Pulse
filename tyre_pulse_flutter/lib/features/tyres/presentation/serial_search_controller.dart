@@ -37,8 +37,9 @@ class SerialSearchController extends Notifier<SerialSearchState> {
   }
 
   Future<void> _loadPermissions() async {
-    final TyreLookupRepository repository =
-        ref.read(tyreLookupRepositoryProvider);
+    final TyreLookupRepository repository = ref.read(
+      tyreLookupRepositoryProvider,
+    );
     final bool scrapAllowed = await repository.canScrap();
     state = state.copyWith(canScrap: scrapAllowed);
     final bool unscrapAllowed = await repository.canUnscrap();
@@ -75,8 +76,9 @@ class SerialSearchController extends Notifier<SerialSearchState> {
       clearError: true,
     );
 
-    final TyreLookupRepository repository =
-        ref.read(tyreLookupRepositoryProvider);
+    final TyreLookupRepository repository = ref.read(
+      tyreLookupRepositoryProvider,
+    );
     try {
       final TyreLookupRecord? found = await repository.lookupBySerial(code);
       if (found == null) {
@@ -123,8 +125,9 @@ class SerialSearchController extends Notifier<SerialSearchState> {
     if (serial == null || serial.isEmpty || state.isScrapBusy) return;
 
     state = state.copyWith(isScrapBusy: true, clearError: true);
-    final TyreLookupRepository repository =
-        ref.read(tyreLookupRepositoryProvider);
+    final TyreLookupRepository repository = ref.read(
+      tyreLookupRepositoryProvider,
+    );
     try {
       await repository.scrapBySerial(serial, reason: reason);
 
@@ -150,8 +153,9 @@ class SerialSearchController extends Notifier<SerialSearchState> {
     if (serial == null || serial.isEmpty || state.isUnscrapBusy) return;
 
     state = state.copyWith(isUnscrapBusy: true, clearError: true);
-    final TyreLookupRepository repository =
-        ref.read(tyreLookupRepositoryProvider);
+    final TyreLookupRepository repository = ref.read(
+      tyreLookupRepositoryProvider,
+    );
     try {
       await repository.unscrapBySerial(serial);
       state = state.copyWith(isUnscrapBusy: false, clearScrapMark: true);
@@ -166,7 +170,7 @@ class SerialSearchController extends Notifier<SerialSearchState> {
 
 /// Serial search screen state and actions.
 final NotifierProvider<SerialSearchController, SerialSearchState>
-    serialSearchControllerProvider =
+serialSearchControllerProvider =
     NotifierProvider<SerialSearchController, SerialSearchState>(
-  SerialSearchController.new,
-);
+      SerialSearchController.new,
+    );

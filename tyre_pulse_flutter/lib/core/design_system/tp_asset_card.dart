@@ -73,9 +73,8 @@ class TpAssetCard extends StatelessWidget {
               children: <Widget>[
                 TpIdentifierText(
                   asset.assetNo,
-                  style: TpTypography.identifier(palette).copyWith(
-                    fontSize: 16,
-                  ),
+                  style: TpTypography.identifier(palette)
+                      .copyWith(fontSize: 16),
                 ),
                 if (asset.description != null) ...<Widget>[
                   const SizedBox(height: 2),

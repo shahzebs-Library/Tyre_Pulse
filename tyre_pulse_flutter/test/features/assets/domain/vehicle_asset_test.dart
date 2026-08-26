@@ -100,9 +100,7 @@ void main() {
 
     test('current_km and year accept a plain int', () {
       final VehicleAsset asset = VehicleAsset.fromRow(
-        _fullRow(
-          overrides: <String, dynamic>{'current_km': 500, 'year': 2020},
-        ),
+        _fullRow(overrides: <String, dynamic>{'current_km': 500, 'year': 2020}),
       );
       expect(asset.currentKm, 500);
       expect(asset.year, 2020);
@@ -211,8 +209,7 @@ void main() {
     });
 
     test('null, empty or an uncatalogued word all map to unknown - never '
-        'to neutral, which would claim a considered "no judgement" answer',
-        () {
+        'to neutral, which would claim a considered "no judgement" answer', () {
       expect(vehicleStatusTone(null), TpStatus.unknown);
       expect(vehicleStatusTone(''), TpStatus.unknown);
       expect(vehicleStatusTone('   '), TpStatus.unknown);
@@ -226,8 +223,7 @@ void main() {
       expect(formatVehicleOdometer(1000000), '1,000,000');
     });
 
-    test('does not insert a leading separator for fewer than four digits',
-        () {
+    test('does not insert a leading separator for fewer than four digits', () {
       expect(formatVehicleOdometer(0), '0');
       expect(formatVehicleOdometer(9), '9');
       expect(formatVehicleOdometer(999), '999');
@@ -250,10 +246,7 @@ void main() {
     test('false for a validation-classified AppError', () {
       expect(
         isBackendUnavailableError(
-          const AppError(
-            kind: AppErrorKind.validation,
-            message: 'invalid',
-          ),
+          const AppError(kind: AppErrorKind.validation, message: 'invalid'),
         ),
         isFalse,
       );
@@ -285,8 +278,7 @@ void main() {
       expect(a, isNot(b));
     });
 
-    test('toString names the id and both identity fields without throwing',
-        () {
+    test('toString names the id and both identity fields without throwing', () {
       final VehicleAsset asset = VehicleAsset.fromRow(_fullRow());
       expect(asset.toString(), contains('row-1'));
       expect(asset.toString(), contains('TM514'));

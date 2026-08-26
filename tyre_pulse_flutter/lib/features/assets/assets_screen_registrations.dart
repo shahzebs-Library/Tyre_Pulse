@@ -36,6 +36,4 @@ Widget buildVehiclesListScreen(BuildContext context, TpRoute route) {
 
 /// This feature's contribution to the shared screen registry.
 final Map<String, TpScreenBuilder> assetsScreenRegistrations =
-    <String, TpScreenBuilder>{
-  TpRouteId.vehicles: buildVehiclesListScreen,
-};
+    <String, TpScreenBuilder>{TpRouteId.vehicles: buildVehiclesListScreen};

@@ -30,7 +30,11 @@ void main() {
   });
 
   test('E2: today resolves the supplied ISO date', () {
-    const ChecklistField f = ChecklistField(id: 'x', type: 'date', autoValue: 'today');
+    const ChecklistField f = ChecklistField(
+      id: 'x',
+      type: 'date',
+      autoValue: 'today',
+    );
     expect(
       resolveAutoValue(f, const ChecklistAutoValueContext(today: '2026-07-12')),
       '2026-07-12',
@@ -38,7 +42,11 @@ void main() {
   });
 
   test('E3: today defaults to now when ctx is empty', () {
-    const ChecklistField f = ChecklistField(id: 'x', type: 'date', autoValue: 'today');
+    const ChecklistField f = ChecklistField(
+      id: 'x',
+      type: 'date',
+      autoValue: 'today',
+    );
     final String today = resolveAutoValue(f);
     expect(today, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
     final DateTime nowUtc = DateTime.now().toUtc();
@@ -64,37 +72,34 @@ void main() {
     );
   });
 
-  test(
-    'E6: a resumed draft keeps the STORED date - resolveAutoValue never '
-    're-resolves what a caller already stored',
-    () {
-      const ChecklistField dateField = ChecklistField(
-        id: 'd1',
-        type: 'date',
-        autoValue: 'today',
-      );
-      // Day 1: the sheet is opened; the auto value is resolved ONCE and
-      // stored like any other answer.
-      final String onOpen = resolveAutoValue(
-        dateField,
-        const ChecklistAutoValueContext(today: '2026-07-12'),
-      );
-      final Map<String, Object?> answers = <String, Object?>{'d1': onOpen};
-      expect(answers['d1'], '2026-07-12');
+  test('E6: a resumed draft keeps the STORED date - resolveAutoValue never '
+      're-resolves what a caller already stored', () {
+    const ChecklistField dateField = ChecklistField(
+      id: 'd1',
+      type: 'date',
+      autoValue: 'today',
+    );
+    // Day 1: the sheet is opened; the auto value is resolved ONCE and
+    // stored like any other answer.
+    final String onOpen = resolveAutoValue(
+      dateField,
+      const ChecklistAutoValueContext(today: '2026-07-12'),
+    );
+    final Map<String, Object?> answers = <String, Object?>{'d1': onOpen};
+    expect(answers['d1'], '2026-07-12');
 
-      // Day 2: a caller that resolves again (simulating "the wrong thing
-      // to do") gets tomorrow's date - but resolveAutoValue has no way to
-      // reach into `answers` and rewrite it; it takes no storage argument
-      // at all. The stored value from day 1 survives untouched, which is
-      // exactly the contract a resumed draft depends on.
-      final String ifResolvedAgain = resolveAutoValue(
-        dateField,
-        const ChecklistAutoValueContext(today: '2026-07-13'),
-      );
-      expect(ifResolvedAgain, '2026-07-13');
-      expect(answers['d1'], '2026-07-12');
-    },
-  );
+    // Day 2: a caller that resolves again (simulating "the wrong thing
+    // to do") gets tomorrow's date - but resolveAutoValue has no way to
+    // reach into `answers` and rewrite it; it takes no storage argument
+    // at all. The stored value from day 1 survives untouched, which is
+    // exactly the contract a resumed draft depends on.
+    final String ifResolvedAgain = resolveAutoValue(
+      dateField,
+      const ChecklistAutoValueContext(today: '2026-07-13'),
+    );
+    expect(ifResolvedAgain, '2026-07-13');
+    expect(answers['d1'], '2026-07-12');
+  });
 
   test('E7: autoFrom prefers fleet number over registration', () {
     const ChecklistField f = ChecklistField(
@@ -111,7 +116,10 @@ void main() {
     );
     // ...and falls back to the plate when the register carries only that.
     expect(
-      resolveAutoFill(f, const ChecklistAssetContext(registrationNo: '8448 GXA')),
+      resolveAutoFill(
+        f,
+        const ChecklistAssetContext(registrationNo: '8448 GXA'),
+      ),
       '8448 GXA',
     );
   });
@@ -122,10 +130,7 @@ void main() {
       type: 'text',
       autoFrom: 'asset.invented',
     );
-    expect(
-      resolveAutoFill(f, const ChecklistAssetContext(site: 'NHC')),
-      '',
-    );
+    expect(resolveAutoFill(f, const ChecklistAssetContext(site: 'NHC')), '');
     expect(kChecklistAutoFillSources.containsKey('asset.site'), isTrue);
   });
 }

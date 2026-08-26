@@ -193,17 +193,17 @@ final class SupabaseInspectionApprovalRepository
   Future<List<InspectionApprovalItem>> listPending({String? country}) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      var query = _client
-          .from(SupabaseTables.inspections)
-          .select(inspectionApprovalListColumns)
-          .eq('approval_status', 'pending_approval');
-      final String? filter = inspectionApprovalCountryFilter(country);
-      if (filter != null) {
-        query = query.or(filter);
-      }
-      return await query.order('created_at', ascending: false).limit(100)
-          as List<Map<String, dynamic>>;
-    });
+          var query = _client
+              .from(SupabaseTables.inspections)
+              .select(inspectionApprovalListColumns)
+              .eq('approval_status', 'pending_approval');
+          final String? filter = inspectionApprovalCountryFilter(country);
+          if (filter != null) {
+            query = query.or(filter);
+          }
+          return await query.order('created_at', ascending: false).limit(100)
+              as List<Map<String, dynamic>>;
+        });
     return <InspectionApprovalItem>[
       for (final Map<String, dynamic> row in rows)
         InspectionApprovalItem.fromRow(row),

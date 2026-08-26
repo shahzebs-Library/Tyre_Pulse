@@ -18,8 +18,10 @@ void main() {
     });
 
     test('several values decode as several entries', () {
-      final CountryScope scope =
-          CountryScope.fromJson(const <Object?>['KSA', 'UAE']);
+      final CountryScope scope = CountryScope.fromJson(const <Object?>[
+        'KSA',
+        'UAE',
+      ]);
       expect(scope.values, <String>['KSA', 'UAE']);
       expect(scope.canSee('KSA', isSuperAdmin: false), isTrue);
       expect(scope.canSee('UAE', isSuperAdmin: false), isTrue);
@@ -31,11 +33,8 @@ void main() {
       expect(CountryScope.fromJson(null).isBlank, isTrue);
       expect(SiteScope.fromJson(null).isBlank, isTrue);
       expect(
-        SiteScope.fromJson(null).canSee(
-          'NHC',
-          isSuperAdmin: false,
-          isAdminRole: false,
-        ),
+        SiteScope.fromJson(null)
+            .canSee('NHC', isSuperAdmin: false, isAdminRole: false),
         isFalse,
       );
     });
@@ -50,9 +49,14 @@ void main() {
     });
 
     test('non-string elements and blanks are dropped, never stringified', () {
-      final CountryScope scope = CountryScope.fromJson(
-        const <Object?>['KSA', 42, '', '   ', null, 'UAE'],
-      );
+      final CountryScope scope = CountryScope.fromJson(const <Object?>[
+        'KSA',
+        42,
+        '',
+        '   ',
+        null,
+        'UAE',
+      ]);
       expect(scope.values, <String>['KSA', 'UAE']);
     });
 
@@ -70,8 +74,7 @@ void main() {
   group('country sentinel', () {
     test('all, All and ALL are the sentinel', () {
       for (final String sentinel in <String>['all', 'All', 'ALL', ' aLl ']) {
-        final CountryScope scope =
-            CountryScope.fromJson(<Object?>[sentinel]);
+        final CountryScope scope = CountryScope.fromJson(<Object?>[sentinel]);
         expect(scope.seesAllCountries, isTrue, reason: 'failed on $sentinel');
         expect(scope.canSee('Egypt', isSuperAdmin: false), isTrue);
       }
@@ -86,8 +89,10 @@ void main() {
     });
 
     test('named countries exclude the sentinel', () {
-      final CountryScope scope =
-          CountryScope.fromJson(const <Object?>['All', 'KSA']);
+      final CountryScope scope = CountryScope.fromJson(const <Object?>[
+        'All',
+        'KSA',
+      ]);
       expect(scope.namedCountries, <String>['KSA']);
       expect(scope.seesAllCountries, isTrue);
     });
@@ -111,8 +116,11 @@ void main() {
     });
 
     test('named sites exclude the sentinels', () {
-      final SiteScope scope =
-          SiteScope.fromJson(const <Object?>['ALL', 'NHC', '*']);
+      final SiteScope scope = SiteScope.fromJson(const <Object?>[
+        'ALL',
+        'NHC',
+        '*',
+      ]);
       expect(scope.namedSites, <String>['NHC']);
     });
 
@@ -164,8 +172,9 @@ void main() {
       // still carries role = Admin. RECORDED: zero plain Admins exist today,
       // so the asymmetry is latent - which is how it would be lost in a
       // rewrite.
-      final CountryScope countries =
-          CountryScope.fromJson(const <Object?>['KSA']);
+      final CountryScope countries = CountryScope.fromJson(const <Object?>[
+        'KSA',
+      ]);
       final SiteScope sites = SiteScope.fromJson(const <Object?>['NHC']);
 
       expect(countries.canSee('UAE', isSuperAdmin: false), isFalse);

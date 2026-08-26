@@ -87,15 +87,12 @@ class InspectionWizardState {
   int get touchedCount =>
       tyreConditions.values.where((r) => r.isTouched).length;
 
-  TyreCompletenessResult get completeness => tyreCompleteness(
-        selectedVehicleType,
-        selectedAssetNo,
-        <String, Object?>{
-          for (final MapEntry<String, TyrePositionReading> e
-              in tyreConditions.entries)
-            e.key: e.value.toEntry(),
-        },
-      );
+  TyreCompletenessResult get completeness =>
+      tyreCompleteness(selectedVehicleType, selectedAssetNo, <String, Object?>{
+        for (final MapEntry<String, TyrePositionReading> e
+            in tyreConditions.entries)
+          e.key: e.value.toEntry(),
+      });
 
   List<InspectionSubmitIssue> get submitIssues =>
       validateInspectionForSubmit(_asPayload());
@@ -163,8 +160,9 @@ class InspectionWizardState {
       headerNotes: headerNotes ?? this.headerNotes,
       positions: positions ?? this.positions,
       tyreConditions: tyreConditions ?? this.tyreConditions,
-      activePosition:
-          clearActivePosition ? null : (activePosition ?? this.activePosition),
+      activePosition: clearActivePosition
+          ? null
+          : (activePosition ?? this.activePosition),
       inspectorSignature: clearInspectorSignature
           ? null
           : (inspectorSignature ?? this.inspectorSignature),
@@ -176,10 +174,12 @@ class InspectionWizardState {
       isSubmitting: isSubmitting ?? this.isSubmitting,
       isCapturingPhoto: isCapturingPhoto ?? this.isCapturingPhoto,
       loadError: clearLoadError ? null : (loadError ?? this.loadError),
-      submitOutcome:
-          clearSubmitOutcome ? null : (submitOutcome ?? this.submitOutcome),
-      submitWarning:
-          clearSubmitWarning ? null : (submitWarning ?? this.submitWarning),
+      submitOutcome: clearSubmitOutcome
+          ? null
+          : (submitOutcome ?? this.submitOutcome),
+      submitWarning: clearSubmitWarning
+          ? null
+          : (submitWarning ?? this.submitWarning),
       lastClientUuid: lastClientUuid ?? this.lastClientUuid,
     );
   }

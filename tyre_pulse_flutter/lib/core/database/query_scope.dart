@@ -58,8 +58,9 @@ Expression<bool> scopeWhere(
   GeneratedColumn<String> workspaceIdColumn,
   GeneratedColumn<String> countryColumn,
 ) {
-  final Expression<bool> workspaceTerm =
-      workspaceIdColumn.equals(scope.workspaceId);
+  final Expression<bool> workspaceTerm = workspaceIdColumn.equals(
+    scope.workspaceId,
+  );
 
   final String? country = scope.country;
   if (country == null) {

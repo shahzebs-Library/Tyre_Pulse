@@ -7,9 +7,9 @@ import 'package:tyre_pulse/core/telemetry/telemetry_service.dart';
 /// A route with the given name, cheap to construct without pushing it into a
 /// real Navigator - all this suite needs is `route.settings.name`.
 Route<void> _routeNamed(String? name) => MaterialPageRoute<void>(
-      settings: RouteSettings(name: name),
-      builder: (_) => const SizedBox.shrink(),
-    );
+  settings: RouteSettings(name: name),
+  builder: (_) => const SizedBox.shrink(),
+);
 
 void main() {
   Map<String, String>? capturedTags;
@@ -57,10 +57,7 @@ void main() {
       'what is on screen once the pop completes', () async {
     observer.didPush(_routeNamed('Home'), null);
     observer.didPush(_routeNamed('InspectionDetail'), _routeNamed('Home'));
-    observer.didPop(
-      _routeNamed('InspectionDetail'),
-      _routeNamed('Home'),
-    );
+    observer.didPop(_routeNamed('InspectionDetail'), _routeNamed('Home'));
 
     await captureAndReadRoute();
 
@@ -69,10 +66,7 @@ void main() {
 
   test('didRemove tags the reporter with the previous route, matching '
       'didPop', () async {
-    observer.didRemove(
-      _routeNamed('InspectionDetail'),
-      _routeNamed('Home'),
-    );
+    observer.didRemove(_routeNamed('InspectionDetail'), _routeNamed('Home'));
 
     await captureAndReadRoute();
 

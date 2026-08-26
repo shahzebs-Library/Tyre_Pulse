@@ -69,8 +69,9 @@ final class SupabaseVersionGateRepository implements VersionGateRepository {
           .eq('key', minVersionConfigKey)
           .maybeSingle()
           .timeout(versionGateReadTimeout);
-      final String? minimum =
-          row == null ? null : normaliseMinimumVersion(row['value']);
+      final String? minimum = row == null
+          ? null
+          : normaliseMinimumVersion(row['value']);
       return resolveVersionGate(
         currentVersion: currentVersion,
         minimumVersion: minimum,

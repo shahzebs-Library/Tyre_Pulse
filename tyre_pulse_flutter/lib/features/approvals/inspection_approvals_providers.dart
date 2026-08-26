@@ -17,7 +17,7 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_repositor
 
 final inspectionApprovalRepositoryProvider =
     Provider<InspectionApprovalRepository>(
-  (ref) => SupabaseInspectionApprovalRepository(
-    ref.watch(supabaseClientProvider),
-  ),
-);
+      (ref) => SupabaseInspectionApprovalRepository(
+        ref.watch(supabaseClientProvider),
+      ),
+    );

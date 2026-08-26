@@ -61,8 +61,9 @@ void main() {
         status: InspectionQueueStatus.pending,
       );
 
-      final QueuedInspection decoded =
-          QueuedInspection.fromJsonString(original.toJsonString());
+      final QueuedInspection decoded = QueuedInspection.fromJsonString(
+        original.toJsonString(),
+      );
 
       expect(decoded.id, original.id);
       expect(decoded.draftKey, original.draftKey);
@@ -94,8 +95,7 @@ void main() {
       expect(decoded.payload.gpsFix!.accuracyMeters, 12.0);
     });
 
-    test('a synced item with an error already cleared round-trips clean',
-        () {
+    test('a synced item with an error already cleared round-trips clean', () {
       final QueuedInspection item = QueuedInspection(
         id: 'client-uuid-2',
         draftKey: 'user-1::TM515',
@@ -104,8 +104,9 @@ void main() {
         status: InspectionQueueStatus.synced,
         syncedAt: DateTime.utc(2026, 8, 20, 9, 32),
       );
-      final QueuedInspection decoded =
-          QueuedInspection.fromJsonString(item.toJsonString());
+      final QueuedInspection decoded = QueuedInspection.fromJsonString(
+        item.toJsonString(),
+      );
       expect(decoded.status, InspectionQueueStatus.synced);
       expect(decoded.syncedAt, isNotNull);
     });
@@ -120,8 +121,9 @@ void main() {
         error: 'This record changed on the server.',
         attempts: 2,
       );
-      final QueuedInspection decoded =
-          QueuedInspection.fromJsonString(item.toJsonString());
+      final QueuedInspection decoded = QueuedInspection.fromJsonString(
+        item.toJsonString(),
+      );
       expect(decoded.status, InspectionQueueStatus.failed);
       expect(decoded.error, 'This record changed on the server.');
       expect(decoded.attempts, 2);
@@ -138,8 +140,9 @@ void main() {
         payload: noGps,
         createdAt: DateTime.utc(2026, 8, 20),
       );
-      final QueuedInspection decoded =
-          QueuedInspection.fromJsonString(item.toJsonString());
+      final QueuedInspection decoded = QueuedInspection.fromJsonString(
+        item.toJsonString(),
+      );
       expect(decoded.payload.gpsFix, isNull);
     });
   });
@@ -211,8 +214,9 @@ void main() {
 
   group('InspectionQueueReadResult', () {
     test('.ok carries items and reports isReadable true', () {
-      final InspectionQueueReadResult result =
-          InspectionQueueReadResult.ok(<QueuedInspection>[]);
+      final InspectionQueueReadResult result = InspectionQueueReadResult.ok(
+        <QueuedInspection>[],
+      );
       expect(result.isReadable, isTrue);
       expect(result.status, InspectionQueueReadStatus.ok);
       expect(result.items, isEmpty);

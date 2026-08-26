@@ -128,10 +128,7 @@ class TyreDetailSheet extends ConsumerWidget {
                       label: l10n.recordsCategory,
                       value: record.category,
                     ),
-                    _DetailRow(
-                      label: l10n.recordsCostPerTyre,
-                      value: costLine,
-                    ),
+                    _DetailRow(label: l10n.recordsCostPerTyre, value: costLine),
                     _DetailRow(
                       label: l10n.recordsKmFitment,
                       value: _numberOrNull(record.kmAtFitment),
@@ -187,8 +184,9 @@ class TyreDetailSheet extends ConsumerWidget {
 
   static String _formatThousands(num value) {
     final bool isWhole = value == value.roundToDouble();
-    final String text =
-        isWhole ? value.round().toString() : value.toStringAsFixed(2);
+    final String text = isWhole
+        ? value.round().toString()
+        : value.toStringAsFixed(2);
     final bool negative = text.startsWith('-');
     final String digits = negative ? text.substring(1) : text;
     final List<String> parts = digits.split('.');
@@ -198,8 +196,9 @@ class TyreDetailSheet extends ConsumerWidget {
       if (i > 0 && (whole.length - i) % 3 == 0) grouped.write(',');
       grouped.write(whole[i]);
     }
-    final String result =
-        parts.length > 1 ? '${grouped.toString()}.${parts[1]}' : grouped.toString();
+    final String result = parts.length > 1
+        ? '${grouped.toString()}.${parts[1]}'
+        : grouped.toString();
     return negative ? '-$result' : result;
   }
 }
@@ -238,9 +237,7 @@ class _DetailRow extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            Expanded(
-              child: Text(label, style: text.bodyMedium),
-            ),
+            Expanded(child: Text(label, style: text.bodyMedium)),
             const SizedBox(width: TpSpace.md),
             Flexible(
               child: isIdentifier

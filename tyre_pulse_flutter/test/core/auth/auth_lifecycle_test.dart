@@ -38,15 +38,14 @@ void main() {
       DateTime? cachedAt,
       bool? locked,
       bool? approved = true,
-    }) =>
-        isCachedProfileUsable(
-          cachedForUserId: cachedForUserId,
-          wantUserId: wantUserId,
-          cachedAt: cachedAt ?? now.subtract(const Duration(days: 1)),
-          now: now,
-          locked: locked,
-          approved: approved,
-        );
+    }) => isCachedProfileUsable(
+      cachedForUserId: cachedForUserId,
+      wantUserId: wantUserId,
+      cachedAt: cachedAt ?? now.subtract(const Duration(days: 1)),
+      now: now,
+      locked: locked,
+      approved: approved,
+    );
 
     test('a fresh cache for the right user is usable', () {
       expect(usable(), isTrue);
@@ -61,20 +60,24 @@ void main() {
       expect(usable(cachedAt: null), isFalse);
     });
 
-    test('exactly at the boundary is still usable; a moment past it is not',
-        () {
-      expect(
-        usable(cachedAt: now.subtract(profileCacheMaxAge)),
-        isTrue,
-        reason: 'exactly profileCacheMaxAge old is not OLDER than the bound',
-      );
-      expect(
-        usable(
-          cachedAt: now.subtract(profileCacheMaxAge + const Duration(seconds: 1)),
-        ),
-        isFalse,
-      );
-    });
+    test(
+      'exactly at the boundary is still usable; a moment past it is not',
+      () {
+        expect(
+          usable(cachedAt: now.subtract(profileCacheMaxAge)),
+          isTrue,
+          reason: 'exactly profileCacheMaxAge old is not OLDER than the bound',
+        );
+        expect(
+          usable(
+            cachedAt: now.subtract(
+              profileCacheMaxAge + const Duration(seconds: 1),
+            ),
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('a cache written while locked is never usable, however fresh', () {
       expect(usable(locked: true), isFalse);
@@ -84,13 +87,15 @@ void main() {
       expect(usable(approved: false), isFalse);
     });
 
-    test('an unknown (null) locked or approved value does not itself refuse',
-        () {
-      // Mirrors the ported rule exactly: only an EXPLICIT false/true refuses.
-      // A row that never carried these columns must not be treated as if it
-      // asserted the worst case.
-      expect(usable(locked: null, approved: null), isTrue);
-    });
+    test(
+      'an unknown (null) locked or approved value does not itself refuse',
+      () {
+        // Mirrors the ported rule exactly: only an EXPLICIT false/true refuses.
+        // A row that never carried these columns must not be treated as if it
+        // asserted the worst case.
+        expect(usable(locked: null, approved: null), isTrue);
+      },
+    );
   });
 
   group('shouldRevalidateOnForeground', () {
@@ -113,25 +118,27 @@ void main() {
       );
     });
 
-    test('checked exactly at the interval revalidates; a moment before does not',
-        () {
-      expect(
-        shouldRevalidateOnForeground(
-          lastCheckedAt: now.subtract(foregroundRevalidateMinInterval),
-          now: now,
-        ),
-        isTrue,
-      );
-      expect(
-        shouldRevalidateOnForeground(
-          lastCheckedAt: now.subtract(
-            foregroundRevalidateMinInterval - const Duration(seconds: 1),
+    test(
+      'checked exactly at the interval revalidates; a moment before does not',
+      () {
+        expect(
+          shouldRevalidateOnForeground(
+            lastCheckedAt: now.subtract(foregroundRevalidateMinInterval),
+            now: now,
           ),
-          now: now,
-        ),
-        isFalse,
-      );
-    });
+          isTrue,
+        );
+        expect(
+          shouldRevalidateOnForeground(
+            lastCheckedAt: now.subtract(
+              foregroundRevalidateMinInterval - const Duration(seconds: 1),
+            ),
+            now: now,
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('the timeout constants are what the field app was tuned to', () {
@@ -146,9 +153,11 @@ void main() {
       expect(profileCacheMaxAge, const Duration(days: 90));
     });
 
-    test('the foreground revalidation floor is 60 seconds, ported verbatim',
-        () {
-      expect(foregroundRevalidateMinInterval, const Duration(minutes: 1));
-    });
+    test(
+      'the foreground revalidation floor is 60 seconds, ported verbatim',
+      () {
+        expect(foregroundRevalidateMinInterval, const Duration(minutes: 1));
+      },
+    );
   });
 }

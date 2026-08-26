@@ -97,9 +97,7 @@ Future<void> _settle() async {
 ({ProviderContainer container, FakeTyreLookupRepository repo}) _harness() {
   final FakeTyreLookupRepository repo = FakeTyreLookupRepository();
   final ProviderContainer container = ProviderContainer(
-    overrides: <Override>[
-      tyreLookupRepositoryProvider.overrideWithValue(repo),
-    ],
+    overrides: <Override>[tyreLookupRepositoryProvider.overrideWithValue(repo)],
   );
   return (container: container, repo: repo);
 }
@@ -116,8 +114,9 @@ void main() {
       container.read(serialSearchControllerProvider); // triggers build()
       await _settle();
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.canScrap, isTrue);
       expect(state.canUnscrap, isFalse);
     });
@@ -126,8 +125,9 @@ void main() {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isIdle, isTrue);
       expect(state.tyre, isNull);
       expect(state.resolvedSerial, isNull);
@@ -135,8 +135,7 @@ void main() {
   });
 
   group('search', () {
-    test('a successful lookup moves to found and carries the tyre',
-        () async {
+    test('a successful lookup moves to found and carries the tyre', () async {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
       const TyreLookupRecord tyre = TyreLookupRecord(
@@ -145,12 +144,14 @@ void main() {
       );
       repo.lookupResult = tyre;
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search('EP0604207');
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isFound, isTrue);
       expect(state.tyre, tyre);
       expect(state.resolvedSerial, 'EP0604207');
@@ -162,46 +163,49 @@ void main() {
       addTearDown(container.dispose);
       repo.lookupResult = null;
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search('DOES-NOT-EXIST');
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isEmptyResult, isTrue);
       expect(state.tyre, isNull);
     });
 
-    test('a lookup failure moves to the error phase with a safe message',
-        () async {
+    test(
+      'a lookup failure moves to the error phase with a safe message',
+      () async {
+        final (:container, :repo) = _harness();
+        addTearDown(container.dispose);
+        repo.lookupError = StateError('offline');
+
+        final SerialSearchController controller = container.read(
+          serialSearchControllerProvider.notifier,
+        );
+        await controller.search('EP0604207');
+
+        final SerialSearchState state = container.read(
+          serialSearchControllerProvider,
+        );
+        expect(state.isError, isTrue);
+        expect(state.lastError, isNotNull);
+      },
+    );
+
+    test('a blank query is a no-op - the repository is never called', () async {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
-      repo.lookupError = StateError('offline');
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
-      await controller.search('EP0604207');
-
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
-      expect(state.isError, isTrue);
-      expect(state.lastError, isNotNull);
-    });
-
-    test('a blank query is a no-op - the repository is never called',
-        () async {
-      final (:container, :repo) = _harness();
-      addTearDown(container.dispose);
-
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search('   ');
 
       expect(repo.lookupCalls, 0);
-      expect(
-        container.read(serialSearchControllerProvider).isIdle,
-        isTrue,
-      );
+      expect(container.read(serialSearchControllerProvider).isIdle, isTrue);
     });
 
     test('a scanned URL payload is unwrapped before it reaches the '
@@ -210,8 +214,9 @@ void main() {
       addTearDown(container.dispose);
       repo.lookupResult = const TyreLookupRecord(id: 'row-1');
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search(
         'https://app.tyrepulse.app/scan?serial=EP0604207',
       );
@@ -231,12 +236,14 @@ void main() {
         ..lookupResult = const TyreLookupRecord(id: 'row-1')
         ..scrapMarkError = StateError('offline');
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search('EP0604207');
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isFound, isTrue);
       expect(state.scrapMark, isNull);
     });
@@ -246,8 +253,9 @@ void main() {
       addTearDown(container.dispose);
       repo.lookupResult = const TyreLookupRecord(id: 'row-1');
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       controller.setQuery('EP0604207');
       await controller.search();
 
@@ -256,23 +264,21 @@ void main() {
   });
 
   group('clear', () {
-    test('returns to the idle default, discarding any prior result',
-        () async {
+    test('returns to the idle default, discarding any prior result', () async {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
       repo.lookupResult = const TyreLookupRecord(id: 'row-1');
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
-      await controller.search('EP0604207');
-      expect(
-        container.read(serialSearchControllerProvider).isFound,
-        isTrue,
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
       );
+      await controller.search('EP0604207');
+      expect(container.read(serialSearchControllerProvider).isFound, isTrue);
 
       controller.clear();
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isIdle, isTrue);
       expect(state.tyre, isNull);
       expect(state.query, isEmpty);
@@ -280,12 +286,12 @@ void main() {
   });
 
   group('confirmScrap', () {
-    Future<(ProviderContainer, FakeTyreLookupRepository)>
-        readyToScrap() async {
+    Future<(ProviderContainer, FakeTyreLookupRepository)> readyToScrap() async {
       final (:container, :repo) = _harness();
       repo.lookupResult = const TyreLookupRecord(id: 'row-1');
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search('EP0604207');
       return (container, repo);
     }
@@ -296,8 +302,9 @@ void main() {
           await readyToScrap();
       addTearDown(container.dispose);
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.confirmScrap(reason: 'Worn beyond limit');
 
       expect(repo.scrapCalls, 1);
@@ -311,19 +318,20 @@ void main() {
       addTearDown(container.dispose);
       repo.scrapMarkResult = const ScrapMark(serial: 'EP0604207');
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.confirmScrap();
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isScrapped, isTrue);
       expect(state.isScrapBusy, isFalse);
     });
 
     test('a refusal from the repository lands in lastError and clears '
-        'the busy flag - the state is not left stuck mid-action',
-        () async {
+        'the busy flag - the state is not left stuck mid-action', () async {
       final (ProviderContainer container, FakeTyreLookupRepository repo) =
           await readyToScrap();
       addTearDown(container.dispose);
@@ -332,12 +340,14 @@ void main() {
         message: 'You do not have permission to mark a tyre as scrapped.',
       );
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.confirmScrap();
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.lastError, isNotNull);
       expect(state.isScrapBusy, isFalse);
       expect(
@@ -351,8 +361,9 @@ void main() {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.confirmScrap(reason: 'Worn');
 
       expect(repo.scrapCalls, 0);
@@ -364,8 +375,9 @@ void main() {
           await readyToScrap();
       addTearDown(container.dispose);
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
 
       final Future<void> first = controller.confirmScrap(reason: 'A');
       final Future<void> second = controller.confirmScrap(reason: 'B');
@@ -380,31 +392,34 @@ void main() {
   });
 
   group('undoScrap', () {
-    Future<(ProviderContainer, FakeTyreLookupRepository)>
-        readyToUndo() async {
+    Future<(ProviderContainer, FakeTyreLookupRepository)> readyToUndo() async {
       final (:container, :repo) = _harness();
       repo
         ..lookupResult = const TyreLookupRecord(id: 'row-1')
         ..scrapMarkResult = const ScrapMark(serial: 'EP0604207');
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.search('EP0604207');
       return (container, repo);
     }
 
-    test('calls the repository exactly once with the resolved serial',
-        () async {
-      final (ProviderContainer container, FakeTyreLookupRepository repo) =
-          await readyToUndo();
-      addTearDown(container.dispose);
+    test(
+      'calls the repository exactly once with the resolved serial',
+      () async {
+        final (ProviderContainer container, FakeTyreLookupRepository repo) =
+            await readyToUndo();
+        addTearDown(container.dispose);
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
-      await controller.undoScrap();
+        final SerialSearchController controller = container.read(
+          serialSearchControllerProvider.notifier,
+        );
+        await controller.undoScrap();
 
-      expect(repo.unscrapCalls, 1);
-      expect(repo.lastUnscrapSerial, 'EP0604207');
-    });
+        expect(repo.unscrapCalls, 1);
+        expect(repo.lastUnscrapSerial, 'EP0604207');
+      },
+    );
 
     test('clears the scrap mark locally on success, without a second '
         'read - the caller already knows the outcome', () async {
@@ -412,12 +427,14 @@ void main() {
           await readyToUndo();
       addTearDown(container.dispose);
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.undoScrap();
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.isScrapped, isFalse);
       expect(state.isUnscrapBusy, isFalse);
     });
@@ -431,12 +448,14 @@ void main() {
         message: 'You do not have permission to undo a scrap.',
       );
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.undoScrap();
 
-      final SerialSearchState state =
-          container.read(serialSearchControllerProvider);
+      final SerialSearchState state = container.read(
+        serialSearchControllerProvider,
+      );
       expect(state.lastError, isNotNull);
       expect(state.isScrapped, isTrue);
       expect(state.isUnscrapBusy, isFalse);
@@ -446,8 +465,9 @@ void main() {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
 
-      final SerialSearchController controller =
-          container.read(serialSearchControllerProvider.notifier);
+      final SerialSearchController controller = container.read(
+        serialSearchControllerProvider.notifier,
+      );
       await controller.undoScrap();
 
       expect(repo.unscrapCalls, 0);

@@ -41,8 +41,7 @@ void main() {
     });
   });
 
-  group('a tyre nobody has assessed does not default to looking healthy',
-      () {
+  group('a tyre nobody has assessed does not default to looking healthy', () {
     testWidgets('the default status is unknown', (WidgetTester tester) async {
       await pumpTp(
         tester,
@@ -52,8 +51,9 @@ void main() {
       expect(_decorationOf(tester).color, TpPalette.light.unknown.soft);
     });
 
-    testWidgets('a real status carries its own colour',
-        (WidgetTester tester) async {
+    testWidgets('a real status carries its own colour', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpTyreChip(
@@ -66,8 +66,9 @@ void main() {
   });
 
   group('isSelected', () {
-    testWidgets('draws a stronger, focus-coloured border',
-        (WidgetTester tester) async {
+    testWidgets('draws a stronger, focus-coloured border', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpTyreChip(
@@ -115,8 +116,9 @@ void main() {
       expect(taps, 1);
     });
 
-    testWidgets('no InkWell is built when onTap is not supplied',
-        (WidgetTester tester) async {
+    testWidgets('no InkWell is built when onTap is not supplied', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpTyreChip(data: TpTyreChipData(position: 'LHF1')),

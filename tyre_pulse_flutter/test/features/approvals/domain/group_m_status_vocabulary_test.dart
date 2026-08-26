@@ -26,61 +26,49 @@ const ApprovalTemplateLike kOneStage = ApprovalTemplateLike(
 );
 
 void main() {
-  test(
-    'case M1: statusSummary says WHO is holding it, not just "pending"',
-    () {
-      expect(
-        statusSummary(
-          kTwoStage,
-          const ApprovalSubmissionLike(approvalStatus: 'pending'),
-        ).text,
-        'Waiting for a supervisor',
-      );
-      expect(
-        statusSummary(
-          kTwoStage,
-          const ApprovalSubmissionLike(
-            approvalStatus: 'pending_area_manager',
-          ),
-        ).text,
-        'Waiting for the area manager',
-      );
-      expect(
-        statusSummary(
-          kTwoStage,
-          const ApprovalSubmissionLike(approvalStatus: 'approved'),
-        ).text,
-        'Closed',
-      );
-      expect(
-        statusSummary(
-          kOneStage,
-          const ApprovalSubmissionLike(approvalStatus: 'pending'),
-        ).text,
-        'Waiting for approval',
-      );
-    },
-  );
+  test('case M1: statusSummary says WHO is holding it, not just "pending"', () {
+    expect(
+      statusSummary(
+        kTwoStage,
+        const ApprovalSubmissionLike(approvalStatus: 'pending'),
+      ).text,
+      'Waiting for a supervisor',
+    );
+    expect(
+      statusSummary(
+        kTwoStage,
+        const ApprovalSubmissionLike(approvalStatus: 'pending_area_manager'),
+      ).text,
+      'Waiting for the area manager',
+    );
+    expect(
+      statusSummary(
+        kTwoStage,
+        const ApprovalSubmissionLike(approvalStatus: 'approved'),
+      ).text,
+      'Closed',
+    );
+    expect(
+      statusSummary(
+        kOneStage,
+        const ApprovalSubmissionLike(approvalStatus: 'pending'),
+      ).text,
+      'Waiting for approval',
+    );
+  });
 
-  test(
-    'case M2: closed means CLOSED, not "a supervisor looked at it"',
-    () {
-      expect(
-        isFullyClosed(
-          const ApprovalSubmissionLike(
-            approvalStatus: 'pending_area_manager',
-          ),
-        ),
-        isFalse,
-      );
-      expect(
-        isFullyClosed(
-          const ApprovalSubmissionLike(approvalStatus: 'approved'),
-        ),
-        isTrue,
-      );
-    },
-  );
+  test('case M2: closed means CLOSED, not "a supervisor looked at it"', () {
+    expect(
+      isFullyClosed(
+        const ApprovalSubmissionLike(approvalStatus: 'pending_area_manager'),
+      ),
+      isFalse,
+    );
+    expect(
+      isFullyClosed(const ApprovalSubmissionLike(approvalStatus: 'approved')),
+      isTrue,
+    );
+  });
 
   test('case M3: both waiting rungs fold into ONE history bucket', () {
     expect(
@@ -89,9 +77,7 @@ void main() {
     );
     expect(
       historyBucket(
-        const ApprovalSubmissionLike(
-          approvalStatus: 'pending_area_manager',
-        ),
+        const ApprovalSubmissionLike(approvalStatus: 'pending_area_manager'),
       ),
       HistoryBucket.waiting,
     );
@@ -124,9 +110,6 @@ void main() {
   test('case M5: a never-minted document number is NULL, not blank', () {
     expect(submissionReference(null), isNull);
     expect(submissionReference('   '), isNull);
-    expect(
-      submissionReference('WDC-TM514-2026-0001'),
-      'WDC-TM514-2026-0001',
-    );
+    expect(submissionReference('WDC-TM514-2026-0001'), 'WDC-TM514-2026-0001');
   });
 }

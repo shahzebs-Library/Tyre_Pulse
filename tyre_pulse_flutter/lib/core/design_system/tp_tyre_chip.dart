@@ -41,7 +41,12 @@ class TpTyreChipData {
 }
 
 class TpTyreChip extends StatelessWidget {
-  const TpTyreChip({required this.data, this.onTap, this.isSelected = false, super.key});
+  const TpTyreChip({
+    required this.data,
+    this.onTap,
+    this.isSelected = false,
+    super.key,
+  });
 
   final TpTyreChipData data;
   final VoidCallback? onTap;
@@ -78,16 +83,14 @@ class TpTyreChip extends StatelessWidget {
             children: <Widget>[
               TpIdentifierText(
                 data.position,
-                style: TpTypography.identifier(palette).copyWith(
-                  color: colors.onSoft,
-                ),
+                style: TpTypography.identifier(palette)
+                    .copyWith(color: colors.onSoft),
               ),
               if (data.detail != null)
                 Text(
                   data.detail!,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colors.onSoft,
-                      ),
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: colors.onSoft),
                 ),
             ],
           ),

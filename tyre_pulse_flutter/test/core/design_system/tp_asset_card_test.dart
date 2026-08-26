@@ -44,8 +44,9 @@ void main() {
   });
 
   group('the site and detail line', () {
-    testWidgets('joins both when both are supplied',
-        (WidgetTester tester) async {
+    testWidgets('joins both when both are supplied', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpAssetCard(
@@ -60,8 +61,9 @@ void main() {
       expect(find.text('NHC  |  84,200 km'), findsOneWidget);
     });
 
-    testWidgets('shows only the site when there is no detail',
-        (WidgetTester tester) async {
+    testWidgets('shows only the site when there is no detail', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpAssetCard(
@@ -72,8 +74,9 @@ void main() {
       expect(find.text('NHC'), findsOneWidget);
     });
 
-    testWidgets('shows only the detail when there is no site',
-        (WidgetTester tester) async {
+    testWidgets('shows only the detail when there is no site', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpAssetCard(
@@ -84,8 +87,9 @@ void main() {
       expect(find.text('84,200 km'), findsOneWidget);
     });
 
-    testWidgets('renders no line at all when neither is supplied',
-        (WidgetTester tester) async {
+    testWidgets('renders no line at all when neither is supplied', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpAssetCard(asset: TpAssetSummary(assetNo: 'TM514')),
@@ -95,10 +99,10 @@ void main() {
     });
   });
 
-  group('an asset nobody has assessed does not default to looking healthy',
-      () {
-    testWidgets('the default status label reads "Not measured"',
-        (WidgetTester tester) async {
+  group('an asset nobody has assessed does not default to looking healthy', () {
+    testWidgets('the default status label reads "Not measured"', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpAssetCard(asset: TpAssetSummary(assetNo: 'TM514')),
@@ -107,8 +111,9 @@ void main() {
       expect(find.text('Not measured'), findsOneWidget);
     });
 
-    testWidgets('a supplied status label overrides the default',
-        (WidgetTester tester) async {
+    testWidgets('a supplied status label overrides the default', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpAssetCard(
@@ -125,8 +130,9 @@ void main() {
     });
   });
 
-  testWidgets('onTap fires when the card is tapped',
-      (WidgetTester tester) async {
+  testWidgets('onTap fires when the card is tapped', (
+    WidgetTester tester,
+  ) async {
     int taps = 0;
     await pumpTp(
       tester,

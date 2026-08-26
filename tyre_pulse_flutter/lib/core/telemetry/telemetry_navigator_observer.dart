@@ -34,8 +34,8 @@ import 'package:tyre_pulse/core/telemetry/telemetry_reporter.dart';
 /// state to have been set correctly.
 final class TelemetryNavigatorObserver extends SentryNavigatorObserver {
   TelemetryNavigatorObserver({required TelemetryReporter reporter})
-      : _reporter = reporter,
-        super();
+    : _reporter = reporter,
+      super();
 
   final TelemetryReporter _reporter;
 

@@ -19,9 +19,7 @@ import 'package:tyre_pulse/features/home/presentation/home_screen.dart';
 
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> homeScreenRegistrations =
-    <String, TpScreenBuilder>{
-  TpRouteId.home: _buildHomeScreen,
-};
+    <String, TpScreenBuilder>{TpRouteId.home: _buildHomeScreen};
 
 /// See `meter_logs_screen_registrations.dart`'s own
 /// `_buildMeterLogScreen` for why this guard exists.

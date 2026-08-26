@@ -54,10 +54,7 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 /// One captured signature, ready for [InspectionDraftRepository.
 /// saveSignature] and, ultimately, `inspections.inspector_signature`.
 class InspectionSignatureCapture {
-  const InspectionSignatureCapture({
-    required this.dataUrl,
-    this.strokesJson,
-  });
+  const InspectionSignatureCapture({required this.dataUrl, this.strokesJson});
 
   final String dataUrl;
   final String? strokesJson;
@@ -78,8 +75,7 @@ class InspectionSignaturePad extends StatefulWidget {
   final double height;
 
   @override
-  State<InspectionSignaturePad> createState() =>
-      _InspectionSignaturePadState();
+  State<InspectionSignaturePad> createState() => _InspectionSignaturePadState();
 }
 
 class _InspectionSignaturePadState extends State<InspectionSignaturePad> {

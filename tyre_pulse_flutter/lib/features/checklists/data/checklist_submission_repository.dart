@@ -99,11 +99,13 @@
 /// essential deliverable.
 library;
 
-import 'package:tyre_pulse/core/database/dao/queue_dao.dart' show QueuedMediaAttachment;
+import 'package:tyre_pulse/core/database/dao/queue_dao.dart'
+    show QueuedMediaAttachment;
 import 'package:tyre_pulse/core/database/database_constants.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
-import 'package:tyre_pulse/core/sync/sync_engine.dart' show expectedPriorStatusPayloadKey;
+import 'package:tyre_pulse/core/sync/sync_engine.dart'
+    show expectedPriorStatusPayloadKey;
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
@@ -154,8 +156,8 @@ final class DefaultChecklistSubmissionRepository
   DefaultChecklistSubmissionRepository({
     required QueuedCommandRepository commandRepository,
     required ChecklistDraftRepository draftRepository,
-  })  : _commands = commandRepository,
-        _drafts = draftRepository;
+  }) : _commands = commandRepository,
+       _drafts = draftRepository;
 
   final QueuedCommandRepository _commands;
   final ChecklistDraftRepository _drafts;
@@ -182,8 +184,8 @@ final class DefaultChecklistSubmissionRepository
     final DateTime now = DateTime.now();
 
     final List<ChecklistDraftPhoto> photos = await _drafts.photosFor(draftKey);
-    final List<ChecklistDraftSignature> signatures =
-        await _drafts.signaturesFor(draftKey);
+    final List<ChecklistDraftSignature> signatures = await _drafts
+        .signaturesFor(draftKey);
 
     // Keyed by field id, mirroring `mobile/lib/checklists.ts`'s
     // `Record<string, string[]>` photo shape exactly - never flattened to a
@@ -221,7 +223,8 @@ final class DefaultChecklistSubmissionRepository
     // `mobile/app/(app)/checklists/[templateId].tsx`'s own
     // `primary = primarySignature || firstFieldSignature` fallback.
     final String? signatureData =
-        primarySignature ?? (signaturesPayload.isEmpty ? null : signaturesPayload.values.first);
+        primarySignature ??
+        (signaturesPayload.isEmpty ? null : signaturesPayload.values.first);
 
     final Map<String, Object?> payload = <String, Object?>{
       'id': submissionId,

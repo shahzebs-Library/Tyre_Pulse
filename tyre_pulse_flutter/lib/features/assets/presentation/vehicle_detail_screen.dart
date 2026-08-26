@@ -89,8 +89,9 @@ class _VehicleDetailBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final AsyncValue<VehicleDetailOutcome> outcomeAsync =
-        ref.watch(vehicleDetailProvider(assetNo));
+    final AsyncValue<VehicleDetailOutcome> outcomeAsync = ref.watch(
+      vehicleDetailProvider(assetNo),
+    );
 
     return TpScaffold(
       appBar: TpAppBar(
@@ -129,8 +130,10 @@ class _VehicleDetailBody extends ConsumerWidget {
         onRetry: () => ref.invalidate(vehicleDetailProvider(assetNo)),
       ),
       data: (VehicleDetailOutcome outcome) => switch (outcome) {
-        VehicleDetailLoaded(asset: final VehicleAsset asset) =>
-          _DetailView(asset: asset, l10n: l10n),
+        VehicleDetailLoaded(asset: final VehicleAsset asset) => _DetailView(
+          asset: asset,
+          l10n: l10n,
+        ),
         VehicleDetailFromCache(
           asset: final VehicleAsset asset,
           cachedAt: final DateTime? cachedAt,
@@ -157,10 +160,10 @@ class _VehicleDetailBody extends ConsumerWidget {
   }
 
   static AppError _unexpectedError() => const AppError(
-        kind: AppErrorKind.unknown,
-        message: 'Something went wrong. Please try again.',
-        isRetryable: true,
-      );
+    kind: AppErrorKind.unknown,
+    message: 'Something went wrong. Please try again.',
+    isRetryable: true,
+  );
 
   static String? _formatCachedAt(DateTime? cachedAt) {
     if (cachedAt == null) {
@@ -187,16 +190,14 @@ class _DetailView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final TpPalette palette = TpPalette.of(context);
-    final bool canStartInspection =
-        ref.watch(canAccessModuleProvider(ModuleKey.inspect));
+    final bool canStartInspection = ref.watch(
+      canAccessModuleProvider(ModuleKey.inspect),
+    );
 
     final List<(String, String?)> fields = <(String, String?)>[
       (l10n.vehiclesFieldFleetNo, asset.fleetNumber),
       (l10n.vehiclesFieldType, asset.vehicleType),
-      (
-        l10n.vehiclesFieldMakeModel,
-        _join(<String?>[asset.make, asset.model]),
-      ),
+      (l10n.vehiclesFieldMakeModel, _join(<String?>[asset.make, asset.model])),
       (l10n.vehiclesFieldYear, asset.year?.toString()),
       (
         l10n.vehiclesFieldCurrentKm,
@@ -339,10 +340,7 @@ class _FieldRow extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Expanded(
-            flex: 2,
-            child: Text(label, style: text.labelMedium),
-          ),
+          Expanded(flex: 2, child: Text(label, style: text.labelMedium)),
           Expanded(
             flex: 3,
             child: Text(

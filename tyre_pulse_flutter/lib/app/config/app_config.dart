@@ -68,8 +68,10 @@ class AppConfig {
   static AppConfigResult resolve() {
     const url = String.fromEnvironment(_urlKey);
     const anonKey = String.fromEnvironment(_anonKey);
-    const environment =
-        String.fromEnvironment('APP_ENV', defaultValue: 'development');
+    const environment = String.fromEnvironment(
+      'APP_ENV',
+      defaultValue: 'development',
+    );
     const sentryDsn = String.fromEnvironment('SENTRY_DSN');
 
     return validate(
@@ -152,7 +154,9 @@ class AppConfig {
     final parts = key.trim().split('.');
     if (parts.length != 3) return false;
     try {
-      final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
       return payload.contains('"role":"service_role"') ||
           payload.contains('"role": "service_role"');
     } on FormatException {

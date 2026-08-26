@@ -46,27 +46,30 @@ void main() {
   });
 
   group('saveHeader / draftsForUser', () {
-    test('a saved header appears in the unfinished-work list for its user',
-        () async {
-      final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
-      await repo.saveHeader(
-        userId: 'user-1',
-        workspaceId: 'org-a',
-        assetNo: 'TM514',
-        filled: 0,
-        total: 12,
-        vehicleType: 'Tr-Mixer',
-        site: 'NHC',
-      );
+    test(
+      'a saved header appears in the unfinished-work list for its user',
+      () async {
+        final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+        await repo.saveHeader(
+          userId: 'user-1',
+          workspaceId: 'org-a',
+          assetNo: 'TM514',
+          filled: 0,
+          total: 12,
+          vehicleType: 'Tr-Mixer',
+          site: 'NHC',
+        );
 
-      final List<InspectionDraftSummary> drafts =
-          await repo.draftsForUser('user-1');
-      expect(drafts, hasLength(1));
-      expect(drafts.single.draftKey, key);
-      expect(drafts.single.assetNo, 'TM514');
-      expect(drafts.single.total, 12);
-      expect(drafts.single.filled, 0);
-    });
+        final List<InspectionDraftSummary> drafts = await repo.draftsForUser(
+          'user-1',
+        );
+        expect(drafts, hasLength(1));
+        expect(drafts.single.draftKey, key);
+        expect(drafts.single.assetNo, 'TM514');
+        expect(drafts.single.total, 12);
+        expect(drafts.single.filled, 0);
+      },
+    );
 
     test('a draft for a different user is invisible to this one', () async {
       await repo.saveHeader(
@@ -95,56 +98,61 @@ void main() {
         filled: 5,
         total: 12,
       );
-      final List<InspectionDraftSummary> drafts =
-          await repo.draftsForUser('user-1');
+      final List<InspectionDraftSummary> drafts = await repo.draftsForUser(
+        'user-1',
+      );
       expect(drafts, hasLength(1));
       expect(drafts.single.filled, 5);
     });
   });
 
   group('saveTyreReading / tyreReadings - the single write path', () {
-    test('a saved reading is readable back with checked stamped true',
-        () async {
-      final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
-      await repo.saveHeader(
-        userId: 'user-1',
-        workspaceId: 'org-a',
-        assetNo: 'TM514',
-        filled: 0,
-        total: 1,
-      );
+    test(
+      'a saved reading is readable back with checked stamped true',
+      () async {
+        final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+        await repo.saveHeader(
+          userId: 'user-1',
+          workspaceId: 'org-a',
+          assetNo: 'TM514',
+          filled: 0,
+          total: 1,
+        );
 
-      // The interface's own contract: checked is ALWAYS stamped true by
-      // this write path, whatever the caller passes in - confirmed by
-      // deliberately passing checked: false here.
-      await repo.saveTyreReading(
-        key,
-        const TyrePositionReading(
-          position: 'LHF1',
-          pressurePsi: 108,
-          checked: false,
-        ),
-      );
+        // The interface's own contract: checked is ALWAYS stamped true by
+        // this write path, whatever the caller passes in - confirmed by
+        // deliberately passing checked: false here.
+        await repo.saveTyreReading(
+          key,
+          const TyrePositionReading(
+            position: 'LHF1',
+            pressurePsi: 108,
+            checked: false,
+          ),
+        );
 
-      final Map<String, TyrePositionReading> readings =
-          await repo.tyreReadings(key);
-      expect(readings['LHF1'], isNotNull);
-      expect(readings['LHF1']!.pressurePsi, 108.0);
-      expect(readings['LHF1']!.checked, isTrue);
-    });
+        final Map<String, TyrePositionReading> readings = await repo
+            .tyreReadings(key);
+        expect(readings['LHF1'], isNotNull);
+        expect(readings['LHF1']!.pressurePsi, 108.0);
+        expect(readings['LHF1']!.checked, isTrue);
+      },
+    );
 
-    test('a pressure of exactly 0 survives the write and the read back',
-        () async {
-      final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
-      await repo.saveTyreReading(
-        key,
-        const TyrePositionReading(position: 'LHF2', pressurePsi: 0),
-      );
-      final Map<String, TyrePositionReading> readings =
-          await repo.tyreReadings(key);
-      expect(readings['LHF2']!.pressurePsi, 0.0);
-      expect(readings['LHF2']!.pressurePsi, isNotNull);
-    });
+    test(
+      'a pressure of exactly 0 survives the write and the read back',
+      () async {
+        final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+        await repo.saveTyreReading(
+          key,
+          const TyrePositionReading(position: 'LHF2', pressurePsi: 0),
+        );
+        final Map<String, TyrePositionReading> readings = await repo
+            .tyreReadings(key);
+        expect(readings['LHF2']!.pressurePsi, 0.0);
+        expect(readings['LHF2']!.pressurePsi, isNotNull);
+      },
+    );
 
     test('saving the same position twice overwrites rather than '
         'duplicating', () async {
@@ -157,8 +165,9 @@ void main() {
         key,
         const TyrePositionReading(position: 'LHF1', pressurePsi: 115),
       );
-      final Map<String, TyrePositionReading> readings =
-          await repo.tyreReadings(key);
+      final Map<String, TyrePositionReading> readings = await repo.tyreReadings(
+        key,
+      );
       expect(readings.length, 1);
       expect(readings['LHF1']!.pressurePsi, 115.0);
     });
@@ -179,8 +188,8 @@ void main() {
         capturedAt: DateTime.utc(2026, 8, 20, 9),
       );
 
-      final Map<String, TyrePositionReading> merged =
-          await repo.tyreReadingsWithPhotos(key);
+      final Map<String, TyrePositionReading> merged = await repo
+          .tyreReadingsWithPhotos(key);
       expect(merged['LHF1']!.photoLocalPath, '/tmp/lhf1_1.jpg');
       expect(merged['LHF1']!.condition, 'Worn');
     });
@@ -201,8 +210,8 @@ void main() {
         capturedAt: DateTime.utc(2026, 8, 20, 9, 5),
       );
 
-      final Map<String, TyrePositionReading> merged =
-          await repo.tyreReadingsWithPhotos(key);
+      final Map<String, TyrePositionReading> merged = await repo
+          .tyreReadingsWithPhotos(key);
       expect(merged['LHF1']!.photoLocalPath, '/tmp/newer.jpg');
     });
 
@@ -215,8 +224,8 @@ void main() {
         localPath: '/tmp/photo-only.jpg',
         capturedAt: DateTime.utc(2026, 8, 20),
       );
-      final Map<String, TyrePositionReading> merged =
-          await repo.tyreReadingsWithPhotos(key);
+      final Map<String, TyrePositionReading> merged = await repo
+          .tyreReadingsWithPhotos(key);
       expect(merged['RHR1-O']!.photoLocalPath, '/tmp/photo-only.jpg');
       expect(merged['RHR1-O']!.condition, TyreReadingCondition.good);
     });
@@ -245,7 +254,8 @@ void main() {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.saveSignature(
         draftKey: key,
-        payload: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>',
+        payload:
+            '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>',
         source: 'drawn',
       );
       await repo.saveSignature(
@@ -302,21 +312,22 @@ void main() {
   });
 
   group('hasContent', () {
-    test('a header with no positions, photos or signature has no content',
-        () async {
-      final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
-      await repo.saveHeader(
-        userId: 'user-1',
-        workspaceId: 'org-a',
-        assetNo: 'TM514',
-        filled: 0,
-        total: 12,
-      );
-      expect(await repo.hasContent(key), isFalse);
-    });
+    test(
+      'a header with no positions, photos or signature has no content',
+      () async {
+        final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+        await repo.saveHeader(
+          userId: 'user-1',
+          workspaceId: 'org-a',
+          assetNo: 'TM514',
+          filled: 0,
+          total: 12,
+        );
+        expect(await repo.hasContent(key), isFalse);
+      },
+    );
 
-    test('a header with at least one filled position has content',
-        () async {
+    test('a header with at least one filled position has content', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.saveHeader(
         userId: 'user-1',

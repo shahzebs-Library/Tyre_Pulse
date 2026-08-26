@@ -120,8 +120,7 @@ void main() {
       expect(workOrderPriorityTone('Medium'), WorkOrderTone.warning);
     });
 
-    test('high and critical are both critical - the disclosed compression',
-        () {
+    test('high and critical are both critical - the disclosed compression', () {
       expect(workOrderPriorityTone('High'), WorkOrderTone.critical);
       expect(workOrderPriorityTone('Critical'), WorkOrderTone.critical);
     });
@@ -150,17 +149,21 @@ void main() {
     });
 
     test('priorities match the reference, in order', () {
-      expect(
-        kWorkOrderPriorities,
-        <String>['Low', 'Medium', 'High', 'Critical'],
-      );
+      expect(kWorkOrderPriorities, <String>[
+        'Low',
+        'Medium',
+        'High',
+        'Critical',
+      ]);
     });
 
-    test('the default work type and priority are in their own vocabularies',
-        () {
-      expect(kWorkOrderWorkTypes, contains(kWorkOrderDefaultWorkType));
-      expect(kWorkOrderPriorities, contains(kWorkOrderDefaultPriority));
-    });
+    test(
+      'the default work type and priority are in their own vocabularies',
+      () {
+        expect(kWorkOrderWorkTypes, contains(kWorkOrderDefaultWorkType));
+        expect(kWorkOrderPriorities, contains(kWorkOrderDefaultPriority));
+      },
+    );
 
     test('a freshly created work order starts Open', () {
       expect(kWorkOrderInitialStatus, 'Open');

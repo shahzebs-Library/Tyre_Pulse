@@ -167,7 +167,8 @@ List<ChecklistField> visibleChecklistFields(
       out.add(f);
       continue;
     }
-    final bool nextIsContent = i + 1 < list.length && list[i + 1].type != 'section';
+    final bool nextIsContent =
+        i + 1 < list.length && list[i + 1].type != 'section';
     if (nextIsContent) out.add(f);
   }
   return out;

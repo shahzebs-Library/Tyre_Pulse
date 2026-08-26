@@ -15,8 +15,7 @@ void main() {
   });
 
   group('isRequired', () {
-    testWidgets('true shows the required marker',
-        (WidgetTester tester) async {
+    testWidgets('true shows the required marker', (WidgetTester tester) async {
       await pumpTp(
         tester,
         const TpInput(label: 'Serial number', isRequired: true),
@@ -25,16 +24,18 @@ void main() {
       expect(find.text('Required'), findsOneWidget);
     });
 
-    testWidgets('false, the default, shows no marker',
-        (WidgetTester tester) async {
+    testWidgets('false, the default, shows no marker', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpInput(label: 'Serial number'));
 
       expect(find.text('Required'), findsNothing);
     });
   });
 
-  testWidgets('the hint shows while the field is empty',
-      (WidgetTester tester) async {
+  testWidgets('the hint shows while the field is empty', (
+    WidgetTester tester,
+  ) async {
     await pumpTp(
       tester,
       const TpInput(label: 'Serial number', hint: 'e.g. YMA55312'),
@@ -44,27 +45,25 @@ void main() {
   });
 
   group('errorText', () {
-    testWidgets('shows the message and puts the field into its error state',
-        (WidgetTester tester) async {
+    testWidgets('shows the message and puts the field into its error state', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpInput(label: 'Serial number', errorText: 'Required field'),
       );
 
       expect(find.text('Required field'), findsOneWidget);
-      final TextField field = tester.widget<TextField>(
-        find.byType(TextField),
-      );
+      final TextField field = tester.widget<TextField>(find.byType(TextField));
       expect(field.decoration?.errorText, 'Required field');
     });
 
-    testWidgets('null, the default, carries no error',
-        (WidgetTester tester) async {
+    testWidgets('null, the default, carries no error', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpInput(label: 'Serial number'));
 
-      final TextField field = tester.widget<TextField>(
-        find.byType(TextField),
-      );
+      final TextField field = tester.widget<TextField>(find.byType(TextField));
       expect(field.decoration?.errorText, isNull);
     });
   });
@@ -82,8 +81,9 @@ void main() {
   });
 
   group('entering text', () {
-    testWidgets('onChanged fires with the typed value',
-        (WidgetTester tester) async {
+    testWidgets('onChanged fires with the typed value', (
+      WidgetTester tester,
+    ) async {
       String? changed;
       await pumpTp(
         tester,
@@ -96,8 +96,9 @@ void main() {
       expect(changed, 'YMA55312');
     });
 
-    testWidgets('onSubmitted fires when the field is submitted',
-        (WidgetTester tester) async {
+    testWidgets('onSubmitted fires when the field is submitted', (
+      WidgetTester tester,
+    ) async {
       String? submitted;
       await pumpTp(
         tester,
@@ -114,8 +115,9 @@ void main() {
       expect(submitted, 'YMA55312');
     });
 
-    testWidgets('a supplied controller keeps the field text in sync',
-        (WidgetTester tester) async {
+    testWidgets('a supplied controller keeps the field text in sync', (
+      WidgetTester tester,
+    ) async {
       final TextEditingController controller = TextEditingController();
       addTearDown(controller.dispose);
 
@@ -132,17 +134,15 @@ void main() {
   });
 
   testWidgets('enabled: false disables the field', (WidgetTester tester) async {
-    await pumpTp(
-      tester,
-      const TpInput(label: 'Serial number', enabled: false),
-    );
+    await pumpTp(tester, const TpInput(label: 'Serial number', enabled: false));
 
     final TextField field = tester.widget<TextField>(find.byType(TextField));
     expect(field.enabled, isFalse);
   });
 
-  testWidgets('obscureText forces a single line even if maxLines says more',
-      (WidgetTester tester) async {
+  testWidgets('obscureText forces a single line even if maxLines says more', (
+    WidgetTester tester,
+  ) async {
     await pumpTp(
       tester,
       const TpInput(label: 'PIN', obscureText: true, maxLines: 5),
@@ -153,8 +153,9 @@ void main() {
     expect(field.maxLines, 1);
   });
 
-  testWidgets('maxLength passes through to the field',
-      (WidgetTester tester) async {
+  testWidgets('maxLength passes through to the field', (
+    WidgetTester tester,
+  ) async {
     await pumpTp(tester, const TpInput(label: 'Code', maxLength: 6));
 
     final TextField field = tester.widget<TextField>(find.byType(TextField));
@@ -182,8 +183,9 @@ void main() {
     expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
   });
 
-  testWidgets('exposes itself as a text field to assistive technology',
-      (WidgetTester tester) async {
+  testWidgets('exposes itself as a text field to assistive technology', (
+    WidgetTester tester,
+  ) async {
     final SemanticsHandle handle = tester.ensureSemantics();
     addTearDown(handle.dispose);
 
@@ -195,8 +197,9 @@ void main() {
     );
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await pumpTpRtl(tester, const TpInput(label: 'Serial number'));
 
     expect(find.text('Serial number'), findsOneWidget);

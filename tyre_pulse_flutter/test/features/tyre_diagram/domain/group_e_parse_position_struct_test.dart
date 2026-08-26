@@ -94,54 +94,48 @@ void main() {
     );
   });
 
-  test(
-    'case 48: RL1 -> drive/L/1/outer, RL2 -> drive/L/1/inner',
-    () {
-      expect(
-        parsePositionStruct('RL1'),
-        const PositionStruct(
-          kind: PositionKind.drive,
-          side: PositionSide.left,
-          axle: 1,
-          role: PositionRole.outer,
-        ),
-      );
-      expect(
-        parsePositionStruct('RL2'),
-        const PositionStruct(
-          kind: PositionKind.drive,
-          side: PositionSide.left,
-          axle: 1,
-          role: PositionRole.inner,
-        ),
-      );
-    },
-  );
+  test('case 48: RL1 -> drive/L/1/outer, RL2 -> drive/L/1/inner', () {
+    expect(
+      parsePositionStruct('RL1'),
+      const PositionStruct(
+        kind: PositionKind.drive,
+        side: PositionSide.left,
+        axle: 1,
+        role: PositionRole.outer,
+      ),
+    );
+    expect(
+      parsePositionStruct('RL2'),
+      const PositionStruct(
+        kind: PositionKind.drive,
+        side: PositionSide.left,
+        axle: 1,
+        role: PositionRole.inner,
+      ),
+    );
+  });
 
-  test(
-    'case 49: the mirroring trap - RR1 -> drive/R/1/inner, '
-    'RR2 -> drive/R/1/outer',
-    () {
-      expect(
-        parsePositionStruct('RR1'),
-        const PositionStruct(
-          kind: PositionKind.drive,
-          side: PositionSide.right,
-          axle: 1,
-          role: PositionRole.inner,
-        ),
-      );
-      expect(
-        parsePositionStruct('RR2'),
-        const PositionStruct(
-          kind: PositionKind.drive,
-          side: PositionSide.right,
-          axle: 1,
-          role: PositionRole.outer,
-        ),
-      );
-    },
-  );
+  test('case 49: the mirroring trap - RR1 -> drive/R/1/inner, '
+      'RR2 -> drive/R/1/outer', () {
+    expect(
+      parsePositionStruct('RR1'),
+      const PositionStruct(
+        kind: PositionKind.drive,
+        side: PositionSide.right,
+        axle: 1,
+        role: PositionRole.inner,
+      ),
+    );
+    expect(
+      parsePositionStruct('RR2'),
+      const PositionStruct(
+        kind: PositionKind.drive,
+        side: PositionSide.right,
+        axle: 1,
+        role: PositionRole.outer,
+      ),
+    );
+  });
 
   test('case 50: RL4 -> drive, L, axle 2, inner', () {
     expect(
@@ -176,47 +170,41 @@ void main() {
     );
   });
 
-  test(
-    'case 52: Spare, SP, SP2 all parse as spare; an unrecognised token '
-    'parses as unknown',
-    () {
-      for (final String id in <String>['Spare', 'SP', 'SP2']) {
-        expect(
-          parsePositionStruct(id),
-          const PositionStruct(
-            kind: PositionKind.spare,
-            side: null,
-            axle: 0,
-            role: PositionRole.single,
-          ),
-          reason: id,
-        );
-      }
+  test('case 52: Spare, SP, SP2 all parse as spare; an unrecognised token '
+      'parses as unknown', () {
+    for (final String id in <String>['Spare', 'SP', 'SP2']) {
       expect(
-        parsePositionStruct('WHEEL_ALPHA'),
+        parsePositionStruct(id),
         const PositionStruct(
-          kind: PositionKind.unknown,
+          kind: PositionKind.spare,
           side: null,
           axle: 0,
           role: PositionRole.single,
         ),
+        reason: id,
       );
-    },
-  );
+    }
+    expect(
+      parsePositionStruct('WHEEL_ALPHA'),
+      const PositionStruct(
+        kind: PositionKind.unknown,
+        side: null,
+        axle: 0,
+        role: PositionRole.single,
+      ),
+    );
+  });
 
-  test(
-    'normalisation: r2ri, R2-RI and " R2_Ri " all parse identically to '
-    'case 46',
-    () {
-      final PositionStruct expected = const PositionStruct(
-        kind: PositionKind.drive,
-        side: PositionSide.right,
-        axle: 2,
-        role: PositionRole.inner,
-      );
-      expect(parsePositionStruct('r2ri'), expected);
-      expect(parsePositionStruct('R2-RI'), expected);
-      expect(parsePositionStruct(' R2_Ri '), expected);
-    },
-  );
+  test('normalisation: r2ri, R2-RI and " R2_Ri " all parse identically to '
+      'case 46', () {
+    final PositionStruct expected = const PositionStruct(
+      kind: PositionKind.drive,
+      side: PositionSide.right,
+      axle: 2,
+      role: PositionRole.inner,
+    );
+    expect(parsePositionStruct('r2ri'), expected);
+    expect(parsePositionStruct('R2-RI'), expected);
+    expect(parsePositionStruct(' R2_Ri '), expected);
+  });
 }

@@ -44,18 +44,12 @@ void main() {
   group('approvalStageToWire / approvalStageFromWire', () {
     test('supervisor round-trips to "supervisor"', () {
       expect(approvalStageToWire(ApprovalStage.supervisor), 'supervisor');
-      expect(
-        approvalStageFromWire('supervisor'),
-        ApprovalStage.supervisor,
-      );
+      expect(approvalStageFromWire('supervisor'), ApprovalStage.supervisor);
     });
 
     test('areaManager round-trips to "area_manager"', () {
       expect(approvalStageToWire(ApprovalStage.areaManager), 'area_manager');
-      expect(
-        approvalStageFromWire('area_manager'),
-        ApprovalStage.areaManager,
-      );
+      expect(approvalStageFromWire('area_manager'), ApprovalStage.areaManager);
     });
 
     test('an unrecognised, null or blank wire value decodes to null - a '
@@ -68,20 +62,21 @@ void main() {
   });
 
   group('dedupeKeyFor', () {
-    test('matches the mobile source\'s own `approve_${id}_${status}` shape',
-        () {
-      expect(
-        QueuedChecklistApprovalDecision.dedupeKeyFor(
-          submissionId: 'sub-1',
-          targetStatus: 'approved',
-        ),
-        'approve_sub-1_approved',
-      );
-    });
+    test(
+      'matches the mobile source\'s own `approve_${id}_${status}` shape',
+      () {
+        expect(
+          QueuedChecklistApprovalDecision.dedupeKeyFor(
+            submissionId: 'sub-1',
+            targetStatus: 'approved',
+          ),
+          'approve_sub-1_approved',
+        );
+      },
+    );
 
     test('a supervisor sign-off and the later area-manager approval on the '
-        'SAME submission never collide - each targets a different status',
-        () {
+        'SAME submission never collide - each targets a different status', () {
       final String signOff = QueuedChecklistApprovalDecision.dedupeKeyFor(
         submissionId: 'sub-1',
         targetStatus: 'pending_area_manager',
@@ -120,8 +115,8 @@ void main() {
       );
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJsonString(
-        original.toJsonString(),
-      );
+            original.toJsonString(),
+          );
       expect(restored.status, ChecklistApprovalQueueStatus.blocked);
       expect(restored.stage, original.stage);
     });
@@ -129,18 +124,18 @@ void main() {
     test('a rejection with a reviewNote round-trips it', () {
       final QueuedChecklistApprovalDecision original =
           QueuedChecklistApprovalDecision(
-        id: QueuedChecklistApprovalDecision.dedupeKeyFor(
-          submissionId: 'sub-1',
-          targetStatus: 'rejected',
-        ),
-        submissionId: 'sub-1',
-        stage: ApprovalStage.areaManager,
-        priorApprovalStatus: 'pending_area_manager',
-        targetStatus: 'rejected',
-        approved: false,
-        decidedAt: DateTime.utc(2026, 8, 20),
-        reviewNote: 'Front left tread not recorded',
-      );
+            id: QueuedChecklistApprovalDecision.dedupeKeyFor(
+              submissionId: 'sub-1',
+              targetStatus: 'rejected',
+            ),
+            submissionId: 'sub-1',
+            stage: ApprovalStage.areaManager,
+            priorApprovalStatus: 'pending_area_manager',
+            targetStatus: 'rejected',
+            approved: false,
+            decidedAt: DateTime.utc(2026, 8, 20),
+            reviewNote: 'Front left tread not recorded',
+          );
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJson(original.toJson());
       expect(restored.approved, isFalse);
@@ -148,18 +143,20 @@ void main() {
       expect(restored.approverSignature, isNull);
     });
 
-    test('a synced entry carries syncedAt and no error, and it round-trips',
-        () {
-      final QueuedChecklistApprovalDecision original = _sample().copyWith(
-        status: ChecklistApprovalQueueStatus.synced,
-        syncedAt: DateTime.utc(2026, 8, 20, 10),
-      );
-      final QueuedChecklistApprovalDecision restored =
-          QueuedChecklistApprovalDecision.fromJson(original.toJson());
-      expect(restored.status, ChecklistApprovalQueueStatus.synced);
-      expect(restored.syncedAt, DateTime.utc(2026, 8, 20, 10));
-      expect(restored.error, isNull);
-    });
+    test(
+      'a synced entry carries syncedAt and no error, and it round-trips',
+      () {
+        final QueuedChecklistApprovalDecision original = _sample().copyWith(
+          status: ChecklistApprovalQueueStatus.synced,
+          syncedAt: DateTime.utc(2026, 8, 20, 10),
+        );
+        final QueuedChecklistApprovalDecision restored =
+            QueuedChecklistApprovalDecision.fromJson(original.toJson());
+        expect(restored.status, ChecklistApprovalQueueStatus.synced);
+        expect(restored.syncedAt, DateTime.utc(2026, 8, 20, 10));
+        expect(restored.error, isNull);
+      },
+    );
 
     test('a blocked entry carries its error and attempts count', () {
       final QueuedChecklistApprovalDecision original = _sample().copyWith(
@@ -239,13 +236,13 @@ void main() {
         'over a corrupt timestamp alone', () {
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJson(<String, Object?>{
-        'id': 'approve_sub-1_approved',
-        'submissionId': 'sub-1',
-        'stage': 'supervisor',
-        'priorApprovalStatus': 'pending',
-        'targetStatus': 'approved',
-        'decidedAt': 'not a date',
-      });
+            'id': 'approve_sub-1_approved',
+            'submissionId': 'sub-1',
+            'stage': 'supervisor',
+            'priorApprovalStatus': 'pending',
+            'targetStatus': 'approved',
+            'decidedAt': 'not a date',
+          });
       expect(restored.decidedAt, isNotNull);
     });
 
@@ -253,13 +250,13 @@ void main() {
         'synced or blocked', () {
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJson(<String, Object?>{
-        'id': 'approve_sub-1_approved',
-        'submissionId': 'sub-1',
-        'stage': 'supervisor',
-        'priorApprovalStatus': 'pending',
-        'targetStatus': 'approved',
-        'status': 'not_a_real_status',
-      });
+            'id': 'approve_sub-1_approved',
+            'submissionId': 'sub-1',
+            'stage': 'supervisor',
+            'priorApprovalStatus': 'pending',
+            'targetStatus': 'approved',
+            'status': 'not_a_real_status',
+          });
       expect(restored.status, ChecklistApprovalQueueStatus.pending);
     });
   });

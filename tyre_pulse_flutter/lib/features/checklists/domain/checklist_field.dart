@@ -115,9 +115,7 @@ final class ChecklistField {
       help: _asString(json['help']),
       required: json['required'] == true,
       allowPhoto: json['allow_photo'] == true,
-      allowNote: json['allow_note'] is bool
-          ? json['allow_note'] as bool
-          : null,
+      allowNote: json['allow_note'] is bool ? json['allow_note'] as bool : null,
       options: _stringList(json['options']),
       optionsRef: _asString(json['options_ref']),
       labels: _stringMap(json['labels']),

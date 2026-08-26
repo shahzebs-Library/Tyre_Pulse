@@ -45,8 +45,7 @@ void main() {
         status: InspectionQueueStatus.pending,
         createdAt: DateTime.utc(2026, 8, 20),
       );
-      final InspectionHistoryEntry entry =
-          InspectionHistoryEntry.fromQueued(q);
+      final InspectionHistoryEntry entry = InspectionHistoryEntry.fromQueued(q);
       expect(entry.source, InspectionHistorySource.queued);
       expect(entry.id, 'q-1');
       expect(entry.recordId, isNull);
@@ -60,8 +59,7 @@ void main() {
         createdAt: DateTime.utc(2026, 8, 20),
         syncedAt: DateTime.utc(2026, 8, 21),
       );
-      final InspectionHistoryEntry entry =
-          InspectionHistoryEntry.fromQueued(q);
+      final InspectionHistoryEntry entry = InspectionHistoryEntry.fromQueued(q);
       expect(entry.updatedAt, DateTime.utc(2026, 8, 21));
     });
 
@@ -71,8 +69,7 @@ void main() {
         status: InspectionQueueStatus.pending,
         createdAt: DateTime.utc(2026, 8, 20),
       );
-      final InspectionHistoryEntry entry =
-          InspectionHistoryEntry.fromQueued(q);
+      final InspectionHistoryEntry entry = InspectionHistoryEntry.fromQueued(q);
       expect(entry.updatedAt, DateTime.utc(2026, 8, 20));
     });
 
@@ -123,8 +120,7 @@ void main() {
         ),
       ];
 
-      final List<InspectionHistoryEntry> sorted =
-          sortInspectionHistory(input);
+      final List<InspectionHistoryEntry> sorted = sortInspectionHistory(input);
 
       expect(sorted.map((e) => e.id).toList(), <String>[
         'newest',

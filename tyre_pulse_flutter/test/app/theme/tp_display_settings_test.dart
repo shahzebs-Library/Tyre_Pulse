@@ -21,29 +21,25 @@ import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 void main() {
   group('InMemoryDisplaySettingsStore, as a unit', () {
     test('a fresh store reads null for both preferences', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       expect(store.readThemeMode(), isNull);
       expect(store.readLocale(), isNull);
     });
 
     test('writeThemeMode is read back exactly', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       store.writeThemeMode(ThemeMode.dark);
       expect(store.readThemeMode(), ThemeMode.dark);
     });
 
     test('writeLocale is read back exactly', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       store.writeLocale(const Locale('ur'));
       expect(store.readLocale(), const Locale('ur'));
     });
 
     test('writeLocale(null) goes back to following the device language', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       store.writeLocale(const Locale('ar'));
       expect(store.readLocale(), isNotNull);
 
@@ -99,8 +95,7 @@ void main() {
 
   group('themeModeProvider - setMode', () {
     test('updates the provider state', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
         overrides: <Override>[
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
@@ -115,8 +110,7 @@ void main() {
     });
 
     test('writes through to the underlying store, not only local state', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
         overrides: <Override>[
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
@@ -157,8 +151,7 @@ void main() {
 
   group('localeProvider - setLocale', () {
     test('updates the provider state and writes through to the store', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
         overrides: <Override>[
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
@@ -174,8 +167,7 @@ void main() {
     });
 
     test('passing null returns to following the device language', () {
-      final InMemoryDisplaySettingsStore store =
-          InMemoryDisplaySettingsStore();
+      final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
         overrides: <Override>[
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),

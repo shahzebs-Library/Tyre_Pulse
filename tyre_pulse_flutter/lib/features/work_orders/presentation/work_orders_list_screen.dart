@@ -108,10 +108,9 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
     });
     final String? country = ref.read(activeCountryProvider);
     try {
-      final List<WorkOrderItem> items =
-          await ref.read(workOrderRepositoryProvider).listRecent(
-                country: country,
-              );
+      final List<WorkOrderItem> items = await ref
+          .read(workOrderRepositoryProvider)
+          .listRecent(country: country);
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -152,10 +151,9 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
 
     setState(() => _advancingId = item.id);
     try {
-      await ref.read(workOrderRepositoryProvider).advanceStatus(
-            workspace: workspace,
-            current: item,
-          );
+      await ref
+          .read(workOrderRepositoryProvider)
+          .advanceStatus(workspace: workspace, current: item);
       if (!mounted) return;
       _showSnack(AppLocalizations.of(context).workOrderStatusQueuedMessage);
       await _load();
@@ -175,11 +173,12 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
   }
 
   List<WorkOrderItem> get _shown => switch (_filter) {
-        _WorkOrdersFilter.all => _items,
-        _WorkOrdersFilter.active => _items
-            .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
-            .toList(growable: false),
-      };
+    _WorkOrdersFilter.all => _items,
+    _WorkOrdersFilter.active =>
+      _items
+          .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
+          .toList(growable: false),
+  };
 
   int get _activeCount => _items
       .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
@@ -194,9 +193,7 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
       backFallback: fallback,
       appBar: TpAppBar(
         title: l10n.workOrdersNavTitle,
-        subtitle: _loading
-            ? null
-            : l10n.workOrdersActiveCount(_activeCount),
+        subtitle: _loading ? null : l10n.workOrdersActiveCount(_activeCount),
         backFallback: fallback,
         actions: <Widget>[
           IconButton(
@@ -357,9 +354,7 @@ class _WorkOrderRow extends StatelessWidget {
                       const SizedBox(width: TpSpace.sm),
                       TpIdentifierText(
                         item.workOrderNo!,
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelSmall
+                        style: Theme.of(context).textTheme.labelSmall
                             ?.copyWith(color: palette.textMuted),
                       ),
                     ],
@@ -369,9 +364,7 @@ class _WorkOrderRow extends StatelessWidget {
                 Text(
                   metaParts.join(' · '),
                   textAlign: textAlign,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: palette.textSecondary),
                 ),
                 if (item.description != null &&
@@ -383,9 +376,7 @@ class _WorkOrderRow extends StatelessWidget {
                       textAlign: textAlign,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
+                      style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: palette.textMuted),
                     ),
                   ),
@@ -462,9 +453,7 @@ class _AdvanceButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
+                style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: palette.primaryDark),
               ),
             ],

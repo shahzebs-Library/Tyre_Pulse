@@ -74,7 +74,8 @@ void main() {
     test('a unique-violation PostgrestException (23505)', () async {
       await expectGuardPropagates(
         PostgrestException(
-          message: 'duplicate key value violates unique constraint '
+          message:
+              'duplicate key value violates unique constraint '
               '"tyre_records_client_uuid_key"',
           code: '23505',
         ),
@@ -116,9 +117,8 @@ void main() {
     test('never throws the raw error itself - the original is kept only as '
         'AppError.cause, for telemetry', () async {
       final SupabaseFailure? actual = await capturedFailure(
-        () => gateway.run<void>(
-          () async => throw StateError('anything at all'),
-        ),
+        () =>
+            gateway.run<void>(() async => throw StateError('anything at all')),
       );
 
       expect(actual, isNotNull);

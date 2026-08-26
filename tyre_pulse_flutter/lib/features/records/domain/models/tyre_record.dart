@@ -178,21 +178,21 @@ final class TyreRecord {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        assetNo,
-        serialNo,
-        brand,
-        site,
-        position,
-        tyrePosition,
-        issueDate,
-        riskLevel,
-        category,
-        costPerTyre,
-        kmAtFitment,
-        kmAtRemoval,
-        Object.hash(description, remarks, country),
-      );
+    id,
+    assetNo,
+    serialNo,
+    brand,
+    site,
+    position,
+    tyrePosition,
+    issueDate,
+    riskLevel,
+    category,
+    costPerTyre,
+    kmAtFitment,
+    kmAtRemoval,
+    Object.hash(description, remarks, country),
+  );
 
   @override
   String toString() =>

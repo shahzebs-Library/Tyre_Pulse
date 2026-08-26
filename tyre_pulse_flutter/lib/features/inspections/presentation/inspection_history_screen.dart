@@ -94,14 +94,16 @@ class _InspectionHistoryScreenState
     }
 
     try {
-      final InspectionDraftRepository draftRepo =
-          ref.read(inspectionDraftRepositoryProvider);
+      final InspectionDraftRepository draftRepo = ref.read(
+        inspectionDraftRepositoryProvider,
+      );
       final List<InspectionDraftSummary> drafts = userId.isEmpty
           ? const <InspectionDraftSummary>[]
           : await draftRepo.draftsForUser(userId);
 
-      final InspectionQueueReadResult queueRead =
-          await ref.read(inspectionSubmissionQueueProvider).list();
+      final InspectionQueueReadResult queueRead = await ref
+          .read(inspectionSubmissionQueueProvider)
+          .list();
       final List<InspectionHistoryEntry> queuedEntries = queueRead.isReadable
           ? <InspectionHistoryEntry>[
               for (final QueuedInspection q in queueRead.items)
@@ -112,9 +114,10 @@ class _InspectionHistoryScreenState
       final List<InspectionHistoryEntry> syncedEntries = userId.isEmpty
           ? const <InspectionHistoryEntry>[]
           : <InspectionHistoryEntry>[
-              for (final record in await ref
-                  .read(inspectionRemoteRepositoryProvider)
-                  .myInspections(createdBy: userId))
+              for (final record
+                  in await ref
+                      .read(inspectionRemoteRepositoryProvider)
+                      .myInspections(createdBy: userId))
                 InspectionHistoryEntry(
                   source: InspectionHistorySource.synced,
                   id: record.id,
@@ -123,8 +126,9 @@ class _InspectionHistoryScreenState
                   site: record.site,
                   inspectionDate:
                       DateTime.tryParse(record.inspectionDate) ??
-                          DateTime.now(),
-                  updatedAt: DateTime.tryParse(record.createdAt ?? '') ??
+                      DateTime.now(),
+                  updatedAt:
+                      DateTime.tryParse(record.createdAt ?? '') ??
                       DateTime.now(),
                   approvalStatus: record.approvalStatus,
                 ),
@@ -137,8 +141,9 @@ class _InspectionHistoryScreenState
       setState(() {
         _drafts = drafts;
         _entries = merged;
-        _attentionCount =
-            merged.where((InspectionHistoryEntry e) => e.needsAttention).length;
+        _attentionCount = merged
+            .where((InspectionHistoryEntry e) => e.needsAttention)
+            .length;
         _loading = false;
       });
 
@@ -162,7 +167,8 @@ class _InspectionHistoryScreenState
       setState(() {
         _error = const AppError(
           kind: AppErrorKind.unknown,
-          message: 'Your inspections could not be loaded. Pull down to '
+          message:
+              'Your inspections could not be loaded. Pull down to '
               'try again.',
           technical: 'InspectionHistoryScreen._load failed',
           isRetryable: true,
@@ -176,15 +182,13 @@ class _InspectionHistoryScreenState
     final String id = entry.source == InspectionHistorySource.synced
         ? (entry.recordId ?? entry.id)
         : entry.id;
-    GoRouter.of(context).push(
-      InspectionDetailRoute(inspectionId: InspectionId(id)).location,
-    );
+    GoRouter.of(context)
+        .push(InspectionDetailRoute(inspectionId: InspectionId(id)).location);
   }
 
   void _resumeDraft(InspectionDraftSummary draft) {
-    GoRouter.of(context).push(
-      NewInspectionRoute(assetNo: AssetNo(draft.assetNo)).location,
-    );
+    GoRouter.of(context)
+        .push(NewInspectionRoute(assetNo: AssetNo(draft.assetNo)).location);
   }
 
   void _startNew() {
@@ -289,9 +293,8 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: TpSpace.sm),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: TpPalette.of(context).textMuted,
-            ),
+        style: Theme.of(context).textTheme.labelLarge
+            ?.copyWith(color: TpPalette.of(context).textMuted),
       ),
     );
   }
@@ -306,8 +309,8 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpStatusColors colors =
-        TpPalette.of(context).forStatus(TpStatus.warning);
+    final TpStatusColors colors = TpPalette.of(context)
+        .forStatus(TpStatus.warning);
     return Container(
       padding: const EdgeInsets.all(TpSpace.md),
       decoration: BoxDecoration(
@@ -322,9 +325,7 @@ class _InlineWarning extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
+              style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: colors.onSoft),
             ),
           ),
@@ -400,10 +401,7 @@ class _HistoryRow extends StatelessWidget {
                   entry.assetNo,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                Text(
-                  entry.site,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                Text(entry.site, style: Theme.of(context).textTheme.bodySmall),
                 Text(
                   _formatDate(entry.inspectionDate),
                   style: Theme.of(context).textTheme.labelSmall,
@@ -427,20 +425,20 @@ class _HistoryRow extends StatelessWidget {
     }
     return switch (entry.queueStatus) {
       InspectionQueueStatus.failed => (
-          Icons.error_outline,
-          TpStatus.critical,
-          l10n.inspectionQueueFailedLabel,
-        ),
+        Icons.error_outline,
+        TpStatus.critical,
+        l10n.inspectionQueueFailedLabel,
+      ),
       InspectionQueueStatus.synced => (
-          Icons.cloud_done_outlined,
-          TpStatus.ok,
-          l10n.inspectionStatusSynced,
-        ),
+        Icons.cloud_done_outlined,
+        TpStatus.ok,
+        l10n.inspectionStatusSynced,
+      ),
       InspectionQueueStatus.pending || null => (
-          Icons.cloud_upload_outlined,
-          TpStatus.info,
-          l10n.inspectionQueuePendingLabel,
-        ),
+        Icons.cloud_upload_outlined,
+        TpStatus.info,
+        l10n.inspectionQueuePendingLabel,
+      ),
     };
   }
 

@@ -9,8 +9,10 @@ final class TyreRecordsPage {
   const TyreRecordsPage({required this.items, required this.hasMore});
 
   /// An empty, exhausted page. Useful as a safe starting value and in tests.
-  static const TyreRecordsPage empty =
-      TyreRecordsPage(items: <TyreRecord>[], hasMore: false);
+  static const TyreRecordsPage empty = TyreRecordsPage(
+    items: <TyreRecord>[],
+    hasMore: false,
+  );
 
   final List<TyreRecord> items;
 

@@ -16,8 +16,9 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
     });
 
-    testWidgets('secondary renders an OutlinedButton',
-        (WidgetTester tester) async {
+    testWidgets('secondary renders an OutlinedButton', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpButton.secondary(label: 'Cancel', onPressed: () {}),
@@ -38,8 +39,9 @@ void main() {
       expect(find.widgetWithText(TextButton, 'Skip'), findsOneWidget);
     });
 
-    testWidgets('the base constructor honours an explicit variant',
-        (WidgetTester tester) async {
+    testWidgets('the base constructor honours an explicit variant', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpButton(
@@ -69,8 +71,9 @@ void main() {
       expect(taps, 2);
     });
 
-    testWidgets('a null onPressed disables the control and never fires',
-        (WidgetTester tester) async {
+    testWidgets('a null onPressed disables the control and never fires', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpButton.primary(label: 'Save', onPressed: null),
@@ -86,16 +89,13 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('isBusy blocks the press even when onPressed is real',
-        (WidgetTester tester) async {
+    testWidgets('isBusy blocks the press even when onPressed is real', (
+      WidgetTester tester,
+    ) async {
       int taps = 0;
       await pumpTp(
         tester,
-        TpButton.primary(
-          label: 'Save',
-          onPressed: () => taps++,
-          isBusy: true,
-        ),
+        TpButton.primary(label: 'Save', onPressed: () => taps++, isBusy: true),
       );
 
       final FilledButton button = tester.widget<FilledButton>(
@@ -111,8 +111,9 @@ void main() {
   });
 
   group('the content swaps between a spinner and an icon', () {
-    testWidgets('isBusy shows the only spinner this widget can show',
-        (WidgetTester tester) async {
+    testWidgets('isBusy shows the only spinner this widget can show', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpButton.primary(
@@ -129,8 +130,9 @@ void main() {
       expect(find.text('Save'), findsOneWidget);
     });
 
-    testWidgets('an icon shows when the button is not busy',
-        (WidgetTester tester) async {
+    testWidgets('an icon shows when the button is not busy', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpButton.primary(
@@ -144,8 +146,9 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
-    testWidgets('no icon and not busy shows neither',
-        (WidgetTester tester) async {
+    testWidgets('no icon and not busy shows neither', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, TpButton.primary(label: 'Save', onPressed: () {}));
 
       expect(find.byType(Icon), findsNothing);
@@ -158,16 +161,18 @@ void main() {
     // control this design system offers is clamped up to the 48dp minimum -
     // see the arithmetic in TpButton.build. Measuring the RENDERED size
     // pins that clamp rather than trusting the source comment.
-    testWidgets('the standard control clears the minimum height',
-        (WidgetTester tester) async {
+    testWidgets('the standard control clears the minimum height', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, TpButton.primary(label: 'Save', onPressed: () {}));
 
       final Size size = tester.getSize(find.byType(FilledButton));
       expect(size.height, greaterThanOrEqualTo(TpSizing.minTouchTarget));
     });
 
-    testWidgets('a compact control still clears the minimum height',
-        (WidgetTester tester) async {
+    testWidgets('a compact control still clears the minimum height', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         TpButton.primary(label: 'Save', onPressed: () {}, isCompact: true),
@@ -177,26 +182,28 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(TpSizing.minTouchTarget));
     });
 
-    testWidgets('isFullWidth stretches the button wider than its default',
-        (WidgetTester tester) async {
+    testWidgets('isFullWidth stretches the button wider than its default', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, TpButton.primary(label: 'Save', onPressed: () {}));
-      final double defaultWidth =
-          tester.getSize(find.byType(FilledButton)).width;
+      final double defaultWidth = tester
+          .getSize(find.byType(FilledButton))
+          .width;
 
       await pumpTp(
         tester,
         TpButton.primary(label: 'Save', onPressed: () {}, isFullWidth: true),
       );
-      final double fullWidth =
-          tester.getSize(find.byType(FilledButton)).width;
+      final double fullWidth = tester.getSize(find.byType(FilledButton)).width;
 
       expect(fullWidth, greaterThan(defaultWidth));
     });
   });
 
   group('semantics', () {
-    testWidgets('an enabled button exposes its label as a button',
-        (WidgetTester tester) async {
+    testWidgets('an enabled button exposes its label as a button', (
+      WidgetTester tester,
+    ) async {
       final SemanticsHandle handle = tester.ensureSemantics();
       addTearDown(handle.dispose);
 
@@ -208,8 +215,9 @@ void main() {
       );
     });
 
-    testWidgets('a disabled button reports itself as not enabled',
-        (WidgetTester tester) async {
+    testWidgets('a disabled button reports itself as not enabled', (
+      WidgetTester tester,
+    ) async {
       final SemanticsHandle handle = tester.ensureSemantics();
       addTearDown(handle.dispose);
 
@@ -225,8 +233,9 @@ void main() {
     });
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await pumpTpRtl(tester, TpButton.primary(label: 'Save', onPressed: () {}));
 
     expect(find.text('Save'), findsOneWidget);

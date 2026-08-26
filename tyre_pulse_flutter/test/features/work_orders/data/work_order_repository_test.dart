@@ -35,10 +35,7 @@ void main() {
       // The exact shape `mobile/app/(app)/work-orders.tsx`'s own load()
       // builds - see this function's own library comment on the 55,606
       // country-less job cards a strict `.eq` once hid from every view.
-      expect(
-        workOrderCountryFilter('KSA'),
-        'country.eq.KSA,country.is.null',
-      );
+      expect(workOrderCountryFilter('KSA'), 'country.eq.KSA,country.is.null');
     });
   });
 
@@ -120,14 +117,16 @@ void main() {
     });
 
     test('total_cost coerces from an int or a double alike', () {
-      final WorkOrderItem fromInt = WorkOrderItem.fromRow(
-        <String, Object?>{'id': 'a', 'total_cost': 100},
-      );
+      final WorkOrderItem fromInt = WorkOrderItem.fromRow(<String, Object?>{
+        'id': 'a',
+        'total_cost': 100,
+      });
       expect(fromInt.totalCost, 100);
 
-      final WorkOrderItem fromDouble = WorkOrderItem.fromRow(
-        <String, Object?>{'id': 'b', 'total_cost': 100.25},
-      );
+      final WorkOrderItem fromDouble = WorkOrderItem.fromRow(<String, Object?>{
+        'id': 'b',
+        'total_cost': 100.25,
+      });
       expect(fromDouble.totalCost, 100.25);
     });
 

@@ -99,8 +99,7 @@ void main() {
       expect(route(entityType: 'work_order'), const WorkshopRoute());
     });
 
-    test('a PARTS REQUEST id is not a work order id, so it opens the board',
-        () {
+    test('a PARTS REQUEST id is not a work order id, so it opens the board', () {
       // The conservative half of the widening. A parts request carries a parts
       // request id; routing it to /work-orders/:id would open the wrong record
       // or nothing at all, which is worse than opening the list.
@@ -127,24 +126,22 @@ void main() {
     test('an inspection approval with an id opens that review', () {
       expect(
         route(entityType: 'inspection_approval', entityId: 'i-5'),
-        const InspectionApprovalReviewRoute(
-          inspectionId: InspectionId('i-5'),
-        ),
+        const InspectionApprovalReviewRoute(inspectionId: InspectionId('i-5')),
       );
     });
 
     test('a checklist approval with an id opens that review', () {
       expect(
         route(entityType: 'checklist_approval', entityId: 's-5'),
-        const ChecklistApprovalReviewRoute(
-          submissionId: SubmissionId('s-5'),
-        ),
+        const ChecklistApprovalReviewRoute(submissionId: SubmissionId('s-5')),
       );
     });
 
     test('a blank entity id is treated as absent', () {
-      expect(route(entityType: 'accident', entityId: '   '),
-          const AccidentDashboardRoute());
+      expect(
+        route(entityType: 'accident', entityId: '   '),
+        const AccidentDashboardRoute(),
+      );
     });
   });
 

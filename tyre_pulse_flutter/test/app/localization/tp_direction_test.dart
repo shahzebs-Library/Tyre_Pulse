@@ -52,10 +52,7 @@ void main() {
   group('stripIsolates', () {
     test('removes both marks added by isolateLtr', () {
       const String value = 'RHCO';
-      expect(
-        TpDirection.stripIsolates(TpDirection.isolateLtr(value)),
-        value,
-      );
+      expect(TpDirection.stripIsolates(TpDirection.isolateLtr(value)), value);
     });
 
     test('is a no-op on a string that carries no isolate marks', () {
@@ -65,10 +62,7 @@ void main() {
     test('removes marks wherever they occur, not only at the edges', () {
       // replaceAll is global: two isolated runs concatenated collapse to
       // one plain string once both pairs of marks are stripped.
-      expect(
-        TpDirection.stripIsolates('${_lri}AB$_pdi${_lri}CD$_pdi'),
-        'ABCD',
-      );
+      expect(TpDirection.stripIsolates('${_lri}AB$_pdi${_lri}CD$_pdi'), 'ABCD');
     });
   });
 
@@ -90,8 +84,9 @@ void main() {
   });
 
   group('TpDirection.isRtl(BuildContext)', () {
-    testWidgets('matches TpLocalizations.isRtl for every supported locale',
-        (WidgetTester tester) async {
+    testWidgets('matches TpLocalizations.isRtl for every supported locale', (
+      WidgetTester tester,
+    ) async {
       for (final Locale locale in TpLocalizations.supportedLocales) {
         late bool rtl;
         await tester.pumpWidget(
@@ -119,31 +114,34 @@ void main() {
   });
 
   group('TpIdentifierText', () {
-    testWidgets('renders left to right regardless of an RTL ambient direction',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Directionality(
-            textDirection: TextDirection.rtl,
-            child: TpIdentifierText('TM514'),
+    testWidgets(
+      'renders left to right regardless of an RTL ambient direction',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Directionality(
+              textDirection: TextDirection.rtl,
+              child: TpIdentifierText('TM514'),
+            ),
           ),
-        ),
-      );
+        );
 
-      final Finder ownDirectionality = find.descendant(
-        of: find.byType(TpIdentifierText),
-        matching: find.byType(Directionality),
-      );
-      expect(ownDirectionality, findsOneWidget);
-      expect(
-        tester.widget<Directionality>(ownDirectionality).textDirection,
-        TextDirection.ltr,
-      );
-      expect(find.text(TpDirection.isolateLtr('TM514')), findsOneWidget);
-    });
+        final Finder ownDirectionality = find.descendant(
+          of: find.byType(TpIdentifierText),
+          matching: find.byType(Directionality),
+        );
+        expect(ownDirectionality, findsOneWidget);
+        expect(
+          tester.widget<Directionality>(ownDirectionality).textDirection,
+          TextDirection.ltr,
+        );
+        expect(find.text(TpDirection.isolateLtr('TM514')), findsOneWidget);
+      },
+    );
 
-    testWidgets('passes style, maxLines and overflow through to Text',
-        (WidgetTester tester) async {
+    testWidgets('passes style, maxLines and overflow through to Text', (
+      WidgetTester tester,
+    ) async {
       const TextStyle style = TextStyle(fontSize: 21);
       await tester.pumpWidget(
         const MaterialApp(
@@ -167,11 +165,10 @@ void main() {
       expect(text.overflow, TextOverflow.ellipsis);
     });
 
-    testWidgets('does not throw for an empty identifier',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: TpIdentifierText('')),
-      );
+    testWidgets('does not throw for an empty identifier', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: TpIdentifierText('')));
 
       expect(tester.takeException(), isNull);
       expect(find.text(''), findsOneWidget);

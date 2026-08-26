@@ -137,7 +137,9 @@ RestoreOutcome classifyRestore({
   if (hasSession) {
     return RestoreOutcome.signedIn;
   }
-  return storageReadFailed ? RestoreOutcome.restoreFailed : RestoreOutcome.signedOut;
+  return storageReadFailed
+      ? RestoreOutcome.restoreFailed
+      : RestoreOutcome.signedOut;
 }
 
 /// May the app open on this cached profile row?

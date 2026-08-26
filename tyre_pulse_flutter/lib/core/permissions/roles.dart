@@ -255,8 +255,9 @@ final class UserRole {
       return false;
     }
     final String token = normaliseRoleToken(rawValue);
-    return knownUnmappedDatabaseRoles
-        .any((String name) => normaliseRoleToken(name) == token);
+    return knownUnmappedDatabaseRoles.any(
+      (String name) => normaliseRoleToken(name) == token,
+    );
   }
 
   /// The hard `admin` role. This is the ONLY place the string is tested.
@@ -291,7 +292,6 @@ final class UserRole {
   int get hashCode => Object.hash(id, rawValue);
 
   @override
-  String toString() => isKnown
-      ? 'UserRole(${id!.token})'
-      : 'UserRole(unknown: "$rawValue")';
+  String toString() =>
+      isKnown ? 'UserRole(${id!.token})' : 'UserRole(unknown: "$rawValue")';
 }

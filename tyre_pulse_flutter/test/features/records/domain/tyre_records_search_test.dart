@@ -66,10 +66,7 @@ void main() {
     });
 
     test('escapes the term before building the expression', () {
-      expect(
-        orIlikeFilter(<String>['asset_no'], 'a,b'),
-        'asset_no.ilike.%ab%',
-      );
+      expect(orIlikeFilter(<String>['asset_no'], 'a,b'), 'asset_no.ilike.%ab%');
     });
 
     test('returns null for a blank term rather than an empty filter', () {

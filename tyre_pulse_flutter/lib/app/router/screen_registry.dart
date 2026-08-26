@@ -30,8 +30,9 @@ class TpScreenRegistry {
   const TpScreenRegistry(this.builders);
 
   /// Nothing registered. Every route renders the "not built yet" state.
-  static const TpScreenRegistry empty =
-      TpScreenRegistry(<String, TpScreenBuilder>{});
+  static const TpScreenRegistry empty = TpScreenRegistry(
+    <String, TpScreenBuilder>{},
+  );
 
   /// Keyed by [TpRoute.routeId].
   final Map<String, TpScreenBuilder> builders;

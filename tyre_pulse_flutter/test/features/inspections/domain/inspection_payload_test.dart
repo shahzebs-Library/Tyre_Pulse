@@ -41,8 +41,9 @@ void main() {
         assetNo: '',
         inspector: '',
       );
-      final List<InspectionSubmitIssue> issues =
-          validateInspectionForSubmit(payload);
+      final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+        payload,
+      );
 
       expect(issues, contains(InspectionSubmitIssue.missingSite));
       expect(issues, contains(InspectionSubmitIssue.missingVehicle));
@@ -68,8 +69,9 @@ void main() {
         },
         signature: 'data:image/png;base64,abc',
       );
-      final List<InspectionSubmitIssue> issues =
-          validateInspectionForSubmit(payload);
+      final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+        payload,
+      );
       expect(issues, contains(InspectionSubmitIssue.tyresIncomplete));
       expect(issues, isNot(contains(InspectionSubmitIssue.noTyreTouched)));
     });
@@ -90,8 +92,9 @@ void main() {
       // "unknown", which tyreCompleteness treats as blocking NOTHING (see
       // that engine's own honesty rules) - so completeness must not appear
       // here either, isolating the assertion to signature alone.
-      final List<InspectionSubmitIssue> issues =
-          validateInspectionForSubmit(payload);
+      final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+        payload,
+      );
       expect(issues, <InspectionSubmitIssue>[
         InspectionSubmitIssue.missingSignature,
       ]);
@@ -115,10 +118,7 @@ void main() {
     test('a signature that is only whitespace is treated as missing', () {
       final InspectionPayload payload = _basePayload(
         tyreConditions: <String, TyrePositionReading>{
-          'LHF1': const TyrePositionReading(
-            position: 'LHF1',
-            checked: true,
-          ),
+          'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
         },
         signature: '   ',
       );
@@ -130,24 +130,22 @@ void main() {
   });
 
   group('touchedPositionCount', () {
-    test('counts only positions with real evidence, not the seeded ones',
-        () {
+    test('counts only positions with real evidence, not the seeded ones', () {
       final Map<String, TyrePositionReading> conditions =
           <String, TyrePositionReading>{
-        'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
-        'RHF1': TyrePositionReading.seed('RHF1'),
-        'LHR1': const TyrePositionReading(
-          position: 'LHR1',
-          pressurePsi: 100,
-        ),
-      };
+            'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
+            'RHF1': TyrePositionReading.seed('RHF1'),
+            'LHR1': const TyrePositionReading(
+              position: 'LHR1',
+              pressurePsi: 100,
+            ),
+          };
       expect(touchedPositionCount(conditions), 2);
     });
   });
 
   group('gps is carried through toRow but never gates submission', () {
-    test('toRow spreads four null gps columns when no fix was captured',
-        () {
+    test('toRow spreads four null gps columns when no fix was captured', () {
       final InspectionPayload payload = _basePayload();
       final Map<String, Object?> row = payload.toRow();
       expect(row['gps_lat'], isNull);

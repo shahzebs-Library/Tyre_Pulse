@@ -113,7 +113,9 @@ void main() {
       assetNo: 'TM514',
     );
 
-    final PendingCommand stored = await checklistCommandFor(result.submissionId);
+    final PendingCommand stored = await checklistCommandFor(
+      result.submissionId,
+    );
     final Map<String, Object?> payload = decode(stored);
 
     expect(
@@ -129,18 +131,22 @@ void main() {
     expect(stored.entityType, SupabaseTables.checklistSubmissions);
   });
 
-  test('a title falls back to the template name when none is supplied', () async {
-    final ChecklistSubmissionResult result = await repository.submit(
-      workspace: _workspace(),
-      templateRecord: _template(),
-      draftKey: 'draft-title',
-      answers: const <String, Object?>{},
-      notes: const <String, Object?>{},
-    );
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
-    expect(payload['title'], 'Workshop Daily Checklist');
-  });
+  test(
+    'a title falls back to the template name when none is supplied',
+    () async {
+      final ChecklistSubmissionResult result = await repository.submit(
+        workspace: _workspace(),
+        templateRecord: _template(),
+        draftKey: 'draft-title',
+        answers: const <String, Object?>{},
+        notes: const <String, Object?>{},
+      );
+      final Map<String, Object?> payload = decode(
+        await checklistCommandFor(result.submissionId),
+      );
+      expect(payload['title'], 'Workshop Daily Checklist');
+    },
+  );
 
   test('require_approval true submits approval_status pending', () async {
     final ChecklistSubmissionResult result = await repository.submit(
@@ -150,8 +156,9 @@ void main() {
       answers: const <String, Object?>{},
       notes: const <String, Object?>{},
     );
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
+    final Map<String, Object?> payload = decode(
+      await checklistCommandFor(result.submissionId),
+    );
     expect(payload['approval_status'], 'pending');
   });
 
@@ -164,8 +171,9 @@ void main() {
       answers: const <String, Object?>{},
       notes: const <String, Object?>{},
     );
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
+    final Map<String, Object?> payload = decode(
+      await checklistCommandFor(result.submissionId),
+    );
     expect(payload['approval_status'], 'not_required');
   });
 
@@ -217,7 +225,9 @@ void main() {
       assetNo: 'TM514',
     );
 
-    final PendingCommand pending = await checklistCommandFor(result.submissionId);
+    final PendingCommand pending = await checklistCommandFor(
+      result.submissionId,
+    );
     final Map<String, Object?> payload = decode(pending);
     final Map<String, Object?> photos =
         payload['photos']! as Map<String, Object?>;
@@ -228,13 +238,15 @@ void main() {
     // The photo files were genuinely handed to the queue, not just recorded
     // in the payload JSON: pending_media_uploads carries one row per photo,
     // referencing the SAME local paths, against the queued command's id.
-    final List<PendingMediaUpload> uploads =
-        await db.mediaDao.mediaForCommand(pending.id);
-    expect(uploads, hasLength(3));
-    expect(
-      uploads.map((PendingMediaUpload u) => u.localPath).toSet(),
-      <String>{'/tmp/brakes-1.jpg', '/tmp/brakes-2.jpg', '/tmp/engine.jpg'},
+    final List<PendingMediaUpload> uploads = await db.mediaDao.mediaForCommand(
+      pending.id,
     );
+    expect(uploads, hasLength(3));
+    expect(uploads.map((PendingMediaUpload u) => u.localPath).toSet(), <String>{
+      '/tmp/brakes-1.jpg',
+      '/tmp/brakes-2.jpg',
+      '/tmp/engine.jpg',
+    });
   });
 
   test('signatures: the template-level pad is the primary sign-off and is '
@@ -266,8 +278,9 @@ void main() {
       notes: const <String, Object?>{},
     );
 
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
+    final Map<String, Object?> payload = decode(
+      await checklistCommandFor(result.submissionId),
+    );
 
     expect(payload['signature_data'], contains('M9 9'));
     final Map<String, Object?> signatures =
@@ -299,8 +312,9 @@ void main() {
       notes: const <String, Object?>{},
     );
 
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
+    final Map<String, Object?> payload = decode(
+      await checklistCommandFor(result.submissionId),
+    );
     expect(payload['signature_data'], contains('M3 3'));
   });
 
@@ -312,8 +326,9 @@ void main() {
       answers: const <String, Object?>{},
       notes: const <String, Object?>{},
     );
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
+    final Map<String, Object?> payload = decode(
+      await checklistCommandFor(result.submissionId),
+    );
     expect(payload['signature_data'], isNull);
     expect(payload['signatures'], isEmpty);
   });
@@ -326,13 +341,13 @@ void main() {
       answers: <String, Object?>{'brakes': 'Not OK'},
       notes: <String, Object?>{'brakes': 'Pad worn to the wear line'},
     );
-    final Map<String, Object?> payload =
-        decode(await checklistCommandFor(result.submissionId));
-    expect(payload['answers'], <String, Object?>{'brakes': 'Not OK'});
-    expect(
-      payload['notes'],
-      <String, Object?>{'brakes': 'Pad worn to the wear line'},
+    final Map<String, Object?> payload = decode(
+      await checklistCommandFor(result.submissionId),
     );
+    expect(payload['answers'], <String, Object?>{'brakes': 'Not OK'});
+    expect(payload['notes'], <String, Object?>{
+      'brakes': 'Pad worn to the wear line',
+    });
   });
 
   test('after submit, the draft bookkeeping rows are gone but the photo '
@@ -377,9 +392,12 @@ void main() {
 
     // ...but the queue now references the SAME file, proving it was handed
     // off rather than orphaned or duplicated.
-    final PendingCommand pending = await checklistCommandFor(result.submissionId);
-    final List<PendingMediaUpload> uploads =
-        await db.mediaDao.mediaForCommand(pending.id);
+    final PendingCommand pending = await checklistCommandFor(
+      result.submissionId,
+    );
+    final List<PendingMediaUpload> uploads = await db.mediaDao.mediaForCommand(
+      pending.id,
+    );
     expect(uploads.single.localPath, '/tmp/still-owned.jpg');
   });
 
@@ -403,8 +421,9 @@ void main() {
     );
 
     expect(result.submissionId, isNotEmpty);
-    final PendingCommand checklistCommand =
-        await checklistCommandFor(result.submissionId);
+    final PendingCommand checklistCommand = await checklistCommandFor(
+      result.submissionId,
+    );
     expect(
       checklistCommand.commandType,
       CommandType.checklistSubmission.wireName,
@@ -421,8 +440,9 @@ void main() {
       notes: const <String, Object?>{},
     );
 
-    final List<PendingCommand> all =
-        await db.queueDao.outstandingCommands(workspaceId: workspaceA);
+    final List<PendingCommand> all = await db.queueDao.outstandingCommands(
+      workspaceId: workspaceA,
+    );
     expect(all, hasLength(1));
     expect(all.single.id, result.submissionId);
   });

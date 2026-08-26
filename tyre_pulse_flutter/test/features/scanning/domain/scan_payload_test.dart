@@ -11,8 +11,7 @@ void main() {
       expect(sanitizeScanCode('  TM514  '), 'TM514');
     });
 
-    test('strips parentheses and commas, which break a PostgREST filter',
-        () {
+    test('strips parentheses and commas, which break a PostgREST filter', () {
       expect(sanitizeScanCode('TM(514),X'), 'TM514X');
     });
 
@@ -73,10 +72,7 @@ void main() {
     });
 
     test('asset_no wins over assetNo when both are present', () {
-      expect(
-        extractScanCode('{"asset_no":"WINS","assetNo":"LOSES"}'),
-        'WINS',
-      );
+      expect(extractScanCode('{"asset_no":"WINS","assetNo":"LOSES"}'), 'WINS');
     });
 
     test('falls back to asset when neither asset field is present', () {
@@ -115,36 +111,28 @@ void main() {
       expect(extractScanCode('{not valid json}'), '{not valid json}');
     });
 
-    test(
-        'valid JSON with none of the known keys falls through to the '
+    test('valid JSON with none of the known keys falls through to the '
         'bare-code path, sanitised as a whole string', () {
       final String raw = '{"unrelated":"value"}';
       expect(extractScanCode(raw), sanitizeScanCode(raw));
     });
 
-    test('a blank value for the first key is skipped in favour of the next',
-        () {
-      expect(
-        extractScanCode('{"asset_no":"  ","assetNo":"TM520"}'),
-        'TM520',
-      );
-    });
+    test(
+      'a blank value for the first key is skipped in favour of the next',
+      () {
+        expect(extractScanCode('{"asset_no":"  ","assetNo":"TM520"}'), 'TM520');
+      },
+    );
   });
 
   group('extractScanCode - URL payload', () {
     test('reads a known query parameter from a full URL', () {
-      expect(
-        extractScanCode('https://app.example/asset?asset=TM600'),
-        'TM600',
-      );
+      expect(extractScanCode('https://app.example/asset?asset=TM600'), 'TM600');
     });
 
-    test('prefers asset over asset_no, code and serial query parameters',
-        () {
+    test('prefers asset over asset_no, code and serial query parameters', () {
       expect(
-        extractScanCode(
-          'https://x?asset=WINS&asset_no=L1&code=L2&serial=L3',
-        ),
+        extractScanCode('https://x?asset=WINS&asset_no=L1&code=L2&serial=L3'),
         'WINS',
       );
     });
@@ -157,18 +145,11 @@ void main() {
 
     test('falls back to the last path segment when no known query '
         'parameter is present', () {
-      expect(
-        extractScanCode('https://app.example/asset/TM514'),
-        'TM514',
-      );
+      expect(extractScanCode('https://app.example/asset/TM514'), 'TM514');
     });
 
-    test('percent-decodes the path segment, matching decodeURIComponent',
-        () {
-      expect(
-        extractScanCode('https://app.example/asset/TM%20514'),
-        'TM 514',
-      );
+    test('percent-decodes the path segment, matching decodeURIComponent', () {
+      expect(extractScanCode('https://app.example/asset/TM%20514'), 'TM 514');
     });
 
     test('a bare query-string wrapper with no scheme is still recognised '
@@ -181,10 +162,7 @@ void main() {
       // rather than embedding them literally keeps this test on the
       // well-defined part of URI parsing (percent-decoding), rather than on
       // whether an unencoded sub-delimiter in a query value round-trips.
-      expect(
-        extractScanCode('https://x?code=%20TM%28600%29%20'),
-        'TM600',
-      );
+      expect(extractScanCode('https://x?code=%20TM%28600%29%20'), 'TM600');
     });
 
     test('a URL with neither a known query parameter nor a path segment '

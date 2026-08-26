@@ -61,8 +61,9 @@ Future<void> _openSheet(
 
 void main() {
   group('header', () {
-    testWidgets('shows the asset number as the title',
-        (WidgetTester tester) async {
+    testWidgets('shows the asset number as the title', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
         record: buildTyreRecord(id: '1', assetNo: 'TM514'),
@@ -70,20 +71,15 @@ void main() {
       expect(find.text('TM514'), findsOneWidget);
     });
 
-    testWidgets(
-      'falls back to a generic title when the asset number is not '
-      'recorded',
-      (WidgetTester tester) async {
-        await _openSheet(
-          tester,
-          record: buildTyreRecord(id: '1', assetNo: null),
-        );
-        expect(find.text('Tyre record'), findsOneWidget);
-      },
-    );
+    testWidgets('falls back to a generic title when the asset number is not '
+        'recorded', (WidgetTester tester) async {
+      await _openSheet(tester, record: buildTyreRecord(id: '1', assetNo: null));
+      expect(find.text('Tyre record'), findsOneWidget);
+    });
 
-    testWidgets('shows the brand only when it is recorded',
-        (WidgetTester tester) async {
+    testWidgets('shows the brand only when it is recorded', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
         record: buildTyreRecord(id: '1', brand: 'Bridgestone'),
@@ -91,12 +87,10 @@ void main() {
       expect(find.text('Bridgestone'), findsOneWidget);
     });
 
-    testWidgets('shows no brand line when brand is not recorded',
-        (WidgetTester tester) async {
-      await _openSheet(
-        tester,
-        record: buildTyreRecord(id: '1', brand: null),
-      );
+    testWidgets('shows no brand line when brand is not recorded', (
+      WidgetTester tester,
+    ) async {
+      await _openSheet(tester, record: buildTyreRecord(id: '1', brand: null));
       expect(find.text('Bridgestone'), findsNothing);
     });
   });
@@ -115,8 +109,9 @@ void main() {
       },
     );
 
-    testWidgets('renders no risk chip when the tyre has never been scored',
-        (WidgetTester tester) async {
+    testWidgets('renders no risk chip when the tyre has never been scored', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
         record: buildTyreRecord(id: '1', riskLevel: null),
@@ -126,33 +121,30 @@ void main() {
   });
 
   group('position chip', () {
-    testWidgets(
-      'renders when a canonical position is recorded',
-      (WidgetTester tester) async {
-        await _openSheet(
-          tester,
-          record: buildTyreRecord(id: '1', tyrePosition: 'LHF1'),
-        );
-        expect(find.byType(TpTyreChip), findsOneWidget);
-      },
-    );
+    testWidgets('renders when a canonical position is recorded', (
+      WidgetTester tester,
+    ) async {
+      await _openSheet(
+        tester,
+        record: buildTyreRecord(id: '1', tyrePosition: 'LHF1'),
+      );
+      expect(find.byType(TpTyreChip), findsOneWidget);
+    });
 
-    testWidgets(
-      'is absent when neither the canonical nor the legacy position '
-      'column is recorded',
-      (WidgetTester tester) async {
-        await _openSheet(
-          tester,
-          record: buildTyreRecord(id: '1', tyrePosition: null),
-        );
-        expect(find.byType(TpTyreChip), findsNothing);
-      },
-    );
+    testWidgets('is absent when neither the canonical nor the legacy position '
+        'column is recorded', (WidgetTester tester) async {
+      await _openSheet(
+        tester,
+        record: buildTyreRecord(id: '1', tyrePosition: null),
+      );
+      expect(find.byType(TpTyreChip), findsNothing);
+    });
   });
 
   group('a row with nothing to say is not shown at all', () {
-    testWidgets('a recorded serial renders its value',
-        (WidgetTester tester) async {
+    testWidgets('a recorded serial renders its value', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
         record: buildTyreRecord(id: '1', serialNo: 'SN-001'),
@@ -160,8 +152,9 @@ void main() {
       expect(find.text('SN-001'), findsOneWidget);
     });
 
-    testWidgets('an unrecorded serial renders nothing for that row',
-        (WidgetTester tester) async {
+    testWidgets('an unrecorded serial renders nothing for that row', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
         record: buildTyreRecord(id: '1', serialNo: null),
@@ -169,14 +162,12 @@ void main() {
       expect(find.text('SN-001'), findsNothing);
     });
 
-    testWidgets('a description block renders its full text when recorded',
-        (WidgetTester tester) async {
+    testWidgets('a description block renders its full text when recorded', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
-        record: buildTyreRecord(
-          id: '1',
-          description: 'Rotated at 40000 km',
-        ),
+        record: buildTyreRecord(id: '1', description: 'Rotated at 40000 km'),
       );
       expect(find.text('Rotated at 40000 km'), findsOneWidget);
     });
@@ -193,7 +184,9 @@ void main() {
       },
     );
 
-    testWidgets('remarks render only when recorded', (WidgetTester tester) async {
+    testWidgets('remarks render only when recorded', (
+      WidgetTester tester,
+    ) async {
       await _openSheet(
         tester,
         record: buildTyreRecord(
@@ -244,21 +237,14 @@ void main() {
   });
 
   group('tyre life', () {
-    testWidgets(
-      'renders the computed distance when removal is genuinely after '
-      'fitment',
-      (WidgetTester tester) async {
-        await _openSheet(
-          tester,
-          record: buildTyreRecord(
-            id: '1',
-            kmAtFitment: 1000,
-            kmAtRemoval: 41000,
-          ),
-        );
-        expect(find.text('40,000'), findsOneWidget);
-      },
-    );
+    testWidgets('renders the computed distance when removal is genuinely after '
+        'fitment', (WidgetTester tester) async {
+      await _openSheet(
+        tester,
+        record: buildTyreRecord(id: '1', kmAtFitment: 1000, kmAtRemoval: 41000),
+      );
+      expect(find.text('40,000'), findsOneWidget);
+    });
 
     testWidgets(
       'shows nothing when the readings are reversed - a reversed pair is '

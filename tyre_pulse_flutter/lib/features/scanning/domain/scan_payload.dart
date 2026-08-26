@@ -74,7 +74,12 @@ const List<String> _jsonCodeKeys = <String>[
 
 /// The URL query parameter names checked, in priority order, when [raw]
 /// looks like a URL. Mirrors `assetLookup.ts`'s `??` chain.
-const List<String> _urlQueryKeys = <String>['asset', 'asset_no', 'code', 'serial'];
+const List<String> _urlQueryKeys = <String>[
+  'asset',
+  'asset_no',
+  'code',
+  'serial',
+];
 
 /// Recognises an explicit `http(s)://` prefix. A payload that instead merely
 /// CONTAINS a `?` (no scheme) is also treated as URL-shaped - see
@@ -172,8 +177,9 @@ String? _codeFromUrl(String trimmed) {
 
   // Uri.pathSegments is already percent-decoded, unlike the raw path text -
   // the Dart equivalent of the reference's explicit decodeURIComponent call.
-  final List<String> segments =
-      uri.pathSegments.where((String segment) => segment.isNotEmpty).toList();
+  final List<String> segments = uri.pathSegments
+      .where((String segment) => segment.isNotEmpty)
+      .toList();
   if (segments.isNotEmpty) {
     return sanitizeScanCode(segments.last);
   }

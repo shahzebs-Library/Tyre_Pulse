@@ -96,9 +96,7 @@ class TyrePositionReading {
         entry['serial_number'] ?? entry['serial_no'] ?? entry['serial'],
       ),
       pressurePsi: _numOrNull(entry['pressure_psi'] ?? entry['pressure']),
-      treadDepthMm: _numOrNull(
-        entry['tread_depth_mm'] ?? entry['tread_depth'],
-      ),
+      treadDepthMm: _numOrNull(entry['tread_depth_mm'] ?? entry['tread_depth']),
       condition: _stringOrNull(entry['condition']) ?? TyreReadingCondition.good,
       checked: entry['checked'] == true,
       photoLocalPath: _stringOrNull(entry['photo_uri']),
@@ -169,10 +167,10 @@ class TyrePositionReading {
       serialNumber: clearSerialNumber
           ? null
           : (serialNumber ?? this.serialNumber),
-      pressurePsi:
-          clearPressurePsi ? null : (pressurePsi ?? this.pressurePsi),
-      treadDepthMm:
-          clearTreadDepthMm ? null : (treadDepthMm ?? this.treadDepthMm),
+      pressurePsi: clearPressurePsi ? null : (pressurePsi ?? this.pressurePsi),
+      treadDepthMm: clearTreadDepthMm
+          ? null
+          : (treadDepthMm ?? this.treadDepthMm),
       condition: condition ?? this.condition,
       checked: checked ?? this.checked,
       photoLocalPath: clearPhotoLocalPath
@@ -255,14 +253,14 @@ class TyrePositionReading {
 
   @override
   int get hashCode => Object.hash(
-        position,
-        serialNumber,
-        pressurePsi,
-        treadDepthMm,
-        condition,
-        checked,
-        photoLocalPath,
-        photoUrl,
-        notes,
-      );
+    position,
+    serialNumber,
+    pressurePsi,
+    treadDepthMm,
+    condition,
+    checked,
+    photoLocalPath,
+    photoUrl,
+    notes,
+  );
 }

@@ -23,19 +23,21 @@ import 'package:tyre_pulse/features/meter_logs/data/meter_log_repository.dart';
 
 /// See the library comment on why this is declared in this feature's own
 /// provider file rather than a cross-feature one.
-final Provider<QueuedCommandRepository> meterLogQueuedCommandRepositoryProvider =
-    Provider<QueuedCommandRepository>((ref) {
+final Provider<QueuedCommandRepository>
+meterLogQueuedCommandRepositoryProvider = Provider<QueuedCommandRepository>((
+  ref,
+) {
   final AppDatabase db = ref.watch(appDatabaseProvider);
   return QueuedCommandRepository(db.queueDao);
 });
 
 final Provider<MeterLogRepository> meterLogRepositoryProvider =
     Provider<MeterLogRepository>(
-  (ref) => SupabaseMeterLogRepository(
-    ref.watch(supabaseClientProvider),
-    ref.watch(meterLogQueuedCommandRepositoryProvider),
-  ),
-);
+      (ref) => SupabaseMeterLogRepository(
+        ref.watch(supabaseClientProvider),
+        ref.watch(meterLogQueuedCommandRepositoryProvider),
+      ),
+    );
 
 /// Real by default - `image_picker`/`path_provider` resolve the same way on
 /// every real device, matching `checklistPhotoCaptureProvider`'s own note.

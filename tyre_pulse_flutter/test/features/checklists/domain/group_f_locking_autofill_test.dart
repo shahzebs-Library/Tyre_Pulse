@@ -43,13 +43,21 @@ const ChecklistAssetContext _asset = ChecklistAssetContext(
 
 void main() {
   test('F1: locked locks whatever the value', () {
-    const ChecklistField f = ChecklistField(id: 'd', type: 'date', locked: true);
+    const ChecklistField f = ChecklistField(
+      id: 'd',
+      type: 'date',
+      locked: true,
+    );
     expect(isFieldLocked(f, ''), isTrue);
     expect(isFieldLocked(f, 'anything'), isTrue);
   });
 
   test('F2: readOnly locks only once a value exists', () {
-    const ChecklistField f = ChecklistField(id: 'r', type: 'text', readOnly: true);
+    const ChecklistField f = ChecklistField(
+      id: 'r',
+      type: 'text',
+      readOnly: true,
+    );
     expect(isFieldLocked(f, ''), isFalse);
     expect(isFieldLocked(f, '   '), isFalse);
     expect(isFieldLocked(f, 'TM514'), isTrue);

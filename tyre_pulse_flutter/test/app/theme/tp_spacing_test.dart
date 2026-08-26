@@ -43,7 +43,8 @@ void main() {
         expect(
           _kTpSpaceScale[i],
           greaterThan(_kTpSpaceScale[i - 1]),
-          reason: 'step $i (${_kTpSpaceScale[i]}) must be larger than step '
+          reason:
+              'step $i (${_kTpSpaceScale[i]}) must be larger than step '
               '${i - 1} (${_kTpSpaceScale[i - 1]})',
         );
       }
@@ -51,11 +52,7 @@ void main() {
 
     test('every step is a multiple of 4, per the doc comment', () {
       for (final double step in _kTpSpaceScale) {
-        expect(
-          step % 4,
-          0,
-          reason: '$step is not on the 4pt scale',
-        );
+        expect(step % 4, 0, reason: '$step is not on the 4pt scale');
       }
     });
   });
@@ -76,16 +73,13 @@ void main() {
       expect(TpRadius.xl, lessThan(TpRadius.pill));
     });
 
-    test(
-      'pill is large enough to round any control this app draws into a '
-      'capsule',
-      () {
-        // A pill radius that were smaller than half the tallest standard
-        // control would leave straight edges on the short sides instead of
-        // a true stadium shape.
-        expect(TpRadius.pill, greaterThanOrEqualTo(TpSizing.controlHeight));
-      },
-    );
+    test('pill is large enough to round any control this app draws into a '
+        'capsule', () {
+      // A pill radius that were smaller than half the tallest standard
+      // control would leave straight edges on the short sides instead of
+      // a true stadium shape.
+      expect(TpRadius.pill, greaterThanOrEqualTo(TpSizing.controlHeight));
+    });
   });
 
   group('TpBorderWidth', () {
@@ -119,16 +113,10 @@ void main() {
       );
     });
 
-    test(
-      'the compact control used inside dense rows is smaller than the '
-      'standard one',
-      () {
-        expect(
-          TpSizing.controlHeightCompact,
-          lessThan(TpSizing.controlHeight),
-        );
-      },
-    );
+    test('the compact control used inside dense rows is smaller than the '
+        'standard one', () {
+      expect(TpSizing.controlHeightCompact, lessThan(TpSizing.controlHeight));
+    });
 
     test('icon sizes strictly increase from small to large', () {
       expect(TpSizing.iconSm, lessThan(TpSizing.iconMd));

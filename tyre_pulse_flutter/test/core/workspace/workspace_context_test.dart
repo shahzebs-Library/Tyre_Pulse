@@ -17,20 +17,19 @@ Map<String, Object?> row({
   Object? approved = true,
   Object? locked,
   Object? site = 'NHC',
-}) =>
-    <String, Object?>{
-      'id': id,
-      'role': role,
-      'country': country,
-      'sites': sites,
-      'org_id': orgId,
-      'organisation_id': organisationId,
-      'is_super_admin': isSuperAdmin,
-      'approved': approved,
-      'locked': locked,
-      'site': site,
-      'full_name': 'A Person',
-    };
+}) => <String, Object?>{
+  'id': id,
+  'role': role,
+  'country': country,
+  'sites': sites,
+  'org_id': orgId,
+  'organisation_id': organisationId,
+  'is_super_admin': isSuperAdmin,
+  'approved': approved,
+  'locked': locked,
+  'site': site,
+  'full_name': 'A Person',
+};
 
 void main() {
   group('WorkspaceProfile decodes the row honestly', () {
@@ -43,8 +42,9 @@ void main() {
     });
 
     test('an empty country array grants nothing', () {
-      final WorkspaceProfile profile =
-          WorkspaceProfile.fromRow(row(country: const <Object?>[]));
+      final WorkspaceProfile profile = WorkspaceProfile.fromRow(
+        row(country: const <Object?>[]),
+      );
       expect(profile.countryScope.isBlank, isTrue);
       expect(profile.countryScope.canSee('KSA', isSuperAdmin: false), isFalse);
     });
@@ -70,8 +70,9 @@ void main() {
     });
 
     test('an unrecognised role stays unknown', () {
-      final WorkspaceProfile profile =
-          WorkspaceProfile.fromRow(row(role: 'Tire Planning Engineer'));
+      final WorkspaceProfile profile = WorkspaceProfile.fromRow(
+        row(role: 'Tire Planning Engineer'),
+      );
       expect(profile.role.isUnknown, isTrue);
       expect(profile.role.id, isNot(RoleId.reporter));
     });
@@ -94,12 +95,14 @@ void main() {
       expect(agreeing.organisationIdsDiffer, isFalse);
       expect(agreeing.organisationIdIncomplete, isFalse);
 
-      final WorkspaceProfile diverging =
-          WorkspaceProfile.fromRow(row(organisationId: 'org-2'));
+      final WorkspaceProfile diverging = WorkspaceProfile.fromRow(
+        row(organisationId: 'org-2'),
+      );
       expect(diverging.organisationIdsDiffer, isTrue);
 
-      final WorkspaceProfile incomplete =
-          WorkspaceProfile.fromRow(row(organisationId: null));
+      final WorkspaceProfile incomplete = WorkspaceProfile.fromRow(
+        row(organisationId: null),
+      );
       expect(incomplete.organisationIdIncomplete, isTrue);
       expect(incomplete.organisationIdsDiffer, isFalse);
     });
@@ -115,8 +118,14 @@ void main() {
           ),
         ),
       );
-      expect(() => WorkspaceProfile.fromRow(row(id: '')), throwsA(isA<AppError>()));
-      expect(() => WorkspaceProfile.fromRow(row(id: 7)), throwsA(isA<AppError>()));
+      expect(
+        () => WorkspaceProfile.fromRow(row(id: '')),
+        throwsA(isA<AppError>()),
+      );
+      expect(
+        () => WorkspaceProfile.fromRow(row(id: 7)),
+        throwsA(isA<AppError>()),
+      );
     });
 
     test('approved false or locked true blocks the app', () {
@@ -189,30 +198,29 @@ void main() {
     });
 
     test('navigation is derived from the resolver, not from the role', () {
-      final WorkspaceProfile profile =
-          WorkspaceProfile.fromRow(row(role: 'Driver'));
+      final WorkspaceProfile profile = WorkspaceProfile.fromRow(
+        row(role: 'Driver'),
+      );
       final WorkspaceContext context = WorkspaceContext.fromProfile(
         profile,
         effectivePermissions: AccessState(role: profile.role),
       );
 
-      expect(
-        context.allowedModules(),
-        <ModuleKey>{
-          ModuleKey.serial,
-          ModuleKey.checklists,
-          ModuleKey.meter,
-          ModuleKey.washing,
-          ModuleKey.reportIssue,
-          ModuleKey.repairRequest,
-          ModuleKey.vehicles,
-        },
-      );
+      expect(context.allowedModules(), <ModuleKey>{
+        ModuleKey.serial,
+        ModuleKey.checklists,
+        ModuleKey.meter,
+        ModuleKey.washing,
+        ModuleKey.reportIssue,
+        ModuleKey.repairRequest,
+        ModuleKey.vehicles,
+      });
     });
 
     test('a per-user grant reaches the workspace navigation', () {
-      final WorkspaceProfile profile =
-          WorkspaceProfile.fromRow(row(role: 'Driver'));
+      final WorkspaceProfile profile = WorkspaceProfile.fromRow(
+        row(role: 'Driver'),
+      );
       final WorkspaceContext context = WorkspaceContext.fromProfile(
         profile,
         effectivePermissions: AccessState(
@@ -243,12 +251,12 @@ void main() {
 
     test('two contexts built the same way are equal', () {
       WorkspaceContext build() => WorkspaceContext.fromProfile(
-            WorkspaceProfile.fromRow(row()),
-            effectivePermissions: AccessState.signedOut,
-            activeCountry: 'KSA',
-            activeSites: const <String>['NHC'],
-            currency: 'SAR',
-          );
+        WorkspaceProfile.fromRow(row()),
+        effectivePermissions: AccessState.signedOut,
+        activeCountry: 'KSA',
+        activeSites: const <String>['NHC'],
+        currency: 'SAR',
+      );
 
       expect(build(), build());
       expect(build().hashCode, build().hashCode);

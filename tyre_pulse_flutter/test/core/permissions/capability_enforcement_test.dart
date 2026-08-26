@@ -22,22 +22,25 @@ void main() {
       expect(enforcementOf(Capability.view).isServerEnforced, isFalse);
     });
 
-    test('a module decision is a view decision and says it is not a boundary',
-        () {
-      for (final ModuleKey key in ModuleKey.values) {
-        final AccessDecision decision = resolveModuleAccess(
-          module: key,
-          access: const AccessState(role: UserRole.known(RoleId.admin)),
-        );
-        expect(decision.capability, Capability.view);
-        expect(
-          decision.isAuthorisationBoundary,
-          isFalse,
-          reason: 'an allow on ${key.wireKey} must never be read as '
-              'authorisation to fetch the underlying table',
-        );
-      }
-    });
+    test(
+      'a module decision is a view decision and says it is not a boundary',
+      () {
+        for (final ModuleKey key in ModuleKey.values) {
+          final AccessDecision decision = resolveModuleAccess(
+            module: key,
+            access: const AccessState(role: UserRole.known(RoleId.admin)),
+          );
+          expect(decision.capability, Capability.view);
+          expect(
+            decision.isAuthorisationBoundary,
+            isFalse,
+            reason:
+                'an allow on ${key.wireKey} must never be read as '
+                'authorisation to fetch the underlying table',
+          );
+        }
+      },
+    );
 
     test('export is enforced nowhere either', () {
       expect(Capability.export.enforcement, CapabilityEnforcement.uiOnly);
@@ -96,8 +99,10 @@ void main() {
     test('parses the six values', () {
       for (final Capability capability in Capability.values) {
         expect(capabilityFromWire(capability.wireName), capability);
-        expect(capabilityFromWire(capability.wireName.toUpperCase()),
-            capability);
+        expect(
+          capabilityFromWire(capability.wireName.toUpperCase()),
+          capability,
+        );
       }
     });
 

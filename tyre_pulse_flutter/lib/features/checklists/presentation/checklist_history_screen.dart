@@ -30,8 +30,10 @@ class _ChecklistHistoryScreenState
     extends ConsumerState<ChecklistHistoryScreen> {
   bool _loading = true;
   String? _errorMessage;
-  ChecklistHistory _history =
-      const ChecklistHistory(completed: <ChecklistHistoryRow>[], queued: <QueuedChecklistSubmission>[]);
+  ChecklistHistory _history = const ChecklistHistory(
+    completed: <ChecklistHistoryRow>[],
+    queued: <QueuedChecklistSubmission>[],
+  );
   String _search = '';
   ChecklistHistoryState? _stateFilter;
 
@@ -78,29 +80,32 @@ class _ChecklistHistoryScreenState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage = 'Your checklist history could not be loaded. Pull '
+        _errorMessage =
+            'Your checklist history could not be loaded. Pull '
             'down to try again.';
       });
     }
   }
 
   List<ChecklistHistoryRow> get _filteredCompleted {
-    return _history.completed.where((ChecklistHistoryRow r) {
-      if (_stateFilter != null &&
-          checklistHistoryStateOf(r.approvalStatus) != _stateFilter) {
-        return false;
-      }
-      return matchesChecklistHistorySearch(
-        ChecklistHistorySearchRow(
-          documentNo: r.documentNo,
-          templateName: r.templateName,
-          title: r.title,
-          assetNo: r.assetNo,
-          site: r.site,
-        ),
-        _search,
-      );
-    }).toList(growable: false);
+    return _history.completed
+        .where((ChecklistHistoryRow r) {
+          if (_stateFilter != null &&
+              checklistHistoryStateOf(r.approvalStatus) != _stateFilter) {
+            return false;
+          }
+          return matchesChecklistHistorySearch(
+            ChecklistHistorySearchRow(
+              documentNo: r.documentNo,
+              templateName: r.templateName,
+              title: r.title,
+              assetNo: r.assetNo,
+              site: r.site,
+            ),
+            _search,
+          );
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -155,8 +160,9 @@ class _ChecklistHistoryScreenState
               _StateFilterChip(
                 label: l10n.checklistHistoryFilterWaiting,
                 selected: _stateFilter == ChecklistHistoryState.waiting,
-                onTap: () =>
-                    setState(() => _stateFilter = ChecklistHistoryState.waiting),
+                onTap: () => setState(
+                  () => _stateFilter = ChecklistHistoryState.waiting,
+                ),
               ),
               _StateFilterChip(
                 label: l10n.checklistHistoryFilterClosed,
@@ -191,7 +197,8 @@ class _ChecklistHistoryScreenState
           ],
           if (completed.isNotEmpty) ...<Widget>[
             _SectionHeader(label: l10n.checklistHistoryCompletedSection),
-            for (final ChecklistHistoryRow row in completed) _CompletedRow(row: row),
+            for (final ChecklistHistoryRow row in completed)
+              _CompletedRow(row: row),
           ],
         ],
       ),
@@ -210,9 +217,7 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: TpSpace.sm),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .labelLarge
+        style: Theme.of(context).textTheme.labelLarge
             ?.copyWith(color: TpPalette.of(context).textMuted),
       ),
     );
@@ -228,8 +233,8 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpStatusColors colors =
-        TpPalette.of(context).forStatus(TpStatus.warning);
+    final TpStatusColors colors = TpPalette.of(context)
+        .forStatus(TpStatus.warning);
     return Container(
       padding: const EdgeInsets.all(TpSpace.md),
       decoration: BoxDecoration(
@@ -244,9 +249,7 @@ class _InlineWarning extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
+              style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: colors.onSoft),
             ),
           ),
@@ -270,7 +273,11 @@ class _StateFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(label: Text(label), selected: selected, onSelected: (_) => onTap());
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+    );
   }
 }
 
@@ -283,8 +290,16 @@ class _QueuedRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final (IconData icon, TpStatus tone, String label) = item.needsAttention
-        ? (Icons.error_outline, TpStatus.critical, l10n.checklistQueueFailedLabel)
-        : (Icons.cloud_upload_outlined, TpStatus.info, l10n.checklistQueuePendingLabel);
+        ? (
+            Icons.error_outline,
+            TpStatus.critical,
+            l10n.checklistQueueFailedLabel,
+          )
+        : (
+            Icons.cloud_upload_outlined,
+            TpStatus.info,
+            l10n.checklistQueuePendingLabel,
+          );
 
     return TpCard(
       margin: const EdgeInsets.only(bottom: TpSpace.sm),
@@ -299,9 +314,10 @@ class _QueuedRow extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 Text(
-                  <String?>[item.assetNo, item.site]
-                      .where((v) => v != null && v.isNotEmpty)
-                      .join(' - '),
+                  <String?>[
+                    item.assetNo,
+                    item.site,
+                  ].where((v) => v != null && v.isNotEmpty).join(' - '),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -322,21 +338,26 @@ class _CompletedRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final ChecklistHistoryState state = checklistHistoryStateOf(row.approvalStatus);
+    final ChecklistHistoryState state = checklistHistoryStateOf(
+      row.approvalStatus,
+    );
     final (TpStatus tone, String label) = switch (state) {
-      ChecklistHistoryState.closed => (TpStatus.ok, l10n.checklistHistoryStatusClosed),
+      ChecklistHistoryState.closed => (
+        TpStatus.ok,
+        l10n.checklistHistoryStatusClosed,
+      ),
       ChecklistHistoryState.sentBack => (
-          TpStatus.critical,
-          l10n.checklistHistoryStatusSentBack,
-        ),
+        TpStatus.critical,
+        l10n.checklistHistoryStatusSentBack,
+      ),
       ChecklistHistoryState.waiting => (
-          TpStatus.warning,
-          l10n.checklistHistoryStatusWaiting,
-        ),
+        TpStatus.warning,
+        l10n.checklistHistoryStatusWaiting,
+      ),
       ChecklistHistoryState.noApproval => (
-          TpStatus.neutral,
-          l10n.checklistHistoryStatusNoApproval,
-        ),
+        TpStatus.neutral,
+        l10n.checklistHistoryStatusNoApproval,
+      ),
     };
 
     return TpCard(
@@ -352,9 +373,10 @@ class _CompletedRow extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 Text(
-                  <String?>[row.assetNo, row.site]
-                      .where((v) => v != null && v.isNotEmpty)
-                      .join(' - '),
+                  <String?>[
+                    row.assetNo,
+                    row.site,
+                  ].where((v) => v != null && v.isNotEmpty).join(' - '),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 Text(

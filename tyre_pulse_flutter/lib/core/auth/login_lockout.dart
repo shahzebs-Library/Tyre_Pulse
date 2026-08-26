@@ -37,10 +37,10 @@ final class LoginLockStatus {
 
   /// Nothing was reachable, or nothing was reported. Never treated as a lock.
   const LoginLockStatus.notLocked()
-      : enabled = false,
-        locked = false,
-        retryAfter = null,
-        remainingAttempts = null;
+    : enabled = false,
+      locked = false,
+      retryAfter = null,
+      remainingAttempts = null;
 
   /// Decodes the `jsonb` body of `login_attempt_status` / `record_login_failure`.
   ///

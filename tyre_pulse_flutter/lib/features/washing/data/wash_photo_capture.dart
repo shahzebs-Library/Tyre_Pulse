@@ -60,10 +60,10 @@ final class CapturedWashPhoto {
 
 const List<({int maxDimension, int quality})> _kResizeLadder =
     <({int maxDimension, int quality})>[
-  (maxDimension: 1600, quality: 50),
-  (maxDimension: 1024, quality: 45),
-  (maxDimension: 720, quality: 40),
-];
+      (maxDimension: 1600, quality: 50),
+      (maxDimension: 1024, quality: 45),
+      (maxDimension: 720, quality: 40),
+    ];
 
 /// Captures one wash photo for [sessionKey] and copies it into a durable,
 /// feature-owned folder.
@@ -109,8 +109,9 @@ final class WashPhotoCapture {
     final String ext = _extensionOf(picked.name);
     final String fileName =
         'wash_${orderIndex}_${now.millisecondsSinceEpoch}$ext';
-    final File destination =
-        File('${folder.path}${Platform.pathSeparator}$fileName');
+    final File destination = File(
+      '${folder.path}${Platform.pathSeparator}$fileName',
+    );
 
     await File(picked.path).copy(destination.path);
     int? sizeBytes;

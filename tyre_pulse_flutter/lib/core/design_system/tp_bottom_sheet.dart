@@ -36,9 +36,7 @@ abstract final class TpBottomSheet {
       backgroundColor: palette.surface,
       barrierColor: palette.overlay,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(TpRadius.xl),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(TpRadius.xl)),
       ),
       builder: (BuildContext sheetContext) {
         return SafeArea(
@@ -66,9 +64,7 @@ abstract final class TpBottomSheet {
                 if (title != null) ...<Widget>[
                   const SizedBox(height: TpSpace.lg),
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: TpSpace.xl,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: TpSpace.xl),
                     child: Text(
                       title,
                       style: Theme.of(sheetContext).textTheme.titleLarge,

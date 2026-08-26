@@ -38,8 +38,9 @@ void main() {
       expect(taps, 1);
     });
 
-    testWidgets('no InkWell is built when onTap is not supplied',
-        (WidgetTester tester) async {
+    testWidgets('no InkWell is built when onTap is not supplied', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpCard(child: Text('card content')));
 
       expect(
@@ -59,8 +60,9 @@ void main() {
   group('isDashed marks content that was never measured', () {
     // Spec section 32: unmeasured content gets a dashed border on top of its
     // colour, because colour alone is not a signal everyone can see.
-    testWidgets('true draws a CustomPaint dashed border',
-        (WidgetTester tester) async {
+    testWidgets('true draws a CustomPaint dashed border', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpCard(isDashed: true, child: Text('card content')),
@@ -75,8 +77,9 @@ void main() {
       );
     });
 
-    testWidgets('false draws the ordinary bordered surface instead',
-        (WidgetTester tester) async {
+    testWidgets('false draws the ordinary bordered surface instead', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpCard(child: Text('card content')));
 
       expect(
@@ -90,8 +93,9 @@ void main() {
   });
 
   group('colour overrides', () {
-    testWidgets('borderColor replaces the default hairline colour',
-        (WidgetTester tester) async {
+    testWidgets('borderColor replaces the default hairline colour', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpCard(borderColor: Colors.red, child: Text('card content')),
@@ -101,16 +105,18 @@ void main() {
       expect(border.top.color, Colors.red);
     });
 
-    testWidgets('the default border colour comes from the palette',
-        (WidgetTester tester) async {
+    testWidgets('the default border colour comes from the palette', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpCard(child: Text('card content')));
 
       final Border border = _borderOf(tester);
       expect(border.top.color, TpPalette.light.border);
     });
 
-    testWidgets('background replaces the default surface colour',
-        (WidgetTester tester) async {
+    testWidgets('background replaces the default surface colour', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(
         tester,
         const TpCard(background: Colors.blue, child: Text('card content')),
@@ -119,8 +125,9 @@ void main() {
       expect(_decorationOf(tester).color, Colors.blue);
     });
 
-    testWidgets('the default background comes from the palette',
-        (WidgetTester tester) async {
+    testWidgets('the default background comes from the palette', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpCard(child: Text('card content')));
 
       expect(_decorationOf(tester).color, TpPalette.light.surface);
@@ -128,8 +135,9 @@ void main() {
   });
 
   group('spacing', () {
-    testWidgets('the default padding matches the design token',
-        (WidgetTester tester) async {
+    testWidgets('the default padding matches the design token', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const TpCard(child: Text('card content')));
 
       final Iterable<Padding> paddings = _paddingsOf(tester);
@@ -141,8 +149,9 @@ void main() {
       );
     });
 
-    testWidgets('a custom padding is applied around the child',
-        (WidgetTester tester) async {
+    testWidgets('a custom padding is applied around the child', (
+      WidgetTester tester,
+    ) async {
       const EdgeInsets customPadding = EdgeInsets.all(40);
       await pumpTp(
         tester,
@@ -153,8 +162,9 @@ void main() {
       expect(paddings.any((Padding p) => p.padding == customPadding), isTrue);
     });
 
-    testWidgets('a custom margin wraps the whole card',
-        (WidgetTester tester) async {
+    testWidgets('a custom margin wraps the whole card', (
+      WidgetTester tester,
+    ) async {
       const EdgeInsets customMargin = EdgeInsets.all(10);
       await pumpTp(
         tester,
@@ -166,8 +176,9 @@ void main() {
     });
   });
 
-  testWidgets('renders under a right-to-left locale',
-      (WidgetTester tester) async {
+  testWidgets('renders under a right-to-left locale', (
+    WidgetTester tester,
+  ) async {
     await pumpTpRtl(tester, const TpCard(child: Text('card content')));
 
     expect(find.text('card content'), findsOneWidget);

@@ -14,8 +14,9 @@ import 'design_system_test_support.dart';
 
 void main() {
   group('TpBottomSheet.show', () {
-    testWidgets('renders the title and the content the builder returns',
-        (WidgetTester tester) async {
+    testWidgets('renders the title and the content the builder returns', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -34,8 +35,9 @@ void main() {
       await future;
     });
 
-    testWidgets('resolves with whatever value the builder pops',
-        (WidgetTester tester) async {
+    testWidgets('resolves with whatever value the builder pops', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -54,8 +56,9 @@ void main() {
       expect(await future, 'picked');
     });
 
-    testWidgets('isDismissible: true, the default, closes on a barrier tap',
-        (WidgetTester tester) async {
+    testWidgets('isDismissible: true, the default, closes on a barrier tap', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -74,8 +77,9 @@ void main() {
       expect(await future, isNull);
     });
 
-    testWidgets('isDismissible: false ignores a barrier tap',
-        (WidgetTester tester) async {
+    testWidgets('isDismissible: false ignores a barrier tap', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -101,8 +105,9 @@ void main() {
   });
 
   group('TpDialog.confirm', () {
-    testWidgets('renders the title, message and default button labels',
-        (WidgetTester tester) async {
+    testWidgets('renders the title, message and default button labels', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -140,8 +145,9 @@ void main() {
       expect(await future, isFalse);
     });
 
-    testWidgets('the confirm button resolves to true',
-        (WidgetTester tester) async {
+    testWidgets('the confirm button resolves to true', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -158,8 +164,9 @@ void main() {
       expect(await future, isTrue);
     });
 
-    testWidgets('custom confirmLabel and cancelLabel replace the defaults',
-        (WidgetTester tester) async {
+    testWidgets('custom confirmLabel and cancelLabel replace the defaults', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 
@@ -208,8 +215,9 @@ void main() {
       },
     );
 
-    testWidgets('isDestructive still resolves true from its confirm button',
-        (WidgetTester tester) async {
+    testWidgets('isDestructive still resolves true from its confirm button', (
+      WidgetTester tester,
+    ) async {
       await pumpTp(tester, const SizedBox());
       final BuildContext context = tester.element(find.byType(Scaffold));
 

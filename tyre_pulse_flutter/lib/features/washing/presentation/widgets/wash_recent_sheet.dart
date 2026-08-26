@@ -44,8 +44,9 @@ class _WashRecentSheetState extends ConsumerState<WashRecentSheet> {
       _error = null;
     });
     try {
-      final List<WashRecord> washes =
-          await ref.read(washRepositoryProvider).listRecentWashes();
+      final List<WashRecord> washes = await ref
+          .read(washRepositoryProvider)
+          .listRecentWashes();
       if (!mounted) return;
       setState(() {
         _washes = washes;
@@ -135,9 +136,7 @@ class _RecentWashRow extends StatelessWidget {
               if (subtitleParts.isNotEmpty)
                 Text(
                   subtitleParts.join(' · '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
+                  style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
             ],

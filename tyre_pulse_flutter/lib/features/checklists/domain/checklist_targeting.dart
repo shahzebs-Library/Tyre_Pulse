@@ -55,7 +55,11 @@ const List<String> kChecklistTradeRoles = <String>[
 
 /// Roles that see every checklist regardless of targeting: they run and
 /// review the programme rather than being assigned by it.
-const List<String> kChecklistOversightRoles = <String>['Admin', 'Manager', 'Director'];
+const List<String> kChecklistOversightRoles = <String>[
+  'Admin',
+  'Manager',
+  'Director',
+];
 
 /// Folds [role] to the comparison key both sides of every targeting check
 /// in this file use: trimmed, lower-cased, with runs of whitespace or `-`
@@ -88,9 +92,7 @@ bool templateTargetsEveryone(ChecklistTemplate? template) =>
 bool isOversightRole(Object? role, {bool isSuperAdmin = false}) {
   if (isSuperAdmin) return true;
   final String key = normaliseRoleKey(role);
-  return kChecklistOversightRoles.any(
-    (String r) => normaliseRoleKey(r) == key,
-  );
+  return kChecklistOversightRoles.any((String r) => normaliseRoleKey(r) == key);
 }
 
 /// Should [role] be OFFERED [template]? In order:
@@ -156,7 +158,8 @@ List<ChecklistAssignment> filterAssignmentsForRole(
   bool isSuperAdmin = false,
 }) {
   return <ChecklistAssignment>[
-    for (final ChecklistAssignment a in assignments ?? const <ChecklistAssignment>[])
+    for (final ChecklistAssignment a
+        in assignments ?? const <ChecklistAssignment>[])
       if (assignmentAllowsRole(a, role, isSuperAdmin: isSuperAdmin)) a,
   ];
 }

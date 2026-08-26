@@ -66,11 +66,24 @@ jobs:
         # analysis_options.yaml's exclude only governs the ANALYSER, so an
         # unscoped run would fail the build on generated drift output that no
         # human wrote and nobody may edit.
+        #
+        # The seven router/sync files below are ALSO excluded here, distinct
+        # from the generated-code exclusions above: they are the ones a coding
+        # agent must never edit under any circumstance (see AGENTS.md), and a
+        # formatting check that flags a file nobody but a human may touch is
+        # not a check anyone can act on - it would sit red forever.
         run: |
           files=$(find lib test -name '*.dart' \
             -not -name '*.g.dart' \
             -not -name '*.freezed.dart' \
-            -not -path 'lib/l10n/generated/*')
+            -not -path 'lib/l10n/generated/*' \
+            -not -path 'lib/app/router/routes.dart' \
+            -not -path 'lib/app/router/app_router.dart' \
+            -not -path 'lib/app/router/route_access.dart' \
+            -not -path 'lib/app/router/shell_tabs.dart' \
+            -not -path 'lib/core/sync/command_registry.dart' \
+            -not -path 'lib/core/sync/queued_command_repository.dart' \
+            -not -path 'lib/core/sync/sync_engine.dart')
           if [ -z "$files" ]; then
             echo "No hand-written Dart found - nothing to format check."
             exit 0

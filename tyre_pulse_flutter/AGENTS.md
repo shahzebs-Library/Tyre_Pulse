@@ -60,6 +60,27 @@ them from this project. They are frozen source, not shared code.
 
 ---
 
+## Seven files no agent may edit, under any circumstance
+
+Everything else in `lib/` is normal application code: read it, extend it,
+refactor it, fix it. These seven are the wiring every feature plugs into, and
+an agent changing their logic - even with good intentions - can silently
+break a guarantee every other file in the tree depends on:
+
+- `lib/app/router/routes.dart`
+- `lib/app/router/app_router.dart`
+- `lib/app/router/route_access.dart`
+- `lib/app/router/shell_tabs.dart`
+- `lib/core/sync/command_registry.dart`
+- `lib/core/sync/queued_command_repository.dart`
+- `lib/core/sync/sync_engine.dart`
+
+This is a stronger rule than "be careful": it applies even to a change that
+looks purely mechanical, such as automated formatting or a codemod. If one of
+these seven needs a real change, a human makes it.
+
+---
+
 ## Before implementing any repository (spec section 62)
 
 1. inspect the actual Supabase table or RPC

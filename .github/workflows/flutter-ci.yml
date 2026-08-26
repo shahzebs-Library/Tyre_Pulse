@@ -56,6 +56,8 @@ jobs:
           if ! git diff --quiet; then
             echo "Generated sources differ from the committed copies:"
             git --no-pager diff --stat
+            echo "--- full diff, for diagnosing the first real run of this step ---"
+            git --no-pager diff
             exit 1
           fi
 

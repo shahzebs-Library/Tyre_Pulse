@@ -37,6 +37,8 @@ import 'package:tyre_pulse/features/meter_logs/'
 import 'package:tyre_pulse/features/records/records_screen_registrations.dart';
 import 'package:tyre_pulse/features/scanning/'
     'scanning_screen_registrations.dart';
+import 'package:tyre_pulse/features/search/'
+    'global_search_screen_registrations.dart';
 import 'package:tyre_pulse/features/tyre_exchange/'
     'tyre_exchange_screen_registrations.dart';
 import 'package:tyre_pulse/features/tyres/tyres_screen_registrations.dart';
@@ -225,6 +227,18 @@ Future<void> main() async {
         // template and `ModuleGuarded(RouteModule.tyreChange)` guard already
         // existed in `routes.dart`/`app_router.dart`/`route_access.dart`
         // before this feature's screen was written.
+        //
+        // `globalSearchScreenRegistrations` (spec section 34, the global
+        // cross-entity search feature) is joined here for the SAME reason
+        // as every entry above it - but unlike all of them, it is still
+        // genuinely UNREACHABLE after this line, because no
+        // `TpRouteId.globalSearch`, no path template and no `GoRoute` entry
+        // exist yet in `app/router/routes.dart`/`app_router.dart`/
+        // `route_access.dart` (those three files were off limits to the
+        // agent that built this feature). See
+        // `features/search/domain/global_search_route.dart`'s own doc
+        // comment for exactly what a human adds to those files to finish
+        // the wiring; nothing in THIS file will need to change when they do.
         screenRegistryProvider.overrideWithValue(
           TpScreenRegistry.empty
               .withAll(assetsScreenRegistrations)
@@ -239,7 +253,8 @@ Future<void> main() async {
               .withAll(washingScreenRegistrations)
               .withAll(homeScreenRegistrations)
               .withAll(workOrdersScreenRegistrations)
-              .withAll(tyreExchangeScreenRegistrations),
+              .withAll(tyreExchangeScreenRegistrations)
+              .withAll(globalSearchScreenRegistrations),
         ),
       ],
       child: const TyrePulseApp(),

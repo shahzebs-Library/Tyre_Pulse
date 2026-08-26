@@ -629,5 +629,21 @@
   "tyreReplaceAddAnotherAction": "إضافة آخر",
   "tyreReplaceDoneAction": "تم",
   "tyreReplaceSaveFailedTitle": "تعذّر حفظ تبديل الإطار",
-  "tyreReplaceTryAgainFallback": "حدث خطأ ما. حاول مرة أخرى."
+  "tyreReplaceTryAgainFallback": "حدث خطأ ما. حاول مرة أخرى.",
+  "globalSearchTitle": "بحث",
+  "globalSearchSubtitle": "ابحث عن أصل أو إطار أو أمر عمل أو تفتيش",
+  "globalSearchPlaceholder": "الأصل، رقم اللوحة، الشاسيه، رقم الأسطول، الرقم التسلسلي، أمر العمل...",
+  "globalSearchHelp": "يطابق رقم الأصل أو رقم اللوحة أو رقم الشاسيه أو رقم الأسطول أو الرقم التسلسلي للإطار أو رقم أمر العمل أو مرجع التفتيش.",
+  "globalSearchSearching": "جارٍ البحث...",
+  "globalSearchIdleTitle": "ابحث في جميع أنحاء أسطولك",
+  "globalSearchIdleMessage": "اكتب رقم الأصل أو رقم اللوحة أو رقم الشاسيه أو رقم الأسطول أو الرقم التسلسلي للإطار أو رقم أمر العمل أو مرجع التفتيش للبحث في كل شيء دفعة واحدة.",
+  "globalSearchEmptyTitle": "لم يُعثر على نتائج مطابقة",
+  "globalSearchEmptyMessage": "لم يتطابق هذا المصطلح مع أي أصل أو إطار أو أمر عمل أو تفتيش. تحقق من الإملاء وحاول مجدداً.",
+  "globalSearchRecentSectionTitle": "عمليات البحث الأخيرة",
+  "globalSearchResultsCount": "{count, plural, zero{لا توجد نتائج} one{نتيجة واحدة} two{نتيجتان} few{{count} نتائج} many{{count} نتيجةً} other{{count} نتيجة}}",
+  "globalSearchSectionAssets": "الأصول",
+  "globalSearchSectionTyres": "الإطارات",
+  "globalSearchSectionWorkOrders": "أوامر العمل",
+  "globalSearchSectionInspections": "عمليات التفتيش",
+  "globalSearchSourceFailedNotice": "تعذّر التحقق من بعض النتائج الآن. اسحب للتحديث أو حاول مجدداً."
 }

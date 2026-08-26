@@ -324,16 +324,28 @@ void main() {
     //   save action; the asset- and position-required validation pair; the
     //   saved/add-another/done outcome trio; and the save-failed title with
     //   its generic try-again fallback.
-    // 553 + 40 = 593. Bumping this pin is the expected maintenance action
+    // 553 + 40 = 593.
+    // - `features/search` (global cross-entity search, spec section 34).
+    //   Purely additive, 16 new keys: the search field's title/subtitle/
+    //   placeholder/help text, the searching/idle/empty state trio, the
+    //   recent-searches section heading, the results-count summary, one
+    //   section label per result kind (assets/tyres/work orders/
+    //   inspections), and a notice shown when one identifier-type lookup
+    //   fails while at least one other still succeeds. Accident-reference
+    //   matching is deliberately NOT represented here - no Flutter
+    //   accidents feature exists yet, so that identifier type is omitted
+    //   rather than half-built (see `features/search/data/
+    //   global_search_repository.dart`'s own library comment).
+    // 593 + 16 = 609. Bumping this pin is the expected maintenance action
     // for a real key addition; this comment exists so the next person to
     // touch it can tell that apart from a mistake. Per this file's own
     // earlier note: if a future edit ever makes a translated file the
     // larger one, re-derive which file is the reference before touching
     // this number - do not just raise it blind.
-    test('en, ar and ur each carry exactly 593 translatable keys today', () {
-      expect(_translatableKeys(en).length, 593);
-      expect(_translatableKeys(ar).length, 593);
-      expect(_translatableKeys(ur).length, 593);
+    test('en, ar and ur each carry exactly 609 translatable keys today', () {
+      expect(_translatableKeys(en).length, 609);
+      expect(_translatableKeys(ar).length, 609);
+      expect(_translatableKeys(ur).length, 609);
     });
   });
 

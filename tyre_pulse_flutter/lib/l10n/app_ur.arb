@@ -629,5 +629,21 @@
   "tyreReplaceAddAnotherAction": "مزید شامل کریں",
   "tyreReplaceDoneAction": "ہو گیا",
   "tyreReplaceSaveFailedTitle": "ٹائر کی تبدیلی محفوظ نہیں ہو سکی",
-  "tyreReplaceTryAgainFallback": "کچھ غلط ہو گیا۔ دوبارہ کوشش کریں۔"
+  "tyreReplaceTryAgainFallback": "کچھ غلط ہو گیا۔ دوبارہ کوشش کریں۔",
+  "globalSearchTitle": "تلاش",
+  "globalSearchSubtitle": "اثاثہ، ٹائر، ورک آرڈر یا معائنہ تلاش کریں",
+  "globalSearchPlaceholder": "اثاثہ، رجسٹریشن، چیسس، فلیٹ نمبر، سیریل، ورک آرڈر...",
+  "globalSearchHelp": "اثاثہ نمبر، رجسٹریشن، چیسس نمبر، فلیٹ نمبر، ٹائر سیریل، ورک آرڈر نمبر یا معائنے کے حوالہ نمبر سے میچ کرتا ہے۔",
+  "globalSearchSearching": "تلاش کیا جا رہا ہے...",
+  "globalSearchIdleTitle": "اپنے پورے فلیٹ میں تلاش کریں",
+  "globalSearchIdleMessage": "اثاثہ نمبر، رجسٹریشن، چیسس نمبر، فلیٹ نمبر، ٹائر سیریل، ورک آرڈر نمبر یا معائنے کا حوالہ نمبر لکھیں تاکہ ایک ساتھ سب کچھ تلاش ہو سکے۔",
+  "globalSearchEmptyTitle": "کوئی نتیجہ نہیں ملا",
+  "globalSearchEmptyMessage": "یہ لفظ اثاثوں، ٹائروں، ورک آرڈرز یا معائنوں میں سے کسی سے میچ نہیں ہوا۔ ہجے چیک کر کے دوبارہ کوشش کریں۔",
+  "globalSearchRecentSectionTitle": "حالیہ تلاشیں",
+  "globalSearchResultsCount": "{count, plural, =0{کوئی نتیجہ نہیں} =1{1 نتیجہ} other{{count} نتائج}}",
+  "globalSearchSectionAssets": "اثاثے",
+  "globalSearchSectionTyres": "ٹائر",
+  "globalSearchSectionWorkOrders": "ورک آرڈرز",
+  "globalSearchSectionInspections": "معائنے",
+  "globalSearchSourceFailedNotice": "کچھ نتائج ابھی چیک نہیں ہو سکے۔ ریفریش کرنے کے لیے نیچے کھینچیں یا دوبارہ کوشش کریں۔"
 }

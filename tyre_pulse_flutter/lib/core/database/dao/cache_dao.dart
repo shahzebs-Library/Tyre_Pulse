@@ -145,6 +145,16 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
   /// The asset picker's list. An empty [term] returns the head of the scope's
   /// fleet rather than nothing, because a picker that shows nothing until you
   /// type is a picker a technician cannot browse.
+  ///
+  /// Matches asset number, registration, chassis number OR fleet number - the
+  /// same four identifier types `features/search`'s global search feature
+  /// names for this cache read (see that feature's `data/
+  /// global_search_repository.dart`, which calls this method directly rather
+  /// than duplicating a fifth copy of this predicate). Fleet number was
+  /// ADDED here as part of that feature: before it, a fleet-number term
+  /// matched nothing, silently, because the WHERE clause never mentioned the
+  /// column even though [CachedAsset.fleetNumber] was already being read and
+  /// displayed everywhere this method's results are shown.
   Future<List<CachedAsset>> searchAssets({
     required WorkspaceScopeFilter scope,
     String term = '',
@@ -164,7 +174,8 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
             return scoped &
                 (t.assetNoNorm.like('%$normalised%') |
                     t.registrationNo.like('%$normalised%') |
-                    t.chassisNo.like('%$normalised%'));
+                    t.chassisNo.like('%$normalised%') |
+                    t.fleetNumber.like('%$normalised%'));
           })
           ..orderBy([(t) => OrderingTerm.asc(t.assetNoNorm)])
           ..limit(limit))

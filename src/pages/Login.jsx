@@ -17,6 +17,7 @@ import { readCachedLogo } from '../lib/brand/library'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
 import { Illustration } from '../components/illustrations'
 import BrandIcon from '../components/ui/BrandIcon'
+import ThemeToggle from '../components/ui/ThemeToggle'
 
 // Login renders before the org is known, so it uses the logo cached on this
 // device after the last successful sign-in (V120), falling back to the mark.
@@ -171,9 +172,9 @@ function FeatureChip({ icon: Icon, label, delay = 0 }) {
       }}>
       <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
         style={{ background: 'rgba(22,163,74,0.18)', border: '1px solid rgba(22,163,74,0.3)' }}>
-        <Icon size={14} color="#4ade80" strokeWidth={2}/>
+        <Icon size={14} style={{ color: 'var(--brand-on-tint)' }} strokeWidth={2}/>
       </div>
-      <span style={{ fontSize:12, fontWeight:600, color:'rgba(255,255,255,0.8)' }}>{label}</span>
+      <span style={{ fontSize:12, fontWeight:600, color:'var(--login-text)' }}>{label}</span>
     </div>
   )
 }
@@ -429,10 +430,10 @@ export default function Login() {
   const inputStyle = (field) => ({
     width: '100%',
     padding: '11px 14px',
-    background: 'rgba(255,255,255,0.055)',
-    border: `1.5px solid ${focusedField === field ? 'rgba(74,222,128,0.65)' : 'rgba(255,255,255,0.1)'}`,
+    background: 'var(--login-input-bg)',
+    border: `1.5px solid ${focusedField === field ? 'var(--login-input-border-focus)' : 'var(--login-input-border)'}`,
     borderRadius: 12,
-    color: '#fff',
+    color: 'var(--login-text)',
     fontSize: 14,
     fontWeight: 500,
     letterSpacing: '0.01em',
@@ -444,7 +445,7 @@ export default function Login() {
 
   const labelStyle = {
     display: 'block', fontSize: 11, fontWeight: 700,
-    color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em',
+    color: 'var(--login-text-dim)', letterSpacing: '0.08em',
     textTransform: 'uppercase', marginBottom: 7,
   }
 
@@ -452,22 +453,22 @@ export default function Login() {
     <>
       <style>{STYLES}</style>
 
-      {/* The auth screen is a fixed premium DARK brand moment in both app themes
-          (see html.light .tp-login-shell in index.css, which pins the --login-*
-          tokens dark). This keeps the card, inputs and Create Account tab fully
-          legible regardless of the user's saved light/dark preference. */}
+      {/* The auth screen now genuinely follows the app's light/dark theme - every
+          surface reads from the --login-* tokens in index.css (dark and light
+          both fully defined), and the reader can flip it right here via the
+          Theme control below without ever having to sign in first. */}
       <div className="tp-login-shell" style={{ minHeight:'100vh', display:'flex', background:'var(--login-bg)', position:'relative', overflow:'hidden' }}>
 
         {/* ── Background layers ──────────────────────────────────────────── */}
         {/* Deep radial glow */}
         <div style={{
           position:'fixed', inset:0, pointerEvents:'none',
-          background:'radial-gradient(ellipse 80% 60% at 20% 50%, rgba(22,163,74,0.14) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 50%, rgba(4,80,30,0.1) 0%, transparent 55%)',
+          background:'radial-gradient(ellipse 80% 60% at 20% 50%, var(--login-glow-a) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 50%, var(--login-glow-b) 0%, transparent 55%)',
         }}/>
         {/* Grid */}
         <div style={{
           position:'fixed', inset:0, pointerEvents:'none',
-          backgroundImage: 'linear-gradient(rgba(22,163,74,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(22,163,74,0.07) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(var(--login-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--login-grid-line) 1px, transparent 1px)',
           backgroundSize: '44px 44px',
         }}/>
         {/* Scan line */}
@@ -488,9 +489,27 @@ export default function Login() {
           transition:'all 0.4s',
         }}>
           {isOnline
-            ? <><Wifi size={11} color="#4ade80"/><span style={{fontSize:10, fontWeight:700, color:'#4ade80', letterSpacing:'0.06em'}}>{t('auth.login.connected')}</span></>
-            : <><WifiOff size={11} color="#f87171"/><span style={{fontSize:10, fontWeight:700, color:'#f87171', letterSpacing:'0.06em'}}>{t('auth.login.offline')}</span></>
+            ? <><Wifi size={11} style={{ color: 'var(--brand-on-tint)' }}/><span style={{fontSize:10, fontWeight:700, color:'var(--brand-on-tint)', letterSpacing:'0.06em'}}>{t('auth.login.connected')}</span></>
+            : <><WifiOff size={11} style={{ color: 'var(--login-danger-text)' }}/><span style={{fontSize:10, fontWeight:700, color:'var(--login-danger-text)', letterSpacing:'0.06em'}}>{t('auth.login.offline')}</span></>
           }
+        </div>
+
+        {/* Theme + language controls - fixed top-right, reachable before signing
+            in and on every viewport (the desktop layout otherwise has nowhere to
+            switch either). */}
+        <div style={{
+          position:'fixed', top:16, right:16, zIndex:100,
+          display:'flex', alignItems:'center', gap:8,
+        }}>
+          <LanguageSwitcher />
+          <div style={{
+            display:'flex', alignItems:'center', justifyContent:'center',
+            width:32, height:32, borderRadius:999,
+            background: 'var(--login-card-bg)', border: '1px solid var(--login-card-border)',
+            color: 'var(--login-text-dim)',
+          }}>
+            <ThemeToggle size={15} />
+          </div>
         </div>
 
         {/* ── LEFT PANEL (desktop) ─────────────────────────────────────────── */}
@@ -521,18 +540,18 @@ export default function Login() {
                 <BrandIcon src={loginLogo} custom={loginLogo !== TpLogo} chip={false} size={30} />
               </div>
               <div>
-                <div style={{fontSize:26, fontWeight:800, color:'#fff', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>
-                <div style={{fontSize:11, color:'rgba(74,222,128,0.7)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:2}}>{t('auth.login.brandTagline')}</div>
+                <div style={{fontSize:26, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>
+                <div style={{fontSize:11, color:'var(--brand-on-tint)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:2}}>{t('auth.login.brandTagline')}</div>
               </div>
             </div>
 
-            <h2 style={{ fontSize:36, fontWeight:800, color:'#fff', lineHeight:1.2, letterSpacing:'-0.03em', margin:'0 0 12px' }}>
+            <h2 style={{ fontSize:36, fontWeight:800, color:'var(--login-text)', lineHeight:1.2, letterSpacing:'-0.03em', margin:'0 0 12px' }}>
               {t('auth.login.heroLine1')}<br/>
-              <span style={{ background:'linear-gradient(135deg, #4ade80, #22c55e)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
+              <span style={{ background:'linear-gradient(135deg, var(--login-hero-accent-1), var(--login-hero-accent-2))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
                 {t('auth.login.heroLine2')}
               </span>
             </h2>
-            <p style={{ fontSize:14, color:'rgba(255,255,255,0.45)', lineHeight:1.6, margin:0, maxWidth:340 }}>
+            <p style={{ fontSize:14, color:'var(--login-text-dim)', lineHeight:1.6, margin:0, maxWidth:340 }}>
               {t('auth.login.heroDesc')}
             </p>
 
@@ -554,8 +573,8 @@ export default function Login() {
           <div style={{ display:'flex', gap:32, marginTop:40 }}>
             {[['10K+','auth.login.stats.tyresTracked'],['99.9%','auth.login.stats.uptime'],['3s','auth.login.stats.alertTime']].map(([val, lblKey]) => (
               <div key={lblKey}>
-                <div style={{fontSize:22, fontWeight:800, color:'#4ade80', letterSpacing:'-0.02em'}}>{val}</div>
-                <div style={{fontSize:11, color:'rgba(255,255,255,0.35)', fontWeight:500, marginTop:2}}>{t(lblKey)}</div>
+                <div style={{fontSize:22, fontWeight:800, color:'var(--brand-on-tint)', letterSpacing:'-0.02em'}}>{val}</div>
+                <div style={{fontSize:11, color:'var(--login-text-dim)', fontWeight:500, marginTop:2}}>{t(lblKey)}</div>
               </div>
             ))}
           </div>
@@ -583,11 +602,8 @@ export default function Login() {
                 <Tyre size={76} opacity={0.95}/>
               </div>
             </div>
-            <div style={{fontSize:24, fontWeight:800, color:'#fff', letterSpacing:'-0.03em'}}>TyrePulse</div>
-            <div style={{fontSize:11, color:'rgba(74,222,128,0.65)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>{t('auth.login.brandTaglinePlatform')}</div>
-            <div style={{ display:'flex', justifyContent:'center', marginTop:14 }}>
-              <LanguageSwitcher />
-            </div>
+            <div style={{fontSize:24, fontWeight:800, color:'var(--login-text)', letterSpacing:'-0.03em'}}>TyrePulse</div>
+            <div style={{fontSize:11, color:'var(--brand-on-tint)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>{t('auth.login.brandTaglinePlatform')}</div>
           </motion.div>
 
           {/* Session expired banner */}
@@ -600,7 +616,7 @@ export default function Login() {
                 style={{
                   display:'flex', alignItems:'center', gap:8,
                   padding:'10px 14px', borderRadius:12, marginBottom:12,
-                  fontSize:13, color:'#fcd34d',
+                  fontSize:13, color:'var(--login-warn-text)',
                   background:'rgba(234,179,8,0.08)',
                   border:'1px solid rgba(234,179,8,0.2)',
                   width:'100%', maxWidth:420,
@@ -622,7 +638,7 @@ export default function Login() {
                 style={{
                   display:'flex', alignItems:'center', gap:8,
                   padding:'10px 14px', borderRadius:12, marginBottom:12,
-                  fontSize:13, color:'#fca5a5',
+                  fontSize:13, color:'var(--login-danger-text)',
                   background:'rgba(239,68,68,0.08)',
                   border:'1px solid rgba(239,68,68,0.25)',
                   width:'100%', maxWidth:420,
@@ -665,9 +681,9 @@ export default function Login() {
                     <button key={val} onClick={() => switchTab(val)} style={{
                       flex:1, padding:'9px 0', fontSize:13, fontWeight:700,
                       border:'none', borderRadius:10,
-                      background: tab===val ? 'rgba(22,163,74,0.18)' : 'rgba(255,255,255,0.045)',
-                      boxShadow: tab===val ? 'inset 0 0 0 1.5px rgba(22,163,74,0.45)' : 'inset 0 0 0 1.5px rgba(255,255,255,0.16)',
-                      color: tab===val ? '#4ade80' : 'rgba(255,255,255,0.72)',
+                      background: tab===val ? 'rgba(22,163,74,0.18)' : 'var(--login-tab-bg)',
+                      boxShadow: tab===val ? 'inset 0 0 0 1.5px rgba(22,163,74,0.45)' : `inset 0 0 0 1.5px var(--login-tab-border)`,
+                      color: tab===val ? 'var(--brand-on-tint)' : 'var(--login-text-dim)',
                       cursor:'pointer', transition:'all 0.2s',
                     }}>
                       {label}
@@ -686,7 +702,7 @@ export default function Login() {
                     style={{
                       display:'flex', alignItems:'flex-start', gap:9,
                       padding:'11px 14px', borderRadius:12, fontSize:13,
-                      color:'#fca5a5', background:'rgba(239,68,68,0.1)',
+                      color:'var(--login-danger-text)', background:'rgba(239,68,68,0.1)',
                       border:'1.5px solid rgba(239,68,68,0.25)', lineHeight:1.5,
                     }}
                   >
@@ -706,15 +722,15 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center',
                     boxShadow:'0 0 40px rgba(234,179,8,0.2)',
                   }}>
-                    <Clock size={30} style={{ color:'#facc15' }}/>
+                    <Clock size={30} style={{ color:'var(--login-warn-icon)' }}/>
                   </div>
-                  <div style={{fontSize:18, fontWeight:800, color:'#fff', marginBottom:8, letterSpacing:'-0.02em'}}>
+                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>
                     {t('auth.awaitingApprovalTitle')}
                   </div>
-                  <div style={{fontSize:13, color:'rgba(255,255,255,0.45)', lineHeight:1.6, maxWidth:300, margin:'0 auto'}}>
+                  <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6, maxWidth:300, margin:'0 auto'}}>
                     {t('auth.awaitingApprovalBody')}
                   </div>
-                  <div style={{fontSize:12, color:'rgba(255,255,255,0.3)', lineHeight:1.5, maxWidth:300, margin:'10px auto 0'}}>
+                  <div style={{fontSize:12, color:'var(--login-text-faint)', lineHeight:1.5, maxWidth:300, margin:'10px auto 0'}}>
                     {t('auth.awaitingApprovalContact')}
                   </div>
                   <button onClick={() => { setPendingApproval(false); setPassword('') }} style={{
@@ -740,7 +756,7 @@ export default function Login() {
                     <div style={{ position:'relative' }}>
                       <div style={{
                         position:'absolute', left:13, top:'50%', transform:'translateY(-50%)',
-                        color: focusedField==='id' ? '#4ade80' : 'rgba(255,255,255,0.28)',
+                        color: focusedField==='id' ? 'var(--brand-on-tint)' : 'var(--login-icon)',
                         transition:'color 0.2s', pointerEvents:'none',
                       }}>
                         <User size={15}/>
@@ -764,9 +780,9 @@ export default function Login() {
                       <span style={labelStyle}>Password</span>
                       <button type="button"
                         onClick={() => { setForgotMode(true); setForgotEmail(identifier.includes('@') ? identifier : ''); setError('') }}
-                        style={{ fontSize:11, color:'rgba(74,222,128,0.6)', background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'color 0.2s', letterSpacing:'0.02em' }}
-                        onMouseEnter={e => e.target.style.color='#4ade80'}
-                        onMouseLeave={e => e.target.style.color='rgba(74,222,128,0.6)'}
+                        style={{ fontSize:11, color:'var(--brand-on-tint)', opacity:0.75, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'opacity 0.2s', letterSpacing:'0.02em' }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
                       >
                         Forgot password?
                       </button>
@@ -784,11 +800,11 @@ export default function Login() {
                       />
                       <button type="button" onClick={() => setShowLoginPw(v => !v)} style={{
                         position:'absolute', right:13, top:'50%', transform:'translateY(-50%)',
-                        color:'rgba(255,255,255,0.3)', background:'none', border:'none',
+                        color:'var(--login-icon)', background:'none', border:'none',
                         cursor:'pointer', padding:4, transition:'color 0.2s', display:'flex',
                       }}
-                        onMouseEnter={e => e.currentTarget.style.color='rgba(255,255,255,0.7)'}
-                        onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.3)'}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--login-icon-hover)' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--login-icon)' }}
                       >
                         {showLoginPw ? <EyeOff size={15}/> : <Eye size={15}/>}
                       </button>
@@ -817,14 +833,14 @@ export default function Login() {
 
                   {/* Enterprise SSO */}
                   <div style={{ display:'flex', alignItems:'center', gap:10, margin:'2px 0' }}>
-                    <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }}/>
-                    <span style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.28)', letterSpacing:'0.08em' }}>OR</span>
-                    <div style={{ flex:1, height:1, background:'rgba(255,255,255,0.08)' }}/>
+                    <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
+                    <span style={{ fontSize:10, fontWeight:700, color:'var(--login-text-faint)', letterSpacing:'0.08em' }}>OR</span>
+                    <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
                   </div>
                   <button type="button" onClick={handleSso} disabled={ssoLoading || !isOnline} style={{
                     width:'100%', padding:'11px', borderRadius:14,
                     border:'1.5px solid rgba(74,222,128,0.28)', background:'rgba(22,163,74,0.08)',
-                    color:'#4ade80', fontSize:13, fontWeight:700,
+                    color:'var(--brand-on-tint)', fontSize:13, fontWeight:700,
                     cursor:(ssoLoading || !isOnline) ? 'not-allowed' : 'pointer',
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                     transition:'all 0.2s',
@@ -845,11 +861,11 @@ export default function Login() {
                 >
                   <div>
                     <button type="button" onClick={() => { setForgotMode(false); setError('') }}
-                      style={{ fontSize:12, color:'rgba(74,222,128,0.6)', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom:14, fontWeight:600 }}>
+                      style={{ fontSize:12, color:'var(--brand-on-tint)', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom:14, fontWeight:600 }}>
                       ← Back to sign in
                     </button>
-                    <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:5, letterSpacing:'-0.02em' }}>Reset Password</div>
-                    <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.5 }}>Enter your email and we'll send a reset link instantly.</div>
+                    <div style={{ fontSize:20, fontWeight:800, color:'var(--login-text)', marginBottom:5, letterSpacing:'-0.02em' }}>Reset Password</div>
+                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>Enter your email and we'll send a reset link instantly.</div>
                   </div>
                   <div>
                     <div style={labelStyle}>Email address</div>
@@ -881,10 +897,10 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center',
                     boxShadow:'0 0 40px rgba(22,163,74,0.25)',
                   }}>
-                    <CheckCircle2 size={30} style={{color:'#4ade80'}}/>
+                    <CheckCircle2 size={30} style={{color:'var(--brand-on-tint)'}}/>
                   </div>
-                  <div style={{fontSize:18, fontWeight:800, color:'#fff', marginBottom:8, letterSpacing:'-0.02em'}}>Reset link sent!</div>
-                  <div style={{fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.6}}>Check your inbox, link expires in 60 minutes.</div>
+                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>Reset link sent!</div>
+                  <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6}}>Check your inbox, link expires in 60 minutes.</div>
                   <button onClick={() => { setForgotMode(false); setForgotSent(false) }} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
                     background:'linear-gradient(135deg, #16a34a, #15803d)',
@@ -906,7 +922,7 @@ export default function Login() {
                     <div style={{
                       display:'flex', alignItems:'flex-start', gap:9,
                       padding:'11px 14px', borderRadius:12, fontSize:13,
-                      color:'#fcd34d', background:'rgba(234,179,8,0.08)',
+                      color:'var(--login-warn-text)', background:'rgba(234,179,8,0.08)',
                       border:'1.5px solid rgba(234,179,8,0.22)', lineHeight:1.5,
                     }}>
                       <AlertCircle size={15} style={{flexShrink:0, marginTop:1}}/>
@@ -945,7 +961,7 @@ export default function Login() {
                           onFocus={() => setFocusedField(field)} onBlur={() => setFocusedField(null)} required/>
                         <button type="button" onClick={() => set(v => !v)} style={{
                           position:'absolute', right:13, top:'50%', transform:'translateY(-50%)',
-                          color:'rgba(255,255,255,0.3)', background:'none', border:'none', cursor:'pointer', padding:4, display:'flex',
+                          color:'var(--login-icon)', background:'none', border:'none', cursor:'pointer', padding:4, display:'flex',
                         }}>
                           {show ? <EyeOff size={15}/> : <Eye size={15}/>}
                         </button>
@@ -967,12 +983,12 @@ export default function Login() {
                               flex:1, height:3, borderRadius:999, transition:'background 0.3s',
                               background: active
                                 ? strength >= 4 ? '#22c55e' : strength >= 3 ? '#84cc16' : strength >= 2 ? '#f59e0b' : '#ef4444'
-                                : 'rgba(255,255,255,0.08)',
+                                : 'var(--login-strength-track)',
                             }}/>
                           )
                         })}
                       </div>
-                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', fontWeight:600 }}>
+                      <div style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600 }}>
                         {password.length < 8 ? 'Too short' : password.length < 10 ? 'Fair' : password.length < 12 ? 'Good' : 'Strong'}
                       </div>
                     </div>
@@ -980,8 +996,8 @@ export default function Login() {
 
                   <div style={{
                     padding:'10px 14px', borderRadius:12, fontSize:12,
-                    color:'rgba(255,255,255,0.38)', lineHeight:1.55,
-                    background:'rgba(255,255,255,0.025)', border:'1px solid rgba(255,255,255,0.07)',
+                    color:'var(--login-text-dim)', lineHeight:1.55,
+                    background:'var(--login-notice-bg)', border:'1px solid var(--login-notice-border)',
                   }}>
                     🔒 New accounts require admin approval before access is granted.
                   </div>
@@ -1010,8 +1026,8 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center', fontSize:30,
                     boxShadow:'0 0 40px rgba(234,179,8,0.2)',
                   }}>⏳</div>
-                  <div style={{fontSize:18, fontWeight:800, color:'#fff', marginBottom:8, letterSpacing:'-0.02em'}}>Account Submitted!</div>
-                  <div style={{fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
+                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>Account Submitted!</div>
+                  <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
                     Pending admin approval. You'll receive access once an administrator reviews your request.
                   </div>
                   <button onClick={() => switchTab('login')} style={{
@@ -1029,12 +1045,12 @@ export default function Login() {
               initial={{ opacity:1 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
               style={{ textAlign:'center', marginTop:20, display:'flex', flexDirection:'column', gap:6 }}
             >
-              <p style={{ fontSize:11, color:'rgba(255,255,255,0.18)', letterSpacing:'0.04em' }}>
+              <p style={{ fontSize:11, color:'var(--login-text-faint)', letterSpacing:'0.04em' }}>
                 © 2026 TyrePulse · Enterprise Fleet Intelligence
               </p>
               <div style={{ display:'flex', justifyContent:'center', gap:16 }}>
                 {['Privacy','Terms','Support'].map(label => (
-                  <span key={label} style={{ fontSize:10, color:'rgba(255,255,255,0.15)', fontWeight:600, cursor:'default', letterSpacing:'0.04em' }}>
+                  <span key={label} style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600, cursor:'default', letterSpacing:'0.04em' }}>
                     {label}
                   </span>
                 ))}

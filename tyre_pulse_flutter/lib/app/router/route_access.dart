@@ -94,7 +94,7 @@ final class RouteModule {
   /// fails open, and the asymmetry is deliberate: a transient permission
   /// lookup failure must never strand a field worker mid shift, but it must
   /// never hand a non-admin a user management console either.
-  static const Set<RouteModule> sensitive = <RouteModule>{
+  static final Set<RouteModule> sensitive = <RouteModule>{
     admin,
     users,
     approvals,

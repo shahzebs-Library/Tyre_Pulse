@@ -69,7 +69,6 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/work_orders/data/work_order_item.dart';
-import 'package:tyre_pulse/features/work_orders/data/work_order_repository.dart';
 import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/create_work_order_sheet.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/work_order_badges.dart';
@@ -89,7 +88,6 @@ class WorkOrdersListScreen extends ConsumerStatefulWidget {
 
 class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
   bool _loading = true;
-  bool _refreshing = false;
   AppError? _error;
   List<WorkOrderItem> _items = const <WorkOrderItem>[];
   _WorkOrdersFilter _filter = _WorkOrdersFilter.active;
@@ -125,11 +123,7 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() => _refreshing = true);
-    await _load();
-    if (mounted) setState(() => _refreshing = false);
-  }
+  Future<void> _refresh() => _load();
 
   Future<void> _openCreateSheet() async {
     final bool? created = await showCreateWorkOrderSheet(context);

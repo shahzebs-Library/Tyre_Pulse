@@ -259,7 +259,7 @@ final class ChecklistApprovalSyncEngine {
         item.submissionId,
       );
       if (current == null) {
-        return _block(
+        return await _block(
           item,
           const AppError(
             kind: AppErrorKind.validation,
@@ -285,7 +285,7 @@ final class ChecklistApprovalSyncEngine {
         // Somebody else already acted on this submission, or it is no
         // longer at the rung this decision was made against - the exact
         // situation AGENTS.md rule 14 exists to prevent silently landing.
-        return _block(
+        return await _block(
           item,
           const AppError.conflict(
             technical: 'checklist submission stage changed since decision',
@@ -299,7 +299,7 @@ final class ChecklistApprovalSyncEngine {
         // The database's own optimistic-concurrency guard caught what the
         // stage re-check above did not - the narrow window between that
         // read and this write. Same outcome, same reason.
-        return _block(
+        return await _block(
           item,
           const AppError.conflict(
             technical: 'checklist submission approval_status changed '

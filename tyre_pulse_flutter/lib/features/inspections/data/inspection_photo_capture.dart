@@ -151,7 +151,7 @@ final class InspectionPhotoCapture {
       '${base.path}${Platform.pathSeparator}inspection_draft_photos'
       '${Platform.pathSeparator}${_sanitise(draftKey)}',
     );
-    if (!await folder.exists()) {
+    if (!folder.existsSync()) {
       await folder.create(recursive: true);
     }
     return folder;

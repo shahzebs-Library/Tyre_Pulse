@@ -92,7 +92,7 @@ void main() {
     );
   });
 
-  test("C10: empty/not_empty treat [] as empty", () {
+  test('C10: empty/not_empty treat [] as empty', () {
     expect(evalChecklistCondition('empty', <Object?>[], null), isTrue);
     expect(evalChecklistCondition('not_empty', <Object?>[], null), isFalse);
   });

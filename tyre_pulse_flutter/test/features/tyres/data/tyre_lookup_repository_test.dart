@@ -49,7 +49,11 @@ class _ScriptedRpcCaller {
   }
 
   void fail(String function, Object error) {
-    answer(function, (_) => throw error);
+    answer(function, (_) {
+      // Deliberate arbitrary-error injection.
+      // ignore: only_throw_errors
+      throw error;
+    });
   }
 
   Future<Object?> call(String function, Map<String, Object?> params) async {

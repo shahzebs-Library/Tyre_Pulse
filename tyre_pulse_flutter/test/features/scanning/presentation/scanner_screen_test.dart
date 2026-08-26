@@ -59,7 +59,7 @@ Future<void> _pumpScanner(
 ) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: <Override>[
+      overrides: [
         scanLookupRepositoryProvider.overrideWithValue(fake),
       ],
       child: MaterialApp.router(

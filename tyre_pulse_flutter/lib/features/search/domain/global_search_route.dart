@@ -1,5 +1,3 @@
-import 'package:tyre_pulse/app/router/routes.dart';
-
 /// The route this feature's own search screen would live at, once a human
 /// finishes the wiring `lib/app/router/routes.dart` and
 /// `lib/app/router/app_router.dart` can only be done by hand-editing those
@@ -8,12 +6,20 @@ import 'package:tyre_pulse/app/router/routes.dart';
 ///
 /// # Why this class exists at all, given it is never reachable today
 ///
-/// [TpRoute] is a public class this feature is allowed to import
-/// read-only and EXTEND in its own file - subclassing a forbidden file's
-/// public export in code this feature owns is not "editing" that file, the
-/// same way importing `VehiclesRoute`'s type is not editing `routes.dart`.
-/// So the route can be fully authored now, structurally complete, and it
-/// becomes live the moment a human adds three things to the forbidden
+/// `TpRoute` in `routes.dart` is a `sealed class` - Dart only permits a
+/// `sealed` type to be extended, implemented or mixed in by another class
+/// declared IN THE SAME LIBRARY (confirmed against `flutter analyze`, not
+/// assumed: `GlobalSearchRoute extends TpRoute` from this file does not
+/// compile - `invalid_use_of_type_outside_library`). So this class is
+/// deliberately a STANDALONE type with the identical shape `TpRoute`
+/// declares (`routeId`/`location` getters, `location`-based equality) -
+/// close enough that a human wiring this in for real can change `extends
+/// TpRoute` at the point they move (or copy) this class's body into
+/// `routes.dart` itself, but it cannot literally extend the sealed type
+/// from outside that file today.
+///
+/// The route can still be fully authored now, structurally complete, and
+/// it becomes live the moment a human adds three things to the forbidden
 /// files: a `TpRouteId.globalSearch` constant, a matching
 /// `TpRoutePaths.globalSearch` constant, and one `GoRoute` entry whose
 /// `pathParameters`/`parse` call mirrors [GlobalSearchRoute.parse] below.
@@ -61,23 +67,38 @@ String _location(String path, [Map<String, String?>? query]) {
 /// Carries an optional [initialQuery] so a caller elsewhere in the app -
 /// or a recent-search re-run - can deep-link straight into a populated
 /// search rather than an empty box.
-final class GlobalSearchRoute extends TpRoute {
+final class GlobalSearchRoute {
   const GlobalSearchRoute({this.initialQuery});
 
-  /// Decodes [params] the way the real router would once wired - reads
-  /// the optional `q` query parameter via [TpRouteParameters
-  /// .optionalQuery], which already treats a blank string as absent.
-  static GlobalSearchRoute parse(TpRouteParameters params) {
-    return GlobalSearchRoute(initialQuery: params.optionalQuery(_qQuery));
+  /// Decodes params the way the real router would once wired - reads the
+  /// optional `q` query parameter, mirroring `TpRouteParameters
+  /// .optionalQuery`'s own "a blank string counts as absent" rule (that
+  /// helper lives on the forbidden `routes.dart` and is not exported for
+  /// use outside it, so this reproduces its exact behaviour rather than
+  /// calling it).
+  static GlobalSearchRoute parse(Map<String, String> queryParameters) {
+    final String? raw = queryParameters[_qQuery];
+    return GlobalSearchRoute(
+      initialQuery: (raw == null || raw.isEmpty) ? null : raw,
+    );
   }
 
   final String? initialQuery;
 
-  @override
+  /// Matches `TpRoute.routeId`'s contract - see this file's own library
+  /// comment for why this class cannot literally extend that sealed type.
   String get routeId => _placeholderRouteId;
 
-  @override
+  /// Matches `TpRoute.location`'s contract.
   String get location => _location(_placeholderPath, <String, String?>{
         _qQuery: initialQuery,
       });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is GlobalSearchRoute && other.location == location);
+
+  @override
+  int get hashCode => Object.hash(runtimeType, location);
 }

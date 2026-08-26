@@ -121,7 +121,7 @@ final class SupabaseChecklistRemoteRepository
       if (country != null && country.isNotEmpty && country != 'All') {
         query = query.or('country.eq.$country,country.is.null');
       }
-      return await query.order('name') as List<Map<String, dynamic>>;
+      return await query.order('name');
     });
 
     final List<ChecklistTemplateRecord> all = <ChecklistTemplateRecord>[
@@ -162,7 +162,7 @@ final class SupabaseChecklistRemoteRepository
       if (country != null && country.isNotEmpty && country != 'All') {
         query = query.or('country.eq.$country,country.is.null');
       }
-      return await query.order('due_date') as List<Map<String, dynamic>>;
+      return await query.order('due_date');
     });
 
     final List<ChecklistAssignmentRecord> all = <ChecklistAssignmentRecord>[];
@@ -194,8 +194,7 @@ final class SupabaseChecklistRemoteRepository
         if (country != null && country.isNotEmpty && country != 'All') {
           query = query.eq('country', country);
         }
-        final List<Map<String, dynamic>> rows =
-            await query.order('name') as List<Map<String, dynamic>>;
+        final List<Map<String, dynamic>> rows = await query.order('name');
         final List<String> names = <String>[];
         final Set<String> seen = <String>{};
         for (final Map<String, dynamic> row in rows) {
@@ -282,7 +281,7 @@ final class SupabaseChecklistRemoteRepository
           .eq('submitted_by', submittedBy)
           .order('submitted_at', ascending: false)
           .order('id')
-          .limit(limit) as List<Map<String, dynamic>>,
+          .limit(limit),
     );
     final List<ChecklistHistoryRow> out = <ChecklistHistoryRow>[];
     for (final Map<String, dynamic> row in rows) {

@@ -318,7 +318,7 @@ final class InspectionSyncEngine {
     for (final String path in paths) {
       try {
         final File file = File(path);
-        if (await file.exists()) {
+        if (file.existsSync()) {
           await file.delete();
         }
       } on Object {

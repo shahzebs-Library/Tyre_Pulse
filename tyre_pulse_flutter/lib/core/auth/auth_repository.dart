@@ -78,8 +78,7 @@ final class AuthSessionSignal {
   int get hashCode => userId.hashCode;
 
   @override
-  String toString() =>
-      'AuthSessionSignal(${userId == null ? 'no session' : userId})';
+  String toString() => 'AuthSessionSignal(${userId ?? 'no session'})';
 }
 
 /// The narrow surface [AuthController] needs from Supabase authentication.
@@ -158,7 +157,7 @@ final class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> startAutoRefresh() async {
     try {
-      await _client.auth.startAutoRefresh();
+      _client.auth.startAutoRefresh();
     } on Object {
       // Best-effort. See the interface doc.
     }
@@ -167,7 +166,7 @@ final class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> stopAutoRefresh() async {
     try {
-      await _client.auth.stopAutoRefresh();
+      _client.auth.stopAutoRefresh();
     } on Object {
       // Best-effort. See the interface doc.
     }
@@ -194,7 +193,7 @@ final class SupabaseAuthRepository implements AuthRepository {
   }) async {
     final String trimmedIdentifier = identifier.trim();
     if (trimmedIdentifier.isEmpty || password.isEmpty) {
-      return SignInRejected(
+      return const SignInRejected(
         AppError(
           kind: AppErrorKind.validation,
           message: 'Enter your username or employee ID and your password.',
@@ -212,7 +211,12 @@ final class SupabaseAuthRepository implements AuthRepository {
     if (trimmedIdentifier.contains('@')) {
       email = trimmedIdentifier;
     } else {
-      final Object? resolved;
+      // Not `final`: the try/catch below sets this on exactly one of two
+      // mutually-exclusive paths, but the analyzer's definite-assignment
+      // check for a `final` local does not treat that as a single
+      // assignment here - see AGENTS.md rule 12, verified against
+      // `flutter analyze --fatal-infos` rather than assumed.
+      Object? resolved;
       try {
         resolved = await _client.rpc(
           _getEmailByIdentifierRpc,
@@ -296,7 +300,7 @@ final class SupabaseAuthRepository implements AuthRepository {
 
   Future<void> _resetLockout() async {
     try {
-      await _client.rpc(SupabaseRpcs.resetLoginAttempts);
+      await _client.rpc<Object?>(SupabaseRpcs.resetLoginAttempts);
     } on Object {
       // Best-effort. See the call site.
     }

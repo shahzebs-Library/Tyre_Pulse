@@ -13,7 +13,6 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
-import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart'
     show ChecklistDraftPhoto;
 import 'package:tyre_pulse/features/checklists/data/checklist_photo_capture.dart';

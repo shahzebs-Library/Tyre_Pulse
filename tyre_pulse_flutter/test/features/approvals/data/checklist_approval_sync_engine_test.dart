@@ -119,7 +119,12 @@ class _FakeRepository implements ChecklistApprovalRepository {
   @override
   Future<ChecklistApprovalItem?> byId(String id) async {
     final Object? failure = byIdFailWith;
-    if (failure != null) throw failure;
+    if (failure != null) {
+      // Deliberate arbitrary-error injection, see the class's own
+      // fake-repository convention.
+      // ignore: only_throw_errors
+      throw failure;
+    }
     return current;
   }
 
@@ -143,7 +148,7 @@ class _FakeRepository implements ChecklistApprovalRepository {
     QueuedChecklistApprovalDecision item,
   ) async {
     final Object? failure = applyFailWith;
-    if (failure != null) throw failure;
+    if (failure != null) throw failure; // ignore: only_throw_errors
     appliedDecisionIds.add(item.id);
     return applyResult;
   }

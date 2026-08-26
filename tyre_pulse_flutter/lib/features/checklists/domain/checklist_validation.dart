@@ -91,8 +91,9 @@ String? validateAnswer(
   if (field.type == 'multiselect' && allowed.isNotEmpty) {
     final List<Object?> values = value is List ? value : const <Object?>[];
     final bool hasBad = values.any((Object? v) => !allowed.contains(v));
-    if (hasBad)
+    if (hasBad) {
       return 'Invalid option(s) for ${name.isEmpty ? 'this field' : name}';
+    }
   }
 
   if (field.type == 'rating') {

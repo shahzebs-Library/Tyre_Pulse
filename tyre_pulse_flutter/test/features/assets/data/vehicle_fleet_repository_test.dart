@@ -745,7 +745,7 @@ class _FakeVehicleFleetSource implements VehicleFleetSource {
   }) async {
     fetchPageCalls++;
     if (throwOnFetch != null) {
-      throw throwOnFetch!;
+      throw throwOnFetch!; // ignore: only_throw_errors - deliberate arbitrary-error injection
     }
     final int index = fetchPageCalls - 1;
     if (index < pages.length) {
@@ -761,7 +761,7 @@ class _FakeVehicleFleetSource implements VehicleFleetSource {
   }) async {
     fetchByAssetNoCalls++;
     if (throwOnDetail != null) {
-      throw throwOnDetail!;
+      throw throwOnDetail!; // ignore: only_throw_errors
     }
     return detailRow;
   }

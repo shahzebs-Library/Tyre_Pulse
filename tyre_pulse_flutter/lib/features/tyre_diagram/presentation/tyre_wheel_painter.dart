@@ -14,6 +14,8 @@
 /// widgets over a slot whose geometry is known, not the reverse.
 library;
 
+import 'dart:ui' show PathMetric;
+
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';

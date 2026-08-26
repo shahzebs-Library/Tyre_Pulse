@@ -124,7 +124,6 @@ class _ChecklistApprovalReviewScreenState
   ChecklistApprovalSignatureCapture? _approverSignature;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
-  String? _approverName;
   _DecisionBusy? _busy;
 
   @override
@@ -190,12 +189,9 @@ class _ChecklistApprovalReviewScreenState
         .read(checklistApprovalRepositoryProvider)
         .currentUserDisplayName(userId);
     if (!mounted) return;
-    setState(() {
-      _approverName = name;
-      if (_nameController.text.trim().isEmpty && name != null) {
-        _nameController.text = name;
-      }
-    });
+    if (_nameController.text.trim().isEmpty && name != null) {
+      setState(() => _nameController.text = name);
+    }
   }
 
   ApprovalTemplateLike get _templateLike =>
@@ -883,7 +879,7 @@ class _ResponsesSection extends StatelessWidget {
                 readOnly: true,
                 note: item.notes[key]?.toString(),
                 showNoteField:
-                    (item.notes[key]?.toString().trim().isNotEmpty ?? false),
+                    item.notes[key]?.toString().trim().isNotEmpty ?? false,
               ),
           ],
         ),

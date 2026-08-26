@@ -144,7 +144,7 @@ final class TyreReplacementPhotoCapture {
       '${base.path}${Platform.pathSeparator}tyre_change_draft_photos'
       '${Platform.pathSeparator}${_sanitise(sessionKey)}',
     );
-    if (!await folder.exists()) {
+    if (!folder.existsSync()) {
       await folder.create(recursive: true);
     }
     return folder;

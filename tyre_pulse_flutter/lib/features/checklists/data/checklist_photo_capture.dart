@@ -126,7 +126,7 @@ final class ChecklistPhotoCapture {
       '${base.path}${Platform.pathSeparator}checklist_draft_photos'
       '${Platform.pathSeparator}${_sanitise(draftKey)}',
     );
-    if (!await folder.exists()) {
+    if (!folder.existsSync()) {
       await folder.create(recursive: true);
     }
     return folder;

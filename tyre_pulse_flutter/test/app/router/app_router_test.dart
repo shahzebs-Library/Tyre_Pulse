@@ -87,7 +87,7 @@ Future<GoRouter> pumpApp(
   bool settle = true,
 }) async {
   final ProviderContainer container = ProviderContainer(
-    overrides: <Override>[
+    overrides: [
       sessionProvider.overrideWith((Ref ref) => session),
       moduleAccessResolverProvider.overrideWith((Ref ref) => resolver),
       screenRegistryProvider.overrideWith((Ref ref) => idRegistry()),

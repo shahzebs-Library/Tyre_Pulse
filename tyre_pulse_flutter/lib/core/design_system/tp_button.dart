@@ -101,6 +101,8 @@ class TpButton extends StatelessWidget {
     required String label,
     required VoidCallback? onPressed,
     IconData? icon,
+    bool isBusy = false,
+    bool isFullWidth = false,
     bool isCompact = false,
     Key? key,
   }) : this(
@@ -108,6 +110,8 @@ class TpButton extends StatelessWidget {
           onPressed: onPressed,
           variant: TpButtonVariant.text,
           icon: icon,
+          isBusy: isBusy,
+          isFullWidth: isFullWidth,
           isCompact: isCompact,
           key: key,
         );

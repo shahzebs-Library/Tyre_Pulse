@@ -134,7 +134,7 @@ final class WashPhotoCapture {
       '${base.path}${Platform.pathSeparator}wash_draft_photos'
       '${Platform.pathSeparator}${_sanitise(sessionKey)}',
     );
-    if (!await folder.exists()) {
+    if (!folder.existsSync()) {
       await folder.create(recursive: true);
     }
     return folder;

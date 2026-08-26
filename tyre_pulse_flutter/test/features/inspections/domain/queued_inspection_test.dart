@@ -21,8 +21,8 @@ InspectionPayload _samplePayload() {
     createdBy: 'user-1',
     inspectionDate: DateTime.utc(2026, 8, 20, 9, 30),
     scheduledDate: DateTime.utc(2026, 8, 20, 9, 30),
-    tyreConditions: <String, TyrePositionReading>{
-      'LHF1': const TyrePositionReading(
+    tyreConditions: const <String, TyrePositionReading>{
+      'LHF1': TyrePositionReading(
         position: 'LHF1',
         pressurePsi: 0,
         treadDepthMm: 8.2,
@@ -217,7 +217,7 @@ void main() {
 
   group('InspectionQueueReadResult', () {
     test('.ok carries items and reports isReadable true', () {
-      final InspectionQueueReadResult result = InspectionQueueReadResult.ok(
+      const InspectionQueueReadResult result = InspectionQueueReadResult.ok(
         <QueuedInspection>[],
       );
       expect(result.isReadable, isTrue);

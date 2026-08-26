@@ -151,7 +151,7 @@ final class MeterLogPhotoCapture {
       '${base.path}${Platform.pathSeparator}meter_log_draft_photos'
       '${Platform.pathSeparator}${_sanitise(sessionKey)}',
     );
-    if (!await folder.exists()) {
+    if (!folder.existsSync()) {
       await folder.create(recursive: true);
     }
     return folder;

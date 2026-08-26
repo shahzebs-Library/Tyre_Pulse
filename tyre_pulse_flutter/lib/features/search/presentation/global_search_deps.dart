@@ -10,9 +10,8 @@ import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
+import 'package:tyre_pulse/features/search/data/global_search_repository.dart';
 import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
-
-import '../data/global_search_repository.dart';
 
 /// The offline cache accessor.
 ///

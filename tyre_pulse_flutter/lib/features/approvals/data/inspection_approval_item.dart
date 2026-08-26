@@ -54,6 +54,38 @@ String? _asString(Object? raw) {
 }
 
 final class InspectionApprovalItem {
+  /// Decodes [row] as read via [inspectionApprovalListColumns] or
+  /// [inspectionApprovalFullColumns].
+  factory InspectionApprovalItem.fromRow(Map<String, Object?> row) {
+    final Object? rawId = row['id'];
+    if (rawId is! String || rawId.isEmpty) {
+      throw const FormatException(
+        'Inspection approval row has no usable "id".',
+      );
+    }
+
+    return InspectionApprovalItem(
+      id: rawId,
+      title: _asString(row['title']),
+      site: _asString(row['site']),
+      assetNo: _asString(row['asset_no']),
+      vehicleType: _asString(row['vehicle_type']),
+      inspector: _asString(row['inspector']),
+      inspectionDate: _asString(row['inspection_date']),
+      createdAt: _asString(row['created_at']),
+      status: _asString(row['status']),
+      approvalStatus: _asString(row['approval_status']),
+      notes: _asString(row['notes']),
+      findings: _asString(row['findings']),
+      odometerKm: (row['odometer_km'] as num?)?.toInt(),
+      hourMeter: (row['hour_meter'] as num?)?.toDouble(),
+      tyreConditions: row['tyre_conditions'],
+      inspectorSignature: _asString(row['inspector_signature']),
+      approverSignature: _asString(row['approver_signature']),
+      approverEmail: _asString(row['approver_email']),
+      approvedAt: _asString(row['approved_at']),
+    );
+  }
   const InspectionApprovalItem({
     required this.id,
     this.title,
@@ -120,37 +152,4 @@ final class InspectionApprovalItem {
   bool get isPending => approvalStatus == 'pending_approval';
 
   bool get isApproved => approvalStatus == 'approved';
-
-  /// Decodes [row] as read via [inspectionApprovalListColumns] or
-  /// [inspectionApprovalFullColumns].
-  factory InspectionApprovalItem.fromRow(Map<String, Object?> row) {
-    final Object? rawId = row['id'];
-    if (rawId is! String || rawId.isEmpty) {
-      throw const FormatException(
-        'Inspection approval row has no usable "id".',
-      );
-    }
-
-    return InspectionApprovalItem(
-      id: rawId,
-      title: _asString(row['title']),
-      site: _asString(row['site']),
-      assetNo: _asString(row['asset_no']),
-      vehicleType: _asString(row['vehicle_type']),
-      inspector: _asString(row['inspector']),
-      inspectionDate: _asString(row['inspection_date']),
-      createdAt: _asString(row['created_at']),
-      status: _asString(row['status']),
-      approvalStatus: _asString(row['approval_status']),
-      notes: _asString(row['notes']),
-      findings: _asString(row['findings']),
-      odometerKm: (row['odometer_km'] as num?)?.toInt(),
-      hourMeter: (row['hour_meter'] as num?)?.toDouble(),
-      tyreConditions: row['tyre_conditions'],
-      inspectorSignature: _asString(row['inspector_signature']),
-      approverSignature: _asString(row['approver_signature']),
-      approverEmail: _asString(row['approver_email']),
-      approvedAt: _asString(row['approved_at']),
-    );
-  }
 }

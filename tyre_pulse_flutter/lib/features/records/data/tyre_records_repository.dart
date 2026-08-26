@@ -39,7 +39,7 @@
 /// anywhere else in this codebase to confirm the correct method shape
 /// against, so a total-row-count feature was left out rather than guessed
 /// at. Every query shape actually used below (`.select().eq().or().order()
-/// .range()`, awaited directly to `List<Map<String, dynamic>>`) mirrors a
+/// .range()`, awaited directly to `List&lt;Map&lt;String, dynamic&gt;&gt;`) mirrors a
 /// shape [SupabaseTyreLookupRepository] already uses successfully in this
 /// same codebase.
 ///

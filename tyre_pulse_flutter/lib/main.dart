@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -118,15 +120,22 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final configResult = AppConfig.resolve();
-  if (configResult is! AppConfigValid) {
-    runApp(
-      ProviderScope(
-        child: ConfigurationProblemApp(problems: configResult.problems),
-      ),
-    );
-    return;
+  // A `sealed class` with exactly two subtypes does not reliably promote
+  // `configResult` to the OTHER subtype inside an `if (x is! T)` branch -
+  // only the code AFTER an early-returning `if` promotes to `T` itself.
+  // An exhaustive switch over the sealed type sidesteps that entirely and
+  // is checked for completeness by the analyzer if a third subtype is ever
+  // added.
+  final AppConfig config;
+  switch (configResult) {
+    case AppConfigInvalid(:final problems):
+      runApp(
+        ProviderScope(child: ConfigurationProblemApp(problems: problems)),
+      );
+      return;
+    case AppConfigValid(config: final resolvedConfig):
+      config = resolvedConfig;
   }
-  final config = configResult.config;
 
   final SecureKeyValueStore secureStore = StagedSecureStore(
     slots: FlutterSecureSlotStore(),

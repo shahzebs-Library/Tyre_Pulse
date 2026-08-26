@@ -9,7 +9,7 @@ library;
 
 import 'dart:io';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
@@ -27,7 +27,11 @@ import 'database_test_support.dart';
 /// match the table a device is actually carrying, and the failure surfaces as
 /// corrupt data rather than as a compile error.
 Future<void> addProbeColumn(Migrator m) async {
-  await m.issueCustomQuery(
+  // `Migrator.issueCustomQuery` is deprecated in this resolved drift version
+  // in favour of the exact same call on the database it wraps - verified
+  // directly against the installed package source, where the deprecated
+  // method is nothing but `return database.customStatement(sql, args);`.
+  await m.database.customStatement(
     'ALTER TABLE pending_commands ADD COLUMN migration_probe TEXT',
   );
 }
@@ -40,7 +44,7 @@ Future<void> addProbeColumn(Migrator m) async {
 /// SQLite is enforcing keys during a migration. The destruction is then
 /// unconditional, which is exactly what makes it a fair control.
 Future<void> wipeTheDrafts(Migrator m) async {
-  await m.issueCustomQuery('DELETE FROM checklist_drafts');
+  await m.database.customStatement('DELETE FROM checklist_drafts');
 }
 
 /// The ladder computes its whole plan before running a single step, so a

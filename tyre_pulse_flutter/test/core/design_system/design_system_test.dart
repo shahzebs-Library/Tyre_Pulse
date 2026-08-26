@@ -17,6 +17,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 
 import 'design_system_test_support.dart';

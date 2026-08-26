@@ -12,7 +12,7 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_auto_fill.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_template.dart';
 
-final ChecklistTemplate _template = const ChecklistTemplate(
+const ChecklistTemplate _template = ChecklistTemplate(
   fields: <ChecklistField>[
     ChecklistField(id: 's1', type: 'section', label: 'Identification'),
     ChecklistField(id: 'f_ws_date', type: 'date', label: 'Date', locked: true),

@@ -125,7 +125,7 @@ void main() {
     );
   });
 
-  test("A10: an unknown type does not crash the registry", () {
+  test('A10: an unknown type does not crash the registry', () {
     expect(fieldTypeDef('nonsense'), isNull);
     expect(newField('nonsense').type, 'text');
     // The registry lookup itself is equally forgiving of an absent token.

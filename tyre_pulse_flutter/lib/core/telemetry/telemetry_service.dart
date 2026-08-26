@@ -88,7 +88,8 @@ final class TelemetryService implements TelemetryReporter {
   /// Builds an INACTIVE reporter. Every method on this class is safe to call
   /// before [initialize] runs, or when it was never called: they do nothing.
   TelemetryService({SentryCaptureFunction? capture})
-      : _capture = capture ?? _defaultCapture;
+      : _capture = capture ?? _defaultCapture,
+        _staticTags = const <String, String>{};
 
   /// Builds an ALREADY-ACTIVE reporter for tests, bypassing the real Sentry
   /// SDK entirely. [capture] receives exactly what a real capture would send.
@@ -104,7 +105,7 @@ final class TelemetryService implements TelemetryReporter {
   bool _active = false;
   String? _currentRoute;
   String? _currentWorkspaceId;
-  final Map<String, String> _staticTags = <String, String>{};
+  final Map<String, String> _staticTags;
 
   @override
   bool get isActive => _active;

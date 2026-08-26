@@ -149,6 +149,37 @@ List<ChecklistField> _decodeFields(Object? raw) {
 /// does not carry (a locked `final class` this feature must not edit - see
 /// `checklist_template.dart`'s own library comment).
 final class ChecklistTemplateRecord {
+  /// Decodes one row selected with [checklistTemplateColumns]. Never
+  /// throws - a malformed `fields`/`option_sets`/`assignee_roles` degrades
+  /// to an empty list/map rather than taking the whole row down, matching
+  /// [ChecklistField.fromJson]'s own tolerance.
+  factory ChecklistTemplateRecord.fromRow(Map<String, dynamic> row) {
+    final String? id = _asString(row['id']);
+    return ChecklistTemplateRecord(
+      template: ChecklistTemplate(
+        id: id,
+        name: _asString(row['name']),
+        fields: _decodeFields(row['fields']),
+        optionSets: _decodeOptionSets(row['option_sets']),
+        assigneeRoles: _asStringListOrNull(row['assignee_roles']),
+      ),
+      description: _asString(row['description']),
+      category: _asString(row['category']),
+      icon: _asString(row['icon']),
+      status: _asString(row['status']),
+      version: _asInt(row['version']) ?? 1,
+      requireSignature: _asBool(row['require_signature']),
+      requireApproval: _asBool(row['require_approval']),
+      requireAreaManager: row['require_area_manager'] is bool
+          ? row['require_area_manager'] as bool
+          : null,
+      docPrefix: _asString(row['doc_prefix']),
+      minIntervalDays: _asInt(row['min_interval_days']),
+      scored: _asBool(row['scored']),
+      passThreshold: _asNum(row['pass_threshold']),
+      country: _asString(row['country']),
+    );
+  }
   const ChecklistTemplateRecord({
     required this.template,
     this.description,
@@ -209,38 +240,6 @@ final class ChecklistTemplateRecord {
   final bool scored;
   final num? passThreshold;
   final String? country;
-
-  /// Decodes one row selected with [checklistTemplateColumns]. Never
-  /// throws - a malformed `fields`/`option_sets`/`assignee_roles` degrades
-  /// to an empty list/map rather than taking the whole row down, matching
-  /// [ChecklistField.fromJson]'s own tolerance.
-  factory ChecklistTemplateRecord.fromRow(Map<String, dynamic> row) {
-    final String? id = _asString(row['id']);
-    return ChecklistTemplateRecord(
-      template: ChecklistTemplate(
-        id: id,
-        name: _asString(row['name']),
-        fields: _decodeFields(row['fields']),
-        optionSets: _decodeOptionSets(row['option_sets']),
-        assigneeRoles: _asStringListOrNull(row['assignee_roles']),
-      ),
-      description: _asString(row['description']),
-      category: _asString(row['category']),
-      icon: _asString(row['icon']),
-      status: _asString(row['status']),
-      version: _asInt(row['version']) ?? 1,
-      requireSignature: _asBool(row['require_signature']),
-      requireApproval: _asBool(row['require_approval']),
-      requireAreaManager: row['require_area_manager'] is bool
-          ? row['require_area_manager'] as bool
-          : null,
-      docPrefix: _asString(row['doc_prefix']),
-      minIntervalDays: _asInt(row['min_interval_days']),
-      scored: _asBool(row['scored']),
-      passThreshold: _asNum(row['pass_threshold']),
-      country: _asString(row['country']),
-    );
-  }
 
   /// `checklist_submissions.approval_status` a FRESH submission of this
   /// template should carry. See [requireApproval]'s own doc comment for why

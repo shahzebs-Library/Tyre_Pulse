@@ -64,7 +64,12 @@ void main() {
 
   group('dedupeKeyFor', () {
     test(
-      'matches the mobile source\'s own `approve_${id}_${status}` shape',
+      // A RAW string: the un-prefixed original had `${id}`/`$status` inside
+      // an ordinary quoted string, which Dart parsed as real interpolation
+      // (looking for local variables named `id`/`status` that do not
+      // exist) rather than the literal format-pattern text this test name
+      // is describing.
+      r"matches the mobile source's own `approve_${id}_$status` shape",
       () {
         expect(
           QueuedChecklistApprovalDecision.dedupeKeyFor(

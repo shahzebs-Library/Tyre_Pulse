@@ -35,7 +35,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/database/query_scope.dart';
-import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
@@ -100,7 +99,11 @@ class _FakeGlobalSearchRepository implements GlobalSearchRepository {
     lastAssetsScope = scope;
     await _maybeWaitForGate();
     final Object? error = assetsError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection, see this file's fake repository.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return assetsResult;
   }
 
@@ -110,7 +113,11 @@ class _FakeGlobalSearchRepository implements GlobalSearchRepository {
     lastTyresTerm = term;
     await _maybeWaitForGate();
     final Object? error = tyresError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection, see this file's fake repository.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return tyresResult;
   }
 
@@ -120,7 +127,11 @@ class _FakeGlobalSearchRepository implements GlobalSearchRepository {
     lastWorkOrdersTerm = term;
     await _maybeWaitForGate();
     final Object? error = workOrdersError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection, see this file's fake repository.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return workOrdersResult;
   }
 
@@ -130,7 +141,11 @@ class _FakeGlobalSearchRepository implements GlobalSearchRepository {
     lastInspectionsTerm = term;
     await _maybeWaitForGate();
     final Object? error = inspectionsError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection, see this file's fake repository.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return inspectionsResult;
   }
 }
@@ -166,7 +181,9 @@ Future<void> _settle() async {
 /// This is the one place that fact is handled, rather than every test
 /// re-deriving it.
 Future<void> _runSearchNow(
-    GlobalSearchController controller, String term) async {
+  GlobalSearchController controller,
+  String term,
+) async {
   controller.searchNow(term);
   await _settle();
 }
@@ -188,7 +205,7 @@ Future<void> _runSelectRecent(
   final _FakeGlobalSearchRepository repo = _FakeGlobalSearchRepository();
   final AppDatabase db = newMemoryDatabase();
   final ProviderContainer container = ProviderContainer(
-    overrides: <Override>[
+    overrides: [
       globalSearchRepositoryProvider.overrideWithValue(repo),
       cacheDaoProvider.overrideWithValue(db.cacheDao),
       workspaceContextProvider.overrideWithValue(

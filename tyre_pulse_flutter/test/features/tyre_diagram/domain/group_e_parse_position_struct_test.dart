@@ -200,7 +200,7 @@ void main() {
   test(
       'normalisation: r2ri, R2-RI and " R2_Ri " all parse identically to '
       'case 46', () {
-    final PositionStruct expected = const PositionStruct(
+    const PositionStruct expected = PositionStruct(
       kind: PositionKind.drive,
       side: PositionSide.right,
       axle: 2,

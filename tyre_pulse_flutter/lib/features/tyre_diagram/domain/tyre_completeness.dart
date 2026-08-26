@@ -195,13 +195,11 @@ List<TyreEntryPair> readTyreEntries(Object? source) {
 
   final List<MapEntry<String, Object?>> pairs = <MapEntry<String, Object?>>[];
   if (isList) {
-    final List<Object?> items = tc as List<Object?>;
+    final List<Object?> items = tc;
     for (int i = 0; i < items.length; i++) {
       final Object? d = items[i];
       final bool named = d is Map<String, Object?> && _hasText(d['position']);
-      final String key = named
-          ? (d as Map<String, Object?>)['position'].toString()
-          : i.toString();
+      final String key = named ? d['position'].toString() : i.toString();
       pairs.add(MapEntry<String, Object?>(key, d));
     }
   } else {

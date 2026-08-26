@@ -1,7 +1,7 @@
 import 'package:tyre_pulse/core/database/app_database.dart' show RecentSearch;
 import 'package:tyre_pulse/core/errors/app_error.dart';
 
-import 'search_result.dart';
+import 'package:tyre_pulse/features/search/domain/search_result.dart';
 
 /// Where a global search currently stands.
 ///

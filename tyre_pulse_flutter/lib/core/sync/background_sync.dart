@@ -47,8 +47,9 @@
 /// - `workmanager: ^0.10.9`'s `Workmanager().initialize`,
 ///   `registerPeriodicTask`, `registerOneOffTask` and `executeTask` accepting
 ///   the exact named parameters used below (`isInDebugMode`, `frequency`,
-///   `constraints`, and the `Future<bool> Function(String, Map<String,
-///   dynamic>?)` task-handler shape). These have been stable across many
+///   `constraints`, and the `Future&lt;bool&gt; Function(String,
+///   Map&lt;String, dynamic&gt;?)` task-handler shape). These have been
+///   stable across many
 ///   releases of this package and were used here at the narrowest, most
 ///   long-standing part of its surface on purpose - no `existingWorkPolicy`
 ///   or `backoffPolicy` argument is passed, specifically because this file
@@ -59,7 +60,6 @@ library;
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
@@ -206,12 +206,12 @@ Future<bool> _runBackgroundSync() async {
 /// every app restart, and this file adds no extra guard on top of whatever
 /// the plugin itself does in that case.
 Future<void> registerBackgroundSync() async {
-  await Workmanager().initialize(
-    callbackDispatcher,
-    // Debug-only native notifications for each task run; never shown to a
-    // production user.
-    isInDebugMode: kDebugMode,
-  );
+  // `isInDebugMode` is deprecated in this resolved workmanager version and
+  // now has no effect at all (its replacement, WorkmanagerDebug handlers,
+  // is a different, opt-in mechanism this file does not register) - kept
+  // out rather than left in as dead configuration that looks like it does
+  // something.
+  await Workmanager().initialize(callbackDispatcher);
   await Workmanager().registerPeriodicTask(
     backgroundSyncTaskName,
     backgroundSyncTaskName,

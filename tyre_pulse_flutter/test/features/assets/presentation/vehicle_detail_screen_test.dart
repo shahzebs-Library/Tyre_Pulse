@@ -24,6 +24,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// `Override` is deliberately not exported by the main flutter_riverpod
+// barrel in Riverpod 3.x (it carries a `@publicInMisc` marker in the
+// package's own source) - `misc.dart` is the sanctioned escape hatch for
+// naming it explicitly, which this file's helper signatures below do.
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
@@ -227,7 +232,7 @@ void main() {
       'a network-classified failure with no cache renders '
       'TpBackendUnavailableState', (WidgetTester tester) async {
     await _pump(tester, <Override>[
-      _resolved(VehicleDetailFailed(const AppError.network())),
+      _resolved(const VehicleDetailFailed(AppError.network())),
       _canStartInspection(false),
     ]);
     await tester.pumpAndSettle();
@@ -240,8 +245,8 @@ void main() {
     (WidgetTester tester) async {
       await _pump(tester, <Override>[
         _resolved(
-          VehicleDetailFailed(
-            const AppError(
+          const VehicleDetailFailed(
+            AppError(
               kind: AppErrorKind.validation,
               message: 'A vehicle record could not be read.',
             ),

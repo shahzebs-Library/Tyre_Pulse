@@ -42,7 +42,12 @@ Future<void> expectGuardPropagates(Object rawError) async {
   final SupabaseFailure expected = classifySupabaseError(rawError);
 
   final SupabaseFailure? actual = await capturedFailure(
-    () => gateway.run<void>(() async => throw rawError),
+    () => gateway.run<void>(
+      // Deliberately injects an arbitrary caller-supplied error to test
+      // resilience against non-Error/Exception failures.
+      // ignore: only_throw_errors
+      () async => throw rawError,
+    ),
   );
 
   expect(actual, isNotNull);
@@ -73,7 +78,7 @@ void main() {
 
     test('a unique-violation PostgrestException (23505)', () async {
       await expectGuardPropagates(
-        PostgrestException(
+        const PostgrestException(
           message: 'duplicate key value violates unique constraint '
               '"tyre_records_client_uuid_key"',
           code: '23505',
@@ -83,7 +88,7 @@ void main() {
 
     test('a schema-mismatch PostgrestException (42P01)', () async {
       await expectGuardPropagates(
-        PostgrestException(
+        const PostgrestException(
           message: 'relation "public.does_not_exist" does not exist',
           code: '42P01',
         ),
@@ -92,7 +97,7 @@ void main() {
 
     test('a permission-denied PostgrestException (42501)', () async {
       await expectGuardPropagates(
-        PostgrestException(
+        const PostgrestException(
           message: 'permission denied for table tyre_records',
           code: '42501',
         ),
@@ -101,13 +106,13 @@ void main() {
 
     test('an expired-session AuthException', () async {
       await expectGuardPropagates(
-        AuthException('JWT expired', statusCode: '401'),
+        const AuthException('JWT expired', statusCode: '401'),
       );
     });
 
     test('a plain SocketException-shaped connectivity failure', () async {
       await expectGuardPropagates(
-        SocketException("Failed host lookup: 'example.com'"),
+        const SocketException("Failed host lookup: 'example.com'"),
       );
     });
   });
@@ -129,7 +134,7 @@ void main() {
         'never re-wraps an already-classified SupabaseFailure, so a '
         'nested guard() call cannot double-classify one error', () async {
       final SupabaseFailure original = classifySupabaseError(
-        PostgrestException(message: 'duplicate key', code: '23505'),
+        const PostgrestException(message: 'duplicate key', code: '23505'),
       );
 
       final SupabaseFailure? actual = await capturedFailure(

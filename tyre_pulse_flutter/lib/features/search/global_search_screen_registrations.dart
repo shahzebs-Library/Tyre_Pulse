@@ -1,56 +1,42 @@
-/// This feature's one contribution to the shared screen registry.
+/// This feature's would-be contribution to the shared screen registry -
+/// EMPTY today, and the reason is stronger than every other feature's
+/// "dormant until `main.dart` joins it" story.
 ///
-/// Mirrors `features/work_orders/work_orders_screen_registrations.dart`'s own
-/// one-route shape - see that file's library comment for the general
-/// reasoning behind this map-of-builders pattern.
+/// # Why this map is empty, not a real registration
 ///
-/// # This entry is dormant, and dormant for a DIFFERENT reason than usual
+/// `TpScreenBuilder` (`app/router/screen_registry.dart`) is fixed as
+/// `Widget Function(BuildContext, TpRoute)` - every registration in this
+/// codebase keys a builder that takes the router's own sealed [TpRoute]
+/// union and narrows it. [GlobalSearchRoute] cannot BE a [TpRoute] from
+/// this file (see `domain/global_search_route.dart`'s own library comment:
+/// `TpRoute` is `sealed`, so only a class declared inside `routes.dart`
+/// itself may extend it - confirmed by `flutter analyze`, not assumed).
+/// So there is no builder this file can honestly write that both
+/// type-checks against `TpScreenBuilder` today AND does something real
+/// with a [GlobalSearchRoute] - forcing one would mean either a builder
+/// that can never be reached with the right type, or a fabricated
+/// `TpRoute` cast that lies about the relationship.
 ///
-/// Every other `*_screen_registrations.dart` file in this codebase (Phase 5
-/// onward, per `main.dart`'s own composition-root comment) was, at worst,
-/// dormant only until ITS OWN `.withAll(...)` call joined the chain there -
-/// the route id, its path template and its `GoRoute` entry already existed
-/// in `app/router/routes.dart`/`app_router.dart`/`route_access.dart` before
-/// the screen was written.
+/// # What actually finishes this
 ///
-/// This one is dormant for a STRONGER reason: no `TpRouteId.globalSearch`,
-/// no `TpRoutePaths.globalSearch` and no `GoRoute` entry exist yet at all -
-/// see `domain/global_search_route.dart`'s own doc comment for exactly what
-/// a human needs to add to the forbidden router files. Joining THIS map into
-/// `main.dart`'s chain is still correct to do now, and still safe: it costs
-/// nothing (an unreachable key in [TpScreenRegistry] is simply never looked
-/// up) and it means the ONLY remaining step, once the router side is wired,
-/// is the router side - this file will not need touching again.
-///
-/// The map key is deliberately NOT a hardcoded string literal - it is
-/// [GlobalSearchRoute.routeId], read off a real instance. So if a human
-/// later changes that getter to return a new `TpRouteId.globalSearch`
-/// constant instead of the current local placeholder (see that file's own
-/// comment for why it is a placeholder today), this key updates itself with
-/// it. Nothing here needs to change in step.
+/// A human moving (or copying) [GlobalSearchRoute]'s body into
+/// `routes.dart` as a real `final class ... extends TpRoute` - not merely
+/// adding a `TpRouteId.globalSearch` constant elsewhere - is what makes a
+/// real registration possible. At that point this file gains one entry,
+/// exactly the shape `features/work_orders/
+/// work_orders_screen_registrations.dart` already demonstrates: `{route
+/// .routeId: builder}` plus a builder that narrows via `route is!
+/// GlobalSearchRoute` before handing it to [GlobalSearchScreen].
 library;
 
-import 'package:flutter/widgets.dart';
-import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
 
-import 'domain/global_search_route.dart';
-import 'presentation/global_search_screen.dart';
-
-/// The route this feature builds a screen for.
+/// Empty until `GlobalSearchRoute` can genuinely extend `TpRoute` - see
+/// this file's own library comment. `TpScreenRegistry.empty`'s own doc
+/// comment already establishes that an empty builder map is a normal,
+/// supported state ("every route renders the not built yet state"), so
+/// joining this into `main.dart`'s chain today costs nothing and needs no
+/// further change once the router side is wired - only this map's one
+/// entry does.
 final Map<String, TpScreenBuilder> globalSearchScreenRegistrations =
-    <String, TpScreenBuilder>{
-  const GlobalSearchRoute().routeId: _buildGlobalSearchScreen,
-};
-
-/// Guards the cast from the router's typed [TpRoute] union down to
-/// [GlobalSearchRoute] - the same defensive check every other
-/// `*_screen_registrations.dart` file in this codebase uses, rather than a
-/// bare cast, so a mismatched registration degrades to
-/// [TpScreenNotAvailable] instead of throwing.
-Widget _buildGlobalSearchScreen(BuildContext context, TpRoute route) {
-  if (route is! GlobalSearchRoute) {
-    return TpScreenNotAvailable(route: route);
-  }
-  return GlobalSearchScreen(route: route);
-}
+    <String, TpScreenBuilder>{};

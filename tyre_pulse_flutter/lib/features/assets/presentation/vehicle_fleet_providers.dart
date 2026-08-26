@@ -29,6 +29,12 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// `FutureProviderFamily` is deliberately not exported by the main
+// flutter_riverpod barrel in Riverpod 3.x (same `@publicInMisc` class as
+// `Override` - see auth_providers.dart's note) - `misc.dart` is the
+// sanctioned escape hatch for naming it explicitly, which the family
+// provider's declared type below does.
+import 'package:flutter_riverpod/misc.dart' show FutureProviderFamily;
 import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';

@@ -48,6 +48,7 @@ import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.
 import 'package:tyre_pulse/features/work_orders/data/work_order_repository.dart';
 import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/work_order_badges.dart';
+import 'package:tyre_pulse/features/work_orders/work_orders_providers.dart';
 
 const Duration _kLookupDebounce = Duration(milliseconds: 350);
 
@@ -260,7 +261,6 @@ class _FoundAssetLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final String joinedMakeModel = <String?>[
       asset.make,

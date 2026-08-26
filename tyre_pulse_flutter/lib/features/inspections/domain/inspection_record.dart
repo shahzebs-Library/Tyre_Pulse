@@ -24,6 +24,44 @@ const String inspectionRecordColumns = 'id, client_uuid, title, site, '
 
 @immutable
 class InspectionRecord {
+  /// Decodes [row] as read via [inspectionRecordColumns]. Never throws on
+  /// a malformed `tyre_conditions` value - it degrades to an empty map,
+  /// matching `readTyreEntries`'s own "never fails to make sense of a
+  /// payload, returns empty instead" contract, because a detail screen
+  /// that cannot render tyre positions is a lesser failure than one that
+  /// crashes outright.
+  factory InspectionRecord.fromRow(Map<String, Object?> row) {
+    final Object? rawId = row['id'];
+    if (rawId is! String || rawId.isEmpty) {
+      throw const FormatException('Inspection row has no usable "id".');
+    }
+
+    return InspectionRecord(
+      id: rawId,
+      clientUuid: row['client_uuid'] as String?,
+      title: row['title'] as String? ?? '',
+      site: row['site'] as String? ?? '',
+      assetNo: row['asset_no'] as String? ?? '',
+      vehicleType: row['vehicle_type'] as String? ?? '',
+      inspector: row['inspector'] as String? ?? '',
+      inspectionDate: row['inspection_date'] as String? ?? '',
+      status: row['status'] as String? ?? '',
+      notes: row['notes'] as String?,
+      findings: row['findings'] as String?,
+      odometerKm: (row['odometer_km'] as num?)?.toInt(),
+      hourMeter: (row['hour_meter'] as num?)?.toDouble(),
+      inspectorSignature: row['inspector_signature'] as String?,
+      approvalStatus: row['approval_status'] as String?,
+      locked: row['locked'] == true,
+      gpsLat: (row['gps_lat'] as num?)?.toDouble(),
+      gpsLng: (row['gps_lng'] as num?)?.toDouble(),
+      gpsAccuracy: (row['gps_accuracy'] as num?)?.toDouble(),
+      gpsCapturedAt: row['gps_captured_at'] as String?,
+      country: row['country'] as String?,
+      createdAt: row['created_at'] as String?,
+      tyreConditions: _decodeConditions(row['tyre_conditions']),
+    );
+  }
   const InspectionRecord({
     required this.id,
     required this.title,
@@ -79,45 +117,6 @@ class InspectionRecord {
   final String? createdAt;
 
   bool get hasGpsFix => gpsLat != null && gpsLng != null;
-
-  /// Decodes [row] as read via [inspectionRecordColumns]. Never throws on
-  /// a malformed `tyre_conditions` value - it degrades to an empty map,
-  /// matching `readTyreEntries`'s own "never fails to make sense of a
-  /// payload, returns empty instead" contract, because a detail screen
-  /// that cannot render tyre positions is a lesser failure than one that
-  /// crashes outright.
-  factory InspectionRecord.fromRow(Map<String, Object?> row) {
-    final Object? rawId = row['id'];
-    if (rawId is! String || rawId.isEmpty) {
-      throw const FormatException('Inspection row has no usable "id".');
-    }
-
-    return InspectionRecord(
-      id: rawId,
-      clientUuid: row['client_uuid'] as String?,
-      title: row['title'] as String? ?? '',
-      site: row['site'] as String? ?? '',
-      assetNo: row['asset_no'] as String? ?? '',
-      vehicleType: row['vehicle_type'] as String? ?? '',
-      inspector: row['inspector'] as String? ?? '',
-      inspectionDate: row['inspection_date'] as String? ?? '',
-      status: row['status'] as String? ?? '',
-      notes: row['notes'] as String?,
-      findings: row['findings'] as String?,
-      odometerKm: (row['odometer_km'] as num?)?.toInt(),
-      hourMeter: (row['hour_meter'] as num?)?.toDouble(),
-      inspectorSignature: row['inspector_signature'] as String?,
-      approvalStatus: row['approval_status'] as String?,
-      locked: row['locked'] == true,
-      gpsLat: (row['gps_lat'] as num?)?.toDouble(),
-      gpsLng: (row['gps_lng'] as num?)?.toDouble(),
-      gpsAccuracy: (row['gps_accuracy'] as num?)?.toDouble(),
-      gpsCapturedAt: row['gps_captured_at'] as String?,
-      country: row['country'] as String?,
-      createdAt: row['created_at'] as String?,
-      tyreConditions: _decodeConditions(row['tyre_conditions']),
-    );
-  }
 
   static Map<String, Map<String, Object?>> _decodeConditions(Object? raw) {
     if (raw is! Map) return const <String, Map<String, Object?>>{};

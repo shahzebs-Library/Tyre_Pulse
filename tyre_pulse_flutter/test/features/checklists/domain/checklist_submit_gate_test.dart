@@ -111,8 +111,8 @@ void main() {
 
   group('what genuinely DOES block submission', () {
     test('a required, empty field blocks', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(
             id: 'km',
             type: 'number',
@@ -134,8 +134,8 @@ void main() {
     });
 
     test('the SAME required field, hidden by visibleWhen, does not block', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(id: 'towed', type: 'boolean', label: 'Towed?'),
           ChecklistField(
             id: 'tow_reason',
@@ -209,8 +209,8 @@ void main() {
     });
 
     test('a group_require_one group with no member answered blocks', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(
             id: 'odo_km',
             type: 'number',
@@ -240,8 +240,8 @@ void main() {
     test(
         'a value of 0 on either member of the group satisfies it - zero '
         'is a reading', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(
             id: 'odo_km',
             type: 'number',
@@ -268,8 +268,8 @@ void main() {
     });
 
     test('a required signature field with no mark blocks', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(
             id: 'sign_mechanic',
             type: 'signature',
@@ -291,8 +291,8 @@ void main() {
     });
 
     test('signing the field clears its own block', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(
             id: 'sign_mechanic',
             type: 'signature',
@@ -315,8 +315,8 @@ void main() {
     test(
         'a template flagged require_signature with no field pad and no '
         'signed field blocks', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(id: 'x', type: 'text', label: 'X'),
         ],
       );
@@ -336,8 +336,8 @@ void main() {
     test(
         'the template-level pad satisfies require_signature with no '
         'signature field on the template at all', () {
-      final ChecklistTemplate template = ChecklistTemplate(
-        fields: const <ChecklistField>[
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
           ChecklistField(id: 'x', type: 'text', label: 'X'),
         ],
       );

@@ -43,7 +43,6 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/work_orders/data/work_order_item.dart';
-import 'package:tyre_pulse/features/work_orders/data/work_order_repository.dart';
 import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/work_order_badges.dart';
 import 'package:tyre_pulse/features/work_orders/work_orders_providers.dart';

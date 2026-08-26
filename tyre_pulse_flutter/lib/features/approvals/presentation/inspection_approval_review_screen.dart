@@ -490,7 +490,6 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
     final String? meterLine = _meterLine(item);
 
     return TpCard(
@@ -766,7 +765,7 @@ class _DecidedSection extends StatelessWidget {
     );
   }
 
-  /// "Approved by <name>" / "Returned by <name>", or `null` when
+  /// "Approved by &lt;name&gt;" / "Returned by &lt;name&gt;", or `null` when
   /// `approver_email` was never recorded. The identifier is LTR-isolated -
   /// see the library comment on `TpDirection.isolateLtr` for why an email
   /// address embedded in translated prose needs it.

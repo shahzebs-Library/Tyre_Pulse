@@ -57,8 +57,16 @@ Future<void> _initialize(
   try {
     await Supabase.initialize(
       url: config.supabaseUrl,
-      anonKey: config.supabaseAnonKey,
-      localStorage: SupabaseLocalStorageAdapter(localStorage),
+      // `anonKey` is deprecated in this resolved supabase_flutter version in
+      // favour of `publishableKey` - same value, Supabase's newer name for
+      // it. Still the publishable, RLS-governed key, never the service role.
+      publishableKey: config.supabaseAnonKey,
+      // `localStorage` moved onto `FlutterAuthClientOptions.localStorage` in
+      // this resolved supabase_flutter version - it is no longer a direct
+      // named parameter of `Supabase.initialize` itself.
+      authOptions: FlutterAuthClientOptions(
+        localStorage: SupabaseLocalStorageAdapter(localStorage),
+      ),
     );
   } on Object {
     // A failed attempt must not permanently block a later retry - the next

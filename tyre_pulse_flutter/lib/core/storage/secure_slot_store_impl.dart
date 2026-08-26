@@ -72,7 +72,7 @@ import 'package:tyre_pulse/core/storage/secure_slot_store.dart';
 final class FlutterSecureSlotStore implements SecureSlotStore {
   FlutterSecureSlotStore({FlutterSecureStorage? storage})
       : _storage = storage ??
-            FlutterSecureStorage(
+            const FlutterSecureStorage(
               aOptions: _androidOptions,
               iOptions: _iosOptions,
             );

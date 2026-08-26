@@ -35,31 +35,31 @@ void main() {
         'label-small strictly decrease', () {
       expect(
         light.displaySmall!.fontSize,
-        greaterThan(light.headlineMedium!.fontSize),
+        greaterThan(light.headlineMedium!.fontSize!),
       );
       expect(
         light.headlineMedium!.fontSize,
-        greaterThan(light.headlineSmall!.fontSize),
+        greaterThan(light.headlineSmall!.fontSize!),
       );
       expect(
         light.headlineSmall!.fontSize,
-        greaterThan(light.titleLarge!.fontSize),
+        greaterThan(light.titleLarge!.fontSize!),
       );
       expect(
         light.titleLarge!.fontSize,
-        greaterThan(light.titleMedium!.fontSize),
+        greaterThan(light.titleMedium!.fontSize!),
       );
       expect(
         light.titleMedium!.fontSize,
-        greaterThan(light.bodyLarge!.fontSize),
+        greaterThan(light.bodyLarge!.fontSize!),
       );
       expect(
         light.bodyLarge!.fontSize,
-        greaterThan(light.labelMedium!.fontSize),
+        greaterThan(light.labelMedium!.fontSize!),
       );
       expect(
         light.labelMedium!.fontSize,
-        greaterThan(light.labelSmall!.fontSize),
+        greaterThan(light.labelSmall!.fontSize!),
       );
     });
 

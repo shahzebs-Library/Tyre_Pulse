@@ -83,7 +83,7 @@ final class FileInspectionSubmissionQueue implements InspectionSubmissionQueue {
       '${base.path}${Platform.pathSeparator}'
       '$_folderName',
     );
-    if (!await dir.exists()) {
+    if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
     return dir;
@@ -130,7 +130,7 @@ final class FileInspectionSubmissionQueue implements InspectionSubmissionQueue {
   Future<QueuedInspection?> byId(String id) async {
     final Directory dir = await _directory();
     final File file = _fileFor(dir, id);
-    if (!await file.exists()) return null;
+    if (!file.existsSync()) return null;
     try {
       return QueuedInspection.fromJsonString(await file.readAsString());
     } on Object {
@@ -168,7 +168,7 @@ final class FileInspectionSubmissionQueue implements InspectionSubmissionQueue {
   Future<void> remove(String id) async {
     final Directory dir = await _directory();
     final File file = _fileFor(dir, id);
-    if (await file.exists()) {
+    if (file.existsSync()) {
       await file.delete();
     }
   }

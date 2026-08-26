@@ -53,6 +53,30 @@ String? _asString(Object? raw) {
 num? _asNum(Object? raw) => raw is num ? raw : null;
 
 final class WorkOrderItem {
+  /// Decodes [row] as read via [workOrderListColumns] or
+  /// [workOrderDetailColumns].
+  factory WorkOrderItem.fromRow(Map<String, Object?> row) {
+    final Object? rawId = row['id'];
+    if (rawId is! String || rawId.isEmpty) {
+      throw const FormatException('Work order row has no usable "id".');
+    }
+
+    return WorkOrderItem(
+      id: rawId,
+      workOrderNo: _asString(row['work_order_no']),
+      assetNo: _asString(row['asset_no']),
+      workType: _asString(row['work_type']),
+      status: _asString(row['status']),
+      priority: _asString(row['priority']),
+      description: _asString(row['description']),
+      site: _asString(row['site']),
+      totalCost: _asNum(row['total_cost']),
+      openedAt: _asString(row['opened_at']),
+      startedAt: _asString(row['started_at']),
+      completedAt: _asString(row['completed_at']),
+      country: _asString(row['country']),
+    );
+  }
   const WorkOrderItem({
     required this.id,
     this.workOrderNo,
@@ -112,29 +136,4 @@ final class WorkOrderItem {
   /// exactly as `InspectionApprovalItem.fromRow`'s own library comment
   /// describes for a column its row never selected.
   final String? country;
-
-  /// Decodes [row] as read via [workOrderListColumns] or
-  /// [workOrderDetailColumns].
-  factory WorkOrderItem.fromRow(Map<String, Object?> row) {
-    final Object? rawId = row['id'];
-    if (rawId is! String || rawId.isEmpty) {
-      throw const FormatException('Work order row has no usable "id".');
-    }
-
-    return WorkOrderItem(
-      id: rawId,
-      workOrderNo: _asString(row['work_order_no']),
-      assetNo: _asString(row['asset_no']),
-      workType: _asString(row['work_type']),
-      status: _asString(row['status']),
-      priority: _asString(row['priority']),
-      description: _asString(row['description']),
-      site: _asString(row['site']),
-      totalCost: _asNum(row['total_cost']),
-      openedAt: _asString(row['opened_at']),
-      startedAt: _asString(row['started_at']),
-      completedAt: _asString(row['completed_at']),
-      country: _asString(row['country']),
-    );
-  }
 }

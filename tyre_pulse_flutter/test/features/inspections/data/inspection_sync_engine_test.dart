@@ -91,7 +91,7 @@ class _FakeRemoteRepository implements InspectionRemoteRepository {
   }) async {
     final Object? failure = failWith;
     if (failure != null) {
-      throw failure;
+      throw failure; // ignore: only_throw_errors - deliberate arbitrary-error injection
     }
     upsertedClientUuids.add(clientUuid);
   }
@@ -213,7 +213,7 @@ class _FakeDraftRepository implements InspectionDraftRepository {
 
   @override
   Future<bool> hasContent(String draftKey) async =>
-      (readingsByDraft[draftKey]?.isNotEmpty ?? false);
+      readingsByDraft[draftKey]?.isNotEmpty ?? false;
 
   @override
   Future<List<String>> discardDraft(String draftKey) async {

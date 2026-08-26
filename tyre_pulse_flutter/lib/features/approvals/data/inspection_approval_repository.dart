@@ -118,7 +118,7 @@ final class InspectionApprovalDecision {
 /// returned inspection would come back with no visible explanation of what
 /// to fix. Mirrors `mobile/lib/inspectionApprovals.ts`'s `merged`
 /// construction exactly: the existing notes (trimmed, dropped entirely
-/// when blank) then a new "Returned by <name>: <reason>" line, joined by a
+/// when blank) then a new "Returned by &lt;name&gt;: &lt;reason&gt;" line, joined by a
 /// blank line. [approverName] falls back to `'supervisor'` when blank -
 /// never to an empty string, which would read as an anonymous return.
 /// [note] is the already-trimmed, already-non-empty reason - callers only
@@ -200,8 +200,7 @@ final class SupabaseInspectionApprovalRepository
       if (filter != null) {
         query = query.or(filter);
       }
-      return await query.order('created_at', ascending: false).limit(100)
-          as List<Map<String, dynamic>>;
+      return await query.order('created_at', ascending: false).limit(100);
     });
     return <InspectionApprovalItem>[
       for (final Map<String, dynamic> row in rows)
@@ -227,7 +226,7 @@ final class SupabaseInspectionApprovalRepository
     final String? note = _trimmedOrNull(input.reviewNote);
 
     await guard<void>(() async {
-      await _client.rpc(
+      await _client.rpc<Object?>(
         SupabaseRpcs.decideInspectionApproval,
         params: <String, Object?>{
           'p_inspection_id': input.inspectionId,
@@ -249,7 +248,8 @@ final class SupabaseInspectionApprovalRepository
       try {
         await guard<void>(() async {
           await _client.from(SupabaseTables.inspections).update(
-              <String, Object?>{'notes': merged}).eq('id', input.inspectionId);
+            <String, Object?>{'notes': merged},
+          ).eq('id', input.inspectionId);
         });
       } on Object {
         // The decision stands; the reason is preserved in

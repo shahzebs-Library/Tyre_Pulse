@@ -23,6 +23,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
+import 'package:tyre_pulse/features/records/domain/models/tyre_record.dart';
 import 'package:tyre_pulse/features/records/domain/models/tyre_records_page.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_records_list_screen.dart';
 import 'package:tyre_pulse/features/records/records_providers.dart';
@@ -42,7 +43,7 @@ Future<FakeTyreRecordsRepository> _pump(
   final FakeTyreRecordsRepository repository =
       repo ?? FakeTyreRecordsRepository();
   final ProviderContainer container = ProviderContainer(
-    overrides: <Override>[
+    overrides: [
       accessStateProvider.overrideWithValue(access),
       tyreRecordsRepositoryProvider.overrideWithValue(repository),
     ],

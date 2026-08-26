@@ -14,7 +14,7 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_marks.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_template.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_validation.dart';
 
-final ChecklistTemplate _meterTemplate = const ChecklistTemplate(
+const ChecklistTemplate _meterTemplate = ChecklistTemplate(
   fields: <ChecklistField>[
     ChecklistField(
       id: 'f_ws_km',

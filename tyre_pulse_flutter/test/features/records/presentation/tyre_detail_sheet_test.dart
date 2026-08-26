@@ -28,7 +28,7 @@ Future<void> _openSheet(
   required TyreRecord record,
   String? currency,
 }) async {
-  final List<Override> overrides = <Override>[
+  final overrides = [
     if (currency != null) activeCurrencyProvider.overrideWithValue(currency),
   ];
   final ProviderContainer container = ProviderContainer(overrides: overrides);

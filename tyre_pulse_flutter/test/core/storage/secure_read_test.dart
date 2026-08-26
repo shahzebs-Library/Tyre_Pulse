@@ -60,11 +60,14 @@ void main() {
 
   group('failed', () {
     test('is true for exactly unreadable and torn, nothing else', () {
-      const cases = <SecureRead, bool>{
-        SecureRead.ok('x'): false,
-        SecureRead.absent(): false,
-        SecureRead.unreadable(): true,
-        SecureRead.torn(): true,
+      // Not `const`: `SecureRead` overrides `==`/`hashCode` for real
+      // value-equality, and Dart does not allow a type with custom
+      // equality as a `const` map key.
+      final cases = <SecureRead, bool>{
+        const SecureRead.ok('x'): false,
+        const SecureRead.absent(): false,
+        const SecureRead.unreadable(): true,
+        const SecureRead.torn(): true,
       };
 
       for (final entry in cases.entries) {

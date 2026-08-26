@@ -34,7 +34,7 @@ const ChecklistOptionSet _kLegend = ChecklistOptionSet(
   requireNote: <String>['Not OK'],
 );
 
-final ChecklistTemplate _cond = const ChecklistTemplate(
+const ChecklistTemplate _cond = ChecklistTemplate(
   optionSets: <String, ChecklistOptionSet>{'legend': _kLegend},
   fields: <ChecklistField>[
     ChecklistField(
@@ -114,7 +114,7 @@ void main() {
   });
 
   test('D5: an answer is never cleared when its field hides', () {
-    final ChecklistTemplate template = const ChecklistTemplate(
+    const ChecklistTemplate template = ChecklistTemplate(
       fields: <ChecklistField>[
         ChecklistField(
           id: 'q1',

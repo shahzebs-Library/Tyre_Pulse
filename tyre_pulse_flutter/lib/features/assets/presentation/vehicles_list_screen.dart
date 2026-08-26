@@ -289,16 +289,22 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
 /// its own translated strings. See `vehicle_asset.dart`'s library comment.
 TpAssetSummary _summaryFor(VehicleAsset asset, AppLocalizations l10n) {
   final String identity = asset.displayIdentity ?? l10n.vehiclesUnknownAsset;
-  final String? description = _joinNonEmpty(<String?>[
-    asset.make,
-    asset.model,
-    asset.vehicleType,
-  ], separator: ', ');
+  final String? description = _joinNonEmpty(
+    <String?>[
+      asset.make,
+      asset.model,
+      asset.vehicleType,
+    ],
+    separator: ', ',
+  );
   final int? km = asset.currentKm;
-  final String? detail = _joinNonEmpty(<String?>[
-    km != null ? '${formatVehicleOdometer(km)} km' : null,
-    asset.tyreSize,
-  ], separator: ', ');
+  final String? detail = _joinNonEmpty(
+    <String?>[
+      km != null ? '${formatVehicleOdometer(km)} km' : null,
+      asset.tyreSize,
+    ],
+    separator: ', ',
+  );
 
   return TpAssetSummary(
     assetNo: identity,

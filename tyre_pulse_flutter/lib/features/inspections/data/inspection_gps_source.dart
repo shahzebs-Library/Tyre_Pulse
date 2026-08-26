@@ -69,7 +69,11 @@ final class InspectionGpsSource {
 
       final Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.balanced,
+          // The resolved geolocator enum has no `balanced` value - its real
+          // members are lowest/low/medium/high/best/reduced. `medium` is
+          // the closest match to the original "balanced" intent (a
+          // middle-ground setting, not the most battery-hungry `best`).
+          accuracy: LocationAccuracy.medium,
           timeLimit: _timeout,
         ),
       ).timeout(_timeout);

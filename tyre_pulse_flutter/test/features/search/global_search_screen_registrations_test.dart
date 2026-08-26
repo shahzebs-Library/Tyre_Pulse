@@ -1,69 +1,94 @@
-/// Tests the routing logic in `globalSearchScreenRegistrations` WITHOUT
-/// pumping a widget tree - mirrors
-/// `features/tyres/tyres_screen_registrations_test.dart`'s own approach
-/// exactly (see that file's library comment for the full reasoning:
-/// [_buildGlobalSearchScreen] never actually reads its [BuildContext]
-/// argument on the success path, so a [Fake] `BuildContext` that is never
-/// invoked is enough to drive it).
+/// Tests `globalSearchScreenRegistrations` and `GlobalSearchRoute`'s own
+/// domain logic.
 ///
-/// The registration key asserted below is [GlobalSearchRoute]'s own
-/// `.routeId`, NOT a `TpRouteId.globalSearch` constant - no such constant
-/// exists yet, because the forbidden router files have not been wired for
-/// this feature. See `domain/global_search_route.dart`'s own doc comment.
-/// This test proves the registrations map is internally CONSISTENT with
-/// that route class today; it cannot prove the map is reachable through the
-/// real router, because it is not, yet.
+/// # Why the registration map has no entry to test
+///
+/// `TpScreenBuilder` is fixed as `Widget Function(BuildContext, TpRoute)`,
+/// and `GlobalSearchRoute` cannot extend the sealed `TpRoute` from this
+/// feature's own files (see `domain/global_search_route.dart`'s library
+/// comment - confirmed by `flutter analyze`, not assumed:
+/// `GlobalSearchRoute extends TpRoute` does not compile outside
+/// `routes.dart`). So there is no builder this feature can register today
+/// whose signature both satisfies `TpScreenBuilder` and does something real
+/// with a `GlobalSearchRoute` - `globalSearchScreenRegistrations` is
+/// genuinely empty, the same documented "nothing registered" state
+/// `TpScreenRegistry.empty` already establishes as normal.
+///
+/// What IS real and worth testing here is `GlobalSearchRoute`'s own
+/// standalone behaviour (routeId/location/parse/equality), since that
+/// class is fully implemented and simply not yet reachable through the
+/// router.
 library;
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
-import 'package:tyre_pulse/app/router/routes.dart';
-import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/features/search/domain/global_search_route.dart';
 import 'package:tyre_pulse/features/search/global_search_screen_registrations.dart';
-import 'package:tyre_pulse/features/search/presentation/'
-    'global_search_screen.dart';
-
-class _FakeBuildContext extends Fake implements BuildContext {}
 
 void main() {
-  final BuildContext context = _FakeBuildContext();
-
-  test(
-      'registers exactly one route, keyed on GlobalSearchRoute\'s own '
-      'routeId', () {
-    expect(
-      globalSearchScreenRegistrations.keys,
-      containsAll(<String>[const GlobalSearchRoute().routeId]),
-    );
-    expect(globalSearchScreenRegistrations, hasLength(1));
+  test('the registration map is empty, honestly, not accidentally', () {
+    expect(globalSearchScreenRegistrations, isEmpty);
   });
 
-  group('the global search builder', () {
-    test('a GlobalSearchRoute builds a GlobalSearchScreen carrying it', () {
-      const GlobalSearchRoute route = GlobalSearchRoute(
-        initialQuery: 'TM514',
+  group('GlobalSearchRoute', () {
+    test('routeId is stable regardless of the carried query', () {
+      expect(
+        const GlobalSearchRoute().routeId,
+        const GlobalSearchRoute(initialQuery: 'TM514').routeId,
       );
-      final TpScreenBuilder builder =
-          globalSearchScreenRegistrations[const GlobalSearchRoute().routeId]!;
-
-      final Widget widget = builder(context, route);
-
-      expect(widget, isA<GlobalSearchScreen>());
-      expect((widget as GlobalSearchScreen).route, route);
     });
 
-    test(
-        'a mismatched route type degrades to the honest "not built yet" '
-        'placeholder rather than throwing', () {
-      const HomeRoute wrongRoute = HomeRoute();
-      final TpScreenBuilder builder =
-          globalSearchScreenRegistrations[const GlobalSearchRoute().routeId]!;
+    test('location has no query string when initialQuery is absent', () {
+      expect(const GlobalSearchRoute().location, isNot(contains('?')));
+    });
 
-      final Widget widget = builder(context, wrongRoute);
+    test('location carries the query term when present', () {
+      expect(
+        const GlobalSearchRoute(initialQuery: 'TM514').location,
+        contains('q=TM514'),
+      );
+    });
 
-      expect(widget, isA<TpScreenNotAvailable>());
+    test('location omits the query key for an empty string', () {
+      expect(
+        const GlobalSearchRoute(initialQuery: '').location,
+        isNot(contains('q=')),
+      );
+    });
+
+    test('parse reads the q query parameter', () {
+      final GlobalSearchRoute route = GlobalSearchRoute.parse(
+        <String, String>{'q': 'TM514'},
+      );
+      expect(route.initialQuery, 'TM514');
+    });
+
+    test('parse treats a blank q as absent, matching the router convention',
+        () {
+      final GlobalSearchRoute route = GlobalSearchRoute.parse(
+        <String, String>{'q': ''},
+      );
+      expect(route.initialQuery, isNull);
+    });
+
+    test('parse treats a missing q as absent', () {
+      final GlobalSearchRoute route = GlobalSearchRoute.parse(
+        <String, String>{},
+      );
+      expect(route.initialQuery, isNull);
+    });
+
+    test('two routes with the same query are equal', () {
+      expect(
+        const GlobalSearchRoute(initialQuery: 'TM514'),
+        const GlobalSearchRoute(initialQuery: 'TM514'),
+      );
+    });
+
+    test('two routes with different queries are not equal', () {
+      expect(
+        const GlobalSearchRoute(initialQuery: 'TM514'),
+        isNot(const GlobalSearchRoute(initialQuery: 'BH021')),
+      );
     });
   });
 }

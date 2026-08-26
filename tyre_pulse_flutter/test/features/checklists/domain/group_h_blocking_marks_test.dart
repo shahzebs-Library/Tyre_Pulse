@@ -79,7 +79,7 @@ const ChecklistOptionSet _legend = ChecklistOptionSet(
   requireNote: <String>['Not OK'],
 );
 
-final ChecklistTemplate _template = const ChecklistTemplate(
+const ChecklistTemplate _template = ChecklistTemplate(
   optionSets: <String, ChecklistOptionSet>{'legend': _legend},
   fields: <ChecklistField>[
     ChecklistField(
@@ -136,7 +136,7 @@ void main() {
     expect(blockingMarks(bare), isEmpty);
     expect(blockingMarks(_legend), <String>['Not OK']);
 
-    final ChecklistTemplate untargeted = const ChecklistTemplate(
+    const ChecklistTemplate untargeted = ChecklistTemplate(
       fields: <ChecklistField>[
         ChecklistField(id: 'x', type: 'select', options: <String>['a', 'b']),
       ],

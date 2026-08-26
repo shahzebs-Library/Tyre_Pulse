@@ -30,7 +30,7 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 /// An exhaustive `switch` on purpose - adding a new [SupabaseFailureCause]
 /// without extending this mapping is a compile error, not a silent
 /// [SyncErrorClass.unknown].
-SyncErrorClass syncErrorClassFor(SupabaseFailureCause cause) {
+String syncErrorClassFor(SupabaseFailureCause cause) {
   switch (cause) {
     case SupabaseFailureCause.offline:
     case SupabaseFailureCause.timeout:

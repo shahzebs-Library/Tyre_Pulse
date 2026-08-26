@@ -114,7 +114,7 @@ void main() {
     test(
         'valid JSON with none of the known keys falls through to the '
         'bare-code path, sanitised as a whole string', () {
-      final String raw = '{"unrelated":"value"}';
+      const String raw = '{"unrelated":"value"}';
       expect(extractScanCode(raw), sanitizeScanCode(raw));
     });
 
@@ -171,7 +171,7 @@ void main() {
     test(
         'a URL with neither a known query parameter nor a path segment '
         'falls through to the bare-code path', () {
-      final String raw = 'https://app.example/';
+      const String raw = 'https://app.example/';
       expect(extractScanCode(raw), sanitizeScanCode(raw));
     });
   });

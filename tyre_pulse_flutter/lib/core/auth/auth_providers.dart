@@ -97,7 +97,7 @@ TpShellGateActions buildAuthShellGateActions(
 
 /// The auth layer's contribution to the root `ProviderScope`. See the library
 /// comment for what else the composition root must supply alongside this.
-final List<Override> authLayerOverrides = <Override>[
+final authLayerOverrides = [
   sessionProvider.overrideWith(
     (Ref ref) => deriveSession(ref.watch(authControllerProvider)),
   ),

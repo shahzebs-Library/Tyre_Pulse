@@ -46,7 +46,6 @@ class InspectionApprovalsQueueScreen extends ConsumerStatefulWidget {
 class _InspectionApprovalsQueueScreenState
     extends ConsumerState<InspectionApprovalsQueueScreen> {
   bool _loading = true;
-  bool _refreshing = false;
   AppError? _error;
   List<InspectionApprovalItem> _items = const <InspectionApprovalItem>[];
 
@@ -80,11 +79,7 @@ class _InspectionApprovalsQueueScreenState
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() => _refreshing = true);
-    await _load();
-    if (mounted) setState(() => _refreshing = false);
-  }
+  Future<void> _refresh() => _load();
 
   void _open(InspectionApprovalItem item) {
     context.push(

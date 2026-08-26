@@ -109,7 +109,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       notes = await drafts.notes(draftKey);
       site = existing.site ?? route.siteName?.value;
       assetNo =
-          existing.assetNo.isEmpty ? (route.assetNo?.value) : existing.assetNo;
+          existing.assetNo.isEmpty ? route.assetNo?.value : existing.assetNo;
       printedName = existing.printedName ?? '';
       readLang = existing.readLang ?? kChecklistDefaultLang;
     } else {

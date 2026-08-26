@@ -103,6 +103,49 @@ Map<String, String> _asStringMap(Object? raw) {
 
 /// One `checklist_submissions` row.
 final class ChecklistApprovalItem {
+  /// Decodes [row] as read via [checklistApprovalListColumns] or
+  /// [checklistApprovalFullColumns]. Never throws for a missing OPTIONAL
+  /// column - it simply reads back at its default.
+  factory ChecklistApprovalItem.fromRow(Map<String, Object?> row) {
+    final Object? rawId = row['id'];
+    if (rawId is! String || rawId.isEmpty) {
+      throw const FormatException(
+        'Checklist submission row has no usable "id".',
+      );
+    }
+
+    return ChecklistApprovalItem(
+      id: rawId,
+      templateId: _asString(row['template_id']),
+      templateName: _asString(row['template_name']),
+      templateVersion: _asInt(row['template_version']),
+      title: _asString(row['title']),
+      site: _asString(row['site']),
+      assetNo: _asString(row['asset_no']),
+      status: _asString(row['status']),
+      answers: _asJsonMap(row['answers']),
+      photos: _asPhotoMap(row['photos']),
+      notes: _asJsonMap(row['notes']),
+      signatures: _asStringMap(row['signatures']),
+      signatureData: _asString(row['signature_data']),
+      printedName: _asString(row['printed_name']),
+      submittedBy: _asString(row['submitted_by']),
+      submittedAt: _asString(row['submitted_at']),
+      scorePct: _asInt(row['score_pct']),
+      scorePassed:
+          row['score_passed'] is bool ? row['score_passed'] as bool : null,
+      approvalStatus: _asString(row['approval_status']),
+      documentNo: _asString(row['document_no']),
+      approverName: _asString(row['approver_name']),
+      approverSignature: _asString(row['approver_signature']),
+      approvedAt: _asString(row['approved_at']),
+      supervisorName: _asString(row['supervisor_name']),
+      supervisorSignature: _asString(row['supervisor_signature']),
+      supervisorAt: _asString(row['supervisor_at']),
+      reviewNote: _asString(row['review_note']),
+      locked: row['locked'] == true,
+    );
+  }
   const ChecklistApprovalItem({
     required this.id,
     this.templateId,
@@ -226,50 +269,6 @@ final class ChecklistApprovalItem {
         supervisorSignature: supervisorSignature,
         supervisorAt: supervisorAt,
       );
-
-  /// Decodes [row] as read via [checklistApprovalListColumns] or
-  /// [checklistApprovalFullColumns]. Never throws for a missing OPTIONAL
-  /// column - it simply reads back at its default.
-  factory ChecklistApprovalItem.fromRow(Map<String, Object?> row) {
-    final Object? rawId = row['id'];
-    if (rawId is! String || rawId.isEmpty) {
-      throw const FormatException(
-        'Checklist submission row has no usable "id".',
-      );
-    }
-
-    return ChecklistApprovalItem(
-      id: rawId,
-      templateId: _asString(row['template_id']),
-      templateName: _asString(row['template_name']),
-      templateVersion: _asInt(row['template_version']),
-      title: _asString(row['title']),
-      site: _asString(row['site']),
-      assetNo: _asString(row['asset_no']),
-      status: _asString(row['status']),
-      answers: _asJsonMap(row['answers']),
-      photos: _asPhotoMap(row['photos']),
-      notes: _asJsonMap(row['notes']),
-      signatures: _asStringMap(row['signatures']),
-      signatureData: _asString(row['signature_data']),
-      printedName: _asString(row['printed_name']),
-      submittedBy: _asString(row['submitted_by']),
-      submittedAt: _asString(row['submitted_at']),
-      scorePct: _asInt(row['score_pct']),
-      scorePassed:
-          row['score_passed'] is bool ? row['score_passed'] as bool : null,
-      approvalStatus: _asString(row['approval_status']),
-      documentNo: _asString(row['document_no']),
-      approverName: _asString(row['approver_name']),
-      approverSignature: _asString(row['approver_signature']),
-      approvedAt: _asString(row['approved_at']),
-      supervisorName: _asString(row['supervisor_name']),
-      supervisorSignature: _asString(row['supervisor_signature']),
-      supervisorAt: _asString(row['supervisor_at']),
-      reviewNote: _asString(row['review_note']),
-      locked: row['locked'] == true,
-    );
-  }
 
   @override
   String toString() =>

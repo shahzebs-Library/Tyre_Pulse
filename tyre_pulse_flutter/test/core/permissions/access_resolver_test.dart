@@ -479,7 +479,7 @@ void main() {
       // lists this as an open product question, not a bug to fix here.
       expect(
         allowedModulesFor(
-          state(role: UserRole.known(RoleId.tyreDataCollector)),
+          state(role: const UserRole.known(RoleId.tyreDataCollector)),
         ),
         <ModuleKey>{ModuleKey.serial, ModuleKey.approvals},
       );

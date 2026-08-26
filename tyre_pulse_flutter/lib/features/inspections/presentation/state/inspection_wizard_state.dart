@@ -5,12 +5,12 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
+    show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
-import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
-    show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 
 enum InspectionWizardStep { header, tyres, review, submitted }

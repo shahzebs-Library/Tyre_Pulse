@@ -14,7 +14,7 @@ void main() {
 
   group('fromKeys', () {
     test('normalises via keyOf, so punctuation/case differences collapse', () {
-      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>[
+      const TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>[
         'LHR1-O',
         'r2ri',
       ]);
@@ -27,7 +27,7 @@ void main() {
     test(
         'accepts a Set<String> - the same constructor covers both list '
         'and Set shapes the RN union offers', () {
-      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>{
+      const TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>{
         'FL',
         'FR',
       });
@@ -35,7 +35,7 @@ void main() {
     });
 
     test('an empty-string entry contributes nothing', () {
-      final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>[
+      const TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>[
         '',
         'FL',
       ]);

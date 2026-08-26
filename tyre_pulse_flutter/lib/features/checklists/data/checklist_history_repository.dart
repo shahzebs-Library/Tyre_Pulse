@@ -17,6 +17,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/queue_dao.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';

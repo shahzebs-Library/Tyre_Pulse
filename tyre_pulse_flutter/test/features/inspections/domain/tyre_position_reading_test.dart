@@ -84,7 +84,7 @@ void main() {
     test('fromEntry accepts the legacy field name aliases', () {
       final TyrePositionReading decoded = TyrePositionReading.fromEntry(
         'LHF1',
-        <String, Object?>{
+        const <String, Object?>{
           'serial_no': 'ALIAS-1',
           'pressure': '108',
           'tread_depth': '7',

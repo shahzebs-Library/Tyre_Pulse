@@ -54,7 +54,6 @@ class ChecklistApprovalsQueueScreen extends ConsumerStatefulWidget {
 class _ChecklistApprovalsQueueScreenState
     extends ConsumerState<ChecklistApprovalsQueueScreen> {
   bool _loading = true;
-  bool _refreshing = false;
   AppError? _error;
   List<ChecklistApprovalItem> _items = const <ChecklistApprovalItem>[];
   Map<String, ChecklistApprovalTemplateInfo> _templates =
@@ -132,11 +131,7 @@ class _ChecklistApprovalsQueueScreenState
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() => _refreshing = true);
-    await _load();
-    if (mounted) setState(() => _refreshing = false);
-  }
+  Future<void> _refresh() => _load();
 
   ApprovalTemplateLike _templateLikeFor(ChecklistApprovalItem item) {
     final ChecklistApprovalTemplateInfo? info =

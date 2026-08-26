@@ -16,7 +16,7 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_validation.dart'
 
 void main() {
   test('B1: the stored value is English, the label is translated', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['OK', 'Not OK'],
@@ -32,13 +32,13 @@ void main() {
   });
 
   test('B2: a shared set WINS over the field own copy', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['old'],
       optionsRef: 'legend',
     );
-    final ChecklistTemplate template = const ChecklistTemplate(
+    const ChecklistTemplate template = ChecklistTemplate(
       optionSets: <String, ChecklistOptionSet>{
         'legend': ChecklistOptionSet(options: <String>['new']),
       },
@@ -47,13 +47,13 @@ void main() {
   });
 
   test('B3: an empty shared set falls back to the field', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['own'],
       optionsRef: 'legend',
     );
-    final ChecklistTemplate template = const ChecklistTemplate(
+    const ChecklistTemplate template = ChecklistTemplate(
       optionSets: <String, ChecklistOptionSet>{
         'legend': ChecklistOptionSet(options: <String>[]),
       },
@@ -62,7 +62,7 @@ void main() {
   });
 
   test('B4: a short translation array falls back PER INDEX', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['A', 'B', 'C'],
@@ -79,7 +79,7 @@ void main() {
 
   test('B5: an unknown language degrades to English', () {
     expect(normalizeLang('fr'), kChecklistDefaultLang);
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['A', 'B'],
@@ -92,7 +92,7 @@ void main() {
   });
 
   test('B6: a blank translation degrades to English', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'text',
       label: 'Eng',
@@ -102,7 +102,7 @@ void main() {
   });
 
   test('B7: an unknown stored value renders as itself', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['OK', 'Not OK'],
@@ -113,13 +113,13 @@ void main() {
   });
 
   test('B8: validation uses the resolved set, not the stale copy', () {
-    final ChecklistField field = const ChecklistField(
+    const ChecklistField field = ChecklistField(
       id: 'c1',
       type: 'select',
       options: <String>['old'],
       optionsRef: 'legend',
     );
-    final ChecklistTemplate template = const ChecklistTemplate(
+    const ChecklistTemplate template = ChecklistTemplate(
       optionSets: <String, ChecklistOptionSet>{
         'legend': ChecklistOptionSet(options: <String>['new']),
       },

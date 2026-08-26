@@ -14,11 +14,9 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
-import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart'
-    show InspectionDraftPhoto;
-import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
     show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -80,14 +78,7 @@ class _StepTrack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final List<String> labels = <String>[
-      l10n.inspectionStep1Label,
-      l10n.inspectionStep2Label,
-      l10n.inspectionStep3Label,
-    ];
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
@@ -139,9 +130,9 @@ class _HeaderStep extends ConsumerWidget {
       appBar: TpAppBar(
         title: l10n.inspectionNavTitle,
         backFallback: TpBackFallbacks.forRoute(const NewInspectionRoute()),
-        actions: <Widget>[
+        actions: const <Widget>[
           Padding(
-            padding: const EdgeInsets.only(right: TpSpace.lg),
+            padding: EdgeInsets.only(right: TpSpace.lg),
             child: Center(child: _StepTrack(current: 1)),
           ),
         ],
@@ -328,7 +319,6 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final controller = ref.read(inspectionWizardControllerProvider.notifier);
 
     if (_manual) {
       return Column(
@@ -495,9 +485,9 @@ class _TyresStep extends ConsumerWidget {
         title: l10n.inspectionTyrePositionsTitle,
         subtitle: '${state.selectedAssetNo} - ${state.selectedSite}',
         onBack: () => controller.backToHeader(),
-        actions: <Widget>[
+        actions: const <Widget>[
           Padding(
-            padding: const EdgeInsets.only(right: TpSpace.lg),
+            padding: EdgeInsets.only(right: TpSpace.lg),
             child: Center(child: _StepTrack(current: 2)),
           ),
         ],
@@ -697,9 +687,9 @@ class _ReviewStep extends ConsumerWidget {
       appBar: TpAppBar(
         title: l10n.inspectionReviewTitle,
         onBack: () => controller.backToTyres(),
-        actions: <Widget>[
+        actions: const <Widget>[
           Padding(
-            padding: const EdgeInsets.only(right: TpSpace.lg),
+            padding: EdgeInsets.only(right: TpSpace.lg),
             child: Center(child: _StepTrack(current: 3)),
           ),
         ],

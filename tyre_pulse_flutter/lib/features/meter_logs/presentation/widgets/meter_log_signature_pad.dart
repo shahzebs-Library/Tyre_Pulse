@@ -98,6 +98,7 @@ class _MeterLogSignaturePadState extends State<MeterLogSignaturePad> {
   void initState() {
     super.initState();
     _controller = SignatureController(
+      onDrawEnd: _onStrokeEnd,
       penStrokeWidth: 3,
       penColor: Colors.black,
       exportBackgroundColor: Colors.white,
@@ -190,7 +191,6 @@ class _MeterLogSignaturePadState extends State<MeterLogSignaturePad> {
             controller: _controller,
             height: widget.height,
             backgroundColor: Colors.white,
-            onDragEnd: _onStrokeEnd,
           ),
         ),
         const SizedBox(height: TpSpace.sm),

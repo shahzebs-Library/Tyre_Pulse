@@ -47,7 +47,6 @@ class TyreDetailSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final TpPalette palette = TpPalette.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String? currency = ref.watch(activeCurrencyProvider);
 

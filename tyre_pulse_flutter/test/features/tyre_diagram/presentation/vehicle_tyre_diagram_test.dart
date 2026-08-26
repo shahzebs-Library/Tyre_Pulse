@@ -2,7 +2,10 @@
 /// accessibility, per artifact section 7.
 library;
 
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
@@ -139,9 +142,9 @@ void main() {
 
       await _pump(
         tester,
-        VehicleTyreDiagram(
+        const VehicleTyreDiagram(
           vehicleType: 'PICKUP',
-          positions: const <String>['FL', 'FR', 'RL', 'RR'],
+          positions: <String>['FL', 'FR', 'RL', 'RR'],
           tyreData: <String, Map<String, Object?>>{
             'FL': <String, Object?>{
               'condition': 'Damaged',
@@ -180,7 +183,9 @@ void main() {
     final SemanticsNode node = tester.getSemantics(
       find.bySemanticsLabel(RegExp('LHF1')),
     );
-    expect(node.hasFlag(SemanticsFlag.isSelected), isTrue);
+    // `hasFlag` is deprecated in this resolved Flutter version in favour of
+    // `flagsCollection`.
+    expect(node.flagsCollection.isSelected, Tristate.isTrue);
   });
 
   testWidgets('the condition legend shows all six conditions', (

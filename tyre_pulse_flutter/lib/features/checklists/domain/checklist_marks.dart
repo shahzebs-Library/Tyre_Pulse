@@ -181,8 +181,9 @@ ChecklistOptionSet? fieldOptionSet(
   final ChecklistOptionSet? shared =
       (ref != null && ref.isNotEmpty) ? template?.optionSets[ref] : null;
   if (shared != null) return shared;
-  if (field.options.isNotEmpty)
+  if (field.options.isNotEmpty) {
     return ChecklistOptionSet(options: field.options);
+  }
   return null;
 }
 

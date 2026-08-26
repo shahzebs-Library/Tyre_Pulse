@@ -134,10 +134,7 @@ class _VehicleDetailBody extends ConsumerWidget {
             asset: asset,
             l10n: l10n,
           ),
-        VehicleDetailFromCache(
-          asset: final VehicleAsset asset,
-          cachedAt: final DateTime? cachedAt,
-        ) =>
+        VehicleDetailFromCache(cachedAt: final DateTime? cachedAt) =>
           TpOfflineCachedState(
             cachedAtLabel: _formatCachedAt(cachedAt),
             onRetry: () => ref.invalidate(vehicleDetailProvider(assetNo)),

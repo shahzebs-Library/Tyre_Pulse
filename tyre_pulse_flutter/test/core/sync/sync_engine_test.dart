@@ -140,7 +140,7 @@ QueuedMediaAttachment _photoWithBucket(String fileName) {
 }
 
 SupabaseFailure _uniqueViolationFailure() {
-  return SupabaseFailure(
+  return const SupabaseFailure(
     error: AppError(
       kind: AppErrorKind.conflict,
       message: 'This has already been saved.',
@@ -151,7 +151,7 @@ SupabaseFailure _uniqueViolationFailure() {
 }
 
 SupabaseFailure _networkFailure() {
-  return SupabaseFailure(
+  return const SupabaseFailure(
     error: AppError.network(),
     cause: SupabaseFailureCause.offline,
   );

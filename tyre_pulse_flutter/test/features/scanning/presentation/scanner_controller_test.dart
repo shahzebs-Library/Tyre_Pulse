@@ -19,7 +19,7 @@ void main() {
   setUp(() {
     fake = FakeScanLookupSource();
     container = ProviderContainer(
-      overrides: <Override>[
+      overrides: [
         scanLookupRepositoryProvider.overrideWithValue(fake),
       ],
     );

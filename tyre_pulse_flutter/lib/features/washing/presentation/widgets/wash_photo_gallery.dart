@@ -116,13 +116,13 @@ class _WashPhotoTile extends StatelessWidget {
             right: 2,
             child: GestureDetector(
               onTap: onRemove,
-              child: DecoratedBox(
+              child: const DecoratedBox(
                 decoration: BoxDecoration(
                   color: Colors.black54,
                   shape: BoxShape.circle,
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(2),
+                  padding: EdgeInsets.all(2),
                   child: Icon(
                     Icons.close,
                     size: TpSizing.iconSm,

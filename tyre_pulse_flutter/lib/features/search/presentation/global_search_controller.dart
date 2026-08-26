@@ -66,10 +66,10 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart'
     show vehicleCacheScopeFor;
 
-import '../data/global_search_repository.dart';
-import '../domain/global_search_state.dart';
-import '../domain/search_result.dart';
-import 'global_search_deps.dart';
+import 'package:tyre_pulse/features/search/data/global_search_repository.dart';
+import 'package:tyre_pulse/features/search/domain/global_search_state.dart';
+import 'package:tyre_pulse/features/search/domain/search_result.dart';
+import 'package:tyre_pulse/features/search/presentation/global_search_deps.dart';
 
 /// How long the input waits after the last keystroke before a search
 /// actually runs. Long enough that a fast typist does not fire four

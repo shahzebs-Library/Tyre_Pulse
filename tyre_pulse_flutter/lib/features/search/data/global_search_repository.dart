@@ -58,13 +58,12 @@ import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_remote_repository.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_record.dart';
+import 'package:tyre_pulse/features/search/domain/search_identifiers.dart';
+import 'package:tyre_pulse/features/search/domain/search_result.dart';
 import 'package:tyre_pulse/features/tyres/data/tyre_lookup_repository.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_lookup_record.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_serial_code.dart';
 import 'package:tyre_pulse/features/work_orders/data/work_order_item.dart';
-
-import '../domain/search_identifiers.dart';
-import '../domain/search_result.dart';
 
 /// How many rows a single identifier-type lookup returns at most. A search
 /// box is not a report - past this many matches the honest answer is "type

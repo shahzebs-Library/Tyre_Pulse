@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 
@@ -183,10 +184,12 @@ void main() {
   });
 
   group('building a real app with these delegates', () {
-    const Map<Locale, String> arbFileByLocale = <Locale, String>{
-      Locale('en'): 'app_en.arb',
-      Locale('ar'): 'app_ar.arb',
-      Locale('ur'): 'app_ur.arb',
+    // Not `const`: `Locale` overrides `==`/`hashCode`, and Dart does not
+    // allow a type with custom equality as a `const` map key.
+    final Map<Locale, String> arbFileByLocale = <Locale, String>{
+      const Locale('en'): 'app_en.arb',
+      const Locale('ar'): 'app_ar.arb',
+      const Locale('ur'): 'app_ur.arb',
     };
 
     for (final Locale locale in TpLocalizations.supportedLocales) {

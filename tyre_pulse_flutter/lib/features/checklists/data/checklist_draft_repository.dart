@@ -35,6 +35,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/drafts_dao.dart';
 import 'package:tyre_pulse/core/database/dao/media_dao.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';

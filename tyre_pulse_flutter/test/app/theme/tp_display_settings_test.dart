@@ -83,7 +83,7 @@ void main() {
           InMemoryDisplaySettingsStore()..writeThemeMode(ThemeMode.dark);
 
       final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           displaySettingsStoreProvider.overrideWith((Ref ref) => preloaded),
         ],
       );
@@ -97,7 +97,7 @@ void main() {
     test('updates the provider state', () {
       final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
         ],
       );
@@ -112,7 +112,7 @@ void main() {
     test('writes through to the underlying store, not only local state', () {
       final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
         ],
       );
@@ -139,7 +139,7 @@ void main() {
           InMemoryDisplaySettingsStore()..writeLocale(const Locale('ar'));
 
       final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           displaySettingsStoreProvider.overrideWith((Ref ref) => preloaded),
         ],
       );
@@ -153,7 +153,7 @@ void main() {
     test('updates the provider state and writes through to the store', () {
       final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
         ],
       );
@@ -169,7 +169,7 @@ void main() {
     test('passing null returns to following the device language', () {
       final InMemoryDisplaySettingsStore store = InMemoryDisplaySettingsStore();
       final ProviderContainer container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           displaySettingsStoreProvider.overrideWith((Ref ref) => store),
         ],
       );

@@ -6,6 +6,8 @@
 /// outside, which is where this application is used.
 library;
 
+import 'dart:ui' show PathMetric;
+
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';

@@ -45,7 +45,7 @@ Future<void> _settle() => Future<void>.delayed(Duration.zero);
     pageSize: pageSize,
   );
   final ProviderContainer container = ProviderContainer(
-    overrides: <Override>[
+    overrides: [
       accessStateProvider.overrideWithValue(access),
       tyreRecordsRepositoryProvider.overrideWithValue(repo),
     ],
@@ -170,20 +170,21 @@ void main() {
       expect(ids, hasLength(10));
       expect(ids.toSet(), hasLength(10), reason: 'no id was duplicated');
       expect(
-          ids,
-          <String>[
-            'a0',
-            'a1',
-            'a2',
-            'a3',
-            'a4',
-            'b0',
-            'b1',
-            'b2',
-            'b3',
-            'b4',
-          ],
-          reason: 'the full set is present, in order, with nothing dropped');
+        ids,
+        <String>[
+          'a0',
+          'a1',
+          'a2',
+          'a3',
+          'a4',
+          'b0',
+          'b1',
+          'b2',
+          'b3',
+          'b4',
+        ],
+        reason: 'the full set is present, in order, with nothing dropped',
+      );
       expect(state.hasMore, isFalse);
     });
 

@@ -70,8 +70,7 @@ final class SupabaseInspectionRemoteRepository
         if (country != null && country.isNotEmpty) {
           query = query.eq('country', country);
         }
-        final List<Map<String, dynamic>> rows =
-            await query.order('name') as List<Map<String, dynamic>>;
+        final List<Map<String, dynamic>> rows = await query.order('name');
         final List<String> names = <String>[];
         final Set<String> seen = <String>{};
         for (final row in rows) {
@@ -129,7 +128,7 @@ final class SupabaseInspectionRemoteRepository
           .select(inspectionRecordColumns)
           .eq('created_by', createdBy)
           .order('inspection_date', ascending: false)
-          .limit(limit) as List<Map<String, dynamic>>,
+          .limit(limit),
     );
     return <InspectionRecord>[
       for (final row in rows) InspectionRecord.fromRow(row),

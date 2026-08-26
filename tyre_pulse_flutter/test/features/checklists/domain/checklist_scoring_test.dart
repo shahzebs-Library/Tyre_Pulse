@@ -34,11 +34,11 @@ void main() {
         weight: -1,
         passValues: <Object?>['OK'],
       ),
-      ChecklistField(
+      const ChecklistField(
         id: 'nan',
         type: 'select',
         weight: double.nan,
-        passValues: const <Object?>['OK'],
+        passValues: <Object?>['OK'],
       ),
       const ChecklistField(
         id: 'counts',

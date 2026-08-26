@@ -198,7 +198,7 @@ WorkspaceProfile profileWith({
 final class Harness {
   Harness({Duration restoreTimeout = const Duration(milliseconds: 30)}) {
     container = ProviderContainer(
-      overrides: <Override>[
+      overrides: [
         authRepositoryProvider.overrideWith((Ref ref) => auth),
         profileRepositoryProvider.overrideWith((Ref ref) => profiles),
         versionGateRepositoryProvider.overrideWith((Ref ref) => versionGate),
@@ -372,8 +372,8 @@ void main() {
         'working retry', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
-      h.profiles.outcomeByUserId['user-1'] = ProfileFetchFailed(
-        const AppError(kind: AppErrorKind.network, message: 'offline'),
+      h.profiles.outcomeByUserId['user-1'] = const ProfileFetchFailed(
+        AppError(kind: AppErrorKind.network, message: 'offline'),
       );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));

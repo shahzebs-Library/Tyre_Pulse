@@ -195,7 +195,7 @@ final class SupabaseChecklistApprovalRepository
       }
       return await query
           .order('submitted_at', ascending: false, nullsFirst: false)
-          .limit(200) as List<Map<String, dynamic>>;
+          .limit(200);
     });
     return <ChecklistApprovalItem>[
       for (final Map<String, dynamic> row in rows)
@@ -265,10 +265,9 @@ final class SupabaseChecklistApprovalRepository
       final List<Map<String, dynamic>> rows =
           await guard<List<Map<String, dynamic>>>(() async {
         return await _client
-                .from(SupabaseTables.checklistTemplates)
-                .select(checklistApprovalTemplateColumns)
-                .or(distinct.map((String id) => 'id.eq.$id').join(','))
-            as List<Map<String, dynamic>>;
+            .from(SupabaseTables.checklistTemplates)
+            .select(checklistApprovalTemplateColumns)
+            .or(distinct.map((String id) => 'id.eq.$id').join(','));
       });
       final Map<String, ChecklistApprovalTemplateInfo> out =
           <String, ChecklistApprovalTemplateInfo>{};
@@ -318,7 +317,7 @@ final class SupabaseChecklistApprovalRepository
           .update(patch)
           .eq('id', item.submissionId)
           .eq('approval_status', item.priorApprovalStatus)
-          .select('id') as List<Map<String, dynamic>>;
+          .select('id');
     });
     return rows.isEmpty
         ? ChecklistApprovalApplyResult.conflict

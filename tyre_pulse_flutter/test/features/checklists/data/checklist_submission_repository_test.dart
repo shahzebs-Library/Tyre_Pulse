@@ -235,8 +235,8 @@ void main() {
     final Map<String, Object?> photos =
         payload['photos']! as Map<String, Object?>;
 
-    expect((photos['brakes']! as List<Object?>), hasLength(2));
-    expect((photos['engine_bay']! as List<Object?>), hasLength(1));
+    expect(photos['brakes']! as List<Object?>, hasLength(2));
+    expect(photos['engine_bay']! as List<Object?>, hasLength(1));
 
     // The photo files were genuinely handed to the queue, not just recorded
     // in the payload JSON: pending_media_uploads carries one row per photo,

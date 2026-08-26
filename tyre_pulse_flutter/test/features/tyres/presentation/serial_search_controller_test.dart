@@ -46,7 +46,11 @@ class FakeTyreLookupRepository implements TyreLookupRepository {
     lookupCalls++;
     lastLookupSerial = rawSerial;
     final Object? error = lookupError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return lookupResult;
   }
 
@@ -54,7 +58,11 @@ class FakeTyreLookupRepository implements TyreLookupRepository {
   Future<ScrapMark?> getScrapMark(String rawSerial) async {
     scrapMarkCalls++;
     final Object? error = scrapMarkError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return scrapMarkResult;
   }
 
@@ -70,7 +78,11 @@ class FakeTyreLookupRepository implements TyreLookupRepository {
     lastScrapSerial = rawSerial;
     lastScrapReason = reason;
     final Object? error = scrapError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection.
+      // ignore: only_throw_errors
+      throw error;
+    }
     return 1;
   }
 
@@ -79,7 +91,11 @@ class FakeTyreLookupRepository implements TyreLookupRepository {
     unscrapCalls++;
     lastUnscrapSerial = rawSerial;
     final Object? error = unscrapError;
-    if (error != null) throw error;
+    if (error != null) {
+      // Deliberate arbitrary-error injection.
+      // ignore: only_throw_errors
+      throw error;
+    }
   }
 }
 
@@ -97,7 +113,7 @@ Future<void> _settle() async {
 ({ProviderContainer container, FakeTyreLookupRepository repo}) _harness() {
   final FakeTyreLookupRepository repo = FakeTyreLookupRepository();
   final ProviderContainer container = ProviderContainer(
-    overrides: <Override>[tyreLookupRepositoryProvider.overrideWithValue(repo)],
+    overrides: [tyreLookupRepositoryProvider.overrideWithValue(repo)],
   );
   return (container: container, repo: repo);
 }

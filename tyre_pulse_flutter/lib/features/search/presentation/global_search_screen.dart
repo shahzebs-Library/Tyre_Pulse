@@ -30,8 +30,6 @@
 /// screen-registry entry this screen ships under.
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,10 +42,10 @@ import 'package:tyre_pulse/core/database/app_database.dart' show RecentSearch;
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 
-import '../domain/global_search_route.dart';
-import '../domain/global_search_state.dart';
-import '../domain/search_result.dart';
-import 'global_search_controller.dart';
+import 'package:tyre_pulse/features/search/domain/global_search_route.dart';
+import 'package:tyre_pulse/features/search/domain/global_search_state.dart';
+import 'package:tyre_pulse/features/search/domain/search_result.dart';
+import 'package:tyre_pulse/features/search/presentation/global_search_controller.dart';
 
 class GlobalSearchScreen extends ConsumerStatefulWidget {
   const GlobalSearchScreen({required this.route, super.key});
@@ -93,11 +91,11 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _didAutoSearch) return;
         _didAutoSearch = true;
-        unawaited(
-          ref
-              .read(globalSearchControllerProvider.notifier)
-              .searchNow(routeQuery),
-        );
+        // `searchNow` is synchronous (`void`, not `Future<void>` - see
+        // `global_search_controller.dart`), so there is nothing here to
+        // `unawaited(...)`; that wrapper does not accept a `void`
+        // expression.
+        ref.read(globalSearchControllerProvider.notifier).searchNow(routeQuery);
       });
     }
   }
@@ -113,11 +111,9 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
   }
 
   void _runSearch([String? raw]) {
-    unawaited(
-      ref
-          .read(globalSearchControllerProvider.notifier)
-          .searchNow(raw ?? _searchController.text),
-    );
+    ref
+        .read(globalSearchControllerProvider.notifier)
+        .searchNow(raw ?? _searchController.text);
   }
 
   void _selectRecent(RecentSearch entry) {
@@ -126,9 +122,7 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
         ..text = entry.term
         ..selection = TextSelection.collapsed(offset: entry.term.length);
     });
-    unawaited(
-      ref.read(globalSearchControllerProvider.notifier).selectRecent(entry),
-    );
+    ref.read(globalSearchControllerProvider.notifier).selectRecent(entry);
   }
 
   /// Navigates to the real, already-registered destination for a tapped
@@ -328,8 +322,10 @@ class _RecentSearchesList extends StatelessWidget {
       children: <Widget>[
         Padding(
           padding: const EdgeInsets.only(bottom: TpSpace.sm),
-          child: Text(l10n.globalSearchRecentSectionTitle,
-              style: text.labelMedium),
+          child: Text(
+            l10n.globalSearchRecentSectionTitle,
+            style: text.labelMedium,
+          ),
         ),
         for (final RecentSearch entry in entries) ...<Widget>[
           TpCard(
@@ -340,7 +336,7 @@ class _RecentSearchesList extends StatelessWidget {
             onTap: () => onSelect(entry),
             child: Row(
               children: <Widget>[
-                Icon(Icons.history, size: TpSizing.iconMd),
+                const Icon(Icons.history, size: TpSizing.iconMd),
                 const SizedBox(width: TpSpace.md),
                 Expanded(
                   child: TpIdentifierText(entry.term, style: text.bodyLarge),
@@ -516,8 +512,11 @@ class _SourcesFailedNotice extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(Icons.info_outline,
-                size: TpSizing.iconMd, color: colors.onSoft),
+            Icon(
+              Icons.info_outline,
+              size: TpSizing.iconMd,
+              color: colors.onSoft,
+            ),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(

@@ -178,7 +178,8 @@ export async function renderTyreLifeReportPdf({
     showHead: 'everyPage',
     head: [[
       'Serial', 'Asset', 'Brand', 'Pos', 'Type', 'Site', 'Size', 'Days on',
-      'Km run', 'Hours run', 'Expected life', 'Remaining', 'Rem. days', 'Used', 'Basis',
+      'Current km', 'Current hrs', 'Km run', 'Hours run', 'Expected life',
+      'Remaining', 'Rem. days', 'Used', 'Basis',
     ]],
     body: rows.map((r) => [
       r.serial || 'N/A',
@@ -189,6 +190,8 @@ export async function renderTyreLifeReportPdf({
       r.site || 'N/A',
       r.size || 'N/A',
       fmtNum(r.daysOn),
+      fmtNum(r.currentKm),
+      fmtNum(r.currentHours),
       fmtNum(r.kmRun),
       fmtNum(r.hoursRun),
       lifeDisplay(r.expectedLifeKm, r.expectedLifeHours),
@@ -203,7 +206,7 @@ export async function renderTyreLifeReportPdf({
     columnStyles: {
       7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' },
       10: { halign: 'right' }, 11: { halign: 'right' }, 12: { halign: 'right' },
-      13: { halign: 'right' },
+      13: { halign: 'right' }, 14: { halign: 'right' }, 15: { halign: 'right' },
     },
   })
 

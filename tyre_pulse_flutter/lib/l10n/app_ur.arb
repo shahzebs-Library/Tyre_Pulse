@@ -528,9 +528,15 @@
 
   "homeNavTitle": "ہوم",
   "homeGreeting": "خوش آمدید",
-  "homeQuickActionsHeading": "فوری اقدامات",
-  "homeWorkOrdersTile": "ورک آرڈرز",
-  "homeWorkOrdersTileSubtitle": "دیکھ بھال کے جاب کارڈز",
+  "homeFieldSectionHeading": "میدانی کام",
+  "homeFleetSectionHeading": "فلیٹ",
+  "homeMaintenanceSectionHeading": "دیکھ بھال",
+  "homeSyncStatLabel": "مطابقت زیر التوا",
+  "homeSiteStatLabel": "سائٹ",
+  "homeSiteStatUnavailable": "کوئی سائٹ درج نہیں",
+  "homeFleetSizeStatLabel": "فلیٹ کا حجم",
+  "homeStatLoadingCaption": "جانچا جا رہا ہے",
+  "homeStatUnavailableCaption": "جانچ نہیں ہو سکی",
   "homeNoQuickActionsMessage": "ابھی آپ کے لیے یہاں کچھ دستیاب نہیں ہے۔ اگر آپ کو کسی فیچر تک رسائی درکار ہو تو اپنے منتظم سے رابطہ کریں۔",
 
   "workOrdersNavTitle": "ورک آرڈرز",

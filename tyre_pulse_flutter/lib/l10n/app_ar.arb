@@ -528,9 +528,15 @@
 
   "homeNavTitle": "الرئيسية",
   "homeGreeting": "مرحبًا بعودتك",
-  "homeQuickActionsHeading": "إجراءات سريعة",
-  "homeWorkOrdersTile": "أوامر العمل",
-  "homeWorkOrdersTileSubtitle": "بطاقات عمل الصيانة",
+  "homeFieldSectionHeading": "الميدان",
+  "homeFleetSectionHeading": "الأسطول",
+  "homeMaintenanceSectionHeading": "الصيانة",
+  "homeSyncStatLabel": "بانتظار المزامنة",
+  "homeSiteStatLabel": "الموقع",
+  "homeSiteStatUnavailable": "لا يوجد موقع مسجل",
+  "homeFleetSizeStatLabel": "حجم الأسطول",
+  "homeStatLoadingCaption": "جارٍ التحقق",
+  "homeStatUnavailableCaption": "تعذر التحقق",
   "homeNoQuickActionsMessage": "لا يتوفر لك شيء هنا بعد. تواصل مع المسؤول إذا احتجت إلى الوصول إلى إحدى الميزات.",
 
   "workOrdersNavTitle": "أوامر العمل",

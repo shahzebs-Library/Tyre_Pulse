@@ -297,16 +297,33 @@ void main() {
     //   load-error pair, title fallback, and seven field labels (work
     //   order number, work type, site, country, opened/started/completed,
     //   description).
-    // 495 + 52 = 547. Bumping this pin is the expected maintenance action
+    // - `features/home` again (the real Home hub, replacing the Phase 8a
+    //   stopgap by REPLACEMENT rather than extension - see
+    //   `features/home/presentation/home_screen.dart`'s own library comment
+    //   on why). Net +6: 3 stopgap-only keys retired
+    //   (homeQuickActionsHeading, homeWorkOrdersTile,
+    //   homeWorkOrdersTileSubtitle - the tile grid now carries per-section
+    //   headings and reuses each destination's own existing nav-title key
+    //   for its tile label, e.g. `workOrdersNavTitle`, rather than a
+    //   Home-local duplicate) against 9 new ones added: three section
+    //   headings (homeFieldSectionHeading, homeFleetSectionHeading,
+    //   homeMaintenanceSectionHeading) and six small-stat-card strings
+    //   (homeSyncStatLabel, homeSiteStatLabel, homeSiteStatUnavailable,
+    //   homeFleetSizeStatLabel, homeStatLoadingCaption,
+    //   homeStatUnavailableCaption) for the pending-sync/site/fleet-size
+    //   row. homeNavTitle, homeGreeting and homeNoQuickActionsMessage carry
+    //   over unchanged from the stopgap - the greeting and the honest
+    //   zero-access fallback are both still correct as written.
+    // 547 - 3 + 9 = 553. Bumping this pin is the expected maintenance action
     // for a real key addition; this comment exists so the next person to
     // touch it can tell that apart from a mistake. Per this file's own
     // earlier note: if a future edit ever makes a translated file the
     // larger one, re-derive which file is the reference before touching
     // this number - do not just raise it blind.
-    test('en, ar and ur each carry exactly 547 translatable keys today', () {
-      expect(_translatableKeys(en).length, 547);
-      expect(_translatableKeys(ar).length, 547);
-      expect(_translatableKeys(ur).length, 547);
+    test('en, ar and ur each carry exactly 553 translatable keys today', () {
+      expect(_translatableKeys(en).length, 553);
+      expect(_translatableKeys(ar).length, 553);
+      expect(_translatableKeys(ur).length, 553);
     });
   });
 

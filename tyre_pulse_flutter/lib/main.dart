@@ -37,6 +37,8 @@ import 'package:tyre_pulse/features/meter_logs/'
 import 'package:tyre_pulse/features/records/records_screen_registrations.dart';
 import 'package:tyre_pulse/features/scanning/'
     'scanning_screen_registrations.dart';
+import 'package:tyre_pulse/features/tyre_exchange/'
+    'tyre_exchange_screen_registrations.dart';
 import 'package:tyre_pulse/features/tyres/tyres_screen_registrations.dart';
 import 'package:tyre_pulse/features/washing/washing_screen_registrations.dart';
 import 'package:tyre_pulse/features/work_orders/'
@@ -213,6 +215,16 @@ Future<void> main() async {
         //   `/work-orders`, never from anywhere inside the app, which is
         //   the exact reachability defect this phase's brief named as the
         //   bug the reference app itself already has.
+        //
+        // Phase 7 (continued) - Tyre Replacement
+        // (`features/tyre_exchange`, ported from
+        // `mobile/app/(app)/tyre-change.tsx`) registers
+        // [TpRouteId.tyreChange] in this SAME integration pass, joining
+        // `meterLogsScreenRegistrations` and `washingScreenRegistrations`
+        // above for the identical reason: its route id, `/tyre-change` path
+        // template and `ModuleGuarded(RouteModule.tyreChange)` guard already
+        // existed in `routes.dart`/`app_router.dart`/`route_access.dart`
+        // before this feature's screen was written.
         screenRegistryProvider.overrideWithValue(
           TpScreenRegistry.empty
               .withAll(assetsScreenRegistrations)
@@ -226,7 +238,8 @@ Future<void> main() async {
               .withAll(meterLogsScreenRegistrations)
               .withAll(washingScreenRegistrations)
               .withAll(homeScreenRegistrations)
-              .withAll(workOrdersScreenRegistrations),
+              .withAll(workOrdersScreenRegistrations)
+              .withAll(tyreExchangeScreenRegistrations),
         ),
       ],
       child: const TyrePulseApp(),

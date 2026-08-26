@@ -37,24 +37,23 @@ class AppError implements Exception {
   /// A failure to reach the server. Retryable by definition: the request never
   /// got an answer, so nothing is known about whether it applied.
   const AppError.network({String? technical, Object? cause})
-    : this(
-        kind: AppErrorKind.network,
-        message:
-            'No connection to the server. Your work is saved on this '
-            'device and will sync when you are back online.',
-        technical: technical,
-        cause: cause,
-        isRetryable: true,
-      );
+      : this(
+          kind: AppErrorKind.network,
+          message: 'No connection to the server. Your work is saved on this '
+              'device and will sync when you are back online.',
+          technical: technical,
+          cause: cause,
+          isRetryable: true,
+        );
 
   /// The session is gone or was rejected.
   const AppError.authentication({String? technical, Object? cause})
-    : this(
-        kind: AppErrorKind.authentication,
-        message: 'Your session has ended. Sign in again to continue.',
-        technical: technical,
-        cause: cause,
-      );
+      : this(
+          kind: AppErrorKind.authentication,
+          message: 'Your session has ended. Sign in again to continue.',
+          technical: technical,
+          cause: cause,
+        );
 
   /// The account is real but is not allowed to do this.
   ///
@@ -65,24 +64,23 @@ class AppError implements Exception {
     String? technical,
     Object? cause,
   }) : this(
-         kind: AppErrorKind.authorization,
-         message: message,
-         technical: technical,
-         cause: cause,
-       );
+          kind: AppErrorKind.authorization,
+          message: message,
+          technical: technical,
+          cause: cause,
+        );
 
   /// The record changed on the server since it was read. Spec section 57 gives
   /// this exact example, and spec section 14 is why it matters: an approval
   /// replayed hours later can contradict a decision somebody else already made.
   const AppError.conflict({String? technical, Object? cause})
-    : this(
-        kind: AppErrorKind.conflict,
-        message:
-            'This record changed on the server. Refresh it before '
-            'continuing so you are acting on the current version.',
-        technical: technical,
-        cause: cause,
-      );
+      : this(
+          kind: AppErrorKind.conflict,
+          message: 'This record changed on the server. Refresh it before '
+              'continuing so you are acting on the current version.',
+          technical: technical,
+          cause: cause,
+        );
 
   final AppErrorKind kind;
 
@@ -102,7 +100,6 @@ class AppError implements Exception {
   final bool isRetryable;
 
   @override
-  String toString() =>
-      'AppError(${kind.name}): $message'
+  String toString() => 'AppError(${kind.name}): $message'
       '${technical == null ? '' : ' [$technical]'}';
 }

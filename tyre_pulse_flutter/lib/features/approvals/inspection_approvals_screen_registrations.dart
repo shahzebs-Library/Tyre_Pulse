@@ -35,9 +35,9 @@ import 'package:tyre_pulse/features/approvals/presentation/'
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> inspectionApprovalsScreenRegistrations =
     <String, TpScreenBuilder>{
-      TpRouteId.inspectionApprovals: _buildInspectionApprovalsQueueScreen,
-      TpRouteId.inspectionApprovalReview: _buildInspectionApprovalReviewScreen,
-    };
+  TpRouteId.inspectionApprovals: _buildInspectionApprovalsQueueScreen,
+  TpRouteId.inspectionApprovalReview: _buildInspectionApprovalReviewScreen,
+};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [InspectionApprovalsRoute]. The registry is keyed by

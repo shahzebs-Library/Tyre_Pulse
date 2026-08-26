@@ -25,9 +25,8 @@ void main() {
       // not a String, and neither wire name below has a corresponding enum
       // value to construct). This test asserts the same fact at runtime, so
       // a future edit that widens the enum trips an assertion here too.
-      final Set<String> wireNames = CommandType.values
-          .map((CommandType t) => t.wireName)
-          .toSet();
+      final Set<String> wireNames =
+          CommandType.values.map((CommandType t) => t.wireName).toSet();
       expect(wireNames.contains('CHECKLIST_APPROVAL'), isFalse);
       expect(wireNames.contains('REPAIR_REQUEST'), isFalse);
     });
@@ -65,8 +64,7 @@ void main() {
         expect(
           SupabaseTables.all.contains(spec.table),
           isTrue,
-          reason:
-              '${spec.type} targets "${spec.table}", which is not a '
+          reason: '${spec.type} targets "${spec.table}", which is not a '
               'verified table',
         );
       }

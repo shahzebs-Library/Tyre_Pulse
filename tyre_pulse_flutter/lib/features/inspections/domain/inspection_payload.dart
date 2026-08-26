@@ -156,10 +156,10 @@ class InspectionPayload {
   /// The raw `tyre_conditions` map this row carries, in the exact shape
   /// [tyreCompleteness] and [VehicleTyreDiagram] expect.
   Map<String, Object?> tyreConditionsJson() => <String, Object?>{
-    for (final MapEntry<String, TyrePositionReading> e
-        in tyreConditions.entries)
-      e.key: e.value.toEntry(),
-  };
+        for (final MapEntry<String, TyrePositionReading> e
+            in tyreConditions.entries)
+          e.key: e.value.toEntry(),
+      };
 
   /// The full row, ready to `.insert()` / `.upsert()`. `client_uuid` is
   /// added by the caller at the point of the actual write (the sync
@@ -191,8 +191,7 @@ class InspectionPayload {
     };
   }
 
-  static String _isoDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
+  static String _isoDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 }

@@ -143,7 +143,8 @@ void main() {
       expect(canActOnStage(ApprovalStage.areaManager, 'Director'), isTrue);
     });
 
-    test('case L10: a tyre data collector signs the supervisor rung but not '
+    test(
+        'case L10: a tyre data collector signs the supervisor rung but not '
         'the area manager rung', () {
       expect(
         canActOnStage(ApprovalStage.supervisor, 'Tyre Data Collector'),
@@ -213,7 +214,8 @@ void main() {
   });
 
   group('what the reader is shown (L15-L16)', () {
-    test("case L15: the ladder carries each rung's own signature so it can "
+    test(
+        "case L15: the ladder carries each rung's own signature so it can "
         'be opened and looked at', () {
       final List<ApprovalRung> rows = approvalProgress(
         kTwoStage,
@@ -233,7 +235,8 @@ void main() {
       expect(rows[1].name, isNull);
     });
 
-    test('case L16: a single-stage sheet shows ONE rung, filled from the '
+    test(
+        'case L16: a single-stage sheet shows ONE rung, filled from the '
         'approver columns', () {
       final List<ApprovalRung> rows = approvalProgress(
         kOneStage,
@@ -281,7 +284,8 @@ void main() {
       expect(normaliseRole(true), 'true');
     });
 
-    test('a super admin passing canActOnStage a null stage still passes - '
+    test(
+        'a super admin passing canActOnStage a null stage still passes - '
         'the literal source behaviour, preserved on purpose', () {
       // canActOnStage checks isSuperAdmin BEFORE it checks whether a
       // stage was even given, exactly matching the order in

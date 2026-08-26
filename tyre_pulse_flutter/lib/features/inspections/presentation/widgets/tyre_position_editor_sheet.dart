@@ -87,7 +87,6 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
         children: <Widget>[
           Text(r.position, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: TpSpace.lg),
-
           Text(
             l10n.inspectionConditionLabel,
             style: Theme.of(context).textTheme.labelMedium,
@@ -110,7 +109,6 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
             ],
           ),
           const SizedBox(height: TpSpace.lg),
-
           Row(
             children: <Widget>[
               Expanded(
@@ -155,7 +153,6 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
             ],
           ),
           const SizedBox(height: TpSpace.lg),
-
           TpInput(
             label: l10n.inspectionSerialLabel,
             controller: _serialController,
@@ -165,7 +162,6 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
             ),
           ),
           const SizedBox(height: TpSpace.lg),
-
           Text(
             l10n.inspectionPhotoLabel,
             style: Theme.of(context).textTheme.labelMedium,
@@ -176,7 +172,9 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
           else
             Text(
               l10n.inspectionPhotoNone,
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: palette.textMuted),
             ),
           const SizedBox(height: TpSpace.sm),
@@ -206,7 +204,6 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
             ],
           ),
           const SizedBox(height: TpSpace.lg),
-
           TpInput(
             label: l10n.inspectionNotesLabel,
             controller: _notesController,
@@ -215,7 +212,6 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
                 _emit(r.copyWith(notes: v, clearNotes: v.trim().isEmpty)),
           ),
           const SizedBox(height: TpSpace.xl),
-
           TpButton.primary(
             label: l10n.actionClose,
             isFullWidth: true,
@@ -260,9 +256,9 @@ class _ConditionChip extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: isSelected ? colors.onBase : colors.onSoft,
-              fontWeight: FontWeight.w700,
-            ),
+                  color: isSelected ? colors.onBase : colors.onSoft,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
         ),
       ),

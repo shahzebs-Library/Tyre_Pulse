@@ -107,16 +107,14 @@ Future<PagedRows<T>> fetchAllPages<T>(
   int pageSize = 1000,
   int maxRows = 5000,
 }) async {
-  final int boundedPageSize = pageSize < 1
-      ? 1
-      : (pageSize > 1000 ? 1000 : pageSize);
+  final int boundedPageSize =
+      pageSize < 1 ? 1 : (pageSize > 1000 ? 1000 : pageSize);
   final int cap = maxRows < boundedPageSize ? boundedPageSize : maxRows;
 
   final List<T> rows = <T>[];
   for (int from = 0; from < cap; from += boundedPageSize) {
-    final int windowEnd = (from + boundedPageSize > cap)
-        ? cap
-        : from + boundedPageSize;
+    final int windowEnd =
+        (from + boundedPageSize > cap) ? cap : from + boundedPageSize;
     final int windowSize = windowEnd - from;
 
     final List<T> page = await fetchPage(from, windowEnd - 1);
@@ -137,8 +135,7 @@ Future<PagedRows<T>> fetchAllPages<T>(
 /// constant so the query and [VehicleAsset.fromRow] cannot silently drift
 /// apart - the same discipline `auth_profile_repository.dart` applies to
 /// `_profileColumns`.
-const String vehicleFleetColumns =
-    'id, asset_no, fleet_number, make, '
+const String vehicleFleetColumns = 'id, asset_no, fleet_number, make, '
     'model, vehicle_type, site, status, operator_name, tyre_size, '
     'current_km, country, department, region, registration_no, year';
 
@@ -201,9 +198,8 @@ final class SupabaseVehicleFleetSource
     required String? country,
   }) {
     return guard(() async {
-      final query = _client
-          .from(SupabaseTables.vehicleFleet)
-          .select(vehicleFleetColumns);
+      final query =
+          _client.from(SupabaseTables.vehicleFleet).select(vehicleFleetColumns);
 
       // The country filter is null-safe by construction: a row whose
       // `country` is null belongs to no single country and must be visible
@@ -214,10 +210,10 @@ final class SupabaseVehicleFleetSource
       final List<Map<String, dynamic>> rows = country == null
           ? await query.order('asset_no').order('id').range(from, to)
           : await query
-                .or('country.eq.$country,country.is.null')
-                .order('asset_no')
-                .order('id')
-                .range(from, to);
+              .or('country.eq.$country,country.is.null')
+              .order('asset_no')
+              .order('id')
+              .range(from, to);
       return rows;
     });
   }
@@ -416,7 +412,7 @@ WorkspaceScopeFilter? vehicleCacheScopeFor(WorkspaceContext? workspace) {
 /// contract.
 final class VehicleFleetRepository {
   VehicleFleetRepository(this._source, {CacheDao? cacheDao})
-    : _cacheDao = cacheDao;
+      : _cacheDao = cacheDao;
 
   final VehicleFleetSource _source;
 
@@ -454,14 +450,13 @@ final class VehicleFleetRepository {
     try {
       final PagedRows<Map<String, dynamic>> paged =
           await fetchAllPages<Map<String, dynamic>>(
-            (int from, int to) =>
-                _source.fetchPage(from: from, to: to, country: country),
-            pageSize: _pageSize,
-            maxRows: _maxRows,
-          );
-      final List<VehicleAsset> assets = paged.rows
-          .map(VehicleAsset.fromRow)
-          .toList(growable: false);
+        (int from, int to) =>
+            _source.fetchPage(from: from, to: to, country: country),
+        pageSize: _pageSize,
+        maxRows: _maxRows,
+      );
+      final List<VehicleAsset> assets =
+          paged.rows.map(VehicleAsset.fromRow).toList(growable: false);
       return VehicleFleetListLoaded(assets: assets, truncated: paged.truncated);
     } on AppError catch (error) {
       // Either a row failed to decode (see VehicleAsset.fromRow, always
@@ -629,16 +624,16 @@ final class VehicleFleetRepository {
   /// unmeasured-value placeholder, so this degrades exactly the way a live
   /// row with a genuinely blank column already does.
   VehicleAsset _fromCachedAsset(CachedAsset row) => VehicleAsset(
-    id: row.id,
-    assetNo: row.assetNo,
-    fleetNumber: row.fleetNumber,
-    make: row.make,
-    model: row.model,
-    vehicleType: row.vehicleType,
-    site: row.site,
-    status: row.status,
-    currentKm: row.currentKm,
-    country: row.country,
-    registrationNo: row.registrationNo,
-  );
+        id: row.id,
+        assetNo: row.assetNo,
+        fleetNumber: row.fleetNumber,
+        make: row.make,
+        model: row.model,
+        vehicleType: row.vehicleType,
+        site: row.site,
+        status: row.status,
+        currentKm: row.currentKm,
+        country: row.country,
+        registrationNo: row.registrationNo,
+      );
 }

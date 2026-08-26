@@ -80,4 +80,5 @@ List<HomeSectionSpec> visibleHomeSections(
 bool homeHasNoVisibleTiles(
   List<HomeSectionSpec> sections,
   bool Function(ModuleKey module) canAccess,
-) => visibleHomeSections(sections, canAccess).isEmpty;
+) =>
+    visibleHomeSections(sections, canAccess).isEmpty;

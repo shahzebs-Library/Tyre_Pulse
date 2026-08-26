@@ -27,8 +27,7 @@ final class FakeSecureKeyValueStore extends SecureKeyValueStore {
   Future<SecureRead> read(String key) async {
     calls.add('read:$key');
 
-    final SecureReadStatus status =
-        forcedReadStatus ??
+    final SecureReadStatus status = forcedReadStatus ??
         (_values.containsKey(key)
             ? SecureReadStatus.ok
             : SecureReadStatus.absent);
@@ -98,7 +97,8 @@ void main() {
       },
     );
 
-    test('persist and remove land under the documented storage key, and '
+    test(
+        'persist and remove land under the documented storage key, and '
         'nothing else', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
       final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
@@ -142,7 +142,8 @@ void main() {
       },
     );
 
-    test('never compounds the failure into a destructive write or delete: '
+    test(
+        'never compounds the failure into a destructive write or delete: '
         'only read calls are made', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
         ..forcedReadStatus = SecureReadStatus.unreadable;
@@ -157,7 +158,8 @@ void main() {
       expect(store.calls, everyElement(startsWith('read:')));
     });
 
-    test('a session persisted before reads started failing is still there '
+    test(
+        'a session persisted before reads started failing is still there '
         'once reads work again - the adapter never deleted it', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
       final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(
@@ -172,7 +174,8 @@ void main() {
       expect(await adapter.accessToken(), 'still-there');
     });
 
-    test('a torn read - a committed value that could not be reassembled - '
+    test(
+        'a torn read - a committed value that could not be reassembled - '
         'is handled the same way: null, and nothing destroyed', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
         ..forcedReadStatus = SecureReadStatus.torn;
@@ -184,7 +187,8 @@ void main() {
       expect(store.calls, everyElement(startsWith('read:')));
     });
 
-    test('remains observable through readFailureCount, which is exactly the '
+    test(
+        'remains observable through readFailureCount, which is exactly the '
         'signal a session-restore caller needs because the LocalStorage '
         'contract itself cannot carry it', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore()
@@ -201,7 +205,8 @@ void main() {
       expect(store.readFailureCount, 1);
     });
 
-    test('a genuinely absent session increments nothing, so the failure '
+    test(
+        'a genuinely absent session increments nothing, so the failure '
         'count really does distinguish the two cases', () async {
       final FakeSecureKeyValueStore store = FakeSecureKeyValueStore();
       final SupabaseLocalStorageAdapter adapter = SupabaseLocalStorageAdapter(

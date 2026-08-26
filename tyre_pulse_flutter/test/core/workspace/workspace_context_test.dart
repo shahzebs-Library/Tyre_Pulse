@@ -17,19 +17,20 @@ Map<String, Object?> row({
   Object? approved = true,
   Object? locked,
   Object? site = 'NHC',
-}) => <String, Object?>{
-  'id': id,
-  'role': role,
-  'country': country,
-  'sites': sites,
-  'org_id': orgId,
-  'organisation_id': organisationId,
-  'is_super_admin': isSuperAdmin,
-  'approved': approved,
-  'locked': locked,
-  'site': site,
-  'full_name': 'A Person',
-};
+}) =>
+    <String, Object?>{
+      'id': id,
+      'role': role,
+      'country': country,
+      'sites': sites,
+      'org_id': orgId,
+      'organisation_id': organisationId,
+      'is_super_admin': isSuperAdmin,
+      'approved': approved,
+      'locked': locked,
+      'site': site,
+      'full_name': 'A Person',
+    };
 
 void main() {
   group('WorkspaceProfile decodes the row honestly', () {
@@ -251,12 +252,12 @@ void main() {
 
     test('two contexts built the same way are equal', () {
       WorkspaceContext build() => WorkspaceContext.fromProfile(
-        WorkspaceProfile.fromRow(row()),
-        effectivePermissions: AccessState.signedOut,
-        activeCountry: 'KSA',
-        activeSites: const <String>['NHC'],
-        currency: 'SAR',
-      );
+            WorkspaceProfile.fromRow(row()),
+            effectivePermissions: AccessState.signedOut,
+            activeCountry: 'KSA',
+            activeSites: const <String>['NHC'],
+            currency: 'SAR',
+          );
 
       expect(build(), build());
       expect(build().hashCode, build().hashCode);

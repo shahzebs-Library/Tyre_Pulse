@@ -53,11 +53,11 @@ class TpSyncSummary {
 
   /// Nothing is known yet.
   const TpSyncSummary.unknown()
-    : connectivity = TpConnectivity.unknown,
-      pendingCount = 0,
-      syncingCompleted = null,
-      syncingTotal = null,
-      attentionCount = 0;
+      : connectivity = TpConnectivity.unknown,
+        pendingCount = 0,
+        syncingCompleted = null,
+        syncingTotal = null,
+        attentionCount = 0;
 
   final TpConnectivity connectivity;
 
@@ -131,13 +131,17 @@ class TpOfflineBanner extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     content.title,
-                    style: Theme.of(context).textTheme.labelLarge
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
                         ?.copyWith(color: colors.onSoft),
                   ),
                   if (content.detail != null)
                     Text(
                       content.detail!,
-                      style: Theme.of(context).textTheme.labelSmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
                           ?.copyWith(color: colors.onSoft),
                     ),
                 ],
@@ -251,7 +255,9 @@ class TpSyncIndicator extends StatelessWidget {
           const SizedBox(width: TpSpace.xs),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium
+            style: Theme.of(context)
+                .textTheme
+                .labelMedium
                 ?.copyWith(color: colors.onSoft),
           ),
         ],

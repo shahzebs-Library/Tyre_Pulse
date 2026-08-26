@@ -52,10 +52,10 @@ class CapturedChecklistPhoto {
 
 const List<({int maxDimension, int quality})> _kResizeLadder =
     <({int maxDimension, int quality})>[
-      (maxDimension: 1600, quality: 50),
-      (maxDimension: 1024, quality: 45),
-      (maxDimension: 720, quality: 40),
-    ];
+  (maxDimension: 1600, quality: 50),
+  (maxDimension: 1024, quality: 45),
+  (maxDimension: 720, quality: 40),
+];
 
 /// Captures one photo for [fieldKey] on [draftKey] and copies it into a
 /// durable, feature-owned folder.
@@ -64,7 +64,7 @@ const List<({int maxDimension, int quality})> _kResizeLadder =
 /// callers must not report a failure for it.
 final class ChecklistPhotoCapture {
   ChecklistPhotoCapture({ImagePicker? picker})
-    : _picker = picker ?? ImagePicker();
+      : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;
 

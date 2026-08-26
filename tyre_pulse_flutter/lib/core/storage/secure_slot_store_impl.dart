@@ -71,12 +71,11 @@ import 'package:tyre_pulse/core/storage/secure_slot_store.dart';
 /// reports as [SecureReadStatus.unreadable] - never `absent`.
 final class FlutterSecureSlotStore implements SecureSlotStore {
   FlutterSecureSlotStore({FlutterSecureStorage? storage})
-    : _storage =
-          storage ??
-          FlutterSecureStorage(
-            aOptions: _androidOptions,
-            iOptions: _iosOptions,
-          );
+      : _storage = storage ??
+            FlutterSecureStorage(
+              aOptions: _androidOptions,
+              iOptions: _iosOptions,
+            );
 
   final FlutterSecureStorage _storage;
 

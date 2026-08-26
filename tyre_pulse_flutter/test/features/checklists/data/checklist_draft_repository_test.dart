@@ -101,14 +101,16 @@ void main() {
       expect(header.printedName, 'A. Mechanic');
     });
 
-    test('answers/notes for a draft that does not exist decode to an empty '
+    test(
+        'answers/notes for a draft that does not exist decode to an empty '
         'map rather than throwing', () async {
       expect(await repo.answers('never-existed'), isEmpty);
       expect(await repo.notes('never-existed'), isEmpty);
       expect(await repo.header('never-existed'), isNull);
     });
 
-    test('saving the header twice for the same user+template+asset updates '
+    test(
+        'saving the header twice for the same user+template+asset updates '
         'the same row rather than creating a second one', () async {
       await repo.saveHeader(
         userId: 'user-1',
@@ -241,7 +243,8 @@ void main() {
   });
 
   group('signatures - multiple independent slots', () {
-    test('signing two different fields on the same draft keeps both, '
+    test(
+        'signing two different fields on the same draft keeps both, '
         'independently', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -279,7 +282,8 @@ void main() {
       expect(electrician.payload, contains('M1 1'));
     });
 
-    test('the template-level pad uses the reserved primary field key and '
+    test(
+        'the template-level pad uses the reserved primary field key and '
         'does not collide with a real field of the same template', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -311,7 +315,8 @@ void main() {
       );
     });
 
-    test('re-saving the SAME field replaces its own value only, leaving a '
+    test(
+        're-saving the SAME field replaces its own value only, leaving a '
         'sibling field untouched', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -361,7 +366,8 @@ void main() {
   });
 
   group('hasContent', () {
-    test('a header with no filled fields, photos or signatures has no '
+    test(
+        'a header with no filled fields, photos or signatures has no '
         'content', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -404,7 +410,8 @@ void main() {
       expect(await repo.hasContent(key), isTrue);
     });
 
-    test('a sheet with zero filled fields but a photo already attached is '
+    test(
+        'a sheet with zero filled fields but a photo already attached is '
         'real work, not merely opened', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -432,7 +439,8 @@ void main() {
       expect(await repo.hasContent(key), isTrue);
     });
 
-    test('a sheet with a signature already captured but nothing else is '
+    test(
+        'a sheet with a signature already captured but nothing else is '
         'real work too', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -462,7 +470,8 @@ void main() {
   });
 
   group('discardDraft', () {
-    test('removes the header, answers, photos and every signature slot, and '
+    test(
+        'removes the header, answers, photos and every signature slot, and '
         'hands back the removed photo paths', () async {
       final String key = repo.draftKeyFor(
         userId: 'user-1',
@@ -516,7 +525,8 @@ void main() {
   });
 
   group('pruneToCap', () {
-    test('trims this user\'s drafts to the checklist retention cap, oldest '
+    test(
+        'trims this user\'s drafts to the checklist retention cap, oldest '
         'first, and returns the discarded photo paths', () async {
       const int cap = RetentionLimits.checklistDrafts;
       for (int i = 0; i < cap + 2; i++) {

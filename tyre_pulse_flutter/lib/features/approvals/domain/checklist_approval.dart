@@ -133,14 +133,14 @@ const List<String> kApprovalAreaManagerRoles = <String>[
 ];
 
 String _labelOf(ApprovalStage stage) => switch (stage) {
-  ApprovalStage.supervisor => 'Supervisor sign-off',
-  ApprovalStage.areaManager => 'Area manager approval',
-};
+      ApprovalStage.supervisor => 'Supervisor sign-off',
+      ApprovalStage.areaManager => 'Area manager approval',
+    };
 
 List<String> _rolesOf(ApprovalStage stage) => switch (stage) {
-  ApprovalStage.supervisor => kApprovalSupervisorRoles,
-  ApprovalStage.areaManager => kApprovalAreaManagerRoles,
-};
+      ApprovalStage.supervisor => kApprovalSupervisorRoles,
+      ApprovalStage.areaManager => kApprovalAreaManagerRoles,
+    };
 
 /// The template facts the ladder needs - not the full checklist template
 /// model, which belongs to the parallel checklist domain engine that this
@@ -208,14 +208,14 @@ final class ApprovalSubmissionLike {
 
   @override
   int get hashCode => Object.hash(
-    approvalStatus,
-    approverName,
-    approverSignature,
-    approvedAt,
-    supervisorName,
-    supervisorSignature,
-    supervisorAt,
-  );
+        approvalStatus,
+        approverName,
+        approverSignature,
+        approvedAt,
+        supervisorName,
+        supervisorSignature,
+        supervisorAt,
+      );
 
   @override
   String toString() =>
@@ -412,14 +412,13 @@ List<ApprovalRung> approvalProgress(
     key: ApprovalStage.supervisor,
     label: two ? 'Supervisor sign-off' : 'Approval',
     name: submission?.supervisorName ?? (two ? null : submission?.approverName),
-    signature:
-        submission?.supervisorSignature ??
+    signature: submission?.supervisorSignature ??
         (two ? null : submission?.approverSignature),
     at: submission?.supervisorAt ?? (two ? null : submission?.approvedAt),
     done: two
         ? (_truthyString(submission?.supervisorAt) ||
-              status == 'pending_area_manager' ||
-              status == 'approved')
+            status == 'pending_area_manager' ||
+            status == 'approved')
         : status == 'approved',
     // The TS source's ternary here (`two ? st === 'pending' : st ===
     // 'pending'`) has identical branches on both sides - kept as a plain

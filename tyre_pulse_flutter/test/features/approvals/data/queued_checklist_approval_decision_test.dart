@@ -52,7 +52,8 @@ void main() {
       expect(approvalStageFromWire('area_manager'), ApprovalStage.areaManager);
     });
 
-    test('an unrecognised, null or blank wire value decodes to null - a '
+    test(
+        'an unrecognised, null or blank wire value decodes to null - a '
         'queue entry with an unreadable stage cannot be safely '
         're-validated and must never be guessed at', () {
       expect(approvalStageFromWire('bogus'), isNull);
@@ -75,7 +76,8 @@ void main() {
       },
     );
 
-    test('a supervisor sign-off and the later area-manager approval on the '
+    test(
+        'a supervisor sign-off and the later area-manager approval on the '
         'SAME submission never collide - each targets a different status', () {
       final String signOff = QueuedChecklistApprovalDecision.dedupeKeyFor(
         submissionId: 'sub-1',
@@ -115,8 +117,8 @@ void main() {
       );
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJsonString(
-            original.toJsonString(),
-          );
+        original.toJsonString(),
+      );
       expect(restored.status, ChecklistApprovalQueueStatus.blocked);
       expect(restored.stage, original.stage);
     });
@@ -124,18 +126,18 @@ void main() {
     test('a rejection with a reviewNote round-trips it', () {
       final QueuedChecklistApprovalDecision original =
           QueuedChecklistApprovalDecision(
-            id: QueuedChecklistApprovalDecision.dedupeKeyFor(
-              submissionId: 'sub-1',
-              targetStatus: 'rejected',
-            ),
-            submissionId: 'sub-1',
-            stage: ApprovalStage.areaManager,
-            priorApprovalStatus: 'pending_area_manager',
-            targetStatus: 'rejected',
-            approved: false,
-            decidedAt: DateTime.utc(2026, 8, 20),
-            reviewNote: 'Front left tread not recorded',
-          );
+        id: QueuedChecklistApprovalDecision.dedupeKeyFor(
+          submissionId: 'sub-1',
+          targetStatus: 'rejected',
+        ),
+        submissionId: 'sub-1',
+        stage: ApprovalStage.areaManager,
+        priorApprovalStatus: 'pending_area_manager',
+        targetStatus: 'rejected',
+        approved: false,
+        decidedAt: DateTime.utc(2026, 8, 20),
+        reviewNote: 'Front left tread not recorded',
+      );
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJson(original.toJson());
       expect(restored.approved, isFalse);
@@ -197,7 +199,8 @@ void main() {
       );
     });
 
-    test('a missing or unreadable stage throws a FormatException - never '
+    test(
+        'a missing or unreadable stage throws a FormatException - never '
         'defaults to a guessed rung', () {
       expect(
         () => QueuedChecklistApprovalDecision.fromJson(<String, Object?>{
@@ -231,32 +234,34 @@ void main() {
       );
     });
 
-    test('an unreadable decidedAt falls back to now, rather than throwing '
+    test(
+        'an unreadable decidedAt falls back to now, rather than throwing '
         '- a decision that was genuinely made must not become undecodable '
         'over a corrupt timestamp alone', () {
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJson(<String, Object?>{
-            'id': 'approve_sub-1_approved',
-            'submissionId': 'sub-1',
-            'stage': 'supervisor',
-            'priorApprovalStatus': 'pending',
-            'targetStatus': 'approved',
-            'decidedAt': 'not a date',
-          });
+        'id': 'approve_sub-1_approved',
+        'submissionId': 'sub-1',
+        'stage': 'supervisor',
+        'priorApprovalStatus': 'pending',
+        'targetStatus': 'approved',
+        'decidedAt': 'not a date',
+      });
       expect(restored.decidedAt, isNotNull);
     });
 
-    test('an unrecognised status wire value defaults to pending, never to '
+    test(
+        'an unrecognised status wire value defaults to pending, never to '
         'synced or blocked', () {
       final QueuedChecklistApprovalDecision restored =
           QueuedChecklistApprovalDecision.fromJson(<String, Object?>{
-            'id': 'approve_sub-1_approved',
-            'submissionId': 'sub-1',
-            'stage': 'supervisor',
-            'priorApprovalStatus': 'pending',
-            'targetStatus': 'approved',
-            'status': 'not_a_real_status',
-          });
+        'id': 'approve_sub-1_approved',
+        'submissionId': 'sub-1',
+        'stage': 'supervisor',
+        'priorApprovalStatus': 'pending',
+        'targetStatus': 'approved',
+        'status': 'not_a_real_status',
+      });
       expect(restored.status, ChecklistApprovalQueueStatus.pending);
     });
   });

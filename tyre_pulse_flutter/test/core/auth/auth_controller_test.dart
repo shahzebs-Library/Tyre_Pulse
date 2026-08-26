@@ -167,27 +167,29 @@ Map<String, Object?> profileRow({
   String id = 'user-1',
   bool approved = true,
   bool locked = false,
-}) => <String, Object?>{
-  'id': id,
-  'role': 'Manager',
-  'country': const <String>['ALL'],
-  'sites': const <String>['ALL'],
-  'org_id': 'org-1',
-  'organisation_id': 'org-1',
-  'is_super_admin': false,
-  'approved': approved,
-  'locked': locked,
-  'site': null,
-  'full_name': 'Test User',
-};
+}) =>
+    <String, Object?>{
+      'id': id,
+      'role': 'Manager',
+      'country': const <String>['ALL'],
+      'sites': const <String>['ALL'],
+      'org_id': 'org-1',
+      'organisation_id': 'org-1',
+      'is_super_admin': false,
+      'approved': approved,
+      'locked': locked,
+      'site': null,
+      'full_name': 'Test User',
+    };
 
 WorkspaceProfile profileWith({
   String id = 'user-1',
   bool approved = true,
   bool locked = false,
-}) => WorkspaceProfile.fromRow(
-  profileRow(id: id, approved: approved, locked: locked),
-);
+}) =>
+    WorkspaceProfile.fromRow(
+      profileRow(id: id, approved: approved, locked: locked),
+    );
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -232,7 +234,8 @@ final class Harness {
 
 void main() {
   group('build() - the initial state', () {
-    test('nothing readable synchronously starts as restoring, bounded by the '
+    test(
+        'nothing readable synchronously starts as restoring, bounded by the '
         'session-restore timeout', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
@@ -241,7 +244,8 @@ void main() {
       expect(h.state.sessionPhase, AuthSessionPhase.restoring);
     });
 
-    test('an already-resolved session at build time adopts it immediately, '
+    test(
+        'an already-resolved session at build time adopts it immediately, '
         'without waiting for the stream to deliver it', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
@@ -264,7 +268,8 @@ void main() {
   });
 
   group('THE TIMEOUT PATH', () {
-    test('a session that never resolves ends in timedOut, not a spinner that '
+    test(
+        'a session that never resolves ends in timedOut, not a spinner that '
         'runs forever', () async {
       final Harness h = Harness(
         restoreTimeout: const Duration(milliseconds: 15),
@@ -282,7 +287,8 @@ void main() {
       expect(deriveSession(h.state).phase, TpSessionPhase.timedOut);
     });
 
-    test('a session that resolves AFTER the timeout still recovers - the '
+    test(
+        'a session that resolves AFTER the timeout still recovers - the '
         'stream keeps listening and this is a temporary state, not a dead '
         'end', () async {
       final Harness h = Harness(
@@ -308,7 +314,8 @@ void main() {
   });
 
   group('a full sign-in reaches signedIn, gated correctly', () {
-    test('an approved, unlocked profile with a passing version gate is '
+    test(
+        'an approved, unlocked profile with a passing version gate is '
         'signed in with no gate', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
@@ -360,7 +367,8 @@ void main() {
       expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
     });
 
-    test('a profile fetch failure resolves profileUnavailable, and offers a '
+    test(
+        'a profile fetch failure resolves profileUnavailable, and offers a '
         'working retry', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
@@ -383,7 +391,8 @@ void main() {
       expect(deriveSession(h.state).gate, TpShellGate.none);
     });
 
-    test('a blocking version gate reaches updateRequired through the real '
+    test(
+        'a blocking version gate reaches updateRequired through the real '
         'wiring', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
@@ -404,7 +413,8 @@ void main() {
   });
 
   group('SIGN-OUT NEVER TOUCHES ANYTHING OUTSIDE THE AUTH SESSION', () {
-    test('it works even with no session already established - "any gate '
+    test(
+        'it works even with no session already established - "any gate '
         'state" includes the very first screen', () async {
       final Harness h = Harness();
       addTearDown(h.dispose);
@@ -435,7 +445,8 @@ void main() {
       },
     );
 
-    test('the fake auth repository is called with EXACTLY signOut and '
+    test(
+        'the fake auth repository is called with EXACTLY signOut and '
         'stopAutoRefresh, and the fake profile cache store sees EXACTLY one '
         'delete - nothing more, nothing else', () async {
       final Harness h = Harness();

@@ -218,14 +218,14 @@ final class ChecklistApprovalItem {
   /// `checklist_approval_sync_engine.dart`'s conflict check, which depends
   /// on exactly that.
   ApprovalSubmissionLike get asSubmissionLike => ApprovalSubmissionLike(
-    approvalStatus: approvalStatus,
-    approverName: approverName,
-    approverSignature: approverSignature,
-    approvedAt: approvedAt,
-    supervisorName: supervisorName,
-    supervisorSignature: supervisorSignature,
-    supervisorAt: supervisorAt,
-  );
+        approvalStatus: approvalStatus,
+        approverName: approverName,
+        approverSignature: approverSignature,
+        approvedAt: approvedAt,
+        supervisorName: supervisorName,
+        supervisorSignature: supervisorSignature,
+        supervisorAt: supervisorAt,
+      );
 
   /// Decodes [row] as read via [checklistApprovalListColumns] or
   /// [checklistApprovalFullColumns]. Never throws for a missing OPTIONAL
@@ -256,9 +256,8 @@ final class ChecklistApprovalItem {
       submittedBy: _asString(row['submitted_by']),
       submittedAt: _asString(row['submitted_at']),
       scorePct: _asInt(row['score_pct']),
-      scorePassed: row['score_passed'] is bool
-          ? row['score_passed'] as bool
-          : null,
+      scorePassed:
+          row['score_passed'] is bool ? row['score_passed'] as bool : null,
       approvalStatus: _asString(row['approval_status']),
       documentNo: _asString(row['document_no']),
       approverName: _asString(row['approver_name']),

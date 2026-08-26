@@ -17,13 +17,14 @@ AccessState state({
   Map<ModuleKey, GrantEffect> grants = const <ModuleKey, GrantEffect>{},
   Map<ModuleKey, bool> matrix = const <ModuleKey, bool>{},
   bool permissionsError = false,
-}) => AccessState(
-  role: role,
-  isSuperAdmin: isSuperAdmin,
-  grants: grants,
-  roleMatrix: matrix,
-  permissionsError: permissionsError,
-);
+}) =>
+    AccessState(
+      role: role,
+      isSuperAdmin: isSuperAdmin,
+      grants: grants,
+      roleMatrix: matrix,
+      permissionsError: permissionsError,
+    );
 
 AccessDecision decide(
   ModuleKey module,
@@ -227,8 +228,7 @@ void main() {
             expect(
               server,
               mobile,
-              reason:
-                  'unexpected divergence for ${id.token} on '
+              reason: 'unexpected divergence for ${id.token} on '
                   '${key.wireKey}',
             );
           }

@@ -53,8 +53,7 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:uuid/uuid.dart';
 
-const String _washColumns =
-    'id,asset_no,vehicle_type,wash_date,wash_time,'
+const String _washColumns = 'id,asset_no,vehicle_type,wash_date,wash_time,'
     'wash_type,site,bay,washed_by,water_liters,cost,duration_min,'
     'odometer_km,status,notes,photos,created_at';
 
@@ -175,13 +174,13 @@ final class SupabaseWashRepository
   Future<List<WashRecord>> listRecentWashes({int limit = 200}) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-          () => _client
-              .from(SupabaseTables.washRecords)
-              .select(_washColumns)
-              .order('wash_date', ascending: false, nullsFirst: false)
-              .order('created_at', ascending: false)
-              .limit(limit),
-        );
+      () => _client
+          .from(SupabaseTables.washRecords)
+          .select(_washColumns)
+          .order('wash_date', ascending: false, nullsFirst: false)
+          .order('created_at', ascending: false)
+          .limit(limit),
+    );
     return <WashRecord>[
       for (final Map<String, dynamic> row in rows) WashRecord.fromRow(row),
     ];

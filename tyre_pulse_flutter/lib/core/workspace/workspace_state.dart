@@ -27,10 +27,10 @@ final class WorkspaceState {
 
   /// Nothing resolved yet. The shell shows its splash, not an empty app.
   const WorkspaceState.unresolved()
-    : workspace = null,
-      isResolving = false,
-      lastError = null,
-      warnings = const <AppError>[];
+      : workspace = null,
+        isResolving = false,
+        lastError = null,
+        warnings = const <AppError>[];
 
   /// The active workspace, or null when none has been adopted yet.
   final WorkspaceContext? workspace;
@@ -56,12 +56,13 @@ final class WorkspaceState {
     AppError? lastError,
     bool clearLastError = false,
     List<AppError>? warnings,
-  }) => WorkspaceState(
-    workspace: workspace ?? this.workspace,
-    isResolving: isResolving ?? this.isResolving,
-    lastError: clearLastError ? null : (lastError ?? this.lastError),
-    warnings: warnings ?? this.warnings,
-  );
+  }) =>
+      WorkspaceState(
+        workspace: workspace ?? this.workspace,
+        isResolving: isResolving ?? this.isResolving,
+        lastError: clearLastError ? null : (lastError ?? this.lastError),
+        warnings: warnings ?? this.warnings,
+      );
 
   @override
   bool operator ==(Object other) =>

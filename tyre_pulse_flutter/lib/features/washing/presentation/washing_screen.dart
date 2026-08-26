@@ -147,9 +147,8 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   Future<void> _fillOperatorFromProfile(WorkspaceContext? workspace) async {
     final String userId = workspace?.userId ?? '';
     if (userId.isEmpty) return;
-    final String? name = await ref
-        .read(washRepositoryProvider)
-        .currentUserDisplayName(userId);
+    final String? name =
+        await ref.read(washRepositoryProvider).currentUserDisplayName(userId);
     if (!mounted || name == null || name.trim().isEmpty) return;
     if (_operatorController.text.trim().isEmpty) {
       _operatorController.text = name.trim();
@@ -162,9 +161,8 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       _dueError = null;
     });
     try {
-      final List<WashRecord> recent = await ref
-          .read(washRepositoryProvider)
-          .listRecentWashes();
+      final List<WashRecord> recent =
+          await ref.read(washRepositoryProvider).listRecentWashes();
       final List<WashDueEntry> due = washDueList(<WashHistoryRecord>[
         for (final WashRecord w in recent)
           WashHistoryRecord(
@@ -215,13 +213,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
 
   Future<void> _performLookup(String asset) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-    final VehicleDetailOutcome outcome = await ref
-        .read(vehicleFleetRepositoryProvider)
-        .byAssetNo(
-          scope: vehicleCacheScopeFor(workspace),
-          assetNo: asset,
-          country: workspace?.activeCountry,
-        );
+    final VehicleDetailOutcome outcome =
+        await ref.read(vehicleFleetRepositoryProvider).byAssetNo(
+              scope: vehicleCacheScopeFor(workspace),
+              assetNo: asset,
+              country: workspace?.activeCountry,
+            );
 
     if (!mounted) return;
     if (_assetController.text.trim() != asset) return;
@@ -267,13 +264,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   Future<void> _capturePhoto(WashPhotoSource source) async {
     setState(() => _capturingPhoto = true);
     try {
-      final CapturedWashPhoto? photo = await ref
-          .read(washPhotoCaptureProvider)
-          .captureAndStore(
-            sessionKey: _sessionKey,
-            orderIndex: _photoPaths.length,
-            source: source,
-          );
+      final CapturedWashPhoto? photo =
+          await ref.read(washPhotoCaptureProvider).captureAndStore(
+                sessionKey: _sessionKey,
+                orderIndex: _photoPaths.length,
+                source: source,
+              );
       if (!mounted) return;
       if (photo != null) {
         setState(() => _photoPaths.add(photo.localPath));
@@ -315,9 +311,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref
-          .read(washRepositoryProvider)
-          .submitWash(
+      await ref.read(washRepositoryProvider).submitWash(
             workspace: workspace,
             input: SubmitWashInput(
               assetNo: asset,
@@ -362,9 +356,8 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
 
     _lookupDebounce?.cancel();
     _assetController.clear();
-    _siteController.text = (legacySite != null && legacySite.isNotEmpty)
-        ? legacySite
-        : '';
+    _siteController.text =
+        (legacySite != null && legacySite.isNotEmpty) ? legacySite : '';
     _siteTouched = legacySite != null && legacySite.isNotEmpty;
     _bayController.clear();
     _odometerController.clear();
@@ -479,7 +472,9 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                 const SizedBox(height: TpSpace.xs),
                 Text(
                   l10n.washSiteHelp,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: TpPalette.of(context).textMuted),
                 ),
               ],
@@ -727,7 +722,9 @@ class _MasterInfoLine extends StatelessWidget {
         parts.join(' · '),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
             ?.copyWith(color: palette.info.onSoft, fontWeight: FontWeight.w700),
       ),
     );
@@ -861,7 +858,9 @@ class _DueRow extends StatelessWidget {
                 ),
                 Text(
                   meta,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
               ],

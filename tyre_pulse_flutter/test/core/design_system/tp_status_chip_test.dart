@@ -81,17 +81,15 @@ void main() {
       tester,
       const TpStatusChip(status: TpStatus.ok, label: 'Same'),
     );
-    final double regularHeight = tester
-        .getSize(find.byType(TpStatusChip))
-        .height;
+    final double regularHeight =
+        tester.getSize(find.byType(TpStatusChip)).height;
 
     await pumpTp(
       tester,
       const TpStatusChip(status: TpStatus.ok, label: 'Same', isCompact: true),
     );
-    final double compactHeight = tester
-        .getSize(find.byType(TpStatusChip))
-        .height;
+    final double compactHeight =
+        tester.getSize(find.byType(TpStatusChip)).height;
 
     expect(compactHeight, lessThan(regularHeight));
   });

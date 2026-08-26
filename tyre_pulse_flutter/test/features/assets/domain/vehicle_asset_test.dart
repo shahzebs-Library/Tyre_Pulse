@@ -53,7 +53,8 @@ void main() {
       expect(asset.year, 2019);
     });
 
-    test('missing optional columns decode to null, never a fabricated '
+    test(
+        'missing optional columns decode to null, never a fabricated '
         'empty string or zero', () {
       final VehicleAsset asset = VehicleAsset.fromRow(<String, dynamic>{
         'id': 'row-2',
@@ -75,7 +76,8 @@ void main() {
       expect(asset.year, isNull);
     });
 
-    test('whitespace-only string columns decode to null, matching '
+    test(
+        'whitespace-only string columns decode to null, matching '
         '`_stringOrNull`\'s trim-then-empty-check rule', () {
       final VehicleAsset asset = VehicleAsset.fromRow(
         _fullRow(overrides: <String, dynamic>{'asset_no': '   '}),
@@ -90,7 +92,8 @@ void main() {
       expect(asset.assetNo, 'TM514');
     });
 
-    test('a non-string value in a string column decodes to null rather '
+    test(
+        'a non-string value in a string column decodes to null rather '
         'than being coerced', () {
       final VehicleAsset asset = VehicleAsset.fromRow(
         _fullRow(overrides: <String, dynamic>{'make': 42}),
@@ -106,7 +109,8 @@ void main() {
       expect(asset.year, 2020);
     });
 
-    test('current_km and year accept a double and truncate toward zero, '
+    test(
+        'current_km and year accept a double and truncate toward zero, '
         'since PostgREST can return a numeric column as either shape', () {
       final VehicleAsset asset = VehicleAsset.fromRow(
         _fullRow(
@@ -208,7 +212,8 @@ void main() {
       expect(vehicleStatusTone('SOLD'), TpStatus.neutral);
     });
 
-    test('null, empty or an uncatalogued word all map to unknown - never '
+    test(
+        'null, empty or an uncatalogued word all map to unknown - never '
         'to neutral, which would claim a considered "no judgement" answer', () {
       expect(vehicleStatusTone(null), TpStatus.unknown);
       expect(vehicleStatusTone(''), TpStatus.unknown);

@@ -64,7 +64,8 @@ void main() {
     expect(() => workspaceIdFor(context), throwsA(isA<ArgumentError>()));
   });
 
-  test('this is the exact meaning WorkspaceScopeFilter already uses for '
+  test(
+      'this is the exact meaning WorkspaceScopeFilter already uses for '
       'cached reads', () {
     final WorkspaceContext context = _context(
       companyId: 'company-a',

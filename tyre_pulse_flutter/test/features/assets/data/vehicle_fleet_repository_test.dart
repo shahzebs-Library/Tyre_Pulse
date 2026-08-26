@@ -32,9 +32,9 @@ import '../../../core/database/database_test_support.dart';
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _row(int n) => <String, dynamic>{
-  'id': 'row-$n',
-  'asset_no': 'TM${n.toString().padLeft(4, '0')}',
-};
+      'id': 'row-$n',
+      'asset_no': 'TM${n.toString().padLeft(4, '0')}',
+    };
 
 // ---------------------------------------------------------------------------
 // fetchAllPages - pure, no Supabase type involved.
@@ -42,7 +42,8 @@ Map<String, dynamic> _row(int n) => <String, dynamic>{
 
 void main() {
   group('fetchAllPages', () {
-    test('an exact multiple of pageSize reads every full page then a final '
+    test(
+        'an exact multiple of pageSize reads every full page then a final '
         'empty one confirms the end', () async {
       // 6 rows over a pageSize of 3: page 0 (rows 0-2, full), page 1 (rows
       // 3-5, full - the SAME length as the window, so the loop cannot yet
@@ -51,20 +52,20 @@ void main() {
       final List<(int, int)> windows = <(int, int)>[];
       final PagedRows<Map<String, dynamic>> result =
           await fetchAllPages<Map<String, dynamic>>(
-            (int from, int to) async {
-              windows.add((from, to));
-              if (from >= 6) {
-                return const <Map<String, dynamic>>[];
-              }
-              final int end = (from + 3).clamp(0, 6);
-              return List<Map<String, dynamic>>.generate(
-                end - from,
-                (int i) => _row(from + i),
-              );
-            },
-            pageSize: 3,
-            maxRows: 100,
+        (int from, int to) async {
+          windows.add((from, to));
+          if (from >= 6) {
+            return const <Map<String, dynamic>>[];
+          }
+          final int end = (from + 3).clamp(0, 6);
+          return List<Map<String, dynamic>>.generate(
+            end - from,
+            (int i) => _row(from + i),
           );
+        },
+        pageSize: 3,
+        maxRows: 100,
+      );
 
       expect(result.rows.length, 6);
       expect(result.truncated, isFalse);
@@ -77,16 +78,16 @@ void main() {
         int calls = 0;
         final PagedRows<Map<String, dynamic>> result =
             await fetchAllPages<Map<String, dynamic>>(
-              (int from, int to) async {
-                calls++;
-                if (from == 0) {
-                  return List<Map<String, dynamic>>.generate(3, _row);
-                }
-                return const <Map<String, dynamic>>[];
-              },
-              pageSize: 5,
-              maxRows: 100,
-            );
+          (int from, int to) async {
+            calls++;
+            if (from == 0) {
+              return List<Map<String, dynamic>>.generate(3, _row);
+            }
+            return const <Map<String, dynamic>>[];
+          },
+          pageSize: 5,
+          maxRows: 100,
+        );
 
         expect(result.rows.length, 3);
         expect(result.truncated, isFalse);
@@ -99,10 +100,10 @@ void main() {
       () async {
         final PagedRows<Map<String, dynamic>> result =
             await fetchAllPages<Map<String, dynamic>>(
-              (int from, int to) async => const <Map<String, dynamic>>[],
-              pageSize: 10,
-              maxRows: 100,
-            );
+          (int from, int to) async => const <Map<String, dynamic>>[],
+          pageSize: 10,
+          maxRows: 100,
+        );
         expect(result.rows, isEmpty);
         expect(result.truncated, isFalse);
       },
@@ -113,17 +114,18 @@ void main() {
       () async {
         final PagedRows<Map<String, dynamic>> result =
             await fetchAllPages<Map<String, dynamic>>(
-              (int from, int to) async =>
-                  List<Map<String, dynamic>>.generate(to - from + 1, _row),
-              pageSize: 4,
-              maxRows: 12,
-            );
+          (int from, int to) async =>
+              List<Map<String, dynamic>>.generate(to - from + 1, _row),
+          pageSize: 4,
+          maxRows: 12,
+        );
         expect(result.rows.length, 12);
         expect(result.truncated, isTrue);
       },
     );
 
-    test('pageSize above 1000 is clamped to 1000, PostgREST own response '
+    test(
+        'pageSize above 1000 is clamped to 1000, PostgREST own response '
         'cap', () async {
       final List<(int, int)> windows = <(int, int)>[];
       await fetchAllPages<Map<String, dynamic>>(
@@ -138,18 +140,19 @@ void main() {
       expect(windows.single, (0, 999));
     });
 
-    test('pageSize below 1 is clamped up to 1, never a zero-width or '
+    test(
+        'pageSize below 1 is clamped up to 1, never a zero-width or '
         'infinite-loop window', () async {
       int calls = 0;
       final PagedRows<Map<String, dynamic>> result =
           await fetchAllPages<Map<String, dynamic>>(
-            (int from, int to) async {
-              calls++;
-              return const <Map<String, dynamic>>[];
-            },
-            pageSize: 0,
-            maxRows: 3,
-          );
+        (int from, int to) async {
+          calls++;
+          return const <Map<String, dynamic>>[];
+        },
+        pageSize: 0,
+        maxRows: 3,
+      );
       expect(result.rows, isEmpty);
       expect(calls, 1);
     });
@@ -164,20 +167,21 @@ void main() {
         final List<(int, int)> windows = <(int, int)>[];
         final PagedRows<Map<String, dynamic>> result =
             await fetchAllPages<Map<String, dynamic>>(
-              (int from, int to) async {
-                windows.add((from, to));
-                return List<Map<String, dynamic>>.generate(2, _row);
-              },
-              pageSize: 10,
-              maxRows: 3,
-            );
+          (int from, int to) async {
+            windows.add((from, to));
+            return List<Map<String, dynamic>>.generate(2, _row);
+          },
+          pageSize: 10,
+          maxRows: 3,
+        );
         expect(windows.single, (0, 9));
         expect(result.rows.length, 2);
         expect(result.truncated, isFalse);
       },
     );
 
-    test('a narrowed final window that comes back exactly full is judged '
+    test(
+        'a narrowed final window that comes back exactly full is judged '
         'against ITS OWN width, not the nominal pageSize, and correctly '
         'reports truncated', () async {
       // pageSize 5, maxRows 12: windows are (0,4) width 5, (5,9) width 5,
@@ -187,13 +191,13 @@ void main() {
       final List<(int, int)> windows = <(int, int)>[];
       final PagedRows<Map<String, dynamic>> result =
           await fetchAllPages<Map<String, dynamic>>(
-            (int from, int to) async {
-              windows.add((from, to));
-              return List<Map<String, dynamic>>.generate(to - from + 1, _row);
-            },
-            pageSize: 5,
-            maxRows: 12,
-          );
+        (int from, int to) async {
+          windows.add((from, to));
+          return List<Map<String, dynamic>>.generate(to - from + 1, _row);
+        },
+        pageSize: 5,
+        maxRows: 12,
+      );
       expect(windows, <(int, int)>[(0, 4), (5, 9), (10, 11)]);
       expect(result.rows.length, 12);
       expect(result.truncated, isTrue);
@@ -245,7 +249,8 @@ void main() {
       VehicleAsset.fromRow(<String, dynamic>{'id': '3', 'asset_no': 'MP001'}),
     ];
 
-    test('a non-blank search term bypasses the class filter entirely - a '
+    test(
+        'a non-blank search term bypasses the class filter entirely - a '
         'chip only shapes browsing and must never hide a real match', () {
       final List<VehicleAsset> result = applyVehicleFilters(
         assets,
@@ -255,7 +260,8 @@ void main() {
       expect(result.map((VehicleAsset a) => a.assetNo), <String>['GN001']);
     });
 
-    test('the tyreAssetClassFilter sentinel narrows to tyre-carrying '
+    test(
+        'the tyreAssetClassFilter sentinel narrows to tyre-carrying '
         'classes only', () {
       final List<VehicleAsset> result = applyVehicleFilters(
         assets,
@@ -290,12 +296,14 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('vehicleCacheScopeFor', () {
-    test('a null workspace yields no scope - there is nothing to fall '
+    test(
+        'a null workspace yields no scope - there is nothing to fall '
         'back by', () {
       expect(vehicleCacheScopeFor(null), isNull);
     });
 
-    test('a workspace with no companyId yields no scope, even with a '
+    test(
+        'a workspace with no companyId yields no scope, even with a '
         'country selected', () {
       final WorkspaceContext workspace = _workspace(
         companyId: null,
@@ -318,7 +326,8 @@ void main() {
       },
     );
 
-    test('a workspace with a companyId but no active country resolves a '
+    test(
+        'a workspace with a companyId but no active country resolves a '
         'country-less scope - "every country this workspace may see", not '
         'a missing value', () {
       final WorkspaceContext workspace = _workspace(companyId: workspaceA);
@@ -333,7 +342,8 @@ void main() {
   // ---------------------------------------------------------------------------
 
   group('VehicleFleetRepository.loadAll', () {
-    test('a successful multi-page read returns every row, decoded, with the '
+    test(
+        'a successful multi-page read returns every row, decoded, with the '
         'paging result\'s own truncated flag carried through', () async {
       final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(
         pages: <List<Map<String, dynamic>>>[
@@ -413,7 +423,8 @@ void main() {
       },
     );
 
-    test('a connectivity failure with a CacheDao but a null scope fails - '
+    test(
+        'a connectivity failure with a CacheDao but a null scope fails - '
         'there is nothing to filter the cache read by', () async {
       final AppDatabase db = newMemoryDatabase();
       addTearDown(db.close);
@@ -472,7 +483,8 @@ void main() {
       },
     );
 
-    test('a NON-connectivity failure never consults the cache, even when a '
+    test(
+        'a NON-connectivity failure never consults the cache, even when a '
         'matching entry exists - a permission refusal is a fact about this '
         'read, not about being offline', () async {
       final AppDatabase db = newMemoryDatabase();
@@ -506,7 +518,8 @@ void main() {
       expect(failed.error.kind, AppErrorKind.authorization);
     });
 
-    test('a row that fails to decode (no usable id) is a validation error, '
+    test(
+        'a row that fails to decode (no usable id) is a validation error, '
         'not a connectivity one, so it never falls back to the cache '
         'either', () async {
       final AppDatabase db = newMemoryDatabase();
@@ -579,7 +592,8 @@ void main() {
       },
     );
 
-    test('a blank asset number is not-found WITHOUT ever calling the '
+    test(
+        'a blank asset number is not-found WITHOUT ever calling the '
         'source - there is no value in `vehicle_fleet` an empty string '
         'could ever match', () async {
       final _FakeVehicleFleetSource source = _FakeVehicleFleetSource(

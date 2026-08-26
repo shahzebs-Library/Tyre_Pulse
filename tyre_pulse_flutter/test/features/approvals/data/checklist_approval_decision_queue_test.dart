@@ -87,7 +87,8 @@ void main() {
       expect(await queue.byId('does-not-exist'), isNull);
     });
 
-    test('two independent decisions never collide - a write to one cannot '
+    test(
+        'two independent decisions never collide - a write to one cannot '
         'corrupt another', () async {
       await queue.enqueue(
         _decision(
@@ -101,9 +102,8 @@ void main() {
 
       final ChecklistApprovalQueueReadResult listed = await queue.list();
       expect(listed.items.length, 2);
-      final Set<String> submissionIds = listed.items
-          .map((d) => d.submissionId)
-          .toSet();
+      final Set<String> submissionIds =
+          listed.items.map((d) => d.submissionId).toSet();
       expect(submissionIds, <String>{'sub-1', 'sub-2'});
     });
 
@@ -135,7 +135,8 @@ void main() {
   });
 
   group('markSynced / markFailed / remove', () {
-    test('markSynced updates status and syncedAt, and clears any prior '
+    test(
+        'markSynced updates status and syncedAt, and clears any prior '
         'error', () async {
       await queue.enqueue(
         _decision(
@@ -157,7 +158,8 @@ void main() {
       expect(after.error, isNull);
     });
 
-    test('markFailed with status:pending records the error and increments '
+    test(
+        'markFailed with status:pending records the error and increments '
         'attempts, but leaves the entry retryable', () async {
       await queue.enqueue(
         _decision(id: 'approve_sub-1_approved', submissionId: 'sub-1'),
@@ -181,7 +183,8 @@ void main() {
       expect(after.attempts, 2);
     });
 
-    test('markFailed with status:blocked moves the entry OUT of the '
+    test(
+        'markFailed with status:blocked moves the entry OUT of the '
         'automatically-retried set - the whole point of a three-state '
         'queue over the inspection queue\'s two-state one', () async {
       await queue.enqueue(
@@ -224,7 +227,8 @@ void main() {
   });
 
   group('pendingCount', () {
-    test('counts BOTH pending and blocked entries - both still represent a '
+    test(
+        'counts BOTH pending and blocked entries - both still represent a '
         'decision this device has not confirmed reached the server - and '
         'ignores synced ones', () async {
       await queue.enqueue(_decision(id: 'a', submissionId: 'sub-a'));
@@ -252,7 +256,8 @@ void main() {
     });
   });
 
-  group('a corrupt individual file is skipped, not fatal to the whole read', () {
+  group('a corrupt individual file is skipped, not fatal to the whole read',
+      () {
     test(
       'list() omits an unparsable file but returns every other item',
       () async {

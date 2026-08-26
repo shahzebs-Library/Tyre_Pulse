@@ -40,12 +40,13 @@ Map<String, Object?> rowFor({
   String id = 'user-1',
   bool locked = false,
   bool approved = true,
-}) => <String, Object?>{
-  'id': id,
-  'role': 'Manager',
-  'locked': locked,
-  'approved': approved,
-};
+}) =>
+    <String, Object?>{
+      'id': id,
+      'role': 'Manager',
+      'locked': locked,
+      'approved': approved,
+    };
 
 void main() {
   group('save then load round-trips the raw row for the same user', () {
@@ -106,7 +107,8 @@ void main() {
   });
 
   group('storage faults never escape as exceptions', () {
-    test('a write failure is swallowed - a failed cache write must not turn '
+    test(
+        'a write failure is swallowed - a failed cache write must not turn '
         'a successful profile fetch into a reported failure', () async {
       final FakeStore store = FakeStore()..failWrites = true;
       final ProfileCache cache = ProfileCache(store);

@@ -129,7 +129,8 @@ void main() {
       expect(decoded.attempts, 2);
     });
 
-    test('a payload with no gps fix decodes with a null gpsFix, not a '
+    test(
+        'a payload with no gps fix decodes with a null gpsFix, not a '
         'malformed one', () {
       final InspectionPayload noGps = _samplePayload().copyWith(
         clearGpsFix: true,
@@ -178,7 +179,8 @@ void main() {
       );
     });
 
-    test('an unrecognised status wire value falls back to pending, never '
+    test(
+        'an unrecognised status wire value falls back to pending, never '
         'throws', () {
       final QueuedInspection decoded = QueuedInspection.fromJson(
         <String, Object?>{
@@ -193,7 +195,8 @@ void main() {
   });
 
   group('copyWith', () {
-    test('clearError removes a previously-set error even when no new one '
+    test(
+        'clearError removes a previously-set error even when no new one '
         'is supplied', () {
       final QueuedInspection failed = QueuedInspection(
         id: 'id-1',

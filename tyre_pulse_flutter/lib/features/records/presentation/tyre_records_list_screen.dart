@@ -178,11 +178,11 @@ class _TyreRecordsListBody extends ConsumerWidget {
       TyreRecordsListPhase.loading => const TpLoadingState(),
       TyreRecordsListPhase.failed => _failedBody(state, controller),
       TyreRecordsListPhase.ready => RefreshIndicator(
-        onRefresh: controller.refresh,
-        child: state.isEmpty
-            ? _EmptyBody(query: state.query, controller: controller)
-            : _RecordsListView(state: state, controller: controller),
-      ),
+          onRefresh: controller.refresh,
+          child: state.isEmpty
+              ? _EmptyBody(query: state.query, controller: controller)
+              : _RecordsListView(state: state, controller: controller),
+        ),
     };
   }
 
@@ -190,8 +190,7 @@ class _TyreRecordsListBody extends ConsumerWidget {
     TyreRecordsListState state,
     TyreRecordsListController controller,
   ) {
-    final AppError error =
-        state.loadError ??
+    final AppError error = state.loadError ??
         const AppError(
           kind: AppErrorKind.unknown,
           message: 'Something went wrong. Please try again.',
@@ -202,7 +201,7 @@ class _TyreRecordsListBody extends ConsumerWidget {
     // earns its own state rather than folding into TpErrorState.
     final bool looksLikeBackendUnavailable =
         error.kind == AppErrorKind.network ||
-        (error.kind == AppErrorKind.server && error.isRetryable);
+            (error.kind == AppErrorKind.server && error.isRetryable);
     if (looksLikeBackendUnavailable) {
       return TpBackendUnavailableState(onRetry: controller.refresh);
     }
@@ -240,9 +239,8 @@ class _EmptyBody extends ConsumerWidget {
             title: l10n.recordsEmptyTitle,
             message: l10n.recordsEmptyMessage,
             icon: Icons.layers_outlined,
-            actionLabel: query.hasActiveFilters
-                ? l10n.recordsClearFilters
-                : null,
+            actionLabel:
+                query.hasActiveFilters ? l10n.recordsClearFilters : null,
             onAction: query.hasActiveFilters ? controller.clearFilters : null,
           ),
         ),
@@ -338,7 +336,9 @@ class _PagingFooter extends StatelessWidget {
             Text(
               l10n.recordsLoadMoreError,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
                   ?.copyWith(color: palette.textMuted),
             ),
             const SizedBox(height: TpSpace.xs),
@@ -357,7 +357,9 @@ class _PagingFooter extends StatelessWidget {
         child: Center(
           child: Text(
             l10n.recordsEndOfList,
-            style: Theme.of(context).textTheme.labelSmall
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
                 ?.copyWith(color: palette.textMuted),
           ),
         ),
@@ -384,9 +386,8 @@ class _TyreRecordCard extends StatelessWidget {
 
     return TpCard(
       onTap: onTap,
-      borderColor: record.riskLevel == null
-          ? null
-          : palette.forStatus(status).base,
+      borderColor:
+          record.riskLevel == null ? null : palette.forStatus(status).base,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -474,7 +475,9 @@ class _MetaItem extends StatelessWidget {
         const SizedBox(width: TpSpace.xs),
         Text(
           text,
-          style: Theme.of(context).textTheme.labelSmall
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
               ?.copyWith(color: palette.textMuted),
         ),
       ],
@@ -554,7 +557,9 @@ class _RemovableChip extends StatelessWidget {
             children: <Widget>[
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
                     ?.copyWith(color: colors.onSoft),
               ),
               const SizedBox(width: TpSpace.xs),

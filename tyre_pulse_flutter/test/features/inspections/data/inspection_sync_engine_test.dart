@@ -103,7 +103,8 @@ class _FakeRemoteRepository implements InspectionRemoteRepository {
   Future<List<InspectionRecord>> myInspections({
     required String createdBy,
     int limit = 100,
-  }) async => <InspectionRecord>[];
+  }) async =>
+      <InspectionRecord>[];
 }
 
 class _FakePhotoUploader implements InspectionPhotoUploader {
@@ -168,14 +169,16 @@ class _FakeDraftRepository implements InspectionDraftRepository {
   @override
   Future<Map<String, TyrePositionReading>> tyreReadings(
     String draftKey,
-  ) async => Map<String, TyrePositionReading>.of(
-    readingsByDraft[draftKey] ?? <String, TyrePositionReading>{},
-  );
+  ) async =>
+      Map<String, TyrePositionReading>.of(
+        readingsByDraft[draftKey] ?? <String, TyrePositionReading>{},
+      );
 
   @override
   Future<Map<String, TyrePositionReading>> tyreReadingsWithPhotos(
     String draftKey,
-  ) async => tyreReadings(draftKey);
+  ) async =>
+      tyreReadings(draftKey);
 
   @override
   Future<void> addPhoto({
@@ -283,7 +286,8 @@ void main() {
       },
     );
 
-    test('a successful delivery returns deliveredNow, marks the queue '
+    test(
+        'a successful delivery returns deliveredNow, marks the queue '
         'entry synced, removes it, and discards the draft', () async {
       final InspectionSubmitResult result = await engine.submitNow(
         draftKey: 'draft-1',
@@ -302,7 +306,8 @@ void main() {
       expect(draftRepo.discardCalls, <String>['draft-1']);
     });
 
-    test('a network failure queues the submission silently - no warning, '
+    test(
+        'a network failure queues the submission silently - no warning, '
         'and the draft is NOT discarded', () async {
       remote.failWith = const SupabaseFailure(
         error: AppError.network(),
@@ -327,7 +332,8 @@ void main() {
       expect(draftRepo.discardCalls, isEmpty);
     });
 
-    test('a definitive, non-retryable server refusal queues WITH a '
+    test(
+        'a definitive, non-retryable server refusal queues WITH a '
         'warning the inspector should see', () async {
       remote.failWith = const SupabaseFailure(
         error: AppError.conflict(),
@@ -393,7 +399,8 @@ void main() {
       },
     );
 
-    test('a photo that fails to upload keeps its local path and does not '
+    test(
+        'a photo that fails to upload keeps its local path and does not '
         'block the rest of the submission from delivering', () async {
       uploader.shouldFail = true;
       draftRepo.readingsByDraft['draft-1'] = <String, TyrePositionReading>{
@@ -477,7 +484,8 @@ void main() {
       },
     );
 
-    test('an unreadable queue store refuses rather than guessing - '
+    test(
+        'an unreadable queue store refuses rather than guessing - '
         'reports nothing attempted, never "everything is fine"', () async {
       final _UnreadableQueue unreadable = _UnreadableQueue();
       final InspectionSyncEngine engineOverUnreadable = InspectionSyncEngine(
@@ -486,8 +494,8 @@ void main() {
         remote: remote,
         photoUploader: uploader,
       );
-      final InspectionFlushSummary summary = await engineOverUnreadable
-          .flushQueue();
+      final InspectionFlushSummary summary =
+          await engineOverUnreadable.flushQueue();
       expect(summary.attempted, 0);
       expect(summary.delivered, 0);
     });

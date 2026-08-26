@@ -54,10 +54,10 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => Size.fromHeight(
-    kToolbarHeight +
-        (subtitle == null ? 0 : TpSpace.lg) +
-        (bottom?.preferredSize.height ?? 0),
-  );
+        kToolbarHeight +
+            (subtitle == null ? 0 : TpSpace.lg) +
+            (bottom?.preferredSize.height ?? 0),
+      );
 
   @override
   Widget build(BuildContext context) {

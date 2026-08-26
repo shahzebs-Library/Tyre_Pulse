@@ -33,21 +33,20 @@ abstract final class TpTheme {
   static ThemeData get dark => _themeFor(TpPalette.dark);
 
   static ThemeData _themeFor(TpPalette palette) {
-    final ColorScheme scheme =
-        ColorScheme.fromSeed(
-          seedColor: palette.primary,
-          brightness: palette.brightness,
-        ).copyWith(
-          primary: palette.primary,
-          onPrimary: palette.onPrimary,
-          surface: palette.surface,
-          onSurface: palette.text,
-          error: palette.critical.base,
-          onError: palette.critical.onBase,
-          outline: palette.borderStrong,
-          outlineVariant: palette.border,
-          scrim: palette.overlay,
-        );
+    final ColorScheme scheme = ColorScheme.fromSeed(
+      seedColor: palette.primary,
+      brightness: palette.brightness,
+    ).copyWith(
+      primary: palette.primary,
+      onPrimary: palette.onPrimary,
+      surface: palette.surface,
+      onSurface: palette.text,
+      error: palette.critical.base,
+      onError: palette.critical.onBase,
+      outline: palette.borderStrong,
+      outlineVariant: palette.border,
+      scrim: palette.overlay,
+    );
 
     return ThemeData(
       useMaterial3: true,

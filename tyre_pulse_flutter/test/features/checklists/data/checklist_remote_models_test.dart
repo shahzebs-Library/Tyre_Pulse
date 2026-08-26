@@ -93,7 +93,8 @@ void main() {
       expect(record.freshApprovalStatus, 'not_required');
     });
 
-    test('a malformed option_sets (not a map) degrades to empty, never '
+    test(
+        'a malformed option_sets (not a map) degrades to empty, never '
         'throws', () {
       expect(
         () => ChecklistTemplateRecord.fromRow(<String, dynamic>{
@@ -108,7 +109,8 @@ void main() {
       expect(record.template.optionSets, isEmpty);
     });
 
-    test('an option_sets entry whose value is not a map is skipped, not '
+    test(
+        'an option_sets entry whose value is not a map is skipped, not '
         'thrown', () {
       final ChecklistTemplateRecord record = ChecklistTemplateRecord.fromRow(
         <String, dynamic>{
@@ -125,7 +127,8 @@ void main() {
       expect(record.template.optionSets['ok_one']!.options, <String>['A']);
     });
 
-    test('a malformed assignee_roles (a string, not a list) degrades to '
+    test(
+        'a malformed assignee_roles (a string, not a list) degrades to '
         'null - "every role"', () {
       final ChecklistTemplateRecord record = ChecklistTemplateRecord.fromRow(
         <String, dynamic>{'id': 't1', 'assignee_roles': 'Mechanic'},
@@ -166,16 +169,16 @@ void main() {
     test('decodes a well-formed row', () {
       final ChecklistAssignmentRecord? record =
           ChecklistAssignmentRecord.fromRow(<String, dynamic>{
-            'id': 'a1',
-            'template_id': 't1',
-            'template_name': 'Workshop Daily Checklist',
-            'site': 'NHC',
-            'asset_no': 'TM514',
-            'assignee_role': 'Mechanic',
-            'due_date': '2026-08-26',
-            'status': 'pending',
-            'submission_id': null,
-          });
+        'id': 'a1',
+        'template_id': 't1',
+        'template_name': 'Workshop Daily Checklist',
+        'site': 'NHC',
+        'asset_no': 'TM514',
+        'assignee_role': 'Mechanic',
+        'due_date': '2026-08-26',
+        'status': 'pending',
+        'submission_id': null,
+      });
       expect(record, isNotNull);
       expect(record!.id, 'a1');
       expect(record.templateId, 't1');
@@ -183,7 +186,8 @@ void main() {
       expect(record.isOpen, isTrue);
     });
 
-    test('a row with no usable id decodes to null rather than a garbage '
+    test(
+        'a row with no usable id decodes to null rather than a garbage '
         'record', () {
       expect(
         ChecklistAssignmentRecord.fromRow(<String, dynamic>{
@@ -196,14 +200,14 @@ void main() {
     test('completed and skipped are not open', () {
       final ChecklistAssignmentRecord completed =
           ChecklistAssignmentRecord.fromRow(<String, dynamic>{
-            'id': 'a1',
-            'status': 'completed',
-          })!;
+        'id': 'a1',
+        'status': 'completed',
+      })!;
       final ChecklistAssignmentRecord skipped =
           ChecklistAssignmentRecord.fromRow(<String, dynamic>{
-            'id': 'a2',
-            'status': 'skipped',
-          })!;
+        'id': 'a2',
+        'status': 'skipped',
+      })!;
       expect(completed.isOpen, isFalse);
       expect(skipped.isOpen, isFalse);
     });
@@ -211,9 +215,9 @@ void main() {
     test('overdue and a null status are both open', () {
       final ChecklistAssignmentRecord overdue =
           ChecklistAssignmentRecord.fromRow(<String, dynamic>{
-            'id': 'a1',
-            'status': 'overdue',
-          })!;
+        'id': 'a1',
+        'status': 'overdue',
+      })!;
       final ChecklistAssignmentRecord noStatus =
           ChecklistAssignmentRecord.fromRow(<String, dynamic>{'id': 'a2'})!;
       expect(overdue.isOpen, isTrue);

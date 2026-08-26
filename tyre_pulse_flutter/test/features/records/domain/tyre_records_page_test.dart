@@ -39,7 +39,8 @@ void main() {
       expect(a, isNot(equals(b)));
     });
 
-    test('a different item order makes two pages unequal - order is part '
+    test(
+        'a different item order makes two pages unequal - order is part '
         'of what this type represents', () {
       final TyreRecordsPage a = TyreRecordsPage(
         items: <TyreRecord>[_r('1'), _r('2')],

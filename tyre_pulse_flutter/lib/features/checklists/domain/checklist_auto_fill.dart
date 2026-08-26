@@ -33,7 +33,8 @@ String? _preferring(String? primary, String? secondary) {
 /// template edit (naming an existing token) or a code change (adding a new
 /// entry here), never an inference.
 final Map<String, Object? Function(ChecklistAssetContext)>
-kChecklistAutoFillSources = <String, Object? Function(ChecklistAssetContext)>{
+    kChecklistAutoFillSources =
+    <String, Object? Function(ChecklistAssetContext)>{
   'asset.site': (ChecklistAssetContext a) => a.site,
   'asset.fleet_no': (ChecklistAssetContext a) =>
       _preferring(a.fleetNumber, a.registrationNo),

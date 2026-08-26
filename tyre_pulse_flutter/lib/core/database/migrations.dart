@@ -83,8 +83,7 @@ List<MigrationStep> migrationPlan({
   if (from > to) {
     throw AppError(
       kind: AppErrorKind.storage,
-      message:
-          'This device holds data saved by a newer version of the app. '
+      message: 'This device holds data saved by a newer version of the app. '
           'Update the app to open it. Nothing on this device has been '
           'changed.',
       technical: 'local schema downgrade refused: onDisk=$from appSupports=$to',
@@ -97,12 +96,10 @@ List<MigrationStep> migrationPlan({
     if (step == null) {
       throw AppError(
         kind: AppErrorKind.storage,
-        message:
-            'This app cannot upgrade the data already on this device. '
+        message: 'This app cannot upgrade the data already on this device. '
             'Nothing has been changed or deleted. Contact your administrator '
             'before reinstalling.',
-        technical:
-            'missing migration step from version $version '
+        technical: 'missing migration step from version $version '
             '(walking $from to $to)',
       );
     }

@@ -68,7 +68,9 @@ class TpStatusChip extends StatelessWidget {
             ],
             Text(
               text,
-              style: Theme.of(context).textTheme.labelMedium
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
                   ?.copyWith(color: colors.onSoft),
             ),
           ],

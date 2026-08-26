@@ -184,9 +184,8 @@ class TyreDetailSheet extends ConsumerWidget {
 
   static String _formatThousands(num value) {
     final bool isWhole = value == value.roundToDouble();
-    final String text = isWhole
-        ? value.round().toString()
-        : value.toStringAsFixed(2);
+    final String text =
+        isWhole ? value.round().toString() : value.toStringAsFixed(2);
     final bool negative = text.startsWith('-');
     final String digits = negative ? text.substring(1) : text;
     final List<String> parts = digits.split('.');

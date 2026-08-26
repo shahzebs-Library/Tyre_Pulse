@@ -74,7 +74,8 @@ void main() {
     }
   });
 
-  test('case 90: diagramPositions agrees with kTyreDiagramLayouts for all 13 '
+  test(
+      'case 90: diagramPositions agrees with kTyreDiagramLayouts for all 13 '
       'layouts', () {
     for (final String key in kTyreDiagramLayouts.keys) {
       final List<String> ids = <String>[

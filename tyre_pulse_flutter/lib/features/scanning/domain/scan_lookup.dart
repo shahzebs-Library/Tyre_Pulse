@@ -137,17 +137,17 @@ final class AssetLookupRecord {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    assetNo,
-    site,
-    vehicleType,
-    make,
-    model,
-    fleetNumber,
-    registrationNo,
-    chassisNo,
-    currentKm,
-  );
+        id,
+        assetNo,
+        site,
+        vehicleType,
+        make,
+        model,
+        fleetNumber,
+        registrationNo,
+        chassisNo,
+        currentKm,
+      );
 
   @override
   String toString() => 'AssetLookupRecord(assetNo: $assetNo, site: $site)';
@@ -241,16 +241,16 @@ final class TyreLookupRecord {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    brand,
-    size,
-    position,
-    tyrePosition,
-    assetNo,
-    site,
-    treadDepth,
-    pressureReading,
-  );
+        id,
+        brand,
+        size,
+        position,
+        tyrePosition,
+        assetNo,
+        site,
+        treadDepth,
+        pressureReading,
+      );
 
   @override
   String toString() =>
@@ -434,9 +434,8 @@ Future<ScanLookupResult> resolveScanLookup(
   try {
     final AssetLookupRecord? asset = await _resolveAsset(code, source);
     if (asset != null) {
-      final String resolvedCode = asset.assetNo.trim().isEmpty
-          ? code
-          : asset.assetNo;
+      final String resolvedCode =
+          asset.assetNo.trim().isEmpty ? code : asset.assetNo;
       return AssetScanMatch(rawInput: raw, code: resolvedCode, asset: asset);
     }
 
@@ -471,8 +470,8 @@ Future<AssetLookupRecord?> _resolveAsset(
   if (exact != null) {
     return exact;
   }
-  final AssetLookupRecord? byNumber = await source
-      .findAssetByNumberIgnoringCase(code);
+  final AssetLookupRecord? byNumber =
+      await source.findAssetByNumberIgnoringCase(code);
   if (byNumber != null) {
     return byNumber;
   }
@@ -527,13 +526,11 @@ final class ScanLookupRepository
   final SupabaseClient _client;
 
   /// Mirrors `assetLookup.ts`'s `ASSET_COLS` exactly.
-  static const String _assetColumns =
-      'id, site, asset_no, vehicle_type, '
+  static const String _assetColumns = 'id, site, asset_no, vehicle_type, '
       'make, model, fleet_number, registration_no, chassis_no, current_km';
 
   /// Mirrors `tyreLookup.ts`'s select list exactly.
-  static const String _tyreColumns =
-      'id, brand, size, position, '
+  static const String _tyreColumns = 'id, brand, size, position, '
       'tyre_position, asset_no, site, tread_depth, pressure_reading';
 
   @override
@@ -544,12 +541,12 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-          () => _client
-              .from(SupabaseTables.vehicleFleet)
-              .select(_assetColumns)
-              .eq('asset_no', clean)
-              .limit(1),
-        );
+      () => _client
+          .from(SupabaseTables.vehicleFleet)
+          .select(_assetColumns)
+          .eq('asset_no', clean)
+          .limit(1),
+    );
     return rows.isEmpty ? null : AssetLookupRecord.fromRow(rows.first);
   }
 
@@ -561,12 +558,12 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-          () => _client
-              .from(SupabaseTables.vehicleFleet)
-              .select(_assetColumns)
-              .ilike('asset_no', literal)
-              .limit(1),
-        );
+      () => _client
+          .from(SupabaseTables.vehicleFleet)
+          .select(_assetColumns)
+          .ilike('asset_no', literal)
+          .limit(1),
+    );
     return rows.isEmpty ? null : AssetLookupRecord.fromRow(rows.first);
   }
 
@@ -580,12 +577,12 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-          () => _client
-              .from(SupabaseTables.vehicleFleet)
-              .select(_assetColumns)
-              .ilike('fleet_number', literal)
-              .limit(1),
-        );
+      () => _client
+          .from(SupabaseTables.vehicleFleet)
+          .select(_assetColumns)
+          .ilike('fleet_number', literal)
+          .limit(1),
+    );
     return rows.isEmpty ? null : AssetLookupRecord.fromRow(rows.first);
   }
 
@@ -597,15 +594,15 @@ final class ScanLookupRepository
     }
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-          () => _client
-              .from(SupabaseTables.tyreRecords)
-              .select(_tyreColumns)
-              .or(
-                'serial_no.eq.$clean,serial_number.eq.$clean,'
-                'tyre_serial.eq.$clean',
-              )
-              .limit(1),
-        );
+      () => _client
+          .from(SupabaseTables.tyreRecords)
+          .select(_tyreColumns)
+          .or(
+            'serial_no.eq.$clean,serial_number.eq.$clean,'
+            'tyre_serial.eq.$clean',
+          )
+          .limit(1),
+    );
     return rows.isEmpty ? null : TyreLookupRecord.fromRow(rows.first);
   }
 

@@ -84,7 +84,8 @@ void main() {
       expect(next.riskLevel, 'Low');
     });
 
-    test('a clear flag wins over a null default, actually clearing the '
+    test(
+        'a clear flag wins over a null default, actually clearing the '
         'field', () {
       const TyreRecordsQuery base = TyreRecordsQuery(site: 'NHC');
       final TyreRecordsQuery cleared = base.copyWith(clearSite: true);

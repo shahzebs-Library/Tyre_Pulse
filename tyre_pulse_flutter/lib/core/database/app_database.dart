@@ -62,8 +62,8 @@ QueryExecutor openTyrePulseDatabase() =>
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e)
-    : _schemaVersion = latestSchemaVersion,
-      _steps = migrationSteps;
+      : _schemaVersion = latestSchemaVersion,
+        _steps = migrationSteps;
 
   /// A seam for migration tests ONLY.
   ///
@@ -76,8 +76,8 @@ class AppDatabase extends _$AppDatabase {
     super.e, {
     required int schemaVersion,
     required Map<int, MigrationStep> steps,
-  }) : _schemaVersion = schemaVersion,
-       _steps = steps;
+  })  : _schemaVersion = schemaVersion,
+        _steps = steps;
 
   /// The version this build of the app understands.
   ///
@@ -106,34 +106,34 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (Migrator m) async {
-      await m.createAll();
-    },
-    onUpgrade: (Migrator m, int from, int to) async {
-      // An explicit ladder. Every rung is walked in order, a gap refuses
-      // rather than skips, and a downgrade refuses rather than writing an
-      // old shape over newer data. There is no recreate-on-failure
-      // fallback anywhere in this path, because that fallback is the thing
-      // that eats a technician's queue.
-      await runMigrationLadder(m, from: from, to: to, steps: _steps);
-    },
-    beforeOpen: (OpeningDetails details) async {
-      // NOT optional. SQLite disables foreign keys per connection by
-      // default, and without this the ON DELETE RESTRICT that stops the
-      // pruner deleting a command whose photo has not been confirmed does
-      // nothing at all, while every cascade silently leaves orphan rows.
-      await customStatement('PRAGMA foreign_keys = ON');
+        onCreate: (Migrator m) async {
+          await m.createAll();
+        },
+        onUpgrade: (Migrator m, int from, int to) async {
+          // An explicit ladder. Every rung is walked in order, a gap refuses
+          // rather than skips, and a downgrade refuses rather than writing an
+          // old shape over newer data. There is no recreate-on-failure
+          // fallback anywhere in this path, because that fallback is the thing
+          // that eats a technician's queue.
+          await runMigrationLadder(m, from: from, to: to, steps: _steps);
+        },
+        beforeOpen: (OpeningDetails details) async {
+          // NOT optional. SQLite disables foreign keys per connection by
+          // default, and without this the ON DELETE RESTRICT that stops the
+          // pruner deleting a command whose photo has not been confirmed does
+          // nothing at all, while every cascade silently leaves orphan rows.
+          await customStatement('PRAGMA foreign_keys = ON');
 
-      if (details.wasCreated || details.hadUpgrade) {
-        final DateTime now = DateTime.now().toUtc();
-        await into(syncMetadata).insertOnConflictUpdate(
-          SyncMetadataCompanion.insert(
-            key: SyncMetadataKeys.schemaMigratedAt,
-            valueJson: now.toIso8601String(),
-            updatedAt: now,
-          ),
-        );
-      }
-    },
-  );
+          if (details.wasCreated || details.hadUpgrade) {
+            final DateTime now = DateTime.now().toUtc();
+            await into(syncMetadata).insertOnConflictUpdate(
+              SyncMetadataCompanion.insert(
+                key: SyncMetadataKeys.schemaMigratedAt,
+                valueJson: now.toIso8601String(),
+                updatedAt: now,
+              ),
+            );
+          }
+        },
+      );
 }

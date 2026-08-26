@@ -65,8 +65,7 @@ void main() {
       expect(
         role.token,
         isEmpty,
-        reason:
-            'an unknown role has no token; inventing one is the '
+        reason: 'an unknown role has no token; inventing one is the '
             'coercion this model exists to prevent',
       );
     });
@@ -79,8 +78,7 @@ void main() {
         expect(
           role.isRecognisedButUnmapped,
           isTrue,
-          reason:
-              '$name should be reported as a configuration gap, not as '
+          reason: '$name should be reported as a configuration gap, not as '
               'corrupt data',
         );
       }

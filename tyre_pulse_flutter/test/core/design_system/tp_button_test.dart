@@ -186,9 +186,8 @@ void main() {
       WidgetTester tester,
     ) async {
       await pumpTp(tester, TpButton.primary(label: 'Save', onPressed: () {}));
-      final double defaultWidth = tester
-          .getSize(find.byType(FilledButton))
-          .width;
+      final double defaultWidth =
+          tester.getSize(find.byType(FilledButton)).width;
 
       await pumpTp(
         tester,

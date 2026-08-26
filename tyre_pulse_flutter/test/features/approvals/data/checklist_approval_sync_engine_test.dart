@@ -126,12 +126,14 @@ class _FakeRepository implements ChecklistApprovalRepository {
   @override
   Future<ChecklistApprovalTemplateInfo?> templateInfo(
     String templateId,
-  ) async => template;
+  ) async =>
+      template;
 
   @override
   Future<Map<String, ChecklistApprovalTemplateInfo>> templateInfoBatch(
     Iterable<String> templateIds,
-  ) async => const <String, ChecklistApprovalTemplateInfo>{};
+  ) async =>
+      const <String, ChecklistApprovalTemplateInfo>{};
 
   @override
   Future<String?> currentUserDisplayName(String userId) async => null;
@@ -202,7 +204,8 @@ void main() {
       },
     );
 
-    test('a successful delivery returns deliveredNow, and the queue entry '
+    test(
+        'a successful delivery returns deliveredNow, and the queue entry '
         'is marked synced and removed', () async {
       final ChecklistApprovalDecisionResult result = await engine.decideNow(
         submissionId: 'sub-1',
@@ -246,7 +249,8 @@ void main() {
       },
     );
 
-    test('a connectivity failure queues the decision - stays pending, no '
+    test(
+        'a connectivity failure queues the decision - stays pending, no '
         'error surfaced other than result.outcome', () async {
       repository.byIdFailWith = const SupabaseFailure(
         error: AppError.network(),
@@ -272,7 +276,8 @@ void main() {
       expect(stillQueued!.status, ChecklistApprovalQueueStatus.pending);
     });
 
-    test('a definitive server refusal (e.g. row-level security) is '
+    test(
+        'a definitive server refusal (e.g. row-level security) is '
         'blocked, not silently retried', () async {
       repository.applyFailWith = const SupabaseFailure(
         error: AppError.authorization(
@@ -315,9 +320,11 @@ void main() {
     });
   });
 
-  group('the stage-mismatch conflict check - the rule InspectionSyncEngine '
+  group(
+      'the stage-mismatch conflict check - the rule InspectionSyncEngine '
       'does not need', () {
-    test('a submission that has already moved past the decided stage is '
+    test(
+        'a submission that has already moved past the decided stage is '
         'BLOCKED with a conflict error, and NOTHING is written', () async {
       // The decision was made when the submission was still `pending`
       // (stage: supervisor). By the time delivery is attempted, somebody
@@ -343,7 +350,8 @@ void main() {
       expect(repository.appliedDecisionIds, isEmpty);
     });
 
-    test('a submission that has already been fully closed (nothing '
+    test(
+        'a submission that has already been fully closed (nothing '
         'outstanding at all) is also blocked, never delivered', () async {
       repository.current = _pendingSubmission(approvalStatus: 'approved');
 
@@ -361,7 +369,8 @@ void main() {
       expect(repository.appliedDecisionIds, isEmpty);
     });
 
-    test('a submission that no longer exists at all (removed) is blocked '
+    test(
+        'a submission that no longer exists at all (removed) is blocked '
         'with a validation error, not a crash', () async {
       repository.current = null;
 
@@ -379,7 +388,8 @@ void main() {
       expect(result.error!.kind, AppErrorKind.validation);
     });
 
-    test('the stage still matching current state (nobody else acted) '
+    test(
+        'the stage still matching current state (nobody else acted) '
         'delivers normally', () async {
       // repository.current is set by setUp to approval_status: 'pending',
       // which is exactly the supervisor stage this decision targets.
@@ -397,7 +407,8 @@ void main() {
   });
 
   group('the server-side optimistic-concurrency guard - the SECOND layer', () {
-    test('ChecklistApprovalApplyResult.conflict from the repository is '
+    test(
+        'ChecklistApprovalApplyResult.conflict from the repository is '
         'ALSO blocked, even when this engine\'s own stage re-check saw no '
         'problem - the narrow window between the two', () async {
       repository.applyResult = ChecklistApprovalApplyResult.conflict;
@@ -480,15 +491,16 @@ void main() {
       },
     );
 
-    test('an unreadable queue store refuses rather than guessing - '
+    test(
+        'an unreadable queue store refuses rather than guessing - '
         'reports nothing attempted', () async {
       final ChecklistApprovalSyncEngine engineOverUnreadable =
           ChecklistApprovalSyncEngine(
-            queue: _UnreadableQueue(),
-            repository: repository,
-          );
-      final ChecklistApprovalFlushSummary summary = await engineOverUnreadable
-          .flushQueue();
+        queue: _UnreadableQueue(),
+        repository: repository,
+      );
+      final ChecklistApprovalFlushSummary summary =
+          await engineOverUnreadable.flushQueue();
       expect(summary.attempted, 0);
       expect(summary.delivered, 0);
       expect(summary.blocked, 0);
@@ -496,7 +508,8 @@ void main() {
   });
 
   group('retryOne', () {
-    test('explicitly retries a BLOCKED entry that flushQueue would never '
+    test(
+        'explicitly retries a BLOCKED entry that flushQueue would never '
         'touch on its own', () async {
       await queue.enqueue(
         QueuedChecklistApprovalDecision(
@@ -557,8 +570,8 @@ void main() {
         ),
       );
 
-      final List<QueuedChecklistApprovalDecision> queued = await engine
-          .listQueued();
+      final List<QueuedChecklistApprovalDecision> queued =
+          await engine.listQueued();
       expect(queued.map((d) => d.id), <String>['a']);
     });
   });

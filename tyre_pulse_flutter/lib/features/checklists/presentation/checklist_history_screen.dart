@@ -80,32 +80,29 @@ class _ChecklistHistoryScreenState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage =
-            'Your checklist history could not be loaded. Pull '
+        _errorMessage = 'Your checklist history could not be loaded. Pull '
             'down to try again.';
       });
     }
   }
 
   List<ChecklistHistoryRow> get _filteredCompleted {
-    return _history.completed
-        .where((ChecklistHistoryRow r) {
-          if (_stateFilter != null &&
-              checklistHistoryStateOf(r.approvalStatus) != _stateFilter) {
-            return false;
-          }
-          return matchesChecklistHistorySearch(
-            ChecklistHistorySearchRow(
-              documentNo: r.documentNo,
-              templateName: r.templateName,
-              title: r.title,
-              assetNo: r.assetNo,
-              site: r.site,
-            ),
-            _search,
-          );
-        })
-        .toList(growable: false);
+    return _history.completed.where((ChecklistHistoryRow r) {
+      if (_stateFilter != null &&
+          checklistHistoryStateOf(r.approvalStatus) != _stateFilter) {
+        return false;
+      }
+      return matchesChecklistHistorySearch(
+        ChecklistHistorySearchRow(
+          documentNo: r.documentNo,
+          templateName: r.templateName,
+          title: r.title,
+          assetNo: r.assetNo,
+          site: r.site,
+        ),
+        _search,
+      );
+    }).toList(growable: false);
   }
 
   @override
@@ -217,7 +214,9 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: TpSpace.sm),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
             ?.copyWith(color: TpPalette.of(context).textMuted),
       ),
     );
@@ -233,8 +232,8 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpStatusColors colors = TpPalette.of(context)
-        .forStatus(TpStatus.warning);
+    final TpStatusColors colors =
+        TpPalette.of(context).forStatus(TpStatus.warning);
     return Container(
       padding: const EdgeInsets.all(TpSpace.md),
       decoration: BoxDecoration(
@@ -249,7 +248,9 @@ class _InlineWarning extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: colors.onSoft),
             ),
           ),
@@ -343,21 +344,21 @@ class _CompletedRow extends StatelessWidget {
     );
     final (TpStatus tone, String label) = switch (state) {
       ChecklistHistoryState.closed => (
-        TpStatus.ok,
-        l10n.checklistHistoryStatusClosed,
-      ),
+          TpStatus.ok,
+          l10n.checklistHistoryStatusClosed,
+        ),
       ChecklistHistoryState.sentBack => (
-        TpStatus.critical,
-        l10n.checklistHistoryStatusSentBack,
-      ),
+          TpStatus.critical,
+          l10n.checklistHistoryStatusSentBack,
+        ),
       ChecklistHistoryState.waiting => (
-        TpStatus.warning,
-        l10n.checklistHistoryStatusWaiting,
-      ),
+          TpStatus.warning,
+          l10n.checklistHistoryStatusWaiting,
+        ),
       ChecklistHistoryState.noApproval => (
-        TpStatus.neutral,
-        l10n.checklistHistoryStatusNoApproval,
-      ),
+          TpStatus.neutral,
+          l10n.checklistHistoryStatusNoApproval,
+        ),
     };
 
     return TpCard(

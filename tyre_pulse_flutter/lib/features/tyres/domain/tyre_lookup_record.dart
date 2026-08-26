@@ -96,19 +96,18 @@ final class TyreLookupRecord {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    brand,
-    size,
-    position,
-    tyrePosition,
-    assetNo,
-    site,
-    treadDepth,
-    pressureReading,
-  );
+        id,
+        brand,
+        size,
+        position,
+        tyrePosition,
+        assetNo,
+        site,
+        treadDepth,
+        pressureReading,
+      );
 
   @override
-  String toString() =>
-      'TyreLookupRecord(id: $id, serialAsset: $assetNo, '
+  String toString() => 'TyreLookupRecord(id: $id, serialAsset: $assetNo, '
       'position: $bestPosition)';
 }

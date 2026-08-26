@@ -71,7 +71,8 @@ void main() {
       expect(find.text('TM514'), findsOneWidget);
     });
 
-    testWidgets('falls back to a generic title when the asset number is not '
+    testWidgets(
+        'falls back to a generic title when the asset number is not '
         'recorded', (WidgetTester tester) async {
       await _openSheet(tester, record: buildTyreRecord(id: '1', assetNo: null));
       expect(find.text('Tyre record'), findsOneWidget);
@@ -131,7 +132,8 @@ void main() {
       expect(find.byType(TpTyreChip), findsOneWidget);
     });
 
-    testWidgets('is absent when neither the canonical nor the legacy position '
+    testWidgets(
+        'is absent when neither the canonical nor the legacy position '
         'column is recorded', (WidgetTester tester) async {
       await _openSheet(
         tester,
@@ -237,7 +239,8 @@ void main() {
   });
 
   group('tyre life', () {
-    testWidgets('renders the computed distance when removal is genuinely after '
+    testWidgets(
+        'renders the computed distance when removal is genuinely after '
         'fitment', (WidgetTester tester) async {
       await _openSheet(
         tester,

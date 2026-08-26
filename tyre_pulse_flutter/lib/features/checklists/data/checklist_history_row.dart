@@ -95,9 +95,8 @@ class ChecklistHistoryRow {
       submittedBy: _asString(row['submitted_by']),
       submittedAt: _asString(row['submitted_at']),
       scorePct: _asInt(row['score_pct']),
-      scorePassed: row['score_passed'] is bool
-          ? row['score_passed'] as bool
-          : null,
+      scorePassed:
+          row['score_passed'] is bool ? row['score_passed'] as bool : null,
       approvalStatus: _asString(row['approval_status']),
       documentNo: _asString(row['document_no']),
       approverName: _asString(row['approver_name']),

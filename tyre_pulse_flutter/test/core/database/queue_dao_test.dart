@@ -183,8 +183,7 @@ void main() {
       expect(
         await db.queueDao.commandById('cmd-1'),
         isNotNull,
-        reason:
-            'nothing that has not reached the server is ever removed '
+        reason: 'nothing that has not reached the server is ever removed '
             'automatically',
       );
     });
@@ -266,8 +265,7 @@ void main() {
       expect(
         claimed,
         isEmpty,
-        reason:
-            'pushing it under the active context would be a cross-tenant '
+        reason: 'pushing it under the active context would be a cross-tenant '
             'write',
       );
       expect(
@@ -321,8 +319,7 @@ void main() {
         expect(
           after.idempotencyKey,
           key,
-          reason:
-              'a fresh key on retry is the exact double-insert the '
+          reason: 'a fresh key on retry is the exact double-insert the '
               'mechanism exists to prevent',
         );
       }
@@ -397,8 +394,7 @@ void main() {
       expect(
         await db.queueDao.pendingCount(),
         2,
-        reason:
-            'counting only pending made every badge read 0 the moment an '
+        reason: 'counting only pending made every badge read 0 the moment an '
             'item failed, and the technician was shown all synced while an '
             'inspection sat unsent',
       );
@@ -454,8 +450,7 @@ void main() {
       expect(
         await db.queueDao.commandById('cmd-1'),
         isNotNull,
-        reason:
-            'the command row is the only thing keeping the photo file '
+        reason: 'the command row is the only thing keeping the photo file '
             'alive until the upload is confirmed',
       );
     });

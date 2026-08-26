@@ -147,13 +147,13 @@ final class WashDueEntry {
 
   @override
   int get hashCode => Object.hash(
-    assetNo,
-    lastWashDate,
-    nextDueDate,
-    daysOverdue,
-    site,
-    vehicleType,
-  );
+        assetNo,
+        lastWashDate,
+        nextDueDate,
+        daysOverdue,
+        site,
+        vehicleType,
+      );
 
   @override
   String toString() =>

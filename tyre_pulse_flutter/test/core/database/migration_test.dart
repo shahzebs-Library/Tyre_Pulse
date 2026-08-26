@@ -287,9 +287,8 @@ void main() {
       final List<QueryRow> columns = await upgraded
           .customSelect('PRAGMA table_info(pending_commands)')
           .get();
-      final Set<String> names = columns
-          .map((QueryRow r) => r.read<String>('name'))
-          .toSet();
+      final Set<String> names =
+          columns.map((QueryRow r) => r.read<String>('name')).toSet();
 
       expect(
         names,
@@ -300,13 +299,13 @@ void main() {
       expect(names, contains('idempotency_key'));
       expect(names, contains('payload_json'));
 
-      final QueryRow version = await upgraded
-          .customSelect('PRAGMA user_version')
-          .getSingle();
+      final QueryRow version =
+          await upgraded.customSelect('PRAGMA user_version').getSingle();
       expect(version.read<int>('user_version'), 2);
     });
 
-    test('the preservation assertion can fail: a destructive step trips it', () async {
+    test('the preservation assertion can fail: a destructive step trips it',
+        () async {
       // The control for the test above. A step that deletes rows - exactly what
       // spec section 61 forbids - must make the work disappear, and therefore
       // must make the preservation assertion fail. If this test ever stops
@@ -324,13 +323,13 @@ void main() {
       expect(
         await upgraded.draftsDao.checklistDraft(draftKey),
         isNull,
-        reason:
-            'a destructive step loses the only copy of a part-filled '
+        reason: 'a destructive step loses the only copy of a part-filled '
             'sheet, which is why migrationSteps must stay additive',
       );
     });
 
-    test('a device that skips a release is refused, not half-migrated', () async {
+    test('a device that skips a release is refused, not half-migrated',
+        () async {
       await seedVersionOne();
 
       final AppDatabase upgraded = AppDatabase.forMigrationTest(
@@ -345,7 +344,8 @@ void main() {
       await expectLater(upgraded.queueDao.pendingCount(), refusesTheUpgrade());
     });
 
-    test('a refused upgrade leaves the rows intact at the old version', () async {
+    test('a refused upgrade leaves the rows intact at the old version',
+        () async {
       await seedVersionOne();
 
       final AppDatabase refused = AppDatabase.forMigrationTest(

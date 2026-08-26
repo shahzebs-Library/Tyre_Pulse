@@ -19,7 +19,8 @@ void main() {
   });
 
   group('workspace scoping', () {
-    test('a cached read under workspace B cannot see workspace A rows', () async {
+    test('a cached read under workspace B cannot see workspace A rows',
+        () async {
       await db.cacheDao.replaceAssets(
         scope: scopeA,
         now: testNow,
@@ -137,8 +138,7 @@ void main() {
         expect(
           assets.map((CachedAsset r) => r.assetNo),
           unorderedEquals(<String>['REC01', 'TM514']),
-          reason:
-              'a strict equality on country silently hid 55,606 '
+          reason: 'a strict equality on country silently hid 55,606 '
               'country-less rows on the web',
         );
       },
@@ -247,8 +247,7 @@ void main() {
       expect(
         await db.cacheDao.cacheIsTruncated('cached_assets'),
         isTrue,
-        reason:
-            'a silently short list reads to a user as "that asset was '
+        reason: 'a silently short list reads to a user as "that asset was '
             'never created"',
       );
 
@@ -306,7 +305,8 @@ void main() {
       );
     }
 
-    test('serial search is case-insensitive but returns the stored value', () async {
+    test('serial search is case-insensitive but returns the stored value',
+        () async {
       // RECORDED: the server serial column is case-split, and normalising it
       // would turn a split-history problem into a cannot-find-the-tyre problem
       // in the field. So the local lookup folds case; the stored value does

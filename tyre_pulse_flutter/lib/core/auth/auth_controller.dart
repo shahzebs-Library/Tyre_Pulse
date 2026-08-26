@@ -137,7 +137,8 @@ final class AuthController extends Notifier<AuthState> {
   Future<SignInOutcome> signIn({
     required String identifier,
     required String password,
-  }) => _auth.signIn(identifier: identifier, password: password);
+  }) =>
+      _auth.signIn(identifier: identifier, password: password);
 
   /// Re-attempts reading the session after [TpSessionPhase.timedOut].
   Future<void> retrySession() async {
@@ -341,9 +342,9 @@ final class AuthController extends Notifier<AuthState> {
   }) {
     switch (outcome) {
       case ProfileFetchSucceeded(
-        profile: final WorkspaceProfile profile,
-        stale: final bool stale,
-      ):
+          profile: final WorkspaceProfile profile,
+          stale: final bool stale,
+        ):
         state = state.copyWith(
           profileStatus: ProfileStatus.loaded,
           profile: profile,
@@ -404,9 +405,7 @@ final class AuthController extends Notifier<AuthState> {
       isSuperAdmin: profile.isSuperAdmin,
       permissionsError: true,
     );
-    ref
-        .read(workspaceControllerProvider.notifier)
-        .adopt(
+    ref.read(workspaceControllerProvider.notifier).adopt(
           WorkspaceContext.fromProfile(profile, effectivePermissions: access),
         );
   }

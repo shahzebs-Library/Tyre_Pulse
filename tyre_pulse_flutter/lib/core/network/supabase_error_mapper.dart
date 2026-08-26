@@ -306,8 +306,7 @@ SupabaseFailure _fromPostgrest(PostgrestException error) {
         code: code,
         cause: SupabaseFailureCause.onConflictInferenceFailed,
         kind: AppErrorKind.server,
-        message:
-            'This could not be saved because of a server setup problem. '
+        message: 'This could not be saved because of a server setup problem. '
             'Your work is still on this device. Report this.',
       );
 
@@ -564,8 +563,7 @@ SupabaseFailure _schemaMismatch(Object error, String raw, String code) {
     // Loud on purpose. Artifact 01: a column PostgREST cannot find fails the
     // WHOLE request, and a failed read rendered as an empty result is a wrong
     // answer that looks right.
-    message:
-        'This version of the app cannot read that data from the server. '
+    message: 'This version of the app cannot read that data from the server. '
         'Update the app, then try again.',
   );
 }
@@ -795,8 +793,7 @@ SupabaseFailure _timedOut(Object error, String? raw, {String? code}) {
       // the request MAY have applied, and telling somebody their work is
       // safely queued when it might already be on the server invites a
       // duplicate. Idempotency is what actually makes the retry safe.
-      message:
-          'The server did not answer in time. Check the record before '
+      message: 'The server did not answer in time. Check the record before '
           'trying again.',
       technical: _technical(text, code),
       cause: error,

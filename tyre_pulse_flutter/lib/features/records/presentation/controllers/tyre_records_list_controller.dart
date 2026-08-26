@@ -58,8 +58,8 @@ const Duration kTyreRecordsSearchDebounce = Duration(milliseconds: 350);
 
 final tyreRecordsListControllerProvider =
     NotifierProvider<TyreRecordsListController, TyreRecordsListState>(
-      TyreRecordsListController.new,
-    );
+  TyreRecordsListController.new,
+);
 
 final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
   Timer? _debounce;
@@ -109,8 +109,7 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
       moduleAccessProvider(ModuleKey.records),
     );
 
-    final bool isElevated =
-        decision.reason == AccessReason.superAdmin ||
+    final bool isElevated = decision.reason == AccessReason.superAdmin ||
         decision.reason == AccessReason.adminRole;
     final String? restrictToSite = isElevated ? null : workspace?.legacySite;
 
@@ -217,9 +216,8 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
       if (seq != _requestSeq) return;
 
       _page = pageIndex;
-      final List<TyreRecord> merged = isFresh
-          ? page.items
-          : <TyreRecord>[...state.items, ...page.items];
+      final List<TyreRecord> merged =
+          isFresh ? page.items : <TyreRecord>[...state.items, ...page.items];
 
       state = state.copyWith(
         phase: TyreRecordsListPhase.ready,

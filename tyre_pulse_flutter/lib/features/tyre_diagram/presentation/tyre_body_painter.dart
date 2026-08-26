@@ -70,21 +70,21 @@ class TyreBodyPainter extends CustomPainter {
   /// fraction of the viewport width - a rough per-class silhouette shape,
   /// not a precise chassis outline.
   double get _insetFraction => switch (bodyKey) {
-    TyreDiagramBodyKey.pickup => 0.18,
-    TyreDiagramBodyKey.wheelLoader => 0.14,
-    TyreDiagramBodyKey.canter => 0.2,
-    TyreDiagramBodyKey.triMixer => 0.16,
-    TyreDiagramBodyKey.concretePump => 0.16,
-    TyreDiagramBodyKey.bus => 0.05,
-    TyreDiagramBodyKey.tata => 0.2,
-    TyreDiagramBodyKey.ashokLeyland => 0.2,
-  };
+        TyreDiagramBodyKey.pickup => 0.18,
+        TyreDiagramBodyKey.wheelLoader => 0.14,
+        TyreDiagramBodyKey.canter => 0.2,
+        TyreDiagramBodyKey.triMixer => 0.16,
+        TyreDiagramBodyKey.concretePump => 0.16,
+        TyreDiagramBodyKey.bus => 0.05,
+        TyreDiagramBodyKey.tata => 0.2,
+        TyreDiagramBodyKey.ashokLeyland => 0.2,
+      };
 
   double get _cornerFraction => switch (bodyKey) {
-    TyreDiagramBodyKey.wheelLoader => 0.28,
-    TyreDiagramBodyKey.pickup => 0.22,
-    _ => 0.12,
-  };
+        TyreDiagramBodyKey.wheelLoader => 0.28,
+        TyreDiagramBodyKey.pickup => 0.22,
+        _ => 0.12,
+      };
 
   @override
   bool shouldRepaint(covariant TyreBodyPainter oldDelegate) {

@@ -177,9 +177,8 @@ String? _codeFromUrl(String trimmed) {
 
   // Uri.pathSegments is already percent-decoded, unlike the raw path text -
   // the Dart equivalent of the reference's explicit decodeURIComponent call.
-  final List<String> segments = uri.pathSegments
-      .where((String segment) => segment.isNotEmpty)
-      .toList();
+  final List<String> segments =
+      uri.pathSegments.where((String segment) => segment.isNotEmpty).toList();
   if (segments.isNotEmpty) {
     return sanitizeScanCode(segments.last);
   }

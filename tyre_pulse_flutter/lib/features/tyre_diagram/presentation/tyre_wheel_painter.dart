@@ -137,9 +137,8 @@ class TyreWheelPainter extends CustomPainter {
     for (final PathMetric metric in path.computeMetrics()) {
       double distance = 0;
       while (distance < metric.length) {
-        final double end = (distance + dash > metric.length)
-            ? metric.length
-            : distance + dash;
+        final double end =
+            (distance + dash > metric.length) ? metric.length : distance + dash;
         canvas.drawPath(metric.extractPath(distance, end), paint);
         distance = end + gap;
       }

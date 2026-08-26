@@ -45,12 +45,12 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 
 TpStatus workOrderToneToStatus(WorkOrderTone tone) => switch (tone) {
-  WorkOrderTone.info => TpStatus.info,
-  WorkOrderTone.ok => TpStatus.ok,
-  WorkOrderTone.warning => TpStatus.warning,
-  WorkOrderTone.critical => TpStatus.critical,
-  WorkOrderTone.neutral => TpStatus.neutral,
-};
+      WorkOrderTone.info => TpStatus.info,
+      WorkOrderTone.ok => TpStatus.ok,
+      WorkOrderTone.warning => TpStatus.warning,
+      WorkOrderTone.critical => TpStatus.critical,
+      WorkOrderTone.neutral => TpStatus.neutral,
+    };
 
 /// The words shown on a status badge for [status]. See the library
 /// comment: the raw value wins whenever one exists.

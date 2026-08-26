@@ -176,8 +176,7 @@ List<ChecklistFieldOption> fieldOptions(
     for (int i = 0; i < values.length; i++)
       ChecklistFieldOption(
         value: values[i],
-        label:
-            _usable(
+        label: _usable(
               translated != null && i < translated.length
                   ? translated[i]
                   : null,
@@ -193,9 +192,11 @@ List<ChecklistFieldOption> fieldOptions(
 List<String> fieldOptionValues(
   ChecklistField? field, [
   ChecklistTemplate? template,
-]) => <String>[
-  for (final ChecklistFieldOption o in fieldOptions(field, template)) o.value,
-];
+]) =>
+    <String>[
+      for (final ChecklistFieldOption o in fieldOptions(field, template))
+        o.value,
+    ];
 
 /// The display label for an already-stored (English) [value]. An unknown
 /// value renders AS ITSELF rather than blank (B7) - a retired option must

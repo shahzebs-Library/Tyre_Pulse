@@ -18,7 +18,8 @@ void main() {
   });
 
   group('updateValue - the read-modify-write guard', () {
-    test('REFUSES and writes nothing when the read failed - this is the '
+    test(
+        'REFUSES and writes nothing when the read failed - this is the '
         'whole point of the method', () async {
       fake.failReadFor('queue_meta', StagedSecureStore.defaultReadAttempts);
 
@@ -35,8 +36,7 @@ void main() {
       expect(
         updateWasCalled,
         isFalse,
-        reason:
-            'the update function must never run over a read that failed '
+        reason: 'the update function must never run over a read that failed '
             '- a caller cannot fold an unreadable read into "[]" and lose '
             'what was actually queued',
       );
@@ -104,7 +104,8 @@ void main() {
       expect(seen, 'existing-value');
     });
 
-    test('passes null to update() when the store proved there is nothing '
+    test(
+        'passes null to update() when the store proved there is nothing '
         'stored - never an unread value mistaken for empty', () async {
       String? sentinel = 'not yet called';
       var receivedNull = false;
@@ -125,7 +126,8 @@ void main() {
       expect(await store.read('queue'), const SecureRead.ok('a,b,c'));
     });
 
-    test('a null return from update() deletes the key - "clear this queue" '
+    test(
+        'a null return from update() deletes the key - "clear this queue" '
         'without a second unguarded path', () async {
       await store.write('queue', 'a,b,c');
 
@@ -135,7 +137,8 @@ void main() {
       expect(after.status, SecureReadStatus.absent);
     });
 
-    test('update() may return a Future - updateValue awaits it before '
+    test(
+        'update() may return a Future - updateValue awaits it before '
         'deciding whether to write or delete', () async {
       await store.updateValue(
         'async',

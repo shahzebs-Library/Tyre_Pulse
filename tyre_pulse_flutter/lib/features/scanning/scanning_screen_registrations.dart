@@ -26,6 +26,6 @@ import 'package:tyre_pulse/features/scanning/presentation/scanner_screen.dart';
 /// something this feature should paper over with a placeholder of its own.
 final Map<String, TpScreenBuilder> scanningScreenRegistrations =
     <String, TpScreenBuilder>{
-      TpRouteId.scanner: (BuildContext context, TpRoute route) =>
-          const ScannerScreen(),
-    };
+  TpRouteId.scanner: (BuildContext context, TpRoute route) =>
+      const ScannerScreen(),
+};

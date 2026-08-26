@@ -26,7 +26,8 @@ void main() {
       asset: asset,
     );
 
-    test('the primary route is VehiclesRoute, carrying assetNo - never the '
+    test(
+        'the primary route is VehiclesRoute, carrying assetNo - never the '
         'unread q parameter the production scanner used to pass', () {
       final TpRoute route = primaryRouteFor(match);
       expect(route, isA<VehiclesRoute>());
@@ -51,7 +52,8 @@ void main() {
       expect(route.siteName, const SiteName('NHC'));
     });
 
-    test('an asset with a blank asset_no produces a route with no assetNo '
+    test(
+        'an asset with a blank asset_no produces a route with no assetNo '
         'parameter at all, never an empty one', () {
       const AssetLookupRecord blank = AssetLookupRecord(id: 'a2', assetNo: '');
       const AssetScanMatch blankMatch = AssetScanMatch(
@@ -75,7 +77,8 @@ void main() {
       site: 'NHC',
     );
 
-    test('the primary route is SerialSearchRoute, carrying the matched '
+    test(
+        'the primary route is SerialSearchRoute, carrying the matched '
         'code', () {
       const TyreScanMatch match = TyreScanMatch(
         rawInput: 'EP0604207',
@@ -88,7 +91,8 @@ void main() {
       expect(route.location, contains('tyreSerial=EP0604207'));
     });
 
-    test('a tyre fitted to an asset offers a second action to start an '
+    test(
+        'a tyre fitted to an asset offers a second action to start an '
         'inspection there, prefilled with its position', () {
       const TyreScanMatch match = TyreScanMatch(
         rawInput: 'EP0604207',
@@ -108,7 +112,8 @@ void main() {
       expect(inspect.tyrePosition, const TyrePosition('LHF1'));
     });
 
-    test('the legacy position column is used only when the canonical one '
+    test(
+        'the legacy position column is used only when the canonical one '
         'is absent', () {
       const TyreLookupRecord legacyOnly = TyreLookupRecord(
         id: 't2',
@@ -126,7 +131,8 @@ void main() {
       expect(inspect.tyrePosition, const TyrePosition('LHF1 (legacy)'));
     });
 
-    test('a tyre not fitted to any asset offers ONLY the view action - '
+    test(
+        'a tyre not fitted to any asset offers ONLY the view action - '
         'starting an inspection with nothing to inspect is never offered', () {
       const TyreLookupRecord unfitted = TyreLookupRecord(id: 't3');
       const TyreScanMatch match = TyreScanMatch(
@@ -142,7 +148,8 @@ void main() {
   });
 
   group('ScanNoMatch', () {
-    test('offers exactly one action: search manually, prefilled with the '
+    test(
+        'offers exactly one action: search manually, prefilled with the '
         'extracted code', () {
       const ScanNoMatch result = ScanNoMatch(rawInput: 'x', code: 'ABC123');
 
@@ -155,7 +162,8 @@ void main() {
       expect(route.location, contains('tyreSerial=ABC123'));
     });
 
-    test('an empty code produces a route with no tyreSerial parameter, '
+    test(
+        'an empty code produces a route with no tyreSerial parameter, '
         'never an empty one - a blank prefill is not a prefill', () {
       const ScanNoMatch result = ScanNoMatch(rawInput: '', code: '');
 
@@ -165,7 +173,8 @@ void main() {
   });
 
   group('ScanLookupFailed', () {
-    test('resolves to the identical manual-entry action a clean miss '
+    test(
+        'resolves to the identical manual-entry action a clean miss '
         'does - a failure is never a different kind of dead end', () {
       const ScanNoMatch miss = ScanNoMatch(rawInput: 'x', code: 'ABC');
       const AppError anyError = AppError(

@@ -42,7 +42,8 @@ Future<AppLocalizations> _captureL10n(
 }
 
 void main() {
-  testWidgets('tyreConditionLabel returns non-empty, distinct text for '
+  testWidgets(
+      'tyreConditionLabel returns non-empty, distinct text for '
       'every condition', (WidgetTester tester) async {
     final AppLocalizations l10n = await _captureL10n(tester);
     final Set<String> labels = <String>{};
@@ -100,7 +101,8 @@ void main() {
       expect(normaliseCondition('Puncture'), TyreCondition.puncture);
     });
 
-    test('null and unrecognised text default to good, matching the '
+    test(
+        'null and unrecognised text default to good, matching the '
         'production capture-form seed', () {
       expect(normaliseCondition(null), TyreCondition.good);
       expect(normaliseCondition('nonsense'), TyreCondition.good);

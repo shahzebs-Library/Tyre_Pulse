@@ -20,7 +20,8 @@ List<String> _codes(List<TyreReplacementPositionOption> options) =>
 
 void main() {
   group('the Spare option', () {
-    test('is always last, always carries the literal code, and always has '
+    test(
+        'is always last, always carries the literal code, and always has '
         'no diagram slot id', () {
       final List<TyreReplacementPositionOption> options =
           tyreReplacementPositions('Pickup');
@@ -30,7 +31,8 @@ void main() {
       expect(spare.diagramSlotId, isNull);
     });
 
-    test('is present even for tyreless equipment, which offers no derived '
+    test(
+        'is present even for tyreless equipment, which offers no derived '
         'positions at all', () {
       final List<TyreReplacementPositionOption> options =
           tyreReplacementPositions('Generator', 'GN101');
@@ -39,7 +41,8 @@ void main() {
     });
   });
 
-  group('unknown or absent vehicle type falls back to the neutral Pickup '
+  group(
+      'unknown or absent vehicle type falls back to the neutral Pickup '
       'default, never an empty picker', () {
     test('null vehicle type and no asset number', () {
       final List<TyreReplacementPositionOption> options =
@@ -78,9 +81,11 @@ void main() {
     });
   });
 
-  group('the asset number resolves the vehicle type when the type itself '
+  group(
+      'the asset number resolves the vehicle type when the type itself '
       'says nothing useful', () {
-    test('a TM-prefixed asset number resolves to the Tri-mixer layout, with '
+    test(
+        'a TM-prefixed asset number resolves to the Tri-mixer layout, with '
         'its centre-axle relabelling applied', () {
       final List<TyreReplacementPositionOption> options =
           tyreReplacementPositions(null, 'TM634');
@@ -111,7 +116,8 @@ void main() {
     });
   });
 
-  group('Tri-mixer: the sharpest parity trap in the underlying engine - '
+  group(
+      'Tri-mixer: the sharpest parity trap in the underlying engine - '
       'the FIRST rear axle is the CENTRE drive axle, not a rear one', () {
     test('exact layout-key match, case/spacing-insensitive', () {
       final List<TyreReplacementPositionOption> options =
@@ -150,7 +156,8 @@ void main() {
     });
   });
 
-  group('Concrete pump: 14 positions, non-tri-mixer labelling (R1/R2 '
+  group(
+      'Concrete pump: 14 positions, non-tri-mixer labelling (R1/R2 '
       'suffixed, not centre-axle relabelled)', () {
     test('all 14 derived codes plus Spare, in layout order', () {
       final List<TyreReplacementPositionOption> options =
@@ -174,7 +181,8 @@ void main() {
       ]);
     });
 
-    test('the generic "pump" keyword also resolves to the concrete-pump '
+    test(
+        'the generic "pump" keyword also resolves to the concrete-pump '
         'layout', () {
       final List<TyreReplacementPositionOption> options =
           tyreReplacementPositions('MP Concrete Pump');
@@ -187,7 +195,8 @@ void main() {
       expect(_codes(tyreReplacementPositions('Generator')), <String>['Spare']);
     });
 
-    test('a stationary concrete pump - a real fleet distinction from the '
+    test(
+        'a stationary concrete pump - a real fleet distinction from the '
         'truck-mounted pump above, which DOES have 14 wheels', () {
       expect(_codes(tyreReplacementPositions('STATIONARY PUMP')), <String>[
         'Spare',
@@ -220,7 +229,8 @@ void main() {
       expect(a == c, isFalse);
     });
 
-    test('the constant Spare code matches the value every Spare option '
+    test(
+        'the constant Spare code matches the value every Spare option '
         'carries', () {
       expect(tyreReplacementSparePositionCode, 'Spare');
     });

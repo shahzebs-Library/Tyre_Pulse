@@ -208,7 +208,8 @@ void main() {
       expect(container.read(serialSearchControllerProvider).isIdle, isTrue);
     });
 
-    test('a scanned URL payload is unwrapped before it reaches the '
+    test(
+        'a scanned URL payload is unwrapped before it reaches the '
         'repository', () async {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
@@ -228,7 +229,8 @@ void main() {
       );
     });
 
-    test('a failed scrap-status lookup after a successful find does not '
+    test(
+        'a failed scrap-status lookup after a successful find does not '
         'hide the result - the tyre still shows as found', () async {
       final (:container, :repo) = _harness();
       addTearDown(container.dispose);
@@ -296,7 +298,8 @@ void main() {
       return (container, repo);
     }
 
-    test('calls the repository exactly once, with the resolved serial '
+    test(
+        'calls the repository exactly once, with the resolved serial '
         'and the reason', () async {
       final (ProviderContainer container, FakeTyreLookupRepository repo) =
           await readyToScrap();
@@ -330,7 +333,8 @@ void main() {
       expect(state.isScrapBusy, isFalse);
     });
 
-    test('a refusal from the repository lands in lastError and clears '
+    test(
+        'a refusal from the repository lands in lastError and clears '
         'the busy flag - the state is not left stuck mid-action', () async {
       final (ProviderContainer container, FakeTyreLookupRepository repo) =
           await readyToScrap();
@@ -369,7 +373,8 @@ void main() {
       expect(repo.scrapCalls, 0);
     });
 
-    test('two overlapping presses reach the repository only ONCE - the '
+    test(
+        'two overlapping presses reach the repository only ONCE - the '
         'busy guard is checked before the first await', () async {
       final (ProviderContainer container, FakeTyreLookupRepository repo) =
           await readyToScrap();
@@ -421,7 +426,8 @@ void main() {
       },
     );
 
-    test('clears the scrap mark locally on success, without a second '
+    test(
+        'clears the scrap mark locally on success, without a second '
         'read - the caller already knows the outcome', () async {
       final (ProviderContainer container, FakeTyreLookupRepository repo) =
           await readyToUndo();

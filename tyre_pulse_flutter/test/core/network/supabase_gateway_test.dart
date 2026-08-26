@@ -74,8 +74,7 @@ void main() {
     test('a unique-violation PostgrestException (23505)', () async {
       await expectGuardPropagates(
         PostgrestException(
-          message:
-              'duplicate key value violates unique constraint '
+          message: 'duplicate key value violates unique constraint '
               '"tyre_records_client_uuid_key"',
           code: '23505',
         ),
@@ -114,7 +113,8 @@ void main() {
   });
 
   group('what guard() does not do', () {
-    test('never throws the raw error itself - the original is kept only as '
+    test(
+        'never throws the raw error itself - the original is kept only as '
         'AppError.cause, for telemetry', () async {
       final SupabaseFailure? actual = await capturedFailure(
         () =>
@@ -125,7 +125,8 @@ void main() {
       expect(actual!.error.cause, isA<StateError>());
     });
 
-    test('never re-wraps an already-classified SupabaseFailure, so a '
+    test(
+        'never re-wraps an already-classified SupabaseFailure, so a '
         'nested guard() call cannot double-classify one error', () async {
       final SupabaseFailure original = classifySupabaseError(
         PostgrestException(message: 'duplicate key', code: '23505'),

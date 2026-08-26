@@ -89,9 +89,8 @@ void main() {
         };
 
         for (final MapEntry<String, Key> keyEntry in keys.entries) {
-          final Matcher expected = keyEntry.key == entry.key
-              ? findsOneWidget
-              : findsNothing;
+          final Matcher expected =
+              keyEntry.key == entry.key ? findsOneWidget : findsNothing;
           expect(
             find.byKey(keyEntry.value),
             expected,

@@ -78,9 +78,8 @@ class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
       _error = null;
     });
     try {
-      final WorkOrderItem? item = await ref
-          .read(workOrderRepositoryProvider)
-          .byId(_workOrderId);
+      final WorkOrderItem? item =
+          await ref.read(workOrderRepositoryProvider).byId(_workOrderId);
       if (!mounted) return;
       setState(() {
         _item = item;

@@ -60,7 +60,8 @@ void main() {
       );
     });
 
-    test('reportPlatformDispatcherError does not throw, and returns false '
+    test(
+        'reportPlatformDispatcherError does not throw, and returns false '
         'because nothing was actually offered to telemetry', () async {
       final service = TelemetryService();
       await service.initialize(config: _configWithNoDsn);
@@ -73,7 +74,8 @@ void main() {
       expect(handled, isFalse);
     });
 
-    test('a freshly constructed service with no initialize call at all is '
+    test(
+        'a freshly constructed service with no initialize call at all is '
         'also inactive and safe', () async {
       final service = TelemetryService();
 
@@ -88,7 +90,8 @@ void main() {
   });
 
   group('AppError sanitisation', () {
-    test('only message and technical reach the sink - never cause, which '
+    test(
+        'only message and technical reach the sink - never cause, which '
         'may hold the original unredacted exception', () async {
       Object? captured;
       final service = TelemetryService.forTesting(
@@ -135,7 +138,8 @@ void main() {
   });
 
   group('SupabaseFailure sanitisation', () {
-    test('rawMessage is never read - a marker only present there must '
+    test(
+        'rawMessage is never read - a marker only present there must '
         'never reach the sink', () async {
       Object? captured;
       Map<String, String>? capturedTags;
@@ -164,7 +168,8 @@ void main() {
       expect(capturedTags!.values, isNot(contains(marker)));
     });
 
-    test('adds the cause name and server code as tags - both are declared '
+    test(
+        'adds the cause name and server code as tags - both are declared '
         'safe to log by the mapper', () async {
       Map<String, String>? capturedTags;
       final service = TelemetryService.forTesting(
@@ -187,7 +192,8 @@ void main() {
   });
 
   group('tags', () {
-    test('are present when an event is captured: static tags, error kind, '
+    test(
+        'are present when an event is captured: static tags, error kind, '
         'route, workspace and sync-failure category', () async {
       Map<String, String>? capturedTags;
       final service = TelemetryService.forTesting(
@@ -219,7 +225,8 @@ void main() {
       expect(capturedTags!['sync_failure_category'], 'connectivity');
     });
 
-    test('route and workspace are omitted, not sent empty, before either is '
+    test(
+        'route and workspace are omitted, not sent empty, before either is '
         'set - the absence is the privacy-safe state, not a bug', () async {
       Map<String, String>? capturedTags;
       final service = TelemetryService.forTesting(
@@ -236,7 +243,8 @@ void main() {
       expect(capturedTags!.containsKey('workspace_id'), isFalse);
     });
 
-    test('sync_failure_category is omitted when the caller does not supply '
+    test(
+        'sync_failure_category is omitted when the caller does not supply '
         'one - most captures are not sync failures', () async {
       Map<String, String>? capturedTags;
       final service = TelemetryService.forTesting(
@@ -252,7 +260,8 @@ void main() {
       expect(capturedTags!.containsKey('sync_failure_category'), isFalse);
     });
 
-    test('setCurrentRoute(null) clears the tag for whatever is captured '
+    test(
+        'setCurrentRoute(null) clears the tag for whatever is captured '
         'next', () async {
       Map<String, String>? capturedTags;
       final service = TelemetryService.forTesting(
@@ -272,7 +281,8 @@ void main() {
   });
 
   group('crash hooks route through the same sanitisation', () {
-    test('reportFlutterError reaches the sink when active, with the JWT- '
+    test(
+        'reportFlutterError reaches the sink when active, with the JWT- '
         'shaped substring in the raw exception stripped', () async {
       Object? captured;
       final service = TelemetryService.forTesting(
@@ -295,7 +305,8 @@ void main() {
       expect(captured.toString(), isNot(contains('eyJhbGciOiJIUzI1NiJ9')));
     });
 
-    test('reportPlatformDispatcherError reaches the sink when active and '
+    test(
+        'reportPlatformDispatcherError reaches the sink when active and '
         'returns true', () async {
       Object? captured;
       Map<String, String>? capturedTags;

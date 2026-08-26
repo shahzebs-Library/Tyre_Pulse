@@ -44,8 +44,7 @@ void main() {
         expect(
           next.from,
           current.to + 1,
-          reason:
-              'page $page ends at ${current.to}, '
+          reason: 'page $page ends at ${current.to}, '
               'page ${page + 1} must start at ${current.to + 1}',
         );
       }
@@ -70,7 +69,8 @@ void main() {
       expect(rangeForPage(5, pageSize: 1), (from: 5, to: 5));
     });
 
-    test('refuses a negative page index rather than computing a negative '
+    test(
+        'refuses a negative page index rather than computing a negative '
         'range', () {
       expect(() => rangeForPage(-1), throwsArgumentError);
     });

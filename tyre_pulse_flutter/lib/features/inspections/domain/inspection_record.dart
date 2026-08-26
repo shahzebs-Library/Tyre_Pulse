@@ -16,8 +16,7 @@ import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dar
 /// a query and its decoder cannot silently drift apart - the same
 /// discipline `tyre_lookup_repository.dart`'s `_lookupColumns` already
 /// established for this codebase.
-const String inspectionRecordColumns =
-    'id, client_uuid, title, site, '
+const String inspectionRecordColumns = 'id, client_uuid, title, site, '
     'asset_no, vehicle_type, inspector, inspection_date, status, notes, '
     'findings, odometer_km, hour_meter, inspector_signature, '
     'approval_status, locked, tyre_conditions, gps_lat, gps_lng, '

@@ -156,8 +156,8 @@ final class DefaultChecklistSubmissionRepository
   DefaultChecklistSubmissionRepository({
     required QueuedCommandRepository commandRepository,
     required ChecklistDraftRepository draftRepository,
-  }) : _commands = commandRepository,
-       _drafts = draftRepository;
+  })  : _commands = commandRepository,
+        _drafts = draftRepository;
 
   final QueuedCommandRepository _commands;
   final ChecklistDraftRepository _drafts;
@@ -184,8 +184,8 @@ final class DefaultChecklistSubmissionRepository
     final DateTime now = DateTime.now();
 
     final List<ChecklistDraftPhoto> photos = await _drafts.photosFor(draftKey);
-    final List<ChecklistDraftSignature> signatures = await _drafts
-        .signaturesFor(draftKey);
+    final List<ChecklistDraftSignature> signatures =
+        await _drafts.signaturesFor(draftKey);
 
     // Keyed by field id, mirroring `mobile/lib/checklists.ts`'s
     // `Record<string, string[]>` photo shape exactly - never flattened to a
@@ -222,8 +222,7 @@ final class DefaultChecklistSubmissionRepository
     // the first captured FIELD signature - mirrors
     // `mobile/app/(app)/checklists/[templateId].tsx`'s own
     // `primary = primarySignature || firstFieldSignature` fallback.
-    final String? signatureData =
-        primarySignature ??
+    final String? signatureData = primarySignature ??
         (signaturesPayload.isEmpty ? null : signaturesPayload.values.first);
 
     final Map<String, Object?> payload = <String, Object?>{

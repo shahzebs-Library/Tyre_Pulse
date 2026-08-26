@@ -241,19 +241,18 @@ class _ChecklistApprovalReviewScreenState
       _busy = approved ? _DecisionBusy.approving : _DecisionBusy.rejecting;
     });
     try {
-      final ChecklistApprovalDecisionResult result = await ref
-          .read(checklistApprovalSyncEngineProvider)
-          .decideNow(
-            submissionId: item.id,
-            stage: stage!,
-            priorApprovalStatus: priorStatus,
-            targetStatus: targetStatus,
-            approved: approved,
-            approverName: trimmedName.isEmpty ? null : trimmedName,
-            approverSignature: _approverSignature?.dataUrl,
-            approverId: approverId,
-            reviewNote: trimmedNote.isEmpty ? null : trimmedNote,
-          );
+      final ChecklistApprovalDecisionResult result =
+          await ref.read(checklistApprovalSyncEngineProvider).decideNow(
+                submissionId: item.id,
+                stage: stage!,
+                priorApprovalStatus: priorStatus,
+                targetStatus: targetStatus,
+                approved: approved,
+                approverName: trimmedName.isEmpty ? null : trimmedName,
+                approverSignature: _approverSignature?.dataUrl,
+                approverId: approverId,
+                reviewNote: trimmedNote.isEmpty ? null : trimmedNote,
+              );
       if (!mounted) return;
 
       switch (result.outcome) {
@@ -299,8 +298,7 @@ class _ChecklistApprovalReviewScreenState
           await _showInfoDialog(
             context,
             title: l10n.checklistApprovalSaveFailedTitle,
-            message:
-                result.error?.message ??
+            message: result.error?.message ??
                 l10n.checklistApprovalDecideGenericError,
           );
           break;
@@ -437,7 +435,7 @@ class _ChecklistApprovalReviewScreenState
             l10n: l10n,
             closing:
                 nextStatusFor(_templateLike, item.asSubmissionLike, true) ==
-                'approved',
+                    'approved',
             approverSignature: _approverSignature,
             onSignatureChanged: (capture) =>
                 setState(() => _approverSignature = capture),
@@ -671,8 +669,8 @@ class _SignOffLadder extends StatelessWidget {
               label: progress[i].key == ApprovalStage.areaManager
                   ? l10n.checklistApprovalStageAreaManager
                   : twoStage
-                  ? l10n.checklistApprovalStageSupervisor
-                  : l10n.checklistApprovalStageApproval,
+                      ? l10n.checklistApprovalStageSupervisor
+                      : l10n.checklistApprovalStageApproval,
               name: progress[i].name,
               at: progress[i].at,
               done: progress[i].done,
@@ -763,7 +761,9 @@ class _RungRow extends StatelessWidget {
                 Text(label, style: Theme.of(context).textTheme.labelLarge),
                 Text(
                   metaText,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
               ],
@@ -916,8 +916,7 @@ class _ResponsesSection extends StatelessWidget {
     // AND no other field's signature is recorded either - see the library
     // comment on why a stronger reconstruction is not possible from the
     // read side alone.
-    final String? fieldSignature =
-        item.signatures[field.id] ??
+    final String? fieldSignature = item.signatures[field.id] ??
         (item.signatures.isEmpty ? item.signatureData : null);
 
     return ChecklistFieldAnswerTile(
@@ -933,7 +932,7 @@ class _ResponsesSection extends StatelessWidget {
       photos: photos,
       signatureBuilder: field.type == 'signature'
           ? (BuildContext context) =>
-                _ReadOnlySignature(dataUrl: fieldSignature)
+              _ReadOnlySignature(dataUrl: fieldSignature)
           : null,
     );
   }

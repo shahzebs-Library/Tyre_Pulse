@@ -53,8 +53,7 @@ final class SupabaseInspectionPhotoUploader
         RegExp(r'[^A-Za-z0-9_-]'),
         '_',
       );
-      final String path =
-          'inspections/$inspectionId/'
+      final String path = 'inspections/$inspectionId/'
           '${safePosition}_${DateTime.now().millisecondsSinceEpoch}$ext';
 
       await _client.storage

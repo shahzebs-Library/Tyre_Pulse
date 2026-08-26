@@ -37,7 +37,8 @@ ChecklistTemplate _templateWithLegend({
 
 void main() {
   group('a blocking mark never blocks submission', () {
-    test('a "Not OK" answer on an otherwise-complete, non-required field '
+    test(
+        'a "Not OK" answer on an otherwise-complete, non-required field '
         'still allows submission', () {
       final ChecklistTemplate template = _templateWithLegend(
         fields: const <ChecklistField>[
@@ -61,7 +62,8 @@ void main() {
       expect(gate.fieldErrors, isEmpty);
     });
 
-    test('a "Not OK" answer on a REQUIRED select field still allows '
+    test(
+        'a "Not OK" answer on a REQUIRED select field still allows '
         'submission - required only means non-empty, not non-blocking', () {
       final ChecklistTemplate template = _templateWithLegend(
         fields: const <ChecklistField>[
@@ -85,7 +87,8 @@ void main() {
       expect(gate.canSubmit, isTrue);
     });
 
-    test('a plain text field carrying the literal string "Not OK" is not '
+    test(
+        'a plain text field carrying the literal string "Not OK" is not '
         'treated as blocking either - the close-gate\'s server-mirroring '
         'behaviour belongs to `checklist_marks.canClose`, never to this '
         'submit gate', () {
@@ -234,7 +237,8 @@ void main() {
       expect(gate.unsatisfiedGroups, hasLength(1));
     });
 
-    test('a value of 0 on either member of the group satisfies it - zero '
+    test(
+        'a value of 0 on either member of the group satisfies it - zero '
         'is a reading', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
@@ -308,7 +312,8 @@ void main() {
       expect(gate.canSubmit, isTrue);
     });
 
-    test('a template flagged require_signature with no field pad and no '
+    test(
+        'a template flagged require_signature with no field pad and no '
         'signed field blocks', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[
@@ -328,7 +333,8 @@ void main() {
       expect(gate.primarySignatureOk, isFalse);
     });
 
-    test('the template-level pad satisfies require_signature with no '
+    test(
+        'the template-level pad satisfies require_signature with no '
         'signature field on the template at all', () {
       final ChecklistTemplate template = ChecklistTemplate(
         fields: const <ChecklistField>[

@@ -86,13 +86,15 @@ void main() {
       expect(
         (TpRouteGuards.forRouteId(
           TpRouteId.accidentReport,
-        ) as ModuleGuarded).module,
+        ) as ModuleGuarded)
+            .module,
         RouteModule.reportAccident,
       );
       expect(
         (TpRouteGuards.forRouteId(
           TpRouteId.accidentDashboard,
-        ) as ModuleGuarded).module,
+        ) as ModuleGuarded)
+            .module,
         RouteModule.accidents,
       );
     });
@@ -101,7 +103,8 @@ void main() {
       expect(
         (TpRouteGuards.forRouteId(
           TpRouteId.inspectionDetail,
-        ) as ModuleGuarded).module,
+        ) as ModuleGuarded)
+            .module,
         RouteModule.inspect,
       );
     });

@@ -16,8 +16,8 @@ void main() {
   // Each entry: input, expected layout key, expected tyre count, expected
   // ordered slot ids (V1). The ordered-id assertion is what makes this a
   // parity suite rather than a count check.
-  const List<(String, String, int, List<String>)>
-  cases = <(String, String, int, List<String>)>[
+  const List<(String, String, int, List<String>)> cases =
+      <(String, String, int, List<String>)>[
     ('PICKUP', 'Pickup', 4, <String>['FL', 'FR', 'RL', 'RR']),
     ('WHEEL_LOADER', 'Wheel loader', 4, <String>['FL', 'FR', 'RL', 'RR']),
     ('SKID LOADER', 'Skid loader', 4, <String>['FL', 'FR', 'RL', 'RR']),
@@ -137,7 +137,8 @@ void main() {
         test("'$input' -> $expectLayout's exact ordered id list", () {
           expect(diagramPositions(input), ids);
           expect(
-            kTyreDiagramLayouts[expectLayout]!.tyres
+            kTyreDiagramLayouts[expectLayout]!
+                .tyres
                 .map((TyreSlot t) => t.id)
                 .toList(),
             ids,

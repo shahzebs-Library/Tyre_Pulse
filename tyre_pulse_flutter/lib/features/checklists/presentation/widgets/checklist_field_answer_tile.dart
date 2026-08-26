@@ -247,7 +247,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
     final String? helper = widget.field.unit == null
         ? widget.field.help
         : '${widget.field.help ?? ''}${(widget.field.help ?? '').isEmpty ? '' : ' '}'
-              '(${widget.field.unit})';
+            '(${widget.field.unit})';
     return TpInput(
       label: widget.label,
       controller: _controller,
@@ -296,8 +296,7 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
       lastDate: DateTime(now.year + 10),
     );
     if (picked == null) return;
-    final String iso =
-        '${picked.year.toString().padLeft(4, '0')}-'
+    final String iso = '${picked.year.toString().padLeft(4, '0')}-'
         '${picked.month.toString().padLeft(2, '0')}-'
         '${picked.day.toString().padLeft(2, '0')}';
     _controller?.text = iso;
@@ -346,7 +345,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 AppLocalizations.of(context).fieldRequired,
-                style: Theme.of(context).textTheme.labelSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -379,7 +380,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           const SizedBox(height: TpSpace.xs),
           Text(
             widget.errorText!,
-            style: Theme.of(context).textTheme.labelSmall
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
                 ?.copyWith(color: TpPalette.of(context).critical.base),
           ),
         ],
@@ -405,7 +408,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 l10n.fieldRequired,
-                style: Theme.of(context).textTheme.labelSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -417,9 +422,8 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
             ChoiceChip(
               label: Text(l10n.checklistYes),
               selected: current == true,
-              onSelected: _isEditable
-                  ? (bool _) => widget.onChanged?.call(true)
-                  : null,
+              onSelected:
+                  _isEditable ? (bool _) => widget.onChanged?.call(true) : null,
             ),
             const SizedBox(width: TpSpace.sm),
             ChoiceChip(
@@ -436,9 +440,8 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
   }
 
   Widget _ratingField(BuildContext context) {
-    final int current = widget.value is num
-        ? (widget.value! as num).round()
-        : 0;
+    final int current =
+        widget.value is num ? (widget.value! as num).round() : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -506,7 +509,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 l10n.fieldRequired,
-                style: Theme.of(context).textTheme.labelSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -532,7 +537,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           const SizedBox(height: TpSpace.xs),
           Text(
             widget.errorText!,
-            style: Theme.of(context).textTheme.labelSmall
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
                 ?.copyWith(color: TpPalette.of(context).critical.base),
           ),
         ],
@@ -544,30 +551,28 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ChecklistPhotoPickSource? source =
         await TpBottomSheet.show<ChecklistPhotoPickSource>(
-          context: context,
-          title: l10n.checklistAddPhotoTitle,
-          builder: (BuildContext sheetContext) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
-                  title: Text(l10n.checklistPhotoSourceCamera),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(ChecklistPhotoPickSource.camera),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: Text(l10n.checklistPhotoSourceGallery),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(ChecklistPhotoPickSource.gallery),
-                ),
-              ],
-            );
-          },
+      context: context,
+      title: l10n.checklistAddPhotoTitle,
+      builder: (BuildContext sheetContext) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: Text(l10n.checklistPhotoSourceCamera),
+              onTap: () => Navigator.of(sheetContext)
+                  .pop(ChecklistPhotoPickSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(l10n.checklistPhotoSourceGallery),
+              onTap: () => Navigator.of(sheetContext)
+                  .pop(ChecklistPhotoPickSource.gallery),
+            ),
+          ],
         );
+      },
+    );
     if (source == null) return;
     await widget.onCapturePhoto?.call(source);
   }
@@ -588,7 +593,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               const SizedBox(width: TpSpace.xs),
               Text(
                 AppLocalizations.of(context).fieldRequired,
-                style: Theme.of(context).textTheme.labelSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
             ],
@@ -600,7 +607,9 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
           const SizedBox(height: TpSpace.xs),
           Text(
             widget.errorText!,
-            style: Theme.of(context).textTheme.labelSmall
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
                 ?.copyWith(color: TpPalette.of(context).critical.base),
           ),
         ],

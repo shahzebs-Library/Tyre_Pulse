@@ -39,8 +39,8 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 /// this already talks to the live [SupabaseVehicleFleetSource].
 final Provider<VehicleFleetSource> vehicleFleetSourceProvider =
     Provider<VehicleFleetSource>(
-      (ref) => SupabaseVehicleFleetSource(ref.watch(supabaseClientProvider)),
-    );
+  (ref) => SupabaseVehicleFleetSource(ref.watch(supabaseClientProvider)),
+);
 
 /// See the library comment. Override this once `core/database` exposes a
 /// shared [CacheDao] instance.
@@ -51,11 +51,11 @@ final Provider<CacheDao?> vehicleFleetCacheDaoProvider = Provider<CacheDao?>(
 /// The fleet register repository.
 final Provider<VehicleFleetRepository> vehicleFleetRepositoryProvider =
     Provider<VehicleFleetRepository>(
-      (ref) => VehicleFleetRepository(
-        ref.watch(vehicleFleetSourceProvider),
-        cacheDao: ref.watch(vehicleFleetCacheDaoProvider),
-      ),
-    );
+  (ref) => VehicleFleetRepository(
+    ref.watch(vehicleFleetSourceProvider),
+    cacheDao: ref.watch(vehicleFleetCacheDaoProvider),
+  ),
+);
 
 /// The whole fleet register, scoped to the active workspace's country.
 ///
@@ -73,13 +73,13 @@ final Provider<VehicleFleetRepository> vehicleFleetRepositoryProvider =
 /// showing the previous workspace's rows.
 final FutureProvider<VehicleFleetListOutcome> vehicleFleetListProvider =
     FutureProvider<VehicleFleetListOutcome>((ref) {
-      final workspace = ref.watch(workspaceContextProvider);
-      final repository = ref.watch(vehicleFleetRepositoryProvider);
-      return repository.loadAll(
-        scope: vehicleCacheScopeFor(workspace),
-        country: workspace?.activeCountry,
-      );
-    });
+  final workspace = ref.watch(workspaceContextProvider);
+  final repository = ref.watch(vehicleFleetRepositoryProvider);
+  return repository.loadAll(
+    scope: vehicleCacheScopeFor(workspace),
+    country: workspace?.activeCountry,
+  );
+});
 
 /// One vehicle, by its exact `asset_no`.
 ///
@@ -88,11 +88,11 @@ final FutureProvider<VehicleFleetListOutcome> vehicleFleetListProvider =
 /// per `VehicleAsset.hasNavigableAssetNo`'s own reasoning.
 final FutureProviderFamily<VehicleDetailOutcome, String> vehicleDetailProvider =
     FutureProvider.family<VehicleDetailOutcome, String>((ref, assetNo) {
-      final workspace = ref.watch(workspaceContextProvider);
-      final repository = ref.watch(vehicleFleetRepositoryProvider);
-      return repository.byAssetNo(
-        scope: vehicleCacheScopeFor(workspace),
-        assetNo: assetNo,
-        country: workspace?.activeCountry,
-      );
-    });
+  final workspace = ref.watch(workspaceContextProvider);
+  final repository = ref.watch(vehicleFleetRepositoryProvider);
+  return repository.byAssetNo(
+    scope: vehicleCacheScopeFor(workspace),
+    assetNo: assetNo,
+    country: workspace?.activeCountry,
+  );
+});

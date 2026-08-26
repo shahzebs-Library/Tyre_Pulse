@@ -24,7 +24,8 @@ void main() {
       expect(keys.length, 2);
     });
 
-    test('accepts a Set<String> - the same constructor covers both list '
+    test(
+        'accepts a Set<String> - the same constructor covers both list '
         'and Set shapes the RN union offers', () {
       final TyreDiagramPending pending = TyreDiagramPending.fromKeys(<String>{
         'FL',
@@ -43,7 +44,8 @@ void main() {
   });
 
   group('fromCompleteness', () {
-    test('collects both the slot id and the canonical code for every '
+    test(
+        'collects both the slot id and the canonical code for every '
         'non-complete slot, and nothing for complete slots', () {
       final TyreCompletenessResult result = tyreCompleteness(
         'TR-MIXER',

@@ -67,7 +67,8 @@ Future<FakeTyreRecordsRepository> _pump(
 
 void main() {
   group('the module gate runs before any fetch', () {
-    testWidgets('a denied user sees the refusal, never a spinner, and the '
+    testWidgets(
+        'a denied user sees the refusal, never a spinner, and the '
         'repository is never called', (WidgetTester tester) async {
       final FakeTyreRecordsRepository repo = await _pump(
         tester,
@@ -80,8 +81,7 @@ void main() {
       expect(
         repo.fetchPageCalls,
         isEmpty,
-        reason:
-            'ModuleKey.records is admin-only; a Reporter must be '
+        reason: 'ModuleKey.records is admin-only; a Reporter must be '
             'refused before the controller provider is ever read',
       );
     });
@@ -92,10 +92,10 @@ void main() {
       await _pump(tester, access: _reporter);
       await tester.pump();
 
-      final TpPermissionDeniedState widget = tester
-          .widget<TpPermissionDeniedState>(
-            find.byType(TpPermissionDeniedState),
-          );
+      final TpPermissionDeniedState widget =
+          tester.widget<TpPermissionDeniedState>(
+        find.byType(TpPermissionDeniedState),
+      );
       expect(widget.reason, isNotEmpty);
     });
 

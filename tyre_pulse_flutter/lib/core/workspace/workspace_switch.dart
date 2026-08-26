@@ -47,8 +47,8 @@ final class WorkspaceSelection {
 
   /// Everything the profile permits: no country filter, no site filter.
   const WorkspaceSelection.everythingInScope()
-    : country = null,
-      sites = const <String>[];
+      : country = null,
+        sites = const <String>[];
 
   /// The single country to work in, or null for "everything in scope".
   final String? country;
@@ -257,8 +257,7 @@ final class WorkspaceSwitcher {
         completedSteps: List<WorkspaceSwitchStep>.unmodifiable(steps),
         error: AppError(
           kind: AppErrorKind.sync,
-          message:
-              'Your workspace could not be changed because your profile '
+          message: 'Your workspace could not be changed because your profile '
               'could not be loaded. Check your connection and try again.',
           technical: 'loadProfile failed: $error',
           cause: error,
@@ -273,8 +272,7 @@ final class WorkspaceSwitcher {
       role: profile.role,
       isSuperAdmin: profile.isSuperAdmin,
     );
-    final bool identityChanged =
-        current.role != profile.role ||
+    final bool identityChanged = current.role != profile.role ||
         current.effectivePermissions.isSuperAdmin != profile.isSuperAdmin;
     if (identityChanged) {
       try {
@@ -289,8 +287,7 @@ final class WorkspaceSwitcher {
         warnings.add(
           AppError(
             kind: AppErrorKind.authorization,
-            message:
-                'Your permissions could not be reloaded after your role '
+            message: 'Your permissions could not be reloaded after your role '
                 'changed. Administration sections stay closed until they load.',
             technical: 'reloadAccessState failed: $error',
             cause: error,
@@ -323,8 +320,7 @@ final class WorkspaceSwitcher {
         warnings.add(
           AppError(
             kind: AppErrorKind.server,
-            message:
-                'The currency for this country could not be loaded. '
+            message: 'The currency for this country could not be loaded. '
                 'Amounts will be shown without a currency until it does.',
             technical: 'currencyForCountry($country) failed: $error',
             cause: error,
@@ -336,8 +332,7 @@ final class WorkspaceSwitcher {
         warnings.add(
           AppError(
             kind: AppErrorKind.server,
-            message:
-                'No currency is configured for this country. Amounts will '
+            message: 'No currency is configured for this country. Amounts will '
                 'be shown without a currency.',
             technical: 'currencyForCountry($country) returned null',
           ),
@@ -371,8 +366,7 @@ final class WorkspaceSwitcher {
       warnings.add(
         AppError(
           kind: AppErrorKind.storage,
-          message:
-              'Some saved data from your previous workspace could not be '
+          message: 'Some saved data from your previous workspace could not be '
               'cleared. Pull to refresh if a screen looks out of date.',
           technical: 'invalidateScopedReads failed: $error',
           cause: error,
@@ -389,8 +383,7 @@ final class WorkspaceSwitcher {
       warnings.add(
         AppError(
           kind: AppErrorKind.storage,
-          message:
-              'This workspace could not be prepared for offline use yet. '
+          message: 'This workspace could not be prepared for offline use yet. '
               'It will fill in as you use it.',
           technical: 'refreshScopedCache failed: $error',
           cause: error,
@@ -428,11 +421,9 @@ final class WorkspaceSwitcher {
           isSuperAdmin: profile.isSuperAdmin,
         )) {
       return AppError.authorization(
-        message:
-            'You do not have access to $country. Contact your '
+        message: 'You do not have access to $country. Contact your '
             'administrator if you need it.',
-        technical:
-            'country "$country" is outside '
+        technical: 'country "$country" is outside '
             '${profile.countryScope.values}',
       );
     }
@@ -444,8 +435,7 @@ final class WorkspaceSwitcher {
         isAdminRole: profile.role.isAdministrator,
       )) {
         return AppError.authorization(
-          message:
-              'You do not have access to site $site. Contact your '
+          message: 'You do not have access to site $site. Contact your '
               'administrator if you need it.',
           technical: 'site "$site" is outside ${profile.siteScope.values}',
         );

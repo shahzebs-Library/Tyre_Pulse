@@ -74,9 +74,8 @@ typedef SentryCaptureFunction = Future<void> Function(
 /// more off it than [toString].
 final class _SanitizedFailure {
   _SanitizedFailure(AppError error)
-    : summary =
-          'AppError(${error.kind.name}): '
-          '${error.technical ?? error.message}';
+      : summary = 'AppError(${error.kind.name}): '
+            '${error.technical ?? error.message}';
 
   final String summary;
 
@@ -89,7 +88,7 @@ final class TelemetryService implements TelemetryReporter {
   /// Builds an INACTIVE reporter. Every method on this class is safe to call
   /// before [initialize] runs, or when it was never called: they do nothing.
   TelemetryService({SentryCaptureFunction? capture})
-    : _capture = capture ?? _defaultCapture;
+      : _capture = capture ?? _defaultCapture;
 
   /// Builds an ALREADY-ACTIVE reporter for tests, bypassing the real Sentry
   /// SDK entirely. [capture] receives exactly what a real capture would send.
@@ -97,9 +96,9 @@ final class TelemetryService implements TelemetryReporter {
   TelemetryService.forTesting({
     required SentryCaptureFunction capture,
     Map<String, String> staticTags = const <String, String>{},
-  }) : _capture = capture,
-       _active = true,
-       _staticTags = Map<String, String>.of(staticTags);
+  })  : _capture = capture,
+        _active = true,
+        _staticTags = Map<String, String>.of(staticTags);
 
   final SentryCaptureFunction _capture;
   bool _active = false;

@@ -154,21 +154,20 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     int limit = 10,
   }) async {
     return transaction(() async {
-      final due =
-          await (select(pendingCommands)
-                ..where(
-                  (t) =>
-                      (t.status.equals(CommandStatus.pending) |
-                          t.status.equals(CommandStatus.retry)) &
-                      t.workspaceId.equals(workspaceId) &
-                      t.nextRetryAt.isSmallerOrEqualValue(now),
-                )
-                ..orderBy([
-                  (t) => OrderingTerm.asc(t.createdAt),
-                  (t) => OrderingTerm.asc(t.id),
-                ])
-                ..limit(limit))
-              .get();
+      final due = await (select(pendingCommands)
+            ..where(
+              (t) =>
+                  (t.status.equals(CommandStatus.pending) |
+                      t.status.equals(CommandStatus.retry)) &
+                  t.workspaceId.equals(workspaceId) &
+                  t.nextRetryAt.isSmallerOrEqualValue(now),
+            )
+            ..orderBy([
+              (t) => OrderingTerm.asc(t.createdAt),
+              (t) => OrderingTerm.asc(t.id),
+            ])
+            ..limit(limit))
+          .get();
 
       final claimed = <PendingCommand>[];
       for (final PendingCommand row in due) {
@@ -253,18 +252,19 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     required String workspaceId,
     required DateTime now,
   }) {
-    return (update(pendingCommands)..where(
-          (t) =>
-              t.status.equals(CommandStatus.blocked) &
-              t.workspaceId.equals(workspaceId),
-        ))
+    return (update(pendingCommands)
+          ..where(
+            (t) =>
+                t.status.equals(CommandStatus.blocked) &
+                t.workspaceId.equals(workspaceId),
+          ))
         .write(
-          PendingCommandsCompanion(
-            status: const Value<String>(CommandStatus.pending),
-            nextRetryAt: Value<DateTime>(now),
-            lastError: const Value<String?>(null),
-          ),
-        );
+      PendingCommandsCompanion(
+        status: const Value<String>(CommandStatus.pending),
+        nextRetryAt: Value<DateTime>(now),
+        lastError: const Value<String?>(null),
+      ),
+    );
   }
 
   /// Releases a claim without counting it as a failed attempt.
@@ -309,17 +309,18 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     Duration timeout = QueueRetryPolicy.claimTimeout,
   }) {
     final DateTime cutoff = now.subtract(timeout);
-    return (update(pendingCommands)..where(
-          (t) =>
-              t.status.equals(CommandStatus.processing) &
-              t.nextRetryAt.isSmallerOrEqualValue(cutoff),
-        ))
+    return (update(pendingCommands)
+          ..where(
+            (t) =>
+                t.status.equals(CommandStatus.processing) &
+                t.nextRetryAt.isSmallerOrEqualValue(cutoff),
+          ))
         .write(
-          PendingCommandsCompanion(
-            status: const Value<String>(CommandStatus.pending),
-            nextRetryAt: Value<DateTime>(now),
-          ),
-        );
+      PendingCommandsCompanion(
+        status: const Value<String>(CommandStatus.pending),
+        nextRetryAt: Value<DateTime>(now),
+      ),
+    );
   }
 
   /// The number the badge, the tab bar and the sync banner show.
@@ -332,9 +333,8 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     final Expression<int> total = pendingCommands.id.count();
     final query = selectOnly(pendingCommands)..addColumns([total]);
 
-    final Expression<bool> notSynced = pendingCommands.status
-        .equals(CommandStatus.synced)
-        .not();
+    final Expression<bool> notSynced =
+        pendingCommands.status.equals(CommandStatus.synced).not();
     query.where(
       workspaceId == null
           ? notSynced
@@ -349,9 +349,8 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
   Future<List<PendingCommand>> outstandingCommands({String? workspaceId}) {
     return (select(pendingCommands)
           ..where((t) {
-            final Expression<bool> notSynced = t.status
-                .equals(CommandStatus.synced)
-                .not();
+            final Expression<bool> notSynced =
+                t.status.equals(CommandStatus.synced).not();
             if (workspaceId == null) {
               return notSynced;
             }
@@ -393,13 +392,15 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     return transaction(() async {
       final synced = await (select(
         pendingCommands,
-      )..where((t) => t.status.equals(CommandStatus.synced))).get();
+      )..where((t) => t.status.equals(CommandStatus.synced)))
+          .get();
 
       final filesToDelete = <String>[];
       for (final PendingCommand command in synced) {
         final media = await (select(
           pendingMediaUploads,
-        )..where((t) => t.commandId.equals(command.id))).get();
+        )..where((t) => t.commandId.equals(command.id)))
+            .get();
 
         final bool allVerified = media.every(
           (PendingMediaUpload m) => m.state == MediaUploadState.verified,
@@ -413,10 +414,12 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
         }
         await (delete(
           pendingMediaUploads,
-        )..where((t) => t.commandId.equals(command.id))).go();
+        )..where((t) => t.commandId.equals(command.id)))
+            .go();
         await (delete(
           pendingCommands,
-        )..where((t) => t.id.equals(command.id))).go();
+        )..where((t) => t.id.equals(command.id)))
+            .go();
       }
       return filesToDelete;
     });
@@ -458,21 +461,19 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
         ),
       );
 
-      final keep =
-          await (select(syncFailures)
-                ..orderBy([
-                  (t) => OrderingTerm.desc(t.occurredAt),
-                  (t) => OrderingTerm.desc(t.id),
-                ])
-                ..limit(RetentionLimits.syncFailures))
-              .get();
+      final keep = await (select(syncFailures)
+            ..orderBy([
+              (t) => OrderingTerm.desc(t.occurredAt),
+              (t) => OrderingTerm.desc(t.id),
+            ])
+            ..limit(RetentionLimits.syncFailures))
+          .get();
 
       if (keep.isEmpty) {
         return;
       }
-      final List<String> keepIds = keep
-          .map((SyncFailure f) => f.id)
-          .toList(growable: false);
+      final List<String> keepIds =
+          keep.map((SyncFailure f) => f.id).toList(growable: false);
       await (delete(syncFailures)..where((t) => t.id.isIn(keepIds).not())).go();
     });
   }
@@ -499,21 +500,19 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     Duration staleAfter = QueueRetryPolicy.claimTimeout,
   }) async {
     return transaction(() async {
-      final existing =
-          await (select(syncMetadata)
-                ..where(
-                  (t) => t.key.equals(SyncMetadataKeys.syncLockAcquiredAt),
-                )
-                ..limit(1))
-              .getSingleOrNull();
+      final existing = await (select(syncMetadata)
+            ..where(
+              (t) => t.key.equals(SyncMetadataKeys.syncLockAcquiredAt),
+            )
+            ..limit(1))
+          .getSingleOrNull();
 
       if (existing != null &&
           now.difference(existing.updatedAt).abs() < staleAfter) {
-        final currentHolder =
-            await (select(syncMetadata)
-                  ..where((t) => t.key.equals(SyncMetadataKeys.syncLockHolder))
-                  ..limit(1))
-                .getSingleOrNull();
+        final currentHolder = await (select(syncMetadata)
+              ..where((t) => t.key.equals(SyncMetadataKeys.syncLockHolder))
+              ..limit(1))
+            .getSingleOrNull();
         if (currentHolder != null && currentHolder.valueJson != holder) {
           return false;
         }
@@ -531,11 +530,12 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
 
   Future<void> releaseSyncLock({required DateTime now}) async {
     await transaction(() async {
-      await (delete(syncMetadata)..where(
-            (t) =>
-                t.key.equals(SyncMetadataKeys.syncLockHolder) |
-                t.key.equals(SyncMetadataKeys.syncLockAcquiredAt),
-          ))
+      await (delete(syncMetadata)
+            ..where(
+              (t) =>
+                  t.key.equals(SyncMetadataKeys.syncLockHolder) |
+                  t.key.equals(SyncMetadataKeys.syncLockAcquiredAt),
+            ))
           .go();
       await _writeMetadata(
         SyncMetadataKeys.syncLastRunAt,

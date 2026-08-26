@@ -34,8 +34,7 @@ void main() {
           expect(
             decision.isAuthorisationBoundary,
             isFalse,
-            reason:
-                'an allow on ${key.wireKey} must never be read as '
+            reason: 'an allow on ${key.wireKey} must never be read as '
                 'authorisation to fetch the underlying table',
           );
         }

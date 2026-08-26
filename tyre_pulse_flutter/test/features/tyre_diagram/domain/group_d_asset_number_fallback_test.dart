@@ -33,7 +33,8 @@ void main() {
     expect(resolveVehicleType('HEAVY EQP', 'SL001'), 'Skid loader');
   });
 
-  test('case 37: an unmapped prefix is never guessed - IP is not read as '
+  test(
+      'case 37: an unmapped prefix is never guessed - IP is not read as '
       '"ice plant"', () {
     expect(resolveVehicleType('HEAVY EQP', 'IP064'), 'Pickup');
   });

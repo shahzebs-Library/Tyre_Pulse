@@ -170,7 +170,7 @@ class SerialSearchController extends Notifier<SerialSearchState> {
 
 /// Serial search screen state and actions.
 final NotifierProvider<SerialSearchController, SerialSearchState>
-serialSearchControllerProvider =
+    serialSearchControllerProvider =
     NotifierProvider<SerialSearchController, SerialSearchState>(
-      SerialSearchController.new,
-    );
+  SerialSearchController.new,
+);

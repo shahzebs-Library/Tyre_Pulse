@@ -24,8 +24,8 @@ import 'package:tyre_pulse/features/tyre_exchange/presentation/tyre_replacement_
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> tyreExchangeScreenRegistrations =
     <String, TpScreenBuilder>{
-      TpRouteId.tyreChange: _buildTyreReplacementScreen,
-    };
+  TpRouteId.tyreChange: _buildTyreReplacementScreen,
+};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [TyreChangeRoute]. The registry is keyed by [TpRouteId.tyreChange], so

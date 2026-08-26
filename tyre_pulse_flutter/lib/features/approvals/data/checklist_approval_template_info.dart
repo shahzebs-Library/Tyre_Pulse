@@ -120,7 +120,6 @@ final class ChecklistApprovalTemplateInfo {
   }
 
   @override
-  String toString() =>
-      'ChecklistApprovalTemplateInfo(id: $id, '
+  String toString() => 'ChecklistApprovalTemplateInfo(id: $id, '
       'requireAreaManager: $requireAreaManager, fields: ${fields.length})';
 }

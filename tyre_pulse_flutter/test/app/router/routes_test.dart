@@ -86,8 +86,8 @@ void main() {
         const NewInspectionRoute(tyrePosition: position).location,
         contains('tyrePosition=LHF1'),
       );
-      final String tyreChange = const TyreChangeRoute(tyrePosition: position)
-          .location;
+      final String tyreChange =
+          const TyreChangeRoute(tyrePosition: position).location;
       expect(tyreChange, contains('tyrePosition=LHF1'));
       // `position=` on its own would match `tyrePosition=` as a substring, so
       // the assertion is on the separator.

@@ -56,19 +56,19 @@ import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart'
 /// pure Dart with zero imports and this is a JSON-serialisation concern of
 /// THIS feature's own on-device persistence, not of the ladder engine.
 String approvalStageToWire(ApprovalStage stage) => switch (stage) {
-  ApprovalStage.supervisor => 'supervisor',
-  ApprovalStage.areaManager => 'area_manager',
-};
+      ApprovalStage.supervisor => 'supervisor',
+      ApprovalStage.areaManager => 'area_manager',
+    };
 
 /// The inverse of [approvalStageToWire]. Returns `null` for anything else -
 /// a queue entry with an unreadable stage cannot be safely re-validated
 /// (see [ChecklistApprovalSyncEngine]), so [QueuedChecklistApprovalDecision.
 /// fromJson] refuses to decode one rather than guessing.
 ApprovalStage? approvalStageFromWire(String? wire) => switch (wire) {
-  'supervisor' => ApprovalStage.supervisor,
-  'area_manager' => ApprovalStage.areaManager,
-  _ => null,
-};
+      'supervisor' => ApprovalStage.supervisor,
+      'area_manager' => ApprovalStage.areaManager,
+      _ => null,
+    };
 
 /// The three states a queued decision can be in on this device.
 ///
@@ -256,7 +256,8 @@ class QueuedChecklistApprovalDecision {
   static String dedupeKeyFor({
     required String submissionId,
     required String targetStatus,
-  }) => 'approve_${submissionId}_$targetStatus';
+  }) =>
+      'approve_${submissionId}_$targetStatus';
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -345,7 +346,6 @@ class QueuedChecklistApprovalDecision {
   }
 
   @override
-  String toString() =>
-      'QueuedChecklistApprovalDecision(id: $id, '
+  String toString() => 'QueuedChecklistApprovalDecision(id: $id, '
       'targetStatus: $targetStatus, status: $status)';
 }

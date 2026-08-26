@@ -50,7 +50,8 @@ void main() {
       expect(decoded.notes, original.notes);
     });
 
-    test('a pressure of exactly 0.0 - a flat tyre - survives the round '
+    test(
+        'a pressure of exactly 0.0 - a flat tyre - survives the round '
         'trip and is never treated as absent', () {
       // The single most important disclosed divergence from
       // `mobile/lib/types.ts`: pressure is a double here, not a string, so
@@ -137,7 +138,8 @@ void main() {
   });
 
   group('copyWith clear flags', () {
-    test('clearPressurePsi removes the value even when a new one is not '
+    test(
+        'clearPressurePsi removes the value even when a new one is not '
         'supplied', () {
       const TyrePositionReading r = TyrePositionReading(
         position: 'LHF1',

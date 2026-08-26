@@ -67,7 +67,9 @@ class MeterLogPhotoSlot extends StatelessWidget {
         else
           Text(
             noneLabel,
-            style: Theme.of(context).textTheme.bodySmall
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
                 ?.copyWith(color: palette.textMuted),
           ),
         const SizedBox(height: TpSpace.sm),

@@ -25,8 +25,7 @@ void expectClearlyDifferent(String label, Color a, Color b) {
   expect(
     diff,
     greaterThan(_kMinLuminanceDiff),
-    reason:
-        '$label: luminance difference was only ${diff.toStringAsFixed(4)}, '
+    reason: '$label: luminance difference was only ${diff.toStringAsFixed(4)}, '
         'below the $_kMinLuminanceDiff floor for legible ink on a fill',
   );
 }

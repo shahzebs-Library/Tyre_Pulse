@@ -137,9 +137,8 @@ final class TyreRecordsListState {
       hasMore: hasMore ?? this.hasMore,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       loadError: clearLoadError ? null : (loadError ?? this.loadError),
-      loadMoreError: clearLoadMoreError
-          ? null
-          : (loadMoreError ?? this.loadMoreError),
+      loadMoreError:
+          clearLoadMoreError ? null : (loadMoreError ?? this.loadMoreError),
       query: query ?? this.query,
       searchInput: searchInput ?? this.searchInput,
       availableSites: availableSites ?? this.availableSites,
@@ -147,8 +146,7 @@ final class TyreRecordsListState {
   }
 
   @override
-  String toString() =>
-      'TyreRecordsListState(phase: $phase, '
+  String toString() => 'TyreRecordsListState(phase: $phase, '
       'items: ${items.length}, hasMore: $hasMore, '
       'isLoadingMore: $isLoadingMore, loadError: $loadError, '
       'loadMoreError: $loadMoreError, query: $query)';

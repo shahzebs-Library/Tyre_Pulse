@@ -56,10 +56,10 @@ final class ChecklistVisibleCondition {
   final Object? value;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    if (field != null) 'field': field,
-    if (op != null) 'op': op,
-    if (value != null) 'value': value,
-  };
+        if (field != null) 'field': field,
+        if (op != null) 'op': op,
+        if (value != null) 'value': value,
+      };
 
   @override
   String toString() =>
@@ -218,39 +218,39 @@ final class ChecklistField {
   final Map<String, dynamic> extra;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    ...extra,
-    'id': id,
-    'type': type,
-    if (label != null) 'label': label,
-    if (help != null) 'help': help,
-    'required': required,
-    'allow_photo': allowPhoto,
-    if (allowNote != null) 'allow_note': allowNote,
-    'options': options,
-    if (optionsRef != null) 'options_ref': optionsRef,
-    if (labels.isNotEmpty) 'labels': labels,
-    if (optionsI18n.isNotEmpty) 'options_i18n': optionsI18n,
-    if (min != null) 'min': min,
-    if (max != null) 'max': max,
-    if (defaultValue != null) 'default': defaultValue,
-    if (visibleWhen.length == 1)
-      'visibleWhen': visibleWhen.first.toJson()
-    else if (visibleWhen.isNotEmpty)
-      'visibleWhen': <Map<String, dynamic>>[
-        for (final ChecklistVisibleCondition c in visibleWhen) c.toJson(),
-      ],
-    if (weight != null) 'weight': weight,
-    if (passValues.isNotEmpty) 'passValues': passValues,
-    if (autoFrom != null) 'autoFrom': autoFrom,
-    'readOnly': readOnly,
-    'locked': locked,
-    if (autoValue != null) 'autoValue': autoValue,
-    if (groupRequireOne != null) 'group_require_one': groupRequireOne,
-    if (compareTo != null) 'compareTo': compareTo,
-    if (unit != null) 'unit': unit,
-    if (requireNoteWhen.isNotEmpty) 'require_note_when': requireNoteWhen,
-    'allow_gallery': allowGallery,
-  };
+        ...extra,
+        'id': id,
+        'type': type,
+        if (label != null) 'label': label,
+        if (help != null) 'help': help,
+        'required': required,
+        'allow_photo': allowPhoto,
+        if (allowNote != null) 'allow_note': allowNote,
+        'options': options,
+        if (optionsRef != null) 'options_ref': optionsRef,
+        if (labels.isNotEmpty) 'labels': labels,
+        if (optionsI18n.isNotEmpty) 'options_i18n': optionsI18n,
+        if (min != null) 'min': min,
+        if (max != null) 'max': max,
+        if (defaultValue != null) 'default': defaultValue,
+        if (visibleWhen.length == 1)
+          'visibleWhen': visibleWhen.first.toJson()
+        else if (visibleWhen.isNotEmpty)
+          'visibleWhen': <Map<String, dynamic>>[
+            for (final ChecklistVisibleCondition c in visibleWhen) c.toJson(),
+          ],
+        if (weight != null) 'weight': weight,
+        if (passValues.isNotEmpty) 'passValues': passValues,
+        if (autoFrom != null) 'autoFrom': autoFrom,
+        'readOnly': readOnly,
+        'locked': locked,
+        if (autoValue != null) 'autoValue': autoValue,
+        if (groupRequireOne != null) 'group_require_one': groupRequireOne,
+        if (compareTo != null) 'compareTo': compareTo,
+        if (unit != null) 'unit': unit,
+        if (requireNoteWhen.isNotEmpty) 'require_note_when': requireNoteWhen,
+        'allow_gallery': allowGallery,
+      };
 
   @override
   String toString() => 'ChecklistField(id: $id, type: $type, label: $label)';

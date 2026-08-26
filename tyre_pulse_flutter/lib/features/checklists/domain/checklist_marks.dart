@@ -141,16 +141,14 @@ MarkInfo markMeta(ChecklistOptionSet? optionSet, Object? value) {
   final String icon = (hit?.icon != null && kMarkIcons.containsKey(hit!.icon))
       ? hit.icon!
       : _kDefaultIcon;
-  final MarkTone tone = _isMarkTone(hit?.tone)
-      ? _markToneOf(hit!.tone!)
-      : kMarkIcons[icon]!;
+  final MarkTone tone =
+      _isMarkTone(hit?.tone) ? _markToneOf(hit!.tone!) : kMarkIcons[icon]!;
   return MarkInfo(
     value: v,
     icon: icon,
     tone: tone,
-    meaning: (hit?.meaning != null && hit!.meaning!.isNotEmpty)
-        ? hit.meaning!
-        : '',
+    meaning:
+        (hit?.meaning != null && hit!.meaning!.isNotEmpty) ? hit.meaning! : '',
     known: hit != null,
   );
 }
@@ -180,9 +178,8 @@ ChecklistOptionSet? fieldOptionSet(
 ) {
   if (field == null) return null;
   final String? ref = field.optionsRef;
-  final ChecklistOptionSet? shared = (ref != null && ref.isNotEmpty)
-      ? template?.optionSets[ref]
-      : null;
+  final ChecklistOptionSet? shared =
+      (ref != null && ref.isNotEmpty) ? template?.optionSets[ref] : null;
   if (shared != null) return shared;
   if (field.options.isNotEmpty)
     return ChecklistOptionSet(options: field.options);

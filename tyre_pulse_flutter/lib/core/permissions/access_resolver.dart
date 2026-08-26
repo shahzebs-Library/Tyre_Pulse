@@ -122,14 +122,12 @@ enum AccessReason {
   ),
   roleMatrixDisabled(
     allows: false,
-    message:
-        'Your administrator has turned this section off for your role. '
+    message: 'Your administrator has turned this section off for your role. '
         'Contact them if you need it.',
   ),
   roleNotInDefaults(
     allows: false,
-    message:
-        'Your role does not include this section. Contact your '
+    message: 'Your role does not include this section. Contact your '
         'administrator if you need it.',
   ),
   adminOnlyModule(
@@ -138,20 +136,17 @@ enum AccessReason {
   ),
   permissionDataUnavailable(
     allows: false,
-    message:
-        'Your permissions could not be loaded, so this administration '
+    message: 'Your permissions could not be loaded, so this administration '
         'section stays closed. Try again in a moment, or sign in again.',
   ),
   unknownRole(
     allows: false,
-    message:
-        'Your role is not recognised by this version of the app, so no '
+    message: 'Your role is not recognised by this version of the app, so no '
         'sections are available. Contact your administrator.',
   ),
   noRoleAssigned(
     allows: false,
-    message:
-        'No role has been assigned to your account yet. Contact your '
+    message: 'No role has been assigned to your account yet. Contact your '
         'administrator.',
   );
 
@@ -274,13 +269,14 @@ final class AccessState {
     Map<ModuleKey, GrantEffect>? grants,
     Map<ModuleKey, bool>? roleMatrix,
     bool? permissionsError,
-  }) => AccessState(
-    role: role ?? this.role,
-    isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
-    grants: grants ?? this.grants,
-    roleMatrix: roleMatrix ?? this.roleMatrix,
-    permissionsError: permissionsError ?? this.permissionsError,
-  );
+  }) =>
+      AccessState(
+        role: role ?? this.role,
+        isSuperAdmin: isSuperAdmin ?? this.isSuperAdmin,
+        grants: grants ?? this.grants,
+        roleMatrix: roleMatrix ?? this.roleMatrix,
+        permissionsError: permissionsError ?? this.permissionsError,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -294,16 +290,15 @@ final class AccessState {
 
   @override
   int get hashCode => Object.hash(
-    role,
-    isSuperAdmin,
-    permissionsError,
-    grants.length,
-    roleMatrix.length,
-  );
+        role,
+        isSuperAdmin,
+        permissionsError,
+        grants.length,
+        roleMatrix.length,
+      );
 
   @override
-  String toString() =>
-      'AccessState(role: $role, superAdmin: $isSuperAdmin, '
+  String toString() => 'AccessState(role: $role, superAdmin: $isSuperAdmin, '
       'grants: ${grants.length}, matrix: ${roleMatrix.length}, '
       'permissionsError: $permissionsError)';
 }
@@ -371,9 +366,8 @@ final class AccessDecision {
   /// than silently coerced, and the raw value is what an administrator needs in
   /// order to fix the configuration.
   String get technical {
-    final String roleText = role.isKnown
-        ? role.token
-        : 'unmapped(${role.rawValue})';
+    final String roleText =
+        role.isKnown ? role.token : 'unmapped(${role.rawValue})';
     return 'module=${module.wireKey} reason=${reason.name} '
         'precedence=${precedence.name} role=$roleText';
   }
@@ -427,11 +421,11 @@ AccessDecision resolveModuleAccess({
   final bool isAdminRole = role.isAdministrator;
 
   AccessDecision decide(AccessReason reason) => AccessDecision(
-    module: module,
-    reason: reason,
-    precedence: precedence,
-    role: role,
-  );
+        module: module,
+        reason: reason,
+        precedence: precedence,
+        role: role,
+      );
 
   // 1. Never lockable, in every implementation.
   if (access.isSuperAdmin) {
@@ -509,11 +503,12 @@ bool canAccessModule({
   required ModuleKey module,
   required AccessState access,
   AdminRevokePrecedence precedence = AdminRevokePrecedence.serverAppUserCan,
-}) => resolveModuleAccess(
-  module: module,
-  access: access,
-  precedence: precedence,
-).isAllowed;
+}) =>
+    resolveModuleAccess(
+      module: module,
+      access: access,
+      precedence: precedence,
+    ).isAllowed;
 
 /// Every module [access] reaches, in registry order.
 ///

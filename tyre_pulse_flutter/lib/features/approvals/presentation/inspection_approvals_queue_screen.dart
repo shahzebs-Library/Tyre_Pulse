@@ -302,7 +302,9 @@ class _MetaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TextStyle? style = Theme.of(context).textTheme.bodySmall
+    final TextStyle? style = Theme.of(context)
+        .textTheme
+        .bodySmall
         ?.copyWith(color: palette.textMuted);
     return Padding(
       padding: const EdgeInsets.only(top: 2),

@@ -78,9 +78,8 @@ ChecklistScore computeScore(
     if (pass) earned += w;
   }
   final int? pct = possible > 0 ? (earned / possible * 100).round() : null;
-  final bool? passed = (pct != null && passThreshold != null)
-      ? pct >= passThreshold
-      : null;
+  final bool? passed =
+      (pct != null && passThreshold != null) ? pct >= passThreshold : null;
   return ChecklistScore(
     scored: scored,
     earned: earned,

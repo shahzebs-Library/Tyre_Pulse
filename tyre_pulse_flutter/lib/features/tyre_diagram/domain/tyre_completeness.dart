@@ -262,8 +262,7 @@ EntryClassification classifyEntry(Map<String, Object?>? entry) {
   final bool deliberateCondition =
       conditionRaw.isNotEmpty && keyOf(conditionRaw) != keyOf(kSeededCondition);
 
-  final bool evidence =
-      pressure != null ||
+  final bool evidence = pressure != null ||
       tread != null ||
       serial != null ||
       notes != null ||
@@ -460,9 +459,8 @@ TyreCompletenessResult tyreCompleteness(
 
   final bool known = layoutIsKnown(vehicleType, assetNo);
   final String layoutKey = resolveVehicleType(vehicleType, assetNo);
-  final List<String> slotIds = known
-      ? diagramPositions(vehicleType ?? '', assetNo)
-      : const <String>[];
+  final List<String> slotIds =
+      known ? diagramPositions(vehicleType ?? '', assetNo) : const <String>[];
 
   if (!known) {
     return _buildResult(
@@ -474,8 +472,7 @@ TyreCompletenessResult tyreCompleteness(
       slots: const <TyreSlotStatus>[],
       extra: <String>[for (final TyreEntryPair e in entries) e.key],
       blocking: blocking,
-      summary:
-          'Wheel layout not known for this machine, so tyre details '
+      summary: 'Wheel layout not known for this machine, so tyre details '
           'were not checked.',
     );
   }
@@ -517,8 +514,7 @@ TyreCompletenessResult tyreCompleteness(
       slots: const <TyreSlotStatus>[],
       extra: extra,
       blocking: blocking,
-      summary:
-          'Recorded tyre readings could not be matched to this machine, '
+      summary: 'Recorded tyre readings could not be matched to this machine, '
           'so they were not checked.',
     );
   }
@@ -578,12 +574,12 @@ TyreCompletenessResult _buildResult({
 }) {
   final Map<TyreSlotState, List<TyreSlotStatus>> byState =
       <TyreSlotState, List<TyreSlotStatus>>{
-        for (final TyreSlotState state in TyreSlotState.values)
-          state: <TyreSlotStatus>[
-            for (final TyreSlotStatus s in slots)
-              if (s.state == state) s,
-          ],
-      };
+    for (final TyreSlotState state in TyreSlotState.values)
+      state: <TyreSlotStatus>[
+        for (final TyreSlotStatus s in slots)
+          if (s.state == state) s,
+      ],
+  };
   final List<TyreSlotStatus> pending = <TyreSlotStatus>[
     for (final TyreSlotStatus s in slots)
       if (s.state != TyreSlotState.complete) s,

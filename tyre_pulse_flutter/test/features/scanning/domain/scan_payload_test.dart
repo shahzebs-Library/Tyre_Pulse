@@ -111,7 +111,8 @@ void main() {
       expect(extractScanCode('{not valid json}'), '{not valid json}');
     });
 
-    test('valid JSON with none of the known keys falls through to the '
+    test(
+        'valid JSON with none of the known keys falls through to the '
         'bare-code path, sanitised as a whole string', () {
       final String raw = '{"unrelated":"value"}';
       expect(extractScanCode(raw), sanitizeScanCode(raw));
@@ -143,7 +144,8 @@ void main() {
       expect(extractScanCode('https://x?serial=A3'), 'A3');
     });
 
-    test('falls back to the last path segment when no known query '
+    test(
+        'falls back to the last path segment when no known query '
         'parameter is present', () {
       expect(extractScanCode('https://app.example/asset/TM514'), 'TM514');
     });
@@ -152,7 +154,8 @@ void main() {
       expect(extractScanCode('https://app.example/asset/TM%20514'), 'TM 514');
     });
 
-    test('a bare query-string wrapper with no scheme is still recognised '
+    test(
+        'a bare query-string wrapper with no scheme is still recognised '
         'as a URL', () {
       expect(extractScanCode('asset?code=TM99'), 'TM99');
     });
@@ -165,7 +168,8 @@ void main() {
       expect(extractScanCode('https://x?code=%20TM%28600%29%20'), 'TM600');
     });
 
-    test('a URL with neither a known query parameter nor a path segment '
+    test(
+        'a URL with neither a known query parameter nor a path segment '
         'falls through to the bare-code path', () {
       final String raw = 'https://app.example/';
       expect(extractScanCode(raw), sanitizeScanCode(raw));

@@ -64,7 +64,8 @@ const List<String> _kDomainFiles = <String>[
 ];
 
 void main() {
-  test('case O3: the supervisor rung accepts a sheet regardless of any '
+  test(
+      'case O3: the supervisor rung accepts a sheet regardless of any '
       'fault, because this engine has no notion of "answers" at all', () {
     // Blocking marks ("Not OK" and similar) live entirely in the
     // checklist FIELD/marks engine and in the database trigger - this
@@ -89,7 +90,8 @@ void main() {
   });
 
   group('case O5: an approval is never queued', () {
-    test('the approval domain has no way to reach a network or a queue at '
+    test(
+        'the approval domain has no way to reach a network or a queue at '
         'all - it imports nothing outside its own three sibling files', () {
       // AGENTS.md: "Approvals and other decisions that depend on current
       // server state are NOT blindly queued." A pure library cannot
@@ -112,8 +114,7 @@ void main() {
           expect(
             trimmed,
             contains('package:tyre_pulse/features/approvals/domain/'),
-            reason:
-                '$path imports something outside this domain folder '
+            reason: '$path imports something outside this domain folder '
                 '("$line"). This library must stay pure Dart, dependent '
                 'on nothing but its own sibling files - no Flutter, no '
                 'networking, no queue, no other feature\'s domain.',
@@ -129,13 +130,13 @@ void main() {
       expect(
         baseHasAnyImport,
         isFalse,
-        reason:
-            'checklist_approval.dart must be the base of this folder\'s '
+        reason: 'checklist_approval.dart must be the base of this folder\'s '
             'dependency graph and import nothing at all.',
       );
     });
 
-    test('a decision can never be silently ready to persist - it is refused '
+    test(
+        'a decision can never be silently ready to persist - it is refused '
         'until it carries a name AND a signature (or, for a rejection, a '
         'reason) - so even a caller that mistakenly tried to build an '
         'offline write from an incomplete decision would be stopped here '
@@ -216,7 +217,8 @@ void main() {
       );
     });
 
-    test('an approval needs a non-blank name and a non-blank signature, '
+    test(
+        'an approval needs a non-blank name and a non-blank signature, '
         'independently', () {
       expect(
         decisionRequirementError(

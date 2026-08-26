@@ -92,18 +92,19 @@ WorkspaceProfile profileFor({
   List<String> countries = const <String>['KSA', 'UAE'],
   List<String> sites = const <String>['ALL'],
   bool isSuperAdmin = false,
-}) => WorkspaceProfile.fromRow(<String, Object?>{
-  'id': 'user-1',
-  'role': role,
-  'country': countries,
-  'sites': sites,
-  'org_id': 'org-1',
-  'organisation_id': 'org-1',
-  'is_super_admin': isSuperAdmin,
-  'approved': true,
-  'locked': false,
-  'site': 'NHC',
-});
+}) =>
+    WorkspaceProfile.fromRow(<String, Object?>{
+      'id': 'user-1',
+      'role': role,
+      'country': countries,
+      'sites': sites,
+      'org_id': 'org-1',
+      'organisation_id': 'org-1',
+      'is_super_admin': isSuperAdmin,
+      'approved': true,
+      'locked': false,
+      'site': 'NHC',
+    });
 
 WorkspaceContext contextFor(WorkspaceProfile profile) =>
     WorkspaceContext.fromProfile(
@@ -122,14 +123,14 @@ void main() {
         final FakeDependencies deps = FakeDependencies(profile);
         final WorkspaceContext current = contextFor(profile);
 
-        final WorkspaceSwitchOutcome outcome = await WorkspaceSwitcher(deps)
-            .switchTo(
-              current: current,
-              selection: const WorkspaceSelection(
-                country: 'UAE',
-                sites: <String>['NHC'],
-              ),
-            );
+        final WorkspaceSwitchOutcome outcome =
+            await WorkspaceSwitcher(deps).switchTo(
+          current: current,
+          selection: const WorkspaceSelection(
+            country: 'UAE',
+            sites: <String>['NHC'],
+          ),
+        );
 
         expect(outcome, isA<WorkspaceSwitchApplied>());
         final WorkspaceSwitchApplied applied =
@@ -176,9 +177,9 @@ void main() {
 
       final WorkspaceSwitchApplied applied =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          ) as WorkspaceSwitchApplied;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
 
       expect(applied.allowedModules, contains(ModuleKey.meter));
       expect(applied.allowedModules, isNot(contains(ModuleKey.inspect)));
@@ -190,9 +191,9 @@ void main() {
 
       final WorkspaceSwitchApplied applied =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection.everythingInScope(),
-          ) as WorkspaceSwitchApplied;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection.everythingInScope(),
+      ) as WorkspaceSwitchApplied;
 
       expect(applied.context.activeCountry, isNull);
       expect(applied.context.currency, isNull);
@@ -209,11 +210,11 @@ void main() {
       final WorkspaceProfile profile = profileFor();
       final FakeDependencies deps = FakeDependencies(profile);
 
-      final WorkspaceSwitchOutcome outcome = await WorkspaceSwitcher(deps)
-          .switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          );
+      final WorkspaceSwitchOutcome outcome =
+          await WorkspaceSwitcher(deps).switchTo(
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      );
 
       for (final String call in deps.calls) {
         expect(
@@ -236,11 +237,11 @@ void main() {
         ..profileError = StateError('offline');
       final WorkspaceContext current = contextFor(profile);
 
-      final WorkspaceSwitchOutcome outcome = await WorkspaceSwitcher(deps)
-          .switchTo(
-            current: current,
-            selection: const WorkspaceSelection(country: 'UAE'),
-          );
+      final WorkspaceSwitchOutcome outcome =
+          await WorkspaceSwitcher(deps).switchTo(
+        current: current,
+        selection: const WorkspaceSelection(country: 'UAE'),
+      );
 
       expect(outcome, isA<WorkspaceSwitchRefused>());
       final WorkspaceSwitchRefused refused = outcome as WorkspaceSwitchRefused;
@@ -265,9 +266,9 @@ void main() {
 
         final WorkspaceSwitchRefused refused =
             await WorkspaceSwitcher(deps).switchTo(
-              current: contextFor(profileFor()),
-              selection: const WorkspaceSelection(country: 'UAE'),
-            ) as WorkspaceSwitchRefused;
+          current: contextFor(profileFor()),
+          selection: const WorkspaceSelection(country: 'UAE'),
+        ) as WorkspaceSwitchRefused;
 
         expect(refused.error, same(original));
       },
@@ -283,9 +284,9 @@ void main() {
 
         final WorkspaceSwitchRefused refused =
             await WorkspaceSwitcher(deps).switchTo(
-              current: contextFor(profile),
-              selection: const WorkspaceSelection(country: 'UAE'),
-            ) as WorkspaceSwitchRefused;
+          current: contextFor(profile),
+          selection: const WorkspaceSelection(country: 'UAE'),
+        ) as WorkspaceSwitchRefused;
 
         expect(refused.error.kind, AppErrorKind.authorization);
         expect(refused.error.message, contains('UAE'));
@@ -300,12 +301,12 @@ void main() {
 
       final WorkspaceSwitchRefused refused =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(
-              country: 'UAE',
-              sites: <String>['DIRIYAH'],
-            ),
-          ) as WorkspaceSwitchRefused;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(
+          country: 'UAE',
+          sites: <String>['DIRIYAH'],
+        ),
+      ) as WorkspaceSwitchRefused;
 
       expect(refused.error.kind, AppErrorKind.authorization);
       expect(refused.error.message, contains('DIRIYAH'));
@@ -322,11 +323,11 @@ void main() {
         profileFor(countries: const <String>['KSA', 'UAE']),
       );
 
-      final WorkspaceSwitchOutcome outcome = await WorkspaceSwitcher(deps)
-          .switchTo(
-            current: contextFor(narrow),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          );
+      final WorkspaceSwitchOutcome outcome =
+          await WorkspaceSwitcher(deps).switchTo(
+        current: contextFor(narrow),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      );
 
       expect(outcome, isA<WorkspaceSwitchApplied>());
     });
@@ -340,9 +341,9 @@ void main() {
 
       final WorkspaceSwitchApplied applied =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          ) as WorkspaceSwitchApplied;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
 
       expect(applied.context.currency, isNull);
       expect(
@@ -360,9 +361,9 @@ void main() {
 
       final WorkspaceSwitchApplied applied =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          ) as WorkspaceSwitchApplied;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
 
       expect(applied.context.currency, isNull);
       expect(applied.context.hasCurrency, isFalse);
@@ -403,9 +404,9 @@ void main() {
 
         final WorkspaceSwitchApplied applied =
             await WorkspaceSwitcher(deps).switchTo(
-              current: contextFor(before),
-              selection: const WorkspaceSelection(country: 'UAE'),
-            ) as WorkspaceSwitchApplied;
+          current: contextFor(before),
+          selection: const WorkspaceSelection(country: 'UAE'),
+        ) as WorkspaceSwitchApplied;
 
         expect(deps.calls, contains('reloadAccessState'));
         expect(
@@ -427,9 +428,9 @@ void main() {
 
         final WorkspaceSwitchApplied applied =
             await WorkspaceSwitcher(deps).switchTo(
-              current: contextFor(before),
-              selection: const WorkspaceSelection(country: 'UAE'),
-            ) as WorkspaceSwitchApplied;
+          current: contextFor(before),
+          selection: const WorkspaceSelection(country: 'UAE'),
+        ) as WorkspaceSwitchApplied;
 
         expect(applied.context.effectivePermissions.permissionsError, isTrue);
         expect(applied.warnings, hasLength(1));
@@ -454,9 +455,9 @@ void main() {
 
       final WorkspaceSwitchApplied applied =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          ) as WorkspaceSwitchApplied;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
 
       expect(applied.context.activeCountry, 'UAE');
       expect(applied.warnings, hasLength(1));
@@ -479,9 +480,9 @@ void main() {
 
       final WorkspaceSwitchApplied applied =
           await WorkspaceSwitcher(deps).switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          ) as WorkspaceSwitchApplied;
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
 
       expect(applied.context.activeCountry, 'UAE');
       expect(applied.warnings, hasLength(1));
@@ -498,11 +499,11 @@ void main() {
         ..invalidateError = StateError('b')
         ..refreshError = StateError('c');
 
-      final WorkspaceSwitchOutcome outcome = await WorkspaceSwitcher(deps)
-          .switchTo(
-            current: contextFor(profile),
-            selection: const WorkspaceSelection(country: 'UAE'),
-          );
+      final WorkspaceSwitchOutcome outcome =
+          await WorkspaceSwitcher(deps).switchTo(
+        current: contextFor(profile),
+        selection: const WorkspaceSelection(country: 'UAE'),
+      );
 
       expect(outcome, isA<WorkspaceSwitchApplied>());
       final WorkspaceSwitchApplied applied = outcome as WorkspaceSwitchApplied;
@@ -531,20 +532,18 @@ void main() {
 
       final WorkspaceSwitchApplied server =
           await WorkspaceSwitcher(deps).switchTo(
-            current: current,
-            selection: const WorkspaceSelection(country: 'UAE'),
-          ) as WorkspaceSwitchApplied;
+        current: current,
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
       expect(server.allowedModules, contains(ModuleKey.records));
 
-      final WorkspaceSwitchApplied phone =
-          await WorkspaceSwitcher(
-                deps,
-                precedence: AdminRevokePrecedence.mobileRevokeBeatsAdmin,
-              ).switchTo(
-                current: current,
-                selection: const WorkspaceSelection(country: 'UAE'),
-              )
-              as WorkspaceSwitchApplied;
+      final WorkspaceSwitchApplied phone = await WorkspaceSwitcher(
+        deps,
+        precedence: AdminRevokePrecedence.mobileRevokeBeatsAdmin,
+      ).switchTo(
+        current: current,
+        selection: const WorkspaceSelection(country: 'UAE'),
+      ) as WorkspaceSwitchApplied;
       expect(phone.allowedModules, isNot(contains(ModuleKey.records)));
     });
   });

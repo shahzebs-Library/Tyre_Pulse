@@ -111,8 +111,8 @@ class _ChecklistApprovalsQueueScreenState
       // flush just kicked off may still be in flight, but a `blocked` one
       // never resolves without the reviewer's own action, so it is worth
       // showing even mid-flush.
-      final List<QueuedChecklistApprovalDecision> queued = await engine
-          .listQueued();
+      final List<QueuedChecklistApprovalDecision> queued =
+          await engine.listQueued();
 
       if (!mounted) return;
       setState(() {
@@ -139,9 +139,8 @@ class _ChecklistApprovalsQueueScreenState
   }
 
   ApprovalTemplateLike _templateLikeFor(ChecklistApprovalItem item) {
-    final ChecklistApprovalTemplateInfo? info = item.templateId == null
-        ? null
-        : _templates[item.templateId];
+    final ChecklistApprovalTemplateInfo? info =
+        item.templateId == null ? null : _templates[item.templateId];
     return info?.asTemplateLike ?? const ApprovalTemplateLike();
   }
 
@@ -390,7 +389,9 @@ class _BlockedDecisionsPanel extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.checklistApprovalsBlockedTitle(items.length),
-                  style: Theme.of(context).textTheme.titleSmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
                       ?.copyWith(color: colors.onSoft),
                 ),
               ),
@@ -399,7 +400,9 @@ class _BlockedDecisionsPanel extends StatelessWidget {
           const SizedBox(height: TpSpace.xs),
           Text(
             l10n.checklistApprovalsBlockedMessage,
-            style: Theme.of(context).textTheme.bodySmall
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
                 ?.copyWith(color: colors.onSoft),
           ),
           for (final QueuedChecklistApprovalDecision item in items)
@@ -410,7 +413,9 @@ class _BlockedDecisionsPanel extends StatelessWidget {
                   Expanded(
                     child: Text(
                       item.error ?? l10n.checklistApprovalsBlockedMessage,
-                      style: Theme.of(context).textTheme.bodySmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
                           ?.copyWith(color: colors.onSoft),
                     ),
                   ),
@@ -419,9 +424,8 @@ class _BlockedDecisionsPanel extends StatelessWidget {
                     label: l10n.actionRetry,
                     isCompact: true,
                     isBusy: retryingId == item.id,
-                    onPressed: retryingId == null
-                        ? () => onRetry(item.id)
-                        : null,
+                    onPressed:
+                        retryingId == null ? () => onRetry(item.id) : null,
                   ),
                 ],
               ),
@@ -458,8 +462,8 @@ class _QueueRow extends StatelessWidget {
     final String heading = (item.title?.trim().isNotEmpty ?? false)
         ? item.title!.trim()
         : (item.templateName?.trim().isNotEmpty ?? false)
-        ? item.templateName!.trim()
-        : fallbackTitle;
+            ? item.templateName!.trim()
+            : fallbackTitle;
     final String when = _formatDate(item.submittedAt) ?? unavailableLabel;
 
     return TpCard(
@@ -556,7 +560,9 @@ class _MetaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TextStyle? style = Theme.of(context).textTheme.bodySmall
+    final TextStyle? style = Theme.of(context)
+        .textTheme
+        .bodySmall
         ?.copyWith(color: palette.textMuted);
     return Padding(
       padding: const EdgeInsets.only(top: 2),

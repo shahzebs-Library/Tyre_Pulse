@@ -35,11 +35,11 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 
 TpStatus _toneToStatus(ApprovalStatusTone tone) => switch (tone) {
-  ApprovalStatusTone.good => TpStatus.ok,
-  ApprovalStatusTone.bad => TpStatus.critical,
-  ApprovalStatusTone.warn => TpStatus.warning,
-  ApprovalStatusTone.muted => TpStatus.neutral,
-};
+      ApprovalStatusTone.good => TpStatus.ok,
+      ApprovalStatusTone.bad => TpStatus.critical,
+      ApprovalStatusTone.warn => TpStatus.warning,
+      ApprovalStatusTone.muted => TpStatus.neutral,
+    };
 
 /// The translated words for [summary] - the localisation half
 /// [statusSummary] deliberately does not do itself.

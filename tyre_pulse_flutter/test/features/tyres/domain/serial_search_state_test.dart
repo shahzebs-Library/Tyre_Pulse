@@ -73,7 +73,8 @@ void main() {
       expect(scrapped.copyWith(canUnscrap: true).offerUnscrap, isTrue);
     });
 
-    test('offerUnscrap is false when the tyre is not scrapped, even if '
+    test(
+        'offerUnscrap is false when the tyre is not scrapped, even if '
         'canUnscrap is true', () {
       final SerialSearchState notScrapped = found.copyWith(canUnscrap: true);
       expect(notScrapped.offerUnscrap, isFalse);
@@ -100,7 +101,8 @@ void main() {
       expect(cleared.tyre, isNull);
     });
 
-    test('clearScrapMark, clearError and clearResolvedSerial each clear '
+    test(
+        'clearScrapMark, clearError and clearResolvedSerial each clear '
         'independently of the others', () {
       const SerialSearchState full = SerialSearchState(
         resolvedSerial: 'EP0604207',
@@ -124,7 +126,8 @@ void main() {
       expect(clearedSerial.scrapMark, _mark);
     });
 
-    test('passing a new value together with its clear flag is dominated '
+    test(
+        'passing a new value together with its clear flag is dominated '
         'by the clear flag', () {
       const SerialSearchState withTyre = SerialSearchState(tyre: _tyre);
       final SerialSearchState result = withTyre.copyWith(
@@ -134,8 +137,7 @@ void main() {
       expect(
         result.tyre,
         isNull,
-        reason:
-            'copyWith checks the clear flag before the replacement '
+        reason: 'copyWith checks the clear flag before the replacement '
             'value, matching WorkspaceContext.copyWith',
       );
     });
@@ -144,10 +146,10 @@ void main() {
   group('equality', () {
     test('two states built the same way are equal', () {
       SerialSearchState build() => const SerialSearchState(
-        phase: SerialSearchPhase.found,
-        tyre: _tyre,
-        canScrap: true,
-      );
+            phase: SerialSearchPhase.found,
+            tyre: _tyre,
+            canScrap: true,
+          );
       expect(build(), build());
       expect(build().hashCode, build().hashCode);
     });

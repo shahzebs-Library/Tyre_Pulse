@@ -75,13 +75,11 @@ class TpSessionTimedOutScreen extends ConsumerWidget {
         tone: TpStatus.warning,
         title: l10n.sessionTimedOutTitle,
         message: l10n.sessionTimedOutMessage,
-        primaryActionLabel: actions.onRetrySession == null
-            ? null
-            : l10n.actionRetry,
+        primaryActionLabel:
+            actions.onRetrySession == null ? null : l10n.actionRetry,
         onPrimaryAction: actions.onRetrySession,
-        secondaryActionLabel: actions.onSignOut == null
-            ? null
-            : l10n.actionSignIn,
+        secondaryActionLabel:
+            actions.onSignOut == null ? null : l10n.actionSignIn,
         onSecondaryAction: actions.onSignOut,
       ),
     );
@@ -108,13 +106,11 @@ class TpUpdateRequiredScreen extends ConsumerWidget {
         tone: TpStatus.info,
         title: l10n.updateRequiredTitle,
         message: l10n.updateRequiredMessage,
-        primaryActionLabel: actions.onOpenStore == null
-            ? null
-            : l10n.actionOpenStore,
+        primaryActionLabel:
+            actions.onOpenStore == null ? null : l10n.actionOpenStore,
         onPrimaryAction: actions.onOpenStore,
-        secondaryActionLabel: actions.onSignOut == null
-            ? null
-            : l10n.actionSignOut,
+        secondaryActionLabel:
+            actions.onSignOut == null ? null : l10n.actionSignOut,
         onSecondaryAction: actions.onSignOut,
       ),
     );
@@ -140,13 +136,11 @@ class TpProfileUnavailableScreen extends ConsumerWidget {
         tone: TpStatus.critical,
         title: l10n.profileUnavailableTitle,
         message: l10n.profileUnavailableMessage,
-        primaryActionLabel: actions.onRetryProfile == null
-            ? null
-            : l10n.actionRetry,
+        primaryActionLabel:
+            actions.onRetryProfile == null ? null : l10n.actionRetry,
         onPrimaryAction: actions.onRetryProfile,
-        secondaryActionLabel: actions.onSignOut == null
-            ? null
-            : l10n.actionSignOut,
+        secondaryActionLabel:
+            actions.onSignOut == null ? null : l10n.actionSignOut,
         onSecondaryAction: actions.onSignOut,
       ),
     );
@@ -168,9 +162,8 @@ class TpAccessBlockedScreen extends ConsumerWidget {
         tone: TpStatus.warning,
         title: l10n.accessBlockedTitle,
         message: l10n.accessBlockedMessage,
-        primaryActionLabel: actions.onSignOut == null
-            ? null
-            : l10n.actionSignOut,
+        primaryActionLabel:
+            actions.onSignOut == null ? null : l10n.actionSignOut,
         onPrimaryAction: actions.onSignOut,
       ),
     );

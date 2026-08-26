@@ -114,15 +114,15 @@ final class SupabaseChecklistRemoteRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-          var query = _client
-              .from(SupabaseTables.checklistTemplates)
-              .select(checklistTemplateColumns)
-              .eq('status', 'published');
-          if (country != null && country.isNotEmpty && country != 'All') {
-            query = query.or('country.eq.$country,country.is.null');
-          }
-          return await query.order('name') as List<Map<String, dynamic>>;
-        });
+      var query = _client
+          .from(SupabaseTables.checklistTemplates)
+          .select(checklistTemplateColumns)
+          .eq('status', 'published');
+      if (country != null && country.isNotEmpty && country != 'All') {
+        query = query.or('country.eq.$country,country.is.null');
+      }
+      return await query.order('name') as List<Map<String, dynamic>>;
+    });
 
     final List<ChecklistTemplateRecord> all = <ChecklistTemplateRecord>[
       for (final Map<String, dynamic> row in rows)
@@ -156,14 +156,14 @@ final class SupabaseChecklistRemoteRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-          var query = _client
-              .from(SupabaseTables.checklistAssignments)
-              .select(checklistAssignmentColumns);
-          if (country != null && country.isNotEmpty && country != 'All') {
-            query = query.or('country.eq.$country,country.is.null');
-          }
-          return await query.order('due_date') as List<Map<String, dynamic>>;
-        });
+      var query = _client
+          .from(SupabaseTables.checklistAssignments)
+          .select(checklistAssignmentColumns);
+      if (country != null && country.isNotEmpty && country != 'All') {
+        query = query.or('country.eq.$country,country.is.null');
+      }
+      return await query.order('due_date') as List<Map<String, dynamic>>;
+    });
 
     final List<ChecklistAssignmentRecord> all = <ChecklistAssignmentRecord>[];
     for (final Map<String, dynamic> row in rows) {
@@ -276,16 +276,14 @@ final class SupabaseChecklistRemoteRepository
     if (submittedBy.isEmpty) return const <ChecklistHistoryRow>[];
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(
-          () async =>
-              await _client
-                      .from(SupabaseTables.checklistSubmissions)
-                      .select(checklistHistoryColumns)
-                      .eq('submitted_by', submittedBy)
-                      .order('submitted_at', ascending: false)
-                      .order('id')
-                      .limit(limit)
-                  as List<Map<String, dynamic>>,
-        );
+      () async => await _client
+          .from(SupabaseTables.checklistSubmissions)
+          .select(checklistHistoryColumns)
+          .eq('submitted_by', submittedBy)
+          .order('submitted_at', ascending: false)
+          .order('id')
+          .limit(limit) as List<Map<String, dynamic>>,
+    );
     final List<ChecklistHistoryRow> out = <ChecklistHistoryRow>[];
     for (final Map<String, dynamic> row in rows) {
       final ChecklistHistoryRow? decoded = ChecklistHistoryRow.fromRow(row);

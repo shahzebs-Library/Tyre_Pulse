@@ -280,9 +280,8 @@ String? _resolveOne(String? vt) {
   final Match? assetCode = _assetCodePrefixRe.firstMatch(raw);
   if (assetCode != null) {
     final String captured = assetCode.group(1)!.toUpperCase();
-    final String prefix = captured.length > 2
-        ? captured.substring(0, 2)
-        : captured;
+    final String prefix =
+        captured.length > 2 ? captured.substring(0, 2) : captured;
     final String? mapped = _kAssetPrefixLayout[prefix];
     if (mapped != null) return mapped;
   }
@@ -480,6 +479,6 @@ List<String> diagramPositions(String vehicleType, [String? assetNo]) {
   if (isTyrelessEquipment(vehicleType)) return const <String>[];
   final DiagramLayout layout =
       kTyreDiagramLayouts[resolveVehicleType(vehicleType, assetNo)] ??
-      kTyreDiagramLayouts['Pickup']!;
+          kTyreDiagramLayouts['Pickup']!;
   return <String>[for (final TyreSlot t in layout.tyres) t.id];
 }

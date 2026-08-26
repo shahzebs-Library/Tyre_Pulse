@@ -51,7 +51,7 @@ final Provider<TelemetryReporter> telemetryReporterProvider =
 /// is active - including the override installed at the composition root.
 final Provider<TelemetryNavigatorObserver> telemetryNavigatorObserverProvider =
     Provider<TelemetryNavigatorObserver>(
-      (ref) => TelemetryNavigatorObserver(
-        reporter: ref.watch(telemetryReporterProvider),
-      ),
-    );
+  (ref) => TelemetryNavigatorObserver(
+    reporter: ref.watch(telemetryReporterProvider),
+  ),
+);

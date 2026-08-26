@@ -75,7 +75,8 @@ void main() {
       expect(result.droppedFields, isEmpty);
     });
 
-    test('an update command keeps its match column in the stored payload, '
+    test(
+        'an update command keeps its match column in the stored payload, '
         'and drops the rest', () async {
       final EnqueueResult result = await repository.enqueue(
         type: CommandType.stockAdjust,

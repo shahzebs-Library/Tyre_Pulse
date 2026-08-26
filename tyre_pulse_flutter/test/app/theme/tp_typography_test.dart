@@ -30,7 +30,8 @@ void main() {
       expect(light.labelSmall!.fontSize, 12);
     });
 
-    test('display, headline, title, then the 15pt tier, then label-medium and '
+    test(
+        'display, headline, title, then the 15pt tier, then label-medium and '
         'label-small strictly decrease', () {
       expect(
         light.displaySmall!.fontSize,

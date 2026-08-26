@@ -42,7 +42,8 @@ void main() {
   }
 
   group('chunking', () {
-    test('splits a long value without cutting a surrogate pair, and '
+    test(
+        'splits a long value without cutting a surrogate pair, and '
         'reassembles it byte-identical', () async {
       // A supplementary-plane character (2 UTF-16 code units) placed so a
       // naive fixed-size split would land exactly between its two halves.
@@ -134,7 +135,8 @@ void main() {
   });
 
   group('delete', () {
-    test('removes metadata, then the plain slot, then the chunks, in that '
+    test(
+        'removes metadata, then the plain slot, then the chunks, in that '
         'order', () async {
       final sut = store(chunkSize: 8);
       await sut.write(
@@ -160,7 +162,8 @@ void main() {
       }
     });
 
-    test('a failure to clean up a chunk still leaves the key reading '
+    test(
+        'a failure to clean up a chunk still leaves the key reading '
         'absent, never torn - this is why the order matters', () async {
       final sut = store(chunkSize: 8);
       await sut.write(
@@ -178,16 +181,14 @@ void main() {
       expect(
         after.status,
         SecureReadStatus.absent,
-        reason:
-            'metadata is gone, so the reader must fall through to '
+        reason: 'metadata is gone, so the reader must fall through to '
             '"nothing stored", not try to reassemble a chunk set it can '
             'no longer address',
       );
       expect(
         fake.raw.containsKey(chunkKey),
         isTrue,
-        reason:
-            'the orphaned chunk is left behind - wasted space, never '
+        reason: 'the orphaned chunk is left behind - wasted space, never '
             'evidence of a fault',
       );
     });
@@ -213,7 +214,8 @@ void main() {
   });
 
   group('read retry', () {
-    test('a slot that refuses every read is retried up to '
+    test(
+        'a slot that refuses every read is retried up to '
         'defaultReadAttempts times before being reported unreadable', () async {
       final sut = store();
       fake.failReadFor('session_meta', StagedSecureStore.defaultReadAttempts);
@@ -225,7 +227,8 @@ void main() {
       expect(attempts, StagedSecureStore.defaultReadAttempts);
     });
 
-    test('a slot that recovers before the retry budget is exhausted is '
+    test(
+        'a slot that recovers before the retry budget is exhausted is '
         'read normally', () async {
       final sut = store();
       fake.failReadFor(
@@ -242,7 +245,8 @@ void main() {
       );
     });
 
-    test('readFailureCount increments only on a failed read, not on an '
+    test(
+        'readFailureCount increments only on a failed read, not on an '
         'ok or absent one', () async {
       final sut = store();
       expect(sut.readFailureCount, 0);

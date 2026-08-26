@@ -78,8 +78,8 @@ class TpThemeModeController extends Notifier<ThemeMode> {
 
 final NotifierProvider<TpThemeModeController, ThemeMode> themeModeProvider =
     NotifierProvider<TpThemeModeController, ThemeMode>(
-      TpThemeModeController.new,
-    );
+  TpThemeModeController.new,
+);
 
 /// The active language, or null to follow the device.
 ///

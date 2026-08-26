@@ -61,8 +61,7 @@ final class VehicleAsset {
     if (rawId is! String || rawId.isEmpty) {
       throw const AppError(
         kind: AppErrorKind.validation,
-        message:
-            'A vehicle record could not be read. Try again, and '
+        message: 'A vehicle record could not be read. Try again, and '
             'contact your administrator if this keeps happening.',
         technical: 'vehicle_fleet row has no usable id column',
       );
@@ -180,27 +179,26 @@ final class VehicleAsset {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    assetNo,
-    fleetNumber,
-    make,
-    model,
-    vehicleType,
-    site,
-    status,
-    operatorName,
-    tyreSize,
-    currentKm,
-    country,
-    department,
-    region,
-    registrationNo,
-    year,
-  );
+        id,
+        assetNo,
+        fleetNumber,
+        make,
+        model,
+        vehicleType,
+        site,
+        status,
+        operatorName,
+        tyreSize,
+        currentKm,
+        country,
+        department,
+        region,
+        registrationNo,
+        year,
+      );
 
   @override
-  String toString() =>
-      'VehicleAsset(id: $id, assetNo: $assetNo, '
+  String toString() => 'VehicleAsset(id: $id, assetNo: $assetNo, '
       'fleetNumber: $fleetNumber)';
 }
 

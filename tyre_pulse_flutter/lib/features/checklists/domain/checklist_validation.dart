@@ -81,9 +81,8 @@ String? validateAnswer(
     }
   }
 
-  final List<String> allowed = (options != null && options.isNotEmpty)
-      ? options
-      : field.options;
+  final List<String> allowed =
+      (options != null && options.isNotEmpty) ? options : field.options;
   if (field.type == 'select' &&
       allowed.isNotEmpty &&
       !allowed.contains(value)) {

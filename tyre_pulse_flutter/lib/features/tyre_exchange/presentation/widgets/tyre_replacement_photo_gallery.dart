@@ -60,29 +60,27 @@ class TyreReplacementPhotoGallery extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TyreReplacementPhotoSource? source =
         await showModalBottomSheet<TyreReplacementPhotoSource>(
-          context: context,
-          builder: (BuildContext sheetContext) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ListTile(
-                  leading: const Icon(Icons.camera_alt_outlined),
-                  title: Text(l10n.tyreReplacePhotoCamera),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(TyreReplacementPhotoSource.camera),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: Text(l10n.tyreReplacePhotoGallery),
-                  onTap: () =>
-                      Navigator.of(sheetContext)
-                          .pop(TyreReplacementPhotoSource.gallery),
-                ),
-              ],
+      context: context,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: Text(l10n.tyreReplacePhotoCamera),
+              onTap: () => Navigator.of(sheetContext)
+                  .pop(TyreReplacementPhotoSource.camera),
             ),
-          ),
-        );
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(l10n.tyreReplacePhotoGallery),
+              onTap: () => Navigator.of(sheetContext)
+                  .pop(TyreReplacementPhotoSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
     if (source != null) {
       onAdd(source);
     }

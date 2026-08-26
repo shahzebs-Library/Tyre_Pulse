@@ -51,11 +51,11 @@ class TpModuleGuard extends ConsumerWidget {
       // them is what produced a spinner that ran forever.
       ModuleAccessResolving() => const TpScaffold(body: TpLoadingState()),
       ModuleAccessDenied(reason: final ModuleDenialReason reason) => TpScaffold(
-        body: TpPermissionDeniedState(
-          reason: describeDenial(AppLocalizations.of(context), reason),
-          onBack: () => _goBack(context),
+          body: TpPermissionDeniedState(
+            reason: describeDenial(AppLocalizations.of(context), reason),
+            onBack: () => _goBack(context),
+          ),
         ),
-      ),
     };
   }
 

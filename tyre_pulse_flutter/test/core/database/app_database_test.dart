@@ -22,9 +22,8 @@ void main() {
     test('opens at the current version', () async {
       expect(db.schemaVersion, AppDatabase.latestSchemaVersion);
 
-      final QueryRow row = await db
-          .customSelect('PRAGMA user_version')
-          .getSingle();
+      final QueryRow row =
+          await db.customSelect('PRAGMA user_version').getSingle();
       expect(row.read<int>('user_version'), AppDatabase.latestSchemaVersion);
     });
 
@@ -32,9 +31,8 @@ void main() {
       final List<QueryRow> rows = await db
           .customSelect("SELECT name FROM sqlite_master WHERE type = 'table'")
           .get();
-      final Set<String> names = rows
-          .map((QueryRow r) => r.read<String>('name'))
-          .toSet();
+      final Set<String> names =
+          rows.map((QueryRow r) => r.read<String>('name')).toSet();
 
       // The 12 from spec section 11, with `pending_uploads` renamed to
       // `pending_media_uploads` because the former is a real REMOTE table, plus
@@ -83,14 +81,12 @@ void main() {
 
   group('foreign keys', () {
     test('are enabled on every connection', () async {
-      final QueryRow row = await db
-          .customSelect('PRAGMA foreign_keys')
-          .getSingle();
+      final QueryRow row =
+          await db.customSelect('PRAGMA foreign_keys').getSingle();
       expect(
         row.read<int>('foreign_keys'),
         1,
-        reason:
-            'without this pragma the RESTRICT that protects an unconfirmed '
+        reason: 'without this pragma the RESTRICT that protects an unconfirmed '
             'photo from its own pruner does nothing at all',
       );
     });
@@ -107,7 +103,8 @@ void main() {
         await expectLater(
           (db.delete(
             db.pendingCommands,
-          )..where((t) => t.id.equals('cmd-1'))).go(),
+          )..where((t) => t.id.equals('cmd-1')))
+              .go(),
           throwsA(isA<Exception>()),
         );
 

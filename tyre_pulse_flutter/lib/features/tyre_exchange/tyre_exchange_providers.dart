@@ -32,22 +32,22 @@ import 'package:tyre_pulse/features/tyre_exchange/data/tyre_replacement_reposito
 /// See the library comment on why this is declared in this feature's own
 /// provider file rather than a cross-feature one.
 final Provider<QueuedCommandRepository>
-tyreReplacementQueuedCommandRepositoryProvider =
+    tyreReplacementQueuedCommandRepositoryProvider =
     Provider<QueuedCommandRepository>((ref) {
-      final AppDatabase db = ref.watch(appDatabaseProvider);
-      return QueuedCommandRepository(db.queueDao);
-    });
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return QueuedCommandRepository(db.queueDao);
+});
 
 final Provider<TyreReplacementRepository> tyreReplacementRepositoryProvider =
     Provider<TyreReplacementRepository>(
-      (ref) => DefaultTyreReplacementRepository(
-        ref.watch(tyreReplacementQueuedCommandRepositoryProvider),
-      ),
-    );
+  (ref) => DefaultTyreReplacementRepository(
+    ref.watch(tyreReplacementQueuedCommandRepositoryProvider),
+  ),
+);
 
 /// Real by default - `image_picker`/`path_provider` resolve the same way on
 /// every real device, matching `washPhotoCaptureProvider`'s own note.
 final Provider<TyreReplacementPhotoCapture>
-tyreReplacementPhotoCaptureProvider = Provider<TyreReplacementPhotoCapture>(
+    tyreReplacementPhotoCaptureProvider = Provider<TyreReplacementPhotoCapture>(
   (ref) => TyreReplacementPhotoCapture(),
 );

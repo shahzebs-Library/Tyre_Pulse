@@ -29,10 +29,10 @@ import 'package:tyre_pulse/features/checklists/presentation/'
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> checklistsScreenRegistrations =
     <String, TpScreenBuilder>{
-      TpRouteId.checklists: _buildChecklistsHomeScreen,
-      TpRouteId.checklistHistory: _buildChecklistHistoryScreen,
-      TpRouteId.checklistFill: _buildChecklistFillScreen,
-    };
+  TpRouteId.checklists: _buildChecklistsHomeScreen,
+  TpRouteId.checklistHistory: _buildChecklistHistoryScreen,
+  TpRouteId.checklistFill: _buildChecklistFillScreen,
+};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [ChecklistsRoute]. The registry is keyed by [TpRouteId.checklists], so

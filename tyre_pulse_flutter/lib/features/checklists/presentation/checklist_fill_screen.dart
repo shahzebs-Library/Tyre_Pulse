@@ -251,33 +251,33 @@ class _FillFormView extends ConsumerWidget {
           .toList(growable: false),
       onCapturePhoto: field.type == 'photo'
           ? (ChecklistPhotoPickSource source) => controller.capturePhoto(
-              fieldId: field.id,
-              capture: () async {
-                final String? draftKey = state.draftKey;
-                if (draftKey == null) return null;
-                final CapturedChecklistPhoto? captured =
-                    await ChecklistPhotoCapture().captureAndStore(
-                      draftKey: draftKey,
-                      fieldKey: field.id,
-                      source: source == ChecklistPhotoPickSource.camera
-                          ? ChecklistPhotoSource.camera
-                          : ChecklistPhotoSource.gallery,
-                    );
-                if (captured == null) return null;
-                return ChecklistDraftPhotoCaptureResult(
-                  localPath: captured.localPath,
-                  capturedAt: captured.capturedAt,
-                  sizeBytes: captured.sizeBytes,
-                );
-              },
-            )
+                fieldId: field.id,
+                capture: () async {
+                  final String? draftKey = state.draftKey;
+                  if (draftKey == null) return null;
+                  final CapturedChecklistPhoto? captured =
+                      await ChecklistPhotoCapture().captureAndStore(
+                    draftKey: draftKey,
+                    fieldKey: field.id,
+                    source: source == ChecklistPhotoPickSource.camera
+                        ? ChecklistPhotoSource.camera
+                        : ChecklistPhotoSource.gallery,
+                  );
+                  if (captured == null) return null;
+                  return ChecklistDraftPhotoCaptureResult(
+                    localPath: captured.localPath,
+                    capturedAt: captured.capturedAt,
+                    sizeBytes: captured.sizeBytes,
+                  );
+                },
+              )
           : null,
       signatureBuilder: field.type == 'signature'
           ? (BuildContext context) => ChecklistSignaturePad(
-              value: state.signaturesByField[field.id],
-              onChanged: (capture) =>
-                  controller.saveSignature(field.id, capture?.dataUrl),
-            )
+                value: state.signaturesByField[field.id],
+                onChanged: (capture) =>
+                    controller.saveSignature(field.id, capture?.dataUrl),
+              )
           : null,
     );
   }
@@ -399,7 +399,9 @@ class _Banner extends StatelessWidget {
       ),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.bodySmall
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
             ?.copyWith(color: colors.onSoft),
       ),
     );

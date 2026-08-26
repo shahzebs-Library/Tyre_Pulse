@@ -55,8 +55,7 @@ void main() {
       expect(
         orphans,
         isEmpty,
-        reason:
-            'a draft is not a queue entry, so a sweep that only consults '
+        reason: 'a draft is not a queue entry, so a sweep that only consults '
             'the queue deletes the operator part-filled sheet photographs',
       );
     });
@@ -75,8 +74,7 @@ void main() {
       expect(
         orphans,
         isEmpty,
-        reason:
-            'a sweep that only consults drafts deletes evidence an '
+        reason: 'a sweep that only consults drafts deletes evidence an '
             'inspection is still waiting to upload',
       );
     });
@@ -128,8 +126,7 @@ void main() {
       expect(
         await db.mediaDao.orphanFileNames(<String>['q_1.jpg']),
         isEmpty,
-        reason:
-            'uploaded is not far enough: an object in a bucket that no '
+        reason: 'uploaded is not far enough: an object in a bucket that no '
             'database row references is unreachable',
       );
 
@@ -176,8 +173,7 @@ void main() {
       expect(
         claimed,
         hasLength(uploadConcurrency),
-        reason:
-            'thirteen simultaneous full-size decodes is a hard native '
+        reason: 'thirteen simultaneous full-size decodes is a hard native '
             'out-of-memory crash on a 2 GB handset',
       );
       expect(claimed.first.state, MediaUploadState.uploading);
@@ -191,9 +187,8 @@ void main() {
           id: 'cmd-1',
           attachments: <QueuedMediaAttachment>[queuedPhoto('q_1.jpg')],
         );
-        final String id = (await db.mediaDao.mediaForCommand('cmd-1'))
-            .single
-            .id;
+        final String id =
+            (await db.mediaDao.mediaForCommand('cmd-1')).single.id;
 
         late PendingMediaUpload latest;
         for (int attempt = 0; attempt < maxUploadAttempts; attempt++) {
@@ -430,8 +425,7 @@ void main() {
       expect(
         mechanic.source,
         SignatureSource.drawn,
-        reason:
-            'a mark drawn now always beats the saved one, and the screen '
+        reason: 'a mark drawn now always beats the saved one, and the screen '
             'must be able to say which',
       );
     });
@@ -460,8 +454,7 @@ void main() {
           ownerKey: 'draft-1',
         ),
         isTrue,
-        reason:
-            'a template with require_signature and no signature FIELD was '
+        reason: 'a template with require_signature and no signature FIELD was '
             'unsubmittable, and the work was lost on back-out',
       );
     });

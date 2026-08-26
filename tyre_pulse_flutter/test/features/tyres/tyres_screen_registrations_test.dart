@@ -42,7 +42,8 @@ void main() {
       expect((widget as SerialSearchScreen).route, route);
     });
 
-    test('a mismatched route type degrades to the honest "not built yet" '
+    test(
+        'a mismatched route type degrades to the honest "not built yet" '
         'placeholder rather than throwing', () {
       const HomeRoute wrongRoute = HomeRoute();
       final TpScreenBuilder builder =

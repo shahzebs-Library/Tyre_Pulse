@@ -126,9 +126,8 @@ String _normalised(String? raw) => (raw ?? '').trim().toLowerCase();
 /// screen itself does not offer to advance from, including a value it has
 /// simply never seen before.
 String? nextWorkOrderStatus(String? current) {
-  final String normalised = _normalised(current).isEmpty
-      ? 'open'
-      : _normalised(current);
+  final String normalised =
+      _normalised(current).isEmpty ? 'open' : _normalised(current);
   switch (normalised) {
     case 'open':
       return kWorkOrderStatusInProgress;

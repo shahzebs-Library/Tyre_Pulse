@@ -160,9 +160,8 @@ class InspectionWizardState {
       headerNotes: headerNotes ?? this.headerNotes,
       positions: positions ?? this.positions,
       tyreConditions: tyreConditions ?? this.tyreConditions,
-      activePosition: clearActivePosition
-          ? null
-          : (activePosition ?? this.activePosition),
+      activePosition:
+          clearActivePosition ? null : (activePosition ?? this.activePosition),
       inspectorSignature: clearInspectorSignature
           ? null
           : (inspectorSignature ?? this.inspectorSignature),
@@ -174,12 +173,10 @@ class InspectionWizardState {
       isSubmitting: isSubmitting ?? this.isSubmitting,
       isCapturingPhoto: isCapturingPhoto ?? this.isCapturingPhoto,
       loadError: clearLoadError ? null : (loadError ?? this.loadError),
-      submitOutcome: clearSubmitOutcome
-          ? null
-          : (submitOutcome ?? this.submitOutcome),
-      submitWarning: clearSubmitWarning
-          ? null
-          : (submitWarning ?? this.submitWarning),
+      submitOutcome:
+          clearSubmitOutcome ? null : (submitOutcome ?? this.submitOutcome),
+      submitWarning:
+          clearSubmitWarning ? null : (submitWarning ?? this.submitWarning),
       lastClientUuid: lastClientUuid ?? this.lastClientUuid,
     );
   }

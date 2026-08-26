@@ -7,9 +7,9 @@ import 'package:tyre_pulse/core/telemetry/telemetry_service.dart';
 /// A route with the given name, cheap to construct without pushing it into a
 /// real Navigator - all this suite needs is `route.settings.name`.
 Route<void> _routeNamed(String? name) => MaterialPageRoute<void>(
-  settings: RouteSettings(name: name),
-  builder: (_) => const SizedBox.shrink(),
-);
+      settings: RouteSettings(name: name),
+      builder: (_) => const SizedBox.shrink(),
+    );
 
 void main() {
   Map<String, String>? capturedTags;
@@ -40,7 +40,8 @@ void main() {
     expect(capturedTags!['route'], 'InspectionDetail');
   });
 
-  test('didReplace tags the reporter with the new route name, not the old '
+  test(
+      'didReplace tags the reporter with the new route name, not the old '
       'one', () async {
     observer.didPush(_routeNamed('Home'), null);
     observer.didReplace(
@@ -53,7 +54,8 @@ void main() {
     expect(capturedTags!['route'], 'WorkOrderList');
   });
 
-  test('didPop tags the reporter with the PREVIOUS route, since that is '
+  test(
+      'didPop tags the reporter with the PREVIOUS route, since that is '
       'what is on screen once the pop completes', () async {
     observer.didPush(_routeNamed('Home'), null);
     observer.didPush(_routeNamed('InspectionDetail'), _routeNamed('Home'));
@@ -64,7 +66,8 @@ void main() {
     expect(capturedTags!['route'], 'Home');
   });
 
-  test('didRemove tags the reporter with the previous route, matching '
+  test(
+      'didRemove tags the reporter with the previous route, matching '
       'didPop', () async {
     observer.didRemove(_routeNamed('InspectionDetail'), _routeNamed('Home'));
 
@@ -73,7 +76,8 @@ void main() {
     expect(capturedTags!['route'], 'Home');
   });
 
-  test('a route with no name clears the tag rather than sending an empty '
+  test(
+      'a route with no name clears the tag rather than sending an empty '
       'one', () async {
     observer.didPush(_routeNamed('Home'), null);
     observer.didPush(_routeNamed(null), _routeNamed('Home'));

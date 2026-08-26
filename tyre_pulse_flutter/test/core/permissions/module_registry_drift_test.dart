@@ -43,8 +43,7 @@ void main() {
       expect(
         parsed.length,
         greaterThanOrEqualTo(25),
-        reason:
-            'only ${parsed.length} M(...) entries parsed. The registry '
+        reason: 'only ${parsed.length} M(...) entries parsed. The registry '
             'shape in mobile/lib/permissions.ts has changed and this guard '
             'must be updated before it can be trusted again.',
       );
@@ -52,9 +51,8 @@ void main() {
     });
 
     test('the same set of module keys, exactly', () {
-      final Set<String> dartKeys = ModuleRegistry.all
-          .map((ModuleDef d) => d.key.wireKey)
-          .toSet();
+      final Set<String> dartKeys =
+          ModuleRegistry.all.map((ModuleDef d) => d.key.wireKey).toSet();
       final Set<String> tsKeys = parsed.keys.toSet();
 
       expect(
@@ -78,14 +76,12 @@ void main() {
           reason: '${def.key.wireKey} is not in the TS',
         );
 
-        final Set<String> dartRoles = def.defaultRoles
-            .map((RoleId r) => r.token)
-            .toSet();
+        final Set<String> dartRoles =
+            def.defaultRoles.map((RoleId r) => r.token).toSet();
         expect(
           dartRoles,
           source!.roles,
-          reason:
-              'role default drift on ${def.key.wireKey}: Dart has '
+          reason: 'role default drift on ${def.key.wireKey}: Dart has '
               '$dartRoles, the phone has ${source.roles}',
         );
       }
@@ -99,8 +95,7 @@ void main() {
           expect(
             def.isAdminOnly,
             source.roles.isEmpty,
-            reason:
-                '${def.key.wireKey}: roles: [] on the phone must be '
+            reason: '${def.key.wireKey}: roles: [] on the phone must be '
                 'ModuleDef.adminOnly in Dart, and nothing else may be',
           );
         }
@@ -126,9 +121,8 @@ void main() {
     test('every role named by the phone is a role this app models', () {
       // A token on the phone with no RoleId here would be silently unmatched,
       // and the module would deny a real person.
-      final Set<String> known = RoleId.values
-          .map((RoleId r) => r.token)
-          .toSet();
+      final Set<String> known =
+          RoleId.values.map((RoleId r) => r.token).toSet();
       for (final _ParsedModule module in parsed.values) {
         for (final String role in module.roles) {
           expect(

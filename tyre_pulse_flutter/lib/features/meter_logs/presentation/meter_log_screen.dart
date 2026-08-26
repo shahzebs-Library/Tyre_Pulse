@@ -167,16 +167,14 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
   Future<void> _performLookup(String asset) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
 
-    final LastOdometerReading? last = await ref
-        .read(meterLogRepositoryProvider)
-        .getLastOdometer(asset);
-    final VehicleDetailOutcome assetOutcome = await ref
-        .read(vehicleFleetRepositoryProvider)
-        .byAssetNo(
-          scope: vehicleCacheScopeFor(workspace),
-          assetNo: asset,
-          country: workspace?.activeCountry,
-        );
+    final LastOdometerReading? last =
+        await ref.read(meterLogRepositoryProvider).getLastOdometer(asset);
+    final VehicleDetailOutcome assetOutcome =
+        await ref.read(vehicleFleetRepositoryProvider).byAssetNo(
+              scope: vehicleCacheScopeFor(workspace),
+              assetNo: asset,
+              country: workspace?.activeCountry,
+            );
 
     if (!mounted) return;
     // A stale response for an asset the driver has since changed away from
@@ -293,21 +291,21 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
 
     final MeterLogReviewSaved? saved =
         await TpBottomSheet.show<MeterLogReviewSaved>(
-          context: context,
-          title: l10n.meterLogReviewTitle,
-          builder: (BuildContext sheetContext) => MeterLogReviewSheet(
-            workspace: workspace,
-            assetNo: assetNo,
-            site: site.isEmpty ? null : site,
-            country: workspace.activeCountry,
-            odometerKm: odometerKm,
-            engineHours: hours,
-            notes: notes.isEmpty ? null : notes,
-            signature: _signature,
-            sessionKey: _sessionKey,
-            flaggedForReview: flaggedForReview,
-          ),
-        );
+      context: context,
+      title: l10n.meterLogReviewTitle,
+      builder: (BuildContext sheetContext) => MeterLogReviewSheet(
+        workspace: workspace,
+        assetNo: assetNo,
+        site: site.isEmpty ? null : site,
+        country: workspace.activeCountry,
+        odometerKm: odometerKm,
+        engineHours: hours,
+        notes: notes.isEmpty ? null : notes,
+        signature: _signature,
+        sessionKey: _sessionKey,
+        flaggedForReview: flaggedForReview,
+      ),
+    );
 
     if (saved == null || !mounted) return;
 
@@ -326,9 +324,8 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
 
     _lookupDebounce?.cancel();
     _assetController.clear();
-    _siteController.text = (legacySite != null && legacySite.isNotEmpty)
-        ? legacySite
-        : '';
+    _siteController.text =
+        (legacySite != null && legacySite.isNotEmpty) ? legacySite : '';
     _siteTouched = legacySite != null && legacySite.isNotEmpty;
     _odometerController.clear();
     _engineHoursController.clear();
@@ -425,7 +422,9 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                 const SizedBox(height: TpSpace.xs),
                 Text(
                   l10n.meterLogSiteHelp,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: TpPalette.of(context).textMuted),
                 ),
               ],
@@ -473,7 +472,9 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                   _engineHoursController.text.trim().isNotEmpty
                       ? l10n.meterLogEngineHoursHelpWithHours
                       : l10n.meterLogEngineHoursHelpWithoutHours,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: TpPalette.of(context).textMuted),
                 ),
               ],
@@ -632,9 +633,9 @@ class _LastReadingPanel extends StatelessWidget {
                 last?.readingDate ?? l10n.valueUnavailable,
               ),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: palette.info.onSoft,
-                fontWeight: FontWeight.w700,
-              ),
+                    color: palette.info.onSoft,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
           ),
         ],

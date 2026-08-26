@@ -285,7 +285,8 @@ class TyrePulseApp extends ConsumerWidget {
       localeResolutionCallback: (
         Locale? deviceLocale,
         Iterable<Locale> supported,
-      ) => TpLocalizations.resolve(deviceLocale, supported),
+      ) =>
+          TpLocalizations.resolve(deviceLocale, supported),
     );
   }
 }

@@ -45,8 +45,7 @@ void main() {
         expect(
           drafts,
           hasLength(1),
-          reason:
-              'without normalising the asset the operator finishes one of '
+          reason: 'without normalising the asset the operator finishes one of '
               'three drafts of the same job',
         );
         expect(drafts.single.assetNo, 'TM514');
@@ -70,8 +69,7 @@ void main() {
         isNot(
           DraftsDao.inspectionDraftKey(userId: 'electrician', assetNo: 'TM514'),
         ),
-        reason:
-            'the user id is inside the primary key, so overwriting is not '
+        reason: 'the user id is inside the primary key, so overwriting is not '
             'possible rather than merely avoided',
       );
     });
@@ -137,9 +135,7 @@ void main() {
         assetNo: 'TM514',
       );
 
-      await db
-          .into(db.inspectionDraftPositions)
-          .insert(
+      await db.into(db.inspectionDraftPositions).insert(
             InspectionDraftPositionsCompanion.insert(
               id: 'seeded-lhf1',
               draftKey: key,
@@ -193,8 +189,7 @@ void main() {
       expect(
         positions.single.pressurePsi,
         0,
-        reason:
-            'a truthiness check throws away the most important reading on '
+        reason: 'a truthiness check throws away the most important reading on '
             'the screen',
       );
       expect(positions.single.pressurePsi, isNot(isNull));
@@ -273,8 +268,7 @@ void main() {
       expect(
         draft!.templateVersion,
         2,
-        reason:
-            'a resume against a changed version must warn rather than '
+        reason: 'a resume against a changed version must warn rather than '
             'silently re-map answers given to different questions',
       );
     });

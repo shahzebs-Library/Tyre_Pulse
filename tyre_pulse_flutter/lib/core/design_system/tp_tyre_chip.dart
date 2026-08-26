@@ -89,7 +89,9 @@ class TpTyreChip extends StatelessWidget {
               if (data.detail != null)
                 Text(
                   data.detail!,
-                  style: Theme.of(context).textTheme.labelSmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
                       ?.copyWith(color: colors.onSoft),
                 ),
             ],

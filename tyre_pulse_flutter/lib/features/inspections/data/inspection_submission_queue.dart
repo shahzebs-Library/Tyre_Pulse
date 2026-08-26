@@ -67,7 +67,7 @@ abstract interface class InspectionSubmissionQueue {
 /// The real, file-backed implementation.
 final class FileInspectionSubmissionQueue implements InspectionSubmissionQueue {
   FileInspectionSubmissionQueue({Directory? overrideDirectory})
-    : _overrideDirectory = overrideDirectory;
+      : _overrideDirectory = overrideDirectory;
 
   /// Test seam: a fixed temp directory instead of
   /// [getApplicationDocumentsDirectory], which needs a platform channel

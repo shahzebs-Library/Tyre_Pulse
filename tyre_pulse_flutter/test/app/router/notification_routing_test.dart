@@ -72,7 +72,8 @@ void main() {
       );
     });
 
-    test('a quality inspection JOB CARD is workshop work, not a tyre '
+    test(
+        'a quality inspection JOB CARD is workshop work, not a tyre '
         'inspection', () {
       // The workshop bucket is ahead of the inspection bucket for exactly this
       // string.
@@ -99,7 +100,8 @@ void main() {
       expect(route(entityType: 'work_order'), const WorkshopRoute());
     });
 
-    test('a PARTS REQUEST id is not a work order id, so it opens the board', () {
+    test('a PARTS REQUEST id is not a work order id, so it opens the board',
+        () {
       // The conservative half of the widening. A parts request carries a parts
       // request id; routing it to /work-orders/:id would open the wrong record
       // or nothing at all, which is worse than opening the list.

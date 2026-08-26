@@ -101,10 +101,10 @@ class InspectionDraftPositions extends Table {
   TextColumn get id => text()();
 
   TextColumn get draftKey => text().references(
-    InspectionDrafts,
-    #draftKey,
-    onDelete: KeyAction.cascade,
-  )();
+        InspectionDrafts,
+        #draftKey,
+        onDelete: KeyAction.cascade,
+      )();
 
   /// Canonical label, e.g. `LHF1`. AGENTS.md rule 10: never change a tyre
   /// position id.

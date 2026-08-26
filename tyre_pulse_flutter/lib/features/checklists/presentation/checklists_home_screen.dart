@@ -57,22 +57,21 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
     try {
       final remote = ref.read(checklistRemoteRepositoryProvider);
       final drafts = ref.read(checklistDraftRepositoryProvider);
-      final String? role = workspace.role.rawValue.isEmpty
-          ? null
-          : workspace.role.rawValue;
+      final String? role =
+          workspace.role.rawValue.isEmpty ? null : workspace.role.rawValue;
 
-      final List<ChecklistTemplateRecord> templates = await remote
-          .listTemplates(
-            country: workspace.activeCountry,
-            role: role,
-            isSuperAdmin: workspace.isSuperAdmin,
-          );
+      final List<ChecklistTemplateRecord> templates =
+          await remote.listTemplates(
+        country: workspace.activeCountry,
+        role: role,
+        isSuperAdmin: workspace.isSuperAdmin,
+      );
       final List<ChecklistAssignmentRecord> assignments =
           (await remote.listAssignments(
-                country: workspace.activeCountry,
-                role: role,
-                isSuperAdmin: workspace.isSuperAdmin,
-              ))
+        country: workspace.activeCountry,
+        role: role,
+        isSuperAdmin: workspace.isSuperAdmin,
+      ))
               .where((ChecklistAssignmentRecord a) => a.isOpen)
               .toList(growable: false);
       final List<ChecklistDraftHeader> allDrafts = await drafts.draftsForUser(
@@ -96,8 +95,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage =
-            'Checklists could not be loaded. Pull down to try '
+        _errorMessage = 'Checklists could not be loaded. Pull down to try '
             'again.';
       });
     }
@@ -118,9 +116,8 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
         templateId: TemplateId(templateId),
         assignmentId: AssignmentId(assignment.id),
         siteName: assignment.site == null ? null : SiteName(assignment.site!),
-        assetNo: assignment.assetNo == null
-            ? null
-            : AssetNo(assignment.assetNo!),
+        assetNo:
+            assignment.assetNo == null ? null : AssetNo(assignment.assetNo!),
       ).location,
     );
   }
@@ -224,7 +221,9 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: TpSpace.sm),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
             ?.copyWith(color: TpPalette.of(context).textMuted),
       ),
     );
@@ -240,8 +239,8 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpStatusColors colors = TpPalette.of(context)
-        .forStatus(TpStatus.warning);
+    final TpStatusColors colors =
+        TpPalette.of(context).forStatus(TpStatus.warning);
     return Container(
       padding: const EdgeInsets.all(TpSpace.md),
       decoration: BoxDecoration(
@@ -256,7 +255,9 @@ class _InlineWarning extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: colors.onSoft),
             ),
           ),

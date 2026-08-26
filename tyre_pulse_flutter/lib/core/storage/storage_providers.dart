@@ -25,5 +25,5 @@ import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 /// [FlutterSecureSlotStore].
 final Provider<SecureKeyValueStore> secureStoreProvider =
     Provider<SecureKeyValueStore>(
-      (ref) => StagedSecureStore(slots: FlutterSecureSlotStore()),
-    );
+  (ref) => StagedSecureStore(slots: FlutterSecureSlotStore()),
+);

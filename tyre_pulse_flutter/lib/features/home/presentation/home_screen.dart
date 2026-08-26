@@ -162,9 +162,8 @@ class HomeScreen extends ConsumerWidget {
 
     final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
     final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
-    final AsyncValue<VehicleFleetListOutcome>? fleet = canSeeVehicles
-        ? ref.watch(vehicleFleetListProvider)
-        : null;
+    final AsyncValue<VehicleFleetListOutcome>? fleet =
+        canSeeVehicles ? ref.watch(vehicleFleetListProvider) : null;
 
     final List<Widget> statCards = <Widget>[
       _siteStatCard(l10n, workspace),

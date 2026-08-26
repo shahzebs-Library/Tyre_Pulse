@@ -163,9 +163,8 @@ class _InspectionDetailScreenState
     });
     final String id = widget.route.inspectionId.value;
     try {
-      final QueuedInspection? queued = await ref
-          .read(inspectionSubmissionQueueProvider)
-          .byId(id);
+      final QueuedInspection? queued =
+          await ref.read(inspectionSubmissionQueueProvider).byId(id);
       if (queued != null) {
         setState(() {
           _view = _InspectionView.fromQueued(queued);
@@ -174,9 +173,8 @@ class _InspectionDetailScreenState
         return;
       }
 
-      final InspectionRecord? record = await ref
-          .read(inspectionRemoteRepositoryProvider)
-          .byId(id);
+      final InspectionRecord? record =
+          await ref.read(inspectionRemoteRepositoryProvider).byId(id);
       setState(() {
         _view = record == null ? null : _InspectionView.fromRecord(record);
         _loading = false;
@@ -185,8 +183,7 @@ class _InspectionDetailScreenState
       setState(() {
         _error = const AppError(
           kind: AppErrorKind.unknown,
-          message:
-              'This inspection could not be loaded. Check your connection '
+          message: 'This inspection could not be loaded. Check your connection '
               'and try again.',
           technical: 'InspectionDetailScreen._load failed',
           isRetryable: true,
@@ -378,7 +375,9 @@ class _DetailBody extends StatelessWidget {
         else
           Text(
             l10n.inspectionSignatureMissing,
-            style: Theme.of(context).textTheme.bodySmall
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
                 ?.copyWith(color: palette.textMuted),
           ),
         const SizedBox(height: TpSpace.lg),
@@ -399,7 +398,9 @@ class _DetailBody extends StatelessWidget {
         else
           Text(
             l10n.inspectionGpsUnavailable,
-            style: Theme.of(context).textTheme.bodySmall
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
                 ?.copyWith(color: palette.textMuted),
           ),
       ],
@@ -480,13 +481,17 @@ class _QueueBanner extends StatelessWidget {
                   failed
                       ? l10n.inspectionQueueFailedLabel
                       : l10n.inspectionQueuePendingLabel,
-                  style: Theme.of(context).textTheme.labelLarge
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
                       ?.copyWith(color: colors.onSoft),
                 ),
                 if (failed && view.queueError != null)
                   Text(
                     view.queueError!,
-                    style: Theme.of(context).textTheme.labelSmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
                         ?.copyWith(color: colors.onSoft),
                   ),
               ],

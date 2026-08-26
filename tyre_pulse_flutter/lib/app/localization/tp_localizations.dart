@@ -36,11 +36,11 @@ abstract final class TpLocalizations {
   /// support is half-shipped.
   static const List<LocalizationsDelegate<Object>> delegates =
       <LocalizationsDelegate<Object>>[
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ];
+    AppLocalizations.delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+  ];
 
   /// The languages written right to left.
   ///

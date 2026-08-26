@@ -41,7 +41,8 @@ void main() {
     _expectTyreless('Stationary pump');
   });
 
-  test('case 31b (negative control): a wheeled machine is never swallowed by '
+  test(
+      'case 31b (negative control): a wheeled machine is never swallowed by '
       'the tyreless keyword match', () {
     expect(isTyrelessEquipment('TR-MIXER'), isFalse);
     expect(isTyrelessEquipment('LINE PUMP'), isFalse);

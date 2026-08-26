@@ -31,16 +31,16 @@ void main() {
     expect(container.read(scannerControllerProvider), isA<ScannerIdle>());
   });
 
-  test('submit moves synchronously to resolving, then settles on resolved '
+  test(
+      'submit moves synchronously to resolving, then settles on resolved '
       'once the source answers', () async {
     fake.exactAssetByCode['TM514'] = const AssetLookupRecord(
       id: 'a1',
       assetNo: 'TM514',
     );
 
-    final Future<void> pending = container
-        .read(scannerControllerProvider.notifier)
-        .submit('TM514');
+    final Future<void> pending =
+        container.read(scannerControllerProvider.notifier).submit('TM514');
 
     // The state assignment at the top of `submit` runs synchronously, before
     // the first `await` inside it - this checks that promise without
@@ -56,14 +56,16 @@ void main() {
     expect((result as AssetScanMatch).asset.assetNo, 'TM514');
   });
 
-  test('submit reads the source through the injected fake, not a real '
+  test(
+      'submit reads the source through the injected fake, not a real '
       'client', () async {
     await container.read(scannerControllerProvider.notifier).submit('anything');
 
     expect(fake.calls, isNotEmpty);
   });
 
-  test('a source failure resolves to ScannerResolved carrying '
+  test(
+      'a source failure resolves to ScannerResolved carrying '
       'ScanLookupFailed - submit itself never throws', () async {
     fake.errorToThrow = Exception('offline');
 
@@ -85,7 +87,8 @@ void main() {
     expect(container.read(scannerControllerProvider), isA<ScannerIdle>());
   });
 
-  test('a second submit after a result replaces it, rather than requiring '
+  test(
+      'a second submit after a result replaces it, rather than requiring '
       'a reset first', () async {
     fake.exactAssetByCode['A1'] = const AssetLookupRecord(
       id: 'a1',

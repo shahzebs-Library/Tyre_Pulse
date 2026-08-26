@@ -13,8 +13,8 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart';
 void main() {
   group('ChecklistApprovalTemplateInfo.fromRow', () {
     test('decodes every column', () {
-      final ChecklistApprovalTemplateInfo?
-      info = ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
+      final ChecklistApprovalTemplateInfo? info =
+          ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
         'id': 'tpl-1',
         'require_area_manager': true,
         'require_signature': true,
@@ -34,48 +34,50 @@ void main() {
       expect(info.fields[1].type, 'section');
     });
 
-    test('a missing require_area_manager decodes to null, not false - a '
+    test(
+        'a missing require_area_manager decodes to null, not false - a '
         'single-stage template and an unreadable flag must remain '
         'distinguishable to isTwoStage even though both currently behave '
         'the same way', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-            'id': 'tpl-2',
-          });
+        'id': 'tpl-2',
+      });
       expect(info, isNotNull);
       expect(info!.requireAreaManager, isNull);
       expect(info.requireSignature, isFalse);
       expect(info.fields, isEmpty);
     });
 
-    test('a non-boolean require_area_manager decodes to null rather than '
+    test(
+        'a non-boolean require_area_manager decodes to null rather than '
         'guessing', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-            'id': 'tpl-3',
-            'require_area_manager': 'yes',
-          });
+        'id': 'tpl-3',
+        'require_area_manager': 'yes',
+      });
       expect(info!.requireAreaManager, isNull);
     });
 
     test('a non-list fields column decodes to an empty list, not a throw', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-            'id': 'tpl-4',
-            'fields': 'not a list',
-          });
+        'id': 'tpl-4',
+        'fields': 'not a list',
+      });
       expect(info!.fields, isEmpty);
     });
 
     test('a non-map entry inside fields is skipped, not fatal to the rest', () {
       final ChecklistApprovalTemplateInfo? info =
           ChecklistApprovalTemplateInfo.fromRow(<String, Object?>{
-            'id': 'tpl-5',
-            'fields': <Object?>[
-              'not a map',
-              <String, Object?>{'id': 'q1', 'type': 'text'},
-            ],
-          });
+        'id': 'tpl-5',
+        'fields': <Object?>[
+          'not a map',
+          <String, Object?>{'id': 'q1', 'type': 'text'},
+        ],
+      });
       expect(info!.fields, hasLength(1));
       expect(info.fields.single.id, 'q1');
     });
@@ -103,7 +105,8 @@ void main() {
   });
 
   group('asTemplateLike', () {
-    test('carries only requireAreaManager, matching what the ladder engine '
+    test(
+        'carries only requireAreaManager, matching what the ladder engine '
         'needs', () {
       const ChecklistApprovalTemplateInfo info = ChecklistApprovalTemplateInfo(
         id: 'tpl-1',
@@ -115,7 +118,8 @@ void main() {
       expect(like.requireAreaManager, isTrue);
     });
 
-    test('a null requireAreaManager on the info produces a null on the '
+    test(
+        'a null requireAreaManager on the info produces a null on the '
         'template-like view too', () {
       const ChecklistApprovalTemplateInfo info = ChecklistApprovalTemplateInfo(
         id: 'tpl-2',

@@ -61,7 +61,8 @@ void main() {
       expect(hit.height, greaterThan(wheel.height));
     });
 
-    test('never falls below the Material minimum on either axis, even for '
+    test(
+        'never falls below the Material minimum on either axis, even for '
         'a Line pump dual wheel (19x33 SVG units at a 300px-wide diagram)', () {
       const TyreDiagramViewport viewport = TyreDiagramViewport(
         width: 300,
@@ -72,7 +73,8 @@ void main() {
       expect(hit.height, greaterThanOrEqualTo(kDiagramMinHitTarget));
     });
 
-    test('the minimum expansion grows the rect from its own centre, never '
+    test(
+        'the minimum expansion grows the rect from its own centre, never '
         'moving the visually painted wheel', () {
       const TyreDiagramViewport viewport = TyreDiagramViewport(
         width: 300,
@@ -84,7 +86,8 @@ void main() {
       expect(hit.center.dy, closeTo(wheel.center.dy, 0.01));
     });
 
-    test('a wheel already at or above the minimum after padding is not '
+    test(
+        'a wheel already at or above the minimum after padding is not '
         'expanded further', () {
       // At a wider render (scale 2), Pickup's front-left wheel
       // (23x44 SVG units) pads out to 54x96 screen pixels - already

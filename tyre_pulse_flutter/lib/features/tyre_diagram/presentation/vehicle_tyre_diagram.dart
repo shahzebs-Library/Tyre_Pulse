@@ -152,7 +152,9 @@ class VehicleTyreDiagram extends StatelessWidget {
             const SizedBox(height: TpSpace.sm),
             Text(
               l10n.tyreDiagramPendingLeadIn(pendingOnScreen.length),
-              style: Theme.of(context).textTheme.labelMedium
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
                   ?.copyWith(color: palette.warning.base),
               textAlign: TextAlign.center,
             ),
@@ -245,22 +247,19 @@ class VehicleTyreDiagram extends StatelessWidget {
     final TyreCondition condition = entry == null
         ? TyreCondition.good
         : normaliseCondition(entry['condition']?.toString());
-    final TpStatus status = entry == null
-        ? TpStatus.unknown
-        : tyreConditionStatus(condition);
+    final TpStatus status =
+        entry == null ? TpStatus.unknown : tyreConditionStatus(condition);
     // "Has evidence" (and the pressure reading that goes with it) is
     // answered ONCE, by the completeness engine's own rule, and read from a
     // SINGLE classification call - never a second, weaker truthiness check
     // inside this widget. Section 7.2 names the RN source's own inline
     // `!!d.serial_number || ...` as exactly the bug this avoids: it would
     // treat a numeric `0` pressure as absent.
-    final EntryClassification? classification = entry == null
-        ? null
-        : classifyEntry(entry);
+    final EntryClassification? classification =
+        entry == null ? null : classifyEntry(entry);
     final bool isRecorded =
         classification != null && classification.state != TyreSlotState.blank;
-    final bool isOutstanding =
-        pendingKeys.contains(keyOf(tyre.positionId)) ||
+    final bool isOutstanding = pendingKeys.contains(keyOf(tyre.positionId)) ||
         pendingKeys.contains(keyOf(tyre.id));
     final String code = legacyPositionCode(layout.key, tyre.id);
 
@@ -298,15 +297,15 @@ class _ResolvedWheel {
   final String? pressureText;
 
   TyreWheelPaintData paintData({bool isSelected = false}) => TyreWheelPaintData(
-    svgX: tyre.x,
-    svgY: tyre.y,
-    svgW: tyre.w,
-    svgH: tyre.h,
-    status: status,
-    isSelected: isSelected,
-    isOutstanding: isOutstanding,
-    isRecorded: isRecorded,
-  );
+        svgX: tyre.x,
+        svgY: tyre.y,
+        svgW: tyre.w,
+        svgH: tyre.h,
+        status: status,
+        isSelected: isSelected,
+        isOutstanding: isOutstanding,
+        isRecorded: isRecorded,
+      );
 }
 
 class _WheelHitTarget extends StatelessWidget {

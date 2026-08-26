@@ -183,7 +183,8 @@ void main() {
     },
   );
 
-  testWidgets('look up another (offered on a match card) returns the screen to '
+  testWidgets(
+      'look up another (offered on a match card) returns the screen to '
       'idle, clearing the field', (WidgetTester tester) async {
     // A match card is what offers this action - see _MatchCard - so an
     // asset match is used here rather than the no-match state, which

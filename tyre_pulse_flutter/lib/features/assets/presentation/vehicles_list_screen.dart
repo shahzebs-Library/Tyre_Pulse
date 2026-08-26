@@ -265,10 +265,10 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   }
 
   static AppError _unexpectedError() => const AppError(
-    kind: AppErrorKind.unknown,
-    message: 'Something went wrong. Please try again.',
-    isRetryable: true,
-  );
+        kind: AppErrorKind.unknown,
+        message: 'Something went wrong. Please try again.',
+        isRetryable: true,
+      );
 
   static String? _formatCachedAt(DateTime? cachedAt) {
     if (cachedAt == null) {
@@ -344,7 +344,9 @@ class _TruncatedNotice extends StatelessWidget {
       ),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.labelSmall
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
             ?.copyWith(color: colors.onSoft),
       ),
     );
@@ -425,7 +427,9 @@ class _ClassChip extends StatelessWidget {
       showCheckmark: false,
       backgroundColor: palette.surface,
       selectedColor: palette.primary,
-      labelStyle: Theme.of(context).textTheme.labelMedium
+      labelStyle: Theme.of(context)
+          .textTheme
+          .labelMedium
           ?.copyWith(color: isSelected ? palette.onPrimary : palette.text),
       side: BorderSide(
         color: isSelected ? palette.primary : palette.border,

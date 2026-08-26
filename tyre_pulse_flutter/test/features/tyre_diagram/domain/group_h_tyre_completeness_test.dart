@@ -24,20 +24,20 @@ const List<String> _kMixerSlots = <String>[
 ];
 
 Map<String, Object?> _filled() => <String, Object?>{
-  'condition': 'Good',
-  'pressure_psi': '110',
-};
+      'condition': 'Good',
+      'pressure_psi': '110',
+    };
 
 Map<String, Object?> _seeded() => <String, Object?>{
-  'position': '',
-  'serial_number': '',
-  'pressure_psi': '',
-  'tread_depth_mm': '',
-  'condition': 'Good',
-  'photo_uri': null,
-  'photo_url': null,
-  'notes': '',
-};
+      'position': '',
+      'serial_number': '',
+      'pressure_psi': '',
+      'tread_depth_mm': '',
+      'condition': 'Good',
+      'photo_uri': null,
+      'photo_url': null,
+      'notes': '',
+    };
 
 TyreCompletenessResult _mixer(
   Object? tc, [
@@ -55,7 +55,8 @@ void main() {
     );
   });
 
-  test('case 69: a deliberate condition is evidence (incomplete without '
+  test(
+      'case 69: a deliberate condition is evidence (incomplete without '
       'pressure)', () {
     expect(
       classifyEntry(<String, Object?>{'condition': 'Damaged'}).state,
@@ -127,9 +128,8 @@ void main() {
   test('case 76: missing pressure is advisory, unless requirePressure', () {
     final Map<String, Object?> tc = <String, Object?>{
       for (final String slot in _kMixerSlots)
-        slot: slot == 'R2Ro'
-            ? <String, Object?>{'condition': 'Worn'}
-            : _filled(),
+        slot:
+            slot == 'R2Ro' ? <String, Object?>{'condition': 'Worn'} : _filled(),
     };
     final TyreCompletenessResult res = _mixer(tc);
     expect(res.ok, isTrue);

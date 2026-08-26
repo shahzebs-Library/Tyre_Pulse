@@ -97,7 +97,8 @@ void main() {
       expect(extractScanCode(payload), 'TM514');
     });
 
-    test('a URL with neither a known query key nor a path segment falls '
+    test(
+        'a URL with neither a known query key nor a path segment falls '
         'through to the raw text', () {
       const String url = 'https://app.tyrepulse.app/?x=1';
       // No recognised query key and pathSegments is empty (root path), so

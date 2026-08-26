@@ -115,7 +115,8 @@ void main() {
     );
   });
 
-  test('case 49: the mirroring trap - RR1 -> drive/R/1/inner, '
+  test(
+      'case 49: the mirroring trap - RR1 -> drive/R/1/inner, '
       'RR2 -> drive/R/1/outer', () {
     expect(
       parsePositionStruct('RR1'),
@@ -170,7 +171,8 @@ void main() {
     );
   });
 
-  test('case 52: Spare, SP, SP2 all parse as spare; an unrecognised token '
+  test(
+      'case 52: Spare, SP, SP2 all parse as spare; an unrecognised token '
       'parses as unknown', () {
     for (final String id in <String>['Spare', 'SP', 'SP2']) {
       expect(
@@ -195,7 +197,8 @@ void main() {
     );
   });
 
-  test('normalisation: r2ri, R2-RI and " R2_Ri " all parse identically to '
+  test(
+      'normalisation: r2ri, R2-RI and " R2_Ri " all parse identically to '
       'case 46', () {
     final PositionStruct expected = const PositionStruct(
       kind: PositionKind.drive,

@@ -97,7 +97,8 @@ void main() {
     );
   });
 
-  group('bonus: meterRegression (artifact section 4b, undertested by '
+  group(
+      'bonus: meterRegression (artifact section 4b, undertested by '
       'section 10)', () {
     test('a lower reading is flagged', () {
       expect(meterRegression(90, 100), isTrue);

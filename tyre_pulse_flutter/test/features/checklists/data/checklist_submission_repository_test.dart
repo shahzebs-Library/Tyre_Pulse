@@ -101,7 +101,8 @@ void main() {
   Map<String, Object?> decode(PendingCommand row) =>
       jsonDecode(row.payloadJson) as Map<String, Object?>;
 
-  test('the stored payload carries exactly the 18 allow-listed fields, no '
+  test(
+      'the stored payload carries exactly the 18 allow-listed fields, no '
       'more and no fewer', () async {
     final ChecklistSubmissionResult result = await repository.submit(
       workspace: _workspace(),
@@ -162,7 +163,8 @@ void main() {
     expect(payload['approval_status'], 'pending');
   });
 
-  test('require_approval false submits approval_status not_required, never '
+  test(
+      'require_approval false submits approval_status not_required, never '
       'consulting require_area_manager', () async {
     final ChecklistSubmissionResult result = await repository.submit(
       workspace: _workspace(),
@@ -177,7 +179,8 @@ void main() {
     expect(payload['approval_status'], 'not_required');
   });
 
-  test('photos are keyed by field id, one array per field, never flattened '
+  test(
+      'photos are keyed by field id, one array per field, never flattened '
       'into a single list', () async {
     final ChecklistTemplateRecord template = _template();
     final String draftKey = drafts.draftKeyFor(
@@ -249,7 +252,8 @@ void main() {
     });
   });
 
-  test('signatures: the template-level pad is the primary sign-off and is '
+  test(
+      'signatures: the template-level pad is the primary sign-off and is '
       'excluded from the per-field signatures map', () async {
     final ChecklistTemplateRecord template = _template(requireSignature: true);
     final String draftKey = drafts.draftKeyFor(
@@ -289,7 +293,8 @@ void main() {
     expect(signatures.containsKey(primaryField), isFalse);
   });
 
-  test('with no template-level pad, the FIRST field signature becomes the '
+  test(
+      'with no template-level pad, the FIRST field signature becomes the '
       'primary sign-off - mirroring the mobile fallback', () async {
     final ChecklistTemplateRecord template = _template();
     final String draftKey = drafts.draftKeyFor(
@@ -350,7 +355,8 @@ void main() {
     });
   });
 
-  test('after submit, the draft bookkeeping rows are gone but the photo '
+  test(
+      'after submit, the draft bookkeeping rows are gone but the photo '
       'FILES are never deleted by this repository - ownership has passed '
       'to the queue', () async {
     final ChecklistTemplateRecord template = _template();
@@ -401,7 +407,8 @@ void main() {
     expect(uploads.single.localPath, '/tmp/still-owned.jpg');
   });
 
-  test('the assignment-completion follow-up is attempted, best-effort, and '
+  test(
+      'the assignment-completion follow-up is attempted, best-effort, and '
       'a failure there never prevents the checklist submission itself from '
       'succeeding', () async {
     // No real assignment row exists for this id; the linked best-effort
@@ -430,7 +437,8 @@ void main() {
     );
   });
 
-  test('with no assignmentId, the best-effort follow-up is skipped and only '
+  test(
+      'with no assignmentId, the best-effort follow-up is skipped and only '
       'the checklist command is queued', () async {
     final ChecklistSubmissionResult result = await repository.submit(
       workspace: _workspace(),

@@ -28,19 +28,19 @@ import 'package:tyre_pulse/features/approvals/data/checklist_approval_repository
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_sync_engine.dart';
 
 final Provider<ChecklistApprovalRepository>
-checklistApprovalRepositoryProvider = Provider<ChecklistApprovalRepository>(
+    checklistApprovalRepositoryProvider = Provider<ChecklistApprovalRepository>(
   (ref) =>
       SupabaseChecklistApprovalRepository(ref.watch(supabaseClientProvider)),
 );
 
 final Provider<ChecklistApprovalDecisionQueue>
-checklistApprovalDecisionQueueProvider =
+    checklistApprovalDecisionQueueProvider =
     Provider<ChecklistApprovalDecisionQueue>(
-      (ref) => FileChecklistApprovalDecisionQueue(),
-    );
+  (ref) => FileChecklistApprovalDecisionQueue(),
+);
 
 final Provider<ChecklistApprovalSyncEngine>
-checklistApprovalSyncEngineProvider = Provider<ChecklistApprovalSyncEngine>(
+    checklistApprovalSyncEngineProvider = Provider<ChecklistApprovalSyncEngine>(
   (ref) => ChecklistApprovalSyncEngine(
     queue: ref.watch(checklistApprovalDecisionQueueProvider),
     repository: ref.watch(checklistApprovalRepositoryProvider),
@@ -55,5 +55,5 @@ checklistApprovalSyncEngineProvider = Provider<ChecklistApprovalSyncEngine>(
 /// watching choice.
 final FutureProvider<int> checklistApprovalPendingCountProvider =
     FutureProvider<int>(
-      (ref) => ref.watch(checklistApprovalDecisionQueueProvider).pendingCount(),
-    );
+  (ref) => ref.watch(checklistApprovalDecisionQueueProvider).pendingCount(),
+);

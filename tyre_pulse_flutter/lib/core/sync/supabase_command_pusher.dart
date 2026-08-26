@@ -51,10 +51,8 @@ final class SupabaseCommandPusher extends SupabaseGateway
         // plain insert enforces the same uniqueness correctly regardless,
         // and throws 23505 on a genuine duplicate for `SyncEngine` to
         // classify against the command's own retry count.
-        final List<Map<String, dynamic>> rows = await _client
-            .from(spec.table)
-            .insert(payload)
-            .select();
+        final List<Map<String, dynamic>> rows =
+            await _client.from(spec.table).insert(payload).select();
         return rows.cast<Map<String, Object?>>();
       }
 
@@ -70,10 +68,8 @@ final class SupabaseCommandPusher extends SupabaseGateway
         );
       }
 
-      var query = _client
-          .from(spec.table)
-          .update(payload)
-          .eq(matchColumn, matchValue);
+      var query =
+          _client.from(spec.table).update(payload).eq(matchColumn, matchValue);
 
       if (spec.requiresOptimisticStatusMatch) {
         if (expectedPriorStatus == null) {

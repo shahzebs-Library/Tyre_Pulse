@@ -77,15 +77,15 @@ class StagedSecureStore extends SecureKeyValueStore {
     Future<void> Function(Duration delay)? sleep,
     Random? random,
     DateTime Function()? clock,
-  }) : assert(chunkSize >= 2, 'a chunk must be able to hold a surrogate pair'),
-       assert(readAttempts >= 1, 'a read must be attempted at least once'),
-       _slots = slots,
-       _chunkSize = chunkSize,
-       _readAttempts = readAttempts,
-       _readRetryStep = readRetryStep,
-       _sleep = sleep ?? Future<void>.delayed,
-       _random = random ?? Random(),
-       _clock = clock ?? DateTime.now;
+  })  : assert(chunkSize >= 2, 'a chunk must be able to hold a surrogate pair'),
+        assert(readAttempts >= 1, 'a read must be attempted at least once'),
+        _slots = slots,
+        _chunkSize = chunkSize,
+        _readAttempts = readAttempts,
+        _readRetryStep = readRetryStep,
+        _sleep = sleep ?? Future<void>.delayed,
+        _random = random ?? Random(),
+        _clock = clock ?? DateTime.now;
 
   /// Characters per slot.
   ///
@@ -289,17 +289,16 @@ class StagedSecureStore extends SecureKeyValueStore {
   }
 
   AppError _writeFailed(String key, Object error) => AppError(
-    kind: AppErrorKind.storage,
-    message:
-        'This device could not save your work just now. '
-        'Nothing has been lost. Try again in a moment.',
-    // Slot names are declared constants, not user data. The stored VALUE is
-    // never included: it is a session token, an offline queue or captured
-    // field work.
-    technical: 'secure storage write failed for slot "$key": $error',
-    cause: error,
-    isRetryable: true,
-  );
+        kind: AppErrorKind.storage,
+        message: 'This device could not save your work just now. '
+            'Nothing has been lost. Try again in a moment.',
+        // Slot names are declared constants, not user data. The stored VALUE is
+        // never included: it is a session token, an offline queue or captured
+        // field work.
+        technical: 'secure storage write failed for slot "$key": $error',
+        cause: error,
+        isRetryable: true,
+      );
 
   // --- metadata ----------------------------------------------------------
 

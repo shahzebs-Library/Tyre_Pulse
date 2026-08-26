@@ -131,9 +131,9 @@ class _VehicleDetailBody extends ConsumerWidget {
       ),
       data: (VehicleDetailOutcome outcome) => switch (outcome) {
         VehicleDetailLoaded(asset: final VehicleAsset asset) => _DetailView(
-          asset: asset,
-          l10n: l10n,
-        ),
+            asset: asset,
+            l10n: l10n,
+          ),
         VehicleDetailFromCache(
           asset: final VehicleAsset asset,
           cachedAt: final DateTime? cachedAt,
@@ -143,9 +143,9 @@ class _VehicleDetailBody extends ConsumerWidget {
             onRetry: () => ref.invalidate(vehicleDetailProvider(assetNo)),
           ),
         VehicleDetailNotFound() => TpEmptyState(
-          title: l10n.vehiclesNotFoundTitle,
-          message: l10n.vehiclesNotFoundMessage,
-        ),
+            title: l10n.vehiclesNotFoundTitle,
+            message: l10n.vehiclesNotFoundMessage,
+          ),
         VehicleDetailFailed(error: final AppError error) =>
           isBackendUnavailableError(error)
               ? TpBackendUnavailableState(
@@ -160,10 +160,10 @@ class _VehicleDetailBody extends ConsumerWidget {
   }
 
   static AppError _unexpectedError() => const AppError(
-    kind: AppErrorKind.unknown,
-    message: 'Something went wrong. Please try again.',
-    isRetryable: true,
-  );
+        kind: AppErrorKind.unknown,
+        message: 'Something went wrong. Please try again.',
+        isRetryable: true,
+      );
 
   static String? _formatCachedAt(DateTime? cachedAt) {
     if (cachedAt == null) {

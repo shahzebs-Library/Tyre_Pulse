@@ -29,12 +29,14 @@ void main() {
       expect(tyreRiskStatus('Low'), TpStatus.ok);
     });
 
-    test('a null risk level maps to TpStatus.unknown, never a healthy '
+    test(
+        'a null risk level maps to TpStatus.unknown, never a healthy '
         'colour', () {
       expect(tyreRiskStatus(null), TpStatus.unknown);
     });
 
-    test('an unrecognised value maps to TpStatus.unknown rather than '
+    test(
+        'an unrecognised value maps to TpStatus.unknown rather than '
         'throwing', () {
       expect(tyreRiskStatus('Severe'), TpStatus.unknown);
       expect(tyreRiskStatus(''), TpStatus.unknown);

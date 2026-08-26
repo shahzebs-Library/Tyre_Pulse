@@ -20,9 +20,9 @@ import 'package:tyre_pulse/features/work_orders/presentation/work_orders_list_sc
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> workOrdersScreenRegistrations =
     <String, TpScreenBuilder>{
-      TpRouteId.workOrders: _buildWorkOrdersListScreen,
-      TpRouteId.workOrderDetail: _buildWorkOrderDetailScreen,
-    };
+  TpRouteId.workOrders: _buildWorkOrdersListScreen,
+  TpRouteId.workOrderDetail: _buildWorkOrderDetailScreen,
+};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [WorkOrdersRoute] - see `inspections_screen_registrations.dart`'s own

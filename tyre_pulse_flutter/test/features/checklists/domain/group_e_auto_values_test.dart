@@ -50,8 +50,7 @@ void main() {
     final String today = resolveAutoValue(f);
     expect(today, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
     final DateTime nowUtc = DateTime.now().toUtc();
-    final String expected =
-        '${nowUtc.year.toString().padLeft(4, '0')}-'
+    final String expected = '${nowUtc.year.toString().padLeft(4, '0')}-'
         '${nowUtc.month.toString().padLeft(2, '0')}-'
         '${nowUtc.day.toString().padLeft(2, '0')}';
     expect(today, expected);
@@ -72,7 +71,8 @@ void main() {
     );
   });
 
-  test('E6: a resumed draft keeps the STORED date - resolveAutoValue never '
+  test(
+      'E6: a resumed draft keeps the STORED date - resolveAutoValue never '
       're-resolves what a caller already stored', () {
     const ChecklistField dateField = ChecklistField(
       id: 'd1',

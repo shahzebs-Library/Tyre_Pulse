@@ -13,7 +13,8 @@ import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 
 void main() {
   group('tyreAssetClasses', () {
-    test('matches TYRE_ASSET_CLASSES in mobile/lib/assetClasses.ts exactly, '
+    test(
+        'matches TYRE_ASSET_CLASSES in mobile/lib/assetClasses.ts exactly, '
         'in order', () {
       // Order matters: it is the priority classChips sorts by.
       expect(tyreAssetClasses, <String>[
@@ -47,7 +48,8 @@ void main() {
       expect(assetClassOf('   '), isNull);
     });
 
-    test('returns null when the code does not start with a letter - never '
+    test(
+        'returns null when the code does not start with a letter - never '
         'invents a class for a code the register does not explain', () {
       expect(assetClassOf('514TM'), isNull);
       expect(assetClassOf('123'), isNull);
@@ -73,7 +75,8 @@ void main() {
       expect(isTyreAsset('IP001'), isFalse);
     });
 
-    test('false for a code with no recognisable class at all - distinct '
+    test(
+        'false for a code with no recognisable class at all - distinct '
         'from "recognised but not a tyre class"', () {
       expect(isTyreAsset('123'), isFalse);
       expect(isTyreAsset(null), isFalse);
@@ -86,7 +89,8 @@ void main() {
   });
 
   group('classChips', () {
-    test('counts one chip per class present, tyre-carrying first in '
+    test(
+        'counts one chip per class present, tyre-carrying first in '
         'priority order', () {
       final List<AssetClassChip> chips = classChips(<String?>[
         'GN101',
@@ -99,9 +103,8 @@ void main() {
 
       // Tyre classes first, in tyreAssetClasses order (TM before MP before
       // BH, regardless of count), then non-tyre classes.
-      final List<String> order = chips
-          .map((AssetClassChip c) => c.assetClass)
-          .toList();
+      final List<String> order =
+          chips.map((AssetClassChip c) => c.assetClass).toList();
       expect(order, <String>['TM', 'MP', 'BH', 'GN']);
 
       final AssetClassChip tm = chips.firstWhere(
@@ -130,7 +133,8 @@ void main() {
       ]);
     });
 
-    test('non-tyre classes with a higher count sort before a lower one, '
+    test(
+        'non-tyre classes with a higher count sort before a lower one, '
         'ahead of the alphabetical tiebreak', () {
       final List<AssetClassChip> chips = classChips(<String?>[
         'IP001',

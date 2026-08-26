@@ -40,9 +40,9 @@ void main() {
   group('equality', () {
     test('two marks with identical fields are equal', () {
       ScrapMark build() => ScrapMark.fromRow(<String, dynamic>{
-        'serial': 'EP0604207',
-        'reason': 'Worn',
-      });
+            'serial': 'EP0604207',
+            'reason': 'Worn',
+          });
       expect(build(), build());
       expect(build().hashCode, build().hashCode);
     });

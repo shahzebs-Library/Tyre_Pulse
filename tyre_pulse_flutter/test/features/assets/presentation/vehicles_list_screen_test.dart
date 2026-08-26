@@ -73,7 +73,8 @@ void _expectNoStateWidget() {
 }
 
 void main() {
-  testWidgets('loading renders TpLoadingState and nothing else - the only '
+  testWidgets(
+      'loading renders TpLoadingState and nothing else - the only '
       'widget in the design system allowed to spin', (
     WidgetTester tester,
   ) async {
@@ -152,7 +153,8 @@ void main() {
     },
   );
 
-  testWidgets('truncated is a slim notice ABOVE a still-usable list, never a '
+  testWidgets(
+      'truncated is a slim notice ABOVE a still-usable list, never a '
       'full-screen state - there is real content underneath it', (
     WidgetTester tester,
   ) async {
@@ -178,7 +180,8 @@ void main() {
     _expectNoStateWidget();
   });
 
-  testWidgets('a failed live read with a usable cached copy renders '
+  testWidgets(
+      'a failed live read with a usable cached copy renders '
       'TpOfflineCachedState, distinct from the empty and error states', (
     WidgetTester tester,
   ) async {
@@ -199,7 +202,8 @@ void main() {
     expect(find.byType(TpAssetCard), findsNothing);
   });
 
-  testWidgets('a network-classified failure with no cache renders '
+  testWidgets(
+      'a network-classified failure with no cache renders '
       'TpBackendUnavailableState, not the plain error state', (
     WidgetTester tester,
   ) async {
@@ -295,7 +299,8 @@ void main() {
     },
   );
 
-  testWidgets('the All chip lifts the default tyre-only filter, revealing a '
+  testWidgets(
+      'the All chip lifts the default tyre-only filter, revealing a '
       'non-tyre-carrying asset that was hidden', (WidgetTester tester) async {
     await _pump(
       tester,

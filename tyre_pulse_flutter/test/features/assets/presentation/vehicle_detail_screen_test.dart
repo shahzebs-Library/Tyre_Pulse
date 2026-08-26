@@ -95,7 +95,8 @@ void main() {
     expect(find.byKey(TpStateKeys.error), findsOneWidget);
   });
 
-  testWidgets('a loaded vehicle shows its identity and every field, joined and '
+  testWidgets(
+      'a loaded vehicle shows its identity and every field, joined and '
       'formatted the way the production screen expects', (
     WidgetTester tester,
   ) async {
@@ -177,7 +178,8 @@ void main() {
     },
   );
 
-  testWidgets('Start inspection is withheld when the inspect module is not '
+  testWidgets(
+      'Start inspection is withheld when the inspect module is not '
       'reachable, rather than shown disabled', (WidgetTester tester) async {
     const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
 
@@ -189,7 +191,8 @@ void main() {
     expect(find.text('Start inspection'), findsNothing);
   });
 
-  testWidgets('a failed live read with a usable cached copy renders '
+  testWidgets(
+      'a failed live read with a usable cached copy renders '
       'TpOfflineCachedState', (WidgetTester tester) async {
     const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
     await _pump(tester, <Override>[
@@ -206,7 +209,8 @@ void main() {
     expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
   });
 
-  testWidgets('a genuine not-found (the query ran and matched nothing) renders '
+  testWidgets(
+      'a genuine not-found (the query ran and matched nothing) renders '
       'TpEmptyState, not TpErrorState - this is a fact about the fleet, '
       'not a malfunction', (WidgetTester tester) async {
     await _pump(tester, <Override>[
@@ -219,7 +223,8 @@ void main() {
     expect(find.byKey(TpStateKeys.error), findsNothing);
   });
 
-  testWidgets('a network-classified failure with no cache renders '
+  testWidgets(
+      'a network-classified failure with no cache renders '
       'TpBackendUnavailableState', (WidgetTester tester) async {
     await _pump(tester, <Override>[
       _resolved(VehicleDetailFailed(const AppError.network())),

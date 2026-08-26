@@ -76,7 +76,8 @@ SupabaseTyreLookupRepository _repositoryFor(_ScriptedRpcCaller rpc) =>
 
 void main() {
   group('scrapBySerial - the critical single-write invariant', () {
-    test('asks the precondition once, then makes EXACTLY ONE mutating '
+    test(
+        'asks the precondition once, then makes EXACTLY ONE mutating '
         'call, and no other request reaches the server', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..answerWith(SupabaseRpcs.tyreScrapAllowed, true)
@@ -97,7 +98,8 @@ void main() {
       expect(rpc.callCountFor(SupabaseRpcs.scrapTyreBySerial), 1);
     });
 
-    test('sends exactly the serial and reason as arguments, and no '
+    test(
+        'sends exactly the serial and reason as arguments, and no '
         'country from this call site', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..answerWith(SupabaseRpcs.tyreScrapAllowed, true)
@@ -148,14 +150,14 @@ void main() {
         expect(
           rpc.wasCalled(SupabaseRpcs.scrapTyreBySerial),
           isFalse,
-          reason:
-              'the mutating write must never be attempted when the '
+          reason: 'the mutating write must never be attempted when the '
               'precondition was not confirmed',
         );
       },
     );
 
-    test('refuses locally, without a network round trip for the mutating '
+    test(
+        'refuses locally, without a network round trip for the mutating '
         'RPC, when the precondition RPC itself fails', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..fail(SupabaseRpcs.tyreScrapAllowed, StateError('offline'));
@@ -168,7 +170,8 @@ void main() {
       expect(rpc.wasCalled(SupabaseRpcs.scrapTyreBySerial), isFalse);
     });
 
-    test('refuses locally, with a validation AppError, for a blank '
+    test(
+        'refuses locally, with a validation AppError, for a blank '
         'serial - the precondition RPC is never even asked', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller();
       final SupabaseTyreLookupRepository repository = _repositoryFor(rpc);
@@ -186,7 +189,8 @@ void main() {
       expect(rpc.calls, isEmpty);
     });
 
-    test('a server failure on the mutating call is surfaced through the '
+    test(
+        'a server failure on the mutating call is surfaced through the '
         'error mapper, not swallowed', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..answerWith(SupabaseRpcs.tyreScrapAllowed, true)
@@ -257,7 +261,8 @@ void main() {
       },
     );
 
-    test('scrap rights and undo rights are asked through DIFFERENT RPCs - '
+    test(
+        'scrap rights and undo rights are asked through DIFFERENT RPCs - '
         'undo never piggybacks on the scrap precondition', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..answerWith(SupabaseRpcs.tyreScrapAllowed, true)
@@ -281,7 +286,8 @@ void main() {
       expect(await repository.canScrap(), isFalse);
     });
 
-    test('canScrap answers false for anything other than an explicit '
+    test(
+        'canScrap answers false for anything other than an explicit '
         'boolean true - a truthy-looking string does not count', () async {
       final _ScriptedRpcCaller rpc = _ScriptedRpcCaller()
         ..answerWith(SupabaseRpcs.tyreScrapAllowed, 'true');

@@ -15,7 +15,8 @@ void main() {
       expect(escapeLikeTerm('a,b(c)'), 'abc');
     });
 
-    test('strips ilike pattern metacharacters percent, underscore and '
+    test(
+        'strips ilike pattern metacharacters percent, underscore and '
         'backslash', () {
       expect(escapeLikeTerm(r'%foo_bar\baz'), 'foobarbaz');
     });
@@ -24,7 +25,8 @@ void main() {
       expect(escapeLikeTerm('TM*514'), 'TM514');
     });
 
-    test('keeps hyphens, dots and single spaces - real in asset numbers '
+    test(
+        'keeps hyphens, dots and single spaces - real in asset numbers '
         'and serials', () {
       expect(escapeLikeTerm('TM-514.A test'), 'TM-514.A test');
     });

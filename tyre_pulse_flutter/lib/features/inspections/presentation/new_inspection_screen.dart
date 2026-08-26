@@ -100,9 +100,8 @@ class _StepTrack extends StatelessWidget {
             ),
           CircleAvatar(
             radius: 12,
-            backgroundColor: i <= current
-                ? palette.primary
-                : palette.surfaceAlt,
+            backgroundColor:
+                i <= current ? palette.primary : palette.surfaceAlt,
             child: i < current
                 ? Icon(Icons.check, size: 14, color: palette.onPrimary)
                 : Text(
@@ -110,9 +109,8 @@ class _StepTrack extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: i == current
-                          ? palette.onPrimary
-                          : palette.textMuted,
+                      color:
+                          i == current ? palette.onPrimary : palette.textMuted,
                     ),
                   ),
           ),
@@ -309,8 +307,7 @@ class _VehiclePicker extends ConsumerStatefulWidget {
     required String assetNo,
     String? vehicleType,
     String? site,
-  })
-  onPicked;
+  }) onPicked;
 
   @override
   ConsumerState<_VehiclePicker> createState() => _VehiclePickerState();
@@ -528,9 +525,8 @@ class _TyresStep extends ConsumerWidget {
             TpCard(
               margin: const EdgeInsets.only(bottom: TpSpace.sm),
               onTap: () => _openEditor(context, ref, position),
-              borderColor: state.activePosition == position
-                  ? palette.primary
-                  : null,
+              borderColor:
+                  state.activePosition == position ? palette.primary : null,
               child: _PositionRow(
                 position: position,
                 reading: state.tyreConditions[position],
@@ -548,7 +544,9 @@ class _TyresStep extends ConsumerWidget {
                         state.completeness.expected ??
                             state.completeness.pending.length,
                       ),
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: palette.warning.base),
               ),
             ),
@@ -576,7 +574,7 @@ class _TyresStep extends ConsumerWidget {
           );
           final TyrePositionReading reading =
               liveState.tyreConditions[position] ??
-              TyrePositionReading.seed(position);
+                  TyrePositionReading.seed(position);
           return TyrePositionEditorSheet(
             reading: reading,
             isCapturingPhoto: liveState.isCapturingPhoto,
@@ -643,25 +641,25 @@ class _GpsChip extends StatelessWidget {
       String label,
     ) = switch (state.gpsStatus) {
       InspectionGpsStatus.captured => (
-        Icons.location_on,
-        TpStatus.ok,
-        l10n.inspectionGpsCaptured,
-      ),
+          Icons.location_on,
+          TpStatus.ok,
+          l10n.inspectionGpsCaptured,
+        ),
       InspectionGpsStatus.unavailable => (
-        Icons.location_off,
-        TpStatus.warning,
-        l10n.inspectionGpsUnavailable,
-      ),
+          Icons.location_off,
+          TpStatus.warning,
+          l10n.inspectionGpsUnavailable,
+        ),
       InspectionGpsStatus.capturing => (
-        Icons.my_location,
-        TpStatus.info,
-        l10n.inspectionGpsCapturing,
-      ),
+          Icons.my_location,
+          TpStatus.info,
+          l10n.inspectionGpsCapturing,
+        ),
       InspectionGpsStatus.idle => (
-        Icons.my_location,
-        TpStatus.neutral,
-        l10n.inspectionGpsCapturing,
-      ),
+          Icons.my_location,
+          TpStatus.neutral,
+          l10n.inspectionGpsCapturing,
+        ),
     };
     return Row(
       children: <Widget>[
@@ -757,7 +755,9 @@ class _ReviewStep extends ConsumerWidget {
               padding: const EdgeInsets.only(top: TpSpace.sm),
               child: Text(
                 l10n.inspectionSignatureRequiredMsg,
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: TpPalette.of(context).critical.base),
               ),
               // `.critical.base` matches the confirmed `TpStatusColors`
@@ -822,7 +822,9 @@ class _SubmittedStep extends ConsumerWidget {
                 Text(
                   state.submitWarning!.message,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: palette.warning.base),
                 ),
               ],

@@ -198,9 +198,8 @@ void main() {
       expect(ModuleRegistry.all, hasLength(31));
       expect(ModuleKey.values, hasLength(31));
 
-      final Set<ModuleKey> defined = ModuleRegistry.all
-          .map((ModuleDef d) => d.key)
-          .toSet();
+      final Set<ModuleKey> defined =
+          ModuleRegistry.all.map((ModuleDef d) => d.key).toSet();
       expect(
         defined,
         hasLength(ModuleRegistry.all.length),
@@ -214,8 +213,7 @@ void main() {
         expect(
           () => ModuleRegistry.definitionFor(key),
           returnsNormally,
-          reason:
-              'ModuleKey.${key.name} has no ModuleDef. In the TypeScript '
+          reason: 'ModuleKey.${key.name} has no ModuleDef. In the TypeScript '
               'app the same gap left MODULE_BY_KEY[key] undefined and denied '
               'the whole fleet at runtime while compiling cleanly.',
         );

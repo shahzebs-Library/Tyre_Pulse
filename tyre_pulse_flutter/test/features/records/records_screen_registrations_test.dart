@@ -44,14 +44,14 @@ void main() {
       expect(
         (built as TyreRecordsListScreen).backFallback,
         isNotEmpty,
-        reason:
-            'a route with no fallback would leave Back with nowhere '
+        reason: 'a route with no fallback would leave Back with nowhere '
             'to go if this screen is ever reached with an empty stack',
       );
     },
   );
 
-  test('merges cleanly into a larger registry without dropping or '
+  test(
+      'merges cleanly into a larger registry without dropping or '
       'overwriting an entry that was already there', () {
     const String otherRouteId = 'someOtherFeatureRoute';
     final TpScreenRegistry base = TpScreenRegistry.empty.withAll(

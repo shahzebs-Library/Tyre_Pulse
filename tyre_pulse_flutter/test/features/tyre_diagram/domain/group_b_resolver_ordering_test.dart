@@ -13,7 +13,8 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dar
 
 void main() {
   // Case 14: case and separator insensitivity.
-  test('case 14: TR-MIXER, Tr-Mixer, tri mixer, "  tri-mixer " all resolve '
+  test(
+      'case 14: TR-MIXER, Tr-Mixer, tri mixer, "  tri-mixer " all resolve '
       'to Tri-mixer', () {
     for (final String input in <String>[
       'TR-MIXER',
@@ -39,11 +40,12 @@ void main() {
   // test asserts case 15's REAL underlying claim (the prefix regex itself
   // does not match) rather than restating a value case 22 explicitly
   // overrides.
-  test('case 15 (R2 the real subject): the asset-code prefix regex does not '
+  test(
+      'case 15 (R2 the real subject): the asset-code prefix regex does not '
       'match PLACING BOOM at all, so a naive PL-prefix bug cannot produce '
       'Pickup for the wrong reason', () {
-    final Match? m = RegExp(r'^([A-Za-z]{2,3})\s*\d')
-        .firstMatch('PLACING BOOM');
+    final Match? m =
+        RegExp(r'^([A-Za-z]{2,3})\s*\d').firstMatch('PLACING BOOM');
     expect(m, isNull);
   });
 
@@ -51,12 +53,14 @@ void main() {
     expect(resolveVehicleType('SLURRY TANKER'), 'Tanker');
   });
 
-  test('case 17: WLD WORKSHOP TRUCK resolves to Truck 6x4, not Wheel '
+  test(
+      'case 17: WLD WORKSHOP TRUCK resolves to Truck 6x4, not Wheel '
       'loader', () {
     expect(resolveVehicleType('WLD WORKSHOP TRUCK'), 'Truck 6x4');
   });
 
-  test('case 18: 10 WHEELER resolves to Truck 6x4 (N-Wheeler beats '
+  test(
+      'case 18: 10 WHEELER resolves to Truck 6x4 (N-Wheeler beats '
       '"wheel")', () {
     expect(resolveVehicleType('10 WHEELER'), 'Truck 6x4');
   });
@@ -88,7 +92,8 @@ void main() {
     );
   });
 
-  test('case 21: "skid" is tested before "loader" - SKID LOADER resolves '
+  test(
+      'case 21: "skid" is tested before "loader" - SKID LOADER resolves '
       'to Skid loader', () {
     expect(resolveVehicleType('SKID LOADER'), 'Skid loader');
   });
@@ -101,7 +106,8 @@ void main() {
     expect(resolveVehicleType('STATIONARY PUMP'), 'Pickup');
   });
 
-  test('case 22b: PLACING BOOM resolves to Pickup - the web-form guard, '
+  test(
+      'case 22b: PLACING BOOM resolves to Pickup - the web-form guard, '
       'ported deliberately over mobile\'s own shadowed rule (artifact '
       'section 3.1, section 8 decision 6)', () {
     expect(resolveVehicleType('PLACING BOOM'), 'Pickup');

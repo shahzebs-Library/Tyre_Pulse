@@ -156,9 +156,8 @@ void main() {
       const ChecklistField(id: 's2', type: 'section', label: 'B'),
       const ChecklistField(id: 't1', type: 'text'),
     ];
-    final List<String> ids = visibleChecklistFields(fields)
-        .map((ChecklistField f) => f.id)
-        .toList();
+    final List<String> ids =
+        visibleChecklistFields(fields).map((ChecklistField f) => f.id).toList();
     expect(ids, <String>['s2', 't1']);
   });
 
@@ -167,9 +166,8 @@ void main() {
       const ChecklistField(id: 't1', type: 'text'),
       const ChecklistField(id: 's1', type: 'section', label: 'Nothing after'),
     ];
-    final List<String> ids = visibleChecklistFields(fields)
-        .map((ChecklistField f) => f.id)
-        .toList();
+    final List<String> ids =
+        visibleChecklistFields(fields).map((ChecklistField f) => f.id).toList();
     expect(ids, <String>['t1']);
   });
 }

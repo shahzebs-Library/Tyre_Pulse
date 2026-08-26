@@ -170,8 +170,8 @@ final class ModuleDef {
     required this.key,
     required this.defaultLabel,
     required this.group,
-  }) : isAdminOnly = true,
-       defaultRoles = const <RoleId>{};
+  })  : isAdminOnly = true,
+        defaultRoles = const <RoleId>{};
 
   final ModuleKey key;
 

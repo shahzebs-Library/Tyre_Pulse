@@ -84,13 +84,12 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
   Future<void> _captureOdometerPhoto(MeterLogPhotoSource source) async {
     setState(() => _capturingOdometerPhoto = true);
     try {
-      final CapturedMeterLogPhoto? photo = await ref
-          .read(meterLogPhotoCaptureProvider)
-          .captureAndStore(
-            sessionKey: widget.sessionKey,
-            slot: 'odometer',
-            source: source,
-          );
+      final CapturedMeterLogPhoto? photo =
+          await ref.read(meterLogPhotoCaptureProvider).captureAndStore(
+                sessionKey: widget.sessionKey,
+                slot: 'odometer',
+                source: source,
+              );
       if (!mounted) return;
       if (photo != null) {
         setState(() => _odometerPhotoPath = photo.localPath);
@@ -103,13 +102,12 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
   Future<void> _captureHoursPhoto(MeterLogPhotoSource source) async {
     setState(() => _capturingHoursPhoto = true);
     try {
-      final CapturedMeterLogPhoto? photo = await ref
-          .read(meterLogPhotoCaptureProvider)
-          .captureAndStore(
-            sessionKey: widget.sessionKey,
-            slot: 'hours',
-            source: source,
-          );
+      final CapturedMeterLogPhoto? photo =
+          await ref.read(meterLogPhotoCaptureProvider).captureAndStore(
+                sessionKey: widget.sessionKey,
+                slot: 'hours',
+                source: source,
+              );
       if (!mounted) return;
       if (photo != null) {
         setState(() => _hoursPhotoPath = photo.localPath);
@@ -141,9 +139,7 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
 
     setState(() => _submitting = true);
     try {
-      await ref
-          .read(meterLogRepositoryProvider)
-          .submitMeterReading(
+      await ref.read(meterLogRepositoryProvider).submitMeterReading(
             workspace: widget.workspace,
             input: SubmitMeterLogInput(
               assetNo: widget.assetNo,
@@ -219,7 +215,9 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
                   Expanded(
                     child: Text(
                       l10n.meterLogFlaggedNote,
-                      style: Theme.of(context).textTheme.bodySmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
                           ?.copyWith(color: palette.warning.onSoft),
                     ),
                   ),
@@ -282,7 +280,9 @@ class _SummaryRow extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodyMedium
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),

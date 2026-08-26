@@ -220,13 +220,12 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
 
   Future<void> _performLookup(String asset) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-    final VehicleDetailOutcome outcome = await ref
-        .read(vehicleFleetRepositoryProvider)
-        .byAssetNo(
-          scope: vehicleCacheScopeFor(workspace),
-          assetNo: asset,
-          country: workspace?.activeCountry,
-        );
+    final VehicleDetailOutcome outcome =
+        await ref.read(vehicleFleetRepositoryProvider).byAssetNo(
+              scope: vehicleCacheScopeFor(workspace),
+              assetNo: asset,
+              country: workspace?.activeCountry,
+            );
 
     if (!mounted) return;
     // A stale response for an asset the field worker has since changed away
@@ -268,13 +267,12 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
   Future<void> _capturePhoto(TyreReplacementPhotoSource source) async {
     setState(() => _capturingPhoto = true);
     try {
-      final CapturedTyreReplacementPhoto? photo = await ref
-          .read(tyreReplacementPhotoCaptureProvider)
-          .captureAndStore(
-            sessionKey: _sessionKey,
-            orderIndex: _photoPaths.length,
-            source: source,
-          );
+      final CapturedTyreReplacementPhoto? photo =
+          await ref.read(tyreReplacementPhotoCaptureProvider).captureAndStore(
+                sessionKey: _sessionKey,
+                orderIndex: _photoPaths.length,
+                source: source,
+              );
       if (!mounted) return;
       if (photo != null) {
         setState(() => _photoPaths.add(photo.localPath));
@@ -317,9 +315,7 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref
-          .read(tyreReplacementRepositoryProvider)
-          .submitTyreReplacement(
+      await ref.read(tyreReplacementRepositoryProvider).submitTyreReplacement(
             workspace: workspace,
             input: SubmitTyreReplacementInput(
               assetNo: asset,
@@ -427,9 +423,9 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
     final String assetForPositions = _assetController.text.trim();
     final List<TyreReplacementPositionOption> positions =
         tyreReplacementPositions(
-          _master?.vehicleType,
-          assetForPositions.isEmpty ? null : assetForPositions,
-        );
+      _master?.vehicleType,
+      assetForPositions.isEmpty ? null : assetForPositions,
+    );
     final String selectedPosition = _positionController.text.trim();
 
     return TpScaffold(
@@ -469,7 +465,9 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
                 const SizedBox(height: TpSpace.xs),
                 Text(
                   l10n.tyreReplaceSiteHelp,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
               ],
@@ -488,7 +486,9 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
                 const SizedBox(height: TpSpace.xs),
                 Text(
                   l10n.tyreReplacePositionHint,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: palette.textMuted),
                 ),
                 const SizedBox(height: TpSpace.sm),
@@ -500,8 +500,7 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
                         in positions)
                       TpTyreChip(
                         data: TpTyreChipData(position: option.code),
-                        isSelected:
-                            option.code.toUpperCase() ==
+                        isSelected: option.code.toUpperCase() ==
                             selectedPosition.toUpperCase(),
                         onTap: () => _selectPosition(option.code),
                       ),
@@ -684,7 +683,9 @@ class _MasterInfoLine extends StatelessWidget {
         parts.join(' · '),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
             ?.copyWith(color: palette.info.onSoft, fontWeight: FontWeight.w700),
       ),
     );

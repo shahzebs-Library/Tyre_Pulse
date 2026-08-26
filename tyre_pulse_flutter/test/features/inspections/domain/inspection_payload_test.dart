@@ -56,7 +56,8 @@ void main() {
       expect(issues, isNot(contains(InspectionSubmitIssue.tyresIncomplete)));
     });
 
-    test('touching one of two positions but not the other reports '
+    test(
+        'touching one of two positions but not the other reports '
         'tyresIncomplete, not noTyreTouched', () {
       final InspectionPayload payload = _basePayload(
         tyreConditions: <String, TyrePositionReading>{
@@ -76,7 +77,8 @@ void main() {
       expect(issues, isNot(contains(InspectionSubmitIssue.noTyreTouched)));
     });
 
-    test('a signature-only gap is the sole reported issue once everything '
+    test(
+        'a signature-only gap is the sole reported issue once everything '
         'else is satisfied', () {
       final InspectionPayload payload = _basePayload(
         tyreConditions: <String, TyrePositionReading>{
@@ -133,13 +135,13 @@ void main() {
     test('counts only positions with real evidence, not the seeded ones', () {
       final Map<String, TyrePositionReading> conditions =
           <String, TyrePositionReading>{
-            'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
-            'RHF1': TyrePositionReading.seed('RHF1'),
-            'LHR1': const TyrePositionReading(
-              position: 'LHR1',
-              pressurePsi: 100,
-            ),
-          };
+        'LHF1': const TyrePositionReading(position: 'LHF1', checked: true),
+        'RHF1': TyrePositionReading.seed('RHF1'),
+        'LHR1': const TyrePositionReading(
+          position: 'LHR1',
+          pressurePsi: 100,
+        ),
+      };
       expect(touchedPositionCount(conditions), 2);
     });
   });

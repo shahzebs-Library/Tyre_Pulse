@@ -226,8 +226,7 @@ void main() {
         expect(
           tabHome,
           _arbValue(arbFileByLocale[locale]!, 'tabHome'),
-          reason:
-              'wrong locale content resolved for '
+          reason: 'wrong locale content resolved for '
               '${locale.languageCode}',
         );
       });

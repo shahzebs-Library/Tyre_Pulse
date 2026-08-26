@@ -143,7 +143,8 @@ void main() {
       expect(b.tyreLifeKm, isNull);
     });
 
-    test('is null when removal is not after fitment - a reversed or equal '
+    test(
+        'is null when removal is not after fitment - a reversed or equal '
         'pair of readings is not a measured life', () {
       final TyreRecord equal = TyreRecord.fromRow(
         _row(<String, dynamic>{'km_at_fitment': 1000, 'km_at_removal': 1000}),

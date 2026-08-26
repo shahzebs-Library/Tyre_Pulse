@@ -39,8 +39,8 @@ final workspaceSwitcherProvider = Provider<WorkspaceSwitcher>(
 /// The active workspace and its lifecycle.
 final workspaceControllerProvider =
     NotifierProvider<WorkspaceController, WorkspaceState>(
-      WorkspaceController.new,
-    );
+  WorkspaceController.new,
+);
 
 /// Holds the active workspace.
 ///
@@ -97,9 +97,9 @@ final class WorkspaceController extends Notifier<WorkspaceState> {
       ) =>
         WorkspaceState(workspace: next, warnings: warnings),
       WorkspaceSwitchRefused(error: final AppError error) => state.copyWith(
-        isResolving: false,
-        lastError: error,
-      ),
+          isResolving: false,
+          lastError: error,
+        ),
     };
   }
 }

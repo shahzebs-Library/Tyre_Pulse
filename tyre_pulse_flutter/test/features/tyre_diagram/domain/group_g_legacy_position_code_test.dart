@@ -18,7 +18,8 @@ void main() {
     expect(legacyPositionCode('Truck 6x4', 'R1Lo'), 'LHR1-O');
   });
 
-  test('case 62: the Tri-mixer centre-axle override - the sharpest parity '
+  test(
+      'case 62: the Tri-mixer centre-axle override - the sharpest parity '
       'trap in the whole engine', () {
     expect(legacyPositionCode('Tri-mixer', 'R1Lo'), 'LHCO');
     expect(legacyPositionCode('Tri-mixer', 'R1Li'), 'LHCI');
@@ -30,12 +31,14 @@ void main() {
     expect(legacyPositionCode('Tri-mixer', 'R2Lo'), 'LHRO');
   });
 
-  test('case 64: the override is keyed on the layout name - Line pump '
+  test(
+      'case 64: the override is keyed on the layout name - Line pump '
       'contains neither "tri" nor "mixer" and is unaffected', () {
     expect(legacyPositionCode('Line pump', 'R1Lo'), 'LHR1-O');
   });
 
-  test('case 65: override matching is case-insensitive and substring - '
+  test(
+      'case 65: override matching is case-insensitive and substring - '
       'TRANSIT MIXER', () {
     expect(legacyPositionCode('TRANSIT MIXER', 'R1Lo'), 'LHCO');
   });
@@ -45,7 +48,8 @@ void main() {
     expect(legacyPositionCode('Pickup', ''), '');
   });
 
-  test("case 67: every one of the 13 layouts' labels match the section-2 "
+  test(
+      "case 67: every one of the 13 layouts' labels match the section-2 "
       'table, computed fresh for all 98 slots', () {
     const Map<String, List<String>> expectedLabels = <String, List<String>>{
       'Pickup': <String>['LHF1', 'RHF1', 'LHR1', 'RHR1'],

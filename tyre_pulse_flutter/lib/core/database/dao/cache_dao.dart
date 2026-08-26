@@ -106,7 +106,8 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     await transaction(() async {
       await (delete(
         cachedAssets,
-      )..where((t) => scopeWhere(scope, t.workspaceId, t.country))).go();
+      )..where((t) => scopeWhere(scope, t.workspaceId, t.country)))
+          .go();
       await batch((Batch b) => b.insertAll(cachedAssets, rows));
       await _recordCacheSync(
         table: 'cached_assets',
@@ -203,7 +204,8 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     await transaction(() async {
       await (delete(
         cachedSites,
-      )..where((t) => scopeWhere(scope, t.workspaceId, t.country))).go();
+      )..where((t) => scopeWhere(scope, t.workspaceId, t.country)))
+          .go();
       await batch((Batch b) => b.insertAll(cachedSites, rows));
       await _recordCacheSync(
         table: 'cached_sites',
@@ -236,7 +238,8 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     await transaction(() async {
       await (delete(
         cachedUsers,
-      )..where((t) => scopeWhere(scope, t.workspaceId, t.country))).go();
+      )..where((t) => scopeWhere(scope, t.workspaceId, t.country)))
+          .go();
       await batch((Batch b) => b.insertAll(cachedUsers, rows));
       await _recordCacheSync(
         table: 'cached_users',
@@ -283,7 +286,8 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     await transaction(() async {
       await (delete(
         cachedChecklistTemplates,
-      )..where((t) => scopeWhere(scope, t.workspaceId, t.country))).go();
+      )..where((t) => scopeWhere(scope, t.workspaceId, t.country)))
+          .go();
       await batch((Batch b) => b.insertAll(cachedChecklistTemplates, rows));
       await _recordCacheSync(
         table: 'cached_checklist_templates',
@@ -393,20 +397,20 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
   /// variables would exceed SQLite's parameter limit, and a tie at the boundary
   /// surviving is the safe direction to be wrong in.
   Future<int> pruneTyresToCap({int cap = RetentionLimits.cachedTyres}) async {
-    final boundary =
-        await (select(cachedTyres)
-              ..orderBy([
-                (t) => OrderingTerm.desc(t.lastSeenAt),
-                (t) => OrderingTerm.desc(t.id),
-              ])
-              ..limit(1, offset: cap - 1))
-            .getSingleOrNull();
+    final boundary = await (select(cachedTyres)
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.lastSeenAt),
+            (t) => OrderingTerm.desc(t.id),
+          ])
+          ..limit(1, offset: cap - 1))
+        .getSingleOrNull();
     if (boundary == null) {
       return 0;
     }
     return (delete(
       cachedTyres,
-    )..where((t) => t.lastSeenAt.isSmallerThanValue(boundary.lastSeenAt))).go();
+    )..where((t) => t.lastSeenAt.isSmallerThanValue(boundary.lastSeenAt)))
+        .go();
   }
 
   // -- Permissions ----------------------------------------------------------
@@ -424,9 +428,11 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     required DateTime now,
   }) async {
     await transaction(() async {
-      await (delete(cachedPermissions)..where(
-            (t) => t.userId.equals(userId) & t.workspaceId.equals(workspaceId),
-          ))
+      await (delete(cachedPermissions)
+            ..where(
+              (t) =>
+                  t.userId.equals(userId) & t.workspaceId.equals(workspaceId),
+            ))
           .go();
       await batch((Batch b) => b.insertAll(cachedPermissions, rows));
       await into(syncMetadata).insertOnConflictUpdate(
@@ -447,12 +453,13 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     required String workspaceId,
     required DateTime now,
   }) {
-    return (select(cachedPermissions)..where(
-          (t) =>
-              t.userId.equals(userId) &
-              t.workspaceId.equals(workspaceId) &
-              (t.expiresAt.isNull() | t.expiresAt.isBiggerThanValue(now)),
-        ))
+    return (select(cachedPermissions)
+          ..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.workspaceId.equals(workspaceId) &
+                (t.expiresAt.isNull() | t.expiresAt.isBiggerThanValue(now)),
+          ))
         .get();
   }
 
@@ -478,16 +485,15 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     }
 
     await transaction(() async {
-      final existing =
-          await (select(recentSearches)
-                ..where(
-                  (t) =>
-                      t.userId.equals(userId) &
-                      t.workspaceId.equals(workspaceId) &
-                      t.termNorm.equals(normalised),
-                )
-                ..limit(1))
-              .getSingleOrNull();
+      final existing = await (select(recentSearches)
+            ..where(
+              (t) =>
+                  t.userId.equals(userId) &
+                  t.workspaceId.equals(workspaceId) &
+                  t.termNorm.equals(normalised),
+            )
+            ..limit(1))
+          .getSingleOrNull();
 
       if (existing == null) {
         await into(recentSearches).insert(
@@ -505,7 +511,8 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
       } else {
         await (update(
           recentSearches,
-        )..where((t) => t.id.equals(existing.id))).write(
+        )..where((t) => t.id.equals(existing.id)))
+            .write(
           RecentSearchesCompanion(
             term: Value<String>(term),
             searchedAt: Value<DateTime>(now),
@@ -624,30 +631,28 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
     required String userId,
     required String workspaceId,
   }) async {
-    final keep =
-        await (select(recentSearches)
-              ..where(
-                (t) =>
-                    t.userId.equals(userId) & t.workspaceId.equals(workspaceId),
-              )
-              ..orderBy([
-                (t) => OrderingTerm.desc(t.searchedAt),
-                (t) => OrderingTerm.desc(t.id),
-              ])
-              ..limit(RetentionLimits.recentSearches))
-            .get();
+    final keep = await (select(recentSearches)
+          ..where(
+            (t) => t.userId.equals(userId) & t.workspaceId.equals(workspaceId),
+          )
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.searchedAt),
+            (t) => OrderingTerm.desc(t.id),
+          ])
+          ..limit(RetentionLimits.recentSearches))
+        .get();
     if (keep.isEmpty) {
       return;
     }
-    final List<String> keepIds = keep
-        .map((RecentSearch r) => r.id)
-        .toList(growable: false);
-    await (delete(recentSearches)..where(
-          (t) =>
-              t.userId.equals(userId) &
-              t.workspaceId.equals(workspaceId) &
-              t.id.isIn(keepIds).not(),
-        ))
+    final List<String> keepIds =
+        keep.map((RecentSearch r) => r.id).toList(growable: false);
+    await (delete(recentSearches)
+          ..where(
+            (t) =>
+                t.userId.equals(userId) &
+                t.workspaceId.equals(workspaceId) &
+                t.id.isIn(keepIds).not(),
+          ))
         .go();
   }
 
@@ -666,11 +671,9 @@ class CacheDao extends DatabaseAccessor<AppDatabase> with _$CacheDaoMixin {
       if (!value.present || value.value != scope.workspaceId) {
         throw AppError(
           kind: AppErrorKind.validation,
-          message:
-              'This data could not be saved for offline use. Sign out and '
+          message: 'This data could not be saved for offline use. Sign out and '
               'in again, then try once more.',
-          technical:
-              'refused a $table row for a workspace other than '
+          technical: 'refused a $table row for a workspace other than '
               '${scope.workspaceId}',
         );
       }

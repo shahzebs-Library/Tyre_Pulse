@@ -143,9 +143,9 @@ class _CameraArea extends ConsumerWidget {
     return switch (access) {
       CameraAccessGranted() => const _CameraPreviewPending(),
       CameraAccessDenied(reason: final String reason) => SizedBox(
-        height: 240,
-        child: TpPermissionDeniedState(reason: reason),
-      ),
+          height: 240,
+          child: TpPermissionDeniedState(reason: reason),
+        ),
       CameraUnavailableInThisBuild() => const _CameraUnavailableNotice(),
     };
   }
@@ -275,28 +275,28 @@ class _ResultSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (result) {
       AssetScanMatch() => _MatchCard(
-        result: result,
-        onOpen: onOpen,
-        onLookUpAnother: onLookUpAnother,
-      ),
+          result: result,
+          onOpen: onOpen,
+          onLookUpAnother: onLookUpAnother,
+        ),
       TyreScanMatch() => _MatchCard(
-        result: result,
-        onOpen: onOpen,
-        onLookUpAnother: onLookUpAnother,
-      ),
+          result: result,
+          onOpen: onOpen,
+          onLookUpAnother: onLookUpAnother,
+        ),
       ScanNoMatch() => _NoMatchCard(result: result, onOpen: onOpen),
       ScanLookupFailed(error: final AppError error) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          TpErrorState(error: error, onRetry: () => onRetry(result.rawInput)),
-          const SizedBox(height: TpSpace.md),
-          TpButton.text(
-            label: AppLocalizations.of(context).scannerOpenSerialSearchAction,
-            onPressed: () => onOpen(primaryRouteFor(result)),
-            icon: Icons.search,
-          ),
-        ],
-      ),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            TpErrorState(error: error, onRetry: () => onRetry(result.rawInput)),
+            const SizedBox(height: TpSpace.md),
+            TpButton.text(
+              label: AppLocalizations.of(context).scannerOpenSerialSearchAction,
+              onPressed: () => onOpen(primaryRouteFor(result)),
+              icon: Icons.search,
+            ),
+          ],
+        ),
     };
   }
 }
@@ -367,28 +367,29 @@ class _MatchCard extends StatelessWidget {
   }
 
   IconData _iconFor(ScanLookupResult result) => switch (result) {
-    AssetScanMatch() => Icons.local_shipping_outlined,
-    TyreScanMatch() => Icons.confirmation_number_outlined,
-    _ => Icons.check_circle_outline,
-  };
+        AssetScanMatch() => Icons.local_shipping_outlined,
+        TyreScanMatch() => Icons.confirmation_number_outlined,
+        _ => Icons.check_circle_outline,
+      };
 
   String _titleFor(ScanLookupResult result) => switch (result) {
-    AssetScanMatch(asset: final AssetLookupRecord asset) =>
-      asset.assetNo.isEmpty ? result.code : asset.assetNo,
-    _ => result.code,
-  };
+        AssetScanMatch(asset: final AssetLookupRecord asset) =>
+          asset.assetNo.isEmpty ? result.code : asset.assetNo,
+        _ => result.code,
+      };
 
   String? _subtitleFor(ScanLookupResult result) => switch (result) {
-    AssetScanMatch(asset: final AssetLookupRecord asset) => _joinNonBlank(
-      <String?>[asset.vehicleType, asset.site],
-    ),
-    TyreScanMatch(tyre: final TyreLookupRecord tyre) => _joinNonBlank(<String?>[
-      tyre.brand,
-      tyre.size,
-      tyre.bestPosition,
-    ]),
-    _ => null,
-  };
+        AssetScanMatch(asset: final AssetLookupRecord asset) => _joinNonBlank(
+            <String?>[asset.vehicleType, asset.site],
+          ),
+        TyreScanMatch(tyre: final TyreLookupRecord tyre) =>
+          _joinNonBlank(<String?>[
+            tyre.brand,
+            tyre.size,
+            tyre.bestPosition,
+          ]),
+        _ => null,
+      };
 
   String _labelFor(AppLocalizations l10n, ScanActionIntent intent) {
     return switch (intent) {

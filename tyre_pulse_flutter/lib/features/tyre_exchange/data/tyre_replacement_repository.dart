@@ -231,8 +231,7 @@ final class DefaultTyreReplacementRepository
       // own doc comment for why the suffix needs no cross-platform shim in
       // Dart and is safe to mint exactly once here, since [enqueue] is
       // called exactly once per call to this method.
-      idempotencyKey:
-          'tyrechg_${asset}_${_slug(position)}_${today}_'
+      idempotencyKey: 'tyrechg_${asset}_${_slug(position)}_${today}_'
           '${_uuid.v4().substring(0, 8)}',
     );
 

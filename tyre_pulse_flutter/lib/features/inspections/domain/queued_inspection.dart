@@ -347,13 +347,13 @@ class InspectionQueueReadResult {
   });
 
   const InspectionQueueReadResult.ok(List<QueuedInspection> items)
-    : this._(status: InspectionQueueReadStatus.ok, items: items);
+      : this._(status: InspectionQueueReadStatus.ok, items: items);
 
   const InspectionQueueReadResult.unreadable()
-    : this._(
-        status: InspectionQueueReadStatus.unreadable,
-        items: const <QueuedInspection>[],
-      );
+      : this._(
+          status: InspectionQueueReadStatus.unreadable,
+          items: const <QueuedInspection>[],
+        );
 
   final InspectionQueueReadStatus status;
   final List<QueuedInspection> items;

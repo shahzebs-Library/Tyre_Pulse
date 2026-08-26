@@ -132,17 +132,17 @@ final class AuthState {
     bool clearProfileError = false,
     bool? profileStale,
     VersionGateResult? versionGate,
-  }) => AuthState(
-    sessionPhase: sessionPhase ?? this.sessionPhase,
-    userId: clearUserId ? null : (userId ?? this.userId),
-    profileStatus: profileStatus ?? this.profileStatus,
-    profile: clearProfile ? null : (profile ?? this.profile),
-    profileError: clearProfileError
-        ? null
-        : (profileError ?? this.profileError),
-    profileStale: profileStale ?? this.profileStale,
-    versionGate: versionGate ?? this.versionGate,
-  );
+  }) =>
+      AuthState(
+        sessionPhase: sessionPhase ?? this.sessionPhase,
+        userId: clearUserId ? null : (userId ?? this.userId),
+        profileStatus: profileStatus ?? this.profileStatus,
+        profile: clearProfile ? null : (profile ?? this.profile),
+        profileError:
+            clearProfileError ? null : (profileError ?? this.profileError),
+        profileStale: profileStale ?? this.profileStale,
+        versionGate: versionGate ?? this.versionGate,
+      );
 
   @override
   String toString() =>

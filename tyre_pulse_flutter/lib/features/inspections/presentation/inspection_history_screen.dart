@@ -101,9 +101,8 @@ class _InspectionHistoryScreenState
           ? const <InspectionDraftSummary>[]
           : await draftRepo.draftsForUser(userId);
 
-      final InspectionQueueReadResult queueRead = await ref
-          .read(inspectionSubmissionQueueProvider)
-          .list();
+      final InspectionQueueReadResult queueRead =
+          await ref.read(inspectionSubmissionQueueProvider).list();
       final List<InspectionHistoryEntry> queuedEntries = queueRead.isReadable
           ? <InspectionHistoryEntry>[
               for (final QueuedInspection q in queueRead.items)
@@ -114,21 +113,18 @@ class _InspectionHistoryScreenState
       final List<InspectionHistoryEntry> syncedEntries = userId.isEmpty
           ? const <InspectionHistoryEntry>[]
           : <InspectionHistoryEntry>[
-              for (final record
-                  in await ref
-                      .read(inspectionRemoteRepositoryProvider)
-                      .myInspections(createdBy: userId))
+              for (final record in await ref
+                  .read(inspectionRemoteRepositoryProvider)
+                  .myInspections(createdBy: userId))
                 InspectionHistoryEntry(
                   source: InspectionHistorySource.synced,
                   id: record.id,
                   recordId: record.id,
                   assetNo: record.assetNo,
                   site: record.site,
-                  inspectionDate:
-                      DateTime.tryParse(record.inspectionDate) ??
+                  inspectionDate: DateTime.tryParse(record.inspectionDate) ??
                       DateTime.now(),
-                  updatedAt:
-                      DateTime.tryParse(record.createdAt ?? '') ??
+                  updatedAt: DateTime.tryParse(record.createdAt ?? '') ??
                       DateTime.now(),
                   approvalStatus: record.approvalStatus,
                 ),
@@ -141,9 +137,8 @@ class _InspectionHistoryScreenState
       setState(() {
         _drafts = drafts;
         _entries = merged;
-        _attentionCount = merged
-            .where((InspectionHistoryEntry e) => e.needsAttention)
-            .length;
+        _attentionCount =
+            merged.where((InspectionHistoryEntry e) => e.needsAttention).length;
         _loading = false;
       });
 
@@ -155,8 +150,7 @@ class _InspectionHistoryScreenState
         setState(() {
           _error = const AppError(
             kind: AppErrorKind.storage,
-            message:
-                'Some queued inspections could not be read from this '
+            message: 'Some queued inspections could not be read from this '
                 'device. They have not been lost - try again shortly.',
             technical: 'InspectionSubmissionQueue.list() unreadable',
             isRetryable: true,
@@ -167,8 +161,7 @@ class _InspectionHistoryScreenState
       setState(() {
         _error = const AppError(
           kind: AppErrorKind.unknown,
-          message:
-              'Your inspections could not be loaded. Pull down to '
+          message: 'Your inspections could not be loaded. Pull down to '
               'try again.',
           technical: 'InspectionHistoryScreen._load failed',
           isRetryable: true,
@@ -293,7 +286,9 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: TpSpace.sm),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
             ?.copyWith(color: TpPalette.of(context).textMuted),
       ),
     );
@@ -309,8 +304,8 @@ class _InlineWarning extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpStatusColors colors = TpPalette.of(context)
-        .forStatus(TpStatus.warning);
+    final TpStatusColors colors =
+        TpPalette.of(context).forStatus(TpStatus.warning);
     return Container(
       padding: const EdgeInsets.all(TpSpace.md),
       decoration: BoxDecoration(
@@ -325,7 +320,9 @@ class _InlineWarning extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: colors.onSoft),
             ),
           ),
@@ -425,20 +422,20 @@ class _HistoryRow extends StatelessWidget {
     }
     return switch (entry.queueStatus) {
       InspectionQueueStatus.failed => (
-        Icons.error_outline,
-        TpStatus.critical,
-        l10n.inspectionQueueFailedLabel,
-      ),
+          Icons.error_outline,
+          TpStatus.critical,
+          l10n.inspectionQueueFailedLabel,
+        ),
       InspectionQueueStatus.synced => (
-        Icons.cloud_done_outlined,
-        TpStatus.ok,
-        l10n.inspectionStatusSynced,
-      ),
+          Icons.cloud_done_outlined,
+          TpStatus.ok,
+          l10n.inspectionStatusSynced,
+        ),
       InspectionQueueStatus.pending || null => (
-        Icons.cloud_upload_outlined,
-        TpStatus.info,
-        l10n.inspectionQueuePendingLabel,
-      ),
+          Icons.cloud_upload_outlined,
+          TpStatus.info,
+          l10n.inspectionQueuePendingLabel,
+        ),
     };
   }
 

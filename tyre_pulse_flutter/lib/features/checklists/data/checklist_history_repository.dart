@@ -93,13 +93,13 @@ final class DefaultChecklistHistoryRepository
   DefaultChecklistHistoryRepository({
     required QueueDao queueDao,
     required Future<List<ChecklistHistoryRow>> Function(String submittedBy)
-    loadCompleted,
-  }) : _queueDao = queueDao,
-       _loadCompleted = loadCompleted;
+        loadCompleted,
+  })  : _queueDao = queueDao,
+        _loadCompleted = loadCompleted;
 
   final QueueDao _queueDao;
   final Future<List<ChecklistHistoryRow>> Function(String submittedBy)
-  _loadCompleted;
+      _loadCompleted;
 
   @override
   Future<ChecklistHistory> load({

@@ -101,10 +101,10 @@ final class InspectionSyncEngine {
     required InspectionSubmissionQueue queue,
     required InspectionRemoteRepository remote,
     required InspectionPhotoUploader photoUploader,
-  }) : _draftRepository = draftRepository,
-       _queue = queue,
-       _remote = remote,
-       _photoUploader = photoUploader;
+  })  : _draftRepository = draftRepository,
+        _queue = queue,
+        _remote = remote,
+        _photoUploader = photoUploader;
 
   final InspectionDraftRepository _draftRepository;
   final InspectionSubmissionQueue _queue;
@@ -173,14 +173,14 @@ final class InspectionSyncEngine {
       // the earlier attempt's own upload may have partially succeeded;
       // re-reading is what makes a retry pick up exactly where the last
       // one left off rather than re-uploading everything.
-      final Map<String, TyrePositionReading> current = await _draftRepository
-          .tyreReadingsWithPhotos(item.draftKey);
+      final Map<String, TyrePositionReading> current =
+          await _draftRepository.tyreReadingsWithPhotos(item.draftKey);
 
       final Map<String, TyrePositionReading> resolved =
           await _uploadOutstandingPhotos(
-            inspectionId: item.id,
-            readings: current,
-          );
+        inspectionId: item.id,
+        readings: current,
+      );
 
       final InspectionPayload resolvedPayload = item.payload.copyWith(
         tyreConditions: resolved,
@@ -209,9 +209,8 @@ final class InspectionSyncEngine {
         clientUuid: item.id,
       );
     } on Object catch (error) {
-      final SupabaseFailure failure = error is SupabaseFailure
-          ? error
-          : classifySupabaseError(error);
+      final SupabaseFailure failure =
+          error is SupabaseFailure ? error : classifySupabaseError(error);
       final AppError appError = failure.error;
 
       await _queue.markFailed(item.id, error: appError.message);

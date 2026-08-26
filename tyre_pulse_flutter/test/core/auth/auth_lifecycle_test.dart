@@ -38,14 +38,15 @@ void main() {
       DateTime? cachedAt,
       bool? locked,
       bool? approved = true,
-    }) => isCachedProfileUsable(
-      cachedForUserId: cachedForUserId,
-      wantUserId: wantUserId,
-      cachedAt: cachedAt ?? now.subtract(const Duration(days: 1)),
-      now: now,
-      locked: locked,
-      approved: approved,
-    );
+    }) =>
+        isCachedProfileUsable(
+          cachedForUserId: cachedForUserId,
+          wantUserId: wantUserId,
+          cachedAt: cachedAt ?? now.subtract(const Duration(days: 1)),
+          now: now,
+          locked: locked,
+          approved: approved,
+        );
 
     test('a fresh cache for the right user is usable', () {
       expect(usable(), isTrue);

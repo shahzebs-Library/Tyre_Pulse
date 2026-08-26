@@ -83,9 +83,8 @@ BackOutcome backTo(
     return BackOutcome.popped;
   }
 
-  final String target = fallback.trim().isEmpty
-      ? TpRoutePaths.home
-      : fallback.trim();
+  final String target =
+      fallback.trim().isEmpty ? TpRoutePaths.home : fallback.trim();
   router.go(target);
   return BackOutcome.replaced;
 }

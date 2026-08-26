@@ -110,9 +110,9 @@ void main() {
   group('equality', () {
     test('two records with identical fields are equal', () {
       TyreLookupRecord build() => TyreLookupRecord.fromRow(<String, dynamic>{
-        'id': 'row-8',
-        'brand': 'Bridgestone',
-      });
+            'id': 'row-8',
+            'brand': 'Bridgestone',
+          });
       expect(build(), build());
       expect(build().hashCode, build().hashCode);
     });

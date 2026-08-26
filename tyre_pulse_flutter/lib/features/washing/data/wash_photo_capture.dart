@@ -60,10 +60,10 @@ final class CapturedWashPhoto {
 
 const List<({int maxDimension, int quality})> _kResizeLadder =
     <({int maxDimension, int quality})>[
-      (maxDimension: 1600, quality: 50),
-      (maxDimension: 1024, quality: 45),
-      (maxDimension: 720, quality: 40),
-    ];
+  (maxDimension: 1600, quality: 50),
+  (maxDimension: 1024, quality: 45),
+  (maxDimension: 720, quality: 40),
+];
 
 /// Captures one wash photo for [sessionKey] and copies it into a durable,
 /// feature-owned folder.

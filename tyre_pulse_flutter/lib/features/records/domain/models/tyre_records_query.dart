@@ -77,9 +77,8 @@ final class TyreRecordsQuery {
       site: clearSite ? null : (site ?? this.site),
       riskLevel: clearRiskLevel ? null : (riskLevel ?? this.riskLevel),
       country: clearCountry ? null : (country ?? this.country),
-      restrictToSite: clearRestrictToSite
-          ? null
-          : (restrictToSite ?? this.restrictToSite),
+      restrictToSite:
+          clearRestrictToSite ? null : (restrictToSite ?? this.restrictToSite),
     );
   }
 
@@ -104,7 +103,6 @@ final class TyreRecordsQuery {
       Object.hash(search, site, riskLevel, country, restrictToSite);
 
   @override
-  String toString() =>
-      'TyreRecordsQuery(search: "$search", site: $site, '
+  String toString() => 'TyreRecordsQuery(search: "$search", site: $site, '
       'risk: $riskLevel, country: $country, restrictToSite: $restrictToSite)';
 }

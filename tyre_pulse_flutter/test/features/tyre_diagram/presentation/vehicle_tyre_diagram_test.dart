@@ -66,7 +66,8 @@ void main() {
     expect(find.text('FRONT'), findsNothing);
   });
 
-  testWidgets('a known vehicle type with no positions shows the empty '
+  testWidgets(
+      'a known vehicle type with no positions shows the empty '
       'positions state, not the tyreless state', (WidgetTester tester) async {
     await _pump(
       tester,
@@ -79,7 +80,8 @@ void main() {
     expect(find.text('No tyre positions to display.'), findsOneWidget);
   });
 
-  testWidgets('tapping a wheel hit target invokes onPositionTap with the '
+  testWidgets(
+      'tapping a wheel hit target invokes onPositionTap with the '
       'exact caller-supplied position id', (WidgetTester tester) async {
     String? tapped;
     await _pump(
@@ -100,7 +102,8 @@ void main() {
     expect(<String>['FL', 'FR', 'RL', 'RR'], contains(tapped));
   });
 
-  testWidgets('the diagram body stays left-to-right regardless of the ambient '
+  testWidgets(
+      'the diagram body stays left-to-right regardless of the ambient '
       'locale direction (artifact section 7.3, rule 1)', (
     WidgetTester tester,
   ) async {
@@ -114,8 +117,8 @@ void main() {
       locale: const Locale('ar'),
     );
 
-    final Iterable<Directionality> directionalities = tester
-        .widgetList<Directionality>(find.byType(Directionality));
+    final Iterable<Directionality> directionalities =
+        tester.widgetList<Directionality>(find.byType(Directionality));
     // At least one Directionality in the tree is forced ltr - the one
     // this widget wraps its own diagram body in - even though the
     // ambient MaterialApp locale is Arabic (rtl).
@@ -158,7 +161,8 @@ void main() {
     },
   );
 
-  testWidgets('the selected wheel is marked selected in its semantics '
+  testWidgets(
+      'the selected wheel is marked selected in its semantics '
       'node', (WidgetTester tester) async {
     final SemanticsHandle handle = tester.ensureSemantics();
     addTearDown(handle.dispose);
@@ -202,7 +206,8 @@ void main() {
     }
   });
 
-  testWidgets('unmatched (foreign vocabulary) positions still render the '
+  testWidgets(
+      'unmatched (foreign vocabulary) positions still render the '
       'whole layout rather than a blank diagram', (WidgetTester tester) async {
     await _pump(
       tester,
@@ -217,7 +222,8 @@ void main() {
     expect(find.textContaining('4'), findsWidgets);
   });
 
-  testWidgets('every wheel hit target measures at least the Material minimum '
+  testWidgets(
+      'every wheel hit target measures at least the Material minimum '
       'touch size, even on the smallest production layout geometry', (
     WidgetTester tester,
   ) async {

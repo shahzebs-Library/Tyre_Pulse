@@ -30,9 +30,9 @@ import 'package:tyre_pulse/features/inspections/presentation/'
 /// The routes this feature builds a screen for.
 final Map<String, TpScreenBuilder> inspectionsScreenRegistrations =
     <String, TpScreenBuilder>{
-      TpRouteId.newInspection: _buildNewInspectionScreen,
-      TpRouteId.inspectionDetail: _buildInspectionDetailScreen,
-    };
+  TpRouteId.newInspection: _buildNewInspectionScreen,
+  TpRouteId.inspectionDetail: _buildInspectionDetailScreen,
+};
 
 /// Guards the cast from the router's typed [TpRoute] union down to
 /// [NewInspectionRoute]. The registry is keyed by [TpRouteId.newInspection],

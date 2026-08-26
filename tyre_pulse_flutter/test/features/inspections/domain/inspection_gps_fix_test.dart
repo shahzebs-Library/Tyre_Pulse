@@ -32,7 +32,8 @@ void main() {
       expect(cols['gps_captured_at'], '2026-08-20T09:15:00.000Z');
     });
 
-    test('a fix with no reported accuracy leaves gps_accuracy null, never '
+    test(
+        'a fix with no reported accuracy leaves gps_accuracy null, never '
         'fabricated as 0', () {
       final InspectionGpsFix fix = InspectionGpsFix(
         latitude: 1,

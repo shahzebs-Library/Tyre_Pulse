@@ -20,8 +20,7 @@ void main() {
       expect(
         light,
         isNot(dark),
-        reason:
-            '$label is the same colour in light and dark - the two themes '
+        reason: '$label is the same colour in light and dark - the two themes '
             'are meant to be visually distinct.',
       );
     }

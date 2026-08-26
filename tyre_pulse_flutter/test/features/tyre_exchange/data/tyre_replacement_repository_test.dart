@@ -80,7 +80,8 @@ void main() {
   Map<String, Object?> decode(PendingCommand row) =>
       jsonDecode(row.payloadJson) as Map<String, Object?>;
 
-  test('every field this repository sends is inside the command registry\'s '
+  test(
+      'every field this repository sends is inside the command registry\'s '
       'allow-list, and nothing is dropped', () async {
     final Set<String> droppedFields = await repository.submitTyreReplacement(
       workspace: _workspace(),
@@ -97,18 +98,18 @@ void main() {
 
     expect(
       payload.keys.toSet().difference(
-        CommandRegistry.specFor(CommandType.tyreChange).fieldAllowList,
-      ),
+            CommandRegistry.specFor(CommandType.tyreChange).fieldAllowList,
+          ),
       isEmpty,
-      reason:
-          'a field outside the allow-list would be dropped before the '
+      reason: 'a field outside the allow-list would be dropped before the '
           'write, and PostgREST fails the whole insert on an unknown column',
     );
     expect(stored.entityType, SupabaseTables.tyreRecords);
     expect(stored.commandType, CommandType.tyreChange.wireName);
   });
 
-  test('asset_no is trimmed and position is trimmed, and every literal '
+  test(
+      'asset_no is trimmed and position is trimmed, and every literal '
       'constant the reference hard-codes is present', () async {
     await repository.submitTyreReplacement(
       workspace: _workspace(),
@@ -147,7 +148,8 @@ void main() {
     },
   );
 
-  test('with no serial typed, all three serial columns are null - never an '
+  test(
+      'with no serial typed, all three serial columns are null - never an '
       'empty string', () async {
     await repository.submitTyreReplacement(
       workspace: _workspace(),
@@ -180,7 +182,8 @@ void main() {
     },
   );
 
-  test('brand/size/cost/km/tread/removal reason pass through when supplied, '
+  test(
+      'brand/size/cost/km/tread/removal reason pass through when supplied, '
       'and stay null when blank', () async {
     await repository.submitTyreReplacement(
       workspace: _workspace(),
@@ -205,7 +208,8 @@ void main() {
     expect(payload['removal_reason'], 'Worn out');
   });
 
-  test('photos: a flat, orderable list - never a keyed map - and empty '
+  test(
+      'photos: a flat, orderable list - never a keyed map - and empty '
       'becomes null rather than an empty array', () async {
     await repository.submitTyreReplacement(
       workspace: _workspace(),
@@ -246,7 +250,8 @@ void main() {
     expect(payload['photos'], isNull);
   });
 
-  test('the stored country matches whatever the caller supplied, honestly - '
+  test(
+      'the stored country matches whatever the caller supplied, honestly - '
       'including null when nothing was supplied', () async {
     await repository.submitTyreReplacement(
       workspace: _workspace(activeCountry: 'KSA'),
@@ -271,7 +276,8 @@ void main() {
     expect(stored.country, 'KSA');
   });
 
-  test('an explicit country is written to both the business column and the '
+  test(
+      'an explicit country is written to both the business column and the '
       'queue bookkeeping column', () async {
     await repository.submitTyreReplacement(
       workspace: _workspace(activeCountry: 'KSA'),

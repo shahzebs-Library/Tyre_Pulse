@@ -67,7 +67,8 @@ void main() {
       expect(await queue.byId('does-not-exist'), isNull);
     });
 
-    test('two independent submissions never collide - a write to one '
+    test(
+        'two independent submissions never collide - a write to one '
         'cannot corrupt another', () async {
       await queue.enqueue(
         QueuedInspection(
@@ -88,15 +89,15 @@ void main() {
 
       final InspectionQueueReadResult listed = await queue.list();
       expect(listed.items.length, 2);
-      final Set<String> assetNumbers = listed.items
-          .map((q) => q.payload.assetNo)
-          .toSet();
+      final Set<String> assetNumbers =
+          listed.items.map((q) => q.payload.assetNo).toSet();
       expect(assetNumbers, <String>{'TM514', 'TM515'});
     });
   });
 
   group('markSynced / markFailed / remove', () {
-    test('markSynced updates status and syncedAt, and clears any prior '
+    test(
+        'markSynced updates status and syncedAt, and clears any prior '
         'error', () async {
       await queue.enqueue(
         QueuedInspection(

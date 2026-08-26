@@ -166,15 +166,12 @@ class _InspectionApprovalReviewScreenState
       return;
     }
 
-    final _DecisionBusy nextBusy = approved
-        ? _DecisionBusy.approving
-        : _DecisionBusy.rejecting;
+    final _DecisionBusy nextBusy =
+        approved ? _DecisionBusy.approving : _DecisionBusy.rejecting;
     setState(() => _busy = nextBusy);
     try {
       final String trimmedNote = _noteController.text.trim();
-      await ref
-          .read(inspectionApprovalRepositoryProvider)
-          .decide(
+      await ref.read(inspectionApprovalRepositoryProvider).decide(
             InspectionApprovalDecision(
               inspectionId: item.id,
               approved: approved,
@@ -386,8 +383,8 @@ class _ReviewBody extends StatelessWidget {
     final List<TyreEntryPair> entries = readTyreEntries(item.tyreConditions);
     final Map<String, Map<String, Object?>> tyreData =
         <String, Map<String, Object?>>{
-          for (final TyreEntryPair pair in entries) pair.key: pair.entry,
-        };
+      for (final TyreEntryPair pair in entries) pair.key: pair.entry,
+    };
     final List<String> positions = diagramPositions(
       item.vehicleType ?? '',
       item.assetNo,
@@ -437,8 +434,7 @@ class _ReviewBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         TpCard(
-          child:
-              item.inspectorSignature != null &&
+          child: item.inspectorSignature != null &&
                   item.inspectorSignature!.isNotEmpty
               ? Image.memory(
                   _decodeSignatureDataUrl(item.inspectorSignature!),
@@ -724,7 +720,9 @@ class _DecidedSection extends StatelessWidget {
                   padding: const EdgeInsets.only(top: TpSpace.sm),
                   child: Text(
                     decidedByLine,
-                    style: Theme.of(context).textTheme.bodySmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
                         ?.copyWith(color: palette.textMuted),
                   ),
                 ),
@@ -733,7 +731,9 @@ class _DecidedSection extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     approvedAt,
-                    style: Theme.of(context).textTheme.bodySmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
                         ?.copyWith(color: palette.textMuted),
                   ),
                 ),
@@ -837,7 +837,9 @@ class _DecisionForm extends StatelessWidget {
                     l10n.inspectionApprovalSigningAs(
                       TpDirection.isolateLtr(approverName!.trim()),
                     ),
-                    style: Theme.of(context).textTheme.bodySmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
                         ?.copyWith(color: TpPalette.of(context).textMuted),
                   ),
                 ),

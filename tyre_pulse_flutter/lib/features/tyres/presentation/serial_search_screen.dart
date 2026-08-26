@@ -120,9 +120,8 @@ class _SerialSearchScreenState extends ConsumerState<SerialSearchScreen> {
       tyreSerial: state.resolvedSerial == null
           ? null
           : TyreSerial(state.resolvedSerial!),
-      tyrePosition: tyre.bestPosition == null
-          ? null
-          : TyrePosition(tyre.bestPosition!),
+      tyrePosition:
+          tyre.bestPosition == null ? null : TyrePosition(tyre.bestPosition!),
     );
     GoRouter.of(context).go(target.location);
   }
@@ -218,9 +217,8 @@ class _SearchBar extends StatelessWidget {
                     label: l10n.searchHint,
                     icon: Icons.search,
                     isBusy: isSearching,
-                    onPressed: canSearch && !isSearching
-                        ? onSearchPressed
-                        : null,
+                    onPressed:
+                        canSearch && !isSearching ? onSearchPressed : null,
                   );
                 },
               ),
@@ -333,9 +331,8 @@ class _FoundResult extends StatelessWidget {
                     // condition/risk rating, only a status about being
                     // scrapped. "unknown" says honestly that nobody
                     // measured this tyre's condition here.
-                    status: state.isScrapped
-                        ? TpStatus.critical
-                        : TpStatus.unknown,
+                    status:
+                        state.isScrapped ? TpStatus.critical : TpStatus.unknown,
                   ),
                 ),
               ),
@@ -487,7 +484,9 @@ class _NoAssetNote extends StatelessWidget {
             Expanded(
               child: Text(
                 message,
-                style: Theme.of(context).textTheme.bodyMedium
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
                     ?.copyWith(color: colors.onSoft),
               ),
             ),

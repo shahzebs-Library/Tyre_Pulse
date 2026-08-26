@@ -82,7 +82,8 @@ void main() {
       expect(await repo.draftsForUser('user-1'), isEmpty);
     });
 
-    test('saving the header twice for the same user+asset updates the '
+    test(
+        'saving the header twice for the same user+asset updates the '
         'same row rather than creating a second one', () async {
       await repo.saveHeader(
         userId: 'user-1',
@@ -131,8 +132,8 @@ void main() {
           ),
         );
 
-        final Map<String, TyrePositionReading> readings = await repo
-            .tyreReadings(key);
+        final Map<String, TyrePositionReading> readings =
+            await repo.tyreReadings(key);
         expect(readings['LHF1'], isNotNull);
         expect(readings['LHF1']!.pressurePsi, 108.0);
         expect(readings['LHF1']!.checked, isTrue);
@@ -147,14 +148,15 @@ void main() {
           key,
           const TyrePositionReading(position: 'LHF2', pressurePsi: 0),
         );
-        final Map<String, TyrePositionReading> readings = await repo
-            .tyreReadings(key);
+        final Map<String, TyrePositionReading> readings =
+            await repo.tyreReadings(key);
         expect(readings['LHF2']!.pressurePsi, 0.0);
         expect(readings['LHF2']!.pressurePsi, isNotNull);
       },
     );
 
-    test('saving the same position twice overwrites rather than '
+    test(
+        'saving the same position twice overwrites rather than '
         'duplicating', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.saveTyreReading(
@@ -174,7 +176,8 @@ void main() {
   });
 
   group('photos and tyreReadingsWithPhotos', () {
-    test('a photo attached to a position is folded into '
+    test(
+        'a photo attached to a position is folded into '
         'tyreReadingsWithPhotos as photoLocalPath', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.saveTyreReading(
@@ -188,13 +191,14 @@ void main() {
         capturedAt: DateTime.utc(2026, 8, 20, 9),
       );
 
-      final Map<String, TyrePositionReading> merged = await repo
-          .tyreReadingsWithPhotos(key);
+      final Map<String, TyrePositionReading> merged =
+          await repo.tyreReadingsWithPhotos(key);
       expect(merged['LHF1']!.photoLocalPath, '/tmp/lhf1_1.jpg');
       expect(merged['LHF1']!.condition, 'Worn');
     });
 
-    test('when a position has two photos (a retake), the most recently '
+    test(
+        'when a position has two photos (a retake), the most recently '
         'captured one wins', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.addPhoto(
@@ -210,12 +214,13 @@ void main() {
         capturedAt: DateTime.utc(2026, 8, 20, 9, 5),
       );
 
-      final Map<String, TyrePositionReading> merged = await repo
-          .tyreReadingsWithPhotos(key);
+      final Map<String, TyrePositionReading> merged =
+          await repo.tyreReadingsWithPhotos(key);
       expect(merged['LHF1']!.photoLocalPath, '/tmp/newer.jpg');
     });
 
-    test('a position with a photo but no separate reading row still '
+    test(
+        'a position with a photo but no separate reading row still '
         'appears, seeded', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.addPhoto(
@@ -224,8 +229,8 @@ void main() {
         localPath: '/tmp/photo-only.jpg',
         capturedAt: DateTime.utc(2026, 8, 20),
       );
-      final Map<String, TyrePositionReading> merged = await repo
-          .tyreReadingsWithPhotos(key);
+      final Map<String, TyrePositionReading> merged =
+          await repo.tyreReadingsWithPhotos(key);
       expect(merged['RHR1-O']!.photoLocalPath, '/tmp/photo-only.jpg');
       expect(merged['RHR1-O']!.condition, TyreReadingCondition.good);
     });
@@ -249,7 +254,8 @@ void main() {
       expect(sig.source, 'drawn');
     });
 
-    test('saving a second signature replaces the first - there is exactly '
+    test(
+        'saving a second signature replaces the first - there is exactly '
         'one signing slot per draft', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.saveSignature(
@@ -270,7 +276,8 @@ void main() {
   });
 
   group('discardDraft', () {
-    test('removes the header, positions, photos and signature, and hands '
+    test(
+        'removes the header, positions, photos and signature, and hands '
         'back the removed photo paths', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
       await repo.saveHeader(

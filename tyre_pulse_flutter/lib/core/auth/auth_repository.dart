@@ -140,8 +140,7 @@ final class SupabaseAuthRepository implements AuthRepository {
     // identifier-resolution RPC failed", and "wrong password" - see the file
     // header. Distinguishing them would tell an attacker which accounts exist.
     message: 'Invalid username, employee ID, or password.',
-    technical:
-        'sign-in rejected: identifier could not be resolved, or '
+    technical: 'sign-in rejected: identifier could not be resolved, or '
         'signInWithPassword rejected the credentials',
   );
 

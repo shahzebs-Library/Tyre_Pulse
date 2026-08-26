@@ -38,10 +38,10 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_template.dart';
 import 'package:tyre_pulse/features/checklists/presentation/state/checklist_fill_state.dart';
 
 final NotifierProvider<ChecklistFillController, ChecklistFillState>
-checklistFillControllerProvider =
+    checklistFillControllerProvider =
     NotifierProvider<ChecklistFillController, ChecklistFillState>(
-      ChecklistFillController.new,
-    );
+  ChecklistFillController.new,
+);
 
 class ChecklistFillController extends Notifier<ChecklistFillState> {
   @override
@@ -59,8 +59,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     if (workspace == null) {
       state = state.copyWith(
         phase: ChecklistFillPhase.error,
-        errorMessage:
-            'Your workspace is still loading. Try again in a '
+        errorMessage: 'Your workspace is still loading. Try again in a '
             'moment.',
       );
       return;
@@ -79,16 +78,14 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     if (templateRecord == null) {
       state = state.copyWith(
         phase: ChecklistFillPhase.error,
-        errorMessage:
-            'This checklist could not be found. It may have been '
+        errorMessage: 'This checklist could not be found. It may have been '
             'unpublished.',
       );
       return;
     }
 
     final String initialAssetNo = route.assetNo?.value ?? '';
-    final String draftKey =
-        route.draftKey?.value ??
+    final String draftKey = route.draftKey?.value ??
         drafts.draftKeyFor(
           userId: workspace.userId,
           templateId: templateRecord.template.id ?? route.templateId.value,
@@ -111,9 +108,8 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       answers = await drafts.answers(draftKey);
       notes = await drafts.notes(draftKey);
       site = existing.site ?? route.siteName?.value;
-      assetNo = existing.assetNo.isEmpty
-          ? (route.assetNo?.value)
-          : existing.assetNo;
+      assetNo =
+          existing.assetNo.isEmpty ? (route.assetNo?.value) : existing.assetNo;
       printedName = existing.printedName ?? '';
       readLang = existing.readLang ?? kChecklistDefaultLang;
     } else {
@@ -384,9 +380,8 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     final ChecklistDraftRepository drafts = ref.read(
       checklistDraftRepositoryProvider,
     );
-    final int total = templateRecord.template.fields
-        .where((f) => f.type != 'section')
-        .length;
+    final int total =
+        templateRecord.template.fields.where((f) => f.type != 'section').length;
     final int filled = _countFilled(templateRecord, s.answers);
     final String workspaceId;
     try {
@@ -448,9 +443,8 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     final ChecklistSubmissionRepository submissions = ref.read(
       checklistSubmissionRepositoryProvider,
     );
-    final int total = templateRecord.template.fields
-        .where((f) => f.type != 'section')
-        .length;
+    final int total =
+        templateRecord.template.fields.where((f) => f.type != 'section').length;
     final int filled = _countFilled(templateRecord, s.answers);
     final int? scorePct = templateRecord.scored
         ? (total == 0 ? null : ((filled / total) * 100).round())
@@ -482,8 +476,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     } on Object {
       state = state.copyWith(
         phase: ChecklistFillPhase.ready,
-        errorMessage:
-            'This checklist could not be saved. It has not been '
+        errorMessage: 'This checklist could not be saved. It has not been '
             'lost - try again.',
       );
       return false;

@@ -129,10 +129,8 @@ String? normaliseMinimumVersion(Object? raw) {
     return null;
   }
   final String text = raw is String ? raw : raw.toString();
-  final String stripped = text
-      .trim()
-      .replaceAll(RegExp('^"+'), '')
-      .replaceAll(RegExp(r'"+$'), '');
+  final String stripped =
+      text.trim().replaceAll(RegExp('^"+'), '').replaceAll(RegExp(r'"+$'), '');
   final String trimmed = stripped.trim();
   return trimmed.isEmpty ? null : trimmed;
 }
@@ -171,12 +169,12 @@ enum VersionGateReason {
   /// Safe to show a person. Only the blocking value has a user-facing
   /// sentence; the rest never reach a screen.
   String get message => switch (this) {
-    VersionGateReason.buildBelowMinimum =>
-      'This version of the app is no longer supported. Update to the '
-          'latest version to carry on. Your saved work stays on this '
-          'device.',
-    _ => '',
-  };
+        VersionGateReason.buildBelowMinimum =>
+          'This version of the app is no longer supported. Update to the '
+              'latest version to carry on. Your saved work stays on this '
+              'device.',
+        _ => '',
+      };
 }
 
 /// The gate's answer, with the reason and the two versions it compared.
@@ -189,9 +187,9 @@ final class VersionGateResult {
 
   /// The state before any check has run. Allows.
   const VersionGateResult.notChecked()
-    : reason = VersionGateReason.notChecked,
-      currentVersion = '',
-      minimumVersion = null;
+      : reason = VersionGateReason.notChecked,
+        currentVersion = '',
+        minimumVersion = null;
 
   final VersionGateReason reason;
 

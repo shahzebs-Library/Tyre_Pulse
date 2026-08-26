@@ -28,10 +28,10 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dar
 import 'package:uuid/uuid.dart';
 
 final NotifierProvider<InspectionWizardController, InspectionWizardState>
-inspectionWizardControllerProvider =
+    inspectionWizardControllerProvider =
     NotifierProvider<InspectionWizardController, InspectionWizardState>(
-      InspectionWizardController.new,
-    );
+  InspectionWizardController.new,
+);
 
 final class InspectionWizardController extends Notifier<InspectionWizardState> {
   Timer? _headerDebounce;
@@ -112,24 +112,23 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
     String? prefillPosition,
   }) async {
     if (_userId.isEmpty) return;
-    final String draftKey =
-        (ref.read(inspectionDraftRepositoryProvider)
-                as DriftInspectionDraftRepository)
-            .draftKeyFor(userId: _userId, assetNo: assetNo);
+    final String draftKey = (ref.read(inspectionDraftRepositoryProvider)
+            as DriftInspectionDraftRepository)
+        .draftKeyFor(userId: _userId, assetNo: assetNo);
 
-    final Map<String, TyrePositionReading> existingReadings = await _draftRepo
-        .tyreReadingsWithPhotos(draftKey);
-    final InspectionDraftSignature? existingSignature = await _draftRepo
-        .signature(draftKey);
+    final Map<String, TyrePositionReading> existingReadings =
+        await _draftRepo.tyreReadingsWithPhotos(draftKey);
+    final InspectionDraftSignature? existingSignature =
+        await _draftRepo.signature(draftKey);
 
     final String resolvedType = vehicleType ?? state.selectedVehicleType;
     final List<String> positions = diagramPositions(resolvedType, assetNo);
 
     final Map<String, TyrePositionReading> seeded =
         <String, TyrePositionReading>{
-          for (final String p in positions)
-            p: existingReadings[p] ?? TyrePositionReading.seed(p),
-        };
+      for (final String p in positions)
+        p: existingReadings[p] ?? TyrePositionReading.seed(p),
+    };
 
     String? seededActivePosition;
     if (prefillSerial != null && prefillSerial.trim().isNotEmpty) {
@@ -246,9 +245,8 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       site: state.selectedSite,
       odometerKm: int.tryParse(state.odometerText.trim()),
       engineHours: double.tryParse(state.hourMeterText.trim()),
-      findings: state.headerNotes.trim().isEmpty
-          ? null
-          : state.headerNotes.trim(),
+      findings:
+          state.headerNotes.trim().isEmpty ? null : state.headerNotes.trim(),
     );
   }
 
@@ -430,8 +428,7 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
     unawaited(_loadUnfinishedDrafts());
   }
 
-  static String _isoDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
+  static String _isoDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 }

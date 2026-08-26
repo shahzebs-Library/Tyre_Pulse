@@ -173,12 +173,11 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
   }
 
   List<WorkOrderItem> get _shown => switch (_filter) {
-    _WorkOrdersFilter.all => _items,
-    _WorkOrdersFilter.active =>
-      _items
-          .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
-          .toList(growable: false),
-  };
+        _WorkOrdersFilter.all => _items,
+        _WorkOrdersFilter.active => _items
+            .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
+            .toList(growable: false),
+      };
 
   int get _activeCount => _items
       .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
@@ -354,7 +353,9 @@ class _WorkOrderRow extends StatelessWidget {
                       const SizedBox(width: TpSpace.sm),
                       TpIdentifierText(
                         item.workOrderNo!,
-                        style: Theme.of(context).textTheme.labelSmall
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelSmall
                             ?.copyWith(color: palette.textMuted),
                       ),
                     ],
@@ -364,7 +365,9 @@ class _WorkOrderRow extends StatelessWidget {
                 Text(
                   metaParts.join(' · '),
                   textAlign: textAlign,
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: palette.textSecondary),
                 ),
                 if (item.description != null &&
@@ -376,7 +379,9 @@ class _WorkOrderRow extends StatelessWidget {
                       textAlign: textAlign,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
                           ?.copyWith(color: palette.textMuted),
                     ),
                   ),
@@ -453,7 +458,9 @@ class _AdvanceButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
                     ?.copyWith(color: palette.primaryDark),
               ),
             ],

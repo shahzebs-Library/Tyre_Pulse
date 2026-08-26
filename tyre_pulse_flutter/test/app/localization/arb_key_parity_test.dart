@@ -341,14 +341,16 @@ void main() {
     test('nothing is missing from app_ar.arb', () {
       final List<String> missing = _translatableKeys(
         en,
-      ).difference(_translatableKeys(ar)).toList()..sort();
+      ).difference(_translatableKeys(ar)).toList()
+        ..sort();
       expect(missing, isEmpty, reason: 'app_ar.arb is missing: $missing');
     });
 
     test('nothing is missing from app_ur.arb', () {
       final List<String> missing = _translatableKeys(
         en,
-      ).difference(_translatableKeys(ur)).toList()..sort();
+      ).difference(_translatableKeys(ur)).toList()
+        ..sort();
       expect(missing, isEmpty, reason: 'app_ur.arb is missing: $missing');
     });
   });
@@ -361,7 +363,8 @@ void main() {
     test('app_ar.arb has no extra keys', () {
       final List<String> extra = _translatableKeys(
         ar,
-      ).difference(_translatableKeys(en)).toList()..sort();
+      ).difference(_translatableKeys(en)).toList()
+        ..sort();
       expect(
         extra,
         isEmpty,
@@ -372,7 +375,8 @@ void main() {
     test('app_ur.arb has no extra keys', () {
       final List<String> extra = _translatableKeys(
         ur,
-      ).difference(_translatableKeys(en)).toList()..sort();
+      ).difference(_translatableKeys(en)).toList()
+        ..sort();
       expect(
         extra,
         isEmpty,

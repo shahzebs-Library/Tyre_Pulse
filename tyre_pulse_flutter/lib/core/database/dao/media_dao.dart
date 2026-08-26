@@ -66,25 +66,25 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
     int limit = uploadConcurrency,
   }) async {
     return transaction(() async {
-      final due =
-          await (select(pendingMediaUploads)
-                ..where(
-                  (t) =>
-                      t.state.equals(MediaUploadState.queued) &
-                      t.attempts.isSmallerThanValue(maxUploadAttempts),
-                )
-                ..orderBy([
-                  (t) => OrderingTerm.asc(t.capturedAt),
-                  (t) => OrderingTerm.asc(t.id),
-                ])
-                ..limit(limit))
-              .get();
+      final due = await (select(pendingMediaUploads)
+            ..where(
+              (t) =>
+                  t.state.equals(MediaUploadState.queued) &
+                  t.attempts.isSmallerThanValue(maxUploadAttempts),
+            )
+            ..orderBy([
+              (t) => OrderingTerm.asc(t.capturedAt),
+              (t) => OrderingTerm.asc(t.id),
+            ])
+            ..limit(limit))
+          .get();
 
       final claimed = <PendingMediaUpload>[];
       for (final PendingMediaUpload row in due) {
         await (update(
           pendingMediaUploads,
-        )..where((t) => t.id.equals(row.id))).write(
+        )..where((t) => t.id.equals(row.id)))
+            .write(
           const PendingMediaUploadsCompanion(
             state: Value<String>(MediaUploadState.uploading),
           ),
@@ -127,16 +127,17 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
   /// The owning command reached `synced` carrying these references. Only now is
   /// the local file safe to remove.
   Future<int> markCommandMediaVerified(String commandId) {
-    return (update(pendingMediaUploads)..where(
-          (t) =>
-              t.commandId.equals(commandId) &
-              t.state.equals(MediaUploadState.uploaded),
-        ))
+    return (update(pendingMediaUploads)
+          ..where(
+            (t) =>
+                t.commandId.equals(commandId) &
+                t.state.equals(MediaUploadState.uploaded),
+          ))
         .write(
-          const PendingMediaUploadsCompanion(
-            state: Value<String>(MediaUploadState.verified),
-          ),
-        );
+      const PendingMediaUploadsCompanion(
+        state: Value<String>(MediaUploadState.verified),
+      ),
+    );
   }
 
   /// Records a failed upload attempt.
@@ -148,11 +149,10 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
     required String messageSafe,
   }) async {
     return transaction(() async {
-      final PendingMediaUpload current =
-          await (select(pendingMediaUploads)
-                ..where((t) => t.id.equals(id))
-                ..limit(1))
-              .getSingle();
+      final PendingMediaUpload current = await (select(pendingMediaUploads)
+            ..where((t) => t.id.equals(id))
+            ..limit(1))
+          .getSingle();
       final int attempts = current.attempts + 1;
       final bool exhausted = attempts >= maxUploadAttempts;
 
@@ -179,16 +179,15 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
   /// React Native loop throws "photos pending upload, will retry" rather than
   /// inserting a record whose photographs are unreachable.
   Future<bool> commandMediaReady(String commandId) async {
-    final outstanding =
-        await (select(pendingMediaUploads)
-              ..where(
-                (t) =>
-                    t.commandId.equals(commandId) &
-                    t.state.equals(MediaUploadState.uploaded).not() &
-                    t.state.equals(MediaUploadState.verified).not(),
-              )
-              ..limit(1))
-            .get();
+    final outstanding = await (select(pendingMediaUploads)
+          ..where(
+            (t) =>
+                t.commandId.equals(commandId) &
+                t.state.equals(MediaUploadState.uploaded).not() &
+                t.state.equals(MediaUploadState.verified).not(),
+          )
+          ..limit(1))
+        .get();
     return outstanding.isEmpty;
   }
 
@@ -316,12 +315,13 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
 
     final String signatureId = id ?? _uuid.v4();
     return transaction(() async {
-      await (delete(capturedSignatures)..where(
-            (t) =>
-                t.ownerKind.equals(ownerKind) &
-                t.ownerKey.equals(ownerKey) &
-                t.fieldKey.equals(fieldKey),
-          ))
+      await (delete(capturedSignatures)
+            ..where(
+              (t) =>
+                  t.ownerKind.equals(ownerKind) &
+                  t.ownerKey.equals(ownerKey) &
+                  t.fieldKey.equals(fieldKey),
+            ))
           .go();
 
       await into(capturedSignatures).insert(
@@ -371,14 +371,12 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
     required String ownerKind,
     required String ownerKey,
   }) async {
-    final rows =
-        await (select(capturedSignatures)
-              ..where(
-                (t) =>
-                    t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
-              )
-              ..limit(1))
-            .get();
+    final rows = await (select(capturedSignatures)
+          ..where(
+            (t) => t.ownerKind.equals(ownerKind) & t.ownerKey.equals(ownerKey),
+          )
+          ..limit(1))
+        .get();
     return rows.isNotEmpty;
   }
 
@@ -414,18 +412,19 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
           : candidates.length;
       final List<String> chunk = candidates.sublist(start, end);
 
-      final queued =
-          await (select(pendingMediaUploads)..where(
-                (t) =>
-                    t.fileName.isIn(chunk) &
-                    t.state.equals(MediaUploadState.verified).not(),
-              ))
-              .get();
+      final queued = await (select(pendingMediaUploads)
+            ..where(
+              (t) =>
+                  t.fileName.isIn(chunk) &
+                  t.state.equals(MediaUploadState.verified).not(),
+            ))
+          .get();
       referenced.addAll(queued.map((PendingMediaUpload row) => row.fileName));
 
       final drafted = await (select(
         draftPhotos,
-      )..where((t) => t.fileName.isIn(chunk))).get();
+      )..where((t) => t.fileName.isIn(chunk)))
+          .get();
       referenced.addAll(drafted.map((DraftPhoto row) => row.fileName));
     }
     return referenced;

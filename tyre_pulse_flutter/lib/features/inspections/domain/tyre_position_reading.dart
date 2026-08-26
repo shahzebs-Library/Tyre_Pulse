@@ -164,18 +164,15 @@ class TyrePositionReading {
   }) {
     return TyrePositionReading(
       position: position,
-      serialNumber: clearSerialNumber
-          ? null
-          : (serialNumber ?? this.serialNumber),
+      serialNumber:
+          clearSerialNumber ? null : (serialNumber ?? this.serialNumber),
       pressurePsi: clearPressurePsi ? null : (pressurePsi ?? this.pressurePsi),
-      treadDepthMm: clearTreadDepthMm
-          ? null
-          : (treadDepthMm ?? this.treadDepthMm),
+      treadDepthMm:
+          clearTreadDepthMm ? null : (treadDepthMm ?? this.treadDepthMm),
       condition: condition ?? this.condition,
       checked: checked ?? this.checked,
-      photoLocalPath: clearPhotoLocalPath
-          ? null
-          : (photoLocalPath ?? this.photoLocalPath),
+      photoLocalPath:
+          clearPhotoLocalPath ? null : (photoLocalPath ?? this.photoLocalPath),
       photoUrl: clearPhotoUrl ? null : (photoUrl ?? this.photoUrl),
       notes: clearNotes ? null : (notes ?? this.notes),
     );
@@ -253,14 +250,14 @@ class TyrePositionReading {
 
   @override
   int get hashCode => Object.hash(
-    position,
-    serialNumber,
-    pressurePsi,
-    treadDepthMm,
-    condition,
-    checked,
-    photoLocalPath,
-    photoUrl,
-    notes,
-  );
+        position,
+        serialNumber,
+        pressurePsi,
+        treadDepthMm,
+        condition,
+        checked,
+        photoLocalPath,
+        photoUrl,
+        notes,
+      );
 }

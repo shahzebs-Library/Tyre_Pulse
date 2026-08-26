@@ -12,8 +12,8 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 DiagramLayout get _triMixer => kTyreDiagramLayouts['Tri-mixer']!;
 
 List<String> _allIds(DiagramLayout layout) => <String>[
-  for (final TyreSlot t in layout.tyres) t.id,
-];
+      for (final TyreSlot t in layout.tyres) t.id,
+    ];
 
 void main() {
   test('case 53: an empty list returns the whole layout, positionId == id', () {
@@ -37,7 +37,8 @@ void main() {
     expect(result.single.positionId, 'r1lo');
   });
 
-  test("case 55: positionId preserves the CALLER's spelling while geometry "
+  test(
+      "case 55: positionId preserves the CALLER's spelling while geometry "
       'comes from the structurally-matched slot', () {
     // The artifact's own literal input for this case is 'LHCO' (a V2
     // canonical code). Verified by executing parsePositionStruct's exact
@@ -74,7 +75,8 @@ void main() {
     expect(result.single.h, expectedSlot.h);
   });
 
-  test('case 56: V3 ids map onto V1 slots on the first drive axle, roles '
+  test(
+      'case 56: V3 ids map onto V1 slots on the first drive axle, roles '
       'mirrored', () {
     final List<MatchedTyreSlot> result = matchPositionsToLayout(
       _triMixer,
@@ -107,7 +109,8 @@ void main() {
     expect(result.length, 12);
   });
 
-  test('case 59: a fully foreign vocabulary returns the whole layout rather '
+  test(
+      'case 59: a fully foreign vocabulary returns the whole layout rather '
       'than a blank diagram', () {
     final List<MatchedTyreSlot> result = matchPositionsToLayout(
       _triMixer,

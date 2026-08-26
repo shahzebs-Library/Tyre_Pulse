@@ -36,7 +36,8 @@ void main() {
       expect(escapeLikeLiteral('TM_514'), r'TM\_514');
     });
 
-    test('escapes both wildcards, in place, without disturbing anything '
+    test(
+        'escapes both wildcards, in place, without disturbing anything '
         'else', () {
       expect(escapeLikeLiteral('A%B_C'), r'A\%B\_C');
     });
@@ -51,7 +52,8 @@ void main() {
   });
 
   group('resolveScanLookup - empty code', () {
-    test('a payload that extracts to nothing returns ScanNoMatch without '
+    test(
+        'a payload that extracts to nothing returns ScanNoMatch without '
         'calling the source at all', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource();
 
@@ -78,7 +80,8 @@ void main() {
       },
     );
 
-    test('a case-insensitive asset_no match is tried only after an exact '
+    test(
+        'a case-insensitive asset_no match is tried only after an exact '
         'miss, and also short-circuits', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..assetByNumberIgnoringCase['tm514'] = _asset;
@@ -89,7 +92,8 @@ void main() {
       expect(fake.calls, <String>['exact:tm514', 'numberIgnoringCase:tm514']);
     });
 
-    test('a fleet_number match is tried only after both asset_no steps '
+    test(
+        'a fleet_number match is tried only after both asset_no steps '
         'miss, and the tyre step is never reached', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..assetByFleetNumberIgnoringCase['F900'] = _asset;
@@ -105,7 +109,8 @@ void main() {
     });
   });
 
-  group('resolveScanLookup - tyre is tried only once every asset step '
+  group(
+      'resolveScanLookup - tyre is tried only once every asset step '
       'misses', () {
     test(
       'a tyre match is returned only after all three asset steps miss',
@@ -129,7 +134,8 @@ void main() {
       },
     );
 
-    test('when nothing matches at all, every step ran once and the result '
+    test(
+        'when nothing matches at all, every step ran once and the result '
         'is ScanNoMatch carrying the extracted code', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource();
 
@@ -151,7 +157,8 @@ void main() {
   });
 
   group('resolveScanLookup - the reported code', () {
-    test('an asset match reports the CANONICAL asset_no, not the scanned '
+    test(
+        'an asset match reports the CANONICAL asset_no, not the scanned '
         'code, when they differ', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..assetByNumberIgnoringCase['tm514'] = _asset;
@@ -162,7 +169,8 @@ void main() {
       expect(result.rawInput, 'tm514');
     });
 
-    test('extraction runs before the source is asked anything, so a JSON '
+    test(
+        'extraction runs before the source is asked anything, so a JSON '
         'payload reaches the fake already unwrapped', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..exactAssetByCode['TM99'] = const AssetLookupRecord(
@@ -182,7 +190,8 @@ void main() {
   });
 
   group('resolveScanLookup - never throws', () {
-    test('a plain exception from the source becomes ScanLookupFailed, not '
+    test(
+        'a plain exception from the source becomes ScanLookupFailed, not '
         'a thrown exception', () async {
       final FakeScanLookupSource fake = FakeScanLookupSource()
         ..errorToThrow = Exception('offline');
@@ -196,7 +205,8 @@ void main() {
       expect(failed.code, 'TM514');
     });
 
-    test('an AppError thrown by the source is preserved as-is, not '
+    test(
+        'an AppError thrown by the source is preserved as-is, not '
         're-wrapped into a generic one', () async {
       const AppError original = AppError.authorization(
         message: 'You do not have permission to do this.',

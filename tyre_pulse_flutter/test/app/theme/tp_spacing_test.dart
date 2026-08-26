@@ -43,8 +43,7 @@ void main() {
         expect(
           _kTpSpaceScale[i],
           greaterThan(_kTpSpaceScale[i - 1]),
-          reason:
-              'step $i (${_kTpSpaceScale[i]}) must be larger than step '
+          reason: 'step $i (${_kTpSpaceScale[i]}) must be larger than step '
               '${i - 1} (${_kTpSpaceScale[i - 1]})',
         );
       }
@@ -73,7 +72,8 @@ void main() {
       expect(TpRadius.xl, lessThan(TpRadius.pill));
     });
 
-    test('pill is large enough to round any control this app draws into a '
+    test(
+        'pill is large enough to round any control this app draws into a '
         'capsule', () {
       // A pill radius that were smaller than half the tallest standard
       // control would leave straight edges on the short sides instead of
@@ -113,7 +113,8 @@ void main() {
       );
     });
 
-    test('the compact control used inside dense rows is smaller than the '
+    test(
+        'the compact control used inside dense rows is smaller than the '
         'standard one', () {
       expect(TpSizing.controlHeightCompact, lessThan(TpSizing.controlHeight));
     });

@@ -45,9 +45,22 @@ dependencies:
   uuid: ^4.6.0
   intl: ^0.20.2
 
-  # Packages for later phases (camera, image compression, barcode scanner, SVG,
-  # signature capture, PDF, sharing, runtime permissions) are added at the phase
-  # that needs them. Spec section 64: do not add a package to shorten five lines.
+  # --- Inspections (Phase 5): photo capture, GPS and signature capture.
+  # image_picker resizes/compresses on the way out (maxWidth/maxHeight/
+  # imageQuality), which is what keeps a 13-position vehicle's photo set off
+  # the out-of-memory path this codebase has already named as a documented
+  # production defect class - see `inspection_photo_capture.dart`. geolocator
+  # owns its own runtime permission prompt, so no separate permission_handler
+  # dependency is needed for the one permission this phase asks for.
+  # signature is a real drawing surface exporting both a PNG and raw stroke
+  # points - see `inspection_signature_pad.dart` for why both are kept.
+  image_picker: ^1.1.2
+  geolocator: ^13.0.1
+  signature: ^5.5.0
+
+  # Packages for later phases (barcode scanner, SVG, PDF, sharing) are added
+  # at the phase that needs them. Spec section 64: do not add a package to
+  # shorten five lines.
 
 dev_dependencies:
   flutter_test:

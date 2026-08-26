@@ -1,0 +1,16 @@
+include: ../analysis_options.yaml
+
+# Test-only relaxations. Everything else from the root options still applies.
+linter:
+  rules:
+    # A test helper lives in test/, and `package:tyre_pulse/...` resolves only
+    # into lib/. So a test importing a sibling helper has no package: form
+    # available - a relative import is the only thing that can work.
+    #
+    # Enforcing the rule here would make the requirement unsatisfiable, which
+    # is worse than not enforcing it: an engineer would either delete a shared
+    # helper and duplicate its setup into every test file, or move test-only
+    # scaffolding into lib/ where it would ship inside the app.
+    #
+    # The rule stays ON for lib/, which is where it protects something real.
+    always_use_package_imports: false

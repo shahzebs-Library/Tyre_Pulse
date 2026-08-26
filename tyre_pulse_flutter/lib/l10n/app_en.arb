@@ -1,0 +1,711 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "Tyre Pulse",
+  "@appTitle": {
+    "description": "Application name. Shown in the task switcher."
+  },
+
+  "actionBack": "Back",
+  "@actionBack": {
+    "description": "Leaves the current screen and returns to where the user came from."
+  },
+  "actionRetry": "Try again",
+  "@actionRetry": {
+    "description": "Repeats the operation that just failed."
+  },
+  "actionClose": "Close",
+  "@actionClose": {},
+  "actionCancel": "Cancel",
+  "@actionCancel": {},
+  "actionSignIn": "Sign in",
+  "@actionSignIn": {},
+  "actionSignOut": "Sign out",
+  "@actionSignOut": {},
+  "actionOpenStore": "Open the store",
+  "@actionOpenStore": {
+    "description": "Opens the app store listing so the user can install a newer build."
+  },
+  "actionClear": "Clear",
+  "@actionClear": {
+    "description": "Clears the text typed into a search field."
+  },
+
+  "valueUnavailable": "Unavailable",
+  "@valueUnavailable": {
+    "description": "Shown where a number would be, when the number was never measured. Spec section 32: never show 0 for something that was not measured."
+  },
+  "valueNotMeasured": "-",
+  "@valueNotMeasured": {
+    "description": "The placeholder that stands in for an unmeasured value. A hyphen, not a zero."
+  },
+
+  "stateLoading": "Loading",
+  "@stateLoading": {
+    "description": "The only state that is allowed to show a spinner."
+  },
+  "stateEmptyTitle": "Nothing here yet",
+  "@stateEmptyTitle": {},
+  "stateEmptyMessage": "When there is something to show, it will appear here.",
+  "@stateEmptyMessage": {},
+  "stateErrorTitle": "Something went wrong",
+  "@stateErrorTitle": {},
+  "stateErrorMessage": "The last action did not finish. Nothing was changed.",
+  "@stateErrorMessage": {},
+  "stateOfflineCachedTitle": "Showing saved data",
+  "@stateOfflineCachedTitle": {},
+  "stateOfflineCachedMessage": "You are offline. This is the copy saved on this device, so it may be out of date.",
+  "@stateOfflineCachedMessage": {},
+  "stateOfflineCachedAt": "Saved {timestamp}",
+  "@stateOfflineCachedAt": {
+    "description": "When the cached copy was taken.",
+    "placeholders": {
+      "timestamp": {
+        "type": "String",
+        "example": "12 Aug, 14:05"
+      }
+    }
+  },
+  "stateBackendUnavailableTitle": "The server is not responding",
+  "@stateBackendUnavailableTitle": {},
+  "stateBackendUnavailableMessage": "Your work is safe on this device. It will be sent when the connection comes back.",
+  "@stateBackendUnavailableMessage": {},
+  "stateNotConfiguredTitle": "Not set up",
+  "@stateNotConfiguredTitle": {},
+  "stateNotConfiguredMessage": "This part of the app has not been set up for your organisation. Your administrator can turn it on.",
+  "@stateNotConfiguredMessage": {},
+  "stateScreenNotAvailableTitle": "This screen is not built yet",
+  "@stateScreenNotAvailableTitle": {},
+  "stateScreenNotAvailableMessage": "The navigation to it works, but the screen itself has not been written. This is a build in progress, not a fault with your account.",
+  "@stateScreenNotAvailableMessage": {},
+
+  "deniedTitle": "No access to this screen",
+  "@deniedTitle": {
+    "description": "A refusal, never a spinner. The production test deniedIsNotASpinner exists because this was got wrong once."
+  },
+  "deniedNotGranted": "You do not have access to this module. Contact your administrator.",
+  "@deniedNotGranted": {},
+  "deniedAdminOnly": "This screen is for administrators only.",
+  "@deniedAdminOnly": {},
+  "deniedSuperAdminOnly": "This screen is for the platform owner only.",
+  "@deniedSuperAdminOnly": {},
+  "deniedPermissionsUnavailable": "Your permissions could not be read, so this screen is closed until they can be. Everything else still works.",
+  "@deniedPermissionsUnavailable": {
+    "description": "Ported from the production rule: sensitive modules fail closed when the permission lookup fails, everything else fails open."
+  },
+
+  "offlineTitle": "Offline",
+  "@offlineTitle": {},
+  "offlineMessage": "You can keep working. Everything is saved on this device.",
+  "@offlineMessage": {},
+  "syncPendingChanges": "{count, plural, =0{No changes waiting} =1{1 change waiting to sync} other{{count} changes waiting to sync}}",
+  "@syncPendingChanges": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncInProgress": "Syncing {completed} of {total}",
+  "@syncInProgress": {
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "syncAllSynced": "All changes synced",
+  "@syncAllSynced": {},
+  "syncNeedsAttention": "{count, plural, =0{Nothing needs attention} =1{1 item needs attention} other{{count} items need attention}}",
+  "@syncNeedsAttention": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncStatusUnknown": "Connection status unknown",
+  "@syncStatusUnknown": {
+    "description": "We could not read connectivity. Different from being offline, and said differently."
+  },
+
+  "sessionRestoringTitle": "Opening Tyre Pulse",
+  "@sessionRestoringTitle": {},
+  "sessionTimedOutTitle": "This is taking longer than usual",
+  "@sessionTimedOutTitle": {
+    "description": "The stored session could not be read in time. Recoverable, and must never be left as a spinner - low end handsets stall on the keystore read."
+  },
+  "sessionTimedOutMessage": "We could not open your saved sign in. You can try again, or sign in from the start.",
+  "@sessionTimedOutMessage": {},
+
+  "updateRequiredTitle": "Update required",
+  "@updateRequiredTitle": {},
+  "updateRequiredMessage": "This version of Tyre Pulse is too old to keep using. Install the update to carry on.",
+  "@updateRequiredMessage": {},
+
+  "profileUnavailableTitle": "We could not load your profile",
+  "@profileUnavailableTitle": {},
+  "profileUnavailableMessage": "Your account details did not load, so the app cannot tell what you are allowed to do. Try again, or sign out and back in.",
+  "@profileUnavailableMessage": {},
+
+  "accessBlockedTitle": "Your account is not active",
+  "@accessBlockedTitle": {},
+  "accessBlockedMessage": "Your account is waiting for approval or has been locked. Your administrator can put this right.",
+  "@accessBlockedMessage": {},
+
+  "routeNotFoundTitle": "That screen does not exist",
+  "@routeNotFoundTitle": {},
+  "routeNotFoundMessage": "The link you followed does not point anywhere in this app.",
+  "@routeNotFoundMessage": {},
+
+  "tabHome": "Home",
+  "@tabHome": {},
+  "tabInspect": "Inspect",
+  "@tabInspect": {},
+  "tabAccidents": "Accidents",
+  "@tabAccidents": {},
+  "tabMeter": "Meter",
+  "@tabMeter": {},
+  "tabWashing": "Washing",
+  "@tabWashing": {},
+  "tabProfile": "Profile",
+  "@tabProfile": {},
+  "tabHistory": "History",
+  "@tabHistory": {},
+  "tabChecklists": "Checklists",
+  "@tabChecklists": {},
+  "tabApprovals": "Approvals",
+  "@tabApprovals": {},
+
+  "searchHint": "Search",
+  "@searchHint": {},
+  "dropdownHint": "Select",
+  "@dropdownHint": {},
+  "fieldRequired": "Required",
+  "@fieldRequired": {},
+
+  "statusOk": "OK",
+  "@statusOk": {},
+  "statusWarning": "Attention",
+  "@statusWarning": {},
+  "statusCritical": "Critical",
+  "@statusCritical": {},
+  "statusInfo": "Info",
+  "@statusInfo": {},
+  "statusNeutral": "Neutral",
+  "@statusNeutral": {},
+  "statusUnknown": "Not measured",
+  "@statusUnknown": {
+    "description": "Deliberately not the word Unknown on its own. It says that nobody took the reading, which is different from a reading that came back neutral."
+  },
+
+  "vehiclesTitle": "Vehicles",
+  "@vehiclesTitle": {},
+  "vehiclesCount": "{count, plural, =0{No vehicles in fleet} =1{1 vehicle in fleet} other{{count} vehicles in fleet}}",
+  "@vehiclesCount": {
+    "description": "The fleet register's row count caption.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vehiclesSearchHint": "Search asset, make, type or site",
+  "@vehiclesSearchHint": {},
+  "vehiclesTyreAssetsFilter": "Tyre assets",
+  "@vehiclesTyreAssetsFilter": {
+    "description": "The default class-filter chip: equipment classes that carry tyres."
+  },
+  "vehiclesAllFilter": "All",
+  "@vehiclesAllFilter": {
+    "description": "Widens the class filter to every equipment class."
+  },
+  "vehiclesEmptyTitle": "No vehicles found",
+  "@vehiclesEmptyTitle": {},
+  "vehiclesEmptySearchMessage": "Try a different search term.",
+  "@vehiclesEmptySearchMessage": {},
+  "vehiclesDetailSubtitle": "Vehicle details",
+  "@vehiclesDetailSubtitle": {},
+  "vehiclesUnknownAsset": "Unknown vehicle",
+  "@vehiclesUnknownAsset": {
+    "description": "Shown for a row carrying neither an asset number nor a fleet number."
+  },
+  "vehiclesFieldFleetNo": "Fleet number",
+  "@vehiclesFieldFleetNo": {},
+  "vehiclesFieldType": "Type",
+  "@vehiclesFieldType": {},
+  "vehiclesFieldMakeModel": "Make and model",
+  "@vehiclesFieldMakeModel": {},
+  "vehiclesFieldYear": "Year",
+  "@vehiclesFieldYear": {},
+  "vehiclesFieldCurrentKm": "Current odometer",
+  "@vehiclesFieldCurrentKm": {},
+  "vehiclesFieldOperator": "Operator",
+  "@vehiclesFieldOperator": {},
+  "vehiclesFieldDepartment": "Department",
+  "@vehiclesFieldDepartment": {},
+  "vehiclesFieldSite": "Site",
+  "@vehiclesFieldSite": {},
+  "vehiclesFieldRegion": "Region",
+  "@vehiclesFieldRegion": {},
+  "vehiclesFieldCountry": "Country",
+  "@vehiclesFieldCountry": {},
+  "vehiclesFieldTyreSize": "Tyre size",
+  "@vehiclesFieldTyreSize": {},
+  "vehiclesFieldRegistration": "Registration",
+  "@vehiclesFieldRegistration": {},
+  "vehiclesStartInspection": "Start inspection",
+  "@vehiclesStartInspection": {},
+  "vehiclesNotFoundTitle": "Vehicle not found",
+  "@vehiclesNotFoundTitle": {},
+  "vehiclesNotFoundMessage": "This vehicle could not be found in the fleet register. It may have been removed or reassigned to another country.",
+  "@vehiclesNotFoundMessage": {},
+  "vehiclesTruncatedNotice": "Showing part of the fleet. Narrow your search to find a specific vehicle.",
+  "@vehiclesTruncatedNotice": {
+    "description": "Shown when the paged read hit its row cap, so the list may not be the whole fleet. Must never be silently dropped."
+  },
+
+  "serialSearchTitle": "Serial Number Search",
+  "@serialSearchTitle": {},
+  "serialSearchSubtitle": "Find a tyre by its serial number",
+  "@serialSearchSubtitle": {},
+  "serialSearchLabel": "Tyre serial number",
+  "@serialSearchLabel": {},
+  "serialSearchPlaceholder": "Type or paste a serial number",
+  "@serialSearchPlaceholder": {},
+  "serialSearchHelp": "Scanned labels, links and QR text are unwrapped automatically.",
+  "@serialSearchHelp": {},
+  "serialSearchSearching": "Searching for tyre...",
+  "@serialSearchSearching": {},
+  "serialSearchFound": "Tyre found",
+  "@serialSearchFound": {},
+  "serialSearchBrand": "Brand",
+  "@serialSearchBrand": {},
+  "serialSearchSize": "Size",
+  "@serialSearchSize": {},
+  "serialSearchPosition": "Position",
+  "@serialSearchPosition": {},
+  "serialSearchAsset": "Asset",
+  "@serialSearchAsset": {},
+  "serialSearchSite": "Site",
+  "@serialSearchSite": {},
+  "serialSearchLastReading": "Last reading",
+  "@serialSearchLastReading": {},
+  "serialSearchInspectThis": "Inspect this tyre",
+  "@serialSearchInspectThis": {},
+  "serialSearchNoAssetNote": "This tyre is not fitted to an asset, so an inspection cannot be started from here.",
+  "@serialSearchNoAssetNote": {},
+  "serialSearchEmptyTitle": "No tyre found for that serial",
+  "@serialSearchEmptyTitle": {},
+  "serialSearchEmptyMessage": "Check the serial number and try again. It may belong to another site, or it may not be recorded yet.",
+  "@serialSearchEmptyMessage": {},
+  "serialSearchIdleTitle": "Search a tyre serial number",
+  "@serialSearchIdleTitle": {},
+  "serialSearchIdleMessage": "Enter a serial number above to see the tyre's brand, size, fitted position and last reading.",
+  "@serialSearchIdleMessage": {},
+  "serialSearchScrappedBadge": "Scrapped",
+  "@serialSearchScrappedBadge": {},
+  "serialSearchScrapReasonLabel": "Reason",
+  "@serialSearchScrapReasonLabel": {},
+  "serialSearchScrapReasonPlaceholder": "Why is this tyre being scrapped?",
+  "@serialSearchScrapReasonPlaceholder": {},
+  "serialSearchMarkScrap": "Mark as scrap",
+  "@serialSearchMarkScrap": {
+    "description": "Opens the scrap confirmation sheet. Does not itself scrap anything - see serialSearchConfirmScrap."
+  },
+  "serialSearchUndoScrap": "Undo scrap",
+  "@serialSearchUndoScrap": {},
+  "serialSearchScrapModalTitle": "Scrap this tyre",
+  "@serialSearchScrapModalTitle": {},
+  "serialSearchConfirmScrap": "Confirm scrap",
+  "@serialSearchConfirmScrap": {
+    "description": "The explicit confirmation step inside the scrap sheet. This is the button that actually performs the scrap."
+  },
+  "serialSearchUndoConfirmTitle": "Undo this scrap?",
+  "@serialSearchUndoConfirmTitle": {},
+  "serialSearchUndoConfirmMessage": "This tyre will be marked active again.",
+  "@serialSearchUndoConfirmMessage": {},
+
+  "scannerTitle": "Scan",
+  "@scannerTitle": {
+    "description": "The scanner screen's app bar title."
+  },
+  "scannerCameraUnavailableTitle": "Camera scanning is not available in this build",
+  "@scannerCameraUnavailableTitle": {
+    "description": "Shown in place of a live camera preview when this build has no scanning package."
+  },
+  "scannerCameraUnavailableMessage": "Type or paste the code from the label instead. Everything below works the same as a scan.",
+  "@scannerCameraUnavailableMessage": {
+    "description": "Explains that manual entry is the real, working path today."
+  },
+  "scannerCameraPermissionDeniedReason": "Camera access was declined. Type or paste the code from the label instead.",
+  "@scannerCameraPermissionDeniedReason": {
+    "description": "The reason shown by TpPermissionDeniedState once a real camera package can report a declined permission."
+  },
+  "scannerManualEntryLabel": "Enter a code",
+  "@scannerManualEntryLabel": {
+    "description": "Heading above the manual code entry field."
+  },
+  "scannerCodeFieldLabel": "Asset or tyre code",
+  "@scannerCodeFieldLabel": {},
+  "scannerCodeFieldHint": "e.g. TM514 or a tyre serial",
+  "@scannerCodeFieldHint": {},
+  "scannerLookUpAction": "Look up",
+  "@scannerLookUpAction": {
+    "description": "Submits the manually entered code for resolution."
+  },
+  "scannerNoMatchTitle": "No match for that code",
+  "@scannerNoMatchTitle": {},
+  "scannerNoMatchMessage": "Check the code and try again, or open Serial Search to look further.",
+  "@scannerNoMatchMessage": {},
+  "scannerOpenSerialSearchAction": "Open Serial Search",
+  "@scannerOpenSerialSearchAction": {
+    "description": "The manual-entry fallback destination for a miss, a failure, or an unresolved code."
+  },
+  "scannerScanAnotherAction": "Look up another",
+  "@scannerScanAnotherAction": {
+    "description": "Returns the scanner to its idle state after a match was shown."
+  },
+  "scannerViewAssetAction": "View asset",
+  "@scannerViewAssetAction": {},
+  "scannerStartInspectionAction": "Start inspection",
+  "@scannerStartInspectionAction": {},
+  "scannerViewTyreAction": "View tyre",
+  "@scannerViewTyreAction": {},
+
+  "recordsTitle": "Tyre Records",
+  "@recordsTitle": {
+    "description": "Title of the admin-only tyre records register."
+  },
+  "recordsShownCount": "{count, plural, =0{No tyre records} =1{1 tyre record shown} other{{count} tyre records shown}}",
+  "@recordsShownCount": {
+    "description": "How many rows are currently loaded in the register. Deliberately a loaded count, not a total: the app never requests an exact row count from the server, so it must not imply one.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recordsSearchHint": "Search asset, serial or brand",
+  "@recordsSearchHint": {},
+  "recordsEmptyTitle": "No records found",
+  "@recordsEmptyTitle": {},
+  "recordsEmptyMessage": "Try a different search or clear your filters.",
+  "@recordsEmptyMessage": {},
+  "recordsLoadMoreError": "Could not load more records.",
+  "@recordsLoadMoreError": {
+    "description": "Shown in the list footer when a page AFTER the first fails. Distinct from the full-screen error state, which only covers the first page."
+  },
+  "recordsEndOfList": "You have reached the end of the list.",
+  "@recordsEndOfList": {
+    "description": "Shown in the list footer once no further page remains."
+  },
+  "recordsFilterTitle": "Filter records",
+  "@recordsFilterTitle": {},
+  "recordsRiskLevel": "Risk level",
+  "@recordsRiskLevel": {},
+  "recordsSite": "Site",
+  "@recordsSite": {},
+  "recordsApplyFilters": "Apply filters",
+  "@recordsApplyFilters": {},
+  "recordsClearFilters": "Clear filters",
+  "@recordsClearFilters": {},
+  "recordsActiveFilters": "{count, plural, =0{No active filters} =1{1 active filter} other{{count} active filters}}",
+  "@recordsActiveFilters": {
+    "description": "Accessibility value announced for the filter button.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "recordsSerialNo": "Serial number",
+  "@recordsSerialNo": {},
+  "recordsIssueDate": "Issue date",
+  "@recordsIssueDate": {},
+  "recordsCategory": "Category",
+  "@recordsCategory": {},
+  "recordsCostPerTyre": "Cost per tyre",
+  "@recordsCostPerTyre": {},
+  "recordsKmFitment": "Km at fitment",
+  "@recordsKmFitment": {},
+  "recordsKmRemoval": "Km at removal",
+  "@recordsKmRemoval": {},
+  "recordsTyreLife": "Tyre life (km)",
+  "@recordsTyreLife": {},
+  "recordsCountry": "Country",
+  "@recordsCountry": {},
+  "recordsDescription": "Description",
+  "@recordsDescription": {},
+  "recordsRemarks": "Remarks",
+  "@recordsRemarks": {},
+  "recordsDetailFallbackTitle": "Tyre record",
+  "@recordsDetailFallbackTitle": {
+    "description": "Detail sheet title when the record has no asset number."
+  },
+
+  "tyreDiagramFrontLabel": "FRONT",
+  "@tyreDiagramFrontLabel": {
+    "description": "Compass label above the vehicle tyre diagram."
+  },
+  "tyreDiagramTapHint": "Tap a tyre to record its condition",
+  "@tyreDiagramTapHint": {},
+  "tyreDiagramTyreCount": "{count, plural, =0{No tyres} =1{1 tyre} other{{count} tyres}}",
+  "@tyreDiagramTyreCount": {
+    "description": "Tyre count appended after the vehicle type in the diagram caption.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreDiagramPendingLeadIn": "{count, plural, =1{1 tyre still needs details} other{{count} tyres still need details}}",
+  "@tyreDiagramPendingLeadIn": {
+    "description": "Lead-in above the row of chips naming which wheels are outstanding.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tyreDiagramTyrelessMessage": "Stationary equipment, no tyres to inspect.",
+  "@tyreDiagramTyrelessMessage": {},
+  "tyreDiagramEmptyMessage": "No tyre positions to display.",
+  "@tyreDiagramEmptyMessage": {},
+  "tyreDiagramPressureDetail": "pressure {value} psi",
+  "@tyreDiagramPressureDetail": {
+    "description": "Appended to a wheel's accessibility label when a pressure reading is recorded.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "tyreConditionGood": "Good",
+  "@tyreConditionGood": {},
+  "tyreConditionWorn": "Worn",
+  "@tyreConditionWorn": {},
+  "tyreConditionDamaged": "Damaged",
+  "@tyreConditionDamaged": {},
+  "tyreConditionPuncture": "Puncture",
+  "@tyreConditionPuncture": {},
+  "tyreConditionFlat": "Flat",
+  "@tyreConditionFlat": {},
+  "tyreConditionMissing": "Missing",
+  "@tyreConditionMissing": {},
+
+  "inspectionNavTitle": "New inspection",
+  "@inspectionNavTitle": {
+    "description": "App bar title on the header step of the inspection capture wizard."
+  },
+  "inspectionStep1Label": "1",
+  "@inspectionStep1Label": {
+    "description": "Step-track label for the header step (vehicle and site)."
+  },
+  "inspectionStep2Label": "2",
+  "@inspectionStep2Label": {
+    "description": "Step-track label for the tyres step."
+  },
+  "inspectionStep3Label": "3",
+  "@inspectionStep3Label": {
+    "description": "Step-track label for the review and submit step."
+  },
+  "inspectionResumeTitle": "Continue unfinished work",
+  "@inspectionResumeTitle": {
+    "description": "Heading above the list of draft inspections that have not yet been submitted."
+  },
+  "inspectionResumeProgress": "{filled} of {total} tyres recorded",
+  "@inspectionResumeProgress": {
+    "description": "Progress line on a resumable draft row.",
+    "placeholders": {
+      "filled": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionChangeVehicleButton": "Change",
+  "@inspectionChangeVehicleButton": {
+    "description": "Lets the inspector pick a different vehicle after one has already been selected."
+  },
+  "inspectionSiteLabel": "Site",
+  "@inspectionSiteLabel": {},
+  "inspectionTypeSiteName": "Type the site name",
+  "@inspectionTypeSiteName": {
+    "description": "Hint shown when no site list could be loaded, so the site is typed by hand instead."
+  },
+  "inspectionOdometerLabel": "Odometer (km)",
+  "@inspectionOdometerLabel": {},
+  "inspectionOdometerHint": "Optional",
+  "@inspectionOdometerHint": {},
+  "inspectionHourMeterLabel": "Hour meter",
+  "@inspectionHourMeterLabel": {},
+  "inspectionHourMeterHint": "Optional",
+  "@inspectionHourMeterHint": {},
+  "inspectionNextButton": "Next: tyre positions",
+  "@inspectionNextButton": {},
+  "inspectionVehicleSearchPlaceholder": "Search by asset number or type",
+  "@inspectionVehicleSearchPlaceholder": {},
+  "inspectionSearchToBeginHint": "Start typing to search the fleet.",
+  "@inspectionSearchToBeginHint": {},
+  "inspectionVehicleNoMatch": "No vehicle matches that search.",
+  "@inspectionVehicleNoMatch": {},
+  "inspectionEnterAssetManually": "Enter an asset number manually",
+  "@inspectionEnterAssetManually": {},
+  "inspectionManualAssetLabel": "Asset number",
+  "@inspectionManualAssetLabel": {},
+  "inspectionManualUseButton": "Use this asset",
+  "@inspectionManualUseButton": {},
+
+  "inspectionTyrePositionsTitle": "Tyre positions",
+  "@inspectionTyrePositionsTitle": {},
+  "inspectionNotRecordedYet": "Not recorded yet",
+  "@inspectionNotRecordedYet": {
+    "description": "Shown on a wheel position row that has not been touched."
+  },
+  "inspectionValidationRecordTyre": "Record at least one tyre before continuing.",
+  "@inspectionValidationRecordTyre": {},
+  "inspectionTyresIncompleteLead": "{count} of {total} tyres still need details before you can continue.",
+  "@inspectionTyresIncompleteLead": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionReviewButton": "Review and sign",
+  "@inspectionReviewButton": {},
+  "inspectionGpsCaptured": "Location captured",
+  "@inspectionGpsCaptured": {},
+  "inspectionGpsCapturing": "Getting location...",
+  "@inspectionGpsCapturing": {},
+  "inspectionGpsUnavailable": "Location not available",
+  "@inspectionGpsUnavailable": {},
+  "inspectionGpsRetry": "Retry",
+  "@inspectionGpsRetry": {
+    "description": "Retries capturing the GPS fix. Never blocks the wizard when this is not pressed."
+  },
+
+  "inspectionReviewTitle": "Review",
+  "@inspectionReviewTitle": {},
+  "inspectionPositionsRecorded": "{touched} of {total} tyre positions recorded",
+  "@inspectionPositionsRecorded": {
+    "placeholders": {
+      "touched": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionObservationsLabel": "Observations",
+  "@inspectionObservationsLabel": {},
+  "inspectionObservationsPlaceholder": "Anything else worth noting about this inspection",
+  "@inspectionObservationsPlaceholder": {},
+  "inspectionInspectorSignatureLabel": "Inspector signature",
+  "@inspectionInspectorSignatureLabel": {},
+  "inspectionSubmitForApproval": "Submit for approval",
+  "@inspectionSubmitForApproval": {},
+  "inspectionSignatureRequiredMsg": "A signature is required before this inspection can be submitted.",
+  "@inspectionSignatureRequiredMsg": {},
+
+  "inspectionSubmittedForApprovalTitle": "Submitted for approval",
+  "@inspectionSubmittedForApprovalTitle": {},
+  "inspectionQueuedTitle": "Saved on this device",
+  "@inspectionQueuedTitle": {
+    "description": "Shown when the inspection could not reach the server immediately (most likely offline) but is safely queued."
+  },
+  "inspectionQueuedWithWarningTitle": "Saved, but the server did not accept it yet",
+  "@inspectionQueuedWithWarningTitle": {
+    "description": "Shown when the device was online but the server gave a definitive refusal. Still queued for retry."
+  },
+  "inspectionBackHome": "Back to Home",
+  "@inspectionBackHome": {},
+  "inspectionNewInspection": "New inspection",
+  "@inspectionNewInspection": {},
+
+  "inspectionConditionLabel": "Condition",
+  "@inspectionConditionLabel": {},
+  "inspectionPressureLabel": "Pressure (psi)",
+  "@inspectionPressureLabel": {},
+  "inspectionPressureHint": "e.g. 110",
+  "@inspectionPressureHint": {},
+  "inspectionTreadLabel": "Tread depth (mm)",
+  "@inspectionTreadLabel": {},
+  "inspectionTreadHint": "e.g. 8.5",
+  "@inspectionTreadHint": {},
+  "inspectionSerialLabel": "Tyre serial number",
+  "@inspectionSerialLabel": {},
+  "inspectionPhotoLabel": "Photo",
+  "@inspectionPhotoLabel": {},
+  "inspectionPhotoNone": "No photo taken",
+  "@inspectionPhotoNone": {},
+  "inspectionPhotoCamera": "Camera",
+  "@inspectionPhotoCamera": {},
+  "inspectionPhotoGallery": "Gallery",
+  "@inspectionPhotoGallery": {},
+  "inspectionNotesLabel": "Notes",
+  "@inspectionNotesLabel": {},
+
+  "inspectionSignatureSavedLabel": "Signature saved",
+  "@inspectionSignatureSavedLabel": {},
+  "inspectionSignatureRedraw": "Draw a new signature",
+  "@inspectionSignatureRedraw": {
+    "description": "Replaces a previously-saved signature preview with a live drawing surface. Drawing again is required before the new mark counts."
+  },
+
+  "inspectionDetailTitle": "Inspection",
+  "@inspectionDetailTitle": {},
+  "inspectionNotFoundTitle": "Inspection not found",
+  "@inspectionNotFoundTitle": {},
+  "inspectionNotFoundMessage": "This inspection could not be found on this device or on the server.",
+  "@inspectionNotFoundMessage": {},
+  "inspectionStatusUnknown": "Unknown",
+  "@inspectionStatusUnknown": {},
+  "inspectionInspectorUnknown": "Inspector not recorded",
+  "@inspectionInspectorUnknown": {},
+  "inspectionSignatureMissing": "No signature recorded",
+  "@inspectionSignatureMissing": {},
+  "inspectionGpsSectionTitle": "Location",
+  "@inspectionGpsSectionTitle": {},
+  "inspectionGpsCoordinates": "{lat}, {lng}",
+  "@inspectionGpsCoordinates": {
+    "description": "Latitude and longitude, already formatted by the caller.",
+    "placeholders": {
+      "lat": {
+        "type": "String"
+      },
+      "lng": {
+        "type": "String"
+      }
+    }
+  },
+  "inspectionQueueFailedLabel": "Sync failed",
+  "@inspectionQueueFailedLabel": {},
+  "inspectionQueuePendingLabel": "Waiting to sync",
+  "@inspectionQueuePendingLabel": {},
+  "inspectionRetrySyncButton": "Retry",
+  "@inspectionRetrySyncButton": {},
+  "inspectionStatusSynced": "Synced",
+  "@inspectionStatusSynced": {},
+
+  "inspectionHistoryTitle": "My Inspections",
+  "@inspectionHistoryTitle": {},
+  "inspectionHistoryEmptyTitle": "No inspections yet",
+  "@inspectionHistoryEmptyTitle": {},
+  "inspectionHistoryEmptyMessage": "Inspections you start or submit will appear here.",
+  "@inspectionHistoryEmptyMessage": {},
+  "inspectionHistoryInProgressSection": "In progress",
+  "@inspectionHistoryInProgressSection": {},
+  "inspectionHistorySubmittedSection": "Submitted",
+  "@inspectionHistorySubmittedSection": {}
+}

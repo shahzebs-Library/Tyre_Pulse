@@ -1540,3 +1540,94 @@ are UNVERIFIED and must be settled before Flutter code depends on them.
    02 records that `get_asset_master` does, so a caller must raise `p_limit` as
    well as page or the function cuts the page short. `reference_asset_options`
    and `reference_site_options` need the same check before they fill a cache.
+
+---
+
+## 11. Findings from the implementation
+
+Added 2026-08-25, after this schema was implemented in
+`tyre_pulse_flutter/lib/core/database/`. All 17 tables and all 31 named indexes
+were built as specified. The points below are where the specification and the
+implementation disagree, or where a specified shape carries a caveat worth
+knowing. They are recorded here so nobody later "fixes" the code to match the
+document, or the document to match the code, without seeing the reasoning.
+
+### 11.1 Two foreign keys could not be declared as specified
+
+Section 2.10 specifies `draft_photos.ownerKey` as a foreign key with
+`ON DELETE CASCADE`. It cannot be one: `ownerKind` is polymorphic across
+`inspection_drafts` and `checklist_drafts`, and SQLite cannot express a foreign
+key whose target table depends on another column. The same applies to
+`captured_signatures`, which section 2.11 already conceded.
+
+The cascade is therefore performed in application code, inside the same
+transaction as the draft delete, and it returns the orphaned file paths so the
+caller can remove them. That is a real behavioural equivalence, not a weakening
+- but it is only equivalent for as long as every delete path goes through the
+DAO. A raw delete would leak rows.
+
+`inspection_draft_positions` DOES use a real foreign key cascade, because its
+parent is unambiguous.
+
+### 11.2 `pending_commands.dependsOn` is deliberately not a foreign key
+
+A predecessor command that has synced is eventually pruned, while a dependent
+may still be queued. A foreign key would either block that prune or
+cascade-delete unsynced work, and losing unsynced work is the one outcome this
+whole design exists to prevent.
+
+The queue therefore treats a MISSING predecessor as satisfied, on the reasoning
+that it can only be missing after it synced successfully.
+
+### 11.3 One specified index is redundant
+
+`idx_commands_pending_count ON (status)` is a strict prefix of
+`idx_commands_due ON (status, nextRetryAt)`. SQLite can serve any query the
+first index supports from the second, so it costs write throughput on every
+queue mutation and buys nothing.
+
+It was implemented as specified rather than silently dropped. Dropping it is a
+safe, mechanical change whenever someone wants it, and it needs a schema
+migration step like any other.
+
+### 11.4 A unique index that does not constrain what it appears to
+
+`idx_cached_assets_identity` is UNIQUE on
+`(workspaceId, country, assetNoNorm)`, and `country` is nullable.
+
+**SQLite treats NULLs as distinct in a unique index.** So two cached rows for
+the same asset code with a NULL country are both accepted, and the index does
+not deduplicate them. The constraint only bites once `country` is populated.
+
+This is exactly the shape section 4 specifies, and it is the correct shape for
+the null-safe country convention this codebase uses everywhere else. It is
+recorded because "there is a unique index on it" would otherwise read as a
+guarantee that duplicates are impossible, and they are not.
+
+### 11.5 Status vocabularies are TEXT plus constants, not Dart enums
+
+The stored values must be exactly the strings this document specifies
+(`checklist_draft`, not `checklistDraft`), because they are compared against
+values the queue and the server already use. Drift's `textEnum` stores the Dart
+`.name`, which would force either the wrong stored value or an identifier style
+the analyser rejects.
+
+### 11.6 A test-only constructor currently lives in production code
+
+`AppDatabase.forMigrationTest` exists so the mandatory migration test can open
+one database file at two schema versions. The proper mechanism is drift's
+`stepByStep`, which is generated from committed schema snapshots, and those
+snapshots cannot be produced on a machine with no Dart SDK.
+
+**Action for CI:** once `drift_dev schema dump` runs, replace this constructor
+with the generated helper and delete it.
+
+### 11.7 Retention rules are in tension, and were implemented literally
+
+Section 8.1 says the queue is never pruned automatically, while both draft
+tables carry a count cap of 25 ported from the React Native source.
+
+`pruneDraftsToCap` is therefore an explicit call that nothing invokes
+automatically, and it returns file paths rather than deleting anything itself.
+Whoever wires it up decides when a field worker's oldest draft disappears, which
+is a product decision rather than a storage one.

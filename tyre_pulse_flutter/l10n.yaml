@@ -1,0 +1,20 @@
+# Localisation generation. Spec section 51: English, Arabic and Urdu, with all
+# user-facing strings coming from these files.
+#
+# `output-dir` places the generated sources inside lib/ rather than in the old
+# synthetic `flutter_gen` package, so the import is a normal package import and
+# `analysis_options.yaml` can exclude the generated tree (it already lists
+# `lib/l10n/generated/**`). Do not import the generated file directly from a
+# feature: go through `lib/app/localization/tp_localizations.dart`, which is
+# the one file that would have to change if this path ever moves again.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+output-dir: lib/l10n/generated
+synthetic-package: false
+
+# `AppLocalizations.of(context)` returns non-null. A screen that renders before
+# the delegate is installed is a wiring bug and should fail loudly in
+# development, not silently fall back to a null check on every string.
+nullable-getter: false

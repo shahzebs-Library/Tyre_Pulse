@@ -60,7 +60,20 @@ jobs:
           fi
 
       - name: Check formatting
-        run: dart format --set-exit-if-changed .
+        # Scoped to hand-written source. `dart format` has no exclude flag, and
+        # analysis_options.yaml's exclude only governs the ANALYSER, so an
+        # unscoped run would fail the build on generated drift output that no
+        # human wrote and nobody may edit.
+        run: |
+          files=$(find lib test -name '*.dart' \
+            -not -name '*.g.dart' \
+            -not -name '*.freezed.dart' \
+            -not -path 'lib/l10n/generated/*')
+          if [ -z "$files" ]; then
+            echo "No hand-written Dart found - nothing to format check."
+            exit 0
+          fi
+          dart format --set-exit-if-changed $files
 
       - name: Analyze
         # --fatal-infos because analysis_options.yaml promotes the rules that
@@ -103,10 +116,21 @@ jobs:
         # docs/BOOTSTRAP.md, CI generates them so this job is green from the
         # first commit. The guard means a real committed folder is never
         # overwritten.
+        #
+        # `--org com.shahzebrahman --project-name tyre_pulse` is what makes
+        # the Dart package stay `tyre_pulse` (renaming it would touch every
+        # `package:tyre_pulse/...` import across the whole app), so Flutter's
+        # default applicationId/namespace come out as
+        # com.shahzebrahman.tyre_pulse - one path segment short of the real,
+        # already-registered store identifier. The sed below is a
+        # deterministic string patch on freshly generated boilerplate, not a
+        # hand-authored project file, so it does not risk a malformed build.
         run: |
           if [ ! -d android ]; then
             echo "android/ absent - generating"
             flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
+            sed -i 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulseinspector/g' \
+              android/app/build.gradle.kts android/app/build.gradle 2>/dev/null || true
           else
             echo "android/ present - using the committed project"
           fi
@@ -135,10 +159,19 @@ jobs:
           cache: true
 
       - name: Create platform folders if absent
+        # See build_android's identical step: this keeps the Dart package
+        # name at tyre_pulse and patches only the generated bundle
+        # identifier, which flutter create always emits as
+        # com.shahzebrahman.tyre_pulse for the given --org/--project-name.
+        # The .RunnerTests suffix is left to extend from the new base.
         run: |
           if [ ! -d ios ]; then
             echo "ios/ absent - generating"
             flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
+            sed -i '' 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulseinspector/g' \
+              ios/Runner.xcodeproj/project.pbxproj 2>/dev/null || \
+            sed -i 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulseinspector/g' \
+              ios/Runner.xcodeproj/project.pbxproj
           else
             echo "ios/ present - using the committed project"
           fi

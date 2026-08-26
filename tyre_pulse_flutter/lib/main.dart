@@ -9,6 +9,8 @@ import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
+import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -20,11 +22,25 @@ import 'package:tyre_pulse/core/sync/background_sync.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_providers.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_service.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/approvals/'
+    'checklist_approvals_screen_registrations.dart';
+import 'package:tyre_pulse/features/approvals/'
+    'inspection_approvals_screen_registrations.dart';
 import 'package:tyre_pulse/features/assets/assets_screen_registrations.dart';
+import 'package:tyre_pulse/features/checklists/'
+    'checklists_screen_registrations.dart';
+import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
+import 'package:tyre_pulse/features/inspections/'
+    'inspections_screen_registrations.dart';
+import 'package:tyre_pulse/features/meter_logs/'
+    'meter_logs_screen_registrations.dart';
 import 'package:tyre_pulse/features/records/records_screen_registrations.dart';
 import 'package:tyre_pulse/features/scanning/'
     'scanning_screen_registrations.dart';
 import 'package:tyre_pulse/features/tyres/tyres_screen_registrations.dart';
+import 'package:tyre_pulse/features/washing/washing_screen_registrations.dart';
+import 'package:tyre_pulse/features/work_orders/'
+    'work_orders_screen_registrations.dart';
 
 /// A placeholder for this build's version until a real one is wired in.
 ///
@@ -143,17 +159,72 @@ Future<void> main() async {
               ref.watch(workspaceContextProvider)?.effectivePermissions ??
               AccessState.signedOut,
         ),
+        // `appDatabaseProvider`'s own library comment prescribes exactly
+        // this: the app's ONE real [AppDatabase], opened via
+        // [openTyrePulseDatabase] and overridden here at the composition
+        // root, never constructed a second time by any feature. Every
+        // feature that reads it (inspections' drafts/photo queue,
+        // checklists' drafts/history, and both approval flows' offline
+        // decision queues) was buildable and independently testable before
+        // this override existed - each test substitutes its own in-memory
+        // [AppDatabase] - but none of them was reachable end-to-end on a
+        // real device until this line landed.
+        appDatabaseProvider.overrideWithValue(
+          AppDatabase(openTyrePulseDatabase()),
+        ),
         // The four Phase 3 features each expose their own screens as a
         // `Map<String, TpScreenBuilder>` and stop there, by design -
         // `screen_registry.dart`'s own comment: importing every feature from
         // the router would invert the dependency this architecture is built
         // on. This is the one place that import is allowed to happen.
+        //
+        // Phase 5 (inspections) and Phase 6 (checklists, plus both approval
+        // flows) each built and independently verified their own screens and
+        // their own registration map the same way, but - like
+        // `appDatabaseProvider` above - were left unwired here pending this
+        // later integration pass; every route id in
+        // `checklistApprovalsScreenRegistrations`,
+        // `inspectionApprovalsScreenRegistrations`,
+        // `checklistsScreenRegistrations` and `inspectionsScreenRegistrations`
+        // rendered [TpScreenNotAvailable] until this call joined them.
+        //
+        // Phase 7 (meter logs and vehicle washing) is wired in the SAME
+        // integration pass it was built in, unlike the phases above - see
+        // `meterLogsScreenRegistrations` and `washingScreenRegistrations`'s
+        // own library comments: both route ids, path templates and shell
+        // branches already existed (branch indices 4 and 5 in
+        // `shell_tabs.dart`) before this feature's screens were written.
+        //
+        // Phase 8a (Work Orders) adds two more, in the SAME integration
+        // pass, for two different reasons:
+        //
+        // - `workOrdersScreenRegistrations` registers
+        //   [TpRouteId.workOrders] and [TpRouteId.workOrderDetail] - both
+        //   already fully wired in `routes.dart`/`app_router.dart`/
+        //   `route_access.dart` before this feature's screens were
+        //   written, exactly like the Phase 7 pair above.
+        // - `homeScreenRegistrations` registers [TpRouteId.home] itself,
+        //   which had NO screen at all before this phase (see
+        //   `features/home/presentation/home_screen.dart`'s own library
+        //   comment for the full reasoning) - without this entry Work
+        //   Orders would be reachable only by a cold deep link straight to
+        //   `/work-orders`, never from anywhere inside the app, which is
+        //   the exact reachability defect this phase's brief named as the
+        //   bug the reference app itself already has.
         screenRegistryProvider.overrideWithValue(
           TpScreenRegistry.empty
               .withAll(assetsScreenRegistrations)
               .withAll(tyresScreenRegistrations)
               .withAll(recordsScreenRegistrations)
-              .withAll(scanningScreenRegistrations),
+              .withAll(scanningScreenRegistrations)
+              .withAll(inspectionsScreenRegistrations)
+              .withAll(checklistsScreenRegistrations)
+              .withAll(inspectionApprovalsScreenRegistrations)
+              .withAll(checklistApprovalsScreenRegistrations)
+              .withAll(meterLogsScreenRegistrations)
+              .withAll(washingScreenRegistrations)
+              .withAll(homeScreenRegistrations)
+              .withAll(workOrdersScreenRegistrations),
         ),
       ],
       child: const TyrePulseApp(),

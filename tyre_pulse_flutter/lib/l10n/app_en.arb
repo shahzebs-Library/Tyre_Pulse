@@ -707,5 +707,800 @@
   "inspectionHistoryInProgressSection": "In progress",
   "@inspectionHistoryInProgressSection": {},
   "inspectionHistorySubmittedSection": "Submitted",
-  "@inspectionHistorySubmittedSection": {}
+  "@inspectionHistorySubmittedSection": {},
+
+  "checklistAddPhotoTitle": "Add a photo",
+  "@checklistAddPhotoTitle": {},
+  "checklistPhotoSourceCamera": "Take a photo",
+  "@checklistPhotoSourceCamera": {},
+  "checklistPhotoSourceGallery": "Choose from gallery",
+  "@checklistPhotoSourceGallery": {},
+  "checklistNoteRequiredLabel": "Remark (required)",
+  "@checklistNoteRequiredLabel": {
+    "description": "Label on a checklist field's remark box when a mark demands one."
+  },
+  "checklistNoteLabel": "Remark",
+  "@checklistNoteLabel": {},
+  "checklistYes": "Yes",
+  "@checklistYes": {
+    "description": "The affirmative choice on a boolean checklist field."
+  },
+  "checklistNo": "No",
+  "@checklistNo": {
+    "description": "The negative choice on a boolean checklist field."
+  },
+  "checklistSignatureSavedLabel": "Signature saved",
+  "@checklistSignatureSavedLabel": {},
+  "checklistSignatureRedraw": "Draw a new signature",
+  "@checklistSignatureRedraw": {},
+
+  "checklistsHomeTitle": "Checklists",
+  "@checklistsHomeTitle": {},
+  "checklistsHistoryAction": "My checklist history",
+  "@checklistsHistoryAction": {},
+  "checklistsEmptyTitle": "Nothing to fill yet",
+  "@checklistsEmptyTitle": {},
+  "checklistsEmptyMessage": "No checklists, assignments or unfinished sheets are available for you right now.",
+  "@checklistsEmptyMessage": {},
+  "checklistsUnfinishedSection": "Unfinished work",
+  "@checklistsUnfinishedSection": {},
+  "checklistsAssignmentsSection": "Assignments due",
+  "@checklistsAssignmentsSection": {},
+  "checklistsAvailableSection": "Available checklists",
+  "@checklistsAvailableSection": {},
+  "checklistNoAssetLabel": "No asset picked yet",
+  "@checklistNoAssetLabel": {},
+  "checklistResumeProgress": "{filled} of {total} answered",
+  "@checklistResumeProgress": {
+    "description": "Progress line on a resumable checklist draft row.",
+    "placeholders": {
+      "filled": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "checklistHistoryTitle": "Checklist history",
+  "@checklistHistoryTitle": {},
+  "checklistHistorySearchHint": "Search by document, template, asset or site",
+  "@checklistHistorySearchHint": {},
+  "checklistHistoryFilterAll": "All",
+  "@checklistHistoryFilterAll": {},
+  "checklistHistoryFilterWaiting": "Waiting",
+  "@checklistHistoryFilterWaiting": {},
+  "checklistHistoryFilterClosed": "Closed",
+  "@checklistHistoryFilterClosed": {},
+  "checklistHistoryFilterSentBack": "Sent back",
+  "@checklistHistoryFilterSentBack": {},
+  "checklistHistoryEmptyTitle": "No checklist history yet",
+  "@checklistHistoryEmptyTitle": {},
+  "checklistHistoryEmptyMessage": "Sheets you fill in will appear here, whether they are still on their way to the server or already confirmed.",
+  "@checklistHistoryEmptyMessage": {},
+  "checklistHistoryQueuedSection": "Still on this device",
+  "@checklistHistoryQueuedSection": {},
+  "checklistHistoryCompletedSection": "Confirmed",
+  "@checklistHistoryCompletedSection": {},
+  "checklistQueueFailedLabel": "Needs attention",
+  "@checklistQueueFailedLabel": {},
+  "checklistQueuePendingLabel": "Waiting to sync",
+  "@checklistQueuePendingLabel": {},
+  "checklistHistoryStatusClosed": "Closed",
+  "@checklistHistoryStatusClosed": {},
+  "checklistHistoryStatusSentBack": "Sent back",
+  "@checklistHistoryStatusSentBack": {},
+  "checklistHistoryStatusWaiting": "Waiting for approval",
+  "@checklistHistoryStatusWaiting": {},
+  "checklistHistoryStatusNoApproval": "No approval needed",
+  "@checklistHistoryStatusNoApproval": {},
+
+  "checklistFillLoadingTitle": "Checklist",
+  "@checklistFillLoadingTitle": {},
+  "checklistSubmittedTitle": "Checklist submitted",
+  "@checklistSubmittedTitle": {},
+  "checklistSubmittedMessage": "Your sheet is saved. It will reach the server as soon as this device is online.",
+  "@checklistSubmittedMessage": {},
+  "checklistLastSubmissionKnown": "This machine has a previous submission for this checklist.",
+  "@checklistLastSubmissionKnown": {},
+  "checklistLastSubmissionDaysAgo": "This machine was last checked {daysAgo} day(s) ago on this checklist.",
+  "@checklistLastSubmissionDaysAgo": {
+    "description": "Advisory shown when the machine was checked on this sheet recently.",
+    "placeholders": {
+      "daysAgo": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistPrimarySignatureLabel": "Sign-off signature",
+  "@checklistPrimarySignatureLabel": {},
+  "checklistSubmitAction": "Submit checklist",
+  "@checklistSubmitAction": {},
+  "checklistSiteLabel": "Site",
+  "@checklistSiteLabel": {},
+  "checklistPrintedNameLabel": "Printed name",
+  "@checklistPrintedNameLabel": {},
+  "checklistPrintedNamePlaceholder": "Type your full name",
+  "@checklistPrintedNamePlaceholder": {},
+  "checklistGateFieldErrors": "{count} field(s) need attention",
+  "@checklistGateFieldErrors": {
+    "description": "Submit-gate summary line: how many answers are invalid or missing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistGateSignatureErrors": "{count} signature(s) are required",
+  "@checklistGateSignatureErrors": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistGateMissingNotes": "{count} item(s) need a remark explaining the mark",
+  "@checklistGateMissingNotes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistGateUnsatisfiedGroups": "{count} reading group(s) need at least one value",
+  "@checklistGateUnsatisfiedGroups": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistGatePrimarySignature": "A signature is required to submit this sheet",
+  "@checklistGatePrimarySignature": {},
+
+  "inspectionApprovalsTitle": "Inspection Approvals",
+  "@inspectionApprovalsTitle": {},
+  "inspectionApprovalsAwaitingCount": "{count} awaiting sign-off",
+  "@inspectionApprovalsAwaitingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionApprovalsEmptyTitle": "Nothing awaiting approval",
+  "@inspectionApprovalsEmptyTitle": {},
+  "inspectionApprovalsEmptyMessage": "Every inspection has been reviewed. Pull down to check again.",
+  "@inspectionApprovalsEmptyMessage": {},
+  "inspectionApprovalsLoadErrorMessage": "Approvals could not be loaded. Check your connection and try again.",
+  "@inspectionApprovalsLoadErrorMessage": {},
+  "inspectionApprovalsPendingBadge": "Pending",
+  "@inspectionApprovalsPendingBadge": {},
+  "inspectionApprovalFallbackTitle": "Inspection",
+  "@inspectionApprovalFallbackTitle": {},
+  "inspectionApprovalReviewTitle": "Approval",
+  "@inspectionApprovalReviewTitle": {},
+  "inspectionApprovalLoadErrorMessage": "This inspection could not be loaded. Check your connection and try again.",
+  "@inspectionApprovalLoadErrorMessage": {},
+  "inspectionApprovalNotFoundMessage": "This inspection could not be found. It may already have been reviewed or removed.",
+  "@inspectionApprovalNotFoundMessage": {},
+  "inspectionApprovalTyreConditionsTitle": "Tyre conditions ({count})",
+  "@inspectionApprovalTyreConditionsTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "inspectionApprovalNoTyreConditions": "No tyre conditions recorded.",
+  "@inspectionApprovalNoTyreConditions": {},
+  "inspectionApprovalYourDecisionTitle": "Your decision",
+  "@inspectionApprovalYourDecisionTitle": {},
+  "inspectionApprovalDecisionTitle": "Decision",
+  "@inspectionApprovalDecisionTitle": {},
+  "inspectionApprovalDecisionApproved": "Approved",
+  "@inspectionApprovalDecisionApproved": {},
+  "inspectionApprovalDecisionReturned": "Returned to the field",
+  "@inspectionApprovalDecisionReturned": {},
+  "inspectionApprovalApprovedBy": "Approved by {name}",
+  "@inspectionApprovalApprovedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inspectionApprovalReturnedBy": "Returned by {name}",
+  "@inspectionApprovalReturnedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inspectionApprovalApproverSignatureLabel": "Approver signature",
+  "@inspectionApprovalApproverSignatureLabel": {},
+  "inspectionApprovalSigningAs": "Signing as {name}",
+  "@inspectionApprovalSigningAs": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "inspectionApprovalNoteLabel": "Note (required to return)",
+  "@inspectionApprovalNoteLabel": {},
+  "inspectionApprovalNoteHint": "Reason if returning to the inspector",
+  "@inspectionApprovalNoteHint": {},
+  "inspectionApprovalApproveButton": "Approve",
+  "@inspectionApprovalApproveButton": {},
+  "inspectionApprovalReturnButton": "Return",
+  "@inspectionApprovalReturnButton": {},
+  "inspectionApprovalSignatureRequiredTitle": "Signature required",
+  "@inspectionApprovalSignatureRequiredTitle": {},
+  "inspectionApprovalSignatureRequiredMessage": "Sign in the approver box to approve this inspection.",
+  "@inspectionApprovalSignatureRequiredMessage": {},
+  "inspectionApprovalReasonRequiredTitle": "Reason required",
+  "@inspectionApprovalReasonRequiredTitle": {},
+  "inspectionApprovalReasonRequiredMessage": "Add a short note so the inspector knows what to fix.",
+  "@inspectionApprovalReasonRequiredMessage": {},
+  "inspectionApprovalApprovedOutcomeTitle": "Inspection approved",
+  "@inspectionApprovalApprovedOutcomeTitle": {},
+  "inspectionApprovalReturnedOutcomeTitle": "Inspection returned",
+  "@inspectionApprovalReturnedOutcomeTitle": {},
+  "inspectionApprovalApprovedOutcomeMessage": "The inspection has been approved. You can review it here, or go back to the list.",
+  "@inspectionApprovalApprovedOutcomeMessage": {},
+  "inspectionApprovalReturnedOutcomeMessage": "The inspection has been returned to the field. You can review it here, or go back to the list.",
+  "@inspectionApprovalReturnedOutcomeMessage": {},
+  "inspectionApprovalStayHereAction": "Stay here",
+  "@inspectionApprovalStayHereAction": {},
+  "inspectionApprovalBackToListAction": "Back to list",
+  "@inspectionApprovalBackToListAction": {},
+  "inspectionApprovalSaveFailedTitle": "Could not save decision",
+  "@inspectionApprovalSaveFailedTitle": {},
+  "inspectionApprovalDecideGenericError": "Please try again.",
+  "@inspectionApprovalDecideGenericError": {},
+  "inspectionApprovalSignatureSavedLabel": "Signature saved",
+  "@inspectionApprovalSignatureSavedLabel": {},
+  "inspectionApprovalSignatureRedraw": "Draw a new signature",
+  "@inspectionApprovalSignatureRedraw": {},
+
+  "checklistApprovalsTitle": "Checklist Approvals",
+  "@checklistApprovalsTitle": {},
+  "checklistApprovalsAwaitingCount": "{count} awaiting sign-off",
+  "@checklistApprovalsAwaitingCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistApprovalsLoadErrorMessage": "Approvals could not be loaded. Check your connection and try again.",
+  "@checklistApprovalsLoadErrorMessage": {},
+  "checklistApprovalsEmptyTitle": "Nothing awaiting approval",
+  "@checklistApprovalsEmptyTitle": {},
+  "checklistApprovalsEmptyMessage": "Every checklist has been reviewed. Pull down to check again.",
+  "@checklistApprovalsEmptyMessage": {},
+  "checklistApprovalsEmptyMineTitle": "Nothing needs you right now",
+  "@checklistApprovalsEmptyMineTitle": {},
+  "checklistApprovalsEmptyMineMessage": "No checklist in this queue is waiting on your signature at the moment.",
+  "@checklistApprovalsEmptyMineMessage": {},
+  "checklistApprovalsFilterAll": "All",
+  "@checklistApprovalsFilterAll": {},
+  "checklistApprovalsFilterMine": "Needs me",
+  "@checklistApprovalsFilterMine": {},
+  "checklistApprovalsYourTurn": "Your turn",
+  "@checklistApprovalsYourTurn": {},
+  "checklistApprovalFallbackTitle": "Checklist",
+  "@checklistApprovalFallbackTitle": {},
+  "checklistApprovalsBlockedTitle": "{count} decision(s) need attention",
+  "@checklistApprovalsBlockedTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistApprovalsBlockedMessage": "These decisions could not be delivered and will not be tried again automatically. Try again below, or reopen the checklist to decide again.",
+  "@checklistApprovalsBlockedMessage": {},
+  "checklistApprovalsStatusClosed": "Closed",
+  "@checklistApprovalsStatusClosed": {},
+  "checklistApprovalsStatusSentBack": "Sent back",
+  "@checklistApprovalsStatusSentBack": {},
+  "checklistApprovalsStatusWaitingAreaManager": "Waiting for the area manager",
+  "@checklistApprovalsStatusWaitingAreaManager": {},
+  "checklistApprovalsStatusWaitingSupervisor": "Waiting for a supervisor",
+  "@checklistApprovalsStatusWaitingSupervisor": {},
+  "checklistApprovalsStatusWaitingApproval": "Waiting for approval",
+  "@checklistApprovalsStatusWaitingApproval": {},
+  "checklistApprovalsStatusNoApproval": "No approval needed",
+  "@checklistApprovalsStatusNoApproval": {},
+
+  "checklistApprovalReviewTitle": "Approval",
+  "@checklistApprovalReviewTitle": {},
+  "checklistApprovalLoadErrorMessage": "This checklist could not be loaded. Check your connection and try again.",
+  "@checklistApprovalLoadErrorMessage": {},
+  "checklistApprovalNotFoundTitle": "Checklist not found",
+  "@checklistApprovalNotFoundTitle": {},
+  "checklistApprovalNotFoundMessage": "This checklist could not be found. It may already have been reviewed or removed.",
+  "@checklistApprovalNotFoundMessage": {},
+  "checklistApprovalSignOffsTitle": "Sign-offs",
+  "@checklistApprovalSignOffsTitle": {},
+  "checklistApprovalResponsesTitle": "Responses",
+  "@checklistApprovalResponsesTitle": {},
+  "checklistApprovalNoResponses": "No responses recorded.",
+  "@checklistApprovalNoResponses": {},
+  "checklistApprovalStageFilledBy": "Filled by",
+  "@checklistApprovalStageFilledBy": {},
+  "checklistApprovalStageSupervisor": "Supervisor sign-off",
+  "@checklistApprovalStageSupervisor": {},
+  "checklistApprovalStageAreaManager": "Area manager approval",
+  "@checklistApprovalStageAreaManager": {},
+  "checklistApprovalStageApproval": "Approval",
+  "@checklistApprovalStageApproval": {},
+  "checklistApprovalNotSignedYet": "Not signed yet",
+  "@checklistApprovalNotSignedYet": {},
+  "checklistApprovalYourDecisionTitle": "Your decision",
+  "@checklistApprovalYourDecisionTitle": {},
+  "checklistApprovalSupervisorSignatureLabel": "Supervisor signature",
+  "@checklistApprovalSupervisorSignatureLabel": {},
+  "checklistApprovalAreaManagerSignatureLabel": "Area manager signature",
+  "@checklistApprovalAreaManagerSignatureLabel": {},
+  "checklistApprovalYourNameLabel": "Your name",
+  "@checklistApprovalYourNameLabel": {},
+  "checklistApprovalYourNamePlaceholder": "Type your name",
+  "@checklistApprovalYourNamePlaceholder": {},
+  "checklistApprovalNoteLabel": "Note (required to send back)",
+  "@checklistApprovalNoteLabel": {},
+  "checklistApprovalNoteHint": "Reason if sending this back",
+  "@checklistApprovalNoteHint": {},
+  "checklistApprovalReturnButton": "Send back",
+  "@checklistApprovalReturnButton": {},
+  "checklistApprovalSignOffButton": "Sign off",
+  "@checklistApprovalSignOffButton": {},
+  "checklistApprovalApproveAndCloseButton": "Approve and close",
+  "@checklistApprovalApproveAndCloseButton": {},
+  "checklistApprovalRequirementTitle": "Cannot sign off",
+  "@checklistApprovalRequirementTitle": {},
+  "checklistApprovalReasonRequiredTitle": "Reason required",
+  "@checklistApprovalReasonRequiredTitle": {},
+  "checklistApprovalReasonRequiredMessage": "Add a short note so the person who filled this in knows what to fix.",
+  "@checklistApprovalReasonRequiredMessage": {},
+  "checklistApprovalNameRequiredMessage": "Enter your name to sign this off.",
+  "@checklistApprovalNameRequiredMessage": {},
+  "checklistApprovalSignatureRequiredMessage": "Sign in the box above to sign this off.",
+  "@checklistApprovalSignatureRequiredMessage": {},
+  "checklistApprovalNothingToDecide": "This checklist has nothing left to decide.",
+  "@checklistApprovalNothingToDecide": {},
+  "checklistApprovalNotYourRung": "This is not for you to decide. {status}",
+  "@checklistApprovalNotYourRung": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "checklistApprovalSaveFailedTitle": "Could not save decision",
+  "@checklistApprovalSaveFailedTitle": {},
+  "checklistApprovalDecideGenericError": "Please try again.",
+  "@checklistApprovalDecideGenericError": {},
+  "checklistApprovalSentBackTitle": "Checklist sent back",
+  "@checklistApprovalSentBackTitle": {},
+  "checklistApprovalSentBackMessage": "This checklist has been sent back to the field. You can review it here, or go back to the list.",
+  "@checklistApprovalSentBackMessage": {},
+  "checklistApprovalSignedOffTitle": "Signed off",
+  "@checklistApprovalSignedOffTitle": {},
+  "checklistApprovalSignedOffMessage": "Your signature has been recorded. This checklist now waits for the area manager. You can review it here, or go back to the list.",
+  "@checklistApprovalSignedOffMessage": {},
+  "checklistApprovalApprovedTitle": "Checklist approved",
+  "@checklistApprovalApprovedTitle": {},
+  "checklistApprovalApprovedMessage": "This checklist has been approved and closed. You can review it here, or go back to the list.",
+  "@checklistApprovalApprovedMessage": {},
+  "checklistApprovalStayHereAction": "Stay here",
+  "@checklistApprovalStayHereAction": {},
+  "checklistApprovalBackToListAction": "Back to list",
+  "@checklistApprovalBackToListAction": {},
+  "checklistApprovalQueuedTitle": "Saved",
+  "@checklistApprovalQueuedTitle": {},
+  "checklistApprovalQueuedOffline": "Your decision is saved on this device and will be sent when you are back online.",
+  "@checklistApprovalQueuedOffline": {},
+  "checklistApprovalScoreLine": "Score: {pct}% ({status})",
+  "@checklistApprovalScoreLine": {
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "checklistApprovalScorePassed": "Passed",
+  "@checklistApprovalScorePassed": {},
+  "checklistApprovalScoreFailed": "Failed",
+  "@checklistApprovalScoreFailed": {},
+
+  "checklistApprovalSignatureSavedLabel": "Signature saved",
+  "@checklistApprovalSignatureSavedLabel": {},
+  "checklistApprovalSignatureRedraw": "Draw a new signature",
+  "@checklistApprovalSignatureRedraw": {},
+
+  "meterLogNavTitle": "Daily Meter Log",
+  "@meterLogNavTitle": {},
+  "meterLogWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
+  "@meterLogWorkspaceLoadingMessage": {},
+  "meterLogAssetLabel": "Asset",
+  "@meterLogAssetLabel": {},
+  "meterLogAssetHint": "Type or scan the asset number",
+  "@meterLogAssetHint": {},
+  "meterLogSiteLabel": "Site",
+  "@meterLogSiteLabel": {},
+  "meterLogSiteHint": "Where this reading was taken",
+  "@meterLogSiteHint": {},
+  "meterLogSiteHelp": "Filled in automatically from the fleet record. Change it if this reading is from a different site.",
+  "@meterLogSiteHelp": {},
+  "meterLogLastReadingChecking": "Checking the last reading...",
+  "@meterLogLastReadingChecking": {},
+  "meterLogLastReadingUnknown": "No previous reading is recorded for this asset.",
+  "@meterLogLastReadingUnknown": {},
+  "meterLogLastReadingKnown": "Last reading: {km} km on {date}",
+  "@meterLogLastReadingKnown": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "meterLogOdometerLabel": "Odometer (km)",
+  "@meterLogOdometerLabel": {},
+  "meterLogOdometerHint": "Enter the reading",
+  "@meterLogOdometerHint": {},
+  "meterLogEngineHoursLabel": "Engine hours",
+  "@meterLogEngineHoursLabel": {},
+  "meterLogEngineHoursHint": "Optional",
+  "@meterLogEngineHoursHint": {},
+  "meterLogEngineHoursHelpWithHours": "A photo of the hour meter will be requested on the next step.",
+  "@meterLogEngineHoursHelpWithHours": {},
+  "meterLogEngineHoursHelpWithoutHours": "Leave this blank if the vehicle has no hour meter.",
+  "@meterLogEngineHoursHelpWithoutHours": {},
+  "meterLogNotesLabel": "Notes",
+  "@meterLogNotesLabel": {},
+  "meterLogNotesHint": "Anything worth recording",
+  "@meterLogNotesHint": {},
+  "meterLogSignatureLabel": "Signature",
+  "@meterLogSignatureLabel": {},
+  "meterLogSignatureSavedLabel": "Signature saved",
+  "@meterLogSignatureSavedLabel": {},
+  "meterLogSignatureRedraw": "Draw a new signature",
+  "@meterLogSignatureRedraw": {},
+  "meterLogContinueAction": "Review & Save",
+  "@meterLogContinueAction": {},
+  "meterLogAssetRequiredTitle": "Asset needed",
+  "@meterLogAssetRequiredTitle": {},
+  "meterLogAssetRequiredMessage": "Enter the asset before continuing.",
+  "@meterLogAssetRequiredMessage": {},
+  "meterLogReadingRequiredTitle": "Reading needed",
+  "@meterLogReadingRequiredTitle": {},
+  "meterLogReadingRequiredMessage": "Enter the odometer reading before continuing.",
+  "@meterLogReadingRequiredMessage": {},
+  "meterLogInvalidReadingTitle": "That reading does not look right",
+  "@meterLogInvalidReadingTitle": {},
+  "meterLogInvalidReadingMessage": "The odometer reading cannot be a negative number.",
+  "@meterLogInvalidReadingMessage": {},
+  "meterLogBelowLastTitle": "This reading is lower than the last one",
+  "@meterLogBelowLastTitle": {},
+  "meterLogBelowLastMessage": "The last reading recorded for this asset was {km} km. Saving this reading will flag it for admin review.",
+  "@meterLogBelowLastMessage": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "meterLogRecheckAction": "Re-check",
+  "@meterLogRecheckAction": {},
+  "meterLogSaveAndFlagAction": "Save anyway",
+  "@meterLogSaveAndFlagAction": {},
+  "meterLogBigJumpTitle": "That is a large jump",
+  "@meterLogBigJumpTitle": {},
+  "meterLogBigJumpMessage": "This is {km} km more than the last reading.",
+  "@meterLogBigJumpMessage": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "meterLogLogAnywayAction": "Log anyway",
+  "@meterLogLogAnywayAction": {},
+  "meterLogReviewTitle": "Confirm reading",
+  "@meterLogReviewTitle": {},
+  "meterLogPhotographGaugeLabel": "Photograph the gauge",
+  "@meterLogPhotographGaugeLabel": {},
+  "meterLogPhotoCamera": "Camera",
+  "@meterLogPhotoCamera": {},
+  "meterLogPhotoGallery": "Gallery",
+  "@meterLogPhotoGallery": {},
+  "meterLogPhotoNone": "No photo taken",
+  "@meterLogPhotoNone": {},
+  "meterLogPhotoRequiredTitle": "Photo needed",
+  "@meterLogPhotoRequiredTitle": {},
+  "meterLogPhotoRequiredMessage": "A photo of the odometer is required before saving.",
+  "@meterLogPhotoRequiredMessage": {},
+  "meterLogSaveReadingAction": "Save Reading",
+  "@meterLogSaveReadingAction": {},
+  "meterLogFlaggedNote": "This reading is below the last one and will be flagged for admin review.",
+  "@meterLogFlaggedNote": {},
+  "meterLogSavedMessage": "Reading saved. It will sync automatically.",
+  "@meterLogSavedMessage": {},
+  "meterLogSavedAndFlaggedMessage": "Reading saved and flagged for admin review because it is below the last one.",
+  "@meterLogSavedAndFlaggedMessage": {},
+  "meterLogTryAgainFallback": "Something went wrong. Try again.",
+  "@meterLogTryAgainFallback": {},
+  "meterLogRecentTitle": "Recent readings",
+  "@meterLogRecentTitle": {},
+  "meterLogRecentEmptyMessage": "No readings recorded yet.",
+  "@meterLogRecentEmptyMessage": {},
+  "meterLogRecentLoadErrorMessage": "Recent readings could not be loaded.",
+  "@meterLogRecentLoadErrorMessage": {},
+  "meterLogRecentKmValue": "{km} km",
+  "@meterLogRecentKmValue": {
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+
+  "washNavTitle": "Vehicle Washing",
+  "@washNavTitle": {},
+  "washWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
+  "@washWorkspaceLoadingMessage": {},
+  "washDueTitle": "Due for wash",
+  "@washDueTitle": {},
+  "washDueNone": "Nothing is due for a wash.",
+  "@washDueNone": {},
+  "washDueToday": "Due today",
+  "@washDueToday": {},
+  "washDueOverdue": "{days} days overdue",
+  "@washDueOverdue": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "washDueLoadErrorMessage": "The due list could not be checked right now.",
+  "@washDueLoadErrorMessage": {},
+  "washAssetLabel": "Asset",
+  "@washAssetLabel": {},
+  "washAssetHint": "Type or scan the asset number",
+  "@washAssetHint": {},
+  "washMasterFleetNumber": "Fleet {fleetNo}",
+  "@washMasterFleetNumber": {
+    "placeholders": {
+      "fleetNo": {
+        "type": "String"
+      }
+    }
+  },
+  "washSiteLabel": "Site",
+  "@washSiteLabel": {},
+  "washSiteHint": "Where the vehicle is washed",
+  "@washSiteHint": {},
+  "washSiteHelp": "Filled in automatically from the fleet record. Change it if this wash happened at a different site.",
+  "@washSiteHelp": {},
+  "washDateLabel": "Date",
+  "@washDateLabel": {},
+  "washDateTodayLine": "Today · {date}",
+  "@washDateTodayLine": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "washTypeLabel": "Wash type",
+  "@washTypeLabel": {},
+  "washTypeExterior": "Exterior",
+  "@washTypeExterior": {},
+  "washTypeInterior": "Interior",
+  "@washTypeInterior": {},
+  "washTypeFull": "Full",
+  "@washTypeFull": {},
+  "washTypeEngineBay": "Engine Bay",
+  "@washTypeEngineBay": {},
+  "washTypeUndercarriage": "Undercarriage",
+  "@washTypeUndercarriage": {},
+  "washTypeSteam": "Steam",
+  "@washTypeSteam": {},
+  "washTypeWaterless": "Waterless",
+  "@washTypeWaterless": {},
+  "washStatusLabel": "Status",
+  "@washStatusLabel": {},
+  "washStatusInProgress": "In Progress",
+  "@washStatusInProgress": {},
+  "washStatusCompleted": "Completed",
+  "@washStatusCompleted": {},
+  "washPhotosLabel": "Photos",
+  "@washPhotosLabel": {},
+  "washAddPhoto": "Add photo",
+  "@washAddPhoto": {},
+  "washPhotoCamera": "Camera",
+  "@washPhotoCamera": {},
+  "washPhotoGallery": "Gallery",
+  "@washPhotoGallery": {},
+  "washDetailsLabel": "Details",
+  "@washDetailsLabel": {},
+  "washOperatorLabel": "Operator name",
+  "@washOperatorLabel": {},
+  "washOperatorHint": "Who washed the vehicle",
+  "@washOperatorHint": {},
+  "washBayLabel": "Bay",
+  "@washBayLabel": {},
+  "washBayHint": "Optional",
+  "@washBayHint": {},
+  "washOdometerLabel": "Odometer (km)",
+  "@washOdometerLabel": {},
+  "washOdometerHint": "Optional",
+  "@washOdometerHint": {},
+  "washNotesLabel": "Notes",
+  "@washNotesLabel": {},
+  "washNotesHint": "Anything worth recording",
+  "@washNotesHint": {},
+  "washTypeRequiredTitle": "Wash type needed",
+  "@washTypeRequiredTitle": {},
+  "washTypeRequiredMessage": "Choose a wash type before saving.",
+  "@washTypeRequiredMessage": {},
+  "washAssetRequiredTitle": "Asset needed",
+  "@washAssetRequiredTitle": {},
+  "washAssetRequiredMessage": "Enter the asset before saving.",
+  "@washAssetRequiredMessage": {},
+  "washSaveAction": "Save Wash",
+  "@washSaveAction": {},
+  "washSavedMessage": "Wash logged. It will sync automatically.",
+  "@washSavedMessage": {},
+  "washSaveFailedTitle": "Could not save the wash",
+  "@washSaveFailedTitle": {},
+  "washTryAgainFallback": "Something went wrong. Try again.",
+  "@washTryAgainFallback": {},
+  "washRecentTitle": "Recent washes",
+  "@washRecentTitle": {},
+  "washRecentEmptyMessage": "No washes recorded yet.",
+  "@washRecentEmptyMessage": {},
+  "washRecentLoadErrorMessage": "Recent washes could not be loaded.",
+  "@washRecentLoadErrorMessage": {},
+
+  "homeNavTitle": "Home",
+  "@homeNavTitle": {},
+  "homeGreeting": "Welcome back",
+  "@homeGreeting": {},
+  "homeQuickActionsHeading": "Quick actions",
+  "@homeQuickActionsHeading": {},
+  "homeWorkOrdersTile": "Work Orders",
+  "@homeWorkOrdersTile": {},
+  "homeWorkOrdersTileSubtitle": "Maintenance job cards",
+  "@homeWorkOrdersTileSubtitle": {},
+  "homeNoQuickActionsMessage": "Nothing is available to you here yet. Contact your administrator if you need access to a feature.",
+  "@homeNoQuickActionsMessage": {},
+
+  "workOrdersNavTitle": "Work Orders",
+  "@workOrdersNavTitle": {},
+  "workOrdersActiveCount": "{count} active",
+  "@workOrdersActiveCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "workOrdersFilterActive": "Active",
+  "@workOrdersFilterActive": {},
+  "workOrdersFilterAll": "All",
+  "@workOrdersFilterAll": {},
+  "workOrdersEmptyTitle": "No work orders",
+  "@workOrdersEmptyTitle": {},
+  "workOrdersEmptyMessage": "Work orders logged for this fleet will appear here.",
+  "@workOrdersEmptyMessage": {},
+  "workOrdersLoadErrorMessage": "Work orders could not be loaded right now.",
+  "@workOrdersLoadErrorMessage": {},
+  "workOrdersStatusOpenFallback": "Open",
+  "@workOrdersStatusOpenFallback": {
+    "description": "Shown on a status badge when work_orders.status is blank or null."
+  },
+  "workOrdersWorkTypeFallback": "General work",
+  "@workOrdersWorkTypeFallback": {
+    "description": "Shown in place of work_orders.work_type when it is blank or null."
+  },
+
+  "workOrderNewTitle": "New work order",
+  "@workOrderNewTitle": {},
+  "workOrderAssetLabel": "Asset",
+  "@workOrderAssetLabel": {},
+  "workOrderAssetHint": "e.g. TM514",
+  "@workOrderAssetHint": {},
+  "workOrderAssetRequiredMessage": "Enter the asset before saving.",
+  "@workOrderAssetRequiredMessage": {},
+  "workOrderWorkTypeLabel": "Work type",
+  "@workOrderWorkTypeLabel": {},
+  "workOrderPriorityLabel": "Priority",
+  "@workOrderPriorityLabel": {},
+  "workOrderDescriptionLabel": "Details",
+  "@workOrderDescriptionLabel": {},
+  "workOrderDescriptionHint": "Anything worth recording",
+  "@workOrderDescriptionHint": {},
+  "workOrderCreateAction": "Create work order",
+  "@workOrderCreateAction": {},
+  "workOrderSavedMessage": "Work order logged. It will sync automatically.",
+  "@workOrderSavedMessage": {},
+  "workOrderSaveFailedMessage": "Could not save. Try again.",
+  "@workOrderSaveFailedMessage": {},
+  "workOrderWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
+  "@workOrderWorkspaceLoadingMessage": {},
+
+  "workOrderWorkTypeTyreChange": "Tyre Change",
+  "@workOrderWorkTypeTyreChange": {
+    "description": "Create-form work type option. The saved value is this exact English word - see work_order_badges.dart's own library comment."
+  },
+  "workOrderWorkTypeRepair": "Repair",
+  "@workOrderWorkTypeRepair": {},
+  "workOrderWorkTypeRotation": "Rotation",
+  "@workOrderWorkTypeRotation": {},
+  "workOrderWorkTypeAlignment": "Alignment",
+  "@workOrderWorkTypeAlignment": {},
+  "workOrderWorkTypeInspection": "Inspection",
+  "@workOrderWorkTypeInspection": {},
+  "workOrderWorkTypeOther": "Other",
+  "@workOrderWorkTypeOther": {},
+
+  "workOrderPriorityLow": "Low",
+  "@workOrderPriorityLow": {
+    "description": "Create-form priority option. The saved value is this exact English word."
+  },
+  "workOrderPriorityMedium": "Medium",
+  "@workOrderPriorityMedium": {},
+  "workOrderPriorityHigh": "High",
+  "@workOrderPriorityHigh": {},
+  "workOrderPriorityCritical": "Critical",
+  "@workOrderPriorityCritical": {},
+
+  "workOrderAdvanceToInProgress": "In Progress",
+  "@workOrderAdvanceToInProgress": {
+    "description": "The advance button's label when the next status is In Progress - names the state it moves the work order to, matching the reference button's own wording."
+  },
+  "workOrderAdvanceToCompleted": "Completed",
+  "@workOrderAdvanceToCompleted": {},
+  "workOrderStatusQueuedMessage": "Status update saved. It will sync automatically.",
+  "@workOrderStatusQueuedMessage": {},
+
+  "workOrderDetailTitle": "Work order",
+  "@workOrderDetailTitle": {
+    "description": "Detail screen app bar title fallback, used only when the work order carries no asset number."
+  },
+  "workOrderNotFoundTitle": "Work order not found",
+  "@workOrderNotFoundTitle": {},
+  "workOrderNotFoundMessage": "This work order could not be found, or you no longer have access to it.",
+  "@workOrderNotFoundMessage": {},
+  "workOrderLoadErrorMessage": "This work order could not be loaded right now.",
+  "@workOrderLoadErrorMessage": {},
+  "workOrderFieldWorkOrderNo": "Work order no.",
+  "@workOrderFieldWorkOrderNo": {},
+  "workOrderFieldWorkType": "Work type",
+  "@workOrderFieldWorkType": {},
+  "workOrderFieldSite": "Site",
+  "@workOrderFieldSite": {},
+  "workOrderFieldCountry": "Country",
+  "@workOrderFieldCountry": {},
+  "workOrderFieldOpened": "Opened",
+  "@workOrderFieldOpened": {},
+  "workOrderFieldStarted": "Started",
+  "@workOrderFieldStarted": {},
+  "workOrderFieldCompleted": "Completed",
+  "@workOrderFieldCompleted": {},
+  "workOrderFieldDescription": "Description",
+  "@workOrderFieldDescription": {}
 }

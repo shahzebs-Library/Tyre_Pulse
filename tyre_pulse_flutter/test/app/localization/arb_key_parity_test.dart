@@ -123,16 +123,188 @@ void main() {
     //   pair, the review and submit-outcome screens, the read-only detail
     //   screen (including its own queued-vs-synced banner), and the
     //   history list's empty/section states.
-    // 171 + 71 = 242. Bumping this pin is the expected maintenance action
+    // 171 + 71 = 242.
+    // - `features/checklists` (Phase 6, the checklist templates/assignments
+    //   home, the dynamic per-template fill screen over the 14-field-type
+    //   engine, and the scoped "my checklist history" surface merging
+    //   completed submissions with the offline queue) added 49 keys:
+    //   checklistAddPhotoTitle through checklistGatePrimarySignature - the
+    //   photo-source picker, the boolean yes/no choice, the signature pad's
+    //   saved-preview/redraw pair (its own copy, mirroring but not sharing
+    //   the inspection pad's keys), the checklists home list (unfinished
+    //   work/assignments due/available checklists sections), the resumable-
+    //   draft progress line, the history list's search/filter/section/
+    //   status vocabulary for both the queued and the confirmed halves, and
+    //   the fill screen's own chrome (site/printed-name header, the
+    //   template-level signature label, the submit action, the "not due
+    //   yet" advisory, and the submit-gate's four structured reason lines -
+    //   deliberately NOT the domain layer's own English
+    //   `ChecklistSubmitGate.blockingReasons`, which that class's own doc
+    //   comment states is never for display).
+    // 242 + 49 = 291.
+    // - `features/approvals` (inspection approvals: the supervisor's queue
+    //   over `inspections.approval_status = 'pending_approval'` and the
+    //   single-stage review/decide screen that goes through the
+    //   `decide_inspection_approval` RPC) added 38 keys:
+    //   inspectionApprovalsTitle through inspectionApprovalSignatureRedraw -
+    //   the queue's title/count/empty/error/badge vocabulary, the review
+    //   screen's fallback title, its tyre-conditions section heading and
+    //   empty message, the decided-vs-still-pending sections (decision
+    //   title, approved/returned labels, "approved/returned by" and
+    //   "signing as" sentences - each carrying a `{name}` placeholder so a
+    //   Latin-script email or display name can be LTR-isolated before being
+    //   substituted in, per `TpDirection.isolateLtr`'s own rule for an
+    //   identifier concatenated into translated prose), the note field's
+    //   label/hint, the Approve/Return buttons, the two validation dialogs
+    //   (signature required / reason required), the two decision-outcome
+    //   dialogs (approved/returned, each with its own full sentence rather
+    //   than one templated string with an English word substituted in - a
+    //   deliberately different choice from the mobile source's own inline
+    //   ternary, made because splicing an untranslated fragment mid-sentence
+    //   does not survive translation into a language with different word
+    //   order), the Stay-here/Back-to-list actions, the save-failed dialog,
+    //   and its own copy of the signature pad's saved-preview/redraw pair -
+    //   mirroring but not sharing `inspectionSignatureSavedLabel`/
+    //   `inspectionSignatureRedraw`, exactly as the checklist feature's own
+    //   copy of that same pair does not share them either (see this test's
+    //   own comment on the 242+49 checklist batch, above). Nine further
+    //   strings this feature needed were genuine REUSES of existing keys,
+    //   not new ones: `valueUnavailable`, `inspectionInspectorUnknown`,
+    //   `inspectionObservationsLabel`, `inspectionInspectorSignatureLabel`,
+    //   `inspectionSignatureMissing`, `inspectionNotFoundTitle`,
+    //   `tyreDiagramPressureDetail`, `actionClear` and `actionClose` - each
+    //   already states the exact same fact this feature needed to state
+    //   over the same `inspections` table or the same shared tyre-diagram
+    //   engine, so duplicating them would only have drifted.
+    // 291 + 38 = 329.
+    // - `features/approvals` (checklist approvals: the two-rung
+    //   supervisor/area-manager queue and review screen over
+    //   `checklist_submissions.approval_status`, decided via a queued raw
+    //   `.update()` rather than an RPC - checklist approvals mirror
+    //   `mobile/lib/checklists.ts`'s own `decideApproval`, which writes the
+    //   row directly, unlike the single-stage inspection approval flow
+    //   above which does go through `decide_inspection_approval`) added 65
+    //   keys: checklistApprovalsTitle through
+    //   checklistApprovalSignatureRedraw - the queue's title/awaiting-count/
+    //   empty (both the "nothing at all" and the "nothing needs you"
+    //   variants)/error/filter-chip/your-turn/fallback-title vocabulary,
+    //   its blocked-decisions panel (a THIRD queue state distinct from the
+    //   inspection queue's plain queued/failed pair, because a checklist
+    //   approval that failed for a reason other than connectivity - a stale
+    //   stage, a server-side optimistic-concurrency conflict - must never
+    //   be silently retried, only surfaced for a person to look at again),
+    //   its six-value status-chip vocabulary (closed/sent back/waiting on
+    //   each rung/waiting approval/no approval needed - deliberately
+    //   distinct strings rather than reusing the inspection approval
+    //   feature's own status vocabulary, because the two features' status
+    //   spaces do not line up one-to-one), the review screen's load-error/
+    //   not-found pair, its sign-offs and responses section headings (the
+    //   latter feeding a read-only render of every template field through
+    //   the checklists feature's own `ChecklistFieldAnswerTile`, not a
+    //   second answer-rendering widget), the per-rung labels (filled-by/
+    //   supervisor/area-manager/approval, plus "not signed yet"), the
+    //   decision form's own field labels (name/note, each rung's own
+    //   signature-pad label), the Return/Sign-off/Approve-and-close button
+    //   labels, the four validation messages a decision can be blocked on
+    //   (mirroring `decisionRequirementError`'s own branches without
+    //   displaying that pure function's pinned English text directly), the
+    //   "not your rung to decide" and "nothing left to decide" advisories
+    //   (the former carrying a `{status}` placeholder), the save-failed
+    //   dialog, the three decision-outcome dialogs (sent back/signed off/
+    //   approved, each a full sentence for the same word-order reason the
+    //   inspection approval feature's own outcome dialogs are full
+    //   sentences) with their shared Stay-here/Back-to-list actions, an
+    //   offline "queued, will send later" dialog with no counterpart in the
+    //   single-stage inspection flow (which is decided synchronously
+    //   against the server rather than through an offline-safe queue), the
+    //   score line and its passed/failed words, and its own copy of the
+    //   signature pad's saved-preview/redraw pair - mirroring but not
+    //   sharing either `inspectionSignatureSavedLabel`/
+    //   `inspectionSignatureRedraw` or `checklistSignatureSavedLabel`/
+    //   `checklistSignatureRedraw`, for the same reason this test's own
+    //   242+49 and 291+38 comments give for why each feature keeps its own
+    //   copy of that pair rather than sharing one.
+    // 329 + 65 = 394.
+    // - `features/meter_logs` (Phase 7, the daily odometer/engine-hour
+    //   capture screen ported from `mobile/lib/meterLogs.ts` and
+    //   `mobile/app/(app)/meter-logs.tsx`) added 51 keys: meterLogNavTitle
+    //   through meterLogRecentKmValue - the workspace-loading guard, the
+    //   asset/site fields and the site auto-fill helper text, the "last
+    //   reading" panel's three states (checking/unknown/known, the latter
+    //   carrying `{km}`/`{date}` placeholders), the odometer and engine
+    //   -hours fields with their conditional help text, notes, its own copy
+    //   of the signature pad's saved-preview/redraw pair (mirroring but not
+    //   sharing `inspectionSignatureSavedLabel`/`inspectionSignatureRedraw`,
+    //   `checklistSignatureSavedLabel`/`checklistSignatureRedraw` or
+    //   `checklistApprovalSignatureSavedLabel`/
+    //   `checklistApprovalSignatureRedraw`, for the same reason this test's
+    //   own earlier batches give for why each feature keeps its own copy of
+    //   that pair), the Review & Save action, the four validation dialogs
+    //   (asset/reading required, invalid reading, below-last-reading and
+    //   big-jump confirmations - the latter two each carrying a `{km}`
+    //   placeholder), the review step's photograph/required-photo/save
+    //   -reading vocabulary, the flagged-for-review note, the two save
+    //   -outcome messages (plain and flagged), a generic try-again fallback,
+    //   and the recent-readings sheet's own title/empty/error/row-value
+    //   strings.
+    // 394 + 51 = 445.
+    // - `features/washing` (Phase 7, the vehicle-wash capture screen ported
+    //   from `mobile/lib/wash.ts`, `mobile/lib/washSchedule.ts` and
+    //   `mobile/app/(app)/washing.tsx`) added 50 keys: washNavTitle through
+    //   washRecentLoadErrorMessage - its own copy of the workspace-loading
+    //   guard message (the identical fact as meter logs', kept as a
+    //   separate key for the same top-level-feature-independence reason),
+    //   the "Due for wash" panel's title/none/today/overdue (the latter
+    //   carrying an `{days}` placeholder)/load-error vocabulary, the asset
+    //   field and its master-info fleet-number fragment (`{fleetNo}`), the
+    //   site field and its auto-fill help text, the locked-to-today date
+    //   line (`{date}`), the seven-value wash-type vocabulary and the two
+    //   -value status vocabulary (both DB-CHECK tokens, translated only for
+    //   display - see `wash_record.dart`'s own `kWashTypes`/
+    //   `kWashStatusChoices`), the photo gallery's add/camera/gallery
+    //   labels, the operator/bay/odometer/notes detail fields, the two
+    //   validation dialogs (asset/wash-type required), the Save Wash action
+    //   and its saved/failed/try-again outcomes, and the recent-washes
+    //   sheet's own title/empty/error strings.
+    // 445 + 50 = 495.
+    // - `features/work_orders` and `features/home` (Phase 8a - the real
+    //   `work_orders` maintenance job-card list and detail screens, plus
+    //   the minimal Home branch-root screen built alongside them purely to
+    //   make Work Orders genuinely reachable - see `features/home/
+    //   presentation/home_screen.dart`'s own library comment) together
+    //   added 52 keys: homeNavTitle through workOrderFieldDescription.
+    //   `features/home` contributed 6 (homeNavTitle, homeGreeting,
+    //   homeQuickActionsHeading, homeWorkOrdersTile,
+    //   homeWorkOrdersTileSubtitle, homeNoQuickActionsMessage) - a
+    //   deliberately small vocabulary for a deliberately minimal stopgap
+    //   screen, not a Home hub's full copy. `features/work_orders`
+    //   contributed the remaining 46: the list screen's nav title/active
+    //   -count (carrying a `{count}` placeholder)/Active-All filter chips/
+    //   empty and load-error states/the two raw-value display fallbacks
+    //   (a blank status shows a translated "Open", a blank work type shows
+    //   a translated "General work" - `work_order_badges.dart`'s own
+    //   library comment on why a STORED value is otherwise always shown
+    //   verbatim, never translated); the create sheet's field labels/
+    //   hints/validation and save-outcome messages; the six work-type and
+    //   four priority CREATE-FORM option labels (translated for the
+    //   picker only - a saved row still reads back its raw English word);
+    //   the two status-advance button labels (each simply naming the
+    //   state it moves a job to) and their shared "queued, will sync"
+    //   outcome message, used by both the list row's inline action and the
+    //   detail screen's own; and the detail screen's own not-found/
+    //   load-error pair, title fallback, and seven field labels (work
+    //   order number, work type, site, country, opened/started/completed,
+    //   description).
+    // 495 + 52 = 547. Bumping this pin is the expected maintenance action
     // for a real key addition; this comment exists so the next person to
     // touch it can tell that apart from a mistake. Per this file's own
     // earlier note: if a future edit ever makes a translated file the
     // larger one, re-derive which file is the reference before touching
     // this number - do not just raise it blind.
-    test('en, ar and ur each carry exactly 242 translatable keys today', () {
-      expect(_translatableKeys(en).length, 242);
-      expect(_translatableKeys(ar).length, 242);
-      expect(_translatableKeys(ur).length, 242);
+    test('en, ar and ur each carry exactly 547 translatable keys today', () {
+      expect(_translatableKeys(en).length, 547);
+      expect(_translatableKeys(ar).length, 547);
+      expect(_translatableKeys(ur).length, 547);
     });
   });
 

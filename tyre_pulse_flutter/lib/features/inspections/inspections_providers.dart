@@ -1,21 +1,15 @@
 /// Riverpod wiring for the inspections feature.
 ///
-/// Follows the precedent `features/assets/presentation/
-/// vehicle_fleet_providers.dart` already set for a feature that needs the
-/// local database before the composition root exposes a canonical
-/// instance: [appDatabaseProvider] THROWS rather than silently
-/// constructing a second connection to the on-device SQLite file, because
-/// draft persistence is this feature's whole reason for existing (risk
-/// R2) and a feature that quietly disabled it would be worse than one
-/// that refuses to build until it is wired correctly. A LATER integration
-/// pass overrides this at the composition root with the app's one real
-/// `AppDatabase` instance - the same "later phase" `vehicle_fleet_
-/// providers.dart`'s own comment and `background_sync.dart`'s `main.dart`
-/// wiring are both already deferred to.
+/// [appDatabaseProvider] now lives at `core/database/app_database_
+/// provider.dart` - see that file's library comment for why it moved out of
+/// here the moment a second feature (checklists) needed the same local
+/// database. This file re-exports nothing; it imports the canonical provider
+/// like any other consumer.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
@@ -24,17 +18,6 @@ import 'package:tyre_pulse/features/inspections/data/inspection_photo_uploader.d
 import 'package:tyre_pulse/features/inspections/data/inspection_remote_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart';
-
-/// See the library comment. Override at the composition root.
-final Provider<AppDatabase> appDatabaseProvider = Provider<AppDatabase>((
-  ref,
-) {
-  throw UnimplementedError(
-    'appDatabaseProvider has no value. Override it at the composition '
-    'root with the app\'s one AppDatabase instance once core/database '
-    'exposes a canonical provider for it.',
-  );
-});
 
 final Provider<InspectionDraftRepository> inspectionDraftRepositoryProvider =
     Provider<InspectionDraftRepository>((ref) {

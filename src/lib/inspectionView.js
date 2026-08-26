@@ -222,6 +222,59 @@ export function tyreReadingRows(row) {
   return { rows, stats, normTc }
 }
 
+/**
+ * The tyre readings on ONE inspection that are NOT "Good" - every wheel a
+ * reader downloading the register actually wants to see: which position, and
+ * what was recorded against it (Damage/Puncture/Worn/Flat/Wear/...).
+ *
+ * Built on `tyreReadingRows`, so a position only appears when something was
+ * genuinely recorded against it, and excluded on the SAME risk band the tyre
+ * map and every other surface draws from - a wheel this leaves out is the
+ * identical wheel the diagram would draw green.
+ */
+export function affectedTyreReadings(row) {
+  return tyreReadingRows(row).rows.filter((r) => r.risk !== 'good')
+}
+
+/** One line per affected tyre on an inspection - "LHF1: Puncture", joined for a single cell. */
+export function affectedTyresSummary(row, { separator = '; ' } = {}) {
+  const affected = affectedTyreReadings(row)
+  if (!affected.length) return ''
+  return affected
+    .map((r) => `${r.label || r.position}: ${r.condition || RISK_LABEL[r.risk] || 'Flagged'}`)
+    .join(separator)
+}
+
+/**
+ * Every affected tyre across a LIST of inspections, one row per tyre, carrying
+ * enough of the parent inspection to stand on its own. This is what a
+ * spreadsheet reader actually needs to act on a fault: which asset, which
+ * position, what was found - without opening each inspection individually.
+ */
+export function affectedTyreRowsForExport(inspections = []) {
+  const out = []
+  for (const row of Array.isArray(inspections) ? inspections : []) {
+    if (!row) continue
+    for (const r of affectedTyreReadings(row)) {
+      out.push({
+        inspection_date: row.inspection_date || row.scheduled_date || row.completed_date || null,
+        inspection_type: row.inspection_type || null,
+        asset_no: row.asset_no || null,
+        site: row.site || null,
+        vehicle_type: row.vehicle_type || null,
+        inspector: row.inspector || row.attendees || null,
+        position: r.label || r.position,
+        condition: r.condition || RISK_LABEL[r.risk] || null,
+        severity: r.risk === 'critical' ? 'Critical' : r.risk === 'warning' ? 'Warning' : 'Flagged',
+        pressure_psi: r.pressure,
+        tread_mm: r.tread,
+        notes: r.notes || null,
+      })
+    }
+  }
+  return out
+}
+
 /** Render a recorded number, or say plainly that it was not recorded. */
 export function readingText(value, unit = '') {
   if (value == null) return 'Not recorded'

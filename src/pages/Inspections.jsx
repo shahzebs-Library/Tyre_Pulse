@@ -10,7 +10,7 @@ import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
+import { exportToExcel, exportSheetsToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, ExternalLink, Trash2, AlertTriangle, ChevronDown } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
@@ -66,7 +66,7 @@ import { getTyreRunningLife } from '../lib/api/tyreRunningLife'
 import { shapeRunningLife, lifeDisplay, measureFor } from '../lib/tyreRunningLife'
 import { activeSelections, buildAssetFlagMap, damagedPositions, inspectionOverview, siteSummary, defectsForAction, isSevereCondition, OVERVIEW_FOCUS, focusMatches, focusSummary, scopeInspections , vehicleTypesIn } from '../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../lib/tyreBay'
-import { positionLabelMap, riskForCondition } from '../lib/inspectionView'
+import { positionLabelMap, riskForCondition, affectedTyresSummary, affectedTyreRowsForExport } from '../lib/inspectionView'
 import { tyreCompleteness, pendingCodes } from '../lib/tyreCompleteness'
 import { listSites, siteRegionMap, regionForSite, regionsIn } from '../lib/api/sites'
 import { trackingLink, trackTyreChanges, trackingBySite } from '../lib/tyreChangeTracking'
@@ -2115,6 +2115,41 @@ export default function Inspections() {
     alignItems: 'center',
   }
 
+  /**
+   * The register's Excel button used to export only the inspection header
+   * fields - nothing said WHICH tyre was marked, so a reader could not tell a
+   * clean inspection from one with a punctured or damaged wheel without
+   * opening every row. Now two sheets: the inspection list itself (with a new
+   * "Affected Tyres" summary column) and a "Tyre Findings" sheet carrying one
+   * row per tyre marked as anything other than Good - position, condition and
+   * whatever pressure/tread/notes were recorded against it.
+   */
+  async function exportInspectionsExcel() {
+    try {
+      const tyreRows = affectedTyreRowsForExport(filtered)
+      await exportSheetsToExcel([
+        {
+          name: 'Inspections',
+          rows: filtered.map((r) => ({ ...r, affected_tyres: affectedTyresSummary(r) || 'None' })),
+          columns: ['inspection_type', 'title', 'site', 'asset_no', 'scheduled_date', 'status', 'severity', 'inspector', 'attendees', 'affected_tyres', 'findings'],
+          headers: ['Type', 'Title', 'Site', 'Asset No', 'Date', 'Status', 'Severity', 'Inspector', 'Attendees', 'Affected Tyres', 'Findings'],
+          note: 'Every inspection in the current filter. "Affected Tyres" summarises any tyre marked as anything other than Good.',
+        },
+        {
+          name: 'Tyre Findings',
+          rows: tyreRows,
+          columns: ['inspection_date', 'inspection_type', 'asset_no', 'site', 'vehicle_type', 'inspector', 'position', 'condition', 'severity', 'pressure_psi', 'tread_mm', 'notes'],
+          headers: ['Date', 'Type', 'Asset No', 'Site', 'Vehicle Type', 'Inspector', 'Position', 'Condition', 'Severity', 'Pressure (PSI)', 'Tread (mm)', 'Notes'],
+          note: 'One row per tyre marked as anything other than Good - Damaged, Puncture, Worn, Flat, Wear and similar - so it can be filtered and actioned directly.',
+          emptyNote: 'No tyre in this selection was marked as anything other than Good.',
+        },
+      ], 'TyrePulse_Inspections', {
+        title: 'Inspections & Tyre Findings',
+        meta: { 'Affected tyres found': tyreRows.length },
+      })
+    } catch (e) { setApproveMsg({ type: 'error', text: toUserMessage(e, 'Could not export. Try again.') }) }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -2124,12 +2159,7 @@ export default function Inspections() {
         actions={isTyreMan ? null : (
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={async () => { try { await exportToExcel(
-                filtered,
-                ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
-                ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
-                'TyrePulse_Inspections'
-              ) } catch (e) { setApproveMsg({ type: 'error', text: toUserMessage(e, 'Could not export. Try again.') }) } }}
+              onClick={exportInspectionsExcel}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
               <Download size={14}/> {t('inspections.actions.excel')}

@@ -4,6 +4,7 @@ import {
   pressureFlagAvailable, pressureDeviation, readingText,
   inspectionMeta, inspectionSummary, isComplete, positionLabelMap,
   inspectionDiagramModel,
+  affectedTyreReadings, affectedTyresSummary, affectedTyreRowsForExport,
 } from '../lib/inspectionView'
 
 describe('normalizeTyreConditions', () => {
@@ -187,5 +188,64 @@ describe('inspectionMeta / inspectionSummary / isComplete', () => {
     expect(isComplete({ status: 'approved' })).toBe(true)
     expect(isComplete({ status: 'In Progress' })).toBe(false)
     expect(isComplete(null)).toBe(false)
+  })
+})
+
+describe('affectedTyreReadings / affectedTyresSummary / affectedTyreRowsForExport', () => {
+  const row = {
+    inspection_date: '2026-08-20',
+    inspection_type: 'Routine',
+    asset_no: 'TM514',
+    site: 'NHC',
+    vehicle_type: 'TR-MIXER',
+    inspector: 'Ijaz',
+    tyre_conditions: {
+      LHF1: { condition: 'Good', pressure: 110 },
+      RHF1: { condition: 'Puncture', pressure: 20, notes: 'Nail in tread' },
+      LHR1: { condition: 'Worn', tread: 2 },
+    },
+  }
+
+  it('keeps only tyres whose band is not good', () => {
+    const affected = affectedTyreReadings(row)
+    expect(affected.map((r) => r.position).sort()).toEqual(['LHR1', 'RHF1'])
+    expect(affected.every((r) => r.risk !== 'good')).toBe(true)
+  })
+
+  it('returns nothing when every tyre is good', () => {
+    expect(affectedTyreReadings({ tyre_conditions: { FL: { condition: 'Good' } } })).toEqual([])
+  })
+
+  it('summarises the affected tyres into one readable line, empty when none', () => {
+    const summary = affectedTyresSummary(row)
+    expect(summary).toContain('RHF1: Puncture')
+    expect(summary).toContain('LHR1: Worn')
+    expect(affectedTyresSummary({ tyre_conditions: { FL: { condition: 'Good' } } })).toBe('')
+  })
+
+  it('builds one export row per affected tyre, carrying the parent inspection context', () => {
+    const rows = affectedTyreRowsForExport([row])
+    expect(rows).toHaveLength(2)
+    const puncture = rows.find((r) => r.position === 'RHF1')
+    expect(puncture).toMatchObject({
+      asset_no: 'TM514', site: 'NHC', vehicle_type: 'TR-MIXER', inspector: 'Ijaz',
+      condition: 'Puncture', severity: 'Critical', pressure_psi: 20, notes: 'Nail in tread',
+    })
+    const worn = rows.find((r) => r.position === 'LHR1')
+    expect(worn).toMatchObject({ condition: 'Worn', severity: 'Warning', tread_mm: 2 })
+  })
+
+  it('spans multiple inspections and skips ones with nothing affected', () => {
+    const clean = { asset_no: 'TM600', tyre_conditions: { FL: { condition: 'Good' } } }
+    const rows = affectedTyreRowsForExport([row, clean, null])
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.asset_no === 'TM514')).toBe(true)
+  })
+
+  it('never drops "None" as a defensible band, only "Good"', () => {
+    // A word riskForCondition cannot place still reads as 'none', not 'good',
+    // so it must still surface as an affected tyre rather than being hidden.
+    const oddWord = { tyre_conditions: { FL: { condition: 'Something Else' } } }
+    expect(affectedTyreReadings(oddWord)).toHaveLength(1)
   })
 })

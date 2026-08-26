@@ -118,6 +118,58 @@ accumulating (3 fails). Each restored and re-verified.
 
 ---
 
+# ⚑ SESSION 2026-08-26 — TELEMATICS KM/HOURS LOADED (380 assets, GPS export). No migration, data-only.
+
+**Reconciled a diverged local branch with a parallel session's advances first** - `git fetch` showed
+`main` had moved 12+ commits ahead. Diffed both directions, confirmed nothing local would be lost,
+reset onto the new tip and reapplied the ONE genuinely novel piece as a patch
+(`git apply --3way`): the EngineeringKpi failure-rate null-guard fix (a fleet with zero rated tyres
+was printing "0.0% good" instead of N/A - `null * 100 === 0` is falsy-safe but numerically wrong).
+Pushed `eea3112d` as a clean fast-forward, no force-push to `main`. A locally-drafted V604 migration
+file was DROPPED as redundant - the parallel session had already captured the identical live fix
+into the canonical `MIGRATIONS_V604_SCRAP_SERIAL_CASE_INSENSITIVE.sql` and resolved the number
+collision themselves. **RULE reaffirmed: diff before resetting onto a moved remote, never assume a
+non-fast-forward push means work is lost.**
+
+**GPS telematics file loaded: `Current_KM__HOurs.xlsx` (380 assets, GPS odometer + hour meter).**
+User: "upload this as my current km to update my tyre life cycle accordingly." Two tables are the
+correct target, confirmed by reading `get_tyre_running_life()` end to end before writing anything:
+**`odometer_logs`** (km) is synced to `vehicle_fleet.current_km` by trigger
+`trg_sync_asset_current_km` (country-aware join, monotonic guard - never lowers an existing higher
+reading), which is what `km_run` in the tyre-life engine actually reads. **`engine_hours_logs`**
+(hours) has NO sync trigger - `get_tyre_running_life` reads it LIVE via a correlated subquery
+(latest reading per asset+country), so an insert alone is sufficient.
+- **All 380 sheet codes matched a fleet asset (0 unmatched).** 6 carried a stray hyphen the DB's own
+  `normalize_asset_no()` does not strip (BH-037, PL-090, PL-091, TM-616, TM-672, TM-689) - matched by
+  comparing both sides with all punctuation stripped, then writing using the FLEET's own stored
+  `asset_no` (already hyphen-free) so the sync trigger's `btrim()` comparison lines up.
+- **50 codes were cross-country ambiguous** (49 KSA+UAE, one KSA+Egypt = PL051). **Resolved to KSA for
+  all 50, backed by evidence, never guessed (the V376 doctrine):** every one of the 328 unambiguous
+  sheet matches was KSA-only (0 UAE-only, 0 Egypt-only anywhere in the file); and for every ambiguous
+  pair the KSA row carries full identity (52/52 chassis_no, 52/52 make, 46/52 engine_no) while the
+  shadow UAE/Egypt row is an auto-derived placeholder (0/52 chassis, 0/52 engine, mostly blank make) -
+  consistent with the documented V348 pattern of derived fleet rows. Verified after resolving: exactly
+  380 resolved rows, 0 still ambiguous.
+- **Loaded via a real staging table** (`_km_import_staging` -> `_km_match` -> `_km_resolved`, dropped
+  after use - MCP `execute_sql` calls do not share a session, so a real table was used instead of a
+  temp table which would not have persisted across calls). Inserted with explicit
+  `organisation_id`/`country` on every row (never left to `app_current_org()`, which is NULL in a
+  service-role session) + `source='telematics'` + `reading_date=current_date`.
+- **Result: 370 odometer readings (10 sheet rows had a blank GPS reading, correctly skipped) + 89
+  hour-meter readings (260 blank + 31 literal 'N/A', correctly skipped).** 0 flagged as a meter
+  regression. Of the 370 km writes, 368 became the new `current_km`; 2 (e.g. BH009) were correctly
+  REFUSED by the monotonic guard because the fleet already held a higher reading from another source -
+  the odometer_logs row still recorded for history, current_km simply did not regress. Verified live
+  via `get_tyre_running_life`: BH015 and TM514 both now show the updated `current_km` flowing through
+  to `km_run`/`life_used_pct` in the same call.
+- **RULE for any future telematics/meter bulk load**: match on punctuation-stripped asset code, write
+  using the FLEET's own stored spelling (not the source file's), resolve cross-country ambiguity with
+  evidence (base-rate + identity-completeness) never a coin flip, and always check `flagged=true`
+  count after insert - the sync/regression triggers are the safety net, not a guarantee nothing needs
+  a second look.
+
+---
+
 # ⚑ SESSION 2026-08-24 — CLOSED CLEAN, MERGED, DEPLOYED. Next free migration **V608**.
 ### WORK ORDER = THE WHOLE JOB CARD (V605) · MIGRATION NUMBERING REPAIRED · TEST SUITE 146 FAILURES -> 0 · V607 SECURITY · REACT-ROUTER 7
 

@@ -56,13 +56,31 @@ jobs:
 
       - name: Reconstruct the release keystore from secrets
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.jks
+          # `tr -d '[:space:]'` first: a base64 secret pasted through a browser
+          # UI can pick up an embedded newline or trailing whitespace, which
+          # `base64 -d` would otherwise fold into the decoded bytes and
+          # corrupt the keystore (this is exactly what happened the first
+          # time this workflow ran - "Tag number over 30 is not supported"
+          # is DER-parsing-speak for "this file's bytes are not a valid
+          # keystore").
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | tr -d '[:space:]' | base64 -d > android/app/release.jks
           cat > android/key.properties <<EOF
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           storeFile=release.jks
           EOF
+
+      - name: Verify the reconstructed keystore is readable
+        # Fails fast, with a clear message, rather than 6+ minutes into a
+        # release build only to fail at the final signing step on a
+        # keystore that was never valid to begin with.
+        run: |
+          keytool -list \
+            -keystore android/app/release.jks \
+            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+          || { echo "::error::The reconstructed keystore is not readable - ANDROID_KEYSTORE_BASE64 is likely corrupted (a stray newline/whitespace from copy-paste is the usual cause). Re-copy it from a single unbroken line and re-add the secret."; exit 1; }
 
       - name: Wire the signing config into build.gradle.kts
         # Written directly rather than patched with a regex on freshly

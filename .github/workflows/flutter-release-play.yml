@@ -1,0 +1,152 @@
+name: Flutter Release - Play Internal Testing
+
+# PUBLISHES to Google Play Console Internal Testing for the app
+# com.shahzebrahman.tyrepulse - a SEPARATE, distinct app listing from the
+# existing production React Native app (com.shahzebrahman.tyrepulseinspector),
+# with its own throwaway signing key generated specifically for this purpose.
+# There is zero signing-continuity risk with the RN app: different package
+# name, different key, different Play Console listing.
+#
+# workflow_dispatch ONLY, deliberately - this must never fire on a push or a
+# PR. Every trigger is a real, visible upload to internal testers; nobody
+# should get a new build just because someone pushed to main.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   GOOGLE_SERVICE_ACCOUNT_KEY_F  - the Play Console service-account JSON,
+#     already created and already granted access on this app (per the user).
+#   ANDROID_KEYSTORE_BASE64       - base64 of the release .jks keystore file.
+#   ANDROID_KEYSTORE_PASSWORD     - the keystore's store password.
+#   ANDROID_KEY_PASSWORD          - the key's password (same as the store
+#     password for a PKCS12 keystore, which is the modern keytool default).
+#   ANDROID_KEY_ALIAS             - the key alias inside the keystore.
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: tyre_pulse_flutter
+
+jobs:
+  build_and_publish:
+    name: Build signed AAB and publish to Internal Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create platform folder
+        # android/ is deliberately not committed (see flutter-ci.yml's
+        # identical step and docs/BOOTSTRAP.md) - generated fresh here just
+        # to get every OTHER file flutter create produces (Gradle wrapper,
+        # manifest, Kotlin scaffold, ios/ for parity). The one file that
+        # actually needs the real package id and signing config,
+        # android/app/build.gradle.kts, is fully overwritten with known-good
+        # content in a later step below, so nothing here needs to patch it.
+        run: flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
+
+      - name: Reconstruct the release keystore from secrets
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.jks
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=release.jks
+          EOF
+
+      - name: Wire the signing config into build.gradle.kts
+        # Written directly rather than patched with a regex on freshly
+        # generated boilerplate - that boilerplate's exact comment text is
+        # not a contract Flutter guarantees to keep stable across versions,
+        # and a regex that silently fails to match would leave the release
+        # build signed with the DEBUG key without erroring. This is the
+        # same content already built and verified locally for this app.
+        run: |
+          cat > android/app/build.gradle.kts <<'EOF'
+          import java.util.Properties
+          import java.io.FileInputStream
+
+          plugins {
+              id("com.android.application")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          val keystoreProperties = Properties()
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              namespace = "com.shahzebrahman.tyrepulse"
+              compileSdk = 37
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              defaultConfig {
+                  applicationId = "com.shahzebrahman.tyrepulse"
+                  minSdk = flutter.minSdkVersion
+                  targetSdk = flutter.targetSdkVersion
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+              }
+
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file(keystoreProperties["storeFile"] as String)
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+
+          kotlin {
+              compilerOptions {
+                  jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+          EOF
+          cat android/app/build.gradle.kts
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build signed release AAB
+        run: flutter build appbundle --release
+
+      - name: Publish to Play Console Internal Testing
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_F }}
+          packageName: com.shahzebrahman.tyrepulse
+          releaseFiles: tyre_pulse_flutter/build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed

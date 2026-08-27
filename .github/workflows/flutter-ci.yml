@@ -157,6 +157,32 @@ jobs:
             # itself. Reproduced and confirmed locally before adding this.
             sed -i 's/compileSdk = flutter\.compileSdkVersion/compileSdk = 37/' \
               android/app/build.gradle.kts 2>/dev/null || true
+            # The sed above only rewrites the Gradle namespace/applicationId
+            # string. `flutter create` ALSO writes MainActivity.kt under a
+            # directory tree matching the default package
+            # (`kotlin/com/shahzebrahman/tyre_pulse/MainActivity.kt`) and
+            # declares `package com.shahzebrahman.tyre_pulse` inside the file
+            # itself - neither is touched by that sed. Left unpatched, the
+            # compiled Gradle namespace and the actual class's package
+            # silently diverge: AndroidManifest.xml's
+            # `android:name=".MainActivity"` resolves against the Gradle
+            # namespace (com.shahzebrahman.tyrepulseinspector.MainActivity),
+            # but the compiled class only exists at
+            # com.shahzebrahman.tyre_pulse.MainActivity. Android throws
+            # ClassNotFoundException and the app crashes on the very first
+            # launch, every time, on every build this job has ever produced.
+            # Reproduced on a real device and confirmed fixed by relocating
+            # and repatching this file before adding this step.
+            old_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse"
+            new_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyrepulseinspector"
+            if [ -d "$old_kt_dir" ]; then
+              mkdir -p "$new_kt_dir"
+              for f in "$old_kt_dir"/*; do
+                sed 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulseinspector/' \
+                  "$f" > "$new_kt_dir/$(basename "$f")"
+              done
+              rm -rf "$old_kt_dir"
+            fi
           else
             echo "android/ present - using the committed project"
           fi

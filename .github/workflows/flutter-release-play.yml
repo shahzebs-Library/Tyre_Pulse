@@ -48,11 +48,39 @@ jobs:
         # android/ is deliberately not committed (see flutter-ci.yml's
         # identical step and docs/BOOTSTRAP.md) - generated fresh here just
         # to get every OTHER file flutter create produces (Gradle wrapper,
-        # manifest, Kotlin scaffold, ios/ for parity). The one file that
-        # actually needs the real package id and signing config,
-        # android/app/build.gradle.kts, is fully overwritten with known-good
-        # content in a later step below, so nothing here needs to patch it.
+        # manifest, Kotlin scaffold, ios/ for parity). build.gradle.kts is
+        # fully overwritten with known-good content in a later step below,
+        # so nothing here needs to patch that one. MainActivity.kt is a
+        # SEPARATE file with its own package declaration that build.gradle.kts
+        # cannot fix by itself - see the next step.
         run: flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
+
+      - name: Fix MainActivity.kt's package to match the Gradle namespace
+        # flutter create writes MainActivity.kt under
+        # android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse/ and
+        # declares `package com.shahzebrahman.tyre_pulse` inside the file
+        # itself. The next step overwrites build.gradle.kts's namespace and
+        # applicationId to com.shahzebrahman.tyrepulse, but that alone does
+        # not relocate or repatch this file. Left as-is,
+        # AndroidManifest.xml's android:name=".MainActivity" resolves
+        # against the new Gradle namespace while the compiled class only
+        # exists under the OLD package - Android throws
+        # ClassNotFoundException and the app crashes on the very first
+        # launch. This is the exact bug that crashed the first build this
+        # workflow ever published to Internal Testing (versionCode 1,
+        # reproduced and confirmed on a real device). flutter-ci.yml carries
+        # the identical fix for the identical reason.
+        run: |
+          old_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse"
+          new_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyrepulse"
+          if [ -d "$old_kt_dir" ]; then
+            mkdir -p "$new_kt_dir"
+            for f in "$old_kt_dir"/*; do
+              sed 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulse/' \
+                "$f" > "$new_kt_dir/$(basename "$f")"
+            done
+            rm -rf "$old_kt_dir"
+          fi
 
       - name: Reconstruct the release keystore from secrets
         run: |

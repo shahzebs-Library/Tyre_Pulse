@@ -364,16 +364,54 @@ void main() {
     //   row states the identical fact the Home screen's own site stat card
     //   already does, over the same `WorkspaceProfile.legacySite` field) -
     //   duplicating either would only have drifted the two screens apart.
-    // 621 + 5 = 626. Bumping this pin is the expected maintenance action
+    // 621 + 5 = 626.
+    // - `features/tyre_diagram` again (the redesigned "Tyre Map / Vehicle
+    //   Layout" board - a real Layout/List toggle, a Total/OK/Monitor/
+    //   Critical stat row, and the flat list alternative to the diagram -
+    //   plus the two new screens it opens into: Tyre Detail for one wheel
+    //   and Take Action for what can be done about it) added 61 keys,
+    //   nothing retired: tyreDiagramModeLayout through
+    //   tyreDiagramListEmptyMessage (12 - the two view-mode toggle labels,
+    //   the four stat-row labels, the "{count} not yet recorded" caption,
+    //   the list row's tread/pressure value templates and its own "Not
+    //   recorded" fallback, and the list's empty title/message pair);
+    //   tyreDetailTitle through tyreDetailNoEvidenceMessage (16 - the
+    //   three stat labels, the shared "not recorded" fallback and its
+    //   fuller caption form, the Overview and Additional info section
+    //   headings, the four Additional-info field labels for data this
+    //   domain does not track at all - brand/pattern, size, installed
+    //   distance, running distance - deliberately rendering the honest
+    //   fallback rather than a fabricated value per AGENTS.md rule 1, the
+    //   asset/site field labels, the Take action button, and the "nobody
+    //   has recorded anything yet" message); takeActionTitle through
+    //   takeActionComingSoonCaption (13 - the seven action-row titles,
+    //   Replace tyre's and Report defect's own subtitles as the two rows a
+    //   real write path backs, Adjust reading's two subtitles for its
+    //   conditionally-live state, and the single "not available in this
+    //   build yet" caption shared by the four rows nothing in this
+    //   codebase's command registry backs - repository rule 7, never a
+    //   live-looking control that does nothing); reportDefectTitle through
+    //   reportDefectSaveFailedTitle (14 - the sheet's own title, the
+    //   title/description field labels and hints, the damage-reason and
+    //   priority dropdown labels, the submit action, the title-required
+    //   validation pair, and the saved/save-failed outcome messages, the
+    //   last of which deliberately reuses the tyre-exchange feature's own
+    //   `tyreReplaceTryAgainFallback` rather than adding a duplicate
+    //   generic-retry string); and damageReasonPuncture through
+    //   damageReasonOther (6 - the damage-reason dropdown's own option
+    //   vocabulary, distinct from any tyre-condition vocabulary because a
+    //   defect report's cause is not the same axis as a recorded
+    //   condition).
+    // 626 + 61 = 687. Bumping this pin is the expected maintenance action
     // for a real key addition; this comment exists so the next person to
     // touch it can tell that apart from a mistake. Per this file's own
     // earlier note: if a future edit ever makes a translated file the
     // larger one, re-derive which file is the reference before touching
     // this number - do not just raise it blind.
-    test('en, ar and ur each carry exactly 626 translatable keys today', () {
-      expect(_translatableKeys(en).length, 626);
-      expect(_translatableKeys(ar).length, 626);
-      expect(_translatableKeys(ur).length, 626);
+    test('en, ar and ur each carry exactly 687 translatable keys today', () {
+      expect(_translatableKeys(en).length, 687);
+      expect(_translatableKeys(ar).length, 687);
+      expect(_translatableKeys(ur).length, 687);
     });
   });
 

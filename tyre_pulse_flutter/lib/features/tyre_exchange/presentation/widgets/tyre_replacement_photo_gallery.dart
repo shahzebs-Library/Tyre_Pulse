@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_card.dart';
 import 'package:tyre_pulse/features/tyre_exchange/data/tyre_replacement_photo_capture.dart';
 
 class TyreReplacementPhotoGallery extends StatelessWidget {
@@ -93,47 +94,75 @@ class _TyrePhotoTile extends StatelessWidget {
   final String localPath;
   final VoidCallback onRemove;
 
-  static const double _size = 96;
+  static const double _size = 104;
 
   @override
   Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
     return SizedBox(
       width: _size,
       height: _size,
-      child: Stack(
-        children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(TpRadius.md),
-            child: Image(
-              image: FileImage(File(localPath)),
-              width: _size,
-              height: _size,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
-            ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          border: Border.all(
+            color: palette.border,
+            width: TpBorderWidth.hairline,
           ),
-          Positioned(
-            top: 2,
-            right: 2,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(2),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(TpRadius.md - 1),
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              Image(
+                image: FileImage(File(localPath)),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stack) => DecoratedBox(
+                  decoration: BoxDecoration(color: palette.surfaceAlt),
                   child: Icon(
-                    Icons.close,
-                    size: TpSizing.iconSm,
-                    color: Colors.white,
+                    Icons.broken_image_outlined,
+                    color: palette.textMuted,
                   ),
                 ),
               ),
-            ),
+              // A soft scrim keeps the remove chip legible over any photo -
+              // a bright sky or a pale tyre wall alike - without a hard
+              // colour block hiding the corner of the image itself.
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment.topRight,
+                      radius: 1.4,
+                      colors: <Color>[Color(0x99000000), Color(0x00000000)],
+                    ),
+                  ),
+                  child: GestureDetector(
+                    onTap: onRemove,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(3),
+                        child: Icon(
+                          Icons.close,
+                          size: TpSizing.iconSm,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -150,7 +179,7 @@ class _AddPhotoTile extends StatelessWidget {
   final bool isBusy;
   final VoidCallback onTap;
 
-  static const double _size = 96;
+  static const double _size = 104;
 
   @override
   Widget build(BuildContext context) {
@@ -158,38 +187,39 @@ class _AddPhotoTile extends StatelessWidget {
     return SizedBox(
       width: _size,
       height: _size,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: palette.surfaceAlt,
-          borderRadius: BorderRadius.circular(TpRadius.md),
-          border: Border.all(color: palette.borderStrong),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(TpRadius.md),
-          onTap: isBusy ? null : onTap,
-          child: Center(
-            child: isBusy
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        Icons.add_a_photo_outlined,
-                        color: palette.textSecondary,
+      child: TpCard(
+        padding: EdgeInsets.zero,
+        margin: EdgeInsets.zero,
+        isDashed: true,
+        borderColor: palette.borderStrong,
+        onTap: isBusy ? null : onTap,
+        child: Center(
+          child: isBusy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      Icons.add_a_photo_outlined,
+                      color: palette.textSecondary,
+                    ),
+                    const SizedBox(height: 2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: TpSpace.xs,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
+                      child: Text(
                         label,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
-                    ],
-                  ),
-          ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

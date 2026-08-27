@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
+import 'package:tyre_pulse/app/router/module_access_resolver_impl.dart';
+import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
@@ -176,6 +178,32 @@ Future<void> main() async {
           (Ref ref) =>
               ref.watch(workspaceContextProvider)?.effectivePermissions ??
               AccessState.signedOut,
+        ),
+        // `moduleAccessResolverProvider`'s own doc comment in
+        // `route_access.dart` says "Override this from the permissions
+        // layer" - nothing did, until this line. Without it, `app_shell
+        // .dart`'s tab bar and every `TpModuleGuard`-wrapped screen
+        // (`vehicle_detail_screen.dart`, `vehicles_list_screen.dart`,
+        // `serial_search_screen.dart`) ran on the DEFAULT
+        // `PermissionsUnavailableResolver` for the entire life of every
+        // signed-in session: fail-open for every non-sensitive module
+        // regardless of the signed-in user's actual role, and fail-closed,
+        // unconditionally, for the three sensitive ones (`admin`, `users`,
+        // `approvals`) - which locked even the platform's own super-admin
+        // out of the Admin Console and the Approvals tab, since that
+        // fallback has no `AccessState` to consult at all. That was a
+        // SECOND, disconnected decision engine running in parallel with
+        // `resolveModuleAccess` - the one `accessStateProvider` above feeds
+        // and `home_screen.dart` (and every other module-gated screen body)
+        // already consults directly - so the tab bar and a screen's own
+        // body could, and did, disagree about whether a module was
+        // reachable at all.
+        // `realModuleAccessResolverProvider` reads the exact same
+        // `accessStateProvider` and `adminRevokePrecedenceProvider` this
+        // file already wires, so the shell, every route guard and every
+        // screen body now decide access from the identical source.
+        moduleAccessResolverProvider.overrideWith(
+          (Ref ref) => ref.watch(realModuleAccessResolverProvider),
         ),
         // `appDatabaseProvider`'s own library comment prescribes exactly
         // this: the app's ONE real [AppDatabase], opened via

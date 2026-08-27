@@ -1,96 +1,94 @@
-/// Draws a per-vehicle-class silhouette behind the wheels.
+/// Draws the real, per-vehicle-class body artwork behind the wheels.
 ///
-/// GENUINE GAP, STATED PLAINLY: the production RN renderer
+/// PREVIOUSLY A GENUINE GAP, NOW CLOSED. This file used to draw a plain
+/// rounded-rectangle silhouette per [TyreDiagramBodyKey], with a library
+/// comment explaining that the production RN renderer
 /// (`mobile/components/VehicleTyreDiagram.tsx`) draws each of the eight
-/// bodies as elaborate hand-authored inline SVG - radial/linear gradients,
-/// individually drawn headlights, mirrors, drum spiral fins, hopper
-/// artwork, a company wordmark baked into the concrete-pump and tri-mixer
-/// bodies. That artwork exists only as `react-native-svg` primitives inside
-/// that 1400-line file; there is no exported asset (no `.svg`, no `.png`)
-/// this Flutter port can read or convert, and re-authoring ~900 lines of
-/// gradient-heavy vector art as hand-written `Canvas` calls, unverifiable
-/// without a local Flutter toolchain to actually render and inspect the
-/// result, is a large, error-prone undertaking with no bearing on the
-/// artifact's 90 parity cases (every one of which is resolver, parser,
-/// matcher or completeness logic - none touches pixel art).
+/// bodies as elaborate hand-authored inline SVG - gradients, headlights,
+/// glass reflections, drum spiral fins, a company wordmark - and that no
+/// exported asset existed for this Flutter port to read.
 ///
-/// This painter draws a plain, clearly provisional silhouette per
-/// [TyreDiagramBodyKey] instead: a rounded outline sized and shaped
-/// distinctly enough per class (a short wide cab for [pickup], a long
-/// rectangle for [canter]/[triMixer]/[concretePump], a low wide arch for
-/// [wheelLoader], a long low box for [bus]) that the diagram remains
-/// functionally complete and visually distinguishable per vehicle - a
-/// person can tell "this is the mixer" from "this is the pickup" - without
-/// claiming to be the real branded artwork. Replacing this with a faithful
-/// reproduction of the production art (or real vector assets, once
-/// available) is future work and does not block anything downstream: the
-/// wheels, hit-testing, labels and completeness state are all real.
+/// That artwork has now been converted, body-for-body, into eight real
+/// `.svg` files under `assets/vehicle_diagram/` - a faithful format
+/// conversion (react-native-svg JSX -> standard SVG XML) of every path,
+/// gradient stop and colour in `PickupBody()`, `CanterBody()`,
+/// `TriMixerBody()`, `ConcretePumpBody()`, `WheelLoaderBody()`, `BusBody()`,
+/// `TataBody()` and `AshokLeylandBody()`. Every [TyreDiagramBodyKey] value
+/// has a matching asset - there is no silhouette fallback left to invoke.
+///
+/// Each asset's `viewBox` is `-10 -5 220 {viewH+10}`, matching
+/// [kDiagramViewMinX]/[kDiagramViewMinY]/[kDiagramViewWidth] and the
+/// layout's own `viewH` EXACTLY (see the asset files' own header comments
+/// for the per-body numbers), so [TyreDiagramBody] can hand it straight to
+/// [TyreDiagramViewport]'s own `width`/`height` and the body lands in
+/// register with the wheels [TyreWheelPainter] draws in the same
+/// [Stack] - both read the same [TyreDiagramViewport]. `fit: BoxFit.fill` is
+/// deliberate rather than the widget's own `BoxFit.contain` default: several
+/// layouts share one body (`canter` backs Canter, Truck 6x4, Tanker AND -
+/// for lack of a dedicated trailer body - Trailer, at a shorter `viewH`),
+/// and a non-uniform fill is what keeps a reused body exactly filling
+/// whatever viewport its layout actually has, rather than being letterboxed
+/// inside it.
+///
+/// DELIBERATELY NOT PORTED: the RN `Tyre` component's realistic 3D wheel
+/// (rubber/rim/hub gradients keyed off a fixed `RISK` hex palette). Per
+/// `tyre_condition.dart`'s own library comment, that palette was already a
+/// considered exclusion in this port - a condition's colour must follow
+/// this app's real light/dark theme (`TpPalette.forStatus`), not one
+/// authored for a different app's fixed dark theme. [TyreWheelPainter] is
+/// where the realistic tyre now lives instead, painted with `dart:ui`
+/// gradients so its rim colour stays theme-driven while still carrying the
+/// rubber body, directional tread blocks, lug-nut ring and hub-cap shine
+/// the reference tyre has.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 
-/// Paints a provisional silhouette for [bodyKey] inside [viewport].
-class TyreBodyPainter extends CustomPainter {
-  TyreBodyPainter({
+/// The asset this [TyreDiagramBodyKey] renders. Every enum value is
+/// covered - there is no silhouette/placeholder path left.
+String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
+  return switch (bodyKey) {
+    TyreDiagramBodyKey.pickup => 'assets/vehicle_diagram/pickup.svg',
+    TyreDiagramBodyKey.canter => 'assets/vehicle_diagram/canter.svg',
+    TyreDiagramBodyKey.triMixer => 'assets/vehicle_diagram/tri_mixer.svg',
+    TyreDiagramBodyKey.concretePump =>
+      'assets/vehicle_diagram/concrete_pump.svg',
+    TyreDiagramBodyKey.wheelLoader => 'assets/vehicle_diagram/wheel_loader.svg',
+    TyreDiagramBodyKey.bus => 'assets/vehicle_diagram/bus.svg',
+    TyreDiagramBodyKey.tata => 'assets/vehicle_diagram/tata.svg',
+    TyreDiagramBodyKey.ashokLeyland =>
+      'assets/vehicle_diagram/ashok_leyland.svg',
+  };
+}
+
+/// Renders [bodyKey]'s real artwork, sized to exactly fill [viewport].
+class TyreDiagramBody extends StatelessWidget {
+  const TyreDiagramBody({
     required this.bodyKey,
     required this.viewport,
-    required this.palette,
+    super.key,
   });
 
   final TyreDiagramBodyKey bodyKey;
   final TyreDiagramViewport viewport;
-  final TpPalette palette;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final Paint fill = Paint()..color = palette.surfaceSunken;
-    final Paint stroke = Paint()
-      ..color = palette.borderStrong
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    final Rect bounds = viewport.wheelRect(
-      0,
-      0,
-      kDiagramViewWidth,
-      viewport.viewH,
+  Widget build(BuildContext context) {
+    return SvgPicture.asset(
+      tyreDiagramBodyAsset(bodyKey),
+      width: viewport.width,
+      height: viewport.height,
+      fit: BoxFit.fill,
+      // The composite Stack this sits in already paints the app's own
+      // surface underneath; a failed asset load should leave that surface
+      // visible (no wheels are affected - they are a separate CustomPaint)
+      // rather than throwing out of the whole diagram.
+      placeholderBuilder: (BuildContext context) => const SizedBox.shrink(),
+      errorBuilder: (BuildContext context, Object error, StackTrace? stack) =>
+          const SizedBox.shrink(),
     );
-    final RRect body = RRect.fromRectAndRadius(
-      bounds.deflate(bounds.width * _insetFraction),
-      Radius.circular(bounds.shortestSide * _cornerFraction),
-    );
-    canvas.drawRRect(body, fill);
-    canvas.drawRRect(body, stroke);
-  }
-
-  /// How far each side of the silhouette sits inside the wheel bounds, as a
-  /// fraction of the viewport width - a rough per-class silhouette shape,
-  /// not a precise chassis outline.
-  double get _insetFraction => switch (bodyKey) {
-        TyreDiagramBodyKey.pickup => 0.18,
-        TyreDiagramBodyKey.wheelLoader => 0.14,
-        TyreDiagramBodyKey.canter => 0.2,
-        TyreDiagramBodyKey.triMixer => 0.16,
-        TyreDiagramBodyKey.concretePump => 0.16,
-        TyreDiagramBodyKey.bus => 0.05,
-        TyreDiagramBodyKey.tata => 0.2,
-        TyreDiagramBodyKey.ashokLeyland => 0.2,
-      };
-
-  double get _cornerFraction => switch (bodyKey) {
-        TyreDiagramBodyKey.wheelLoader => 0.28,
-        TyreDiagramBodyKey.pickup => 0.22,
-        _ => 0.12,
-      };
-
-  @override
-  bool shouldRepaint(covariant TyreBodyPainter oldDelegate) {
-    return oldDelegate.bodyKey != bodyKey ||
-        oldDelegate.viewport.width != viewport.width ||
-        oldDelegate.viewport.viewH != viewport.viewH ||
-        oldDelegate.palette != palette;
   }
 }

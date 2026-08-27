@@ -2021,6 +2021,204 @@ class AppLocalizationsUr extends AppLocalizations {
   String get tyreReplaceTryAgainFallback => 'کچھ غلط ہو گیا۔ دوبارہ کوشش کریں۔';
 
   @override
+  String get tyreDiagramModeLayout => 'لے آؤٹ ویو';
+
+  @override
+  String get tyreDiagramModeList => 'فہرست ویو';
+
+  @override
+  String get tyreDiagramStatTotal => 'کل ٹائر';
+
+  @override
+  String get tyreDiagramStatOk => 'اچھا';
+
+  @override
+  String get tyreDiagramStatMonitor => 'نگرانی درکار';
+
+  @override
+  String get tyreDiagramStatCritical => 'نازک';
+
+  @override
+  String tyreDiagramStatUnrecordedCaption(int count) {
+    return '$count ابھی تک ریکارڈ نہیں ہوئے';
+  }
+
+  @override
+  String tyreDiagramListPressureValue(String value) {
+    return '$value پی ایس آئی';
+  }
+
+  @override
+  String tyreDiagramListTreadValue(String value) {
+    return '$value ملی میٹر';
+  }
+
+  @override
+  String get tyreDiagramListNotRecorded => 'ریکارڈ نہیں ہوا';
+
+  @override
+  String get tyreDiagramListEmptyTitle => 'ابھی تک کچھ ریکارڈ نہیں ہوا';
+
+  @override
+  String get tyreDiagramListEmptyMessage =>
+      'لے آؤٹ ویو پر جائیں اور حالت ریکارڈ کرنے کے لیے ٹائر پر ٹیپ کریں۔';
+
+  @override
+  String get tyreDetailTitle => 'ٹائر کی تفصیل';
+
+  @override
+  String get tyreDetailStatTread => 'ٹریڈ کی گہرائی';
+
+  @override
+  String get tyreDetailStatPressure => 'دباؤ';
+
+  @override
+  String get tyreDetailStatTemperature => 'درجہ حرارت';
+
+  @override
+  String get tyreDetailFieldNotRecorded => 'ریکارڈ نہیں ہوا';
+
+  @override
+  String get tyreDetailNotRecordedCaption => 'اس معائنے میں ریکارڈ نہیں ہوا';
+
+  @override
+  String get tyreDetailSectionOverview => 'جائزہ';
+
+  @override
+  String get tyreDetailSectionAdditionalInfo => 'اضافی معلومات';
+
+  @override
+  String get tyreDetailBrandLabel => 'برانڈ / پیٹرن';
+
+  @override
+  String get tyreDetailSizeLabel => 'سائز';
+
+  @override
+  String get tyreDetailInstalledKmLabel => 'نصب شدہ';
+
+  @override
+  String get tyreDetailRunningKmLabel => 'چلائی گئی مسافت';
+
+  @override
+  String get tyreDetailAssetLabel => 'اثاثہ';
+
+  @override
+  String get tyreDetailSiteLabel => 'سائٹ';
+
+  @override
+  String get tyreDetailTakeActionButton => 'کارروائی کریں';
+
+  @override
+  String get tyreDetailNoEvidenceMessage =>
+      'اس ٹائر کے لیے ابھی تک کچھ ریکارڈ نہیں کیا گیا۔';
+
+  @override
+  String get takeActionTitle => 'کارروائی کریں';
+
+  @override
+  String get takeActionReplaceTyre => 'ٹائر تبدیل کریں';
+
+  @override
+  String get takeActionReplaceTyreSubtitle =>
+      'اس پہیے پر لگائے گئے نئے ٹائر کا اندراج کریں';
+
+  @override
+  String get takeActionReportDefect => 'مرمت (پنکچر / نقصان)';
+
+  @override
+  String get takeActionReportDefectSubtitle =>
+      'اس ٹائر کے لیے مرمت کا کام درج کریں';
+
+  @override
+  String get takeActionAdjustReading => 'ریڈنگ درست کریں';
+
+  @override
+  String get takeActionAdjustReadingSubtitle =>
+      'دباؤ، ٹریڈ کی گہرائی یا حالت کو اپ ڈیٹ کریں';
+
+  @override
+  String get takeActionAdjustReadingUnavailableCaption =>
+      'صرف اس معائنے کو مکمل کرتے وقت دستیاب ہے';
+
+  @override
+  String get takeActionRotateTyre => 'ٹائر گھمائیں';
+
+  @override
+  String get takeActionRemoveTyre => 'ٹائر ہٹائیں';
+
+  @override
+  String get takeActionSendToRetread => 'ری ٹریڈ کے لیے بھیجیں';
+
+  @override
+  String get takeActionMarkAsSpare => 'اسپیئر کے طور پر نشان زد کریں';
+
+  @override
+  String get takeActionComingSoonCaption =>
+      'یہ سہولت ابھی اس ورژن میں دستیاب نہیں ہے';
+
+  @override
+  String get reportDefectTitle => 'خرابی کی اطلاع دیں';
+
+  @override
+  String get reportDefectTitleFieldLabel => 'عنوان';
+
+  @override
+  String get reportDefectTitleFieldHint => 'مثلاً: پچھلے بیرونی ٹائر میں پنکچر';
+
+  @override
+  String get reportDefectDescriptionLabel => 'تفصیل';
+
+  @override
+  String get reportDefectDescriptionHint => 'اس ٹائر میں کیا خرابی ہے؟';
+
+  @override
+  String get reportDefectDamageReasonLabel => 'نقصان کی وجہ';
+
+  @override
+  String get reportDefectDamageReasonHint => 'اختیاری';
+
+  @override
+  String get reportDefectPriorityLabel => 'ترجیح';
+
+  @override
+  String get reportDefectSubmitAction => 'مرمت کی درخواست جمع کروائیں';
+
+  @override
+  String get reportDefectTitleRequiredTitle => 'عنوان درکار ہے';
+
+  @override
+  String get reportDefectTitleRequiredMessage =>
+      'محفوظ کرنے سے پہلے مختصر عنوان شامل کریں۔';
+
+  @override
+  String get reportDefectSavedTitle => 'مرمت کی درخواست محفوظ ہو گئی';
+
+  @override
+  String get reportDefectSavedMessage =>
+      'یہ خودکار طور پر مطابقت پذیر ہو جائے گی۔';
+
+  @override
+  String get reportDefectSaveFailedTitle => 'مرمت کی درخواست محفوظ نہیں ہو سکی';
+
+  @override
+  String get damageReasonPuncture => 'پنکچر';
+
+  @override
+  String get damageReasonSidewall => 'سائیڈ وال کو نقصان';
+
+  @override
+  String get damageReasonTreadWear => 'ٹریڈ کی گھساوٹ';
+
+  @override
+  String get damageReasonBlowout => 'پھٹ جانا';
+
+  @override
+  String get damageReasonImpact => 'ٹکراؤ سے نقصان';
+
+  @override
+  String get damageReasonOther => 'دیگر';
+
+  @override
   String get globalSearchTitle => 'تلاش';
 
   @override

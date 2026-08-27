@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Concrete pump body art (Green Concrete Company livery: outriggers, hopper,
+  pump cylinders, S-valve, boom). Ported verbatim from
+  `mobile/components/VehicleTyreDiagram.tsx`'s `ConcretePumpBody()`. Shared
+  by the Concrete pump and Line pump layouts, both viewH 375 -> viewBox
+  height 385, matching `kTyreDiagramLayouts`.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -5 220 385">
+  <defs>
+    <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#dbeafe" stop-opacity="0.95" />
+      <stop offset="40%" stop-color="#93c5fd" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.6" />
+    </linearGradient>
+    <linearGradient id="glassReflect" x1="0%" y1="0%" x2="60%" y2="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="chrome" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f1f5f9" />
+      <stop offset="40%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+    <radialGradient id="headlight" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fffde7" />
+      <stop offset="60%" stop-color="#fef08a" />
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.6" />
+    </radialGradient>
+    <radialGradient id="brakeLight" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fee2e2" />
+      <stop offset="60%" stop-color="#fca5a5" />
+      <stop offset="100%" stop-color="#ef4444" stop-opacity="0.7" />
+    </radialGradient>
+    <radialGradient id="cpBody" cx="48%" cy="35%" r="62%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="55%" stop-color="#f1f5f9" />
+      <stop offset="100%" stop-color="#cbd5e1" />
+    </radialGradient>
+    <linearGradient id="cpHood" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#94a3b8" />
+      <stop offset="30%" stop-color="#e2e8f0" />
+      <stop offset="50%" stop-color="#ffffff" />
+      <stop offset="70%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+    <radialGradient id="cpPump" cx="45%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="55%" stop-color="#f1f5f9" />
+      <stop offset="100%" stop-color="#cbd5e1" />
+    </radialGradient>
+    <radialGradient id="cpHopper" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#4ade80" />
+      <stop offset="50%" stop-color="#16a34a" />
+      <stop offset="100%" stop-color="#14532d" />
+    </radialGradient>
+    <linearGradient id="cpOutrigger" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#004d26" />
+      <stop offset="50%" stop-color="#006C35" />
+      <stop offset="100%" stop-color="#004d26" />
+    </linearGradient>
+    <linearGradient id="cpBoom" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#004d26" />
+      <stop offset="50%" stop-color="#006C35" />
+      <stop offset="100%" stop-color="#004d26" />
+    </linearGradient>
+    <linearGradient id="cpGreenStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#004d26" />
+      <stop offset="30%" stop-color="#006C35" />
+      <stop offset="50%" stop-color="#00A850" />
+      <stop offset="70%" stop-color="#006C35" />
+      <stop offset="100%" stop-color="#004d26" />
+    </linearGradient>
+    <radialGradient id="cpLogoBg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#006C35" />
+      <stop offset="100%" stop-color="#004d26" />
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="100" cy="362" rx="90" ry="11" fill="#000000" fill-opacity="0.25" />
+
+  <!-- Cab - white -->
+  <path d="M 70,14 Q 57,14 56,28 L 54,110 L 54,128 L 146,128 L 146,110 L 144,28 Q 143,14 130,14 Z"
+    fill="url(#cpBody)" />
+
+  <!-- Front bumper chrome -->
+  <rect x="58" y="6" width="84" height="12" rx="4" fill="url(#chrome)" />
+  <rect x="66" y="8" width="68" height="5" rx="2" fill="#1e293b" />
+  <rect x="68" y="9" width="64" height="1" rx="0.5" fill="#475569" opacity="0.8" />
+  <rect x="68" y="10.5" width="64" height="1" rx="0.5" fill="#475569" opacity="0.8" />
+  <rect x="68" y="12" width="64" height="1" rx="0.5" fill="#475569" opacity="0.8" />
+
+  <!-- Headlights -->
+  <rect x="58" y="7" width="24" height="12" rx="3" fill="url(#headlight)" />
+  <rect x="118" y="7" width="24" height="12" rx="3" fill="url(#headlight)" />
+  <rect x="60" y="18" width="80" height="3" rx="1" fill="#00A850" opacity="0.95" />
+
+  <!-- Hood - white -->
+  <rect x="60" y="21" width="80" height="44" rx="4" fill="url(#cpHood)" />
+  <line x1="100" y1="23" x2="100" y2="64" stroke="#cbd5e1" stroke-width="1" opacity="0.7" />
+  <rect x="70" y="30" width="60" height="4" rx="2" fill="#e2e8f0" opacity="0.6" />
+  <rect x="70" y="40" width="60" height="4" rx="2" fill="#e2e8f0" opacity="0.6" />
+  <rect x="70" y="50" width="60" height="4" rx="2" fill="#e2e8f0" opacity="0.6" />
+
+  <!-- GCC logo badge on hood -->
+  <circle cx="100" cy="44" r="10" fill="url(#cpLogoBg)" opacity="0.9" />
+  <path d="M 96,44 Q 96,39 100,38 Q 106,38 106,44 Q 106,49 100,50 Q 97,50 96,48 L 96,44 Z"
+    fill="#00A850" />
+  <line x1="100" y1="50" x2="100" y2="54" stroke="#00A850" stroke-width="1.2" />
+  <text x="100" y="57" text-anchor="middle" font-size="3.5" font-weight="800" fill="#006C35">GCC</text>
+
+  <!-- Windshield -->
+  <path d="M 63,65 L 137,65 L 133,83 L 67,83 Z" fill="url(#glassGrad)" />
+  <path d="M 68,66 L 112,66 L 109,76 L 71,76 Z" fill="url(#glassReflect)" opacity="0.5" />
+  <line x1="78" y1="81" x2="98" y2="67" stroke="#475569" stroke-width="0.8" opacity="0.6" />
+  <line x1="122" y1="81" x2="102" y2="67" stroke="#475569" stroke-width="0.8" opacity="0.6" />
+
+  <!-- Cab interior -->
+  <rect x="58" y="83" width="84" height="42" rx="3" fill="#e2e8f0" />
+  <rect x="65" y="87" width="18" height="14" rx="3" fill="#cbd5e1" />
+  <rect x="117" y="87" width="18" height="14" rx="3" fill="#cbd5e1" />
+  <circle cx="80" cy="111" r="8" fill="none" stroke="#334155" stroke-width="2.5" />
+  <circle cx="80" cy="111" r="2.5" fill="#334155" />
+
+  <!-- Green Concrete brand stripe -->
+  <rect x="58" y="120" width="84" height="9" fill="url(#cpGreenStripe)" />
+  <text x="100" y="126.5" text-anchor="middle" font-size="4" font-weight="800"
+    fill="#ffffff" letter-spacing="0.5px">GREEN CONCRETE</text>
+
+  <!-- Cab bottom bar -->
+  <rect x="58" y="126" width="84" height="3" fill="#004d26" />
+
+  <!-- Chassis frame -->
+  <rect x="68" y="129" width="11" height="222" fill="#334155" />
+  <rect x="121" y="129" width="11" height="222" fill="#334155" />
+
+  <!-- Outrigger beams - green -->
+  <rect x="20" y="142" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
+  <rect x="130" y="142" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
+  <rect x="12" y="138" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" stroke-width="1.5" />
+  <rect x="174" y="138" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" stroke-width="1.5" />
+  <rect x="14" y="140" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
+  <rect x="176" y="140" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
+  <rect x="20" y="238" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
+  <rect x="130" y="238" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
+  <rect x="12" y="234" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" stroke-width="1.5" />
+  <rect x="174" y="234" width="14" height="18" rx="4" fill="#006C35" stroke="#00A850" stroke-width="1.5" />
+  <rect x="14" y="236" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
+  <rect x="176" y="236" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
+
+  <!-- Pump body - white -->
+  <rect x="58" y="129" width="84" height="220" rx="4" fill="url(#cpPump)" />
+
+  <!-- Green side stripe on pump body -->
+  <rect x="58" y="129" width="5" height="220" fill="#006C35" opacity="0.8" rx="2" />
+  <rect x="137" y="129" width="5" height="220" fill="#006C35" opacity="0.8" rx="2" />
+
+  <!-- Hopper - green branded -->
+  <rect x="66" y="135" width="68" height="58" rx="6" fill="url(#cpHopper)" />
+  <rect x="70" y="139" width="60" height="46" rx="4" fill="#14532d" opacity="0.5" />
+  <ellipse cx="100" cy="164" rx="24" ry="17" fill="#052e16" />
+  <text x="100" y="162" text-anchor="middle" font-size="5.5" font-weight="700" fill="#4ade80" opacity="0.9">HOPPER</text>
+  <line x1="72" y1="152" x2="128" y2="152" stroke="#4ade80" stroke-width="0.7" opacity="0.4" />
+  <line x1="72" y1="158" x2="128" y2="158" stroke="#4ade80" stroke-width="0.7" opacity="0.4" />
+  <line x1="72" y1="164" x2="128" y2="164" stroke="#4ade80" stroke-width="0.7" opacity="0.4" />
+  <line x1="88" y1="138" x2="88" y2="190" stroke="#4ade80" stroke-width="0.7" opacity="0.4" />
+  <line x1="100" y1="138" x2="100" y2="190" stroke="#4ade80" stroke-width="0.7" opacity="0.4" />
+  <line x1="112" y1="138" x2="112" y2="190" stroke="#4ade80" stroke-width="0.7" opacity="0.4" />
+
+  <!-- Pump cylinders -->
+  <rect x="70" y="198" width="26" height="42" rx="5" fill="#475569" stroke="#006C35" stroke-width="1.2" />
+  <rect x="104" y="198" width="26" height="42" rx="5" fill="#475569" stroke="#006C35" stroke-width="1.2" />
+  <ellipse cx="83" cy="219" rx="10" ry="10" fill="url(#chrome)" />
+  <ellipse cx="117" cy="219" rx="10" ry="10" fill="url(#chrome)" />
+  <circle cx="83" cy="219" r="4" fill="#334155" />
+  <circle cx="117" cy="219" r="4" fill="#334155" />
+
+  <!-- S-valve -->
+  <rect x="76" y="240" width="48" height="18" rx="5" fill="#1e293b" stroke="#006C35" stroke-width="1.2" />
+  <text x="100" y="252" text-anchor="middle" font-size="5" fill="#00A850" font-weight="700">S-VALVE</text>
+
+  <!-- GCC logo badge on pump body -->
+  <ellipse cx="100" cy="290" rx="18" ry="18" fill="url(#cpLogoBg)" stroke="#00A850" stroke-width="1.5" />
+  <path d="M 97,287 Q 96,282 100,281 Q 105,281 105,287 Q 105,293 100,294 Q 97,294 96,291 L 97,287 Z"
+    fill="#00A850" />
+  <line x1="100" y1="294" x2="100" y2="298" stroke="#00A850" stroke-width="1.2" />
+  <text x="100" y="302" text-anchor="middle" font-size="3.8" font-weight="900" fill="#ffffff">GCC</text>
+
+  <!-- Boom arm - green -->
+  <rect x="66" y="263" width="68" height="12" rx="4" fill="url(#cpBoom)" stroke="#00A850" stroke-width="0.8" />
+  <rect x="70" y="276" width="60" height="10" rx="4" fill="url(#cpBoom)" stroke="#00A850" stroke-width="0.8" />
+  <rect x="74" y="287" width="52" height="10" rx="4" fill="url(#cpBoom)" stroke="#00A850" stroke-width="0.8" />
+  <rect x="78" y="298" width="44" height="10" rx="4" fill="url(#cpBoom)" stroke="#00A850" stroke-width="0.8" />
+  <circle cx="100" cy="269" r="4" fill="#004d26" stroke="#00A850" stroke-width="0.8" />
+  <circle cx="100" cy="281" r="4" fill="#004d26" stroke="#00A850" stroke-width="0.8" />
+  <circle cx="100" cy="292" r="4" fill="#004d26" stroke="#00A850" stroke-width="0.8" />
+
+  <!-- Concrete pipe -->
+  <line x1="100" y1="181" x2="100" y2="303" stroke="#006C35" stroke-width="2.5" stroke-dasharray="3 2" opacity="0.7" />
+
+  <!-- Rear bumper -->
+  <rect x="60" y="348" width="80" height="12" rx="3" fill="url(#chrome)" />
+  <rect x="62" y="349" width="22" height="8" rx="2" fill="url(#brakeLight)" />
+  <rect x="116" y="349" width="22" height="8" rx="2" fill="url(#brakeLight)" />
+  <rect x="86" y="350" width="28" height="6" rx="2" fill="#006C35" opacity="0.8" />
+
+  <!-- Mirrors - green -->
+  <rect x="39" y="55" width="17" height="9" rx="3" fill="#006C35" stroke="#004d26" stroke-width="0.8" />
+  <rect x="144" y="55" width="17" height="9" rx="3" fill="#006C35" stroke="#004d26" stroke-width="0.8" />
+</svg>

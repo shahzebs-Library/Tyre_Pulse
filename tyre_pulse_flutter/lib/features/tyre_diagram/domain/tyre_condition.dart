@@ -79,3 +79,28 @@ TpStatus tyreConditionStatus(TyreCondition condition) => switch (condition) {
       TyreCondition.flat => TpStatus.warning,
       TyreCondition.missing => TpStatus.unknown,
     };
+
+/// The condition recorded on a raw `tyre_conditions` entry, or `null` when
+/// nothing was ever recorded for this wheel. `entry` is the plain
+/// `Map<String, Object?>` shape both [VehicleTyreDiagram] and this app's
+/// tyre-completeness engine already read `tyre_conditions` payloads as -
+/// never a typed model, so a caller in ANY top-level feature can classify a
+/// wheel without depending on another feature's domain layer (see
+/// `inspection_approval_review_screen.dart`'s own library comment on why
+/// sibling features do not share domain code).
+TyreCondition? wheelConditionFor(Map<String, Object?>? entry) {
+  if (entry == null) return null;
+  return normaliseCondition(entry['condition']?.toString());
+}
+
+/// The status band ONE wheel currently draws at, from its raw entry (or
+/// `null` when nothing was recorded - see [wheelConditionFor]).
+///
+/// This is the SINGLE place that decision is made: [VehicleTyreDiagram]'s
+/// own wheel resolution and `tyre_diagram_stats.dart`'s summary counts both
+/// call this, so a stat tile and the diagram it sits above can never
+/// disagree about how many wheels are OK, need monitoring or are critical.
+TpStatus wheelStatusFor(Map<String, Object?>? entry) {
+  final TyreCondition? condition = wheelConditionFor(entry);
+  return condition == null ? TpStatus.unknown : tyreConditionStatus(condition);
+}

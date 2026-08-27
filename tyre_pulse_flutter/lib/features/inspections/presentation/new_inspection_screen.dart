@@ -5,6 +5,8 @@
 /// (risk R2) instead of React state that vanished on a process kill.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,8 +29,9 @@ import 'package:tyre_pulse/features/inspections/presentation/controllers/inspect
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_pending.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
 
 class NewInspectionScreen extends ConsumerStatefulWidget {
   const NewInspectionScreen({required this.route, super.key});
@@ -495,7 +498,7 @@ class _TyresStep extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(TpSpace.lg),
         children: <Widget>[
-          VehicleTyreDiagram(
+          TyreDiagramBoard(
             vehicleType: state.selectedVehicleType,
             assetNo: state.selectedAssetNo,
             positions: state.positions,
@@ -504,24 +507,13 @@ class _TyresStep extends ConsumerWidget {
                 entry.key: entry.value.toEntry(),
             },
             selectedPosition: state.activePosition,
-            onPositionTap: controller.openPosition,
+            onPositionTap: (String position) =>
+                _openTyreDetail(context, ref, position),
             pending: TyreDiagramPending.fromCompleteness(state.completeness),
             width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 2),
           ),
           const SizedBox(height: TpSpace.lg),
           _GpsChip(state: state, controller: controller),
-          const SizedBox(height: TpSpace.lg),
-          for (final String position in state.positions)
-            TpCard(
-              margin: const EdgeInsets.only(bottom: TpSpace.sm),
-              onTap: () => _openEditor(context, ref, position),
-              borderColor:
-                  state.activePosition == position ? palette.primary : null,
-              child: _PositionRow(
-                position: position,
-                reading: state.tyreConditions[position],
-              ),
-            ),
           const SizedBox(height: TpSpace.lg),
           if (state.touchedCount == 0 || !state.completeness.ok)
             Padding(
@@ -552,6 +544,33 @@ class _TyresStep extends ConsumerWidget {
     );
   }
 
+  /// Tapping a wheel (in either the Layout or the List view) opens the Tyre
+  /// Detail screen first, rather than jumping straight to the editor - the
+  /// same "detail, then take action" flow the read-only inspection/approval
+  /// screens use. [_openEditor] (the existing, proven recording sheet) is
+  /// still the ONE place a reading is actually written; Take Action's
+  /// "Adjust reading" row only bridges into it once both pushed screens are
+  /// popped back to this one.
+  void _openTyreDetail(BuildContext context, WidgetRef ref, String position) {
+    final Map<String, Object?>? entry =
+        state.tyreConditions[position]?.toEntry();
+    unawaited(
+      pushTyreDetailScreen(
+        context,
+        positionCode: position,
+        vehicleType: state.selectedVehicleType,
+        entry: entry,
+        assetNo: state.selectedAssetNo,
+        siteName: state.selectedSite,
+        onAdjustReading: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).pop();
+          _openEditor(context, ref, position);
+        },
+      ),
+    );
+  }
+
   void _openEditor(BuildContext context, WidgetRef ref, String position) {
     final controller = ref.read(inspectionWizardControllerProvider.notifier);
     controller.openPosition(position);
@@ -578,41 +597,6 @@ class _TyresStep extends ConsumerWidget {
         },
       ),
     ).whenComplete(controller.closePosition);
-  }
-}
-
-class _PositionRow extends StatelessWidget {
-  const _PositionRow({required this.position, required this.reading});
-
-  final String position;
-  final TyrePositionReading? reading;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool touched = reading?.isTouched ?? false;
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(position, style: Theme.of(context).textTheme.titleSmall),
-              Text(
-                touched
-                    ? (reading?.condition ?? '')
-                    : l10n.inspectionNotRecordedYet,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-        if (touched)
-          const Icon(Icons.check_circle, size: 18)
-        else
-          const Icon(Icons.radio_button_unchecked, size: 18),
-      ],
-    );
   }
 }
 

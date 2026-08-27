@@ -2013,6 +2013,202 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tyreReplaceTryAgainFallback => 'Something went wrong. Try again.';
 
   @override
+  String get tyreDiagramModeLayout => 'Layout view';
+
+  @override
+  String get tyreDiagramModeList => 'List view';
+
+  @override
+  String get tyreDiagramStatTotal => 'Total tyres';
+
+  @override
+  String get tyreDiagramStatOk => 'OK';
+
+  @override
+  String get tyreDiagramStatMonitor => 'Monitor';
+
+  @override
+  String get tyreDiagramStatCritical => 'Critical';
+
+  @override
+  String tyreDiagramStatUnrecordedCaption(int count) {
+    return '$count not yet recorded';
+  }
+
+  @override
+  String tyreDiagramListPressureValue(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String tyreDiagramListTreadValue(String value) {
+    return '$value mm';
+  }
+
+  @override
+  String get tyreDiagramListNotRecorded => 'Not recorded';
+
+  @override
+  String get tyreDiagramListEmptyTitle => 'Nothing recorded yet';
+
+  @override
+  String get tyreDiagramListEmptyMessage =>
+      'Switch to Layout view and tap a tyre to record its condition.';
+
+  @override
+  String get tyreDetailTitle => 'Tyre detail';
+
+  @override
+  String get tyreDetailStatTread => 'Tread depth';
+
+  @override
+  String get tyreDetailStatPressure => 'Pressure';
+
+  @override
+  String get tyreDetailStatTemperature => 'Temperature';
+
+  @override
+  String get tyreDetailFieldNotRecorded => 'Not recorded';
+
+  @override
+  String get tyreDetailNotRecordedCaption => 'Not recorded for this inspection';
+
+  @override
+  String get tyreDetailSectionOverview => 'Overview';
+
+  @override
+  String get tyreDetailSectionAdditionalInfo => 'Additional info';
+
+  @override
+  String get tyreDetailBrandLabel => 'Brand / pattern';
+
+  @override
+  String get tyreDetailSizeLabel => 'Size';
+
+  @override
+  String get tyreDetailInstalledKmLabel => 'Installed at';
+
+  @override
+  String get tyreDetailRunningKmLabel => 'Running distance';
+
+  @override
+  String get tyreDetailAssetLabel => 'Asset';
+
+  @override
+  String get tyreDetailSiteLabel => 'Site';
+
+  @override
+  String get tyreDetailTakeActionButton => 'Take action';
+
+  @override
+  String get tyreDetailNoEvidenceMessage =>
+      'Nobody has recorded anything for this wheel yet.';
+
+  @override
+  String get takeActionTitle => 'Take action';
+
+  @override
+  String get takeActionReplaceTyre => 'Replace tyre';
+
+  @override
+  String get takeActionReplaceTyreSubtitle =>
+      'Record the new tyre fitted to this wheel';
+
+  @override
+  String get takeActionReportDefect => 'Repair (Puncture / Damage)';
+
+  @override
+  String get takeActionReportDefectSubtitle =>
+      'File a repair job for this tyre';
+
+  @override
+  String get takeActionAdjustReading => 'Adjust reading';
+
+  @override
+  String get takeActionAdjustReadingSubtitle =>
+      'Update pressure, tread depth or condition';
+
+  @override
+  String get takeActionAdjustReadingUnavailableCaption =>
+      'Only available while filling in this inspection';
+
+  @override
+  String get takeActionRotateTyre => 'Rotate tyre';
+
+  @override
+  String get takeActionRemoveTyre => 'Remove tyre';
+
+  @override
+  String get takeActionSendToRetread => 'Send to retread';
+
+  @override
+  String get takeActionMarkAsSpare => 'Mark as spare';
+
+  @override
+  String get takeActionComingSoonCaption => 'Not available in this build yet';
+
+  @override
+  String get reportDefectTitle => 'Report a defect';
+
+  @override
+  String get reportDefectTitleFieldLabel => 'Title';
+
+  @override
+  String get reportDefectTitleFieldHint => 'e.g. Puncture on outer rear tyre';
+
+  @override
+  String get reportDefectDescriptionLabel => 'Description';
+
+  @override
+  String get reportDefectDescriptionHint => 'What is wrong with this tyre?';
+
+  @override
+  String get reportDefectDamageReasonLabel => 'Damage reason';
+
+  @override
+  String get reportDefectDamageReasonHint => 'Optional';
+
+  @override
+  String get reportDefectPriorityLabel => 'Priority';
+
+  @override
+  String get reportDefectSubmitAction => 'Submit repair request';
+
+  @override
+  String get reportDefectTitleRequiredTitle => 'Title needed';
+
+  @override
+  String get reportDefectTitleRequiredMessage =>
+      'Add a short title before saving.';
+
+  @override
+  String get reportDefectSavedTitle => 'Repair request saved';
+
+  @override
+  String get reportDefectSavedMessage => 'It will sync automatically.';
+
+  @override
+  String get reportDefectSaveFailedTitle => 'Could not save the repair request';
+
+  @override
+  String get damageReasonPuncture => 'Puncture';
+
+  @override
+  String get damageReasonSidewall => 'Sidewall damage';
+
+  @override
+  String get damageReasonTreadWear => 'Tread wear';
+
+  @override
+  String get damageReasonBlowout => 'Blowout';
+
+  @override
+  String get damageReasonImpact => 'Impact damage';
+
+  @override
+  String get damageReasonOther => 'Other';
+
+  @override
   String get globalSearchTitle => 'Search';
 
   @override

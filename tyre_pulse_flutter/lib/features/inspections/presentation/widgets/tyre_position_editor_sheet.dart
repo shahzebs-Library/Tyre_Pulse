@@ -168,14 +168,47 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
           ),
           const SizedBox(height: TpSpace.sm),
           if (r.hasPhoto)
-            _PhotoPreview(reading: r)
+            _PhotoPreview(
+              reading: r,
+              onRemove: () => _emit(
+                r.copyWith(clearPhotoLocalPath: true, clearPhotoUrl: true),
+              ),
+            )
           else
-            Text(
-              l10n.inspectionPhotoNone,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: palette.textMuted),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: palette.surfaceAlt,
+                borderRadius: BorderRadius.circular(TpRadius.md),
+                border: Border.all(
+                  color: palette.border,
+                  width: TpBorderWidth.hairline,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TpSpace.md,
+                  vertical: TpSpace.lg,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      Icons.image_outlined,
+                      size: TpSizing.iconMd,
+                      color: palette.textMuted,
+                    ),
+                    const SizedBox(width: TpSpace.sm),
+                    Expanded(
+                      child: Text(
+                        l10n.inspectionPhotoNone,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: palette.textMuted),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           const SizedBox(height: TpSpace.sm),
           Row(
@@ -267,26 +300,66 @@ class _ConditionChip extends StatelessWidget {
 }
 
 class _PhotoPreview extends StatelessWidget {
-  const _PhotoPreview({required this.reading});
+  const _PhotoPreview({required this.reading, required this.onRemove});
 
   final TyrePositionReading reading;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String? url = reading.photoUrl;
     final String? local = reading.photoLocalPath;
     final ImageProvider? provider = url != null
         ? NetworkImage(url)
         : (local != null ? FileImage(File(local)) : null);
     if (provider == null) return const SizedBox.shrink();
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(TpRadius.md),
-      child: Image(
-        image: provider,
-        height: 140,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(
+          color: palette.border,
+          width: TpBorderWidth.hairline,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(TpRadius.md - 1),
+        child: Stack(
+          children: <Widget>[
+            Image(
+              image: provider,
+              height: 150,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+            ),
+            Positioned(
+              top: TpSpace.sm,
+              right: TpSpace.sm,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onRemove,
+                  child: Tooltip(
+                    message: l10n.actionCancel,
+                    child: const Padding(
+                      padding: EdgeInsets.all(TpSpace.sm),
+                      child: Icon(
+                        Icons.delete_outline,
+                        size: TpSizing.iconSm,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

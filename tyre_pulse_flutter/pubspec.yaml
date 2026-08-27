@@ -58,8 +58,15 @@ dependencies:
   geolocator: ^13.0.1
   signature: ^5.5.0
 
-  # Packages for later phases (barcode scanner, SVG, PDF, sharing) are added
-  # at the phase that needs them. Spec section 64: do not add a package to
+  # --- Vehicle diagram body artwork (tyre diagram redesign). Renders the
+  # real per-vehicle-class SVG bodies under assets/vehicle_diagram/ - see
+  # `tyre_body_painter.dart`'s library comment for why the wheels themselves
+  # stay a `CustomPainter` (status colour must keep following
+  # `TpPalette.forStatus`, not a fixed hex palette baked into an asset). ---
+  flutter_svg: ^2.3.0
+
+  # Packages for later phases (barcode scanner, PDF, sharing) are added at
+  # the phase that needs them. Spec section 64: do not add a package to
   # shorten five lines.
 
 dev_dependencies:
@@ -73,3 +80,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true
+  assets:
+    - assets/vehicle_diagram/

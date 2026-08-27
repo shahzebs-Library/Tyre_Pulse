@@ -3658,6 +3658,372 @@ abstract class AppLocalizations {
   /// **'Something went wrong. Try again.'**
   String get tyreReplaceTryAgainFallback;
 
+  /// No description provided for @tyreDiagramModeLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Layout view'**
+  String get tyreDiagramModeLayout;
+
+  /// No description provided for @tyreDiagramModeList.
+  ///
+  /// In en, this message translates to:
+  /// **'List view'**
+  String get tyreDiagramModeList;
+
+  /// No description provided for @tyreDiagramStatTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total tyres'**
+  String get tyreDiagramStatTotal;
+
+  /// No description provided for @tyreDiagramStatOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get tyreDiagramStatOk;
+
+  /// No description provided for @tyreDiagramStatMonitor.
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get tyreDiagramStatMonitor;
+
+  /// No description provided for @tyreDiagramStatCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get tyreDiagramStatCritical;
+
+  /// Caption under the Total tyres stat tile - how many of the vehicle's wheels have no reading at all.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} not yet recorded'**
+  String tyreDiagramStatUnrecordedCaption(int count);
+
+  /// A pressure reading shown in the tyre position list, already formatted by the caller.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} psi'**
+  String tyreDiagramListPressureValue(String value);
+
+  /// A tread depth reading shown in the tyre position list, already formatted by the caller.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} mm'**
+  String tyreDiagramListTreadValue(String value);
+
+  /// No description provided for @tyreDiagramListNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get tyreDiagramListNotRecorded;
+
+  /// No description provided for @tyreDiagramListEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing recorded yet'**
+  String get tyreDiagramListEmptyTitle;
+
+  /// No description provided for @tyreDiagramListEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Layout view and tap a tyre to record its condition.'**
+  String get tyreDiagramListEmptyMessage;
+
+  /// No description provided for @tyreDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre detail'**
+  String get tyreDetailTitle;
+
+  /// No description provided for @tyreDetailStatTread.
+  ///
+  /// In en, this message translates to:
+  /// **'Tread depth'**
+  String get tyreDetailStatTread;
+
+  /// No description provided for @tyreDetailStatPressure.
+  ///
+  /// In en, this message translates to:
+  /// **'Pressure'**
+  String get tyreDetailStatPressure;
+
+  /// No description provided for @tyreDetailStatTemperature.
+  ///
+  /// In en, this message translates to:
+  /// **'Temperature'**
+  String get tyreDetailStatTemperature;
+
+  /// No description provided for @tyreDetailFieldNotRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get tyreDetailFieldNotRecorded;
+
+  /// No description provided for @tyreDetailNotRecordedCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded for this inspection'**
+  String get tyreDetailNotRecordedCaption;
+
+  /// No description provided for @tyreDetailSectionOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get tyreDetailSectionOverview;
+
+  /// No description provided for @tyreDetailSectionAdditionalInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional info'**
+  String get tyreDetailSectionAdditionalInfo;
+
+  /// No description provided for @tyreDetailBrandLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Brand / pattern'**
+  String get tyreDetailBrandLabel;
+
+  /// No description provided for @tyreDetailSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get tyreDetailSizeLabel;
+
+  /// No description provided for @tyreDetailInstalledKmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed at'**
+  String get tyreDetailInstalledKmLabel;
+
+  /// No description provided for @tyreDetailRunningKmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Running distance'**
+  String get tyreDetailRunningKmLabel;
+
+  /// No description provided for @tyreDetailAssetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset'**
+  String get tyreDetailAssetLabel;
+
+  /// No description provided for @tyreDetailSiteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get tyreDetailSiteLabel;
+
+  /// No description provided for @tyreDetailTakeActionButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Take action'**
+  String get tyreDetailTakeActionButton;
+
+  /// No description provided for @tyreDetailNoEvidenceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody has recorded anything for this wheel yet.'**
+  String get tyreDetailNoEvidenceMessage;
+
+  /// No description provided for @takeActionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Take action'**
+  String get takeActionTitle;
+
+  /// No description provided for @takeActionReplaceTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace tyre'**
+  String get takeActionReplaceTyre;
+
+  /// No description provided for @takeActionReplaceTyreSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Record the new tyre fitted to this wheel'**
+  String get takeActionReplaceTyreSubtitle;
+
+  /// No description provided for @takeActionReportDefect.
+  ///
+  /// In en, this message translates to:
+  /// **'Repair (Puncture / Damage)'**
+  String get takeActionReportDefect;
+
+  /// No description provided for @takeActionReportDefectSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'File a repair job for this tyre'**
+  String get takeActionReportDefectSubtitle;
+
+  /// No description provided for @takeActionAdjustReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust reading'**
+  String get takeActionAdjustReading;
+
+  /// No description provided for @takeActionAdjustReadingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update pressure, tread depth or condition'**
+  String get takeActionAdjustReadingSubtitle;
+
+  /// No description provided for @takeActionAdjustReadingUnavailableCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Only available while filling in this inspection'**
+  String get takeActionAdjustReadingUnavailableCaption;
+
+  /// No description provided for @takeActionRotateTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate tyre'**
+  String get takeActionRotateTyre;
+
+  /// No description provided for @takeActionRemoveTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove tyre'**
+  String get takeActionRemoveTyre;
+
+  /// No description provided for @takeActionSendToRetread.
+  ///
+  /// In en, this message translates to:
+  /// **'Send to retread'**
+  String get takeActionSendToRetread;
+
+  /// No description provided for @takeActionMarkAsSpare.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as spare'**
+  String get takeActionMarkAsSpare;
+
+  /// No description provided for @takeActionComingSoonCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available in this build yet'**
+  String get takeActionComingSoonCaption;
+
+  /// No description provided for @reportDefectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a defect'**
+  String get reportDefectTitle;
+
+  /// No description provided for @reportDefectTitleFieldLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get reportDefectTitleFieldLabel;
+
+  /// No description provided for @reportDefectTitleFieldHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Puncture on outer rear tyre'**
+  String get reportDefectTitleFieldHint;
+
+  /// No description provided for @reportDefectDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get reportDefectDescriptionLabel;
+
+  /// No description provided for @reportDefectDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What is wrong with this tyre?'**
+  String get reportDefectDescriptionHint;
+
+  /// No description provided for @reportDefectDamageReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Damage reason'**
+  String get reportDefectDamageReasonLabel;
+
+  /// No description provided for @reportDefectDamageReasonHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get reportDefectDamageReasonHint;
+
+  /// No description provided for @reportDefectPriorityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get reportDefectPriorityLabel;
+
+  /// No description provided for @reportDefectSubmitAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit repair request'**
+  String get reportDefectSubmitAction;
+
+  /// No description provided for @reportDefectTitleRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title needed'**
+  String get reportDefectTitleRequiredTitle;
+
+  /// No description provided for @reportDefectTitleRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a short title before saving.'**
+  String get reportDefectTitleRequiredMessage;
+
+  /// No description provided for @reportDefectSavedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Repair request saved'**
+  String get reportDefectSavedTitle;
+
+  /// No description provided for @reportDefectSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It will sync automatically.'**
+  String get reportDefectSavedMessage;
+
+  /// No description provided for @reportDefectSaveFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the repair request'**
+  String get reportDefectSaveFailedTitle;
+
+  /// No description provided for @damageReasonPuncture.
+  ///
+  /// In en, this message translates to:
+  /// **'Puncture'**
+  String get damageReasonPuncture;
+
+  /// No description provided for @damageReasonSidewall.
+  ///
+  /// In en, this message translates to:
+  /// **'Sidewall damage'**
+  String get damageReasonSidewall;
+
+  /// No description provided for @damageReasonTreadWear.
+  ///
+  /// In en, this message translates to:
+  /// **'Tread wear'**
+  String get damageReasonTreadWear;
+
+  /// No description provided for @damageReasonBlowout.
+  ///
+  /// In en, this message translates to:
+  /// **'Blowout'**
+  String get damageReasonBlowout;
+
+  /// No description provided for @damageReasonImpact.
+  ///
+  /// In en, this message translates to:
+  /// **'Impact damage'**
+  String get damageReasonImpact;
+
+  /// No description provided for @damageReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get damageReasonOther;
+
   /// No description provided for @globalSearchTitle.
   ///
   /// In en, this message translates to:

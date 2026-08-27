@@ -2018,6 +2018,201 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tyreReplaceTryAgainFallback => 'حدث خطأ ما. حاول مرة أخرى.';
 
   @override
+  String get tyreDiagramModeLayout => 'عرض التخطيط';
+
+  @override
+  String get tyreDiagramModeList => 'عرض القائمة';
+
+  @override
+  String get tyreDiagramStatTotal => 'إجمالي الإطارات';
+
+  @override
+  String get tyreDiagramStatOk => 'جيد';
+
+  @override
+  String get tyreDiagramStatMonitor => 'مراقبة';
+
+  @override
+  String get tyreDiagramStatCritical => 'حرج';
+
+  @override
+  String tyreDiagramStatUnrecordedCaption(int count) {
+    return '$count لم يُسجَّل بعد';
+  }
+
+  @override
+  String tyreDiagramListPressureValue(String value) {
+    return '$value رطل/بوصة²';
+  }
+
+  @override
+  String tyreDiagramListTreadValue(String value) {
+    return '$value مم';
+  }
+
+  @override
+  String get tyreDiagramListNotRecorded => 'لم يُسجَّل';
+
+  @override
+  String get tyreDiagramListEmptyTitle => 'لم يتم تسجيل أي شيء بعد';
+
+  @override
+  String get tyreDiagramListEmptyMessage =>
+      'بدّل إلى عرض التخطيط واضغط على إطار لتسجيل حالته.';
+
+  @override
+  String get tyreDetailTitle => 'تفاصيل الإطار';
+
+  @override
+  String get tyreDetailStatTread => 'عمق النقش';
+
+  @override
+  String get tyreDetailStatPressure => 'الضغط';
+
+  @override
+  String get tyreDetailStatTemperature => 'درجة الحرارة';
+
+  @override
+  String get tyreDetailFieldNotRecorded => 'لم يُسجَّل';
+
+  @override
+  String get tyreDetailNotRecordedCaption => 'لم يُسجَّل في هذا الفحص';
+
+  @override
+  String get tyreDetailSectionOverview => 'نظرة عامة';
+
+  @override
+  String get tyreDetailSectionAdditionalInfo => 'معلومات إضافية';
+
+  @override
+  String get tyreDetailBrandLabel => 'العلامة التجارية / النقش';
+
+  @override
+  String get tyreDetailSizeLabel => 'المقاس';
+
+  @override
+  String get tyreDetailInstalledKmLabel => 'تم التركيب عند';
+
+  @override
+  String get tyreDetailRunningKmLabel => 'المسافة المقطوعة';
+
+  @override
+  String get tyreDetailAssetLabel => 'الأصل';
+
+  @override
+  String get tyreDetailSiteLabel => 'الموقع';
+
+  @override
+  String get tyreDetailTakeActionButton => 'اتخاذ إجراء';
+
+  @override
+  String get tyreDetailNoEvidenceMessage =>
+      'لم يسجل أحد أي شيء لهذا الإطار بعد.';
+
+  @override
+  String get takeActionTitle => 'اتخاذ إجراء';
+
+  @override
+  String get takeActionReplaceTyre => 'استبدال الإطار';
+
+  @override
+  String get takeActionReplaceTyreSubtitle =>
+      'سجّل الإطار الجديد المركّب على هذا الإطار';
+
+  @override
+  String get takeActionReportDefect => 'إصلاح (ثقب / تلف)';
+
+  @override
+  String get takeActionReportDefectSubtitle => 'افتح أمر إصلاح لهذا الإطار';
+
+  @override
+  String get takeActionAdjustReading => 'تعديل القراءة';
+
+  @override
+  String get takeActionAdjustReadingSubtitle =>
+      'تحديث الضغط أو عمق النقش أو الحالة';
+
+  @override
+  String get takeActionAdjustReadingUnavailableCaption =>
+      'متاح فقط أثناء تعبئة هذا الفحص';
+
+  @override
+  String get takeActionRotateTyre => 'تدوير الإطار';
+
+  @override
+  String get takeActionRemoveTyre => 'إزالة الإطار';
+
+  @override
+  String get takeActionSendToRetread => 'إرسال لإعادة التلبيس';
+
+  @override
+  String get takeActionMarkAsSpare => 'وضع علامة كإطار احتياطي';
+
+  @override
+  String get takeActionComingSoonCaption => 'غير متاح في هذا الإصدار بعد';
+
+  @override
+  String get reportDefectTitle => 'الإبلاغ عن عطل';
+
+  @override
+  String get reportDefectTitleFieldLabel => 'العنوان';
+
+  @override
+  String get reportDefectTitleFieldHint => 'مثال: ثقب في الإطار الخلفي الخارجي';
+
+  @override
+  String get reportDefectDescriptionLabel => 'الوصف';
+
+  @override
+  String get reportDefectDescriptionHint => 'ما الخلل في هذا الإطار؟';
+
+  @override
+  String get reportDefectDamageReasonLabel => 'سبب التلف';
+
+  @override
+  String get reportDefectDamageReasonHint => 'اختياري';
+
+  @override
+  String get reportDefectPriorityLabel => 'الأولوية';
+
+  @override
+  String get reportDefectSubmitAction => 'إرسال طلب الإصلاح';
+
+  @override
+  String get reportDefectTitleRequiredTitle => 'العنوان مطلوب';
+
+  @override
+  String get reportDefectTitleRequiredMessage =>
+      'أضف عنوانًا قصيرًا قبل الحفظ.';
+
+  @override
+  String get reportDefectSavedTitle => 'تم حفظ طلب الإصلاح';
+
+  @override
+  String get reportDefectSavedMessage => 'سيتم مزامنته تلقائيًا.';
+
+  @override
+  String get reportDefectSaveFailedTitle => 'تعذر حفظ طلب الإصلاح';
+
+  @override
+  String get damageReasonPuncture => 'ثقب';
+
+  @override
+  String get damageReasonSidewall => 'تلف الجانب';
+
+  @override
+  String get damageReasonTreadWear => 'تآكل النقش';
+
+  @override
+  String get damageReasonBlowout => 'انفجار';
+
+  @override
+  String get damageReasonImpact => 'تلف نتيجة اصطدام';
+
+  @override
+  String get damageReasonOther => 'أخرى';
+
+  @override
   String get globalSearchTitle => 'بحث';
 
   @override

@@ -15,6 +15,7 @@ export 'package:tyre_pulse/core/design_system/tp_dropdown.dart';
 export 'package:tyre_pulse/core/design_system/tp_input.dart';
 export 'package:tyre_pulse/core/design_system/tp_scaffold.dart';
 export 'package:tyre_pulse/core/design_system/tp_search_field.dart';
+export 'package:tyre_pulse/core/design_system/tp_segmented.dart';
 export 'package:tyre_pulse/core/design_system/tp_stat_card.dart';
 export 'package:tyre_pulse/core/design_system/tp_states.dart';
 export 'package:tyre_pulse/core/design_system/tp_status_chip.dart';

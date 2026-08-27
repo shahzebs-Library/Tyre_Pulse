@@ -186,14 +186,7 @@ class VehicleTyreDiagram extends StatelessWidget {
               height: viewport.height,
               child: Stack(
                 children: <Widget>[
-                  CustomPaint(
-                    size: Size(viewport.width, viewport.height),
-                    painter: TyreBodyPainter(
-                      bodyKey: layout.bodyKey,
-                      viewport: viewport,
-                      palette: palette,
-                    ),
-                  ),
+                  TyreDiagramBody(bodyKey: layout.bodyKey, viewport: viewport),
                   CustomPaint(
                     size: Size(viewport.width, viewport.height),
                     painter: TyreWheelPainter(
@@ -244,11 +237,14 @@ class VehicleTyreDiagram extends StatelessWidget {
     // carries the canonical code (or vice versa).
     final Map<String, Object?>? entry =
         tyreData[tyre.positionId] ?? tyreData[tyre.id];
-    final TyreCondition condition = entry == null
-        ? TyreCondition.good
-        : normaliseCondition(entry['condition']?.toString());
-    final TpStatus status =
-        entry == null ? TpStatus.unknown : tyreConditionStatus(condition);
+    // `?? TyreCondition.good` mirrors the previous inline default exactly:
+    // an unrecorded wheel is drawn as though it were seeded Good (the same
+    // seed both capture forms pre-fill), while its [status] below still
+    // reads [TpStatus.unknown] rather than [TpStatus.ok] - see
+    // `wheelConditionFor`'s own doc comment for why the two are kept apart.
+    final TyreCondition condition =
+        wheelConditionFor(entry) ?? TyreCondition.good;
+    final TpStatus status = wheelStatusFor(entry);
     // "Has evidence" (and the pressure reading that goes with it) is
     // answered ONCE, by the completeness engine's own rule, and read from a
     // SINGLE classification call - never a second, weaker truthiness check

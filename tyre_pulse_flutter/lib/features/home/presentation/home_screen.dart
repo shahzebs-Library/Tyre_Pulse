@@ -206,14 +206,35 @@ class HomeScreen extends ConsumerWidget {
               onPressed: () => context.push(const ScannerRoute().location),
             ),
           if (canInspect || canScan) const SizedBox(height: TpSpace.xxl),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              for (int i = 0; i < statCards.length; i++) ...<Widget>[
-                if (i > 0) const SizedBox(width: TpSpace.md),
-                Expanded(child: statCards[i]),
+          // `IntrinsicHeight` is load-bearing, not decorative. A `Row` sits
+          // inside this `ListView`'s main (vertical) axis, which hands every
+          // item an UNBOUNDED height constraint - that is what lets a list
+          // item be as tall as its content needs. `crossAxisAlignment:
+          // CrossAxisAlignment.stretch` then asks each `Expanded` stat card
+          // to stretch to the Row's OWN cross-axis (height) extent, but the
+          // Row has no such extent to give: it is exactly the layout that
+          // throws Flutter's "BoxConstraints forces an infinite height" at
+          // `RenderFlex.performLayout` (reproduced in a widget test pumping
+          // this screen with a real `AccessState` - see the accompanying
+          // report). The failure is not local to this Row: a `RenderSliverList`
+          // cannot compute layout for anything below a child whose own layout
+          // threw, so the WHOLE `ListView` - greeting, buttons, every stat
+          // card, the section grid, the empty-state fallback - rendered as a
+          // blank rectangle beneath a perfectly normal app bar. `IntrinsicHeight`
+          // resolves each stat card's OWN natural height first, which gives
+          // the Row a real, finite height to stretch its children to. Do not
+          // remove this wrapper to "simplify" the tree; do not move the stat
+          // row outside `IntrinsicHeight` again.
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                for (int i = 0; i < statCards.length; i++) ...<Widget>[
+                  if (i > 0) const SizedBox(width: TpSpace.md),
+                  Expanded(child: statCards[i]),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: TpSpace.xxl),
           if (sections.isEmpty)

@@ -28,10 +28,9 @@ import 'package:tyre_pulse/features/inspections/domain/queued_inspection.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
-import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 
 /// One shape both sources ([QueuedInspection] and [InspectionRecord]) are
 /// normalised into, so the render half of this screen does not need to
@@ -338,7 +337,7 @@ class _DetailBody extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: TpSpace.sm),
-        VehicleTyreDiagram(
+        TyreDiagramBoard(
           vehicleType: view.vehicleType,
           assetNo: view.assetNo,
           positions: positions,
@@ -346,15 +345,21 @@ class _DetailBody extends StatelessWidget {
             for (final entry in view.tyreConditions.entries)
               entry.key: entry.value.toEntry(),
           },
+          onPositionTap: (String position) => unawaited(
+            pushTyreDetailScreen(
+              context,
+              positionCode: position,
+              vehicleType: view.vehicleType,
+              entry: view.tyreConditions[position]?.toEntry(),
+              assetNo: view.assetNo,
+              siteName: view.site,
+              // This is a read, already-recorded inspection - there is no
+              // live draft to write a corrected reading back into, so
+              // "Adjust reading" renders honestly disabled on Take Action.
+            ),
+          ),
           width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 2),
         ),
-        const SizedBox(height: TpSpace.lg),
-        for (final String position in positions)
-          if (view.tyreConditions[position]?.isTouched ?? false)
-            _PositionSummaryRow(
-              position: position,
-              reading: view.tyreConditions[position]!,
-            ),
         if ((view.findings ?? view.notes ?? '').trim().isNotEmpty) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           Text(
@@ -543,41 +548,6 @@ class _MetricTile extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.labelSmall),
         Text(value, style: Theme.of(context).textTheme.titleMedium),
       ],
-    );
-  }
-}
-
-class _PositionSummaryRow extends StatelessWidget {
-  const _PositionSummaryRow({required this.position, required this.reading});
-
-  final String position;
-  final TyrePositionReading reading;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return TpCard(
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(position, style: Theme.of(context).textTheme.labelLarge),
-                Text(
-                  tyreConditionLabel(
-                    l10n,
-                    normaliseCondition(reading.condition),
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          if (reading.pressurePsi != null) Text('${reading.pressurePsi} psi'),
-        ],
-      ),
     );
   }
 }

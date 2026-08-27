@@ -16,24 +16,22 @@
 /// `features/inspections/presentation/inspection_detail_screen.dart` reads
 /// the exact same `inspections.tyre_conditions` column for the exact same
 /// purpose (showing a supervisor/inspector what was recorded) and reuses
-/// `VehicleTyreDiagram` + `diagramPositions` + `tyreConditionLabel` from
-/// `features/tyre_diagram` directly, per that file's own library comment:
-/// "Vehicle picking is deliberately NOT duplicated here ... the same way
-/// this whole port consumes `features/tyre_diagram`'s widget and engine,
-/// rather than re-querying ... a second, possibly-drifting way". This
-/// feature follows the SAME established convention for the SAME reason.
-/// What it does NOT do is import `features/inspections/domain/
-/// tyre_position_reading.dart` - that decode belongs to a SIBLING
-/// top-level feature's own domain layer, and per this codebase's
-/// established convention (`inspection_approval_signature_pad.dart`'s own
-/// library comment), sibling top-level features do not share domain/
-/// presentation code even when a decode looks similar. The raw-cell
-/// classification this screen needs instead comes from `features/
-/// tyre_diagram/domain/tyre_completeness.dart`'s `readTyreEntries`/
-/// `classifyEntry` - the SAME foundational, shape-agnostic decoder
-/// `VehicleTyreDiagram` itself is built on, so "which positions actually
-/// carry evidence" can never disagree between the diagram and the summary
-/// list underneath it.
+/// `TyreDiagramBoard` + `diagramPositions` from `features/tyre_diagram`
+/// directly - the shared vehicle-layout board (diagram + stat row + list
+/// view), the same way this whole port consumes `features/tyre_diagram`'s
+/// widgets and engine rather than re-querying or re-rendering a second,
+/// possibly-drifting way. This feature follows the SAME established
+/// convention for the SAME reason. What it does NOT do is import
+/// `features/inspections/domain/tyre_position_reading.dart` - that decode
+/// belongs to a SIBLING top-level feature's own domain layer, and per this
+/// codebase's established convention (`inspection_approval_signature_pad
+/// .dart`'s own library comment), sibling top-level features do not share
+/// domain/presentation code even when a decode looks similar. The raw-cell
+/// entry this screen needs instead comes from `features/tyre_diagram/domain/
+/// tyre_completeness.dart`'s `readTyreEntries` - the SAME foundational,
+/// shape-agnostic decoder `TyreDiagramBoard` and `TyreDetailScreen`
+/// themselves are built on, so "what this wheel carries" can never disagree
+/// between the board and the detail screen it opens.
 library;
 
 import 'dart:async';
@@ -58,10 +56,9 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_repositor
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
-import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 
 /// Which decision is currently in flight, so the two action buttons can
 /// each show their own busy indicator without either being pressed twice.
@@ -414,6 +411,7 @@ class _ReviewBody extends StatelessWidget {
               : _TyreConditionsSection(
                   vehicleType: item.vehicleType ?? '',
                   assetNo: item.assetNo,
+                  siteName: item.site,
                   positions: positions,
                   tyreData: tyreData,
                 ),
@@ -553,117 +551,39 @@ class _TyreConditionsSection extends StatelessWidget {
   const _TyreConditionsSection({
     required this.vehicleType,
     required this.assetNo,
+    required this.siteName,
     required this.positions,
     required this.tyreData,
   });
 
   final String vehicleType;
   final String? assetNo;
+  final String? siteName;
   final List<String> positions;
   final Map<String, Map<String, Object?>> tyreData;
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final List<_TouchedPosition> touched = <_TouchedPosition>[
-      for (final String position in positions)
-        if (classifyEntry(tyreData[position]).state != TyreSlotState.blank)
-          _TouchedPosition(position, classifyEntry(tyreData[position])),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Center(
-          child: VehicleTyreDiagram(
-            vehicleType: vehicleType,
-            assetNo: assetNo,
-            positions: positions,
-            tyreData: tyreData,
-            width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 4),
-          ),
+    return TyreDiagramBoard(
+      vehicleType: vehicleType,
+      assetNo: assetNo,
+      positions: positions,
+      tyreData: tyreData,
+      onPositionTap: (String position) => unawaited(
+        pushTyreDetailScreen(
+          context,
+          positionCode: position,
+          vehicleType: vehicleType,
+          entry: tyreData[position],
+          assetNo: assetNo,
+          siteName: siteName,
+          // This inspection has already been submitted for approval - there
+          // is no live draft to write a corrected reading back into, so
+          // "Adjust reading" on Take Action renders honestly disabled.
         ),
-        if (touched.isNotEmpty) ...[
-          const SizedBox(height: TpSpace.md),
-          for (final _TouchedPosition t in touched)
-            _PositionSummaryRow(
-              position: t.position,
-              classification: t.classification,
-            ),
-        ],
-        if (touched.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: TpSpace.sm),
-            child: Text(
-              l10n.inspectionApprovalNoTyreConditions,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _TouchedPosition {
-  const _TouchedPosition(this.position, this.classification);
-
-  final String position;
-  final EntryClassification classification;
-}
-
-class _PositionSummaryRow extends StatelessWidget {
-  const _PositionSummaryRow({
-    required this.position,
-    required this.classification,
-  });
-
-  final String position;
-  final EntryClassification classification;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final TyreCondition condition = normaliseCondition(
-      classification.condition,
-    );
-    final String? pressureText = _pressureText(classification.pressure);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            width: 64,
-            child: TpIdentifierText(
-              position,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              tyreConditionLabel(l10n, condition),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          if (pressureText != null)
-            Text(
-              l10n.tyreDiagramPressureDetail(pressureText),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-        ],
       ),
+      width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 4),
     );
-  }
-
-  static String? _pressureText(Object? raw) {
-    if (raw == null) return null;
-    if (raw is num) {
-      return raw == raw.roundToDouble()
-          ? raw.toInt().toString()
-          : raw.toString();
-    }
-    final String s = raw.toString().trim();
-    return s.isEmpty ? null : s;
   }
 }
 

@@ -5,7 +5,7 @@ publish_to: "none"
 # The Android versionCode is set by CI. Read docs/BOOTSTRAP.md before changing
 # this by hand: the production listing already has a version code and Play
 # rejects a lower one (spec section 69).
-version: 0.1.0+2
+version: 0.1.0+3
 
 environment:
   # Deliberately broad. CI pins the real SDK by using the Flutter stable

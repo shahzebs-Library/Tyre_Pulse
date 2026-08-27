@@ -186,7 +186,27 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build signed release AAB
-        run: flutter build appbundle --release
+        # main.dart / app_config.dart validate SUPABASE_URL and
+        # SUPABASE_ANON_KEY at startup and, if either is missing, render a
+        # deliberate "This app is not set up correctly" screen instead of
+        # crashing - which is exactly what the first build out of this fixed
+        # workflow did (versionCode 2, confirmed on a real device): it opened
+        # cleanly (the MainActivity fix above worked) straight into that
+        # screen, because this step never passed either value in. The
+        # anon/publishable key is safe to embed in a compiled binary - RLS is
+        # the real access boundary, the same reasoning already written out in
+        # app_config.dart and already acted on in build-native-android.yml
+        # and mobile/eas.json, both of which ship this exact literal key.
+        # SUPABASE_ANON_KEY_PROD is read here (not a new secret) so a future
+        # key rotation only has to touch one place across every workflow.
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
+        run: |
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=APP_ENV=staging
 
       - name: Publish to Play Console Internal Testing
         uses: r0adkll/upload-google-play@v1

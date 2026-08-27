@@ -146,6 +146,17 @@ jobs:
             flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
             sed -i 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulseinspector/g' \
               android/app/build.gradle.kts android/app/build.gradle 2>/dev/null || true
+            # flutter_secure_storage (a real project dependency, not
+            # generated boilerplate) declares it needs Android SDK 37 or
+            # higher to compile against; `flutter create` always templates
+            # compileSdk as `flutter.compileSdkVersion`, which currently
+            # resolves lower than that on the `stable` channel. Same
+            # deterministic-patch reasoning as the bundle-id sed above: this
+            # is freshly generated boilerplate, not a hand-authored file, so
+            # overriding one literal on it carries no risk to the app
+            # itself. Reproduced and confirmed locally before adding this.
+            sed -i 's/compileSdk = flutter\.compileSdkVersion/compileSdk = 37/' \
+              android/app/build.gradle.kts 2>/dev/null || true
           else
             echo "android/ present - using the committed project"
           fi

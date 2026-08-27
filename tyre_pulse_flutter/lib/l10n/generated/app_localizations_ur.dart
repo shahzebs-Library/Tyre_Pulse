@@ -2082,4 +2082,66 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get globalSearchSourceFailedNotice =>
       'کچھ نتائج ابھی چیک نہیں ہو سکے۔ ریفریش کرنے کے لیے نیچے کھینچیں یا دوبارہ کوشش کریں۔';
+
+  @override
+  String get loginAppSubtitle => 'انسپکٹر ایپ';
+
+  @override
+  String get loginTagline => 'TyrePulse · ٹائر مین پورٹل';
+
+  @override
+  String get loginCardTitle => 'سائن ان کریں';
+
+  @override
+  String get loginCardSubtitle =>
+      'اپنا ای میل، صارف نام یا ملازم نمبر استعمال کریں';
+
+  @override
+  String get loginIdentifierLabel => 'ای میل / صارف نام / ملازم نمبر';
+
+  @override
+  String get loginIdentifierPlaceholder => 'ای میل، نام یا نمبر درج کریں';
+
+  @override
+  String get loginPasswordLabel => 'پاس ورڈ';
+
+  @override
+  String get loginPasswordPlaceholder => 'پاس ورڈ درج کریں';
+
+  @override
+  String get loginShowPassword => 'پاس ورڈ دکھائیں';
+
+  @override
+  String get loginHidePassword => 'پاس ورڈ چھپائیں';
+
+  @override
+  String get loginErrorRequired => 'براہ کرم لاگ ان اور پاس ورڈ درج کریں۔';
+
+  @override
+  String loginErrorLocked(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other:
+          'بہت زیادہ ناکام کوششیں۔ براہ کرم $minutes منٹ بعد دوبارہ کوشش کریں۔',
+      one: 'بہت زیادہ ناکام کوششیں۔ براہ کرم 1 منٹ بعد دوبارہ کوشش کریں۔',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileNavTitle => 'پروفائل';
+
+  @override
+  String get profileRoleLabel => 'کردار';
+
+  @override
+  String get profileSuperAdminBadge => 'پلیٹ فارم ایڈمنسٹریٹر';
+
+  @override
+  String get profileSignOutConfirmTitle => 'سائن آؤٹ کریں؟';
+
+  @override
+  String get profileSignOutConfirmMessage =>
+      'کام جاری رکھنے کے لیے آپ کو دوبارہ سائن ان کرنا ہوگا۔ اس ڈیوائس پر پہلے سے محفوظ کام محفوظ رہے گا۔';
 }

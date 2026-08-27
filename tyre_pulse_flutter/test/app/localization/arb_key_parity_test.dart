@@ -336,16 +336,44 @@ void main() {
     //   accidents feature exists yet, so that identifier type is omitted
     //   rather than half-built (see `features/search/data/
     //   global_search_repository.dart`'s own library comment).
-    // 593 + 16 = 609. Bumping this pin is the expected maintenance action
+    // 593 + 16 = 609.
+    // - `features/auth` (the sign-in screen - the acute blocker this app had
+    //   no entry point without) added 12 keys: loginAppSubtitle through
+    //   loginErrorLocked - the subtitle under the app name, the footer
+    //   tagline, the card's title/subtitle, the identifier and password
+    //   field labels and placeholders, the show/hide-password tooltip pair,
+    //   the client-side required-fields message, and the server-enforced
+    //   lockout message (carrying an `{minutes}` plural placeholder - see
+    //   `SignInLocked.lockoutMinutes`'s own doc comment for why it is never
+    //   less than one). The submit button label deliberately REUSES the
+    //   existing `actionSignIn` key rather than adding a new one - it
+    //   already says exactly the right thing. The three language-toggle
+    //   chip labels ('EN' / 'ع' / 'اردو') are deliberately NOT ARB keys at
+    //   all - see `login_screen.dart`'s own `_LanguageOption` doc comment
+    //   for why a language's own name must not be routed through whichever
+    //   language happens to be active.
+    // 609 + 12 = 621.
+    // - `features/profile` (the Profile branch root - previously
+    //   unreachable, and the only place `AuthController.signOut` was ever
+    //   wired to a control) added 5 keys: profileNavTitle,
+    //   profileRoleLabel, profileSuperAdminBadge,
+    //   profileSignOutConfirmTitle and profileSignOutConfirmMessage. Three
+    //   further strings this screen needed were genuine REUSES, not new
+    //   keys: `valueUnavailable` (an absent full name), and
+    //   `homeSiteStatLabel`/`homeSiteStatUnavailable` (the profile's site
+    //   row states the identical fact the Home screen's own site stat card
+    //   already does, over the same `WorkspaceProfile.legacySite` field) -
+    //   duplicating either would only have drifted the two screens apart.
+    // 621 + 5 = 626. Bumping this pin is the expected maintenance action
     // for a real key addition; this comment exists so the next person to
     // touch it can tell that apart from a mistake. Per this file's own
     // earlier note: if a future edit ever makes a translated file the
     // larger one, re-derive which file is the reference before touching
     // this number - do not just raise it blind.
-    test('en, ar and ur each carry exactly 609 translatable keys today', () {
-      expect(_translatableKeys(en).length, 609);
-      expect(_translatableKeys(ar).length, 609);
-      expect(_translatableKeys(ur).length, 609);
+    test('en, ar and ur each carry exactly 626 translatable keys today', () {
+      expect(_translatableKeys(en).length, 626);
+      expect(_translatableKeys(ar).length, 626);
+      expect(_translatableKeys(ur).length, 626);
     });
   });
 

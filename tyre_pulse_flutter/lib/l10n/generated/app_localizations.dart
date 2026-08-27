@@ -3753,6 +3753,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Some results could not be checked right now. Pull to refresh or try again.'**
   String get globalSearchSourceFailedNotice;
+
+  /// Small line under the app name on the sign-in screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspector App'**
+  String get loginAppSubtitle;
+
+  /// Footer line at the bottom of the sign-in screen.
+  ///
+  /// In en, this message translates to:
+  /// **'TyrePulse Fleet Intelligence · Tyre Man Portal'**
+  String get loginTagline;
+
+  /// No description provided for @loginCardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In'**
+  String get loginCardTitle;
+
+  /// No description provided for @loginCardSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your email, username, or Employee ID'**
+  String get loginCardSubtitle;
+
+  /// No description provided for @loginIdentifierLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Email / Username / Employee ID'**
+  String get loginIdentifierLabel;
+
+  /// No description provided for @loginIdentifierPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter email, username, or ID'**
+  String get loginIdentifierPlaceholder;
+
+  /// No description provided for @loginPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get loginPasswordLabel;
+
+  /// No description provided for @loginPasswordPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter password'**
+  String get loginPasswordPlaceholder;
+
+  /// Icon-button tooltip that reveals the typed password.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get loginShowPassword;
+
+  /// Icon-button tooltip that masks the typed password again.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get loginHidePassword;
+
+  /// Client-side validation before a sign-in attempt is even sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter your login and password.'**
+  String get loginErrorRequired;
+
+  /// SignInLocked - the server-enforced account lockout (system_config.max_login_attempts) refused this attempt outright, without checking the credentials just supplied.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes, plural, =1{Too many failed attempts. Try again in 1 minute.} other{Too many failed attempts. Try again in {minutes} minutes.}}'**
+  String loginErrorLocked(int minutes);
+
+  /// No description provided for @profileNavTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileNavTitle;
+
+  /// No description provided for @profileRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get profileRoleLabel;
+
+  /// Shown on the profile screen only when profiles.is_super_admin is true.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform administrator'**
+  String get profileSuperAdminBadge;
+
+  /// No description provided for @profileSignOutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out?'**
+  String get profileSignOutConfirmTitle;
+
+  /// Reassures the field worker that signing out does not touch the offline command queue or any draft - see AuthController.signOut's own library comment for exactly what it does and does not clear.
+  ///
+  /// In en, this message translates to:
+  /// **'You will need to sign in again to continue working. Anything already saved on this device stays saved.'**
+  String get profileSignOutConfirmMessage;
 }
 
 class _AppLocalizationsDelegate

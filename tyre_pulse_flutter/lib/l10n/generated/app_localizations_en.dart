@@ -2074,4 +2074,64 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get globalSearchSourceFailedNotice =>
       'Some results could not be checked right now. Pull to refresh or try again.';
+
+  @override
+  String get loginAppSubtitle => 'Inspector App';
+
+  @override
+  String get loginTagline => 'TyrePulse Fleet Intelligence · Tyre Man Portal';
+
+  @override
+  String get loginCardTitle => 'Sign In';
+
+  @override
+  String get loginCardSubtitle => 'Use your email, username, or Employee ID';
+
+  @override
+  String get loginIdentifierLabel => 'Email / Username / Employee ID';
+
+  @override
+  String get loginIdentifierPlaceholder => 'Enter email, username, or ID';
+
+  @override
+  String get loginPasswordLabel => 'Password';
+
+  @override
+  String get loginPasswordPlaceholder => 'Enter password';
+
+  @override
+  String get loginShowPassword => 'Show password';
+
+  @override
+  String get loginHidePassword => 'Hide password';
+
+  @override
+  String get loginErrorRequired => 'Please enter your login and password.';
+
+  @override
+  String loginErrorLocked(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'Too many failed attempts. Try again in $minutes minutes.',
+      one: 'Too many failed attempts. Try again in 1 minute.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileNavTitle => 'Profile';
+
+  @override
+  String get profileRoleLabel => 'Role';
+
+  @override
+  String get profileSuperAdminBadge => 'Platform administrator';
+
+  @override
+  String get profileSignOutConfirmTitle => 'Sign out?';
+
+  @override
+  String get profileSignOutConfirmMessage =>
+      'You will need to sign in again to continue working. Anything already saved on this device stays saved.';
 }

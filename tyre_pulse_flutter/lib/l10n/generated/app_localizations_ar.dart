@@ -2081,4 +2081,67 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get globalSearchSourceFailedNotice =>
       'تعذّر التحقق من بعض النتائج الآن. اسحب للتحديث أو حاول مجدداً.';
+
+  @override
+  String get loginAppSubtitle => 'تطبيق المفتش';
+
+  @override
+  String get loginTagline => 'TyrePulse · بوابة فني الإطارات';
+
+  @override
+  String get loginCardTitle => 'تسجيل الدخول';
+
+  @override
+  String get loginCardSubtitle =>
+      'استخدم بريدك الإلكتروني أو اسم المستخدم أو رقم الموظف';
+
+  @override
+  String get loginIdentifierLabel =>
+      'البريد الإلكتروني / اسم المستخدم / رقم الموظف';
+
+  @override
+  String get loginIdentifierPlaceholder => 'أدخل البريد أو الاسم أو الرقم';
+
+  @override
+  String get loginPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get loginPasswordPlaceholder => 'أدخل كلمة المرور';
+
+  @override
+  String get loginShowPassword => 'إظهار كلمة المرور';
+
+  @override
+  String get loginHidePassword => 'إخفاء كلمة المرور';
+
+  @override
+  String get loginErrorRequired =>
+      'يرجى إدخال بيانات تسجيل الدخول وكلمة المرور.';
+
+  @override
+  String loginErrorLocked(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد $minutes دقيقة.',
+      one: 'محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد دقيقة واحدة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get profileNavTitle => 'حسابي';
+
+  @override
+  String get profileRoleLabel => 'الدور';
+
+  @override
+  String get profileSuperAdminBadge => 'مسؤول المنصة';
+
+  @override
+  String get profileSignOutConfirmTitle => 'تسجيل الخروج؟';
+
+  @override
+  String get profileSignOutConfirmMessage =>
+      'ستحتاج إلى تسجيل الدخول مرة أخرى لمواصلة العمل. أي عمل محفوظ بالفعل على هذا الجهاز يبقى محفوظاً.';
 }

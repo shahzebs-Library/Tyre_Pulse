@@ -1641,5 +1641,63 @@
   "globalSearchSourceFailedNotice": "Some results could not be checked right now. Pull to refresh or try again.",
   "@globalSearchSourceFailedNotice": {
     "description": "Shown when one of the four identifier-type lookups failed while at least one other succeeded - see GlobalSearchState.failedSources."
+  },
+
+  "loginAppSubtitle": "Inspector App",
+  "@loginAppSubtitle": {
+    "description": "Small line under the app name on the sign-in screen."
+  },
+  "loginTagline": "TyrePulse Fleet Intelligence · Tyre Man Portal",
+  "@loginTagline": {
+    "description": "Footer line at the bottom of the sign-in screen."
+  },
+  "loginCardTitle": "Sign In",
+  "@loginCardTitle": {},
+  "loginCardSubtitle": "Use your email, username, or Employee ID",
+  "@loginCardSubtitle": {},
+  "loginIdentifierLabel": "Email / Username / Employee ID",
+  "@loginIdentifierLabel": {},
+  "loginIdentifierPlaceholder": "Enter email, username, or ID",
+  "@loginIdentifierPlaceholder": {},
+  "loginPasswordLabel": "Password",
+  "@loginPasswordLabel": {},
+  "loginPasswordPlaceholder": "Enter password",
+  "@loginPasswordPlaceholder": {},
+  "loginShowPassword": "Show password",
+  "@loginShowPassword": {
+    "description": "Icon-button tooltip that reveals the typed password."
+  },
+  "loginHidePassword": "Hide password",
+  "@loginHidePassword": {
+    "description": "Icon-button tooltip that masks the typed password again."
+  },
+  "loginErrorRequired": "Please enter your login and password.",
+  "@loginErrorRequired": {
+    "description": "Client-side validation before a sign-in attempt is even sent."
+  },
+  "loginErrorLocked": "{minutes, plural, =1{Too many failed attempts. Try again in 1 minute.} other{Too many failed attempts. Try again in {minutes} minutes.}}",
+  "@loginErrorLocked": {
+    "description": "SignInLocked - the server-enforced account lockout (system_config.max_login_attempts) refused this attempt outright, without checking the credentials just supplied.",
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+
+  "profileNavTitle": "Profile",
+  "@profileNavTitle": {},
+  "profileRoleLabel": "Role",
+  "@profileRoleLabel": {},
+  "profileSuperAdminBadge": "Platform administrator",
+  "@profileSuperAdminBadge": {
+    "description": "Shown on the profile screen only when profiles.is_super_admin is true."
+  },
+  "profileSignOutConfirmTitle": "Sign out?",
+  "@profileSignOutConfirmTitle": {},
+  "profileSignOutConfirmMessage": "You will need to sign in again to continue working. Anything already saved on this device stays saved.",
+  "@profileSignOutConfirmMessage": {
+    "description": "Reassures the field worker that signing out does not touch the offline command queue or any draft - see AuthController.signOut's own library comment for exactly what it does and does not clear."
   }
 }

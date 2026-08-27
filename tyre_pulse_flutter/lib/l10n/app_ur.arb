@@ -645,5 +645,24 @@
   "globalSearchSectionTyres": "ٹائر",
   "globalSearchSectionWorkOrders": "ورک آرڈرز",
   "globalSearchSectionInspections": "معائنے",
-  "globalSearchSourceFailedNotice": "کچھ نتائج ابھی چیک نہیں ہو سکے۔ ریفریش کرنے کے لیے نیچے کھینچیں یا دوبارہ کوشش کریں۔"
+  "globalSearchSourceFailedNotice": "کچھ نتائج ابھی چیک نہیں ہو سکے۔ ریفریش کرنے کے لیے نیچے کھینچیں یا دوبارہ کوشش کریں۔",
+
+  "loginAppSubtitle": "انسپکٹر ایپ",
+  "loginTagline": "TyrePulse · ٹائر مین پورٹل",
+  "loginCardTitle": "سائن ان کریں",
+  "loginCardSubtitle": "اپنا ای میل، صارف نام یا ملازم نمبر استعمال کریں",
+  "loginIdentifierLabel": "ای میل / صارف نام / ملازم نمبر",
+  "loginIdentifierPlaceholder": "ای میل، نام یا نمبر درج کریں",
+  "loginPasswordLabel": "پاس ورڈ",
+  "loginPasswordPlaceholder": "پاس ورڈ درج کریں",
+  "loginShowPassword": "پاس ورڈ دکھائیں",
+  "loginHidePassword": "پاس ورڈ چھپائیں",
+  "loginErrorRequired": "براہ کرم لاگ ان اور پاس ورڈ درج کریں۔",
+  "loginErrorLocked": "{minutes, plural, =1{بہت زیادہ ناکام کوششیں۔ براہ کرم 1 منٹ بعد دوبارہ کوشش کریں۔} other{بہت زیادہ ناکام کوششیں۔ براہ کرم {minutes} منٹ بعد دوبارہ کوشش کریں۔}}",
+
+  "profileNavTitle": "پروفائل",
+  "profileRoleLabel": "کردار",
+  "profileSuperAdminBadge": "پلیٹ فارم ایڈمنسٹریٹر",
+  "profileSignOutConfirmTitle": "سائن آؤٹ کریں؟",
+  "profileSignOutConfirmMessage": "کام جاری رکھنے کے لیے آپ کو دوبارہ سائن ان کرنا ہوگا۔ اس ڈیوائس پر پہلے سے محفوظ کام محفوظ رہے گا۔"
 }

@@ -645,5 +645,24 @@
   "globalSearchSectionTyres": "الإطارات",
   "globalSearchSectionWorkOrders": "أوامر العمل",
   "globalSearchSectionInspections": "عمليات التفتيش",
-  "globalSearchSourceFailedNotice": "تعذّر التحقق من بعض النتائج الآن. اسحب للتحديث أو حاول مجدداً."
+  "globalSearchSourceFailedNotice": "تعذّر التحقق من بعض النتائج الآن. اسحب للتحديث أو حاول مجدداً.",
+
+  "loginAppSubtitle": "تطبيق المفتش",
+  "loginTagline": "TyrePulse · بوابة فني الإطارات",
+  "loginCardTitle": "تسجيل الدخول",
+  "loginCardSubtitle": "استخدم بريدك الإلكتروني أو اسم المستخدم أو رقم الموظف",
+  "loginIdentifierLabel": "البريد الإلكتروني / اسم المستخدم / رقم الموظف",
+  "loginIdentifierPlaceholder": "أدخل البريد أو الاسم أو الرقم",
+  "loginPasswordLabel": "كلمة المرور",
+  "loginPasswordPlaceholder": "أدخل كلمة المرور",
+  "loginShowPassword": "إظهار كلمة المرور",
+  "loginHidePassword": "إخفاء كلمة المرور",
+  "loginErrorRequired": "يرجى إدخال بيانات تسجيل الدخول وكلمة المرور.",
+  "loginErrorLocked": "{minutes, plural, =1{محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد دقيقة واحدة.} other{محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد {minutes} دقيقة.}}",
+
+  "profileNavTitle": "حسابي",
+  "profileRoleLabel": "الدور",
+  "profileSuperAdminBadge": "مسؤول المنصة",
+  "profileSignOutConfirmTitle": "تسجيل الخروج؟",
+  "profileSignOutConfirmMessage": "ستحتاج إلى تسجيل الدخول مرة أخرى لمواصلة العمل. أي عمل محفوظ بالفعل على هذا الجهاز يبقى محفوظاً."
 }

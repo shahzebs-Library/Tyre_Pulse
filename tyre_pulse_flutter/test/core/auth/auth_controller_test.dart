@@ -3,193 +3,25 @@
 /// reasoning `test/core/workspace/workspace_switch_test.dart` gives for the
 /// same choice: the sign-out guarantee below is a rule about what is NOT
 /// called, and a call list is the only way to test that.
+///
+/// The fakes and fixtures this file drives now live in
+/// `auth_test_support.dart`, shared with
+/// `test/features/auth/presentation/login_screen_test.dart` - see that
+/// file's own library comment for why.
 library;
-
-import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/router/session.dart';
 import 'package:tyre_pulse/core/auth/app_version.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
-import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_profile_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_repository.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
-import 'package:tyre_pulse/core/auth/auth_version_gate_repository.dart';
-import 'package:tyre_pulse/core/auth/foreground_signal.dart';
-import 'package:tyre_pulse/core/auth/profile_cache.dart';
-import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
-import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
-import 'package:tyre_pulse/core/storage/secure_read.dart';
-import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 
-// ---------------------------------------------------------------------------
-// Fakes
-// ---------------------------------------------------------------------------
-
-/// Every method call this fake session store was ever asked for, in order.
-/// Deliberately the SAME shape `workspace_switch_test.dart`'s `FakeDependencies`
-/// uses: the list itself is the proof, not just a stub returning canned data.
-final class FakeAuthRepository implements AuthRepository {
-  final StreamController<AuthSessionSignal> _controller =
-      StreamController<AuthSessionSignal>.broadcast();
-
-  AuthSessionSignal _current = const AuthSessionSignal.none();
-  final List<String> calls = <String>[];
-
-  /// Pushes a new session signal, as a real `onAuthStateChange` event would.
-  void emit(AuthSessionSignal signal) {
-    _current = signal;
-    _controller.add(signal);
-  }
-
-  @override
-  AuthSessionSignal get currentSession => _current;
-
-  @override
-  Stream<AuthSessionSignal> get sessionChanges => _controller.stream;
-
-  @override
-  Future<SignInOutcome> signIn({
-    required String identifier,
-    required String password,
-  }) async {
-    calls.add('signIn');
-    return const SignInSucceeded();
-  }
-
-  @override
-  Future<void> signOut() async {
-    calls.add('signOut');
-    // Deliberately does NOT emit a signedOut signal on its own. This is what
-    // proves `AuthController.signOut()` reaches the signed-out state by its
-    // own explicit transition, not by depending on this firing - see the
-    // 'signOut works even when no session event follows it' test below.
-  }
-
-  @override
-  Future<void> startAutoRefresh() async {
-    calls.add('startAutoRefresh');
-  }
-
-  @override
-  Future<void> stopAutoRefresh() async {
-    calls.add('stopAutoRefresh');
-  }
-
-  Future<void> dispose() => _controller.close();
-}
-
-final class FakeProfileRepository implements ProfileRepository {
-  final Map<String, ProfileFetchOutcome> outcomeByUserId =
-      <String, ProfileFetchOutcome>{};
-  final List<String> calls = <String>[];
-
-  @override
-  Future<ProfileFetchOutcome> fetchProfile(String userId) async {
-    calls.add('fetchProfile:$userId');
-    return outcomeByUserId[userId] ??
-        ProfileFetchFailed(
-          AppError(
-            kind: AppErrorKind.unknown,
-            message: 'no fixture registered for $userId',
-          ),
-        );
-  }
-}
-
-final class FakeVersionGateRepository implements VersionGateRepository {
-  VersionGateResult result = const VersionGateResult.notChecked();
-  int callCount = 0;
-
-  @override
-  Future<VersionGateResult> check() async {
-    callCount++;
-    return result;
-  }
-}
-
-final class FakeForegroundSignal implements ForegroundSignal {
-  final StreamController<void> _controller = StreamController<void>.broadcast();
-  bool disposed = false;
-
-  void resume() => _controller.add(null);
-
-  @override
-  Stream<void> get onResumed => _controller.stream;
-
-  @override
-  void dispose() {
-    disposed = true;
-    unawaited(_controller.close());
-  }
-}
-
-/// A trivial in-memory [SecureKeyValueStore]. [ProfileCache] is a `final`
-/// class and cannot itself be faked from another library, so the real
-/// [ProfileCache] is exercised over this instead - which also means the cache
-/// logic is genuinely tested, not stubbed away.
-final class FakeSecureStore extends SecureKeyValueStore {
-  final Map<String, String> _values = <String, String>{};
-  final List<String> calls = <String>[];
-
-  @override
-  int get readFailureCount => 0;
-
-  @override
-  Future<SecureRead> read(String key) async {
-    calls.add('read:$key');
-    final String? value = _values[key];
-    return value == null ? const SecureRead.absent() : SecureRead.ok(value);
-  }
-
-  @override
-  Future<void> write(String key, String value) async {
-    calls.add('write:$key');
-    _values[key] = value;
-  }
-
-  @override
-  Future<void> delete(String key) async {
-    calls.add('delete:$key');
-    _values.remove(key);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
-
-Map<String, Object?> profileRow({
-  String id = 'user-1',
-  bool approved = true,
-  bool locked = false,
-}) =>
-    <String, Object?>{
-      'id': id,
-      'role': 'Manager',
-      'country': const <String>['ALL'],
-      'sites': const <String>['ALL'],
-      'org_id': 'org-1',
-      'organisation_id': 'org-1',
-      'is_super_admin': false,
-      'approved': approved,
-      'locked': locked,
-      'site': null,
-      'full_name': 'Test User',
-    };
-
-WorkspaceProfile profileWith({
-  String id = 'user-1',
-  bool approved = true,
-  bool locked = false,
-}) =>
-    WorkspaceProfile.fromRow(
-      profileRow(id: id, approved: approved, locked: locked),
-    );
+import 'auth_test_support.dart';
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -198,16 +30,14 @@ WorkspaceProfile profileWith({
 final class Harness {
   Harness({Duration restoreTimeout = const Duration(milliseconds: 30)}) {
     container = ProviderContainer(
-      overrides: [
-        authRepositoryProvider.overrideWith((Ref ref) => auth),
-        profileRepositoryProvider.overrideWith((Ref ref) => profiles),
-        versionGateRepositoryProvider.overrideWith((Ref ref) => versionGate),
-        profileCacheProvider.overrideWith((Ref ref) => cache),
-        foregroundSignalProvider.overrideWith((Ref ref) => foreground),
-        sessionRestoreTimeoutDurationProvider.overrideWith(
-          (Ref ref) => restoreTimeout,
-        ),
-      ],
+      overrides: authTestOverrides(
+        auth: auth,
+        profiles: profiles,
+        versionGate: versionGate,
+        secureStore: store,
+        foreground: foreground,
+        restoreTimeout: restoreTimeout,
+      ),
     );
   }
 
@@ -216,7 +46,6 @@ final class Harness {
   final FakeVersionGateRepository versionGate = FakeVersionGateRepository();
   final FakeSecureStore store = FakeSecureStore();
   final FakeForegroundSignal foreground = FakeForegroundSignal();
-  late final ProfileCache cache = ProfileCache(store);
 
   late final ProviderContainer container;
 

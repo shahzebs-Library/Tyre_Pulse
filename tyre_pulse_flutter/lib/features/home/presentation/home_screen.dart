@@ -30,8 +30,16 @@
 /// `*_screen_registrations.dart` file under `lib/features/`. Only the
 /// routeIds that came back from ALL THREE are tiles here:
 /// `newInspection`, `scanner`, `serialSearch`, `tyreRecords`, `vehicles`,
-/// `checklists`, `checklistHistory`, `meterLog`, `washing`, `workOrders`,
-/// `inspectionApprovals`, `checklistApprovals`.
+/// `tyreChange`, `checklists`, `checklistHistory`, `meterLog`, `washing`,
+/// `workOrders`, `inspectionApprovals`, `checklistApprovals`.
+///
+/// `tyreChange` joined this list AFTER the sections below were first
+/// written - the original comment here recorded it as omitted because no
+/// feature yet registered a screen for `TpRouteId.tyreChange`. It now does
+/// (`features/tyre_exchange/tyre_exchange_screen_registrations.dart`,
+/// already wired into `main.dart`'s `.withAll(...)` chain), so the three
+/// sources agree and the tile was added rather than left as a gap the RN
+/// reference does not have.
 ///
 /// # Deliberately OMITTED, and why - the RN catalogue this does not carry
 ///
@@ -40,13 +48,6 @@
 ///   AGENTS's own dead-code rule cuts against a second entry point to the
 ///   same destination on the one screen that has room for genuinely new
 ///   controls.
-/// - `tyreChange` - `TyreChangeRoute` is declared in `routes.dart` and
-///   `route_access.dart`, but a grep of every `*_screen_registrations.dart`
-///   file under `lib/features/` at the time this was written returns no
-///   match for `TpRouteId.tyreChange` - no feature registers a screen for
-///   it. A background agent in a sibling worktree may be building the tyre
-///   replacement screen concurrently; if it lands after this file is
-///   written, adding its tile is a follow-up, not a reason to guess here.
 /// - `reportIssue`, `repairRequest`, `rca`, `tasks`, `stock`,
 ///   `preventiveMaintenance`, `workshop`, `overview`, `reports`,
 ///   `analytics`, `ai`, `team`, `admin`, `alerts`, `calendar`,
@@ -79,10 +80,10 @@
 /// this reason, quoted by the earlier stopgap screen's own comment: it
 /// "genuinely crosses from branch 0 into branch 1". A routeId with NO
 /// branch of its own - `serialSearch`, `tyreRecords`, `vehicles`,
-/// `workOrders`, `checklistApprovals`, `scanner` - is nested inside Home's
-/// OWN branch (0), the same shape `WorkOrdersRoute` had in the stopgap this
-/// file replaces, and is reached with `context.push(...)` so Home stays on
-/// the stack underneath it with real history.
+/// `workOrders`, `checklistApprovals`, `scanner`, `tyreChange` - is nested
+/// inside Home's OWN branch (0), the same shape `WorkOrdersRoute` had in the
+/// stopgap this file replaces, and is reached with `context.push(...)` so
+/// Home stays on the stack underneath it with real history.
 library;
 
 import 'package:flutter/material.dart';
@@ -115,6 +116,7 @@ const List<HomeSectionSpec> _kHomeSections = <HomeSectionSpec>[
       HomeTileSpec(id: 'serial', module: ModuleKey.serial),
       HomeTileSpec(id: 'meter', module: ModuleKey.meter),
       HomeTileSpec(id: 'washing', module: ModuleKey.washing),
+      HomeTileSpec(id: 'tyreChange', module: ModuleKey.tyreChange),
       HomeTileSpec(id: 'checklists', module: ModuleKey.checklists),
       HomeTileSpec(id: 'checklistHistory', module: ModuleKey.checklists),
     ],
@@ -327,6 +329,12 @@ class _QuickActionTile extends StatelessWidget {
         icon: Icons.local_car_wash,
         approve: false,
       );
+    case 'tyreChange':
+      return (
+        label: l10n.tyreReplaceNavTitle,
+        icon: Icons.tire_repair_outlined,
+        approve: false,
+      );
     case 'checklists':
       return (
         label: l10n.checklistsHomeTitle,
@@ -390,6 +398,8 @@ void _openHomeTile(BuildContext context, String id) {
     context.push(const WorkOrdersRoute().location);
   } else if (id == 'checklistApprovals') {
     context.push(const ChecklistApprovalsRoute().location);
+  } else if (id == 'tyreChange') {
+    context.push(const TyreChangeRoute().location);
   } else if (id == 'meter') {
     context.go(const MeterLogRoute().location);
   } else if (id == 'washing') {

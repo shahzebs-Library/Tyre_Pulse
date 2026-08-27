@@ -29,6 +29,7 @@ import 'package:tyre_pulse/features/approvals/'
 import 'package:tyre_pulse/features/approvals/'
     'inspection_approvals_screen_registrations.dart';
 import 'package:tyre_pulse/features/assets/assets_screen_registrations.dart';
+import 'package:tyre_pulse/features/auth/auth_screen_registrations.dart';
 import 'package:tyre_pulse/features/checklists/'
     'checklists_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
@@ -36,6 +37,8 @@ import 'package:tyre_pulse/features/inspections/'
     'inspections_screen_registrations.dart';
 import 'package:tyre_pulse/features/meter_logs/'
     'meter_logs_screen_registrations.dart';
+import 'package:tyre_pulse/features/profile/'
+    'profile_screen_registrations.dart';
 import 'package:tyre_pulse/features/records/records_screen_registrations.dart';
 import 'package:tyre_pulse/features/scanning/'
     'scanning_screen_registrations.dart';
@@ -248,6 +251,18 @@ Future<void> main() async {
         // `features/search/domain/global_search_route.dart`'s own doc
         // comment for exactly what a human adds to those files to finish
         // the wiring; nothing in THIS file will need to change when they do.
+        //
+        // `authScreenRegistrations` ([TpRouteId.login]) and
+        // `profileScreenRegistrations` ([TpRouteId.profile]) close the one
+        // gap every phase above this point still left open: BOTH route ids,
+        // path templates and guards already existed
+        // (`PublicRoute()`/`AuthenticatedOnly()` respectively) before either
+        // screen was written, exactly like `homeScreenRegistrations` above -
+        // but until this pair joined the registry, `/login` rendered
+        // [TpScreenNotAvailable] for every signed-out user, and nothing in
+        // the app could call `AuthController.signOut()` at all. Every
+        // feature above this point was reachable only by a cold deep link
+        // straight past a screen nobody could actually get past.
         screenRegistryProvider.overrideWithValue(
           TpScreenRegistry.empty
               .withAll(assetsScreenRegistrations)
@@ -263,7 +278,9 @@ Future<void> main() async {
               .withAll(homeScreenRegistrations)
               .withAll(workOrdersScreenRegistrations)
               .withAll(tyreExchangeScreenRegistrations)
-              .withAll(globalSearchScreenRegistrations),
+              .withAll(globalSearchScreenRegistrations)
+              .withAll(authScreenRegistrations)
+              .withAll(profileScreenRegistrations),
         ),
       ],
       child: const TyrePulseApp(),

@@ -89,7 +89,22 @@ final class TyreRecordsListController extends Notifier<TyreRecordsListState> {
     // `unawaited` is required here under this project's lint configuration
     // (`unawaited_futures: error`) - an un-awaited Future with no explicit
     // marker is exactly how a failed background fetch disappears silently.
-    unawaited(_reset(initialQuery));
+    //
+    // `_reset` is wrapped in `Future.microtask` rather than called directly:
+    // its very first line touches `state` (`state = state.copyWith(...)`),
+    // and `state` cannot be read or written from INSIDE this notifier's own
+    // `build()` - the provider element only marks itself initialized once
+    // `build()` has RETURNED a value, so calling `_reset` synchronously here
+    // throws "Tried to read the state of an uninitialized provider" the
+    // instant it runs (an async function's body executes synchronously up
+    // to its first `await`, and `_reset` has no `await` before that first
+    // `state` access). `Future.microtask` defers the call to the next
+    // microtask turn, which cannot fire until this synchronous `build()`
+    // call - and the `container.read`/`ref.watch` that triggered it - has
+    // fully unwound, by which point the provider is initialized and `state`
+    // is safe to touch. `_loadAvailableSites` needs no such wrapping: its
+    // own first line has no `state` access before its first `await`.
+    unawaited(Future<void>.microtask(() => _reset(initialQuery)));
     unawaited(_loadAvailableSites(initialQuery));
 
     return TyreRecordsListState(query: initialQuery);

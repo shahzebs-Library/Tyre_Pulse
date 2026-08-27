@@ -274,8 +274,19 @@ void main() {
       // (U+2066/U+2069) so it can never be reordered next to Arabic or
       // Urdu text - see tp_direction.dart. find.text does an exact match
       // against the rendered string and would find nothing; textContaining
-      // matches the substring inside the isolate marks.
-      expect(find.textContaining('GN101'), findsOneWidget);
+      // matches the substring inside the isolate marks. Scoped to the
+      // card, not the whole tree: the search field's own EditableText now
+      // ALSO literally contains "GN101" (what was just typed into it), so
+      // an unscoped textContaining matches both and findsOneWidget fails
+      // as "too many" - scoping proves the CARD shows it, which is the
+      // actual thing under test.
+      expect(
+        find.descendant(
+          of: find.byType(TpAssetCard),
+          matching: find.textContaining('GN101'),
+        ),
+        findsOneWidget,
+      );
     },
   );
 

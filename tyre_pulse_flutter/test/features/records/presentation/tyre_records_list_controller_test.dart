@@ -185,7 +185,13 @@ void main() {
         ],
         reason: 'the full set is present, in order, with nothing dropped',
       );
-      expect(state.hasMore, isFalse);
+      // The second page came back FULL (five rows), so hasMore correctly
+      // reads true - the fixture derives it from page fullness, exactly as
+      // the real repository does, never from a total-count the repository
+      // never has either. Only a following, empty page would prove the
+      // list is exhausted (see the sibling "exact multiple" test below,
+      // and TyreRecordsPage.hasMore's own doc comment).
+      expect(state.hasMore, isTrue);
     });
 
     test(

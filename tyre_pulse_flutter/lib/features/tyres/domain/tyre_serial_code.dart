@@ -133,12 +133,15 @@ String? _fromUrlPayload(String source) {
   // `Uri.pathSegments` already percent-decodes each segment, so decoding
   // again is normally a no-op - but a segment that legitimately contains a
   // bare `%` (not part of valid percent-encoding) would make a second
-  // decode throw a FormatException. Falling back to the segment as given
-  // keeps this function's "never throws" contract regardless of which
-  // decoding state the segment is actually in.
+  // decode throw. `Uri.decodeComponent` raises `ArgumentError` (not
+  // `FormatException`) for that case, so both are caught here. Falling back
+  // to the segment as given keeps this function's "never throws" contract
+  // regardless of which decoding state the segment is actually in.
   try {
     return Uri.decodeComponent(lastSegment);
   } on FormatException {
+    return lastSegment;
+  } on ArgumentError {
     return lastSegment;
   }
 }

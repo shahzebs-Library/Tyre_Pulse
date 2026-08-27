@@ -151,11 +151,18 @@ void main() {
     expect(b, hasLength(1));
     expect(b.single.id, 'c1');
     expect(b.single.value, 'Not OK');
+    // `canClose.ok` deliberately does NOT follow blockingAnswers here - see
+    // this file's "THE MOST IMPORTANT CORRECTION IN THIS WHOLE PORT" library
+    // comment. The server's `jsonb_each_text` yields the array's own TEXT
+    // form (`'["OK","Not OK"]'`), which is not a member of the blocking
+    // list, so the server does NOT block on this answer and canClose must
+    // agree with it, even though blockingAnswers (used only to NAME the
+    // suspect line above) walks the array's members.
     expect(
       canClose(_template, <String, Object?>{
         'c1': <String>['OK', 'Not OK'],
       }).ok,
-      isFalse,
+      isTrue,
     );
   });
 

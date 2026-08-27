@@ -329,6 +329,14 @@ void main() {
       );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+      // `build()` only runs on the FIRST read of the provider, and the
+      // profile fetch + version-gate check it kicks off from
+      // `initial.hasSession` are fire-and-forget (`unawaited`). Forcing that
+      // first read HERE - mirroring "an already-resolved session at build
+      // time adopts it immediately" above - is what gives `pumpEventQueue`
+      // below something to actually settle: called before any read has ever
+      // happened, it flushes nothing, because nothing has been scheduled yet.
+      expect(h.state.profileStatus, ProfileStatus.loading);
       await pumpEventQueue(times: 40);
 
       final TpSession session = deriveSession(h.state);
@@ -348,6 +356,9 @@ void main() {
         );
 
         h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+        // See the identical comment in the test above: this forces build()
+        // to run and adopt the session before the queue is pumped.
+        expect(h.state.profileStatus, ProfileStatus.loading);
         await pumpEventQueue(times: 40);
 
         expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
@@ -362,6 +373,9 @@ void main() {
       );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+      // See the identical comment further up this group: this forces
+      // build() to run and adopt the session before the queue is pumped.
+      expect(h.state.profileStatus, ProfileStatus.loading);
       await pumpEventQueue(times: 40);
 
       expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
@@ -377,6 +391,9 @@ void main() {
       );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+      // See the identical comment further up this group: this forces
+      // build() to run and adopt the session before the queue is pumped.
+      expect(h.state.profileStatus, ProfileStatus.loading);
       await pumpEventQueue(times: 40);
 
       expect(deriveSession(h.state).gate, TpShellGate.profileUnavailable);
@@ -406,6 +423,9 @@ void main() {
       );
 
       h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+      // See the identical comment further up this group: this forces
+      // build() to run and adopt the session before the queue is pumped.
+      expect(h.state.profileStatus, ProfileStatus.loading);
       await pumpEventQueue(times: 40);
 
       expect(deriveSession(h.state).gate, TpShellGate.updateRequired);

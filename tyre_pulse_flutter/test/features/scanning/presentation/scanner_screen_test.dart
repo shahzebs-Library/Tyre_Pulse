@@ -201,6 +201,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('View asset'), findsOneWidget);
 
+    // The match card sits below the fold in the 600-logical-pixel test
+    // viewport, pushing "Look up another" past the root render view's
+    // bounds: a bare tap() computes an offscreen Offset and never
+    // registers a hit (the button stays present, so a warning rather than
+    // a "not found" failure - it just silently does nothing). Scrolling it
+    // into view first is what a real user's finger does implicitly.
+    await tester.ensureVisible(find.text('Look up another'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Look up another'));
     await tester.pumpAndSettle();
 

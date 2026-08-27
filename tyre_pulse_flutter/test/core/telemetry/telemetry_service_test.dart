@@ -293,8 +293,18 @@ void main() {
 
       service.reportFlutterError(
         FlutterErrorDetails(
+          // `_jwtPattern` in `supabase_error_mapper.dart` requires each of
+          // the three dot-separated segments to look like real base64url -
+          // in particular, the middle (payload) segment must be at least 5
+          // characters, which is already a low bar for any genuine JWT (a
+          // real payload is never just a handful of characters). The
+          // fixture below gives every segment a realistic length so it
+          // actually exercises that redaction path, rather than a shorter
+          // placeholder that would fall under the threshold and never
+          // match.
           exception: Exception(
-            'unexpected failure near eyJhbGciOiJIUzI1NiJ9.body.sig',
+            'unexpected failure near '
+            'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl',
           ),
         ),
       );

@@ -25,7 +25,15 @@ void main() {
     );
   });
 
-  tearDown(container.dispose);
+  // Not `tearDown(container.dispose)`: that is a tear-off, which evaluates
+  // `container` IMMEDIATELY - right here, while `main()` itself is still
+  // executing to register the tests, long before the first `setUp` callback
+  // ever runs. `container` is a `late` field with no initializer, so that
+  // immediate read throws "Local 'container' has not been initialized" and
+  // takes the whole file down before a single test can run. Wrapping it in a
+  // closure defers the read to when `tearDown`'s callback actually fires,
+  // after `setUp` has assigned `container` for that test.
+  tearDown(() => container.dispose());
 
   test('starts idle', () {
     expect(container.read(scannerControllerProvider), isA<ScannerIdle>());

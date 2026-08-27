@@ -102,10 +102,14 @@ void main() {
     });
 
     test('different assets are tracked independently', () {
+      // Both must actually be overdue as of "now", or washDueList correctly
+      // drops the not-yet-due one (daysOverdue is never negative - see its
+      // doc comment). TM514: 01-01 + 7 days -> due 01-08, 12 days overdue by
+      // 01-20. TM515: 01-05 + 7 days -> due 01-12, 8 days overdue by 01-20.
       final List<WashDueEntry> due = washDueList(
         const <WashHistoryRecord>[
           WashHistoryRecord(assetNo: 'TM514', washDate: '2026-01-01'),
-          WashHistoryRecord(assetNo: 'TM515', washDate: '2026-01-15'),
+          WashHistoryRecord(assetNo: 'TM515', washDate: '2026-01-05'),
         ],
         now: DateTime.utc(2026, 1, 20),
       );

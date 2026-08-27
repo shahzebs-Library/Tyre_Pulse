@@ -69,11 +69,42 @@ void main() {
     );
 
     test('textTheme is exactly what TpTypography builds for the palette', () {
+      // `ThemeData`'s own constructor merges whatever `textTheme` it is given
+      // onto a Material-derived default (`packages/flutter/.../theme_data.dart`:
+      // `textTheme = defaultTextTheme.merge(textTheme)`), and that default
+      // itself is built from `colorScheme` and `brightness`
+      // (`Typography.material2021(platform: ..., colorScheme: ...)`) - which
+      // is why even a Material 3 role `TpTypography` never defines, such as
+      // `displayLarge`, still comes out coloured with `palette.text`: it
+      // inherited that from the SAME custom `colorScheme` `_themeFor` passed
+      // in. `_themeFor` does nothing beyond handing `textTheme:` straight to
+      // `ThemeData` alongside its own `colorScheme` and `brightness` (see
+      // `tp_theme.dart`'s own doc comment on how little it configures), so
+      // the true expectation is what `ThemeData` itself produces from those
+      // three inputs - not the bare, unmerged `TpTypography` value, which
+      // `Theme.of(context).textTheme` never actually hands to a widget.
+      // Reconstructing the merge (rather than hand-picking fields) still
+      // catches a real regression: a `_themeFor` that stopped passing
+      // `textTheme:`, or passed the wrong palette, changes what this
+      // equality reports. `colorScheme` is read live off the already-built
+      // theme rather than re-derived, so this stays correct even if
+      // `_themeFor`'s own colour-scheme construction changes later - that is
+      // independently pinned by the "ColorScheme" group below.
+      TextTheme mergedWith(ThemeData built, TpPalette palette) => ThemeData(
+            useMaterial3: true,
+            brightness: palette.brightness,
+            colorScheme: built.colorScheme,
+            textTheme: TpTypography.textThemeFor(palette),
+          ).textTheme;
+
       expect(
         TpTheme.light.textTheme,
-        TpTypography.textThemeFor(TpPalette.light),
+        mergedWith(TpTheme.light, TpPalette.light),
       );
-      expect(TpTheme.dark.textTheme, TpTypography.textThemeFor(TpPalette.dark));
+      expect(
+        TpTheme.dark.textTheme,
+        mergedWith(TpTheme.dark, TpPalette.dark),
+      );
     });
   });
 

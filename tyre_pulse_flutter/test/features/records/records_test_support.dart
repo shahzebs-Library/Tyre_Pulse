@@ -18,11 +18,24 @@ import 'package:tyre_pulse/features/records/domain/models/tyre_records_page.dart
 import 'package:tyre_pulse/features/records/domain/models/tyre_records_query.dart';
 import 'package:tyre_pulse/features/records/domain/tyre_records_paging.dart';
 
+/// A private sentinel distinguishing "the caller did not pass [assetNo] at
+/// all" from "the caller explicitly passed null". A plain `String? assetNo`
+/// parameter defaulting via `assetNo ?? 'TM$id'` cannot tell those two
+/// apart - `buildTyreRecord(id: '1', assetNo: null)` and
+/// `buildTyreRecord(id: '1')` would build the identical record, which makes
+/// it impossible to construct a record that genuinely has no asset number
+/// on record (exactly the case a "falls back to a generic title" test needs
+/// to exercise).
+const Object _unset = Object();
+
 /// Builds a minimal, valid [TyreRecord] for tests. Every field beyond [id]
 /// is optional so a test can construct exactly the shape it needs.
+///
+/// [assetNo] defaults to `'TM$id'` when OMITTED, exactly as before. Passing
+/// it explicitly - including `assetNo: null` - always wins.
 TyreRecord buildTyreRecord({
   required String id,
-  String? assetNo,
+  Object? assetNo = _unset,
   String? serialNo,
   String? brand,
   String? site,
@@ -40,7 +53,7 @@ TyreRecord buildTyreRecord({
 }) {
   return TyreRecord(
     id: id,
-    assetNo: assetNo ?? 'TM$id',
+    assetNo: identical(assetNo, _unset) ? 'TM$id' : assetNo as String?,
     serialNo: serialNo,
     brand: brand,
     site: site,
@@ -129,7 +142,13 @@ final class FakeTyreRecordsRepository implements TyreRecordsRepository {
         ? _dataset.length
         : (from + pageSize);
     final List<TyreRecord> items = _dataset.sublist(from, to);
-    return TyreRecordsPage(items: items, hasMore: to < _dataset.length);
+    // Derived from whether THIS page came back full, mirroring
+    // SupabaseTyreRecordsRepository.fetchPage's real contract - never from
+    // the total dataset length, which the real repository never has either.
+    // A full final page therefore reads hasMore=true; only the following,
+    // empty page proves the list is exhausted (see
+    // TyreRecordsPage.hasMore's own doc comment).
+    return TyreRecordsPage(items: items, hasMore: items.length == pageSize);
   }
 
   @override

@@ -486,9 +486,20 @@ void main() {
 
       expect(applied.context.activeCountry, 'UAE');
       expect(applied.warnings, hasLength(1));
+      // The warm-up itself failed, so `scopedCacheRefreshed` genuinely did
+      // NOT complete - see `WorkspaceSwitcher.switchTo` step 7, which only
+      // pushes that step inside the `try` block, before the `catch` that
+      // turns the same failure into the warning already asserted above.
+      // Mirrors the sibling assertion one test above for
+      // `scopedReadsInvalidated`.
       expect(
         applied.completedSteps,
-        contains(WorkspaceSwitchStep.scopedCacheRefreshed),
+        isNot(contains(WorkspaceSwitchStep.scopedCacheRefreshed)),
+      );
+      // It carried on rather than stopping half way.
+      expect(
+        applied.completedSteps,
+        contains(WorkspaceSwitchStep.navigationRecomputed),
       );
     });
 

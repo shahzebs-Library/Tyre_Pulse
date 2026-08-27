@@ -114,6 +114,13 @@ void main() {
     expect(find.text('Serial number'), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);
 
+    // The column above stacks enough cards that "Open sheet" sits below the
+    // 600-logical-pixel test viewport: a bare tap() computes an Offset past
+    // the root render view's bounds and never registers a hit. Scrolling it
+    // into view first is what a real user's finger does implicitly.
+    await tester.ensureVisible(find.text('Open sheet'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Open sheet'));
     await tester.pumpAndSettle();
 

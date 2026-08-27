@@ -25,6 +25,7 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/features/records/domain/models/tyre_record.dart';
 import 'package:tyre_pulse/features/records/domain/models/tyre_records_page.dart';
+import 'package:tyre_pulse/features/records/presentation/tyre_detail_sheet.dart';
 import 'package:tyre_pulse/features/records/presentation/tyre_records_list_screen.dart';
 import 'package:tyre_pulse/features/records/records_providers.dart';
 
@@ -190,8 +191,14 @@ void main() {
 
       expect(find.byKey(TpStateKeys.empty), findsNothing);
       expect(find.byKey(TpStateKeys.loading), findsNothing);
-      expect(find.text('TM514'), findsOneWidget);
-      expect(find.text('TM515'), findsOneWidget);
+      // Not find.text: each card's identifier draws through
+      // TpIdentifierText, which wraps the value in invisible bidi isolate
+      // marks (U+2066/U+2069) so it can never be reordered next to Arabic
+      // or Urdu text - see tp_direction.dart. find.text does an exact
+      // match against the rendered string and would find nothing;
+      // textContaining matches the substring inside the isolate marks.
+      expect(find.textContaining('TM514'), findsOneWidget);
+      expect(find.textContaining('TM515'), findsOneWidget);
     });
 
     testWidgets('tapping a row opens the detail sheet for that record', (
@@ -212,10 +219,26 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('TM514'));
+      // Not find.text: see the identifier-isolate note above. Tapping any
+      // point inside the card's tappable area triggers its onTap, so
+      // hitting the (wrapped) identifier text works the same as it would
+      // for a real finger tap on the visible glyphs.
+      await tester.tap(find.textContaining('TM514'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SN001'), findsOneWidget);
+      // The detail sheet's serial row draws through TpIdentifierText too,
+      // AND the card behind the sheet still renders its own "brand ·
+      // serial" text (a plain, non-identifier Text), so a bare
+      // find.textContaining('SN001') now matches two widgets. Scoping to
+      // the sheet is both what actually needs proving here (the sheet
+      // opened for the right record) and what disambiguates the two.
+      expect(
+        find.descendant(
+          of: find.byType(TyreDetailSheet),
+          matching: find.textContaining('SN001'),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

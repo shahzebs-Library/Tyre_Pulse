@@ -137,8 +137,13 @@ void main() {
     'a wheel with a recorded condition exposes an accessibility label '
     'built from the V2 code, never the internal V1 id',
     (WidgetTester tester) async {
+      // Disposed with an explicit call at the end of the test body, not via
+      // addTearDown: the binding's own end-of-test invariant check (no
+      // SemanticsHandle left active) runs before addTearDown callbacks
+      // fire, so an addTearDown-only disposal reads as a leak every time.
+      // This is the exact pattern flutter_test's own `matchesSemantics`
+      // doc comment uses.
       final SemanticsHandle handle = tester.ensureSemantics();
-      addTearDown(handle.dispose);
 
       await _pump(
         tester,
@@ -161,6 +166,8 @@ void main() {
         find.bySemanticsLabel(RegExp('LHF1.*Damaged.*95')),
         findsOneWidget,
       );
+
+      handle.dispose();
     },
   );
 
@@ -168,7 +175,6 @@ void main() {
       'the selected wheel is marked selected in its semantics '
       'node', (WidgetTester tester) async {
     final SemanticsHandle handle = tester.ensureSemantics();
-    addTearDown(handle.dispose);
 
     await _pump(
       tester,
@@ -186,6 +192,8 @@ void main() {
     // `hasFlag` is deprecated in this resolved Flutter version in favour of
     // `flagsCollection`.
     expect(node.flagsCollection.isSelected, Tristate.isTrue);
+
+    handle.dispose();
   });
 
   testWidgets('the condition legend shows all six conditions', (

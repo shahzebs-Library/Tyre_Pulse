@@ -89,11 +89,18 @@ void main() {
           ),
         },
         vehicleType: 'unrecognised-type-xyz',
+        // resolveVehicleType also falls back to the ASSET NUMBER when the
+        // type resolves to nothing (artifact rule R10) - the default
+        // 'TM514' from _basePayload would itself resolve to a known
+        // Tri-mixer layout via the TM asset-prefix rule, defeating the
+        // "unknown layout" premise this test relies on. An assetNo with no
+        // recognised prefix keeps the layout genuinely unknown.
+        assetNo: 'ZZ999',
       );
-      // vehicleType is deliberately unrecognisable so the layout is
-      // "unknown", which tyreCompleteness treats as blocking NOTHING (see
-      // that engine's own honesty rules) - so completeness must not appear
-      // here either, isolating the assertion to signature alone.
+      // vehicleType (and now assetNo) are deliberately unrecognisable so the
+      // layout is "unknown", which tyreCompleteness treats as blocking
+      // NOTHING (see that engine's own honesty rules) - so completeness must
+      // not appear here either, isolating the assertion to signature alone.
       final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
         payload,
       );
@@ -112,6 +119,9 @@ void main() {
           ),
         },
         vehicleType: 'unrecognised-type-xyz',
+        // See the comment on the previous test - the default assetNo
+        // 'TM514' would otherwise resolve a known Tri-mixer layout.
+        assetNo: 'ZZ999',
         signature: 'data:image/png;base64,abc',
       );
       expect(validateInspectionForSubmit(payload), isEmpty);

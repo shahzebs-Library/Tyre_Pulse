@@ -68,14 +68,22 @@ void main() {
         tester,
         record: buildTyreRecord(id: '1', assetNo: 'TM514'),
       );
-      expect(find.text('TM514'), findsOneWidget);
+      // Not find.text: the header draws through TpIdentifierText, which
+      // wraps the value in invisible bidi isolate marks (U+2066/U+2069) so
+      // it can never be reordered next to Arabic or Urdu text - see
+      // tp_direction.dart. find.text does an exact match against the
+      // rendered string and would find nothing; textContaining matches the
+      // substring inside the isolate marks.
+      expect(find.textContaining('TM514'), findsOneWidget);
     });
 
     testWidgets(
         'falls back to a generic title when the asset number is not '
         'recorded', (WidgetTester tester) async {
       await _openSheet(tester, record: buildTyreRecord(id: '1', assetNo: null));
-      expect(find.text('Tyre record'), findsOneWidget);
+      // Same TpIdentifierText wrapping as above - the fallback title goes
+      // through it too, since it is the SAME Text widget either way.
+      expect(find.textContaining('Tyre record'), findsOneWidget);
     });
 
     testWidgets('shows the brand only when it is recorded', (
@@ -151,7 +159,10 @@ void main() {
         tester,
         record: buildTyreRecord(id: '1', serialNo: 'SN-001'),
       );
-      expect(find.text('SN-001'), findsOneWidget);
+      // The serial value draws through TpIdentifierText (isIdentifier:
+      // true on _DetailRow), so it carries the same invisible bidi
+      // isolate marks - see the header test above.
+      expect(find.textContaining('SN-001'), findsOneWidget);
     });
 
     testWidgets('an unrecorded serial renders nothing for that row', (

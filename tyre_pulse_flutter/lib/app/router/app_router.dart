@@ -102,9 +102,9 @@ String? resolveRedirect({
   final String location = state.matchedLocation;
   final String requested = state.uri.toString();
   final bool isBoot = location == TpRoutePaths.boot;
-  final bool isPublic = isBoot ||
-      location == TpRoutePaths.login ||
-      location == TpRoutePaths.register;
+  final bool isLoginOrRegister =
+      location == TpRoutePaths.login || location == TpRoutePaths.register;
+  final bool isPublic = isBoot || isLoginOrRegister;
 
   switch (session.phase) {
     // Hold. Deciding anything on a half-read session denies every role,
@@ -115,7 +115,12 @@ String? resolveRedirect({
       return BootRoute(from: sanitizeInternalLocation(requested)).location;
 
     case TpSessionPhase.signedOut:
-      if (isPublic) return null;
+      // Deliberately NOT `isPublic`: /boot is only a safe place to sit
+      // while the session is still being resolved (the branch above). Once
+      // it has resolved to signedOut, staying there parks the router on
+      // the boot screen forever with no further redirect ever fired -
+      // only login/register are genuine public destinations to remain at.
+      if (isLoginOrRegister) return null;
       return LoginRoute(from: sanitizeInternalLocation(requested)).location;
 
     case TpSessionPhase.signedIn:
@@ -221,335 +226,335 @@ class _BootScreen extends ConsumerWidget {
 /// GoRouter instances - which a test suite does every time it builds a second
 /// router - would put the same keys in two trees.
 List<RouteBase> _buildRoutes() => <RouteBase>[
-  GoRoute(
-    path: TpRoutePaths.boot,
-    name: TpRouteId.boot,
-    builder: (BuildContext context, GoRouterState state) => const _BootScreen(),
-  ),
-  _route(TpRoutePaths.login, TpRouteId.login, LoginRoute.parse),
-  _route(
-    TpRoutePaths.register,
-    TpRouteId.register,
-    (TpRouteParameters _) => const RegisterRoute(),
-  ),
-
-  StatefulShellRoute.indexedStack(
-    builder: (
-      BuildContext context,
-      GoRouterState state,
-      StatefulNavigationShell navigationShell,
-    ) =>
-        TpAppShell(navigationShell: navigationShell),
-    branches: <StatefulShellBranch>[
-      // 0 - Home. Every pushed screen with no branch of its own lives here, so
-      // a task started from Home returns to Home when it is popped.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.home,
-            TpRouteId.home,
-            (TpRouteParameters _) => const HomeRoute(),
-          ),
-          _route(
-            TpRoutePaths.notifications,
-            TpRouteId.notifications,
-            (TpRouteParameters _) => const NotificationsRoute(),
-          ),
-          _route(
-            TpRoutePaths.scanner,
-            TpRouteId.scanner,
-            (TpRouteParameters _) => const ScannerRoute(),
-          ),
-          _route(
-            TpRoutePaths.serialSearch,
-            TpRouteId.serialSearch,
-            SerialSearchRoute.parse,
-          ),
-          _route(
-            TpRoutePaths.tyreRecords,
-            TpRouteId.tyreRecords,
-            (TpRouteParameters _) => const TyreRecordsRoute(),
-          ),
-          _route(
-            TpRoutePaths.vehicles,
-            TpRouteId.vehicles,
-            VehiclesRoute.parse,
-          ),
-          _route(
-            TpRoutePaths.alerts,
-            TpRouteId.alerts,
-            (TpRouteParameters _) => const AlertsRoute(),
-          ),
-          _route(
-            TpRoutePaths.calendar,
-            TpRouteId.calendar,
-            (TpRouteParameters _) => const CalendarRoute(),
-          ),
-          _route(
-            TpRoutePaths.overview,
-            TpRouteId.overview,
-            (TpRouteParameters _) => const OverviewRoute(),
-          ),
-          _route(
-            TpRoutePaths.reports,
-            TpRouteId.reports,
-            (TpRouteParameters _) => const ReportsRoute(),
-          ),
-          _route(
-            TpRoutePaths.analytics,
-            TpRouteId.analytics,
-            (TpRouteParameters _) => const AnalyticsRoute(),
-          ),
-          _route(
-            TpRoutePaths.fleetAi,
-            TpRouteId.fleetAi,
-            (TpRouteParameters _) => const FleetAiRoute(),
-          ),
-          _route(
-            TpRoutePaths.team,
-            TpRouteId.team,
-            (TpRouteParameters _) => const TeamRoute(),
-          ),
-          _route(
-            TpRoutePaths.tyreChange,
-            TpRouteId.tyreChange,
-            TyreChangeRoute.parse,
-          ),
-          _route(
-            TpRoutePaths.reportIssue,
-            TpRouteId.reportIssue,
-            ReportIssueRoute.parse,
-          ),
-          _route(
-            TpRoutePaths.repairRequest,
-            TpRouteId.repairRequest,
-            RepairRequestRoute.parse,
-          ),
-          _route(TpRoutePaths.rca, TpRouteId.rca, RcaRoute.parse),
-          _route(
-            TpRoutePaths.stockCount,
-            TpRouteId.stockCount,
-            (TpRouteParameters _) => const StockCountRoute(),
-          ),
-          _route(
-            TpRoutePaths.tasks,
-            TpRouteId.tasks,
-            (TpRouteParameters _) => const TasksRoute(),
-          ),
-          _route(
-            TpRoutePaths.preventiveMaintenance,
-            TpRouteId.preventiveMaintenance,
-            (TpRouteParameters _) => const PreventiveMaintenanceRoute(),
-          ),
-          _route(
-            TpRoutePaths.workOrders,
-            TpRouteId.workOrders,
-            (TpRouteParameters _) => const WorkOrdersRoute(),
-            routes: <RouteBase>[
-              // Nested so a notification that pushes here stacks the list
-              // beneath it, and Back gives Work Order, Workshop, Home exactly
-              // as spec section 5 draws it.
-              _route(
-                ':${TpRoutePaths.pWorkOrderId}',
-                TpRouteId.workOrderDetail,
-                WorkOrderDetailRoute.parse,
-              ),
-            ],
-          ),
-          _route(
-            TpRoutePaths.workshop,
-            TpRouteId.workshop,
-            (TpRouteParameters _) => const WorkshopRoute(),
-          ),
-          _route(
-            TpRoutePaths.adminConsole,
-            TpRouteId.adminConsole,
-            (TpRouteParameters _) => const AdminConsoleRoute(),
-            routes: <RouteBase>[
-              _route(
-                'users',
-                TpRouteId.adminUsers,
-                (TpRouteParameters _) => const AdminUsersRoute(),
-              ),
-              _route(
-                'access',
-                TpRouteId.adminAccess,
-                (TpRouteParameters _) => const AdminAccessRoute(),
-              ),
-              _route(
-                'approvals',
-                TpRouteId.adminApprovals,
-                (TpRouteParameters _) => const AdminApprovalsRoute(),
-              ),
-              _route(
-                'sites',
-                TpRouteId.adminSites,
-                (TpRouteParameters _) => const AdminSitesRoute(),
-              ),
-              _route(
-                'ai-chat',
-                TpRouteId.adminAiChat,
-                (TpRouteParameters _) => const AdminAiChatRoute(),
-              ),
-            ],
-          ),
-        ],
+      GoRoute(
+        path: TpRoutePaths.boot,
+        name: TpRouteId.boot,
+        builder: (BuildContext context, GoRouterState state) =>
+            const _BootScreen(),
       ),
-
-      // 1 - Inspect.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.newInspection,
-            TpRouteId.newInspection,
-            NewInspectionRoute.parse,
-          ),
-        ],
+      _route(TpRoutePaths.login, TpRouteId.login, LoginRoute.parse),
+      _route(
+        TpRoutePaths.register,
+        TpRouteId.register,
+        (TpRouteParameters _) => const RegisterRoute(),
       ),
-
-      // 2 - Approvals. Both queues and both review screens, so opening a review
-      // and pressing Back returns to its queue.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.inspectionApprovals,
-            TpRouteId.inspectionApprovals,
-            (TpRouteParameters _) => const InspectionApprovalsRoute(),
+      StatefulShellRoute.indexedStack(
+        builder: (
+          BuildContext context,
+          GoRouterState state,
+          StatefulNavigationShell navigationShell,
+        ) =>
+            TpAppShell(navigationShell: navigationShell),
+        branches: <StatefulShellBranch>[
+          // 0 - Home. Every pushed screen with no branch of its own lives here, so
+          // a task started from Home returns to Home when it is popped.
+          StatefulShellBranch(
             routes: <RouteBase>[
               _route(
-                ':${TpRoutePaths.pInspectionId}',
-                TpRouteId.inspectionApprovalReview,
-                InspectionApprovalReviewRoute.parse,
-              ),
-            ],
-          ),
-          _route(
-            TpRoutePaths.checklistApprovals,
-            TpRouteId.checklistApprovals,
-            (TpRouteParameters _) => const ChecklistApprovalsRoute(),
-            routes: <RouteBase>[
-              _route(
-                ':${TpRoutePaths.pSubmissionId}',
-                TpRouteId.checklistApprovalReview,
-                ChecklistApprovalReviewRoute.parse,
-              ),
-            ],
-          ),
-        ],
-      ),
-
-      // 3 - Accidents.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.accidentDashboard,
-            TpRouteId.accidentDashboard,
-            (TpRouteParameters _) => const AccidentDashboardRoute(),
-            routes: <RouteBase>[
-              // DECLARATION ORDER MATTERS. `report` is a literal segment and
-              // would also match `:accidentId`; GoRouter takes the first
-              // matching route, so the literal must come first.
-              _route(
-                'report',
-                TpRouteId.accidentReport,
-                (TpRouteParameters _) => const AccidentReportRoute(),
+                TpRoutePaths.home,
+                TpRouteId.home,
+                (TpRouteParameters _) => const HomeRoute(),
               ),
               _route(
-                ':${TpRoutePaths.pAccidentId}',
-                TpRouteId.accidentDetail,
-                AccidentDetailRoute.parse,
+                TpRoutePaths.notifications,
+                TpRouteId.notifications,
+                (TpRouteParameters _) => const NotificationsRoute(),
+              ),
+              _route(
+                TpRoutePaths.scanner,
+                TpRouteId.scanner,
+                (TpRouteParameters _) => const ScannerRoute(),
+              ),
+              _route(
+                TpRoutePaths.serialSearch,
+                TpRouteId.serialSearch,
+                SerialSearchRoute.parse,
+              ),
+              _route(
+                TpRoutePaths.tyreRecords,
+                TpRouteId.tyreRecords,
+                (TpRouteParameters _) => const TyreRecordsRoute(),
+              ),
+              _route(
+                TpRoutePaths.vehicles,
+                TpRouteId.vehicles,
+                VehiclesRoute.parse,
+              ),
+              _route(
+                TpRoutePaths.alerts,
+                TpRouteId.alerts,
+                (TpRouteParameters _) => const AlertsRoute(),
+              ),
+              _route(
+                TpRoutePaths.calendar,
+                TpRouteId.calendar,
+                (TpRouteParameters _) => const CalendarRoute(),
+              ),
+              _route(
+                TpRoutePaths.overview,
+                TpRouteId.overview,
+                (TpRouteParameters _) => const OverviewRoute(),
+              ),
+              _route(
+                TpRoutePaths.reports,
+                TpRouteId.reports,
+                (TpRouteParameters _) => const ReportsRoute(),
+              ),
+              _route(
+                TpRoutePaths.analytics,
+                TpRouteId.analytics,
+                (TpRouteParameters _) => const AnalyticsRoute(),
+              ),
+              _route(
+                TpRoutePaths.fleetAi,
+                TpRouteId.fleetAi,
+                (TpRouteParameters _) => const FleetAiRoute(),
+              ),
+              _route(
+                TpRoutePaths.team,
+                TpRouteId.team,
+                (TpRouteParameters _) => const TeamRoute(),
+              ),
+              _route(
+                TpRoutePaths.tyreChange,
+                TpRouteId.tyreChange,
+                TyreChangeRoute.parse,
+              ),
+              _route(
+                TpRoutePaths.reportIssue,
+                TpRouteId.reportIssue,
+                ReportIssueRoute.parse,
+              ),
+              _route(
+                TpRoutePaths.repairRequest,
+                TpRouteId.repairRequest,
+                RepairRequestRoute.parse,
+              ),
+              _route(TpRoutePaths.rca, TpRouteId.rca, RcaRoute.parse),
+              _route(
+                TpRoutePaths.stockCount,
+                TpRouteId.stockCount,
+                (TpRouteParameters _) => const StockCountRoute(),
+              ),
+              _route(
+                TpRoutePaths.tasks,
+                TpRouteId.tasks,
+                (TpRouteParameters _) => const TasksRoute(),
+              ),
+              _route(
+                TpRoutePaths.preventiveMaintenance,
+                TpRouteId.preventiveMaintenance,
+                (TpRouteParameters _) => const PreventiveMaintenanceRoute(),
+              ),
+              _route(
+                TpRoutePaths.workOrders,
+                TpRouteId.workOrders,
+                (TpRouteParameters _) => const WorkOrdersRoute(),
                 routes: <RouteBase>[
-                  // Nested under the accident, so Back returns to the accident
-                  // rather than to the register. In production the same id is a
-                  // path segment here and a query parameter there, and both are
-                  // called `id`.
+                  // Nested so a notification that pushes here stacks the list
+                  // beneath it, and Back gives Work Order, Workshop, Home exactly
+                  // as spec section 5 draws it.
                   _route(
-                    'case',
-                    TpRouteId.accidentCase,
-                    AccidentCaseRoute.parse,
+                    ':${TpRoutePaths.pWorkOrderId}',
+                    TpRouteId.workOrderDetail,
+                    WorkOrderDetailRoute.parse,
+                  ),
+                ],
+              ),
+              _route(
+                TpRoutePaths.workshop,
+                TpRouteId.workshop,
+                (TpRouteParameters _) => const WorkshopRoute(),
+              ),
+              _route(
+                TpRoutePaths.adminConsole,
+                TpRouteId.adminConsole,
+                (TpRouteParameters _) => const AdminConsoleRoute(),
+                routes: <RouteBase>[
+                  _route(
+                    'users',
+                    TpRouteId.adminUsers,
+                    (TpRouteParameters _) => const AdminUsersRoute(),
+                  ),
+                  _route(
+                    'access',
+                    TpRouteId.adminAccess,
+                    (TpRouteParameters _) => const AdminAccessRoute(),
+                  ),
+                  _route(
+                    'approvals',
+                    TpRouteId.adminApprovals,
+                    (TpRouteParameters _) => const AdminApprovalsRoute(),
+                  ),
+                  _route(
+                    'sites',
+                    TpRouteId.adminSites,
+                    (TpRouteParameters _) => const AdminSitesRoute(),
+                  ),
+                  _route(
+                    'ai-chat',
+                    TpRouteId.adminAiChat,
+                    (TpRouteParameters _) => const AdminAiChatRoute(),
                   ),
                 ],
               ),
             ],
           ),
-        ],
-      ),
 
-      // 4 - Meter.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.meterLog,
-            TpRouteId.meterLog,
-            MeterLogRoute.parse,
-          ),
-        ],
-      ),
-
-      // 5 - Washing.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.washing,
-            TpRouteId.washing,
-            (TpRouteParameters _) => const WashingRoute(),
-          ),
-        ],
-      ),
-
-      // 6 - History. A branch because History is the only screen that opens an
-      // inspection detail, and Back from that detail must return to it.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.activityHistory,
-            TpRouteId.activityHistory,
-            (TpRouteParameters _) => const ActivityHistoryRoute(),
+          // 1 - Inspect.
+          StatefulShellBranch(
             routes: <RouteBase>[
               _route(
-                'inspection/:${TpRoutePaths.pInspectionId}',
-                TpRouteId.inspectionDetail,
-                InspectionDetailRoute.parse,
+                TpRoutePaths.newInspection,
+                TpRouteId.newInspection,
+                NewInspectionRoute.parse,
+              ),
+            ],
+          ),
+
+          // 2 - Approvals. Both queues and both review screens, so opening a review
+          // and pressing Back returns to its queue.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.inspectionApprovals,
+                TpRouteId.inspectionApprovals,
+                (TpRouteParameters _) => const InspectionApprovalsRoute(),
+                routes: <RouteBase>[
+                  _route(
+                    ':${TpRoutePaths.pInspectionId}',
+                    TpRouteId.inspectionApprovalReview,
+                    InspectionApprovalReviewRoute.parse,
+                  ),
+                ],
+              ),
+              _route(
+                TpRoutePaths.checklistApprovals,
+                TpRouteId.checklistApprovals,
+                (TpRouteParameters _) => const ChecklistApprovalsRoute(),
+                routes: <RouteBase>[
+                  _route(
+                    ':${TpRoutePaths.pSubmissionId}',
+                    TpRouteId.checklistApprovalReview,
+                    ChecklistApprovalReviewRoute.parse,
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // 3 - Accidents.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.accidentDashboard,
+                TpRouteId.accidentDashboard,
+                (TpRouteParameters _) => const AccidentDashboardRoute(),
+                routes: <RouteBase>[
+                  // DECLARATION ORDER MATTERS. `report` is a literal segment and
+                  // would also match `:accidentId`; GoRouter takes the first
+                  // matching route, so the literal must come first.
+                  _route(
+                    'report',
+                    TpRouteId.accidentReport,
+                    (TpRouteParameters _) => const AccidentReportRoute(),
+                  ),
+                  _route(
+                    ':${TpRoutePaths.pAccidentId}',
+                    TpRouteId.accidentDetail,
+                    AccidentDetailRoute.parse,
+                    routes: <RouteBase>[
+                      // Nested under the accident, so Back returns to the accident
+                      // rather than to the register. In production the same id is a
+                      // path segment here and a query parameter there, and both are
+                      // called `id`.
+                      _route(
+                        'case',
+                        TpRouteId.accidentCase,
+                        AccidentCaseRoute.parse,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // 4 - Meter.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.meterLog,
+                TpRouteId.meterLog,
+                MeterLogRoute.parse,
+              ),
+            ],
+          ),
+
+          // 5 - Washing.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.washing,
+                TpRouteId.washing,
+                (TpRouteParameters _) => const WashingRoute(),
+              ),
+            ],
+          ),
+
+          // 6 - History. A branch because History is the only screen that opens an
+          // inspection detail, and Back from that detail must return to it.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.activityHistory,
+                TpRouteId.activityHistory,
+                (TpRouteParameters _) => const ActivityHistoryRoute(),
+                routes: <RouteBase>[
+                  _route(
+                    'inspection/:${TpRoutePaths.pInspectionId}',
+                    TpRouteId.inspectionDetail,
+                    InspectionDetailRoute.parse,
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // 7 - Checklists.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.checklists,
+                TpRouteId.checklists,
+                (TpRouteParameters _) => const ChecklistsRoute(),
+                routes: <RouteBase>[
+                  // Literal before parameter, as with `report` above.
+                  _route(
+                    'history',
+                    TpRouteId.checklistHistory,
+                    (TpRouteParameters _) => const ChecklistHistoryRoute(),
+                  ),
+                  _route(
+                    ':${TpRoutePaths.pTemplateId}',
+                    TpRouteId.checklistFill,
+                    ChecklistFillRoute.parse,
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // 8 - Profile. Carries the offline queue: sync, retry and clear.
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              _route(
+                TpRoutePaths.profile,
+                TpRouteId.profile,
+                (TpRouteParameters _) => const ProfileRoute(),
               ),
             ],
           ),
         ],
       ),
-
-      // 7 - Checklists.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.checklists,
-            TpRouteId.checklists,
-            (TpRouteParameters _) => const ChecklistsRoute(),
-            routes: <RouteBase>[
-              // Literal before parameter, as with `report` above.
-              _route(
-                'history',
-                TpRouteId.checklistHistory,
-                (TpRouteParameters _) => const ChecklistHistoryRoute(),
-              ),
-              _route(
-                ':${TpRoutePaths.pTemplateId}',
-                TpRouteId.checklistFill,
-                ChecklistFillRoute.parse,
-              ),
-            ],
-          ),
-        ],
-      ),
-
-      // 8 - Profile. Carries the offline queue: sync, retry and clear.
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          _route(
-            TpRoutePaths.profile,
-            TpRouteId.profile,
-            (TpRouteParameters _) => const ProfileRoute(),
-          ),
-        ],
-      ),
-    ],
-  ),
-];
+    ];

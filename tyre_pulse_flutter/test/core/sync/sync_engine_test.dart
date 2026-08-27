@@ -471,7 +471,17 @@ void main() {
       expect(summary.mediaPending, 1);
       expect(summary.synced, 0);
       expect(summary.failed, 0);
-      expect(summary.photosFailed, 1);
+      // A photo that fails EVERY attempt is retried within this SAME pass,
+      // not just once: `_drainMediaUploads` loops in rounds bounded by
+      // `uploadConcurrency`, and `MediaDao.markUploadAttemptFailed` resets
+      // the row back to `queued` (attempts+1) until `maxUploadAttempts` is
+      // reached, so it is re-claimed by the next round rather than waiting
+      // for a later sync pass. `_maxMediaClaimRounds`'s own doc comment on
+      // `SyncEngine` derives its worst-case bound as exactly
+      // `(queued rows) * maxUploadAttempts` for this reason. One row that
+      // always fails therefore accounts for `maxUploadAttempts` (3) failed
+      // attempts in a single `runOnce` call.
+      expect(summary.photosFailed, maxUploadAttempts);
 
       final PendingCommand? stored = await db.queueDao.commandById('cmd-1');
       expect(stored!.status, CommandStatus.pending);
@@ -516,7 +526,10 @@ void main() {
       );
 
       expect(summary.photosUploaded, 1);
-      expect(summary.photosFailed, 1);
+      // See the sibling test above for why one permanently-failing photo
+      // accounts for `maxUploadAttempts` failed attempts within this same
+      // pass, not just one.
+      expect(summary.photosFailed, maxUploadAttempts);
       expect(
         summary.synced,
         1,
@@ -547,11 +560,18 @@ void main() {
 
       final PendingMediaUpload blockedMedia =
           (await db.mediaDao.mediaForCommand('cmd-blocked')).single;
+      // A permanently-failing upload is retried within this SAME pass
+      // (see the comment on the previous test), so by the time
+      // `_drainMediaUploads` stops finding claimable rows it has already
+      // spent all `maxUploadAttempts` on this one - it is exhausted, not
+      // merely queued for a later pass.
+      expect(blockedMedia.attempts, maxUploadAttempts);
       expect(
         blockedMedia.state,
-        MediaUploadState.queued,
-        reason: 'one failed attempt of maxUploadAttempts leaves it queued '
-            'for another try, not exhausted',
+        MediaUploadState.failed,
+        reason: 'maxUploadAttempts was reached within this pass, so the '
+            'row is reported rather than retried into another crash loop '
+            '- see MediaDao.claimNextUploads\' own doc comment',
       );
     });
 

@@ -1,6 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/core/auth/auth_lifecycle.dart';
 
+/// Distinguishes "the caller did not say, use the helper's own fresh
+/// default" from "the caller explicitly passed `null`" - a plain `??`
+/// default on a nullable named parameter cannot tell those apart when the
+/// explicit value IS `null`, and `isCachedProfileUsable`'s `cachedAt` is
+/// genuinely nullable in the real signature (a row with no cached timestamp
+/// at all), so a test that wants to exercise exactly that case needs a
+/// sentinel rather than the usual default-parameter shorthand.
+const Object _defaultCachedAt = Object();
+
 void main() {
   group('classifyRestore', () {
     test('a session found is always signedIn, whatever storage reported', () {
@@ -35,14 +44,16 @@ void main() {
     bool usable({
       String? cachedForUserId = 'user-1',
       String wantUserId = 'user-1',
-      DateTime? cachedAt,
+      Object? cachedAt = _defaultCachedAt,
       bool? locked,
       bool? approved = true,
     }) =>
         isCachedProfileUsable(
           cachedForUserId: cachedForUserId,
           wantUserId: wantUserId,
-          cachedAt: cachedAt ?? now.subtract(const Duration(days: 1)),
+          cachedAt: identical(cachedAt, _defaultCachedAt)
+              ? now.subtract(const Duration(days: 1))
+              : cachedAt as DateTime?,
           now: now,
           locked: locked,
           approved: approved,

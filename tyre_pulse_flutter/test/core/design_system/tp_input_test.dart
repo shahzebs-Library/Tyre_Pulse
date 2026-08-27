@@ -186,15 +186,37 @@ void main() {
   testWidgets('exposes itself as a text field to assistive technology', (
     WidgetTester tester,
   ) async {
+    // Disposed with an explicit call at the end of the test body, not via
+    // addTearDown: the binding's own end-of-test invariant check (no
+    // SemanticsHandle left active) runs before addTearDown callbacks fire,
+    // so an addTearDown-only disposal reads as a leak every time. This is
+    // the exact pattern flutter_test's own `matchesSemantics` doc comment
+    // uses.
     final SemanticsHandle handle = tester.ensureSemantics();
-    addTearDown(handle.dispose);
 
     await pumpTp(tester, const TpInput(label: 'Serial number'));
 
+    // find.byType(TextField) resolves to InputDecorator's own render
+    // object, which owns no SemanticsNode of its own - the text-field
+    // semantics (isTextField, the focus/tap actions) are attached to the
+    // RenderEditable deeper inside, wrapped by EditableText. Walking
+    // ANCESTORS from InputDecorator's render object therefore never
+    // reaches it and falls all the way back to the app's own scopesRoute
+    // boundary. find.byType(EditableText) targets the node that actually
+    // owns the semantics.
     expect(
-      tester.getSemantics(find.byType(TextField)),
-      matchesSemantics(isTextField: true),
+      tester.getSemantics(find.byType(EditableText)),
+      matchesSemantics(
+        isTextField: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        isFocusable: true,
+        hasTapAction: true,
+        hasFocusAction: true,
+      ),
     );
+
+    handle.dispose();
   });
 
   testWidgets('renders under a right-to-left locale', (

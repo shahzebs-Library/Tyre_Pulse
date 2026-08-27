@@ -144,6 +144,16 @@ void main() {
       'a pressure of exactly 0 survives the write and the read back',
       () async {
         final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+        // InspectionDraftPositions.draftKey has a real FK onto
+        // InspectionDrafts.draftKey (draft_tables.dart) - a position row
+        // cannot be written before the header row it belongs to exists.
+        await repo.saveHeader(
+          userId: 'user-1',
+          workspaceId: 'org-a',
+          assetNo: 'TM514',
+          filled: 0,
+          total: 1,
+        );
         await repo.saveTyreReading(
           key,
           const TyrePositionReading(position: 'LHF2', pressurePsi: 0),
@@ -159,6 +169,14 @@ void main() {
         'saving the same position twice overwrites rather than '
         'duplicating', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+      // Same FK requirement as above - the header must exist first.
+      await repo.saveHeader(
+        userId: 'user-1',
+        workspaceId: 'org-a',
+        assetNo: 'TM514',
+        filled: 0,
+        total: 1,
+      );
       await repo.saveTyreReading(
         key,
         const TyrePositionReading(position: 'LHF1', pressurePsi: 100),
@@ -180,6 +198,15 @@ void main() {
         'a photo attached to a position is folded into '
         'tyreReadingsWithPhotos as photoLocalPath', () async {
       final String key = repo.draftKeyFor(userId: 'user-1', assetNo: 'TM514');
+      // The FK on InspectionDraftPositions.draftKey (see above) requires
+      // the header to exist before saveTyreReading writes a position row.
+      await repo.saveHeader(
+        userId: 'user-1',
+        workspaceId: 'org-a',
+        assetNo: 'TM514',
+        filled: 0,
+        total: 1,
+      );
       await repo.saveTyreReading(
         key,
         const TyrePositionReading(position: 'LHF1', condition: 'Worn'),

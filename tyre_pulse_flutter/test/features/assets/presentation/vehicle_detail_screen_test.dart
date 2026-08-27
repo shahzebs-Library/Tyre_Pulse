@@ -179,6 +179,19 @@ void main() {
         _canStartInspection(true),
       ]);
       await tester.pumpAndSettle();
+
+      // "Start inspection" is the LAST item in the body's ListView, past
+      // the twelve field rows above it - beyond the default viewport plus
+      // cache extent in this 800x600 test window, a sliver list never
+      // builds an Element for it at all (not merely off-screen, genuinely
+      // absent from the tree), so a bare find.text finds nothing to match.
+      // scrollUntilVisible scrolls the list a little at a time, retrying
+      // the finder after each step, which is what lets the lazily-built
+      // item come into existence.
+      await tester.scrollUntilVisible(
+        find.text('Start inspection'),
+        200,
+      );
       expect(find.text('Start inspection'), findsOneWidget);
     },
   );

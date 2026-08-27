@@ -203,32 +203,62 @@ void main() {
     testWidgets('an enabled button exposes its label as a button', (
       WidgetTester tester,
     ) async {
+      // Disposed with an explicit call at the end of the test body, not via
+      // addTearDown: the binding's own end-of-test invariant check (no
+      // SemanticsHandle left active) runs before addTearDown callbacks fire,
+      // so an addTearDown-only disposal reads as a leak every time. This is
+      // the exact pattern flutter_test's own `matchesSemantics` doc comment
+      // uses.
       final SemanticsHandle handle = tester.ensureSemantics();
-      addTearDown(handle.dispose);
 
       await pumpTp(tester, TpButton.primary(label: 'Save', onPressed: () {}));
 
+      // An enabled, focusable Material button genuinely exposes a tap
+      // action, a focus action and isFocusable - that is what makes it
+      // reachable from a keyboard or a switch device, not an incidental
+      // extra. Omitting them here would assert that a real button is LESS
+      // accessible than it actually is.
       expect(
         tester.getSemantics(find.byType(FilledButton)),
-        matchesSemantics(label: 'Save', isButton: true, isEnabled: true),
+        matchesSemantics(
+          label: 'Save',
+          isButton: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          isFocusable: true,
+          hasTapAction: true,
+          hasFocusAction: true,
+        ),
       );
+
+      handle.dispose();
     });
 
     testWidgets('a disabled button reports itself as not enabled', (
       WidgetTester tester,
     ) async {
       final SemanticsHandle handle = tester.ensureSemantics();
-      addTearDown(handle.dispose);
 
       await pumpTp(
         tester,
         const TpButton.primary(label: 'Save', onPressed: null),
       );
 
+      // hasEnabledState: true is the flag itself, not an accident of being
+      // disabled - it is what tells assistive technology this control HAS a
+      // concept of being enabled, so announcing "disabled" means something.
+      // A control with no enabled/disabled concept at all would omit it.
       expect(
         tester.getSemantics(find.byType(FilledButton)),
-        matchesSemantics(label: 'Save', isButton: true, isEnabled: false),
+        matchesSemantics(
+          label: 'Save',
+          isButton: true,
+          isEnabled: false,
+          hasEnabledState: true,
+        ),
       );
+
+      handle.dispose();
     });
   });
 

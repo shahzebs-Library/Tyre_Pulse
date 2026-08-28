@@ -117,7 +117,7 @@ class _TyreDiagramBoardState extends State<TyreDiagramBoard> {
                 // tappable tyre cards on both sides. The ordinary top-down
                 // diagram keeps its existing compact/full sizing.
                 final double renderedWidth = widget.captureMode
-                    ? available.clamp(300, 390).toDouble()
+                    ? available.clamp(300, 380).toDouble()
                     : widget.compact
                         ? diagramWidth.clamp(176, 252).toDouble()
                         : diagramWidth.clamp(220, widget.width).toDouble();

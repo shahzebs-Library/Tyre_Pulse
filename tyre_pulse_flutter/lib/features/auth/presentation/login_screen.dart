@@ -332,7 +332,9 @@ class _ExactLoginHero extends StatelessWidget {
     final String asset = _countryHeroAsset(country);
 
     return Semantics(
+      key: const Key('login.country.hero'),
       container: true,
+      explicitChildNodes: true,
       label: l10n.loginSelectedCountrySemantics(
         localizedLoginCountryName(l10n, country),
       ),
@@ -397,6 +399,8 @@ class _ExactLoginHero extends StatelessWidget {
               top: 34,
               width: 126,
               child: Semantics(
+                key: const Key('login.brand.title'),
+                container: true,
                 header: true,
                 label: l10n.appTitle,
                 child: ExcludeSemantics(

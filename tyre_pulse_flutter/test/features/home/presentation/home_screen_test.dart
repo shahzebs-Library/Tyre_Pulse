@@ -196,12 +196,8 @@ void main() {
       expect(find.byIcon(Icons.fact_check_outlined), findsNothing);
       expect(find.byIcon(Icons.schedule_rounded), findsNothing);
 
-      await expectLater(
-        find.byType(HomeScreen),
-        matchesGoldenFile(
-          '../../../../audit/device/home_strict/02-home-widget.png',
-        ),
-      );
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 

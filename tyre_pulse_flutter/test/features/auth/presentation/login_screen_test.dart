@@ -167,7 +167,7 @@ Future<_Pumped> _pump(
 
 Finder _identifierField() => find.byType(TextField).at(0);
 Finder _passwordField() => find.byType(TextField).at(1);
-Finder _submitButton() => find.widgetWithText(TpButton, 'Sign in');
+Finder _submitButton() => find.byKey(const Key('login.submit'));
 Finder _passwordToggle() => find.byType(IconButton);
 
 Future<void> _fillValidCredentials(WidgetTester tester) async {
@@ -564,7 +564,7 @@ void main() {
 
       expect(
         tester
-            .getSemantics(find.bySemanticsLabel('Tyre Pulse'))
+            .getSemantics(find.byKey(const Key('login.brand.title')))
             .flagsCollection
             .isHeader,
         isTrue,

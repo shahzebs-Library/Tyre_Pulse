@@ -598,7 +598,7 @@ class _FigmaTyreStatusCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
@@ -608,23 +608,23 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: palette.text,
-                        fontSize: 9,
+                        fontSize: 8,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: colors.base,
                     shape: BoxShape.circle,
                   ),
                   child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: Icon(statusIcon, color: colors.onBase, size: 14),
+                    width: 18,
+                    height: 18,
+                    child: Icon(statusIcon, color: colors.onBase, size: 12),
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   statusLabel,
                   maxLines: 1,
@@ -632,7 +632,7 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: palette.text,
-                        fontSize: 8,
+                        fontSize: 7,
                         fontWeight: FontWeight.w700,
                       ),
                 ),

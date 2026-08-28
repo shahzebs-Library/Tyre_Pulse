@@ -14,6 +14,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -144,40 +145,24 @@ class VehicleTyreDiagram extends StatelessWidget {
       }
     }
 
-    final Widget diagramCanvas = _diagramCanvas(
-      context: context,
-      layout: layout,
-      viewport: viewport,
-      hitRects: hitRects,
-      wheels: resolved,
-      showPositionLabels: captureMode,
-    );
+    final Widget diagramCanvas = captureMode
+        ? _FigmaTyreCaptureStage(
+            layout: layout,
+            wheels: resolved,
+            width: width,
+            selectedPosition: selectedPosition,
+            onPositionTap: onPositionTap,
+          )
+        : _diagramCanvas(
+            context: context,
+            layout: layout,
+            viewport: viewport,
+            hitRects: hitRects,
+            wheels: resolved,
+            showPositionLabels: false,
+          );
 
-    if (captureMode) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            l10n.tyreDiagramFrontLabel,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: palette.textSecondary,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: TpSpace.sm),
-          diagramCanvas,
-          const SizedBox(height: TpSpace.sm),
-          Text(
-            l10n.inspectionRearLabel,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: palette.textSecondary,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ],
-      );
-    }
+    if (captureMode) return diagramCanvas;
 
     return TpCard(
       padding: EdgeInsets.all(compact ? TpSpace.sm : TpSpace.lg),
@@ -389,6 +374,275 @@ String _capturePositionLabel(MatchedTyreSlot tyre) {
     PositionKind.drive => tyre.id.toUpperCase(),
     _ => tyre.id.toUpperCase(),
   };
+}
+
+class _FigmaTyreCaptureStage extends StatelessWidget {
+  const _FigmaTyreCaptureStage({
+    required this.layout,
+    required this.wheels,
+    required this.width,
+    required this.selectedPosition,
+    required this.onPositionTap,
+  });
+
+  final DiagramLayout layout;
+  final List<_ResolvedWheel> wheels;
+  final double width;
+  final String? selectedPosition;
+  final ValueChanged<String>? onPositionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final bool tall = layout.viewH >= 360;
+    final double stageHeight = tall ? 430 : 324;
+    final double cardWidth = (width * 0.18).clamp(58, 70).toDouble();
+    final double photoWidth = width * (tall ? 0.41 : 0.43);
+    final double photoLeft = (width - photoWidth) / 2;
+    final String? photoAsset =
+        tyreDiagramVehiclePhotoAsset(layout.bodyKey);
+
+    final List<_ResolvedWheel> left = <_ResolvedWheel>[];
+    final List<_ResolvedWheel> right = <_ResolvedWheel>[];
+    for (final _ResolvedWheel wheel in wheels) {
+      final PositionStruct position = parsePositionStruct(wheel.tyre.id);
+      if (position.side == PositionSide.right) {
+        right.add(wheel);
+      } else if (position.side == PositionSide.left) {
+        left.add(wheel);
+      } else if (wheel.tyre.x < 100) {
+        left.add(wheel);
+      } else {
+        right.add(wheel);
+      }
+    }
+    left.sort(_compareWheelPosition);
+    right.sort(_compareWheelPosition);
+    final int maxCards = left.length > right.length ? left.length : right.length;
+    final double cardHeight = maxCards <= 1
+        ? 64
+        : ((stageHeight - 24) / maxCards - 6).clamp(48, 64).toDouble();
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: SizedBox(
+        key: const Key('tyre.diagram.figma_capture_stage'),
+        width: width,
+        height: stageHeight,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.surfaceAlt,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Positioned(
+                left: photoLeft,
+                top: 0,
+                width: photoWidth,
+                height: stageHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: photoAsset != null
+                      ? Image.asset(
+                          photoAsset,
+                          key: ValueKey<String>(photoAsset),
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          excludeFromSemantics: true,
+                        )
+                      : SvgPicture.asset(
+                          tyreDiagramBodyAsset(layout.bodyKey),
+                          fit: BoxFit.contain,
+                          excludeFromSemantics: true,
+                        ),
+                ),
+              ),
+              for (int i = 0; i < left.length; i++) ...<Widget>[
+                _connector(
+                  left: cardWidth,
+                  top: _topFor(i, left.length, stageHeight, cardHeight) +
+                      (cardHeight / 2),
+                  width: photoLeft - cardWidth,
+                  color: palette.borderStrong,
+                ),
+                Positioned(
+                  left: 0,
+                  top: _topFor(i, left.length, stageHeight, cardHeight),
+                  width: cardWidth,
+                  height: cardHeight,
+                  child: _FigmaTyreStatusCard(
+                    wheel: left[i],
+                    selected: _isSelected(left[i]),
+                    onTap: onPositionTap == null
+                        ? null
+                        : () => onPositionTap!(left[i].tyre.positionId),
+                  ),
+                ),
+              ],
+              for (int i = 0; i < right.length; i++) ...<Widget>[
+                _connector(
+                  left: photoLeft + photoWidth,
+                  top: _topFor(i, right.length, stageHeight, cardHeight) +
+                      (cardHeight / 2),
+                  width: width - photoLeft - photoWidth - cardWidth,
+                  color: palette.borderStrong,
+                ),
+                Positioned(
+                  right: 0,
+                  top: _topFor(i, right.length, stageHeight, cardHeight),
+                  width: cardWidth,
+                  height: cardHeight,
+                  child: _FigmaTyreStatusCard(
+                    wheel: right[i],
+                    selected: _isSelected(right[i]),
+                    onTap: onPositionTap == null
+                        ? null
+                        : () => onPositionTap!(right[i].tyre.positionId),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _isSelected(_ResolvedWheel wheel) =>
+      wheel.tyre.positionId == selectedPosition ||
+      wheel.tyre.id == selectedPosition;
+
+  static int _compareWheelPosition(_ResolvedWheel a, _ResolvedWheel b) {
+    final int y = a.tyre.y.compareTo(b.tyre.y);
+    if (y != 0) return y;
+    return a.tyre.x.compareTo(b.tyre.x);
+  }
+
+  static double _topFor(
+    int index,
+    int count,
+    double stageHeight,
+    double cardHeight,
+  ) {
+    if (count <= 1) return (stageHeight - cardHeight) / 2;
+    const double inset = 12;
+    final double travel = stageHeight - (inset * 2) - cardHeight;
+    return inset + ((travel / (count - 1)) * index);
+  }
+
+  static Widget _connector({
+    required double left,
+    required double top,
+    required double width,
+    required Color color,
+  }) {
+    return Positioned(
+      left: left,
+      top: top,
+      width: width < 0 ? 0 : width,
+      height: 1,
+      child: ColoredBox(color: color),
+    );
+  }
+}
+
+class _FigmaTyreStatusCard extends StatelessWidget {
+  const _FigmaTyreStatusCard({
+    required this.wheel,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ResolvedWheel wheel;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatus tone = wheel.isRecorded ? wheel.status : TpStatus.neutral;
+    final TpStatusColors colors = palette.forStatus(tone);
+    final String statusLabel = !wheel.isRecorded
+        ? l10n.tyreDiagramListNotRecorded
+        : wheel.condition == null
+            ? l10n.tyreDiagramListNotRecorded
+            : tyreConditionLabel(l10n, wheel.condition!);
+    final IconData statusIcon = !wheel.isRecorded
+        ? Icons.remove
+        : tone == TpStatus.ok
+            ? Icons.check
+            : tone == TpStatus.critical
+                ? Icons.warning_rounded
+                : Icons.priority_high_rounded;
+    final String semanticLabel = wheel.pressureText == null
+        ? wheel.code + ', ' + statusLabel
+        : wheel.code + ', ' + statusLabel + ', ' + wheel.pressureText!;
+
+    return Semantics(
+      label: semanticLabel,
+      selected: selected,
+      button: onTap != null,
+      child: Material(
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(9),
+          side: BorderSide(
+            color: selected ? palette.focus : colors.base,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  wheel.code,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.text,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.base,
+                    shape: BoxShape.circle,
+                  ),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Icon(statusIcon, color: colors.onBase, size: 14),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  statusLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.text,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CapturePositionLabel extends StatelessWidget {

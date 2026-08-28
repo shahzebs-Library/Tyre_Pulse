@@ -112,15 +112,12 @@ class _TyreDiagramBoardState extends State<TyreDiagramBoard> {
                 final double bounded =
                     available < widget.width ? available : widget.width;
                 final double diagramWidth = bounded - (TpSpace.lg * 2);
-                // The approved inspection and approval mocks keep the whole
-                // bird-view vehicle visible above their fixed action bar.
-                // Letting the compact board consume the full phone width
-                // makes a 4/5-axle pump or mixer taller than the viewport and
-                // hides its last joined dual axle behind that bar. The shared
-                // diagram remains full-size on asset/detail screens; only the
-                // focused capture/review presentation is capped here.
+                // Focused capture mode follows the approved 390px mobile
+                // stage: real vehicle artwork in the centre and independently
+                // tappable tyre cards on both sides. The ordinary top-down
+                // diagram keeps its existing compact/full sizing.
                 final double renderedWidth = widget.captureMode
-                    ? (available - 112).clamp(152, 190).toDouble()
+                    ? available.clamp(300, 390).toDouble()
                     : widget.compact
                         ? diagramWidth.clamp(176, 252).toDouble()
                         : diagramWidth.clamp(220, widget.width).toDouble();

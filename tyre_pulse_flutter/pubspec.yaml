@@ -83,3 +83,4 @@ flutter:
   assets:
     - assets/login/
     - assets/vehicle_diagram/
+    - assets/vehicle_photos/

@@ -351,6 +351,41 @@ void main() {
     }
   });
 
+  testWidgets(
+    'focused pickup capture uses the approved real photo and preserves ids',
+    (WidgetTester tester) async {
+      String? tapped;
+      await _pump(
+        tester,
+        VehicleTyreDiagram(
+          vehicleType: 'PICKUP',
+          positions: const <String>['FL', 'FR', 'RL', 'RR'],
+          tyreData: const <String, Map<String, Object?>>{},
+          width: 366,
+          compact: true,
+          captureMode: true,
+          onPositionTap: (String id) => tapped = id,
+        ),
+      );
+
+      expect(
+        find.byKey(const Key('tyre.diagram.figma_capture_stage')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('assets/vehicle_photos/pickup.png'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.bySemanticsLabel(RegExp('LHF1')).first);
+      await tester.pump();
+      expect(tapped, 'FL');
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final String vehicleClass in <String>[
     'Tri-mixer',
     'Line pump',

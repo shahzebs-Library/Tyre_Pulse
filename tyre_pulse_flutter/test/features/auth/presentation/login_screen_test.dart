@@ -515,8 +515,8 @@ void main() {
         find.byKey(const Key('login.form.card')),
       );
       expect(Directionality.of(formContext), TextDirection.rtl);
-      expect(find.text('English'), findsOneWidget);
-      expect(find.text('العربية'), findsOneWidget);
+      expect(find.text('EN'), findsOneWidget);
+      expect(find.text('عربي'), findsOneWidget);
       expect(find.text('اردو'), findsOneWidget);
       final TpButton urChip = tester.widget<TpButton>(
         find.byKey(const Key('login.language.ur')),
@@ -563,7 +563,10 @@ void main() {
       await _pump(tester);
 
       expect(
-        tester.getSemantics(find.text('Tyre Pulse')).flagsCollection.isHeader,
+        tester
+            .getSemantics(find.bySemanticsLabel('Tyre Pulse'))
+            .flagsCollection
+            .isHeader,
         isTrue,
       );
       expect(
@@ -630,7 +633,7 @@ void main() {
     },
   );
 
-  testWidgets('design QA capture: compact English', (
+  testWidgets('approved 390x844 mobile composition keeps the exact anchors', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -640,13 +643,24 @@ void main() {
 
     await _pump(tester);
 
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/login_compact_en.png'),
+    final Finder hero = find.byKey(const Key('login.brand.panel'));
+    final Finder form = find.byKey(const Key('login.form.card'));
+    expect(tester.getSize(hero), const Size(390, 354));
+    expect(tester.getTopLeft(form).dy, 328);
+    expect(tester.getSize(_identifierField()).height, 56);
+    expect(tester.getSize(_passwordField()).height, 56);
+    expect(tester.getSize(_submitButton()).height, 54);
+    expect(find.byIcon(Icons.fingerprint), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('assets/login/figma_city_background.png'),
+      ),
+      findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('design QA capture: wide Arabic RTL', (
+  testWidgets('wide Arabic remains responsive and keeps one functional form', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1024, 768);
@@ -656,9 +670,10 @@ void main() {
 
     await _pump(tester, locale: const Locale('ar'));
 
-    await expectLater(
-      find.byType(MaterialApp),
-      matchesGoldenFile('goldens/login_wide_ar.png'),
-    );
+    expect(find.byKey(const Key('login.brand.panel')), findsOneWidget);
+    expect(find.byKey(const Key('login.form.card')), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(_submitButton(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

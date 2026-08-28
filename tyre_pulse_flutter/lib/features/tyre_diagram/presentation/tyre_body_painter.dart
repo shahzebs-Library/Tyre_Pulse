@@ -65,6 +65,25 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
   };
 }
 
+/// Returns the approved replaceable vehicle photograph used by the focused
+/// inspection mock. The tyre controls remain native widgets and retain their
+/// canonical position ids; this asset only replaces the visual body layer.
+String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) {
+  return switch (bodyKey) {
+    TyreDiagramBodyKey.pickup => 'assets/vehicle_photos/pickup.png',
+    TyreDiagramBodyKey.wheelLoader =>
+      'assets/vehicle_photos/wheel_loader.png',
+    TyreDiagramBodyKey.concretePump =>
+      'assets/vehicle_photos/concrete_pump.png',
+    TyreDiagramBodyKey.canter ||
+    TyreDiagramBodyKey.triMixer ||
+    TyreDiagramBodyKey.bus ||
+    TyreDiagramBodyKey.tata ||
+    TyreDiagramBodyKey.ashokLeyland =>
+      null,
+  };
+}
+
 /// Renders [bodyKey]'s real artwork, sized to exactly fill [viewport].
 class TyreDiagramBody extends StatefulWidget {
   const TyreDiagramBody({

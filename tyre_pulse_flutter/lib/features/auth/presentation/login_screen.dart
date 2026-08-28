@@ -196,8 +196,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required LoginCountry selectedCountry,
     required Locale activeLocale,
   }) {
-    final bool hasFeedback =
-        _errorMessage != null || _lockoutMinutes != null;
+    final bool hasFeedback = _errorMessage != null || _lockoutMinutes != null;
     final double feedbackExtra = hasFeedback ? 82 : 0;
     final double canvasWidth =
         constraints.maxWidth > 390 ? 390 : constraints.maxWidth;
@@ -316,8 +315,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 String _countryHeroAsset(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia =>
-        'assets/login/figma_city_background.png',
+      LoginCountry.saudiArabia => 'assets/login/figma_city_background.png',
       LoginCountry.unitedArabEmirates =>
         'assets/login/united_arab_emirates_hero.png',
       LoginCountry.egypt => 'assets/login/egypt_hero.png',
@@ -522,12 +520,13 @@ class _ExactLoginForm extends StatelessWidget {
                     header: true,
                     child: Text(
                       l10n.loginWelcomeTitle,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: palette.text,
-                            fontSize: 30,
-                            height: 1.14,
-                            fontWeight: FontWeight.w800,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                color: palette.text,
+                                fontSize: 30,
+                                height: 1.14,
+                                fontWeight: FontWeight.w800,
+                              ),
                     ),
                   ),
                 ),
@@ -631,8 +630,7 @@ class _ExactLoginForm extends StatelessWidget {
                             key: LoginBannerKeys.locked,
                             icon: Icons.lock_outline,
                             tone: TpStatus.warning,
-                            message:
-                                l10n.loginErrorLocked(lockoutMinutes!),
+                            message: l10n.loginErrorLocked(lockoutMinutes!),
                           )
                         : _LoginBanner(
                             key: LoginBannerKeys.error,
@@ -786,10 +784,9 @@ class _LanguageToggle extends StatelessWidget {
                     label: option.label,
                     isCompact: true,
                     isFullWidth: true,
-                    variant:
-                        active.languageCode == option.locale.languageCode
-                            ? TpButtonVariant.primary
-                            : TpButtonVariant.secondary,
+                    variant: active.languageCode == option.locale.languageCode
+                        ? TpButtonVariant.primary
+                        : TpButtonVariant.secondary,
                     onPressed: () => onSelect(option.locale),
                   ),
                 ),

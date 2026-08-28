@@ -71,8 +71,7 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
 String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) {
   return switch (bodyKey) {
     TyreDiagramBodyKey.pickup => 'assets/vehicle_photos/pickup.png',
-    TyreDiagramBodyKey.wheelLoader =>
-      'assets/vehicle_photos/wheel_loader.png',
+    TyreDiagramBodyKey.wheelLoader => 'assets/vehicle_photos/wheel_loader.png',
     TyreDiagramBodyKey.concretePump =>
       'assets/vehicle_photos/concrete_pump.png',
     TyreDiagramBodyKey.canter ||

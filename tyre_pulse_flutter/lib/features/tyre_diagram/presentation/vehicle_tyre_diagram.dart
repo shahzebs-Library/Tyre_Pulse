@@ -399,8 +399,7 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     final double cardWidth = (width * 0.18).clamp(58, 70).toDouble();
     final double photoWidth = width * (tall ? 0.41 : 0.43);
     final double photoLeft = (width - photoWidth) / 2;
-    final String? photoAsset =
-        tyreDiagramVehiclePhotoAsset(layout.bodyKey);
+    final String? photoAsset = tyreDiagramVehiclePhotoAsset(layout.bodyKey);
 
     final List<_ResolvedWheel> left = <_ResolvedWheel>[];
     final List<_ResolvedWheel> right = <_ResolvedWheel>[];
@@ -418,7 +417,8 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     }
     left.sort(_compareWheelPosition);
     right.sort(_compareWheelPosition);
-    final int maxCards = left.length > right.length ? left.length : right.length;
+    final int maxCards =
+        left.length > right.length ? left.length : right.length;
     final double cardHeight = maxCards <= 1
         ? 64
         : ((stageHeight - 24) / maxCards - 6).clamp(48, 64).toDouble();

@@ -195,7 +195,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
     final Locale? activeLocale = ref.watch(localeProvider);
 
     return TpScaffold(
@@ -203,74 +202,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // root of the app, exactly as Home is once signed in - see
       // `tp_scaffold.dart`'s own library comment on what a null
       // `backFallback` means.
+      backgroundColor: const Color(0xFFFFFBF3),
       body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
+        builder: (BuildContext context, BoxConstraints _) {
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(TpSpace.xxl),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight - (TpSpace.xxl * 2),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Center(
-                    child: Column(
-                      children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: palette.primarySoft,
-                            shape: BoxShape.circle,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    AspectRatio(
+                      aspectRatio: 852 / 960,
+                      child: Image.asset(
+                        'assets/branding/login_hero_saudi.webp',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                        semanticLabel: l10n.loginAppSubtitle,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        TpSpace.xxl,
+                        TpSpace.lg,
+                        TpSpace.xxl,
+                        TpSpace.xxxl,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          _LanguageToggle(
+                            active: activeLocale,
+                            onSelect: (Locale locale) => ref
+                                .read(localeProvider.notifier)
+                                .setLocale(locale),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(TpSpace.lg),
-                            child: Icon(
-                              Icons.tire_repair_outlined,
-                              size: TpSizing.iconState,
-                              color: palette.primaryDark,
-                            ),
-                          ),
+                        const SizedBox(height: TpSpace.xxl),
+                        Text(
+                          l10n.homeGreeting,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: const Color(0xFF092451),
+                                fontSize: 28,
+                              ),
                         ),
                         const SizedBox(height: TpSpace.md),
-                        Text(
-                          l10n.appTitle,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: TpSpace.xs),
-                        Text(
-                          l10n.loginAppSubtitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: palette.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: TpSpace.xxl),
-                  TpCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        _LanguageToggle(
-                          active: activeLocale,
-                          onSelect: (Locale locale) => ref
-                              .read(localeProvider.notifier)
-                              .setLocale(locale),
-                        ),
-                        const SizedBox(height: TpSpace.lg),
-                        Text(
-                          l10n.loginCardTitle,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: TpSpace.xs),
-                        Text(
-                          l10n.loginCardSubtitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: palette.textMuted),
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Container(
+                            width: 44,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFB28B45),
+                              borderRadius: BorderRadius.circular(
+                                TpRadius.pill,
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: TpSpace.lg),
                         if (_lockoutMinutes != null) ...<Widget>[
@@ -293,7 +283,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         TpInput(
                           label: l10n.loginIdentifierLabel,
                           controller: _identifierController,
-                          hint: l10n.loginIdentifierPlaceholder,
                           prefixIcon: Icons.person_outline,
                           enabled: !_isSubmitting,
                           keyboardType: TextInputType.emailAddress,
@@ -304,7 +293,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         TpInput(
                           label: l10n.loginPasswordLabel,
                           controller: _passwordController,
-                          hint: l10n.loginPasswordPlaceholder,
                           prefixIcon: Icons.lock_outline,
                           enabled: !_isSubmitting,
                           obscureText: _obscurePassword,
@@ -325,28 +313,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: TpSpace.lg),
+                        Row(
+                          children: <Widget>[
+                            const Icon(
+                              Icons.gpp_good_outlined,
+                              size: TpSizing.iconLg,
+                              color: Color(0xFFB28B45),
+                            ),
+                            const SizedBox(width: TpSpace.sm),
+                            Expanded(
+                              child: Text(
+                                l10n.loginTagline,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: const Color(0xFF314665),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: TpSpace.xl),
                         TpButton.primary(
                           label: l10n.actionSignIn,
-                          icon: Icons.arrow_forward,
                           isFullWidth: true,
                           isBusy: _isSubmitting,
-                          onPressed:
-                              _isSubmitting ? null : () => unawaited(_submit()),
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => unawaited(_submit()),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: TpSpace.xxl),
-                  Text(
-                    l10n.loginTagline,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: palette.textMuted),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -371,27 +373,67 @@ class _LanguageToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        for (int i = 0; i < _kLanguageOptions.length; i++) ...<Widget>[
-          if (i > 0) const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: TpButton(
-              key: Key(
-                'login.language.${_kLanguageOptions[i].locale.languageCode}',
-              ),
-              label: _kLanguageOptions[i].label,
-              isCompact: true,
-              isFullWidth: true,
-              variant: active?.languageCode ==
-                      _kLanguageOptions[i].locale.languageCode
-                  ? TpButtonVariant.primary
-                  : TpButtonVariant.secondary,
-              onPressed: () => onSelect(_kLanguageOptions[i].locale),
-            ),
+    const Color navy = Color(0xFF092451);
+    const Color green = Color(0xFF087B3D);
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFCF6),
+          border: Border.all(color: const Color(0xFFE2D3B5)),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(TpSpace.xs),
+          child: Row(
+            children: <Widget>[
+              for (int i = 0; i < _kLanguageOptions.length; i++)
+                Expanded(
+                  child: Semantics(
+                    selected: active?.languageCode ==
+                        _kLanguageOptions[i].locale.languageCode,
+                    button: true,
+                    child: InkWell(
+                      key: Key(
+                        'login.language.${_kLanguageOptions[i].locale.languageCode}',
+                      ),
+                      onTap: () => onSelect(_kLanguageOptions[i].locale),
+                      borderRadius: BorderRadius.circular(TpRadius.sm),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        constraints: const BoxConstraints(
+                          minHeight: TpSizing.minTouchTarget,
+                        ),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: active?.languageCode ==
+                                  _kLanguageOptions[i].locale.languageCode
+                              ? green
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(TpRadius.sm),
+                        ),
+                        child: Text(
+                          _kLanguageOptions[i].label,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(
+                                color: active?.languageCode ==
+                                        _kLanguageOptions[i]
+                                            .locale
+                                            .languageCode
+                                    ? Colors.white
+                                    : navy,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }

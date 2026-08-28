@@ -779,7 +779,7 @@ class _LanguageToggle extends StatelessWidget {
                   selected: active.languageCode == option.locale.languageCode,
                   child: TpButton(
                     key: Key(
-                      'login.language.' + option.locale.languageCode,
+                      'login.language.${option.locale.languageCode}',
                     ),
                     label: option.label,
                     isCompact: true,
@@ -811,7 +811,7 @@ class _CountryFooter extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        key: LoginCountryKeys.change,
+        key: const Key('login.country.change'),
         onTap: onTap,
         child: Column(
           children: <Widget>[

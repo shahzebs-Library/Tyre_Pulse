@@ -578,8 +578,8 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                 ? Icons.warning_rounded
                 : Icons.priority_high_rounded;
     final String semanticLabel = wheel.pressureText == null
-        ? wheel.code + ', ' + statusLabel
-        : wheel.code + ', ' + statusLabel + ', ' + wheel.pressureText!;
+        ? '${wheel.code}, $statusLabel'
+        : '${wheel.code}, $statusLabel, ${wheel.pressureText}';
 
     return Semantics(
       label: semanticLabel,

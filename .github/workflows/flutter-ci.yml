@@ -88,7 +88,12 @@ jobs:
             echo "No hand-written Dart found - nothing to format check."
             exit 0
           fi
-          dart format --set-exit-if-changed $files
+          dart format $files
+          if ! git diff --quiet; then
+            echo "Formatter diff:"
+            git --no-pager diff
+            exit 1
+          fi
 
       - name: Analyze
         # --fatal-infos because analysis_options.yaml promotes the rules that

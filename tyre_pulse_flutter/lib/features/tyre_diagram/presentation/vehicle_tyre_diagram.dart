@@ -162,7 +162,31 @@ class VehicleTyreDiagram extends StatelessWidget {
             showPositionLabels: false,
           );
 
-    if (captureMode) return diagramCanvas;
+    if (captureMode) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            l10n.tyreDiagramFrontLabel,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: TpSpace.sm),
+          diagramCanvas,
+          const SizedBox(height: TpSpace.sm),
+          Text(
+            l10n.inspectionRearLabel,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
+      );
+    }
 
     return TpCard(
       padding: EdgeInsets.all(compact ? TpSpace.sm : TpSpace.lg),
@@ -602,8 +626,8 @@ class _FigmaTyreStatusCard extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Text(
-                  wheel.code,
+                TpIdentifierText(
+                  _capturePositionLabel(wheel.tyre),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(

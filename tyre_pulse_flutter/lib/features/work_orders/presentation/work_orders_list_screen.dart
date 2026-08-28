@@ -1,55 +1,8 @@
-/// Work Orders - the maintenance job card list.
+/// Work Orders - the permission-gated, live maintenance job-card list.
 ///
-/// Ported from `mobile/app/(app)/work-orders.tsx` (`mobile/` is READ-ONLY
-/// reference material - see `AGENTS.md`). See `domain/work_order_status
-/// .dart`'s own library comment for why this is the ONE "work orders"
-/// feature this port builds - `workorders/index.tsx`, which reads
-/// `corrective_actions`, is a different, deliberately deferred feature.
-///
-/// Lists every work order this workspace's country scope can see, newest
-/// first, with an Active/All filter matching the reference's own two
-/// chips, a "New work order" action that opens
-/// [showCreateWorkOrderSheet], and a status-advance action per row
-/// (`domain/work_order_status.dart`'s [nextWorkOrderStatus]) that is
-/// hidden the moment there is nothing further to advance to - matching the
-/// reference's own `{next && mayEdit && (...)}` guard, minus the `mayEdit`
-/// half: see the next section.
-///
-/// # Reaching this screen at all already IS the authorisation to act on it
-///
-/// The reference's own `mayEdit = canManageWorkOrders(profile?.role)` and
-/// the `allowed` its `useModuleGuard('workorders')` produces are NOT the
-/// same check, and that is a real, confirmed defect in the reference, not
-/// a deliberate two-tier design: `canManageWorkOrders` tests
-/// `profile?.role` against the module's registry ROLE DEFAULT ONLY
-/// (`mobile/lib/permissions.ts`'s `moduleAllowedByRole`), while
-/// `useModuleGuard` resolves through `resolveGuardedAccess`, which ALSO
-/// honours a per-user GRANT. Since `workorders`' role default is an empty
-/// list (admin-only; see `M('workorders', ..., [])` in the reference's own
-/// `permissions.ts`), a person granted this module individually - exactly
-/// the mechanism this whole permission layer exists to support - would see
-/// `allowed === true` and `mayEdit === false`: the screen, with no way to
-/// ever create or advance anything on it.
-///
-/// This port's own permission layer
-/// (`core/permissions/access_resolver.dart`) makes exactly one decision
-/// per module - [resolveModuleAccess] - precisely so a widget never tests
-/// a role string a second time with a different, narrower rule ("A widget
-/// must never test a role string. `if (role == admin)` belongs here and
-/// nowhere else", that file's own library comment). [ModuleKey.workorders]
-/// is `ModuleDef.adminOnly` here too (`core/permissions/module_registry
-/// .dart`, matching the reference's empty role list exactly), and both
-/// [TpRouteId.workOrders] and [TpRouteId.workOrderDetail] are
-/// `ModuleGuarded(RouteModule.workorders)` in `app/router/route_access
-/// .dart` - so by the time [WorkOrdersListScreen] is ever built at all,
-/// the router's own `_GuardedScreen` has already resolved that SAME
-/// decision and admitted the user. There is no second, narrower gate left
-/// to apply, and inventing one here - by re-reading a raw role, ignoring
-/// the grant the router already honoured - would reproduce the reference's
-/// own bug rather than port the feature it was trying to build. So this
-/// screen shows the "New work order" action and every row's advance
-/// action unconditionally: reaching the screen already answers "may I act
-/// here" the same way it answers "may I view this".
+/// Reads stay bounded through [WorkOrderRepository.listRecent]. Create and
+/// status changes keep their existing queued command paths; this presentation
+/// pass changes hierarchy only and never presents a queued change as synced.
 library;
 
 import 'dart:async';
@@ -74,7 +27,14 @@ import 'package:tyre_pulse/features/work_orders/presentation/widgets/create_work
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/work_order_badges.dart';
 import 'package:tyre_pulse/features/work_orders/work_orders_providers.dart';
 
-enum _WorkOrdersFilter { active, all }
+enum _WorkOrdersFilter { all, inProgress, completed }
+
+abstract final class WorkOrdersListScreenKeys {
+  static const Key filters = Key('workOrders.list.filters');
+  static const Key results = Key('workOrders.list.results');
+  static Key row(String id) => Key('workOrders.list.row.$id');
+  static Key advance(String id) => Key('workOrders.list.advance.$id');
+}
 
 class WorkOrdersListScreen extends ConsumerStatefulWidget {
   const WorkOrdersListScreen({required this.route, super.key});
@@ -90,7 +50,7 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
   bool _loading = true;
   AppError? _error;
   List<WorkOrderItem> _items = const <WorkOrderItem>[];
-  _WorkOrdersFilter _filter = _WorkOrdersFilter.active;
+  _WorkOrdersFilter _filter = _WorkOrdersFilter.inProgress;
   String? _advancingId;
 
   @override
@@ -104,11 +64,10 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
       _loading = true;
       _error = null;
     });
-    final String? country = ref.read(activeCountryProvider);
     try {
       final List<WorkOrderItem> items = await ref
           .read(workOrderRepositoryProvider)
-          .listRecent(country: country);
+          .listRecent(country: ref.read(activeCountryProvider));
       if (!mounted) return;
       setState(() {
         _items = items;
@@ -123,8 +82,6 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
     }
   }
 
-  Future<void> _refresh() => _load();
-
   Future<void> _openCreateSheet() async {
     final bool? created = await showCreateWorkOrderSheet(context);
     if (!mounted || created != true) return;
@@ -132,11 +89,9 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
     unawaited(_load());
   }
 
-  void _open(WorkOrderItem item) {
-    context.push(
-      WorkOrderDetailRoute(workOrderId: WorkOrderId(item.id)).location,
-    );
-  }
+  void _open(WorkOrderItem item) => context.push(
+        WorkOrderDetailRoute(workOrderId: WorkOrderId(item.id)).location,
+      );
 
   Future<void> _advance(WorkOrderItem item) async {
     if (_advancingId != null) return;
@@ -159,7 +114,6 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
     }
   }
 
-  /// Mirrors `WashingScreen._showSnack`'s own shape.
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -168,29 +122,43 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
 
   List<WorkOrderItem> get _shown => switch (_filter) {
         _WorkOrdersFilter.all => _items,
-        _WorkOrdersFilter.active => _items
-            .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
+        _WorkOrdersFilter.inProgress => _items
+            .where(
+              (WorkOrderItem item) =>
+                  item.status?.trim().toLowerCase() == 'in progress',
+            )
+            .toList(growable: false),
+        _WorkOrdersFilter.completed => _items
+            .where(
+              (WorkOrderItem item) =>
+                  item.status?.trim().toLowerCase() == 'completed',
+            )
             .toList(growable: false),
       };
 
   int get _activeCount => _items
-      .where((WorkOrderItem w) => isWorkOrderStatusOpenLike(w.status))
+      .where((WorkOrderItem item) => isWorkOrderStatusOpenLike(item.status))
       .length;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
-
     return TpScaffold(
       backFallback: fallback,
+      backgroundColor: TpPalette.of(context).surface,
       appBar: TpAppBar(
         title: l10n.workOrdersNavTitle,
         subtitle: _loading ? null : l10n.workOrdersActiveCount(_activeCount),
         backFallback: fallback,
         actions: <Widget>[
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.filter_alt_outlined),
+            tooltip: l10n.workOrdersFilterAll,
+            onPressed: () => unawaited(_showFilterSheet(l10n)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_rounded),
             tooltip: l10n.workOrderNewTitle,
             onPressed: () => unawaited(_openCreateSheet()),
           ),
@@ -200,17 +168,58 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
     );
   }
 
+  Future<void> _showFilterSheet(AppLocalizations l10n) async {
+    final _WorkOrdersFilter? selected =
+        await showModalBottomSheet<_WorkOrdersFilter>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: Icon(
+                _filter == _WorkOrdersFilter.all
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+              ),
+              title: Text(l10n.workOrdersFilterAll),
+              onTap: () => Navigator.pop(context, _WorkOrdersFilter.all),
+            ),
+            ListTile(
+              leading: Icon(
+                _filter == _WorkOrdersFilter.inProgress
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+              ),
+              title: Text(l10n.workOrderAdvanceToInProgress),
+              onTap: () => Navigator.pop(context, _WorkOrdersFilter.inProgress),
+            ),
+            ListTile(
+              leading: Icon(
+                _filter == _WorkOrdersFilter.completed
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+              ),
+              title: Text(l10n.workOrderAdvanceToCompleted),
+              onTap: () => Navigator.pop(context, _WorkOrdersFilter.completed),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null && mounted) setState(() => _filter = selected);
+  }
+
   Widget _body(AppLocalizations l10n) {
     if (_loading) return const TpLoadingState();
-    if (_error != null) {
-      return TpErrorState(error: _error!, onRetry: _load);
-    }
-
+    if (_error != null) return TpErrorState(error: _error!, onRetry: _load);
     final List<WorkOrderItem> shown = _shown;
 
     return Column(
       children: <Widget>[
-        Padding(
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(
             TpSpace.lg,
             TpSpace.md,
@@ -218,19 +227,27 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
             TpSpace.sm,
           ),
           child: Row(
+            key: WorkOrdersListScreenKeys.filters,
             children: <Widget>[
-              ChoiceChip(
-                label: Text(l10n.workOrdersFilterActive),
-                selected: _filter == _WorkOrdersFilter.active,
-                onSelected: (_) =>
-                    setState(() => _filter = _WorkOrdersFilter.active),
-              ),
-              const SizedBox(width: TpSpace.sm),
               ChoiceChip(
                 label: Text(l10n.workOrdersFilterAll),
                 selected: _filter == _WorkOrdersFilter.all,
                 onSelected: (_) =>
                     setState(() => _filter = _WorkOrdersFilter.all),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              ChoiceChip(
+                label: Text(l10n.workOrderAdvanceToInProgress),
+                selected: _filter == _WorkOrdersFilter.inProgress,
+                onSelected: (_) =>
+                    setState(() => _filter = _WorkOrdersFilter.inProgress),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              ChoiceChip(
+                label: Text(l10n.workOrderAdvanceToCompleted),
+                selected: _filter == _WorkOrdersFilter.completed,
+                onSelected: (_) =>
+                    setState(() => _filter = _WorkOrdersFilter.completed),
               ),
             ],
           ),
@@ -238,7 +255,7 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
         Expanded(
           child: shown.isEmpty
               ? RefreshIndicator(
-                  onRefresh: _refresh,
+                  onRefresh: _load,
                   child: ListView(
                     children: <Widget>[
                       SizedBox(
@@ -253,8 +270,9 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
                   ),
                 )
               : RefreshIndicator(
-                  onRefresh: _refresh,
+                  onRefresh: _load,
                   child: ListView.builder(
+                    key: WorkOrdersListScreenKeys.results,
                     padding: const EdgeInsets.fromLTRB(
                       TpSpace.lg,
                       0,
@@ -279,10 +297,6 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
   }
 }
 
-/// Mirrors `inspection_approvals_queue_screen.dart`'s own private
-/// `_asAppError`: any [AppError]/[SupabaseFailure] carries a message
-/// already safe to show; anything else falls back to a translated generic
-/// sentence rather than a raw driver message.
 AppError _asAppError(BuildContext context, Object error) {
   if (error is AppError) return error;
   if (error is SupabaseFailure) return error.error;
@@ -312,99 +326,118 @@ class _WorkOrderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final bool isRtl = TpDirection.isRtl(context);
-    final TextAlign textAlign = isRtl ? TextAlign.right : TextAlign.left;
     final String? next = nextWorkOrderStatus(item.status);
     final String? priority = item.priority?.trim();
+    final WorkOrderTone accentTone = priority?.isNotEmpty == true
+        ? workOrderPriorityTone(priority)
+        : workOrderStatusTone(item.status);
+    final Color accent =
+        palette.forStatus(workOrderToneToStatus(accentTone)).base;
+    final String title = item.description?.trim().isNotEmpty == true
+        ? item.description!.trim()
+        : workOrderWorkTypeLabel(l10n, item.workType);
 
-    final List<String> metaParts = <String>[
-      workOrderWorkTypeLabel(l10n, item.workType),
-      if (item.site != null && item.site!.trim().isNotEmpty) item.site!,
-    ];
-
-    return TpCard(
-      onTap: onTap,
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TpSpace.sm),
+      child: Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: WorkOrdersListScreenKeys.row(item.id),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          child: Container(
+            decoration: BoxDecoration(
+              border: BorderDirectional(
+                start: BorderSide(color: accent, width: TpBorderWidth.strong),
+                top: BorderSide(color: palette.border),
+                end: BorderSide(color: palette.border),
+                bottom: BorderSide(color: palette.border),
+              ),
+            ),
+            padding: const EdgeInsets.all(TpSpace.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Flexible(
-                      child: TpIdentifierText(
-                        item.assetNo ?? l10n.valueNotMeasured,
-                        style: Theme.of(context).textTheme.titleSmall,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: TpIdentifierText(
+                              item.workOrderNo ?? l10n.valueNotMeasured,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(color: palette.textMuted),
+                            ),
+                          ),
+                          WorkOrderStatusChip(
+                            status: item.status,
+                            isCompact: true,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
-                    ),
-                    if (item.workOrderNo != null) ...<Widget>[
-                      const SizedBox(width: TpSpace.sm),
+                      const SizedBox(height: 2),
                       TpIdentifierText(
-                        item.workOrderNo!,
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelSmall
-                            ?.copyWith(color: palette.textMuted),
+                        item.assetNo ?? l10n.valueNotMeasured,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: TpSpace.sm),
+                      Wrap(
+                        spacing: TpSpace.md,
+                        runSpacing: TpSpace.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: <Widget>[
+                          if (item.site?.trim().isNotEmpty == true)
+                            _MetaLine(
+                              icon: Icons.location_on_outlined,
+                              value: item.site!.trim(),
+                            ),
+                          if (item.openedAt?.trim().isNotEmpty == true)
+                            _MetaLine(
+                              icon: Icons.schedule_outlined,
+                              value: _formatTimestamp(item.openedAt!) ??
+                                  l10n.valueNotMeasured,
+                            ),
+                          if (priority != null && priority.isNotEmpty)
+                            WorkOrderPriorityChip(
+                              priority: priority,
+                              isCompact: true,
+                            ),
+                        ],
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  metaParts.join(' · '),
-                  textAlign: textAlign,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: palette.textSecondary),
-                ),
-                if (item.description != null &&
-                    item.description!.trim().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      item.description!,
-                      textAlign: textAlign,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: palette.textMuted),
-                    ),
                   ),
-                const SizedBox(height: TpSpace.xs),
-                Wrap(
-                  spacing: TpSpace.xs,
-                  children: <Widget>[
-                    WorkOrderStatusChip(status: item.status, isCompact: true),
-                    if (priority != null && priority.isNotEmpty)
-                      WorkOrderPriorityChip(
-                        priority: priority,
-                        isCompact: true,
-                      ),
-                  ],
                 ),
+                if (next != null) ...<Widget>[
+                  const SizedBox(width: TpSpace.sm),
+                  _AdvanceButton(
+                    key: WorkOrdersListScreenKeys.advance(item.id),
+                    label: next == kWorkOrderStatusInProgress
+                        ? l10n.workOrderAdvanceToInProgress
+                        : l10n.workOrderAdvanceToCompleted,
+                    isBusy: isAdvancing,
+                    onPressed: onAdvance,
+                  ),
+                ],
               ],
             ),
           ),
-          if (next != null) ...<Widget>[
-            const SizedBox(width: TpSpace.sm),
-            _AdvanceButton(
-              label: next == kWorkOrderStatusInProgress
-                  ? l10n.workOrderAdvanceToInProgress
-                  : l10n.workOrderAdvanceToCompleted,
-              isBusy: isAdvancing,
-              onPressed: onAdvance,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -415,6 +448,7 @@ class _AdvanceButton extends StatelessWidget {
     required this.label,
     required this.isBusy,
     required this.onPressed,
+    super.key,
   });
 
   final String label;
@@ -425,42 +459,57 @@ class _AdvanceButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     return SizedBox(
-      width: 76,
+      width: TpSizing.minTouchTarget,
+      height: TpSizing.minTouchTarget,
       child: InkWell(
         onTap: isBusy ? null : onPressed,
         borderRadius: BorderRadius.circular(TpRadius.md),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (isBusy)
-                const SizedBox(
+        child: Center(
+          child: isBusy
+              ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              else
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: TpSizing.iconSm,
-                  color: palette.primary,
+              : Tooltip(
+                  message: label,
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: TpSizing.iconSm,
+                    color: palette.primary,
+                  ),
                 ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: palette.primaryDark),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
+}
+
+class _MetaLine extends StatelessWidget {
+  const _MetaLine({required this.icon, required this.value});
+
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: TpPalette.of(context).textMuted),
+          const SizedBox(width: TpSpace.xs),
+          Text(value, style: Theme.of(context).textTheme.labelSmall),
+        ],
+      );
+}
+
+String? _formatTimestamp(String iso) {
+  final DateTime? parsed = DateTime.tryParse(iso);
+  if (parsed == null) return null;
+  final DateTime local = parsed.toLocal();
+  final String y = local.year.toString().padLeft(4, '0');
+  final String m = local.month.toString().padLeft(2, '0');
+  final String d = local.day.toString().padLeft(2, '0');
+  final String hh = local.hour.toString().padLeft(2, '0');
+  final String mm = local.minute.toString().padLeft(2, '0');
+  return '$y-$m-$d $hh:$mm';
 }

@@ -144,4 +144,20 @@ void main() {
       expect(label, isNot(contains('psi')));
     },
   );
+
+  testWidgets(
+    'tyreDiagramAccessibilityLabel announces an untouched wheel as not recorded',
+    (WidgetTester tester) async {
+      final AppLocalizations l10n = await _captureL10n(tester);
+
+      final String label = tyreDiagramAccessibilityLabel(
+        l10n,
+        code: 'LHCO',
+        condition: null,
+      );
+
+      expect(label, contains('Not recorded'));
+      expect(label, isNot(contains('Good')));
+    },
+  );
 }

@@ -26,7 +26,8 @@ String tyreConditionLabel(AppLocalizations l10n, TyreCondition condition) {
   };
 }
 
-/// Builds the spoken/read label for one wheel: `"LHCO, Good"`, or
+/// Builds the spoken/read label for one wheel: `"LHCO, Good"`,
+/// `"LHCO, Not recorded"` for an untouched seed, or
 /// `"LHCO, Good, pressure 110 psi"` when a reading was recorded.
 ///
 /// [code] is the V2 canonical GCC code - never [TyreSlot.id]. It is wrapped
@@ -38,11 +39,14 @@ String tyreConditionLabel(AppLocalizations l10n, TyreCondition condition) {
 String tyreDiagramAccessibilityLabel(
   AppLocalizations l10n, {
   required String code,
-  required TyreCondition condition,
+  required TyreCondition? condition,
   String? pressureText,
 }) {
   final String isolatedCode = TpDirection.isolateLtr(code);
-  final String base = '$isolatedCode, ${tyreConditionLabel(l10n, condition)}';
+  final String conditionText = condition == null
+      ? l10n.tyreDiagramListNotRecorded
+      : tyreConditionLabel(l10n, condition);
+  final String base = '$isolatedCode, $conditionText';
   final String? pressure = pressureText?.trim();
   if (pressure == null || pressure.isEmpty) return base;
   return '$base, ${l10n.tyreDiagramPressureDetail(pressure)}';

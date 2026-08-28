@@ -32,6 +32,8 @@ class TyreDiagramBoard extends StatefulWidget {
     this.onPositionTap,
     this.pending = TyreDiagramPending.none,
     this.width = 320,
+    this.compact = false,
+    this.captureMode = false,
     super.key,
   });
 
@@ -43,6 +45,15 @@ class TyreDiagramBoard extends StatefulWidget {
   final ValueChanged<String>? onPositionTap;
   final TyreDiagramPending pending;
   final double width;
+
+  /// Uses the approved inspection/approval mock hierarchy: the vehicle map
+  /// stays primary while the dashboard stat row and view switcher are hidden.
+  final bool compact;
+
+  /// Reproduces the focused inspection-map composition: no dashboard chrome,
+  /// visible physical-position labels, FRONT/REAR orientation, and no legend.
+  /// Opt-in so detail and approval consumers keep their existing rendering.
+  final bool captureMode;
 
   @override
   State<TyreDiagramBoard> createState() => _TyreDiagramBoardState();
@@ -62,11 +73,12 @@ class _TyreDiagramBoardState extends State<TyreDiagramBoard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        TyreDiagramStatRow(stats: stats),
-        if (stats.total > 0) ...<Widget>[
+        if (!widget.compact) TyreDiagramStatRow(stats: stats),
+        if (!widget.compact && stats.total > 0) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           Center(
             child: TpSegmented<TyreDiagramViewMode>(
+              expanded: true,
               value: _mode,
               options: <TpSegmentedOption<TyreDiagramViewMode>>[
                 TpSegmentedOption<TyreDiagramViewMode>(
@@ -86,19 +98,47 @@ class _TyreDiagramBoardState extends State<TyreDiagramBoard> {
             ),
           ),
         ],
-        const SizedBox(height: TpSpace.lg),
+        SizedBox(
+          height: widget.captureMode
+              ? 0
+              : (widget.compact ? TpSpace.sm : TpSpace.lg),
+        ),
         switch (_mode) {
-          TyreDiagramViewMode.layout => Center(
-              child: VehicleTyreDiagram(
-                vehicleType: widget.vehicleType,
-                assetNo: widget.assetNo,
-                positions: widget.positions,
-                tyreData: widget.tyreData,
-                selectedPosition: widget.selectedPosition,
-                onPositionTap: widget.onPositionTap,
-                pending: widget.pending,
-                width: widget.width,
-              ),
+          TyreDiagramViewMode.layout => LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double available = constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : widget.width;
+                final double bounded =
+                    available < widget.width ? available : widget.width;
+                final double diagramWidth = bounded - (TpSpace.lg * 2);
+                // The approved inspection and approval mocks keep the whole
+                // bird-view vehicle visible above their fixed action bar.
+                // Letting the compact board consume the full phone width
+                // makes a 4/5-axle pump or mixer taller than the viewport and
+                // hides its last joined dual axle behind that bar. The shared
+                // diagram remains full-size on asset/detail screens; only the
+                // focused capture/review presentation is capped here.
+                final double renderedWidth = widget.captureMode
+                    ? (available - 112).clamp(152, 190).toDouble()
+                    : widget.compact
+                        ? diagramWidth.clamp(176, 252).toDouble()
+                        : diagramWidth.clamp(220, widget.width).toDouble();
+                return Center(
+                  child: VehicleTyreDiagram(
+                    vehicleType: widget.vehicleType,
+                    assetNo: widget.assetNo,
+                    positions: widget.positions,
+                    tyreData: widget.tyreData,
+                    selectedPosition: widget.selectedPosition,
+                    onPositionTap: widget.onPositionTap,
+                    pending: widget.pending,
+                    width: renderedWidth,
+                    compact: widget.compact,
+                    captureMode: widget.captureMode,
+                  ),
+                );
+              },
             ),
           TyreDiagramViewMode.list => TyreDiagramListView(
               positions: widget.positions,

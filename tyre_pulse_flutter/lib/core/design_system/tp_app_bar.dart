@@ -83,7 +83,12 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
       leading: showBack
           ? IconButton(
               // Mirrors under RTL. Flutter does not flip arrow_back for us.
-              icon: Icon(isRtl ? Icons.arrow_forward : Icons.arrow_back),
+              icon: Icon(
+                isRtl
+                    ? Icons.arrow_forward_ios_rounded
+                    : Icons.arrow_back_ios_new_rounded,
+                color: palette.text,
+              ),
               tooltip: l10n.actionBack,
               onPressed: onBack ?? () => _defaultBack(context),
             )

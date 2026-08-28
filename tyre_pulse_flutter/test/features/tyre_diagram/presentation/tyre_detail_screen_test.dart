@@ -74,9 +74,9 @@ void main() {
     // Unknown status - nothing has ever been recorded for this wheel.
     expect(find.byType(TpStatusChip), findsOneWidget);
 
-    // Tread, pressure AND temperature all read unavailable - three of
-    // them, not just the always-untracked temperature.
-    expect(find.byKey(TpStatCardKeys.unavailable), findsNWidgets(3));
+    // Tread, pressure, temperature AND the server-backed remaining-life
+    // projection all read unavailable - never fabricated from a condition.
+    expect(find.byKey(TpStatCardKeys.unavailable), findsNWidgets(4));
 
     expect(find.text('Not recorded'), findsWidgets);
     // Brand, size, installed km, running km: four Additional info fields,
@@ -101,6 +101,7 @@ void main() {
         'condition': 'Worn',
         'tread_depth_mm': 4.5,
         'pressure_psi': 32,
+        'remaining_km': 18500,
         'serial_number': 'YMA55312',
         'notes': 'Slight cupping on the outer edge.',
       },
@@ -108,6 +109,7 @@ void main() {
 
     expect(find.textContaining('4.5 mm'), findsOneWidget);
     expect(find.textContaining('32 psi'), findsOneWidget);
+    expect(find.textContaining('18500 km'), findsOneWidget);
     // Temperature is NEVER tracked, recorded entry or not.
     expect(find.byKey(TpStatCardKeys.unavailable), findsOneWidget);
     expect(_identifierText('YMA55312'), findsOneWidget);
@@ -135,6 +137,39 @@ void main() {
   });
 
   testWidgets(
+      'a seeded Good map is still an untouched wheel and offers Add details',
+      (WidgetTester tester) async {
+    await _pumpDetail(
+      tester,
+      entry: const <String, Object?>{
+        'position': 'LHF1',
+        'condition': 'Good',
+        'checked': false,
+      },
+      onAdjustReading: () {},
+    );
+
+    expect(find.text('Add details'), findsOneWidget);
+    expect(find.text('Edit details'), findsNothing);
+  });
+
+  testWidgets('local inspection evidence uses a device-file image provider', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDetail(
+      tester,
+      entry: const <String, Object?>{
+        'condition': 'Damaged',
+        'photo_uri': r'C:\inspection-evidence.jpg',
+      },
+    );
+
+    expect(find.byType(Image), findsOneWidget);
+    final Image evidence = tester.widget<Image>(find.byType(Image));
+    expect(evidence.image, isA<FileImage>());
+  });
+
+  testWidgets(
       'Take action forwards this screen\'s own context, including '
       'a live onAdjustReading callback, to the Take Action screen', (
     WidgetTester tester,
@@ -142,11 +177,14 @@ void main() {
     bool invoked = false;
     await _pumpDetail(
       tester,
-      entry: const <String, Object?>{'condition': 'Good'},
+      entry: const <String, Object?>{
+        'condition': 'Good',
+        'checked': true,
+      },
       onAdjustReading: () => invoked = true,
     );
 
-    await tester.tap(find.text('Take action'));
+    await tester.tap(find.text('Edit details'));
     await tester.pumpAndSettle();
 
     expect(find.byType(TyreTakeActionScreen), findsOneWidget);

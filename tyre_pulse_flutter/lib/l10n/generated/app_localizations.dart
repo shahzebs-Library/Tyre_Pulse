@@ -1156,11 +1156,53 @@ abstract class AppLocalizations {
   /// **'Continue unfinished work'**
   String get inspectionResumeTitle;
 
-  /// Progress line on a resumable draft row.
+  /// Truthful count of tyre positions the inspector deliberately checked. This is workflow progress, not an inspection result.
   ///
   /// In en, this message translates to:
-  /// **'{filled} of {total} tyres recorded'**
+  /// **'{filled} of {total} checked'**
   String inspectionResumeProgress(int filled, int total);
+
+  /// Workflow state before the inspector has checked any tyre. Never represents a tyre condition result.
+  ///
+  /// In en, this message translates to:
+  /// **'Not started'**
+  String get inspectionWorkflowNotStarted;
+
+  /// Workflow state after at least one but not all required tyre positions have been checked.
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get inspectionWorkflowInProgress;
+
+  /// Workflow state once the tyre-position completeness gate permits review.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready for review'**
+  String get inspectionWorkflowReadyForReview;
+
+  /// One-line workflow state and checked-position count on a resumable inspection row.
+  ///
+  /// In en, this message translates to:
+  /// **'{status} • {progress}'**
+  String inspectionWorkflowResumeSummary(String status, String progress);
+
+  /// Instruction shown before the first tyre position is checked.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a tyre to add inspection details.'**
+  String get inspectionWorkflowTapTyre;
+
+  /// Instruction shown while a tyre inspection is in progress but has not passed its completeness gate.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue checking tyre positions until each has enough detail.'**
+  String get inspectionWorkflowContinueChecking;
+
+  /// Confirmation shown when every required tyre position has enough detail to proceed to review.
+  ///
+  /// In en, this message translates to:
+  /// **'All tyre positions are checked. Review and sign is ready.'**
+  String get inspectionWorkflowAllChecked;
 
   /// Lets the inspector pick a different vehicle after one has already been selected.
   ///
@@ -1251,6 +1293,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tyre positions'**
   String get inspectionTyrePositionsTitle;
+
+  /// No description provided for @inspectionDraftLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft'**
+  String get inspectionDraftLabel;
+
+  /// No description provided for @inspectionTyreConfiguration.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}-Tyre Configuration'**
+  String inspectionTyreConfiguration(int count);
+
+  /// No description provided for @inspectionStepOfTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {step} of {total}'**
+  String inspectionStepOfTotal(int step, int total);
+
+  /// No description provided for @inspectionRearLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'REAR'**
+  String get inspectionRearLabel;
+
+  /// No description provided for @inspectionSelectedTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected Tyre'**
+  String get inspectionSelectedTyre;
+
+  /// No description provided for @inspectionPressureShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Pressure'**
+  String get inspectionPressureShort;
+
+  /// No description provided for @inspectionTreadDepthShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Tread Depth'**
+  String get inspectionTreadDepthShort;
+
+  /// No description provided for @inspectionAddEvidencePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Evidence (Photo)'**
+  String get inspectionAddEvidencePhoto;
+
+  /// No description provided for @inspectionSaveAndNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Save & Next'**
+  String get inspectionSaveAndNext;
+
+  /// No description provided for @inspectionFrontLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Front Left'**
+  String get inspectionFrontLeft;
+
+  /// No description provided for @inspectionFrontRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Front Right'**
+  String get inspectionFrontRight;
+
+  /// No description provided for @inspectionInnerLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Inner Left'**
+  String get inspectionInnerLeft;
+
+  /// No description provided for @inspectionOuterLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Outer Left'**
+  String get inspectionOuterLeft;
+
+  /// No description provided for @inspectionInnerRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Inner Right'**
+  String get inspectionInnerRight;
+
+  /// No description provided for @inspectionOuterRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Outer Right'**
+  String get inspectionOuterRight;
+
+  /// No description provided for @inspectionRearLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear Left'**
+  String get inspectionRearLeft;
+
+  /// No description provided for @inspectionRearRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear Right'**
+  String get inspectionRearRight;
+
+  /// No description provided for @inspectionTyrePositionFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre position'**
+  String get inspectionTyrePositionFallback;
 
   /// Shown on a wheel position row that has not been touched.
   ///
@@ -3082,6 +3232,180 @@ abstract class AppLocalizations {
   /// **'Welcome back'**
   String get homeGreeting;
 
+  /// No description provided for @homeGoodMorning.
+  ///
+  /// In en, this message translates to:
+  /// **'Good morning,'**
+  String get homeGoodMorning;
+
+  /// No description provided for @homeGoodAfternoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Good afternoon,'**
+  String get homeGoodAfternoon;
+
+  /// No description provided for @homeGoodEvening.
+  ///
+  /// In en, this message translates to:
+  /// **'Good evening,'**
+  String get homeGoodEvening;
+
+  /// No description provided for @homeFallbackUser.
+  ///
+  /// In en, this message translates to:
+  /// **'Team member'**
+  String get homeFallbackUser;
+
+  /// No description provided for @homeSearchAssetsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search asset, tyre, job...'**
+  String get homeSearchAssetsHint;
+
+  /// No description provided for @homeAttentionRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Attention required'**
+  String get homeAttentionRequired;
+
+  /// No description provided for @homeViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get homeViewAll;
+
+  /// No description provided for @homeApprovalsMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get homeApprovalsMetric;
+
+  /// No description provided for @homeOverdueMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get homeOverdueMetric;
+
+  /// No description provided for @homeCriticalMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get homeCriticalMetric;
+
+  /// No description provided for @homeTyreIssueDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre issue detected'**
+  String get homeTyreIssueDetected;
+
+  /// No description provided for @homeNoCriticalIssueTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No critical tyre issue'**
+  String get homeNoCriticalIssueTitle;
+
+  /// No description provided for @homeNoCriticalIssueMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No active critical tyre alert was found.'**
+  String get homeNoCriticalIssueMessage;
+
+  /// No description provided for @homeReviewAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Review'**
+  String get homeReviewAction;
+
+  /// No description provided for @homeMyWork.
+  ///
+  /// In en, this message translates to:
+  /// **'My work'**
+  String get homeMyWork;
+
+  /// No description provided for @homeQuickActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick actions'**
+  String get homeQuickActions;
+
+  /// No description provided for @homeInspectAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect'**
+  String get homeInspectAction;
+
+  /// No description provided for @homeAssetAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Asset'**
+  String get homeAssetAction;
+
+  /// No description provided for @homeReportIssueAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Report issue'**
+  String get homeReportIssueAction;
+
+  /// No description provided for @homeOpenAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get homeOpenAction;
+
+  /// No description provided for @homeNoUrgentWorkTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No urgent work'**
+  String get homeNoUrgentWorkTitle;
+
+  /// No description provided for @homeNoUrgentWorkMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No overdue or high-priority task is assigned.'**
+  String get homeNoUrgentWorkMessage;
+
+  /// No description provided for @homeMoreAction.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get homeMoreAction;
+
+  /// No description provided for @homeAlertsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get homeAlertsAction;
+
+  /// No description provided for @homeMenuTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open services'**
+  String get homeMenuTooltip;
+
+  /// No description provided for @homeNotificationsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open tyre alerts'**
+  String get homeNotificationsTooltip;
+
+  /// No description provided for @homeSiteSelectorTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'View current site'**
+  String get homeSiteSelectorTooltip;
+
+  /// No description provided for @homeReportIssueSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an issue'**
+  String get homeReportIssueSheetTitle;
+
+  /// No description provided for @homeReportAccidentAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Report an accident'**
+  String get homeReportAccidentAction;
+
   /// No description provided for @homeFieldSectionHeading.
   ///
   /// In en, this message translates to:
@@ -3820,6 +4144,36 @@ abstract class AppLocalizations {
   /// **'Take action'**
   String get tyreDetailTakeActionButton;
 
+  /// No description provided for @tyreDetailAddDetailsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Add details'**
+  String get tyreDetailAddDetailsButton;
+
+  /// No description provided for @tyreDetailEditDetailsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit details'**
+  String get tyreDetailEditDetailsButton;
+
+  /// No description provided for @tyreDetailRemainingKmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining life'**
+  String get tyreDetailRemainingKmLabel;
+
+  /// No description provided for @tyreDetailRemainingKmCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet life projection'**
+  String get tyreDetailRemainingKmCaption;
+
+  /// No description provided for @tyreDetailRemainingKmUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No measured life projection'**
+  String get tyreDetailRemainingKmUnavailable;
+
   /// No description provided for @tyreDetailNoEvidenceMessage.
   ///
   /// In en, this message translates to:
@@ -4192,6 +4546,90 @@ abstract class AppLocalizations {
   /// **'{minutes, plural, =1{Too many failed attempts. Try again in 1 minute.} other{Too many failed attempts. Try again in {minutes} minutes.}}'**
   String loginErrorLocked(int minutes);
 
+  /// Generic product description on every country-specific login screen. PMV is the product's established operational acronym.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete PMV Operations'**
+  String get loginOperationsTitle;
+
+  /// No description provided for @loginWelcomeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome back'**
+  String get loginWelcomeTitle;
+
+  /// No description provided for @loginWelcomeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to your assigned operations'**
+  String get loginWelcomeSubtitle;
+
+  /// No description provided for @loginSelectCountryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select your country'**
+  String get loginSelectCountryTitle;
+
+  /// No description provided for @loginSelectCountrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the country for your assigned operations.'**
+  String get loginSelectCountrySubtitle;
+
+  /// No description provided for @loginChangeCountryAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Change country'**
+  String get loginChangeCountryAction;
+
+  /// No description provided for @loginCountrySaudiArabia.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Arabia'**
+  String get loginCountrySaudiArabia;
+
+  /// No description provided for @loginCountryUnitedArabEmirates.
+  ///
+  /// In en, this message translates to:
+  /// **'United Arab Emirates'**
+  String get loginCountryUnitedArabEmirates;
+
+  /// No description provided for @loginCountryEgypt.
+  ///
+  /// In en, this message translates to:
+  /// **'Egypt'**
+  String get loginCountryEgypt;
+
+  /// Accessibility label for the control that opens the country selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Country selector'**
+  String get loginCountrySelectorSemantics;
+
+  /// Accessibility value announced for the currently selected login country.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected country: {country}'**
+  String loginSelectedCountrySemantics(String country);
+
+  /// Concise capability label on the login screen; it names the fleet and asset registers without implying any live count.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet & assets'**
+  String get loginScopeFleetAssets;
+
+  /// Concise capability label on the login screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspections & checklists'**
+  String get loginScopeInspectionsChecklists;
+
+  /// Concise capability label on the login screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance & workshop'**
+  String get loginScopeMaintenanceWorkshop;
+
   /// No description provided for @profileNavTitle.
   ///
   /// In en, this message translates to:
@@ -4210,6 +4648,72 @@ abstract class AppLocalizations {
   /// **'Platform administrator'**
   String get profileSuperAdminBadge;
 
+  /// No description provided for @accidentReportCaptureSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Private evidence capture'**
+  String get accidentReportCaptureSubtitle;
+
+  /// No description provided for @accidentSubmitUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Submission is unavailable until the protected sync pipeline guarantees every private evidence photo is uploaded before the accident row. Captured photos remain on this device.'**
+  String get accidentSubmitUnavailable;
+
+  /// No description provided for @tasksCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=My Work~today=Today~inProgress=In Progress~completed=Completed~urgent=Urgent~upcoming=Upcoming~open=open~emptyTitle=No tasks~emptyMessage=No work matches this view.~loadError=My work could not be loaded right now.~due=Due~assigned=Assigned to~unassigned=Unassigned~normal=Normal~overdue=Overdue~details=Task details~description=Description~site=Site~asset=Asset~priority=Priority~status=Status~retry=Retry'**
+  String get tasksCopyCatalog;
+
+  /// No description provided for @alertsCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry'**
+  String get alertsCopyCatalog;
+
+  /// No description provided for @notificationInboxCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You\'re all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago'**
+  String get notificationInboxCopyCatalog;
+
+  /// No description provided for @reportIssueCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Report an Issue~problem=What is the problem?~problemHint=Briefly describe the issue~priority=Priority~low=Low~medium=Medium~high=High~critical=Critical~site=Site~siteHint=Where the issue was found~asset=Asset~assetHint=Asset number~due=Due in~noDate=No date~threeDays=3 days~oneWeek=1 week~twoWeeks=2 weeks~details=Details~detailsHint=Add symptoms, location and any immediate action taken~photos=Photos~optional=(optional)~addPhoto=Add photo~camera=Camera~gallery=Gallery~photoFailed=The photo could not be added.~submit=Raise Issue~titleRequired=Enter a problem title before saving.~workspaceUnavailable=Your workspace is still loading. Try again in a moment.~savedTitle=Issue saved~savedBody=The issue is in My Work and will sync automatically.~stay=Stay here~viewTasks=View My Work~saveFailed=The issue could not be saved. Try again.'**
+  String get reportIssueCopyCatalog;
+
+  /// No description provided for @rcaCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Root Cause Analysis~records=records~newRecord=New RCA~none=No RCA records~noneBody=Completed root-cause records will appear here.~unknown=Unknown asset~asset=Asset~serial=Tyre serial~brand=Brand~site=Site~km=Kilometres at failure~factors=Contributing factors~rootCause=Root cause~photos=Evidence photos~photo=Photo~addPhoto=Add photo~camera=Camera~gallery=Gallery~photoFailed=The photo could not be added.~save=Save RCA~missingCause=Enter the root cause before saving.~invalidKm=Enter a valid kilometre reading.~loadFailed=The RCA records could not be loaded.~saveFailed=The RCA could not be saved. Try again.'**
+  String get rcaCopyCatalog;
+
+  /// No description provided for @pmCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Preventive Maintenance~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.'**
+  String get pmCopyCatalog;
+
+  /// No description provided for @stockCountCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand'**
+  String get stockCountCopyCatalog;
+
+  /// No description provided for @calendarCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Calendar~scheduled=scheduled~overdue=Overdue~today=Due today~week=This week~later=Later~inspection=Inspection~maintenance=Maintenance~task=Corrective task~empty=Nothing scheduled~emptyBody=Upcoming inspections, maintenance and corrective tasks will appear here.~loadFailed=The schedule could not be loaded.'**
+  String get calendarCopyCatalog;
+
+  /// No description provided for @managementCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'overviewTitle=Fleet Overview~analyticsTitle=Fleet Analytics~reportsTitle=Reports~reportsSubtitle=Authoritative executive snapshot~teamTitle=Team~last=Last~days=days~days30=30 days~days90=90 days~year1=1 year~allSites=All sites~tyres=Tyres~vehicles=Vehicles~critical=Critical~openActions=Open actions~highRisk=High risk~inspections30=Inspections (30d)~tyreSpend=Tyre spend~risk=Risk distribution~sites=Top sites~brands=Top brands~analyticsFailed=Analytics could not be loaded.~reportsFailed=Report data could not be loaded.~reportUnavailable=Live report unavailable~reportUnavailableBody=The authoritative server snapshot is not available. No figures were fabricated.~retry=Retry~generated=Generated~costPerformance=Cost and performance~fleet=Fleet~tyre_spend=Tyre spend~accidents=Accidents~open_accidents=Open accidents~claims_claimed=Claims submitted~claims_recovered=Claims recovered~inspections=Inspections~work_orders_open=Open work orders~tyre_cost=Tyre cost~maintenance_cost=Maintenance cost~total_cost=Total cost~km=Kilometres~engine_hours=Engine hours~m3=Production m3~cost_per_km=Cost per km~cost_per_hour=Cost per hour~cost_per_m3=Cost per m3~tyre_cpk=Tyre CPK~severity=Accident severity~accidents_by_site=Accidents by site~tyres_by_site=Tyres by site~claim_status=Claim status~members=members~manage=Manage team~active=Active~pending=Pending~teamSearch=Search name, role or site~noMembers=No team members~trySearch=Try a different search.~teamFailed=The team directory could not be loaded.'**
+  String get managementCopyCatalog;
+
   /// No description provided for @profileSignOutConfirmTitle.
   ///
   /// In en, this message translates to:
@@ -4221,6 +4725,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You will need to sign in again to continue working. Anything already saved on this device stays saved.'**
   String get profileSignOutConfirmMessage;
+
+  /// No description provided for @accidentCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'loadFailed=The accident record could not be loaded. Try again.~notRecorded=Not recorded~dashboardTitle=Accident command centre~dashboardSubtitle=Live register • permission-scoped~reportAction=Report accident~reportShort=Report~loadingRegister=Loading accident register…~dashboardEyebrow=PMV incident control~dashboardHeroTitle=Every case, one accountable trail~dashboardHeroMessage=Fleet, insurance, workshop, QC, handover and recovery remain visible without invented KPIs.~searchHint=Search asset, reference, site or location~allCases=All cases~reportedByMe=Reported by me~anyStatus=Any status~open=Open~closed=Closed~noMatches=No matching cases~noMatchesMessage=Change the filters or create a new accident report.~loadMore=Load more cases~loading=Loading…~detailTitle=Accident detail~loadingFacts=Loading case facts…~notFound=Accident not found~notFoundMessage=This record is outside your access scope or no longer exists.~openFlow=Open accountable case flow~incidentFacts=Incident facts~incidentFactsHint=Reporter evidence and vehicle identity~liability=Liability & payment~liabilityHint=Who was at fault, liable and expected to pay~insurance=Insurance & recovery~insuranceHint=Claim and recovery remain distinct from closure~workshopRelease=Workshop & release~workshopReleaseHint=Assessment, repair, QC and vehicle return~closure=Closure controls~closureHint=Legacy approval and modern case status remain separate~vehicleType=Vehicle type~plate=Plate / fleet number~type=Accident type~severity=Severity~reporter=Reporter~evidenceFiles=Evidence files~description=Description~damage=Damage~fault=Fault status~responsible=Responsible party~liable=Liable party~payer=Payer~insurer=Insurer~policy=Policy~claimNo=Claim number~claimStatus=Claim status~claimed=Claimed amount~approved=Approved amount~recoveryStatus=Recovery status~recovered=Recovered amount~repairType=Repair type~workshop=Workshop~repairCost=Repair cost~expectedRelease=Expected release~actualRelease=Actual release~nextAction=Next action~workflowStage=Workflow stage~caseStatus=Case status~closureRequest=Closure request~closureLevel=Closure level~caseTitle=Case accountability~loadingWorkstreams=Loading case workstreams…~caseNotFound=Case not found~caseNotFoundMessage=This accident is outside your permission scope or no longer exists.~endToEnd=End-to-end case flow~notActivated=Case workflow not activated~notActivatedMessage=The incident exists, but the workstream model is not provisioned. No progress was inferred.~noWorkstreams=No workstreams assigned~noWorkstreamsMessage=The case model is available, but this accident has no routed workstreams yet.~timeline=Accountable timeline~timelineHint=Read-only truth from the case workstream ledger~boundary=Control boundary~boundaryHint=Actions are intentionally not fabricated~boundaryMessage=Insurance, assessment, repair, QC, handover, closure and recovery decisions require verified server actions. This view offers no unsafe direct edits.~done=Done~inProgress=In progress~pending=Pending~notRequired=Not required~reason=Reason~wsIncident=Incident & evidence~wsFleet=Fleet validation~wsLiability=Liability & safety~wsInsurance=Insurance claim~wsAssessment=Workshop assessment~wsRepair=Repair execution~wsQc=Workshop QC~wsHandover=Vehicle handover~wsFinance=Recovery & finance~wsCorrective=Corrective actions~selectAsset=Select fleet asset~changeAsset=Change fleet asset~assetSearch=Asset, fleet number, plate or model~unrecordedAsset=Unrecorded asset~photoFailed=The evidence photo could not be saved. Try again.~workspaceLoading=Your workspace is still loading. Try again.~required=Asset, site, description and at least one evidence photo are required.~fieldsDropped=The report could not preserve every field. Nothing was presented as submitted.~saveFailed=The report could not be saved on this device. Try again.~saved=Report saved~savedTitle=Accident report saved safely~savedMessage=The report and evidence are in the device sync queue and will upload under the active workspace.~backRegister=Back to accident register~reportTitle=Report an accident~reportSubtitle=Offline-safe evidence capture~firstResponse=First response~captureFacts=Capture facts at the scene~captureFactsMessage=Select the asset first so PMV master data can fill its site and identity. At least one evidence photo is mandatory.~assetLocation=1. Asset & location~assetLocationHint=Fleet master is authoritative when available~fleetUnavailable=Fleet lookup is unavailable. Manual entry remains available.~assetNo=Asset number~site=Site~exactLocation=Exact incident location~classification=2. Classification~classificationHint=Initial field classification can be reviewed later~minor=Minor~moderate=Moderate~severe=Severe~fatal=Fatal~collision=Collision~rollover=Rollover~propertyDamage=Property damage~other=Other~whatHappened=What happened?~notes=Immediate notes~evidence=3. Evidence~evidenceAttached=evidence photo(s) attached • minimum 1~camera=Camera~gallery=Gallery~evidencePhoto=Evidence photo~removePhoto=Remove photo~saveReport=Save accident report'**
+  String get accidentCopyCatalog;
 }
 
 class _AppLocalizationsDelegate

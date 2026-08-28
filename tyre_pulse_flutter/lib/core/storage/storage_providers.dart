@@ -8,6 +8,8 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
@@ -26,4 +28,16 @@ import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 final Provider<SecureKeyValueStore> secureStoreProvider =
     Provider<SecureKeyValueStore>(
   (ref) => StagedSecureStore(slots: FlutterSecureSlotStore()),
+);
+
+/// Authenticated, read-only resolution for private evidence references.
+///
+/// This never creates a public URL: Supabase mints a short-lived signed URL
+/// after applying the signed-in user's Storage RLS policy.
+final Provider<PrivateStorageReferenceResolver>
+    privateStorageReferenceResolverProvider =
+    Provider<PrivateStorageReferenceResolver>(
+  (ref) => PrivateStorageReferenceResolver.supabase(
+    ref.watch(supabaseClientProvider),
+  ),
 );

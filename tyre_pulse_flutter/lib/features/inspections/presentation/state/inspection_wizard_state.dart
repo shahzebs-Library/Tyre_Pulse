@@ -87,12 +87,16 @@ class InspectionWizardState {
   int get touchedCount =>
       tyreConditions.values.where((r) => r.isTouched).length;
 
-  TyreCompletenessResult get completeness =>
-      tyreCompleteness(selectedVehicleType, selectedAssetNo, <String, Object?>{
-        for (final MapEntry<String, TyrePositionReading> e
-            in tyreConditions.entries)
-          e.key: e.value.toEntry(),
-      });
+  TyreCompletenessResult get completeness => tyreCompleteness(
+        selectedVehicleType,
+        selectedAssetNo,
+        <String, Object?>{
+          for (final MapEntry<String, TyrePositionReading> e
+              in tyreConditions.entries)
+            e.key: e.value.toEntry(),
+        },
+        kInspectionCompletenessOptions,
+      );
 
   List<InspectionSubmitIssue> get submitIssues =>
       validateInspectionForSubmit(_asPayload());

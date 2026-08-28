@@ -30,10 +30,13 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -61,6 +64,12 @@ class VehiclesListScreen extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<VehiclesListScreen> createState() => _VehiclesListScreenState();
+}
+
+@visibleForTesting
+abstract final class VehiclesListScreenKeys {
+  static const Key search = Key('vehicles.search');
+  static Key asset(String id) => Key('vehicles.asset.$id');
 }
 
 class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
@@ -111,13 +120,27 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
       vehicleFleetListProvider,
     );
 
-    return TpScaffold(
-      backFallback: widget.backFallback,
-      appBar: TpAppBar(
-        title: l10n.vehiclesTitle,
-        backFallback: widget.backFallback,
+    return Theme(
+      data: TpTheme.dark,
+      child: Builder(
+        builder: (BuildContext darkContext) => TpScaffold(
+          backFallback: widget.backFallback,
+          appBar: TpAppBar(
+            title: l10n.vehiclesTitle,
+            backFallback: widget.backFallback,
+            actions: <Widget>[
+              IconButton(
+                tooltip: l10n.scannerTitle,
+                onPressed: () => darkContext.push(
+                  const ScannerRoute().location,
+                ),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+              ),
+            ],
+          ),
+          body: _buildBody(darkContext, l10n, outcomeAsync),
+        ),
       ),
-      body: _buildBody(context, l10n, outcomeAsync),
     );
   }
 
@@ -205,14 +228,29 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(
             TpSpace.lg,
-            TpSpace.sm,
+            TpSpace.md,
             TpSpace.lg,
             TpSpace.xs,
           ),
-          child: TpSearchField(
-            controller: _searchController,
-            hint: l10n.vehiclesSearchHint,
-            onChanged: (String value) => setState(() => _searchTerm = value),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: KeyedSubtree(
+                  key: VehiclesListScreenKeys.search,
+                  child: TpSearchField(
+                    controller: _searchController,
+                    hint: l10n.vehiclesSearchHint,
+                    onChanged: (String value) =>
+                        setState(() => _searchTerm = value),
+                  ),
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              _SquareScannerButton(
+                tooltip: l10n.scannerTitle,
+                onTap: () => context.push(const ScannerRoute().location),
+              ),
+            ],
           ),
         ),
         Padding(
@@ -241,7 +279,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                       ? l10n.vehiclesEmptySearchMessage
                       : null,
                 )
-              : ListView.builder(
+              : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(
                     TpSpace.lg,
                     TpSpace.sm,
@@ -249,10 +287,14 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                     TpSpace.xxl,
                   ),
                   itemCount: filtered.length,
+                  separatorBuilder: (BuildContext context, int index) =>
+                      const SizedBox(height: TpSpace.sm),
                   itemBuilder: (BuildContext context, int index) {
                     final VehicleAsset asset = filtered[index];
-                    return TpAssetCard(
-                      asset: _summaryFor(asset, l10n),
+                    return _FleetAssetCard(
+                      key: VehiclesListScreenKeys.asset(asset.id),
+                      asset: asset,
+                      unknownAssetLabel: l10n.vehiclesUnknownAsset,
                       onTap: asset.hasNavigableAssetNo
                           ? () => _openDetail(asset.assetNo!)
                           : null,
@@ -282,38 +324,200 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   }
 }
 
-/// Maps a [VehicleAsset] onto [TpAssetCard]'s view model.
-///
-/// Lives here, not on [VehicleAsset] itself, because the "Unknown vehicle"
-/// fallback text needs [AppLocalizations] - a domain model must not resolve
-/// its own translated strings. See `vehicle_asset.dart`'s library comment.
-TpAssetSummary _summaryFor(VehicleAsset asset, AppLocalizations l10n) {
-  final String identity = asset.displayIdentity ?? l10n.vehiclesUnknownAsset;
-  final String? description = _joinNonEmpty(
-    <String?>[
-      asset.make,
-      asset.model,
-      asset.vehicleType,
-    ],
-    separator: ', ',
-  );
-  final int? km = asset.currentKm;
-  final String? detail = _joinNonEmpty(
-    <String?>[
-      km != null ? '${formatVehicleOdometer(km)} km' : null,
-      asset.tyreSize,
-    ],
-    separator: ', ',
-  );
+class _SquareScannerButton extends StatelessWidget {
+  const _SquareScannerButton({
+    required this.tooltip,
+    required this.onTap,
+  });
 
-  return TpAssetSummary(
-    assetNo: identity,
-    description: description,
-    siteName: asset.site,
-    detail: detail,
-    status: vehicleStatusTone(asset.status),
-    statusLabel: asset.status,
-  );
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Material(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          child: SizedBox.square(
+            dimension: TpSizing.controlHeight,
+            child: Icon(
+              Icons.qr_code_scanner_rounded,
+              color: palette.text,
+              size: TpSizing.iconLg,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The production fleet row rendered in the compact black/yellow mock style.
+/// The leading artwork slot uses a real Material class icon because the
+/// verified `vehicle_fleet` row has no image column; showing a made-up vehicle
+/// photograph would misrepresent the asset.
+class _FleetAssetCard extends StatelessWidget {
+  const _FleetAssetCard({
+    required this.asset,
+    required this.unknownAssetLabel,
+    this.onTap,
+    super.key,
+  });
+
+  final VehicleAsset asset;
+  final String unknownAssetLabel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String identity = asset.displayIdentity ?? unknownAssetLabel;
+    final String? description = _joinNonEmpty(
+      <String?>[asset.make, asset.model, asset.vehicleType],
+      separator: ' · ',
+    );
+    final String? contextLine = _joinNonEmpty(
+      <String?>[
+        asset.site,
+        if (asset.currentKm != null)
+          '${formatVehicleOdometer(asset.currentKm!)} km',
+      ],
+      separator: ' · ',
+    );
+    final TpStatusColors statusColors = palette.forStatus(
+      vehicleStatusTone(asset.status),
+    );
+
+    return Semantics(
+      button: onTap != null,
+      label: identity,
+      child: Material(
+        color: palette.surfaceAlt,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: palette.border),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(TpSpace.sm),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 62,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: palette.surfaceSunken,
+                    borderRadius: BorderRadius.circular(TpRadius.sm),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    _assetIcon(asset),
+                    size: 32,
+                    color: palette.primary,
+                  ),
+                ),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      TpIdentifierText(
+                        identity,
+                        style: text.titleMedium?.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (description != null) ...<Widget>[
+                        const SizedBox(height: 2),
+                        Text(
+                          description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.labelSmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 2),
+                      Row(
+                        children: <Widget>[
+                          if (asset.status?.trim().isNotEmpty == true)
+                            Text(
+                              asset.status!.trim(),
+                              style: text.labelSmall?.copyWith(
+                                color: statusColors.base,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          if (asset.status?.trim().isNotEmpty == true &&
+                              contextLine != null)
+                            Text(
+                              '  ·  ',
+                              style: text.labelSmall?.copyWith(
+                                color: palette.textMuted,
+                              ),
+                            ),
+                          if (contextLine != null)
+                            Expanded(
+                              child: Text(
+                                contextLine,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelSmall?.copyWith(
+                                  color: palette.textMuted,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Icon(
+                  Directionality.of(context) == TextDirection.rtl
+                      ? Icons.chevron_left_rounded
+                      : Icons.chevron_right_rounded,
+                  color: palette.textMuted,
+                  size: TpSizing.iconMd,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+IconData _assetIcon(VehicleAsset asset) {
+  final String type = <String?>[
+    asset.vehicleType,
+    asset.make,
+    asset.model,
+    asset.assetNo,
+  ].whereType<String>().join(' ').toLowerCase();
+  if (type.contains('loader')) return Icons.construction_outlined;
+  if (type.contains('bus') || type.contains('hiace')) {
+    return Icons.directions_bus_outlined;
+  }
+  if (type.contains('pickup')) return Icons.airport_shuttle_outlined;
+  if (type.contains('generator') || type.contains('chiller')) {
+    return Icons.precision_manufacturing_outlined;
+  }
+  if (type.contains('trailer')) return Icons.rv_hookup_outlined;
+  return Icons.local_shipping_outlined;
 }
 
 /// Joins the non-blank values in [parts] with [separator]. Returns null when

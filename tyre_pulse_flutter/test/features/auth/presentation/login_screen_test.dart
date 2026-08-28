@@ -37,6 +37,7 @@
 library;
 
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,17 +49,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
+import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/auth/data/login_country_preference_repository.dart';
+import 'package:tyre_pulse/features/auth/domain/login_country.dart';
+import 'package:tyre_pulse/features/auth/presentation/login_country_preference_provider.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_screen.dart';
+import 'package:tyre_pulse/features/auth/presentation/widgets/login_country_hero.dart';
 
 import '../../../core/auth/auth_test_support.dart';
 
 final class _Pumped {
-  const _Pumped({required this.auth, required this.container});
+  const _Pumped({
+    required this.auth,
+    required this.container,
+    required this.countryRepository,
+  });
 
   final FakeAuthRepository auth;
 
@@ -66,13 +76,49 @@ final class _Pumped {
   /// public `container.read(provider)` path - never through
   /// `TpLocaleController.state`, which the framework marks `@protected`.
   final ProviderContainer container;
+  final _LoginCountryRepository countryRepository;
+}
+
+final class _LoginCountryRepository
+    implements LoginCountryPreferenceRepository {
+  _LoginCountryRepository(this.value);
+
+  LoginCountry? value;
+  Object? readFailure;
+  Object? saveFailure;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<LoginCountry?> read() async {
+    if (readFailure case final Object error) {
+      Error.throwWithStackTrace(error, StackTrace.current);
+    }
+    return value;
+  }
+
+  @override
+  Future<void> save(LoginCountry country) async {
+    if (saveFailure case final Object error) {
+      Error.throwWithStackTrace(error, StackTrace.current);
+    }
+    value = country;
+  }
 }
 
 /// Matches `auth_controller_test.dart`'s own short default.
 const Duration _kRestoreTimeout = Duration(milliseconds: 30);
 
-Future<_Pumped> _pump(WidgetTester tester) async {
+Future<_Pumped> _pump(
+  WidgetTester tester, {
+  Locale locale = const Locale('en'),
+  LoginCountry? country = LoginCountry.saudiArabia,
+}) async {
   final FakeAuthRepository auth = FakeAuthRepository();
+  final _LoginCountryRepository countryRepository = _LoginCountryRepository(
+    country,
+  );
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       ...authTestOverrides(
@@ -82,6 +128,9 @@ Future<_Pumped> _pump(WidgetTester tester) async {
         secureStore: FakeSecureStore(),
         foreground: FakeForegroundSignal(),
         restoreTimeout: _kRestoreTimeout,
+      ),
+      loginCountryPreferenceRepositoryProvider.overrideWithValue(
+        countryRepository,
       ),
     ],
   );
@@ -100,7 +149,7 @@ Future<_Pumped> _pump(WidgetTester tester) async {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
-        locale: const Locale('en'),
+        locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
         home: const LoginScreen(route: LoginRoute()),
@@ -109,12 +158,17 @@ Future<_Pumped> _pump(WidgetTester tester) async {
   );
   await tester.pump();
 
-  return _Pumped(auth: auth, container: container);
+  return _Pumped(
+    auth: auth,
+    container: container,
+    countryRepository: countryRepository,
+  );
 }
 
 Finder _identifierField() => find.byType(TextField).at(0);
 Finder _passwordField() => find.byType(TextField).at(1);
 Finder _submitButton() => find.widgetWithText(TpButton, 'Sign in');
+Finder _passwordToggle() => find.byType(IconButton);
 
 Future<void> _fillValidCredentials(WidgetTester tester) async {
   await tester.enterText(_identifierField(), 'tyreman@example.com');
@@ -292,4 +346,319 @@ void main() {
       expect(enChip.variant, TpButtonVariant.secondary);
     },
   );
+
+  testWidgets(
+    'compact phone and keyboard-height layouts remain scrollable without '
+    'overflow and keep the real submit action reachable',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 480);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final _Pumped p = await _pump(tester);
+      p.auth.signInHandler =
+          (String identifier, String password) async => const SignInSucceeded();
+
+      expect(find.byKey(const Key('login.brand.panel')), findsOneWidget);
+      expect(find.byKey(const Key('login.form.card')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _fillValidCredentials(tester);
+      await tester.showKeyboard(_passwordField());
+      await tester.ensureVisible(_submitButton());
+      await tester.pump();
+
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(_submitButton());
+      await tester.pump();
+      await tester.pump();
+
+      expect(p.auth.calls, <String>['signIn']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Arabic uses true RTL in the compact layout and selects the Arabic '
+    'language control without changing login behaviour',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(tester, locale: const Locale('ar'));
+
+      final BuildContext panelContext = tester.element(
+        find.byKey(const Key('login.brand.panel')),
+      );
+      expect(Directionality.of(panelContext), TextDirection.rtl);
+      final TpButton arChip = tester.widget<TpButton>(
+        find.byKey(const Key('login.language.ar')),
+      );
+      expect(arChip.variant, TpButtonVariant.primary);
+      expect(find.byType(TextField), findsNWidgets(2));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'wide screens use the richer split hero and form hierarchy without '
+    'duplicating either panel',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(tester);
+
+      final Finder brand = find.byKey(const Key('login.brand.panel'));
+      final Finder form = find.byKey(const Key('login.form.card'));
+      expect(brand, findsOneWidget);
+      expect(form, findsOneWidget);
+      expect(tester.getTopLeft(brand).dx, lessThan(tester.getTopLeft(form).dx));
+      expect(find.text('Complete PMV Operations'), findsOneWidget);
+      expect(find.text('Saudi Arabia'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('assets/login/saudi_arabia_hero.png'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a remembered Egypt selection renders the Egypt identity without '
+    'changing the shared authentication form',
+    (WidgetTester tester) async {
+      await _pump(tester, country: LoginCountry.egypt);
+
+      expect(find.text('Egypt'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('assets/login/egypt_hero.png')),
+        findsOneWidget,
+      );
+      expect(find.byType(TextField), findsNWidgets(2));
+      expect(_submitButton(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'country selector switches to UAE and durably remembers the visual choice',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pump(tester);
+
+      await tester.tap(find.byKey(LoginCountryKeys.change));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(LoginCountryKeys.picker), findsOneWidget);
+      await tester.tap(
+        find.byKey(
+          LoginCountryKeys.option(LoginCountry.unitedArabEmirates),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        p.countryRepository.value,
+        LoginCountry.unitedArabEmirates,
+      );
+      expect(find.text('United Arab Emirates'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'assets/login/united_arab_emirates_hero.png',
+          ),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'first launch asks for a country and persists the selected presentation',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pump(tester, country: null);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(LoginCountryKeys.picker), findsOneWidget);
+      await tester.tap(
+        find.byKey(LoginCountryKeys.option(LoginCountry.egypt)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(p.countryRepository.value, LoginCountry.egypt);
+      expect(find.byKey(LoginCountryKeys.picker), findsNothing);
+      expect(find.text('Egypt'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Urdu uses true RTL while all three native-language controls remain '
+    'available and Urdu is selected',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(tester, locale: const Locale('ur'));
+
+      final BuildContext formContext = tester.element(
+        find.byKey(const Key('login.form.card')),
+      );
+      expect(Directionality.of(formContext), TextDirection.rtl);
+      expect(find.text('English'), findsOneWidget);
+      expect(find.text('العربية'), findsOneWidget);
+      expect(find.text('اردو'), findsOneWidget);
+      final TpButton urChip = tester.widget<TpButton>(
+        find.byKey(const Key('login.language.ur')),
+      );
+      expect(urChip.variant, TpButtonVariant.primary);
+      expect(find.text('سائن اِن'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'language controls, password toggle, and submit action all keep the '
+    '48dp field-use touch target',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(tester);
+
+      for (final String language in <String>['en', 'ar', 'ur']) {
+        final Size size = tester.getSize(
+          find.byKey(Key('login.language.$language')),
+        );
+        expect(size.width, greaterThanOrEqualTo(TpSizing.minTouchTarget));
+        expect(size.height, greaterThanOrEqualTo(TpSizing.minTouchTarget));
+      }
+      expect(
+        tester.getSize(_passwordToggle()).shortestSide,
+        greaterThanOrEqualTo(TpSizing.minTouchTarget),
+      );
+      expect(
+        tester.getSize(_submitButton()).height,
+        greaterThanOrEqualTo(TpSizing.minTouchTarget),
+      );
+    },
+  );
+
+  testWidgets(
+    'brand and form titles are semantic headings and the active language '
+    'announces its selected state',
+    (WidgetTester tester) async {
+      await _pump(tester);
+
+      expect(
+        tester.getSemantics(find.text('Tyre Pulse')).flagsCollection.isHeader,
+        isTrue,
+      );
+      expect(
+        tester
+            .getSemantics(find.text('Welcome back').first)
+            .flagsCollection
+            .isHeader,
+        isTrue,
+      );
+      expect(
+        tester
+            .getSemantics(find.byKey(const Key('login.language.en')))
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+      );
+      expect(
+        tester
+            .getSemantics(find.byKey(const Key('login.language.ar')))
+            .flagsCollection
+            .isSelected,
+        Tristate.isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'password visibility toggle changes obscuring and keeps its localized '
+    'tooltip contract',
+    (WidgetTester tester) async {
+      await _pump(tester);
+
+      expect(tester.widget<TextField>(_passwordField()).obscureText, isTrue);
+      expect(find.byTooltip('Show password'), findsOneWidget);
+
+      await tester.tap(_passwordToggle());
+      await tester.pump();
+
+      expect(tester.widget<TextField>(_passwordField()).obscureText, isFalse);
+      expect(find.byTooltip('Hide password'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'editing either credential clears stale error and lockout feedback '
+    'without making another authentication call',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pump(tester);
+      p.auth.signInHandler =
+          (String identifier, String password) async => const SignInLocked(5);
+
+      await _fillValidCredentials(tester);
+      await tester.tap(_submitButton());
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(LoginBannerKeys.locked), findsOneWidget);
+
+      await tester.enterText(_identifierField(), 'changed@example.com');
+      await tester.pump();
+
+      expect(find.byKey(LoginBannerKeys.locked), findsNothing);
+      expect(find.byKey(LoginBannerKeys.error), findsNothing);
+      expect(p.auth.calls, <String>['signIn']);
+    },
+  );
+
+  testWidgets('design QA capture: compact English', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pump(tester);
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/login_compact_en.png'),
+    );
+  });
+
+  testWidgets('design QA capture: wide Arabic RTL', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pump(tester, locale: const Locale('ar'));
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/login_wide_ar.png'),
+    );
+  });
 }

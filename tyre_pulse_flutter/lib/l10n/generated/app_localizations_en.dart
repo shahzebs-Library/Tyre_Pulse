@@ -635,8 +635,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String inspectionResumeProgress(int filled, int total) {
-    return '$filled of $total tyres recorded';
+    return '$filled of $total checked';
   }
+
+  @override
+  String get inspectionWorkflowNotStarted => 'Not started';
+
+  @override
+  String get inspectionWorkflowInProgress => 'In progress';
+
+  @override
+  String get inspectionWorkflowReadyForReview => 'Ready for review';
+
+  @override
+  String inspectionWorkflowResumeSummary(String status, String progress) {
+    return '$status • $progress';
+  }
+
+  @override
+  String get inspectionWorkflowTapTyre =>
+      'Tap a tyre to add inspection details.';
+
+  @override
+  String get inspectionWorkflowContinueChecking =>
+      'Continue checking tyre positions until each has enough detail.';
+
+  @override
+  String get inspectionWorkflowAllChecked =>
+      'All tyre positions are checked. Review and sign is ready.';
 
   @override
   String get inspectionChangeVehicleButton => 'Change';
@@ -683,6 +709,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get inspectionTyrePositionsTitle => 'Tyre positions';
+
+  @override
+  String get inspectionDraftLabel => 'Draft';
+
+  @override
+  String inspectionTyreConfiguration(int count) {
+    return '$count-Tyre Configuration';
+  }
+
+  @override
+  String inspectionStepOfTotal(int step, int total) {
+    return 'Step $step of $total';
+  }
+
+  @override
+  String get inspectionRearLabel => 'REAR';
+
+  @override
+  String get inspectionSelectedTyre => 'Selected Tyre';
+
+  @override
+  String get inspectionPressureShort => 'Pressure';
+
+  @override
+  String get inspectionTreadDepthShort => 'Tread Depth';
+
+  @override
+  String get inspectionAddEvidencePhoto => 'Add Evidence (Photo)';
+
+  @override
+  String get inspectionSaveAndNext => 'Save & Next';
+
+  @override
+  String get inspectionFrontLeft => 'Front Left';
+
+  @override
+  String get inspectionFrontRight => 'Front Right';
+
+  @override
+  String get inspectionInnerLeft => 'Inner Left';
+
+  @override
+  String get inspectionOuterLeft => 'Outer Left';
+
+  @override
+  String get inspectionInnerRight => 'Inner Right';
+
+  @override
+  String get inspectionOuterRight => 'Outer Right';
+
+  @override
+  String get inspectionRearLeft => 'Rear Left';
+
+  @override
+  String get inspectionRearRight => 'Rear Right';
+
+  @override
+  String get inspectionTyrePositionFallback => 'Tyre position';
 
   @override
   String get inspectionNotRecordedYet => 'Not recorded yet';
@@ -1707,6 +1791,95 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeGreeting => 'Welcome back';
 
   @override
+  String get homeGoodMorning => 'Good morning,';
+
+  @override
+  String get homeGoodAfternoon => 'Good afternoon,';
+
+  @override
+  String get homeGoodEvening => 'Good evening,';
+
+  @override
+  String get homeFallbackUser => 'Team member';
+
+  @override
+  String get homeSearchAssetsHint => 'Search asset, tyre, job...';
+
+  @override
+  String get homeAttentionRequired => 'Attention required';
+
+  @override
+  String get homeViewAll => 'View all';
+
+  @override
+  String get homeApprovalsMetric => 'Approvals';
+
+  @override
+  String get homeOverdueMetric => 'Overdue';
+
+  @override
+  String get homeCriticalMetric => 'Critical';
+
+  @override
+  String get homeTyreIssueDetected => 'Tyre issue detected';
+
+  @override
+  String get homeNoCriticalIssueTitle => 'No critical tyre issue';
+
+  @override
+  String get homeNoCriticalIssueMessage =>
+      'No active critical tyre alert was found.';
+
+  @override
+  String get homeReviewAction => 'Review';
+
+  @override
+  String get homeMyWork => 'My work';
+
+  @override
+  String get homeQuickActions => 'Quick actions';
+
+  @override
+  String get homeInspectAction => 'Inspect';
+
+  @override
+  String get homeAssetAction => 'Asset';
+
+  @override
+  String get homeReportIssueAction => 'Report issue';
+
+  @override
+  String get homeOpenAction => 'Open';
+
+  @override
+  String get homeNoUrgentWorkTitle => 'No urgent work';
+
+  @override
+  String get homeNoUrgentWorkMessage =>
+      'No overdue or high-priority task is assigned.';
+
+  @override
+  String get homeMoreAction => 'More';
+
+  @override
+  String get homeAlertsAction => 'Alerts';
+
+  @override
+  String get homeMenuTooltip => 'Open services';
+
+  @override
+  String get homeNotificationsTooltip => 'Open tyre alerts';
+
+  @override
+  String get homeSiteSelectorTooltip => 'View current site';
+
+  @override
+  String get homeReportIssueSheetTitle => 'Report an issue';
+
+  @override
+  String get homeReportAccidentAction => 'Report an accident';
+
+  @override
   String get homeFieldSectionHeading => 'Field';
 
   @override
@@ -2101,6 +2274,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tyreDetailTakeActionButton => 'Take action';
 
   @override
+  String get tyreDetailAddDetailsButton => 'Add details';
+
+  @override
+  String get tyreDetailEditDetailsButton => 'Edit details';
+
+  @override
+  String get tyreDetailRemainingKmLabel => 'Remaining life';
+
+  @override
+  String get tyreDetailRemainingKmCaption => 'Fleet life projection';
+
+  @override
+  String get tyreDetailRemainingKmUnavailable => 'No measured life projection';
+
+  @override
   String get tyreDetailNoEvidenceMessage =>
       'Nobody has recorded anything for this wheel yet.';
 
@@ -2316,6 +2504,51 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get loginOperationsTitle => 'Complete PMV Operations';
+
+  @override
+  String get loginWelcomeTitle => 'Welcome back';
+
+  @override
+  String get loginWelcomeSubtitle => 'Sign in to your assigned operations';
+
+  @override
+  String get loginSelectCountryTitle => 'Select your country';
+
+  @override
+  String get loginSelectCountrySubtitle =>
+      'Choose the country for your assigned operations.';
+
+  @override
+  String get loginChangeCountryAction => 'Change country';
+
+  @override
+  String get loginCountrySaudiArabia => 'Saudi Arabia';
+
+  @override
+  String get loginCountryUnitedArabEmirates => 'United Arab Emirates';
+
+  @override
+  String get loginCountryEgypt => 'Egypt';
+
+  @override
+  String get loginCountrySelectorSemantics => 'Country selector';
+
+  @override
+  String loginSelectedCountrySemantics(String country) {
+    return 'Selected country: $country';
+  }
+
+  @override
+  String get loginScopeFleetAssets => 'Fleet & assets';
+
+  @override
+  String get loginScopeInspectionsChecklists => 'Inspections & checklists';
+
+  @override
+  String get loginScopeMaintenanceWorkshop => 'Maintenance & workshop';
+
+  @override
   String get profileNavTitle => 'Profile';
 
   @override
@@ -2325,9 +2558,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileSuperAdminBadge => 'Platform administrator';
 
   @override
+  String get accidentReportCaptureSubtitle => 'Private evidence capture';
+
+  @override
+  String get accidentSubmitUnavailable =>
+      'Submission is unavailable until the protected sync pipeline guarantees every private evidence photo is uploaded before the accident row. Captured photos remain on this device.';
+
+  @override
+  String get tasksCopyCatalog =>
+      'title=My Work~today=Today~inProgress=In Progress~completed=Completed~urgent=Urgent~upcoming=Upcoming~open=open~emptyTitle=No tasks~emptyMessage=No work matches this view.~loadError=My work could not be loaded right now.~due=Due~assigned=Assigned to~unassigned=Unassigned~normal=Normal~overdue=Overdue~details=Task details~description=Description~site=Site~asset=Asset~priority=Priority~status=Status~retry=Retry';
+
+  @override
+  String get alertsCopyCatalog =>
+      'title=Tyre Alerts~all=All~critical=Critical~warnings=Warnings~info=Info~flagged=flagged~criticalCount=critical~emptyTitle=No active alerts~emptyFilter=No alerts match this filter.~loadError=Could not load alerts. Pull down to retry.~unknownAsset=Unknown asset~pressureLow=Tyre pressure is low~treadLow=Tread depth is low~position=Position~serial=Serial~tread=Tread~retry=Retry';
+
+  @override
+  String get notificationInboxCopyCatalog =>
+      'title=Notifications~markAll=Mark all read~fallbackTitle=Notification~emptyTitle=You\'re all caught up~emptyBody=Assignments, approvals and operational updates will appear here.~loadFailed=Could not load notifications. Pull down to retry.~markFailed=Could not mark this notification as read.~markAllFailed=Could not mark all notifications as read.~justNow=Just now~minutesAgo=%count%m ago~hoursAgo=%count%h ago~daysAgo=%count%d ago';
+
+  @override
+  String get reportIssueCopyCatalog =>
+      'title=Report an Issue~problem=What is the problem?~problemHint=Briefly describe the issue~priority=Priority~low=Low~medium=Medium~high=High~critical=Critical~site=Site~siteHint=Where the issue was found~asset=Asset~assetHint=Asset number~due=Due in~noDate=No date~threeDays=3 days~oneWeek=1 week~twoWeeks=2 weeks~details=Details~detailsHint=Add symptoms, location and any immediate action taken~photos=Photos~optional=(optional)~addPhoto=Add photo~camera=Camera~gallery=Gallery~photoFailed=The photo could not be added.~submit=Raise Issue~titleRequired=Enter a problem title before saving.~workspaceUnavailable=Your workspace is still loading. Try again in a moment.~savedTitle=Issue saved~savedBody=The issue is in My Work and will sync automatically.~stay=Stay here~viewTasks=View My Work~saveFailed=The issue could not be saved. Try again.';
+
+  @override
+  String get rcaCopyCatalog =>
+      'title=Root Cause Analysis~records=records~newRecord=New RCA~none=No RCA records~noneBody=Completed root-cause records will appear here.~unknown=Unknown asset~asset=Asset~serial=Tyre serial~brand=Brand~site=Site~km=Kilometres at failure~factors=Contributing factors~rootCause=Root cause~photos=Evidence photos~photo=Photo~addPhoto=Add photo~camera=Camera~gallery=Gallery~photoFailed=The photo could not be added.~save=Save RCA~missingCause=Enter the root cause before saving.~invalidKm=Enter a valid kilometre reading.~loadFailed=The RCA records could not be loaded.~saveFailed=The RCA could not be saved. Try again.';
+
+  @override
+  String get pmCopyCatalog =>
+      'title=Preventive Maintenance~overdue=Overdue~dueSoon=Due soon~active=Active plans~due=Due now~all=All plans~empty=No maintenance plans~emptyDue=No preventive maintenance is due in the next 14 days.~emptyAll=No active preventive maintenance plans are available.~plan=Maintenance plan~daysOverdue=days overdue~daysLeft=days left~noDate=No due date~record=Record service~meter=Meter reading~performedBy=Performed by~workshop=Workshop~partsCost=Parts cost~labourCost=Labour cost~findings=Findings~completed=Completed~partial=Partially completed~deferred=Deferred~failed=Failed~save=Save service~invalidNumber=Enter valid numeric values.~loadFailed=The maintenance plans could not be loaded.~saveFailed=The service record could not be saved. Try again.';
+
+  @override
+  String get stockCountCopyCatalog =>
+      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand';
+
+  @override
+  String get calendarCopyCatalog =>
+      'title=Calendar~scheduled=scheduled~overdue=Overdue~today=Due today~week=This week~later=Later~inspection=Inspection~maintenance=Maintenance~task=Corrective task~empty=Nothing scheduled~emptyBody=Upcoming inspections, maintenance and corrective tasks will appear here.~loadFailed=The schedule could not be loaded.';
+
+  @override
+  String get managementCopyCatalog =>
+      'overviewTitle=Fleet Overview~analyticsTitle=Fleet Analytics~reportsTitle=Reports~reportsSubtitle=Authoritative executive snapshot~teamTitle=Team~last=Last~days=days~days30=30 days~days90=90 days~year1=1 year~allSites=All sites~tyres=Tyres~vehicles=Vehicles~critical=Critical~openActions=Open actions~highRisk=High risk~inspections30=Inspections (30d)~tyreSpend=Tyre spend~risk=Risk distribution~sites=Top sites~brands=Top brands~analyticsFailed=Analytics could not be loaded.~reportsFailed=Report data could not be loaded.~reportUnavailable=Live report unavailable~reportUnavailableBody=The authoritative server snapshot is not available. No figures were fabricated.~retry=Retry~generated=Generated~costPerformance=Cost and performance~fleet=Fleet~tyre_spend=Tyre spend~accidents=Accidents~open_accidents=Open accidents~claims_claimed=Claims submitted~claims_recovered=Claims recovered~inspections=Inspections~work_orders_open=Open work orders~tyre_cost=Tyre cost~maintenance_cost=Maintenance cost~total_cost=Total cost~km=Kilometres~engine_hours=Engine hours~m3=Production m3~cost_per_km=Cost per km~cost_per_hour=Cost per hour~cost_per_m3=Cost per m3~tyre_cpk=Tyre CPK~severity=Accident severity~accidents_by_site=Accidents by site~tyres_by_site=Tyres by site~claim_status=Claim status~members=members~manage=Manage team~active=Active~pending=Pending~teamSearch=Search name, role or site~noMembers=No team members~trySearch=Try a different search.~teamFailed=The team directory could not be loaded.';
+
+  @override
   String get profileSignOutConfirmTitle => 'Sign out?';
 
   @override
   String get profileSignOutConfirmMessage =>
       'You will need to sign in again to continue working. Anything already saved on this device stays saved.';
+
+  @override
+  String get accidentCopyCatalog =>
+      'loadFailed=The accident record could not be loaded. Try again.~notRecorded=Not recorded~dashboardTitle=Accident command centre~dashboardSubtitle=Live register • permission-scoped~reportAction=Report accident~reportShort=Report~loadingRegister=Loading accident register…~dashboardEyebrow=PMV incident control~dashboardHeroTitle=Every case, one accountable trail~dashboardHeroMessage=Fleet, insurance, workshop, QC, handover and recovery remain visible without invented KPIs.~searchHint=Search asset, reference, site or location~allCases=All cases~reportedByMe=Reported by me~anyStatus=Any status~open=Open~closed=Closed~noMatches=No matching cases~noMatchesMessage=Change the filters or create a new accident report.~loadMore=Load more cases~loading=Loading…~detailTitle=Accident detail~loadingFacts=Loading case facts…~notFound=Accident not found~notFoundMessage=This record is outside your access scope or no longer exists.~openFlow=Open accountable case flow~incidentFacts=Incident facts~incidentFactsHint=Reporter evidence and vehicle identity~liability=Liability & payment~liabilityHint=Who was at fault, liable and expected to pay~insurance=Insurance & recovery~insuranceHint=Claim and recovery remain distinct from closure~workshopRelease=Workshop & release~workshopReleaseHint=Assessment, repair, QC and vehicle return~closure=Closure controls~closureHint=Legacy approval and modern case status remain separate~vehicleType=Vehicle type~plate=Plate / fleet number~type=Accident type~severity=Severity~reporter=Reporter~evidenceFiles=Evidence files~description=Description~damage=Damage~fault=Fault status~responsible=Responsible party~liable=Liable party~payer=Payer~insurer=Insurer~policy=Policy~claimNo=Claim number~claimStatus=Claim status~claimed=Claimed amount~approved=Approved amount~recoveryStatus=Recovery status~recovered=Recovered amount~repairType=Repair type~workshop=Workshop~repairCost=Repair cost~expectedRelease=Expected release~actualRelease=Actual release~nextAction=Next action~workflowStage=Workflow stage~caseStatus=Case status~closureRequest=Closure request~closureLevel=Closure level~caseTitle=Case accountability~loadingWorkstreams=Loading case workstreams…~caseNotFound=Case not found~caseNotFoundMessage=This accident is outside your permission scope or no longer exists.~endToEnd=End-to-end case flow~notActivated=Case workflow not activated~notActivatedMessage=The incident exists, but the workstream model is not provisioned. No progress was inferred.~noWorkstreams=No workstreams assigned~noWorkstreamsMessage=The case model is available, but this accident has no routed workstreams yet.~timeline=Accountable timeline~timelineHint=Read-only truth from the case workstream ledger~boundary=Control boundary~boundaryHint=Actions are intentionally not fabricated~boundaryMessage=Insurance, assessment, repair, QC, handover, closure and recovery decisions require verified server actions. This view offers no unsafe direct edits.~done=Done~inProgress=In progress~pending=Pending~notRequired=Not required~reason=Reason~wsIncident=Incident & evidence~wsFleet=Fleet validation~wsLiability=Liability & safety~wsInsurance=Insurance claim~wsAssessment=Workshop assessment~wsRepair=Repair execution~wsQc=Workshop QC~wsHandover=Vehicle handover~wsFinance=Recovery & finance~wsCorrective=Corrective actions~selectAsset=Select fleet asset~changeAsset=Change fleet asset~assetSearch=Asset, fleet number, plate or model~unrecordedAsset=Unrecorded asset~photoFailed=The evidence photo could not be saved. Try again.~workspaceLoading=Your workspace is still loading. Try again.~required=Asset, site, description and at least one evidence photo are required.~fieldsDropped=The report could not preserve every field. Nothing was presented as submitted.~saveFailed=The report could not be saved on this device. Try again.~saved=Report saved~savedTitle=Accident report saved safely~savedMessage=The report and evidence are in the device sync queue and will upload under the active workspace.~backRegister=Back to accident register~reportTitle=Report an accident~reportSubtitle=Offline-safe evidence capture~firstResponse=First response~captureFacts=Capture facts at the scene~captureFactsMessage=Select the asset first so PMV master data can fill its site and identity. At least one evidence photo is mandatory.~assetLocation=1. Asset & location~assetLocationHint=Fleet master is authoritative when available~fleetUnavailable=Fleet lookup is unavailable. Manual entry remains available.~assetNo=Asset number~site=Site~exactLocation=Exact incident location~classification=2. Classification~classificationHint=Initial field classification can be reviewed later~minor=Minor~moderate=Moderate~severe=Severe~fatal=Fatal~collision=Collision~rollover=Rollover~propertyDamage=Property damage~other=Other~whatHappened=What happened?~notes=Immediate notes~evidence=3. Evidence~evidenceAttached=evidence photo(s) attached • minimum 1~camera=Camera~gallery=Gallery~evidencePhoto=Evidence photo~removePhoto=Remove photo~saveReport=Save accident report';
 }

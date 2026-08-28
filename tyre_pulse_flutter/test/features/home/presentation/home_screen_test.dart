@@ -6,26 +6,9 @@
 ///
 /// # Why this file exists
 ///
-/// No widget test ever pumped [HomeScreen] before this one -
-/// `test/features/home/home_layout_test.dart` covers only the pure
-/// `visibleHomeSections` function, which takes no `BuildContext` and builds
-/// no render tree. That gap is what let a real layout defect ship and stay
-/// live: the stat-card `Row` (`crossAxisAlignment: CrossAxisAlignment
-/// .stretch`) sits inside this `ListView`'s main axis, which hands every
-/// item an UNBOUNDED height constraint - and `stretch` then asks each
-/// `Expanded` stat card to fill a height the Row has none to give. That
-/// throws `RenderFlex.performLayout`'s "BoxConstraints forces an infinite
-/// height" - reproduced here before the fix by pumping this exact screen
-/// with a real Admin `AccessState` (`tester.takeException()` returned a
-/// non-null `_TypeError`/assertion instead of `null`). Because a
-/// `RenderSliverList` cannot lay out anything below a child whose own
-/// layout threw, the failure was not local to the Row: the WHOLE
-/// `ListView` - greeting, both quick-action buttons, every stat card, the
-/// section grid, the empty-state fallback - rendered as a blank rectangle
-/// under an otherwise perfectly normal app bar, for EVERY signed-in role,
-/// because the stat-card Row is unconditional. `home_screen.dart` now
-/// wraps it in `IntrinsicHeight`; `_takeNoException` below is what a
-/// regression on that wrapper would fail.
+/// These tests pump the real responsive hierarchy at compact and default
+/// widths. They protect both the earlier unbounded-stat-row failure and the
+/// fixed-aspect quick-action grid that clipped longer translated labels.
 library;
 
 import 'package:flutter/material.dart';
@@ -36,17 +19,22 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
-import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
+import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
+import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/presentation/'
     'vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/home/presentation/home_screen.dart';
+import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/tasks/data/task_item.dart';
 
 import '../../../core/database/database_test_support.dart';
 
@@ -80,6 +68,9 @@ Future<void> _pumpHome(
   WidgetTester tester, {
   required AccessState access,
   String? legacySite = 'NHC',
+  Locale locale = const Locale('en'),
+  int notificationCount = 0,
+  List<Override> extraOverrides = const <Override>[],
 }) async {
   final WorkspaceContext workspace = WorkspaceContext(
     userId: 'user-1',
@@ -90,6 +81,7 @@ Future<void> _pumpHome(
     companyId: 'org-1',
     tenantId: 'org-1',
     legacySite: legacySite,
+    fullName: 'Mohammed A.',
   );
 
   final db = newMemoryDatabase();
@@ -102,6 +94,10 @@ Future<void> _pumpHome(
     vehicleFleetSourceProvider.overrideWith(
       (Ref ref) => _EmptyVehicleFleetSource(),
     ),
+    unreadNotificationsCountProvider.overrideWithValue(
+      AsyncData<int>(notificationCount),
+    ),
+    ...extraOverrides,
   ];
 
   await tester.pumpWidget(
@@ -110,7 +106,7 @@ Future<void> _pumpHome(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
-        locale: const Locale('en'),
+        locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
         home: const HomeScreen(route: HomeRoute()),
@@ -129,6 +125,87 @@ Future<void> _pumpHome(
 
 void main() {
   testWidgets(
+    'approved Home dashboard has a deterministic full-data visual contract',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final List<InspectionApprovalItem> approvals = List.generate(
+        8,
+        (int index) => InspectionApprovalItem(id: 'approval-$index'),
+      );
+      final List<TaskItem> tasks = List.generate(
+        12,
+        (int index) => TaskItem(
+          id: 'task-$index',
+          title: index == 0 ? 'PM • Mixer 3821' : 'Scheduled work ${index + 1}',
+          priority: index == 0 ? 'urgent' : 'normal',
+          status: 'open',
+          site: index == 0 ? 'Diriyah' : 'NHC',
+          assetNo: index == 0 ? 'Mixer 3821' : null,
+          description: index == 0 ? 'Preventive Maintenance' : null,
+          assignedTo: index == 0 ? 'user-1' : null,
+          dueDate: DateTime(2025, 1, index + 1),
+        ),
+      );
+      const List<TyreAlert> alerts = <TyreAlert>[
+        TyreAlert(
+          id: 'alert-1',
+          riskLevel: 'critical',
+          assetNo: 'Mixer 4271',
+          position: 'Rear outer tyre',
+          site: 'Qiddiya G2',
+          issueDate: '2026-08-28T12:00:00Z',
+        ),
+        TyreAlert(id: 'alert-2', riskLevel: 'critical'),
+        TyreAlert(id: 'alert-3', riskLevel: 'critical'),
+      ];
+
+      await _pumpHome(
+        tester,
+        access: _admin,
+        legacySite: 'Qiddiya G2',
+        notificationCount: 3,
+        extraOverrides: <Override>[
+          homePendingInspectionApprovalsProvider.overrideWith(
+            (Ref ref) async => approvals,
+          ),
+          homeTaskPreviewProvider.overrideWith((Ref ref) async => tasks),
+          tyreAlertsProvider.overrideWith((Ref ref) async => alerts),
+        ],
+      );
+
+      for (final String value in <String>['8', '12', '3']) {
+        expect(
+          find.descendant(
+            of: find.byKey(HomeScreenKeys.stats),
+            matching: find.text(value),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(find.text('Mixer 4271'), findsOneWidget);
+      expect(find.text('Rear outer tyre • Qiddiya G2'), findsOneWidget);
+      expect(find.text('PM • Mixer 3821'), findsOneWidget);
+      expect(
+        find.text('Mixer 3821 • Preventive Maintenance'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.fact_check_outlined), findsNothing);
+      expect(find.byIcon(Icons.schedule_rounded), findsNothing);
+
+      await expectLater(
+        find.byType(HomeScreen),
+        matchesGoldenFile(
+          '../../../../audit/device/home_strict/02-home-widget.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'an Admin renders the full Home hub with no layout exception: '
     'greeting, both quick-action buttons, the stat-card row and every '
     'section - never a blank body under a normal app bar',
@@ -142,11 +219,22 @@ void main() {
             'see this file\'s own library comment for the defect this guards',
       );
 
-      expect(find.text('Welcome back'), findsOneWidget);
-      expect(find.text('New inspection'), findsOneWidget);
-      expect(find.text('Scan'), findsOneWidget);
-      expect(find.byType(TpStatCard), findsWidgets);
-      expect(find.byType(GridView), findsWidgets);
+      expect(find.text('Mohammed'), findsOneWidget);
+      expect(find.text('ATTENTION REQUIRED'), findsOneWidget);
+      expect(find.text('Approvals'), findsOneWidget);
+      expect(find.text('Overdue'), findsOneWidget);
+      expect(find.text('Critical'), findsOneWidget);
+      expect(find.text('MY WORK'), findsOneWidget);
+      expect(find.text('QUICK ACTIONS'), findsOneWidget);
+      expect(find.text('Inspect'), findsWidgets);
+      expect(find.text('Asset'), findsOneWidget);
+      expect(find.text('Report issue'), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('inspect')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
+      expect(find.byType(GridView), findsNothing);
       // The Admin break-glass allows every module, so there is never a
       // reason to fall back to the "nothing available" empty state.
       expect(
@@ -166,12 +254,10 @@ void main() {
       await _pumpHome(tester, access: _tyreMan);
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Welcome back'), findsOneWidget);
-      expect(find.byType(TpStatCard), findsWidgets);
-      // Tyre Man reaches ModuleKey.inspect and ModuleKey.scan by role
-      // default, so both quick-action buttons are still expected.
-      expect(find.text('New inspection'), findsOneWidget);
-      expect(find.text('Scan'), findsOneWidget);
+      expect(find.text('Mohammed'), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
+      expect(find.text('Inspect'), findsWidgets);
     },
   );
 
@@ -182,7 +268,65 @@ void main() {
       await _pumpHome(tester, access: _admin, legacySite: null);
 
       expect(tester.takeException(), isNull);
-      expect(find.byKey(TpStatCardKeys.unavailable), findsWidgets);
+      expect(find.text('No site on file'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a compact phone keeps the PMV hierarchy readable without overflow',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpHome(tester, access: _admin);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('inspect')), findsOneWidget);
+      expect(find.byType(GridView), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the approved compact hierarchy remains ordered on a narrow phone',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpHome(tester, access: _admin);
+
+      final double attentionY =
+          tester.getTopLeft(find.text('ATTENTION REQUIRED')).dy;
+      final double workY = tester.getTopLeft(find.text('MY WORK')).dy;
+      final double actionsY = tester.getTopLeft(find.text('QUICK ACTIONS')).dy;
+      expect(attentionY, lessThan(workY));
+      expect(workY, lessThan(actionsY));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Arabic keeps the compact approved layout and all primary actions',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpHome(
+        tester,
+        access: _admin,
+        locale: const Locale('ar'),
+      );
+
+      expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 }

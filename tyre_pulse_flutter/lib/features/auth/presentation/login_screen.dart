@@ -49,9 +49,14 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/auth/domain/login_country.dart';
+import 'package:tyre_pulse/features/auth/presentation/login_country_preference_provider.dart';
+import 'package:tyre_pulse/features/auth/presentation/widgets/login_country_hero.dart';
+import 'package:tyre_pulse/features/auth/presentation/widgets/login_operations_scope.dart';
 
 /// Keys for the two distinct banner renderings this screen can show, so a
 /// test can assert on WHICH one rendered rather than only on its text -
@@ -73,10 +78,10 @@ abstract final class LoginBannerKeys {
 /// One selectable interface language on the sign-in card.
 ///
 /// Deliberately NOT routed through [AppLocalizations]. Each [label] names a
-/// language in its own script - translating "EN" or "اردو" into whichever
-/// language happens to be active right now would read as nonsense, which is
-/// exactly why `mobile/app/(auth)/login.tsx`'s own `LANG_OPTIONS` constant
-/// hardcodes 'EN' / 'ع' / 'اردو' regardless of the active language too.
+/// language in its own script - translating "English", "العربية", or "اردو"
+/// into whichever language happens to be active right now would read as
+/// nonsense. The production React Native screen follows the same rule for its
+/// language options.
 @immutable
 class _LanguageOption {
   const _LanguageOption({required this.locale, required this.label});
@@ -86,8 +91,8 @@ class _LanguageOption {
 }
 
 const List<_LanguageOption> _kLanguageOptions = <_LanguageOption>[
-  _LanguageOption(locale: Locale('en'), label: 'EN'),
-  _LanguageOption(locale: Locale('ar'), label: 'ع'),
+  _LanguageOption(locale: Locale('en'), label: 'English'),
+  _LanguageOption(locale: Locale('ar'), label: 'العربية'),
   _LanguageOption(locale: Locale('ur'), label: 'اردو'),
 ];
 
@@ -109,6 +114,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   bool _obscurePassword = true;
   bool _isSubmitting = false;
+  bool _hasRequestedInitialCountry = false;
+  bool _hasReportedCountryPreferenceError = false;
 
   /// The message for [LoginBannerKeys.error] - either the client-side
   /// "required" check, or [AppError.message] off a [SignInRejected] or
@@ -192,165 +199,291 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  Future<void> _chooseCountry(LoginCountry selected) async {
+    final LoginCountry? country = await showLoginCountryPicker(
+      context: context,
+      selected: selected,
+    );
+    if (!mounted || country == null) return;
+    try {
+      await ref.read(loginCountryPreferenceProvider.notifier).select(country);
+    } on Object {
+      if (!mounted) return;
+      final AppLocalizations l10n = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.stateErrorMessage)),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Locale? activeLocale = ref.watch(localeProvider);
+    final AsyncValue<LoginCountry?> countryPreference = ref.watch(
+      loginCountryPreferenceProvider,
+    );
+    final LoginCountry? storedCountry = countryPreference.asData?.value;
+    final LoginCountry selectedCountry =
+        storedCountry ?? LoginCountry.saudiArabia;
+
+    if (countryPreference is AsyncData<LoginCountry?> &&
+        storedCountry == null &&
+        !_hasRequestedInitialCountry) {
+      _hasRequestedInitialCountry = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_chooseCountry(selectedCountry));
+      });
+    }
+
+    if (countryPreference.hasError && !_hasReportedCountryPreferenceError) {
+      _hasReportedCountryPreferenceError = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).stateErrorMessage),
+          ),
+        );
+      });
+    }
+
+    return Theme(
+      data: TpTheme.forPalette(TpPalette.loginLight),
+      child: TpScaffold(
+        // No app bar and no back fallback: signed out, this screen IS the
+        // root of the app, exactly as Home is once signed in - see
+        // `tp_scaffold.dart`'s own library comment on what a null
+        // `backFallback` means.
+        body: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool useSplitLayout = constraints.maxWidth >= 700;
+            final double horizontalPadding =
+                useSplitLayout ? TpSpace.xxl : TpSpace.lg;
+            final Widget form = _LoginFormCard(
+              activeLocale: activeLocale ?? Localizations.localeOf(context),
+              identifierController: _identifierController,
+              passwordController: _passwordController,
+              obscurePassword: _obscurePassword,
+              isSubmitting: _isSubmitting,
+              errorMessage: _errorMessage,
+              lockoutMinutes: _lockoutMinutes,
+              onSelectLocale: (Locale locale) =>
+                  ref.read(localeProvider.notifier).setLocale(locale),
+              onIdentifierChanged: (String _) => _clearFeedback(),
+              onPasswordChanged: (String _) => _clearFeedback(),
+              onTogglePassword: () => setState(
+                () => _obscurePassword = !_obscurePassword,
+              ),
+              onSubmit: _submit,
+            );
+
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontalPadding,
+                vertical: TpSpace.lg,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - (TpSpace.lg * 2),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1060),
+                    child: useSplitLayout
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(
+                                flex: 9,
+                                child: LoginCountryHero(
+                                  key: const Key('login.brand.panel'),
+                                  country: selectedCountry,
+                                  compact: false,
+                                  onChangeCountry: () => unawaited(
+                                    _chooseCountry(selectedCountry),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: TpSpace.xl),
+                              Expanded(flex: 11, child: form),
+                            ],
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              LoginCountryHero(
+                                key: const Key('login.brand.panel'),
+                                country: selectedCountry,
+                                compact: true,
+                                onChangeCountry: () =>
+                                    unawaited(_chooseCountry(selectedCountry)),
+                              ),
+                              const SizedBox(height: TpSpace.lg),
+                              form,
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _LoginFormCard extends StatelessWidget {
+  const _LoginFormCard({
+    required this.activeLocale,
+    required this.identifierController,
+    required this.passwordController,
+    required this.obscurePassword,
+    required this.isSubmitting,
+    required this.errorMessage,
+    required this.lockoutMinutes,
+    required this.onSelectLocale,
+    required this.onIdentifierChanged,
+    required this.onPasswordChanged,
+    required this.onTogglePassword,
+    required this.onSubmit,
+  });
+
+  final Locale activeLocale;
+  final TextEditingController identifierController;
+  final TextEditingController passwordController;
+  final bool obscurePassword;
+  final bool isSubmitting;
+  final String? errorMessage;
+  final int? lockoutMinutes;
+  final ValueChanged<Locale> onSelectLocale;
+  final ValueChanged<String> onIdentifierChanged;
+  final ValueChanged<String> onPasswordChanged;
+  final VoidCallback onTogglePassword;
+  final Future<void> Function() onSubmit;
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final Locale? activeLocale = ref.watch(localeProvider);
+    final TextTheme text = Theme.of(context).textTheme;
 
-    return TpScaffold(
-      // No app bar and no back fallback: signed out, this screen IS the
-      // root of the app, exactly as Home is once signed in - see
-      // `tp_scaffold.dart`'s own library comment on what a null
-      // `backFallback` means.
-      body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(TpSpace.xxl),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight - (TpSpace.xxl * 2),
+    return TpCard(
+      key: const Key('login.form.card'),
+      padding: const EdgeInsets.all(TpSpace.xxl),
+      child: AutofillGroup(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _LanguageToggle(active: activeLocale, onSelect: onSelectLocale),
+            const SizedBox(height: TpSpace.xl),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: palette.primarySoft,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(TpSpace.sm),
+                    child: Icon(
+                      Icons.login_outlined,
+                      color: palette.primaryDark,
+                      size: TpSizing.iconLg,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          l10n.loginWelcomeTitle,
+                          style: text.headlineSmall,
+                        ),
+                      ),
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        l10n.loginWelcomeSubtitle,
+                        style: text.bodySmall?.copyWith(
+                          color: palette.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: TpSpace.lg),
+            const LoginOperationsScope(),
+            const SizedBox(height: TpSpace.xl),
+            if (lockoutMinutes != null) ...<Widget>[
+              _LoginBanner(
+                key: LoginBannerKeys.locked,
+                icon: Icons.lock_outline,
+                tone: TpStatus.warning,
+                message: l10n.loginErrorLocked(lockoutMinutes!),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Center(
-                    child: Column(
-                      children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: palette.primarySoft,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(TpSpace.lg),
-                            child: Icon(
-                              Icons.tire_repair_outlined,
-                              size: TpSizing.iconState,
-                              color: palette.primaryDark,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: TpSpace.md),
-                        Text(
-                          l10n.appTitle,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: TpSpace.xs),
-                        Text(
-                          l10n.loginAppSubtitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: palette.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: TpSpace.xxl),
-                  TpCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        _LanguageToggle(
-                          active: activeLocale,
-                          onSelect: (Locale locale) => ref
-                              .read(localeProvider.notifier)
-                              .setLocale(locale),
-                        ),
-                        const SizedBox(height: TpSpace.lg),
-                        Text(
-                          l10n.loginCardTitle,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: TpSpace.xs),
-                        Text(
-                          l10n.loginCardSubtitle,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: palette.textMuted),
-                        ),
-                        const SizedBox(height: TpSpace.lg),
-                        if (_lockoutMinutes != null) ...<Widget>[
-                          _LoginBanner(
-                            key: LoginBannerKeys.locked,
-                            icon: Icons.lock_outline,
-                            tone: TpStatus.warning,
-                            message: l10n.loginErrorLocked(_lockoutMinutes!),
-                          ),
-                          const SizedBox(height: TpSpace.md),
-                        ] else if (_errorMessage != null) ...<Widget>[
-                          _LoginBanner(
-                            key: LoginBannerKeys.error,
-                            icon: Icons.error_outline,
-                            tone: TpStatus.critical,
-                            message: _errorMessage!,
-                          ),
-                          const SizedBox(height: TpSpace.md),
-                        ],
-                        TpInput(
-                          label: l10n.loginIdentifierLabel,
-                          controller: _identifierController,
-                          hint: l10n.loginIdentifierPlaceholder,
-                          prefixIcon: Icons.person_outline,
-                          enabled: !_isSubmitting,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          onChanged: (String _) => _clearFeedback(),
-                        ),
-                        const SizedBox(height: TpSpace.lg),
-                        TpInput(
-                          label: l10n.loginPasswordLabel,
-                          controller: _passwordController,
-                          hint: l10n.loginPasswordPlaceholder,
-                          prefixIcon: Icons.lock_outline,
-                          enabled: !_isSubmitting,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          onChanged: (String _) => _clearFeedback(),
-                          onSubmitted: (String _) => unawaited(_submit()),
-                          suffix: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                            ),
-                            tooltip: _obscurePassword
-                                ? l10n.loginShowPassword
-                                : l10n.loginHidePassword,
-                            onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: TpSpace.xl),
-                        TpButton.primary(
-                          label: l10n.actionSignIn,
-                          icon: Icons.arrow_forward,
-                          isFullWidth: true,
-                          isBusy: _isSubmitting,
-                          onPressed:
-                              _isSubmitting ? null : () => unawaited(_submit()),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: TpSpace.xxl),
-                  Text(
-                    l10n.loginTagline,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: palette.textMuted),
-                  ),
-                ],
+              const SizedBox(height: TpSpace.md),
+            ] else if (errorMessage != null) ...<Widget>[
+              _LoginBanner(
+                key: LoginBannerKeys.error,
+                icon: Icons.error_outline,
+                tone: TpStatus.critical,
+                message: errorMessage!,
+              ),
+              const SizedBox(height: TpSpace.md),
+            ],
+            TpInput(
+              label: l10n.loginIdentifierLabel,
+              controller: identifierController,
+              hint: l10n.loginIdentifierPlaceholder,
+              prefixIcon: Icons.badge_outlined,
+              enabled: !isSubmitting,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              onChanged: onIdentifierChanged,
+            ),
+            const SizedBox(height: TpSpace.lg),
+            TpInput(
+              label: l10n.loginPasswordLabel,
+              controller: passwordController,
+              hint: l10n.loginPasswordPlaceholder,
+              prefixIcon: Icons.lock_outline,
+              enabled: !isSubmitting,
+              obscureText: obscurePassword,
+              textInputAction: TextInputAction.done,
+              onChanged: onPasswordChanged,
+              onSubmitted: (String _) => unawaited(onSubmit()),
+              suffix: IconButton(
+                icon: Icon(
+                  obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                tooltip: obscurePassword
+                    ? l10n.loginShowPassword
+                    : l10n.loginHidePassword,
+                onPressed: isSubmitting ? null : onTogglePassword,
               ),
             ),
-          );
-        },
+            const SizedBox(height: TpSpace.xl),
+            TpButton.primary(
+              label: l10n.actionSignIn,
+              icon: Icons.arrow_forward,
+              isFullWidth: true,
+              isBusy: isSubmitting,
+              onPressed: isSubmitting ? null : () => unawaited(onSubmit()),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -376,18 +509,24 @@ class _LanguageToggle extends StatelessWidget {
         for (int i = 0; i < _kLanguageOptions.length; i++) ...<Widget>[
           if (i > 0) const SizedBox(width: TpSpace.sm),
           Expanded(
-            child: TpButton(
-              key: Key(
-                'login.language.${_kLanguageOptions[i].locale.languageCode}',
+            child: MergeSemantics(
+              child: Semantics(
+                selected: active?.languageCode ==
+                    _kLanguageOptions[i].locale.languageCode,
+                child: TpButton(
+                  key: Key(
+                    'login.language.${_kLanguageOptions[i].locale.languageCode}',
+                  ),
+                  label: _kLanguageOptions[i].label,
+                  isCompact: true,
+                  isFullWidth: true,
+                  variant: active?.languageCode ==
+                          _kLanguageOptions[i].locale.languageCode
+                      ? TpButtonVariant.primary
+                      : TpButtonVariant.secondary,
+                  onPressed: () => onSelect(_kLanguageOptions[i].locale),
+                ),
               ),
-              label: _kLanguageOptions[i].label,
-              isCompact: true,
-              isFullWidth: true,
-              variant: active?.languageCode ==
-                      _kLanguageOptions[i].locale.languageCode
-                  ? TpButtonVariant.primary
-                  : TpButtonVariant.secondary,
-              onPressed: () => onSelect(_kLanguageOptions[i].locale),
             ),
           ),
         ],

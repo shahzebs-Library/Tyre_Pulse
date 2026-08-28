@@ -190,6 +190,13 @@ abstract interface class ChecklistDraftRepository {
     String? signerRole,
   });
 
+  /// Clears one signing slot while preserving every sibling signature on the
+  /// same draft.
+  Future<void> clearSignature({
+    required String draftKey,
+    required String fieldKey,
+  });
+
   /// Whether [draftKey] holds real work - progress, a photo or a signature -
   /// as opposed to a sheet that was merely opened.
   Future<bool> hasContent(String draftKey);
@@ -379,6 +386,18 @@ final class DriftChecklistDraftRepository implements ChecklistDraftRepository {
       signerUserId: signerUserId,
       signerName: signerName,
       signerRole: signerRole,
+    );
+  }
+
+  @override
+  Future<void> clearSignature({
+    required String draftKey,
+    required String fieldKey,
+  }) async {
+    await _mediaDao.deleteSignature(
+      ownerKind: _ownerKind,
+      ownerKey: draftKey,
+      fieldKey: fieldKey,
     );
   }
 

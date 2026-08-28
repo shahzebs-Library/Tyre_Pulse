@@ -167,6 +167,9 @@ void main() {
 
   test('case 79: layoutIsKnown needs something to have said Pickup', () {
     expect(layoutIsKnown('HEAVY EQP', 'TM640'), isTrue);
+    expect(layoutIsKnown('HEAVY EQP', 'LP003'), isTrue);
+    expect(layoutIsKnown('HEAVY EQP', 'BH-037'), isTrue);
+    expect(layoutIsKnown('HEAVY EQP', 'PL-090'), isTrue);
     expect(layoutIsKnown('HEAVY EQP', null), isFalse);
     // A forklift resolves to Pickup by fallback, so its wheel count is a
     // guess and must not gate.

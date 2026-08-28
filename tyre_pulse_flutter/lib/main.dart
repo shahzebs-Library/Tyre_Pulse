@@ -26,32 +26,49 @@ import 'package:tyre_pulse/core/sync/background_sync.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_providers.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_service.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/accidents/'
+    'accidents_screen_registrations.dart';
+import 'package:tyre_pulse/features/alerts/alerts_screen_registrations.dart';
 import 'package:tyre_pulse/features/approvals/'
     'checklist_approvals_screen_registrations.dart';
 import 'package:tyre_pulse/features/approvals/'
     'inspection_approvals_screen_registrations.dart';
 import 'package:tyre_pulse/features/assets/assets_screen_registrations.dart';
 import 'package:tyre_pulse/features/auth/auth_screen_registrations.dart';
+import 'package:tyre_pulse/features/calendar/calendar_screen_registrations.dart';
 import 'package:tyre_pulse/features/checklists/'
     'checklists_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
 import 'package:tyre_pulse/features/inspections/'
     'inspections_screen_registrations.dart';
+import 'package:tyre_pulse/features/management/'
+    'management_screen_registrations.dart';
 import 'package:tyre_pulse/features/meter_logs/'
     'meter_logs_screen_registrations.dart';
+import 'package:tyre_pulse/features/notifications/'
+    'notifications_screen_registrations.dart';
+import 'package:tyre_pulse/features/preventive_maintenance/'
+    'pm_screen_registrations.dart';
 import 'package:tyre_pulse/features/profile/'
     'profile_screen_registrations.dart';
+import 'package:tyre_pulse/features/rca/rca_screen_registrations.dart';
 import 'package:tyre_pulse/features/records/records_screen_registrations.dart';
+import 'package:tyre_pulse/features/report_issue/'
+    'report_issue_screen_registrations.dart';
 import 'package:tyre_pulse/features/scanning/'
     'scanning_screen_registrations.dart';
 import 'package:tyre_pulse/features/search/'
     'global_search_screen_registrations.dart';
+import 'package:tyre_pulse/features/stock_count/'
+    'stock_count_screen_registrations.dart';
+import 'package:tyre_pulse/features/tasks/tasks_screen_registrations.dart';
 import 'package:tyre_pulse/features/tyre_exchange/'
     'tyre_exchange_screen_registrations.dart';
 import 'package:tyre_pulse/features/tyres/tyres_screen_registrations.dart';
 import 'package:tyre_pulse/features/washing/washing_screen_registrations.dart';
 import 'package:tyre_pulse/features/work_orders/'
     'work_orders_screen_registrations.dart';
+import 'package:tyre_pulse/features/workshop/workshop_screen_registrations.dart';
 
 /// A placeholder for this build's version until a real one is wired in.
 ///
@@ -296,17 +313,28 @@ Future<void> main() async {
               .withAll(assetsScreenRegistrations)
               .withAll(tyresScreenRegistrations)
               .withAll(recordsScreenRegistrations)
+              .withAll(rcaScreenRegistrations)
+              .withAll(stockCountScreenRegistrations)
+              .withAll(reportIssueScreenRegistrations)
               .withAll(scanningScreenRegistrations)
               .withAll(inspectionsScreenRegistrations)
+              .withAll(calendarScreenRegistrations)
+              .withAll(managementScreenRegistrations)
               .withAll(checklistsScreenRegistrations)
               .withAll(inspectionApprovalsScreenRegistrations)
               .withAll(checklistApprovalsScreenRegistrations)
+              .withAll(accidentsScreenRegistrations)
+              .withAll(alertsScreenRegistrations)
+              .withAll(notificationsScreenRegistrations)
+              .withAll(pmScreenRegistrations)
               .withAll(meterLogsScreenRegistrations)
               .withAll(washingScreenRegistrations)
               .withAll(homeScreenRegistrations)
               .withAll(workOrdersScreenRegistrations)
+              .withAll(workshopScreenRegistrations)
               .withAll(tyreExchangeScreenRegistrations)
               .withAll(globalSearchScreenRegistrations)
+              .withAll(tasksScreenRegistrations)
               .withAll(authScreenRegistrations)
               .withAll(profileScreenRegistrations),
         ),

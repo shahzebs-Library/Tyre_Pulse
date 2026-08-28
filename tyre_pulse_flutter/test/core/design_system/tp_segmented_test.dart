@@ -99,4 +99,41 @@ void main() {
     expect(xFirst, lessThan(xSecond));
     expect(xSecond, lessThan(xThird));
   });
+
+  testWidgets(
+    'expanded mode shares a compact phone width without clipping labels',
+    (WidgetTester tester) async {
+      await pumpTp(
+        tester,
+        SizedBox(
+          width: 320,
+          child: TpSegmented<_Mode>(
+            expanded: true,
+            value: _Mode.a,
+            options: const <TpSegmentedOption<_Mode>>[
+              TpSegmentedOption<_Mode>(
+                value: _Mode.a,
+                label: 'Layout view',
+                icon: Icons.dashboard_customize_outlined,
+              ),
+              TpSegmentedOption<_Mode>(
+                value: _Mode.b,
+                label: 'List view',
+                icon: Icons.format_list_bulleted,
+              ),
+            ],
+            onChanged: (_Mode value) {},
+          ),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      final List<Size> segments = tester
+          .widgetList<InkWell>(find.byType(InkWell))
+          .map((InkWell segment) => tester.getSize(find.byWidget(segment)))
+          .toList(growable: false);
+      expect(segments, hasLength(2));
+      expect(segments[0].width, closeTo(segments[1].width, 0.01));
+    },
+  );
 }

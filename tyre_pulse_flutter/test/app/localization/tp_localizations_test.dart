@@ -235,4 +235,60 @@ void main() {
       });
     }
   });
+
+  group('country-aware login vocabulary', () {
+    test('keeps the PMV heading generic in every locale', () async {
+      final AppLocalizations en = await AppLocalizations.delegate.load(
+        const Locale('en'),
+      );
+      final AppLocalizations ar = await AppLocalizations.delegate.load(
+        const Locale('ar'),
+      );
+      final AppLocalizations ur = await AppLocalizations.delegate.load(
+        const Locale('ur'),
+      );
+
+      expect(en.loginOperationsTitle, 'Complete PMV Operations');
+      expect(ar.loginOperationsTitle, 'عمليات PMV المتكاملة');
+      expect(ur.loginOperationsTitle, 'مکمل PMV آپریشنز');
+    });
+
+    test('exposes all three country labels in every locale', () async {
+      for (final Locale locale in TpLocalizations.supportedLocales) {
+        final AppLocalizations l10n = await AppLocalizations.delegate.load(
+          locale,
+        );
+        expect(l10n.loginCountrySaudiArabia, isNotEmpty);
+        expect(l10n.loginCountryUnitedArabEmirates, isNotEmpty);
+        expect(l10n.loginCountryEgypt, isNotEmpty);
+        expect(l10n.loginSelectCountryTitle, isNotEmpty);
+        expect(l10n.loginChangeCountryAction, isNotEmpty);
+        expect(l10n.loginCountrySelectorSemantics, isNotEmpty);
+        expect(
+          l10n.loginSelectedCountrySemantics(
+            l10n.loginCountrySaudiArabia,
+          ),
+          contains(l10n.loginCountrySaudiArabia),
+        );
+      }
+    });
+
+    test('exposes a truthful PMV capability strip in every locale', () async {
+      for (final Locale locale in TpLocalizations.supportedLocales) {
+        final AppLocalizations l10n = await AppLocalizations.delegate.load(
+          locale,
+        );
+        final List<String> labels = <String>[
+          l10n.loginScopeFleetAssets,
+          l10n.globalSearchSectionTyres,
+          l10n.loginScopeInspectionsChecklists,
+          l10n.loginScopeMaintenanceWorkshop,
+          l10n.tabAccidents,
+        ];
+
+        expect(labels, everyElement(isNotEmpty));
+        expect(labels.toSet(), hasLength(labels.length));
+      }
+    });
+  });
 }

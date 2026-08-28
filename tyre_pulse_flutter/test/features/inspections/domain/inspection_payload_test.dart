@@ -1,14 +1,14 @@
 /// Coverage for [validateInspectionForSubmit]: the check order ported from
 /// `mobile/app/(app)/inspection/new.tsx`'s `handleSubmit`, and the
-/// deliberate policy choice to run [inspectionCompleteness] with the
-/// completeness engine's OWN default options rather than the RN screen's
-/// `requireEvidence: true` override.
+/// strict capture policy that requires deliberate evidence on every resolved
+/// physical tyre before review/submission.
 library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 
 InspectionPayload _basePayload({
   String site = 'NHC',
@@ -75,6 +75,49 @@ void main() {
       );
       expect(issues, contains(InspectionSubmitIssue.tyresIncomplete));
       expect(issues, isNot(contains(InspectionSubmitIssue.noTyreTouched)));
+    });
+
+    test('one checked tyre plus eleven seeded mixer tyres cannot submit', () {
+      final List<String> positions = diagramPositions('Tr-Mixer', 'TM514');
+      expect(positions, hasLength(12));
+      final Map<String, TyrePositionReading> readings =
+          <String, TyrePositionReading>{
+        for (final String position in positions)
+          position: TyrePositionReading.seed(position),
+      };
+      readings[positions.first] = TyrePositionReading(
+        position: positions.first,
+        checked: true,
+      );
+
+      final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+        _basePayload(
+          tyreConditions: readings,
+          signature: 'data:image/png;base64,abc',
+        ),
+      );
+
+      expect(issues, contains(InspectionSubmitIssue.tyresIncomplete));
+      expect(issues, isNot(contains(InspectionSubmitIssue.noTyreTouched)));
+    });
+
+    test('all twelve explicitly checked mixer tyres pass the tyre gate', () {
+      final List<String> positions = diagramPositions('Tr-Mixer', 'TM514');
+      final Map<String, TyrePositionReading> readings =
+          <String, TyrePositionReading>{
+        for (final String position in positions)
+          position: TyrePositionReading(position: position, checked: true),
+      };
+
+      expect(
+        validateInspectionForSubmit(
+          _basePayload(
+            tyreConditions: readings,
+            signature: 'data:image/png;base64,abc',
+          ),
+        ),
+        isEmpty,
+      );
     });
 
     test(

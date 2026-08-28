@@ -19,6 +19,7 @@ import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart'
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_remote_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
@@ -180,8 +181,15 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
 
   Future<void> _loadUnfinishedDrafts() async {
     if (_userId.isEmpty) return;
-    final drafts = await _draftRepo.draftsForUser(_userId);
-    state = state.copyWith(unfinishedDrafts: drafts);
+    final List<InspectionDraftSummary> drafts =
+        await _draftRepo.draftsForUser(_userId);
+    final List<InspectionDraftSummary> unfinished = <InspectionDraftSummary>[];
+    for (final InspectionDraftSummary draft in drafts) {
+      if (await _draftRepo.hasContent(draft.draftKey)) {
+        unfinished.add(draft);
+      }
+    }
+    state = state.copyWith(unfinishedDrafts: unfinished);
   }
 
   // -- Header step --------------------------------------------------------

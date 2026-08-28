@@ -35,7 +35,7 @@ void main() {
     final TyreDiagramStats stats = computeTyreDiagramStats(
       const <String>['A', 'B', 'C', 'D', 'E'],
       const <String, Map<String, Object?>>{
-        'A': <String, Object?>{'condition': 'Good'},
+        'A': <String, Object?>{'condition': 'Good', 'checked': true},
         'B': <String, Object?>{'condition': 'Worn'},
         'C': <String, Object?>{'condition': 'Flat'},
         'D': <String, Object?>{'condition': 'Damaged'},
@@ -47,6 +47,19 @@ void main() {
     expect(stats.monitor, 2);
     expect(stats.critical, 2);
     expect(stats.unrecorded, 0);
+  });
+
+  test('a seeded unchecked Good entry is unrecorded, never an OK result', () {
+    final TyreDiagramStats stats = computeTyreDiagramStats(
+      const <String>['A'],
+      const <String, Map<String, Object?>>{
+        'A': <String, Object?>{'condition': 'Good', 'checked': false},
+      },
+    );
+    expect(stats.unrecorded, 1);
+    expect(stats.ok, 0);
+    expect(stats.monitor, 0);
+    expect(stats.critical, 0);
   });
 
   test('Missing condition counts as unrecorded, matching TpStatus.unknown', () {
@@ -64,7 +77,7 @@ void main() {
     final TyreDiagramStats stats = computeTyreDiagramStats(
       const <String>['A', 'B', 'C', 'D'],
       const <String, Map<String, Object?>>{
-        'A': <String, Object?>{'condition': 'Good'},
+        'A': <String, Object?>{'condition': 'Good', 'checked': true},
         'B': <String, Object?>{'condition': 'Damaged'},
       },
     );

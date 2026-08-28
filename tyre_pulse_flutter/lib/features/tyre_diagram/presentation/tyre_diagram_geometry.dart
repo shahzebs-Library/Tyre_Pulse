@@ -12,6 +12,8 @@ library;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 
 /// The production SVG viewBox: `minX -10, width 220, minY -5,
 /// height viewH + 10`.
@@ -90,4 +92,82 @@ Rect _expandToMinimum(Rect rect, double minSize) {
   if (width == rect.width && height == rect.height) return rect;
   final Offset centre = rect.center;
   return Rect.fromCenter(center: centre, width: width, height: height);
+}
+
+/// Builds the hit rectangle for every slot in [layout].
+///
+/// A centred 48px expansion is correct for a single wheel, but it is wrong
+/// for a physically adjacent dual pair: the two expanded rectangles overlap
+/// and the later widget in a [Stack] steals part of its neighbour's taps.
+/// Dual pairs therefore share one seam. The outer and inner targets meet at
+/// that seam without overlapping, remain at least 48px wide, and still cover
+/// their own painted wheel. This keeps the wheels visually joined while each
+/// stored position remains independently tappable.
+Map<String, Rect> buildTyreHitRects({
+  required DiagramLayout layout,
+  required TyreDiagramViewport viewport,
+}) {
+  final Map<String, Rect> result = <String, Rect>{
+    for (final TyreSlot slot in layout.tyres)
+      slot.id: viewport.hitRect(slot.x, slot.y, slot.w, slot.h),
+  };
+
+  final Map<(PositionSide, int), List<TyreSlot>> dualGroups =
+      <(PositionSide, int), List<TyreSlot>>{};
+  for (final TyreSlot slot in layout.tyres) {
+    final PositionStruct position = parsePositionStruct(slot.id);
+    if (position.kind != PositionKind.drive ||
+        position.side == null ||
+        position.role == PositionRole.single) {
+      continue;
+    }
+    dualGroups.putIfAbsent(
+      (position.side!, position.axle),
+      () => <TyreSlot>[],
+    ).add(slot);
+  }
+
+  for (final List<TyreSlot> pair in dualGroups.values) {
+    if (pair.length != 2) continue;
+    pair.sort((TyreSlot a, TyreSlot b) => a.x.compareTo(b.x));
+    final TyreSlot left = pair.first;
+    final TyreSlot right = pair.last;
+    final Rect leftWheel = viewport.wheelRect(left.x, left.y, left.w, left.h);
+    final Rect rightWheel =
+        viewport.wheelRect(right.x, right.y, right.w, right.h);
+    final Rect leftDefault = result[left.id]!;
+    final Rect rightDefault = result[right.id]!;
+
+    // Keep the seam physically between the two painted wheel centres. A
+    // viewport-edge clamp is tempting when preserving the 48px target width,
+    // but on a compact phone map that can move the seam *past* the inner
+    // wheel's centre. The visible inner tyre would then select Outer. Targets
+    // may extend beyond the viewport edge; their visible portion still owns
+    // its painted wheel and the two logical positions never overlap or swap.
+    final double seam = ((leftWheel.right + rightWheel.left) / 2).clamp(
+      leftWheel.center.dx,
+      rightWheel.center.dx,
+    );
+    final double leftWidth = leftDefault.width < kDiagramMinHitTarget
+        ? kDiagramMinHitTarget
+        : leftDefault.width;
+    final double rightWidth = rightDefault.width < kDiagramMinHitTarget
+        ? kDiagramMinHitTarget
+        : rightDefault.width;
+
+    result[left.id] = Rect.fromLTWH(
+      seam - leftWidth,
+      leftDefault.top,
+      leftWidth,
+      leftDefault.height,
+    );
+    result[right.id] = Rect.fromLTWH(
+      seam,
+      rightDefault.top,
+      rightWidth,
+      rightDefault.height,
+    );
+  }
+
+  return Map<String, Rect>.unmodifiable(result);
 }

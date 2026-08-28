@@ -402,16 +402,40 @@ void main() {
     //   vocabulary, distinct from any tyre-condition vocabulary because a
     //   defect report's cause is not the same axis as a recorded
     //   condition).
-    // 626 + 61 = 687. Bumping this pin is the expected maintenance action
+    // tyreDetailAddDetailsButton through tyreDetailRemainingKmUnavailable
+    // add 5 more tyre-detail strings for the submitted-reading workflow.
+    // - `features/auth` (country-aware sign-in) added 11 keys for one shared
+    //   login flow across Saudi Arabia, the United Arab Emirates and Egypt:
+    //   the generic PMV operations heading, welcome title/subtitle, country
+    //   selector title/subtitle, change-country action, three country labels,
+    //   and the selector's label/value accessibility copy. None of these
+    //   strings claims that the product itself belongs to one country.
+    // - The richer login scope strip adds 3 missing COMBINED labels:
+    //   Fleet & assets, Inspections & checklists, and Maintenance & workshop.
+    //   It reuses `globalSearchSectionTyres` and `tabAccidents` for the two
+    //   single-module labels instead of duplicating their existing strings.
+    // 626 + 66 + 11 + 3 + 3 + 2 = 711. The final five keys are the localized
+    // Accident, My Work and Alerts feature catalogs added with their
+    // registered screens.
+    // - `features/inspections` then added 7 truthful workflow keys for the
+    //   Not started / In progress / Ready for review hierarchy, its resume
+    //   summary, and the untouched/in-progress/complete helper copy. The
+    //   existing
+    //   `inspectionResumeProgress` key was corrected from "recorded" to
+    //   "checked" without changing the key count.
+    // 736 + 29 = 765.
+    // Bumping this pin is the expected maintenance action
     // for a real key addition; this comment exists so the next person to
     // touch it can tell that apart from a mistake. Per this file's own
     // earlier note: if a future edit ever makes a translated file the
     // larger one, re-derive which file is the reference before touching
     // this number - do not just raise it blind.
-    test('en, ar and ur each carry exactly 687 translatable keys today', () {
-      expect(_translatableKeys(en).length, 687);
-      expect(_translatableKeys(ar).length, 687);
-      expect(_translatableKeys(ur).length, 687);
+    // Notifications, RCA, PM, stock, calendar and management add their
+    // locale-owned catalogs without introducing per-locale drift.
+    test('en, ar and ur each carry exactly 772 translatable keys today', () {
+      expect(_translatableKeys(en).length, 772);
+      expect(_translatableKeys(ar).length, 772);
+      expect(_translatableKeys(ur).length, 772);
     });
   });
 

@@ -18,6 +18,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
+import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/router/session.dart';
 import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/app/router/shell_tabs.dart';
@@ -70,13 +71,21 @@ class TpAppShell extends ConsumerWidget {
     );
 
     final TpPalette palette = TpPalette.of(context);
+    final String activePath = GoRouterState.of(context).uri.path;
+    final bool hasScreenOwnedNavigation =
+        activePath == TpRoutePaths.newInspection ||
+            activePath == TpRoutePaths.home;
 
     return Scaffold(
       backgroundColor: palette.background,
       body: navigationShell,
-      bottomNavigationBar: layout.visible.length < 2
+      bottomNavigationBar: hasScreenOwnedNavigation || layout.visible.length < 2
           // One destination is not a navigation bar, it is a decoration that
-          // costs a row of screen height on a phone held in one hand.
+          // costs a row of screen height on a phone held in one hand. The
+          // The approved Home dashboard owns its compact raised-centre action
+          // bar, while the multi-step inspection flow owns a persistent action
+          // instead. In both cases a second shell bar would duplicate controls
+          // and consume the exact working height the reference allocates.
           ? null
           : _TabBar(layout: layout, navigationShell: navigationShell),
     );

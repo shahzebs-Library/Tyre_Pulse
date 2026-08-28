@@ -83,8 +83,57 @@ class TyreWheelPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    _paintTwinTyreJoins(canvas);
     for (final TyreWheelPaintData wheel in wheels) {
       _paintWheel(canvas, wheel);
+    }
+  }
+
+  /// Fills the tiny authored gap between adjacent tyres on a dual axle.
+  ///
+  /// The individual tyre bodies, colours and selection states remain
+  /// separate. This dark bridge is drawn behind them so an inner/outer pair
+  /// reads as one physical twin-wheel assembly instead of two unrelated
+  /// floating wheels. The production layouts use a 2 SVG-unit gap; a
+  /// conservative 4-unit ceiling avoids joining wheels across the chassis.
+  void _paintTwinTyreJoins(Canvas canvas) {
+    final List<Rect> rects = <Rect>[
+      for (final TyreWheelPaintData wheel in wheels)
+        viewport.wheelRect(
+          wheel.svgX,
+          wheel.svgY,
+          wheel.svgW,
+          wheel.svgH,
+        ),
+    ];
+    final double maxGap = 4 * viewport.scale;
+    for (int i = 0; i < rects.length; i++) {
+      for (int j = i + 1; j < rects.length; j++) {
+        final Rect a = rects[i];
+        final Rect b = rects[j];
+        final Rect left = a.left <= b.left ? a : b;
+        final Rect right = identical(left, a) ? b : a;
+        final double gap = right.left - left.right;
+        final bool sameAxle = (left.center.dy - right.center.dy).abs() <= 0.5;
+        final bool sameSize = (left.height - right.height).abs() <= 0.5;
+        if (!sameAxle || !sameSize || gap < 0 || gap > maxGap) continue;
+
+        final double inset = left.height * 0.08;
+        final Rect bridge = Rect.fromLTRB(
+          left.right - 1,
+          left.top + inset,
+          right.left + 1,
+          left.bottom - inset,
+        );
+        canvas.drawRect(bridge, Paint()..color = const Color(0xFF101010));
+        canvas.drawLine(
+          Offset(bridge.center.dx, bridge.top),
+          Offset(bridge.center.dx, bridge.bottom),
+          Paint()
+            ..color = const Color(0xFF5B6470).withValues(alpha: 0.45)
+            ..strokeWidth = 0.6,
+        );
+      }
     }
   }
 

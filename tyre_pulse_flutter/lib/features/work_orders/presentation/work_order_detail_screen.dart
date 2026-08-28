@@ -1,30 +1,9 @@
-/// One work order, in full.
+/// One live work order, reached independently from a list or notification.
 ///
-/// # A genuinely NEW surface, not a literal port of a modal
-///
-/// `routes.dart`'s own doc comment on [WorkOrderDetailRoute] is explicit:
-/// "There is no work order detail route in the production app - both list
-/// screens open a record in an in-page modal." This screen has no direct
-/// reference counterpart to port field-for-field. It exists because the
-/// route, the guard and a documented future notification journey
-/// ("the notification must push this so Back gives Work Order, Workshop,
-/// Home" - see `app/router/notification_routing.dart`'s own handling of a
-/// work-order-carrying notification, which already resolves straight to
-/// [WorkOrderDetailRoute]) were all decided in an earlier phase of this
-/// migration, before this feature existed. So it must stand on its own:
-/// it fetches its OWN copy of the row by id
-/// (`WorkOrderRepository.byId`) rather than assuming
-/// [WorkOrdersListScreen] already loaded it, exactly the way a
-/// notification tap would reach it with nothing else in memory.
-///
-/// Shows every field [WorkOrdersListScreen]'s row already carries, plus
-/// the three real, already-written columns that only make sense once a
-/// job has moved (`started_at`, `completed_at`, `country` -
-/// `data/work_order_item.dart`'s own [workOrderDetailColumns]), and offers
-/// the SAME status-advance action the list row does - see
-/// `work_orders_list_screen.dart`'s own library comment for why reaching
-/// this screen at all is already the authorisation to act on it, with no
-/// separate `mayEdit` check layered on top.
+/// The light layout follows the approved Work Order mock and the dark layout
+/// follows the approved Job Details mock. Only columns already decoded by
+/// [WorkOrderItem] are rendered. The existing status advance remains queued
+/// through [WorkOrderRepository.advanceStatus] and retains its disclosure.
 library;
 
 import 'dart:async';
@@ -46,6 +25,15 @@ import 'package:tyre_pulse/features/work_orders/data/work_order_item.dart';
 import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/widgets/work_order_badges.dart';
 import 'package:tyre_pulse/features/work_orders/work_orders_providers.dart';
+
+enum _DetailMenu { refresh }
+
+abstract final class WorkOrderDetailScreenKeys {
+  static const Key header = Key('workOrder.detail.header');
+  static const Key tabs = Key('workOrder.detail.tabs');
+  static const Key lifecycle = Key('workOrder.detail.lifecycle');
+  static const Key bottomAction = Key('workOrder.detail.bottomAction');
+}
 
 class WorkOrderDetailScreen extends ConsumerStatefulWidget {
   const WorkOrderDetailScreen({required this.route, super.key});
@@ -105,11 +93,6 @@ class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
           .read(workOrderRepositoryProvider)
           .advanceStatus(workspace: workspace, current: item);
       if (!mounted) return;
-      // Reload IN PLACE rather than navigating away - mirrors
-      // `InspectionApprovalReviewScreen._decide`'s own choice: this is the
-      // record the person is looking at, and staying on it shows the new
-      // state as proof the action was recorded, rather than assuming they
-      // wanted to leave.
       await _load();
       if (!mounted) return;
       final AppLocalizations l10n = AppLocalizations.of(context);
@@ -136,31 +119,81 @@ class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     final WorkOrderItem? item = _item;
+    final TpPalette palette = TpPalette.of(context);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return TpScaffold(
-      backFallback: fallback,
-      appBar: TpAppBar(
-        title: item?.assetNo?.trim().isNotEmpty == true
-            ? TpDirection.isolateLtr(item!.assetNo!.trim())
-            : l10n.workOrderDetailTitle,
-        // A plain string slot - see `vehicle_detail_screen.dart`'s own
-        // comment on why an identifier placed directly in `TpAppBar`'s
-        // subtitle slot is isolated rather than wrapped in
-        // [TpIdentifierText], which needs a widget slot this one is not.
-        subtitle: item?.workOrderNo != null
-            ? TpDirection.isolateLtr(item!.workOrderNo!)
-            : null,
+    return DefaultTabController(
+      length: 4,
+      child: TpScaffold(
         backFallback: fallback,
+        backgroundColor: isDark ? palette.background : palette.surface,
+        appBar: TpAppBar(
+          title: l10n.workOrderDetailTitle,
+          backFallback: fallback,
+          actions: item == null
+              ? null
+              : <Widget>[
+                  PopupMenuButton<_DetailMenu>(
+                    icon: const Icon(Icons.more_vert_rounded),
+                    onSelected: (_) => unawaited(_load()),
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<_DetailMenu>>[
+                      PopupMenuItem<_DetailMenu>(
+                        value: _DetailMenu.refresh,
+                        child: Text(l10n.actionRetry),
+                      ),
+                    ],
+                  ),
+                ],
+        ),
+        body: _body(l10n, item, isDark: isDark),
+        bottomNavigationBar: _bottomAction(l10n, item),
       ),
-      body: _body(l10n, item),
     );
   }
 
-  Widget _body(AppLocalizations l10n, WorkOrderItem? item) {
+  Widget? _bottomAction(AppLocalizations l10n, WorkOrderItem? item) {
+    if (item == null || _loading || _error != null) return null;
+    final String? next = nextWorkOrderStatus(item.status);
+    if (next == null) return null;
+    final TpPalette palette = TpPalette.of(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.sm,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: TpButton.primary(
+            key: WorkOrderDetailScreenKeys.bottomAction,
+            label: next == kWorkOrderStatusInProgress
+                ? l10n.workOrderAdvanceToInProgress
+                : l10n.workOrderAdvanceToCompleted,
+            icon: Icons.play_arrow_rounded,
+            isBusy: _advancing,
+            isFullWidth: true,
+            onPressed: _advancing ? null : _advance,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _body(
+    AppLocalizations l10n,
+    WorkOrderItem? item, {
+    required bool isDark,
+  }) {
     if (_loading) return const TpLoadingState();
-    if (_error != null) {
-      return TpErrorState(error: _error!, onRetry: _load);
-    }
+    if (_error != null) return TpErrorState(error: _error!, onRetry: _load);
     if (item == null) {
       return TpEmptyState(
         icon: Icons.help_outline,
@@ -168,115 +201,477 @@ class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
         message: l10n.workOrderNotFoundMessage,
       );
     }
+    return isDark
+        ? _DarkJobBody(item: item, l10n: l10n, onRefresh: _load)
+        : _LightWorkOrderBody(item: item, l10n: l10n, onRefresh: _load);
+  }
+}
 
+class _LightWorkOrderBody extends StatelessWidget {
+  const _LightWorkOrderBody({
+    required this.item,
+    required this.l10n,
+    required this.onRefresh,
+  });
+
+  final WorkOrderItem item;
+  final AppLocalizations l10n;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final String? next = nextWorkOrderStatus(item.status);
     final String workType = workOrderWorkTypeLabel(l10n, item.workType);
-
-    final List<(String, String?)> fields = <(String, String?)>[
-      (l10n.workOrderFieldWorkOrderNo, item.workOrderNo),
-      (l10n.workOrderFieldWorkType, workType),
-      (l10n.workOrderFieldSite, item.site),
-      (l10n.workOrderFieldCountry, item.country),
-      (l10n.workOrderFieldOpened, _formatTimestamp(item.openedAt)),
-      (l10n.workOrderFieldStarted, _formatTimestamp(item.startedAt)),
-      (l10n.workOrderFieldCompleted, _formatTimestamp(item.completedAt)),
-    ];
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        TpSpace.lg,
-        TpSpace.lg,
-        TpSpace.lg,
-        TpSpace.xxxl,
-      ),
+    return Column(
       children: <Widget>[
-        TpCard(
-          margin: const EdgeInsets.only(bottom: TpSpace.lg),
+        Padding(
+          key: WorkOrderDetailScreenKeys.header,
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.md,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: WorkOrderStatusChip(
+                  status: item.status,
+                  isCompact: true,
+                ),
+              ),
+              const SizedBox(height: TpSpace.xs),
               TpIdentifierText(
                 item.assetNo ?? l10n.valueNotMeasured,
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _display(item.description, l10n),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (item.site?.trim().isNotEmpty == true) ...<Widget>[
+                const SizedBox(height: TpSpace.xs),
+                Text(
+                  item.site!.trim(),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: palette.textMuted),
+                ),
+              ],
+              const SizedBox(height: TpSpace.md),
+              Divider(height: 1, color: palette.border),
+              const SizedBox(height: TpSpace.md),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: _CompactFact(
+                      label: l10n.workOrderPriorityLabel,
+                      child: item.priority?.trim().isNotEmpty == true
+                          ? WorkOrderPriorityChip(
+                              priority: item.priority!.trim(),
+                              isCompact: true,
+                            )
+                          : Text(l10n.valueNotMeasured),
+                    ),
+                  ),
+                  const SizedBox(width: TpSpace.md),
+                  Expanded(
+                    child: _CompactFact(
+                      label: l10n.workOrderFieldOpened,
+                      child: Text(
+                        _formatTimestamp(item.openedAt) ??
+                            l10n.valueNotMeasured,
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: TpSpace.sm),
-              Wrap(
-                spacing: TpSpace.xs,
-                runSpacing: TpSpace.xs,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  WorkOrderStatusChip(status: item.status),
-                  if (item.priority != null && item.priority!.trim().isNotEmpty)
-                    WorkOrderPriorityChip(priority: item.priority!.trim()),
+                  Expanded(
+                    child: _CompactFact(
+                      label: l10n.workOrderFieldWorkType,
+                      child: Text(workType),
+                    ),
+                  ),
+                  const SizedBox(width: TpSpace.md),
+                  Expanded(
+                    child: _CompactFact(
+                      label: l10n.workOrderFieldStarted,
+                      child: Text(
+                        _formatTimestamp(item.startedAt) ??
+                            l10n.valueNotMeasured,
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
         ),
-        if (item.description != null && item.description!.trim().isNotEmpty)
+        TabBar(
+          key: WorkOrderDetailScreenKeys.tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          indicatorColor: palette.primary,
+          labelColor: palette.primary,
+          unselectedLabelColor: palette.textSecondary,
+          tabs: <Widget>[
+            Tab(text: l10n.workOrderDescriptionLabel),
+            Tab(text: l10n.tabChecklists),
+            Tab(text: l10n.inspectionNotesLabel),
+            Tab(text: l10n.tabHistory),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            children: <Widget>[
+              _DetailTab(item: item, l10n: l10n, onRefresh: onRefresh),
+              _NotConfiguredTab(l10n: l10n),
+              _NotConfiguredTab(l10n: l10n),
+              _HistoryTab(item: item, l10n: l10n, onRefresh: onRefresh),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DarkJobBody extends StatelessWidget {
+  const _DarkJobBody({
+    required this.item,
+    required this.l10n,
+    required this.onRefresh,
+  });
+
+  final WorkOrderItem item;
+  final AppLocalizations l10n;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final String workType = workOrderWorkTypeLabel(l10n, item.workType);
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.md,
+          TpSpace.md,
+          TpSpace.md,
+          TpSpace.xxxl,
+        ),
+        children: <Widget>[
           TpCard(
-            margin: const EdgeInsets.only(bottom: TpSpace.lg),
+            margin: const EdgeInsets.only(bottom: TpSpace.xs),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+              key: WorkOrderDetailScreenKeys.header,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  l10n.workOrderFieldDescription,
-                  style: Theme.of(context).textTheme.labelMedium,
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: TpIdentifierText(
+                        item.workOrderNo ?? l10n.valueNotMeasured,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                    WorkOrderStatusChip(status: item.status, isCompact: true),
+                  ],
                 ),
-                const SizedBox(height: TpSpace.xs),
-                Text(
-                  item.description!.trim(),
-                  style: Theme.of(context).textTheme.bodyLarge,
+                const SizedBox(height: TpSpace.md),
+                Row(
+                  children: <Widget>[
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: TpPalette.of(context).surfaceAlt,
+                        borderRadius: BorderRadius.circular(TpRadius.sm),
+                      ),
+                      child: const SizedBox(
+                        width: 52,
+                        height: 44,
+                        child: Icon(Icons.local_shipping_outlined),
+                      ),
+                    ),
+                    const SizedBox(width: TpSpace.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          TpIdentifierText(
+                            item.assetNo ?? l10n.valueNotMeasured,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          Text(workType),
+                          if (item.description?.trim().isNotEmpty == true)
+                            Text(
+                              item.description!.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        TpCard(
-          margin: const EdgeInsets.only(bottom: TpSpace.lg),
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: <Widget>[
-              for (int i = 0; i < fields.length; i++)
-                _FieldRow(
-                  label: fields[i].$1,
-                  value: fields[i].$2,
-                  showDivider: i < fields.length - 1,
-                  borderColor: palette.border,
+          TpCard(
+            margin: const EdgeInsets.only(bottom: TpSpace.xs),
+            padding: const EdgeInsets.all(TpSpace.md),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: _CompactFact(
+                    label: l10n.workOrderFieldSite,
+                    child: Text(_display(item.site, l10n)),
+                  ),
                 ),
-            ],
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: _CompactFact(
+                    label: l10n.workOrderFieldCountry,
+                    child: Text(_display(item.country, l10n)),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        if (next != null)
-          TpButton.primary(
-            label: next == kWorkOrderStatusInProgress
-                ? l10n.workOrderAdvanceToInProgress
-                : l10n.workOrderAdvanceToCompleted,
-            icon: Icons.arrow_forward_ios_rounded,
-            isBusy: _advancing,
-            isFullWidth: true,
-            onPressed: _advancing ? null : _advance,
-          ),
-      ],
+          _LifecycleCard(item: item, l10n: l10n),
+        ],
+      ),
     );
-  }
-
-  static String? _formatTimestamp(String? iso) {
-    if (iso == null || iso.isEmpty) return null;
-    final DateTime? parsed = DateTime.tryParse(iso);
-    if (parsed == null) return null;
-    final DateTime local = parsed.toLocal();
-    final String y = local.year.toString().padLeft(4, '0');
-    final String m = local.month.toString().padLeft(2, '0');
-    final String d = local.day.toString().padLeft(2, '0');
-    final String hh = local.hour.toString().padLeft(2, '0');
-    final String mm = local.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
   }
 }
 
-/// Mirrors `work_orders_list_screen.dart`'s own private `_asAppError`.
+class _DetailTab extends StatelessWidget {
+  const _DetailTab({
+    required this.item,
+    required this.l10n,
+    required this.onRefresh,
+  });
+
+  final WorkOrderItem item;
+  final AppLocalizations l10n;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.all(TpSpace.lg),
+          children: <Widget>[
+            _SectionLabel(l10n.workOrderFieldDescription),
+            const SizedBox(height: TpSpace.sm),
+            Text(_display(item.description, l10n)),
+            const SizedBox(height: TpSpace.xl),
+            _FieldRow(
+              label: l10n.workOrderFieldWorkOrderNo,
+              value: item.workOrderNo,
+            ),
+            _FieldRow(
+              label: l10n.workOrderFieldWorkType,
+              value: workOrderWorkTypeLabel(l10n, item.workType),
+            ),
+            _FieldRow(label: l10n.workOrderFieldCountry, value: item.country),
+          ],
+        ),
+      );
+}
+
+class _HistoryTab extends StatelessWidget {
+  const _HistoryTab({
+    required this.item,
+    required this.l10n,
+    required this.onRefresh,
+  });
+
+  final WorkOrderItem item;
+  final AppLocalizations l10n;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) => RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.all(TpSpace.lg),
+          children: <Widget>[
+            _LifecycleCard(item: item, l10n: l10n),
+          ],
+        ),
+      );
+}
+
+class _NotConfiguredTab extends StatelessWidget {
+  const _NotConfiguredTab({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) => TpNotConfiguredState(
+        title: l10n.stateNotConfiguredTitle,
+        detail: l10n.stateNotConfiguredMessage,
+      );
+}
+
+class _LifecycleCard extends StatelessWidget {
+  const _LifecycleCard({required this.item, required this.l10n});
+
+  final WorkOrderItem item;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<(String, String?)> steps = <(String, String?)>[
+      (l10n.workOrderFieldOpened, _formatTimestamp(item.openedAt)),
+      (l10n.workOrderFieldStarted, _formatTimestamp(item.startedAt)),
+      (l10n.workOrderFieldCompleted, _formatTimestamp(item.completedAt)),
+    ];
+    final int complete = steps.where((step) => step.$2 != null).length;
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      key: WorkOrderDetailScreenKeys.lifecycle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  l10n.tabHistory,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Text('$complete/${steps.length}'),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          LinearProgressIndicator(
+            value: complete / steps.length,
+            minHeight: 5,
+            borderRadius: BorderRadius.circular(TpRadius.pill),
+            backgroundColor: palette.surfaceSunken,
+          ),
+          const SizedBox(height: TpSpace.md),
+          for (final (String label, String? value) in steps)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    value == null
+                        ? Icons.radio_button_unchecked_rounded
+                        : Icons.check_circle_rounded,
+                    color: value == null ? palette.textMuted : palette.ok.base,
+                    size: 20,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(child: Text(label)),
+                  const SizedBox(width: TpSpace.sm),
+                  Text(
+                    value ?? l10n.valueNotMeasured,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactFact extends StatelessWidget {
+  const _CompactFact({required this.label, required this.child});
+
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          const SizedBox(height: 2),
+          DefaultTextStyle.merge(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+            child: child,
+          ),
+        ],
+      );
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: TpPalette.of(context).textSecondary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
+      );
+}
+
+class _FieldRow extends StatelessWidget {
+  const _FieldRow({required this.label, required this.value});
+
+  final String label;
+  final String? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: TpPalette.of(context).border),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: TpSpace.md),
+      child: Row(
+        children: <Widget>[
+          Expanded(child: Text(label)),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: Text(
+              _display(value, l10n),
+              textAlign: TextAlign.end,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 AppError _asAppError(BuildContext context, Object error) {
   if (error is AppError) return error;
   if (error is SupabaseFailure) return error.error;
@@ -289,57 +684,20 @@ AppError _asAppError(BuildContext context, Object error) {
   );
 }
 
-/// A labelled field, mirroring `vehicle_detail_screen.dart`'s own
-/// `_FieldRow` shape. Each feature keeps its own copy of this small widget
-/// rather than sharing one across top-level features, matching this
-/// codebase's established convention (see, for one example among several,
-/// `inspection_approval_signature_pad.dart`'s own library comment on why
-/// sibling top-level features keep their own copies even of widgets that
-/// look similar).
-class _FieldRow extends StatelessWidget {
-  const _FieldRow({
-    required this.label,
-    required this.value,
-    required this.showDivider,
-    required this.borderColor,
-  });
+String _display(String? value, AppLocalizations l10n) {
+  final String text = value?.trim() ?? '';
+  return text.isEmpty ? l10n.valueNotMeasured : text;
+}
 
-  final String label;
-  final String? value;
-  final bool showDivider;
-  final Color borderColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-    final String display = value?.trim().isNotEmpty == true
-        ? value!.trim()
-        : l10n.valueNotMeasured;
-
-    return Container(
-      decoration: showDivider
-          ? BoxDecoration(
-              border: Border(bottom: BorderSide(color: borderColor)),
-            )
-          : null,
-      padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.lg,
-        vertical: TpSpace.md,
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(flex: 2, child: Text(label, style: text.labelMedium)),
-          Expanded(
-            flex: 3,
-            child: Text(
-              display,
-              style: text.bodyLarge,
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+String? _formatTimestamp(String? iso) {
+  if (iso == null || iso.isEmpty) return null;
+  final DateTime? parsed = DateTime.tryParse(iso);
+  if (parsed == null) return null;
+  final DateTime local = parsed.toLocal();
+  final String y = local.year.toString().padLeft(4, '0');
+  final String m = local.month.toString().padLeft(2, '0');
+  final String d = local.day.toString().padLeft(2, '0');
+  final String hh = local.hour.toString().padLeft(2, '0');
+  final String mm = local.minute.toString().padLeft(2, '0');
+  return TpDirection.isolateLtr('$y-$m-$d $hh:$mm');
 }

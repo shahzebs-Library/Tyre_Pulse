@@ -81,4 +81,5 @@ flutter:
   uses-material-design: true
   generate: true
   assets:
+    - assets/login/
     - assets/vehicle_diagram/

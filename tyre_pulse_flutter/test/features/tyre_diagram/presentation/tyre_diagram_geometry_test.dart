@@ -6,6 +6,8 @@ library;
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 
 void main() {
@@ -100,6 +102,132 @@ void main() {
       final Rect padded = viewport.hitRect(32, 48, 23, 44);
       expect(padded.width, greaterThan(kDiagramMinHitTarget));
       expect(padded.height, greaterThan(kDiagramMinHitTarget));
+    });
+  });
+
+  group('buildTyreHitRects', () {
+    for (final String layoutKey in <String>[
+      'Tri-mixer',
+      'Line pump',
+      'Concrete pump',
+    ]) {
+      test(
+        '$layoutKey compact dual targets keep each painted centre on its '
+        'own side of the seam',
+        () {
+          final DiagramLayout layout = kTyreDiagramLayouts[layoutKey]!;
+          const TyreDiagramViewport viewport = TyreDiagramViewport(
+            width: 190,
+            viewH: 375,
+          );
+          final Map<String, Rect> targets = buildTyreHitRects(
+            layout: layout,
+            viewport: viewport,
+          );
+
+          for (final (String, String) pair in <(String, String)>[
+            ('R1Lo', 'R1Li'),
+            ('R1Ri', 'R1Ro'),
+            ('R2Lo', 'R2Li'),
+            ('R2Ri', 'R2Ro'),
+          ]) {
+            final TyreSlot first = layout.tyres.singleWhere(
+              (TyreSlot slot) => slot.id == pair.$1,
+            );
+            final TyreSlot second = layout.tyres.singleWhere(
+              (TyreSlot slot) => slot.id == pair.$2,
+            );
+            final TyreSlot left = first.x < second.x ? first : second;
+            final TyreSlot right = identical(left, first) ? second : first;
+            final Rect leftTarget = targets[left.id]!;
+            final Rect rightTarget = targets[right.id]!;
+
+            expect(leftTarget.overlaps(rightTarget), isFalse);
+            expect(leftTarget.right, closeTo(rightTarget.left, 0.001));
+            expect(leftTarget.width, greaterThanOrEqualTo(48));
+            expect(rightTarget.width, greaterThanOrEqualTo(48));
+            expect(
+              leftTarget.contains(
+                viewport.wheelRect(left.x, left.y, left.w, left.h).center,
+              ),
+              isTrue,
+              reason: '$layoutKey ${left.id} must not select ${right.id}',
+            );
+            expect(
+              rightTarget.contains(
+                viewport.wheelRect(right.x, right.y, right.w, right.h).center,
+              ),
+              isTrue,
+              reason: '$layoutKey ${right.id} must not select ${left.id}',
+            );
+          }
+        },
+      );
+    }
+
+    test(
+        'every concrete-pump inner/outer pair has two adjacent, non-overlapping targets',
+        () {
+      final DiagramLayout layout = kTyreDiagramLayouts['Concrete pump']!;
+      const TyreDiagramViewport viewport = TyreDiagramViewport(
+        width: 300,
+        viewH: 375,
+      );
+      final Map<String, Rect> targets = buildTyreHitRects(
+        layout: layout,
+        viewport: viewport,
+      );
+
+      for (final (String, String) pair in <(String, String)>[
+        ('R1Lo', 'R1Li'),
+        ('R1Ri', 'R1Ro'),
+        ('R2Lo', 'R2Li'),
+        ('R2Ri', 'R2Ro'),
+      ]) {
+        final TyreSlot first =
+            layout.tyres.singleWhere((TyreSlot slot) => slot.id == pair.$1);
+        final TyreSlot second =
+            layout.tyres.singleWhere((TyreSlot slot) => slot.id == pair.$2);
+        final TyreSlot left = first.x < second.x ? first : second;
+        final TyreSlot right = identical(left, first) ? second : first;
+        final Rect leftTarget = targets[left.id]!;
+        final Rect rightTarget = targets[right.id]!;
+
+        expect(leftTarget.right, closeTo(rightTarget.left, 0.001));
+        expect(leftTarget.overlaps(rightTarget), isFalse);
+        expect(leftTarget.width, greaterThanOrEqualTo(kDiagramMinHitTarget));
+        expect(rightTarget.width, greaterThanOrEqualTo(kDiagramMinHitTarget));
+        expect(
+          leftTarget.contains(
+            viewport.wheelRect(left.x, left.y, left.w, left.h).center,
+          ),
+          isTrue,
+        );
+        expect(
+          rightTarget.contains(
+            viewport.wheelRect(right.x, right.y, right.w, right.h).center,
+          ),
+          isTrue,
+        );
+      }
+    });
+
+    test('single steer-wheel targets keep the centred geometry', () {
+      final DiagramLayout layout = kTyreDiagramLayouts['Line pump']!;
+      const TyreDiagramViewport viewport = TyreDiagramViewport(
+        width: 300,
+        viewH: 375,
+      );
+      final TyreSlot slot =
+          layout.tyres.singleWhere((TyreSlot tyre) => tyre.id == 'F1L');
+      final Map<String, Rect> targets = buildTyreHitRects(
+        layout: layout,
+        viewport: viewport,
+      );
+      expect(
+        targets[slot.id],
+        viewport.hitRect(slot.x, slot.y, slot.w, slot.h),
+      );
     });
   });
 }

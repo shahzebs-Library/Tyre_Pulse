@@ -33,6 +33,16 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 
+/// Stable finders for the responsive approvals queue presentation.
+@visibleForTesting
+abstract final class InspectionApprovalsQueueKeys {
+  static const Key summary = Key('inspection.approvals.summary');
+  static const Key list = Key('inspection.approvals.list');
+
+  static Key row(String id) => Key('inspection.approvals.row.$id');
+  static Key heading(String id) => Key('inspection.approvals.heading.$id');
+}
+
 class InspectionApprovalsQueueScreen extends ConsumerStatefulWidget {
   const InspectionApprovalsQueueScreen({required this.route, super.key});
 
@@ -48,6 +58,7 @@ class _InspectionApprovalsQueueScreenState
   bool _loading = true;
   AppError? _error;
   List<InspectionApprovalItem> _items = const <InspectionApprovalItem>[];
+  String _query = '';
 
   @override
   void initState() {
@@ -97,9 +108,6 @@ class _InspectionApprovalsQueueScreenState
       backFallback: fallback,
       appBar: TpAppBar(
         title: l10n.inspectionApprovalsTitle,
-        subtitle: _loading
-            ? null
-            : l10n.inspectionApprovalsAwaitingCount(_items.length),
         backFallback: fallback,
       ),
       body: _body(l10n),
@@ -129,24 +137,133 @@ class _InspectionApprovalsQueueScreenState
       );
     }
 
+    final String needle = _query.trim().toLowerCase();
+    final List<InspectionApprovalItem> visible = needle.isEmpty
+        ? _items
+        : _items.where((InspectionApprovalItem item) {
+            return <String?>[
+              item.assetNo,
+              item.vehicleType,
+              item.site,
+              item.inspector,
+              item.title,
+              item.id,
+            ].any(
+              (String? value) =>
+                  value?.trim().toLowerCase().contains(needle) == true,
+            );
+          }).toList(growable: false);
+
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.builder(
+        key: InspectionApprovalsQueueKeys.list,
         padding: const EdgeInsets.fromLTRB(
           TpSpace.lg,
           TpSpace.lg,
           TpSpace.lg,
           TpSpace.xxl,
         ),
-        itemCount: _items.length,
-        itemBuilder: (BuildContext context, int index) => _QueueRow(
-          item: _items[index],
-          fallbackTitle: l10n.inspectionApprovalFallbackTitle,
-          inspectorFallback: l10n.inspectionInspectorUnknown,
-          pendingLabel: l10n.inspectionApprovalsPendingBadge,
-          unavailableLabel: l10n.valueUnavailable,
-          onTap: () => _open(_items[index]),
-        ),
+        itemCount: visible.isEmpty ? 2 : visible.length + 1,
+        itemBuilder: (BuildContext context, int index) {
+          if (index == 0) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: _QueueSummary(
+                  count: _items.length,
+                  onSearchChanged: (String value) {
+                    setState(() => _query = value);
+                  },
+                ),
+              ),
+            );
+          }
+          if (visible.isEmpty) {
+            return SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.42,
+              child: TpEmptyState(
+                icon: Icons.search_off_outlined,
+                title: l10n.globalSearchEmptyTitle,
+                message: l10n.vehiclesEmptySearchMessage,
+              ),
+            );
+          }
+          final InspectionApprovalItem item = visible[index - 1];
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: _QueueRow(
+                item: item,
+                fallbackTitle: l10n.inspectionApprovalFallbackTitle,
+                inspectorFallback: l10n.inspectionInspectorUnknown,
+                pendingLabel: l10n.inspectionApprovalsPendingBadge,
+                unavailableLabel: l10n.valueUnavailable,
+                onTap: () => _open(item),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _QueueSummary extends StatelessWidget {
+  const _QueueSummary({
+    required this.count,
+    required this.onSearchChanged,
+  });
+
+  final int count;
+  final ValueChanged<String> onSearchChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      key: InspectionApprovalsQueueKeys.summary,
+      margin: const EdgeInsets.only(bottom: TpSpace.lg),
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.pending_actions_outlined,
+                color: palette.primary,
+                size: TpSizing.iconMd,
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  l10n.inspectionApprovalsPendingBadge,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: palette.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              TpStatusChip(
+                status: TpStatus.info,
+                label: count.toString(),
+                isCompact: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              color: palette.primary,
+              borderRadius: BorderRadius.circular(TpRadius.pill),
+            ),
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpSearchField(onChanged: onSearchChanged),
+        ],
       ),
     );
   }
@@ -193,68 +310,78 @@ class _QueueRow extends StatelessWidget {
     final String when = _formatDate(item.createdAt) ?? unavailableLabel;
 
     return TpCard(
+      key: InspectionApprovalsQueueKeys.row(item.id),
       onTap: onTap,
       margin: const EdgeInsets.only(bottom: TpSpace.sm),
-      child: Row(
+      padding: const EdgeInsets.all(TpSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.forStatus(TpStatus.warning).soft,
-              shape: BoxShape.circle,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(TpSpace.sm),
-              child: Icon(
-                Icons.assignment_outlined,
-                size: TpSizing.iconMd,
-                color: palette.forStatus(TpStatus.warning).onSoft,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: palette.forStatus(TpStatus.warning).soft,
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(TpSpace.sm),
+                  child: Icon(
+                    Icons.assignment_outlined,
+                    size: TpSizing.iconMd,
+                    color: palette.forStatus(TpStatus.warning).onSoft,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
+              const SizedBox(width: TpSpace.md),
+              Expanded(
+                child: Text(
                   heading,
-                  style: Theme.of(context).textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  key: InspectionApprovalsQueueKeys.heading(item.id),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
-                if (item.site != null && item.site!.trim().isNotEmpty)
-                  _MetaRow(icon: Icons.place_outlined, text: item.site!),
-                _MetaRow(
-                  icon: Icons.person_outline,
-                  text: item.inspector?.trim().isNotEmpty == true
-                      ? item.inspector!.trim()
-                      : inspectorFallback,
-                  trailing: when,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: TpSpace.sm),
-          if (item.inspectorSignature != null &&
-              item.inspectorSignature!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(right: TpSpace.xs),
-              child: Icon(
-                Icons.draw_outlined,
-                size: TpSizing.iconSm,
-                color: palette.forStatus(TpStatus.ok).base,
               ),
-            ),
-          TpStatusChip(
-            status: TpStatus.warning,
-            label: pendingLabel,
-            isCompact: true,
+              const SizedBox(width: TpSpace.sm),
+              Icon(
+                isRtl ? Icons.chevron_left : Icons.chevron_right,
+                color: palette.textMuted,
+              ),
+            ],
           ),
-          const SizedBox(width: TpSpace.xs),
-          Icon(
-            isRtl ? Icons.chevron_left : Icons.chevron_right,
-            color: palette.textMuted,
+          if (item.site != null && item.site!.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: TpSpace.md),
+            _MetaRow(icon: Icons.place_outlined, text: item.site!),
+          ],
+          const SizedBox(height: TpSpace.xs),
+          _MetaRow(
+            icon: Icons.person_outline,
+            text: item.inspector?.trim().isNotEmpty == true
+                ? item.inspector!.trim()
+                : inspectorFallback,
+          ),
+          const SizedBox(height: TpSpace.md),
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              _MetaPill(icon: Icons.event_outlined, text: when),
+              if (item.inspectorSignature != null &&
+                  item.inspectorSignature!.isNotEmpty)
+                Icon(
+                  Icons.draw_outlined,
+                  size: TpSizing.iconSm,
+                  color: palette.forStatus(TpStatus.ok).base,
+                ),
+              TpStatusChip(
+                status: TpStatus.warning,
+                label: pendingLabel,
+                isCompact: true,
+              ),
+            ],
           ),
         ],
       ),
@@ -266,10 +393,13 @@ class _QueueRow extends StatelessWidget {
   /// own `[s.asset_no, s.vehicle_type].filter(Boolean).join(' · ') ||
   /// s.title || 'Inspection'`.
   static String _headingFor(InspectionApprovalItem item, String fallbackTitle) {
-    final String assetAndType = <String?>[
-      item.assetNo,
-      item.vehicleType,
-    ].where((String? v) => v != null && v.trim().isNotEmpty).join(' - ');
+    final String? assetNo = item.assetNo?.trim();
+    final String? vehicleType = item.vehicleType?.trim();
+    final String assetAndType = <String>[
+      if (assetNo != null && assetNo.isNotEmpty)
+        TpDirection.isolateLtr(assetNo),
+      if (vehicleType != null && vehicleType.isNotEmpty) vehicleType,
+    ].join(' - ');
     if (assetAndType.isNotEmpty) return assetAndType;
     final String title = item.title?.trim() ?? '';
     return title.isNotEmpty ? title : fallbackTitle;
@@ -288,11 +418,10 @@ class _QueueRow extends StatelessWidget {
 }
 
 class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.icon, required this.text, this.trailing});
+  const _MetaRow({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
-  final String? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -308,18 +437,47 @@ class _MetaRow extends StatelessWidget {
           Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
           const SizedBox(width: TpSpace.xs),
           Flexible(
-            child: Text(
-              text,
-              style: style,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(text, style: style),
           ),
-          if (trailing != null) ...<Widget>[
-            const SizedBox(width: TpSpace.xs),
-            Text(trailing!, style: style),
-          ],
         ],
+      ),
+    );
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  const _MetaPill({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: TpSpace.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+            const SizedBox(width: TpSpace.xs),
+            Text(
+              text,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: palette.textMuted),
+            ),
+          ],
+        ),
       ),
     );
   }

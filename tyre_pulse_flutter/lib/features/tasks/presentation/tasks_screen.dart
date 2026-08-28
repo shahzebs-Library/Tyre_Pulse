@@ -1,0 +1,636 @@
+library;
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:tyre_pulse/app/router/back_navigation.dart';
+import 'package:tyre_pulse/app/router/routes.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/tasks/data/task_item.dart';
+import 'package:tyre_pulse/features/tasks/domain/task_board.dart';
+import 'package:tyre_pulse/features/tasks/presentation/tasks_copy.dart';
+import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
+
+abstract final class TasksScreenKeys {
+  static Key task(String id) => ValueKey<String>('tasks.task.$id');
+  static const Key todayTab = ValueKey<String>('tasks.tab.today');
+  static const Key inProgressTab = ValueKey<String>('tasks.tab.in-progress');
+  static const Key completedTab = ValueKey<String>('tasks.tab.completed');
+}
+
+class TasksScreen extends ConsumerStatefulWidget {
+  const TasksScreen({required this.route, super.key});
+
+  final TasksRoute route;
+
+  @override
+  ConsumerState<TasksScreen> createState() => _TasksScreenState();
+}
+
+class _TasksScreenState extends ConsumerState<TasksScreen> {
+  bool _loading = true;
+  Object? _error;
+  List<TaskItem> _items = const <TaskItem>[];
+  TaskBoardFilter _filter = TaskBoardFilter.today;
+  final Set<String> _expandedIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final List<TaskItem> items = await ref
+          .read(tasksRepositoryProvider)
+          .listRecent(country: ref.read(activeCountryProvider));
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
+
+  void _selectFilter(TaskBoardFilter value) {
+    if (_filter == value) return;
+    setState(() {
+      _filter = value;
+      _expandedIds.clear();
+    });
+  }
+
+  void _toggleDetails(String id) {
+    setState(() {
+      if (!_expandedIds.add(id)) _expandedIds.remove(id);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final TasksCopy copy = TasksCopy.of(context);
+    final String fallback = TpBackFallbacks.forRoute(widget.route);
+    final int activeCount =
+        _items.where((TaskItem item) => !isTaskCompleted(item)).length;
+
+    return TpScaffold(
+      backFallback: fallback,
+      appBar: TpAppBar(
+        title: copy('title'),
+        subtitle: _loading ? null : '$activeCount ${copy('open')}',
+        backFallback: fallback,
+        actions: <Widget>[
+          PopupMenuButton<TaskBoardFilter>(
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: copy('status'),
+            initialValue: _filter,
+            onSelected: _selectFilter,
+            itemBuilder: (BuildContext context) =>
+                <PopupMenuEntry<TaskBoardFilter>>[
+              PopupMenuItem<TaskBoardFilter>(
+                value: TaskBoardFilter.today,
+                child: Text(copy('today')),
+              ),
+              PopupMenuItem<TaskBoardFilter>(
+                value: TaskBoardFilter.inProgress,
+                child: Text(copy('inProgress')),
+              ),
+              PopupMenuItem<TaskBoardFilter>(
+                value: TaskBoardFilter.completed,
+                child: Text(copy('completed')),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: _body(copy),
+    );
+  }
+
+  Widget _body(TasksCopy copy) {
+    if (_loading) return const TpLoadingState();
+    if (_error != null) {
+      final Object error = _error!;
+      final AppError appError;
+      if (error is AppError) {
+        appError = error;
+      } else if (error is SupabaseFailure) {
+        appError = error.error;
+      } else {
+        appError = AppError(
+          kind: AppErrorKind.unknown,
+          message: copy('loadError'),
+          technical: error.toString(),
+          cause: error,
+          isRetryable: true,
+        );
+      }
+      return TpErrorState(error: appError, onRetry: _load);
+    }
+
+    final List<TaskItem> shown = filterTasks(_items, _filter);
+    return Column(
+      children: <Widget>[
+        _TaskTabs(
+          selected: _filter,
+          todayCount: filterTasks(_items, TaskBoardFilter.today).length,
+          inProgressCount:
+              filterTasks(_items, TaskBoardFilter.inProgress).length,
+          completedCount: filterTasks(_items, TaskBoardFilter.completed).length,
+          copy: copy,
+          onSelected: _selectFilter,
+        ),
+        Expanded(
+          child: shown.isEmpty
+              ? RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: <Widget>[
+                      SizedBox(
+                        height: MediaQuery.sizeOf(context).height * 0.55,
+                        child: TpEmptyState(
+                          icon: Icons.task_alt_rounded,
+                          title: copy('emptyTitle'),
+                          message: copy('emptyMessage'),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : _TaskBoard(
+                  items: shown,
+                  now: DateTime.now(),
+                  copy: copy,
+                  expandedIds: _expandedIds,
+                  onRefresh: _load,
+                  onToggleDetails: _toggleDetails,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TaskTabs extends StatelessWidget {
+  const _TaskTabs({
+    required this.selected,
+    required this.todayCount,
+    required this.inProgressCount,
+    required this.completedCount,
+    required this.copy,
+    required this.onSelected,
+  });
+
+  final TaskBoardFilter selected;
+  final int todayCount;
+  final int inProgressCount;
+  final int completedCount;
+  final TasksCopy copy;
+  final ValueChanged<TaskBoardFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          _TaskTab(
+            key: TasksScreenKeys.todayTab,
+            label: copy('today'),
+            count: todayCount,
+            selected: selected == TaskBoardFilter.today,
+            onTap: () => onSelected(TaskBoardFilter.today),
+          ),
+          _TaskTab(
+            key: TasksScreenKeys.inProgressTab,
+            label: copy('inProgress'),
+            count: inProgressCount,
+            selected: selected == TaskBoardFilter.inProgress,
+            onTap: () => onSelected(TaskBoardFilter.inProgress),
+          ),
+          _TaskTab(
+            key: TasksScreenKeys.completedTab,
+            label: copy('completed'),
+            count: completedCount,
+            selected: selected == TaskBoardFilter.completed,
+            onTap: () => onSelected(TaskBoardFilter.completed),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskTab extends StatelessWidget {
+  const _TaskTab({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  width: selected ? 3 : 0,
+                  color: selected ? palette.primary : Colors.transparent,
+                ),
+              ),
+            ),
+            child: Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: selected
+                                ? palette.primaryDark
+                                : palette.textSecondary,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  if (count > 0) ...<Widget>[
+                    const SizedBox(width: TpSpace.xs),
+                    Text(
+                      '$count',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color:
+                                selected ? palette.primary : palette.textMuted,
+                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskBoard extends StatelessWidget {
+  const _TaskBoard({
+    required this.items,
+    required this.now,
+    required this.copy,
+    required this.expandedIds,
+    required this.onRefresh,
+    required this.onToggleDetails,
+  });
+
+  final List<TaskItem> items;
+  final DateTime now;
+  final TasksCopy copy;
+  final Set<String> expandedIds;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<String> onToggleDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final Map<TaskBoardSection, List<TaskItem>> grouped =
+        groupTasks(items, now: now);
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.md,
+          TpSpace.lg,
+          TpSpace.xxl,
+        ),
+        children: <Widget>[
+          for (final TaskBoardSection section in TaskBoardSection.values)
+            if (grouped[section]!.isNotEmpty) ...<Widget>[
+              _SectionLabel(section: section, copy: copy),
+              const SizedBox(height: TpSpace.sm),
+              for (final TaskItem item in grouped[section]!)
+                _TaskCard(
+                  item: item,
+                  section: section,
+                  expanded: expandedIds.contains(item.id),
+                  copy: copy,
+                  onToggleDetails: () => onToggleDetails(item.id),
+                ),
+              const SizedBox(height: TpSpace.sm),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.section, required this.copy});
+
+  final TaskBoardSection section;
+  final TasksCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color color = switch (section) {
+      TaskBoardSection.urgent => palette.critical.base,
+      TaskBoardSection.inProgress => palette.ok.base,
+      TaskBoardSection.upcoming => palette.textSecondary,
+      TaskBoardSection.completed => palette.ok.base,
+    };
+    final String key = switch (section) {
+      TaskBoardSection.urgent => 'urgent',
+      TaskBoardSection.inProgress => 'inProgress',
+      TaskBoardSection.upcoming => 'upcoming',
+      TaskBoardSection.completed => 'completed',
+    };
+    return Text(
+      copy(key).toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.8,
+          ),
+    );
+  }
+}
+
+class _TaskCard extends StatelessWidget {
+  const _TaskCard({
+    required this.item,
+    required this.section,
+    required this.expanded,
+    required this.copy,
+    required this.onToggleDetails,
+  });
+
+  final TaskItem item;
+  final TaskBoardSection section;
+  final bool expanded;
+  final TasksCopy copy;
+  final VoidCallback onToggleDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color accent = switch (section) {
+      TaskBoardSection.urgent => palette.critical.base,
+      TaskBoardSection.inProgress => palette.primary,
+      TaskBoardSection.upcoming => palette.ok.base,
+      TaskBoardSection.completed => palette.ok.base,
+    };
+    final String? asset = item.assetNo;
+    final String? site = item.site;
+    final String priority = item.priority ?? copy('normal');
+    final List<String> meta = <String>[
+      if (asset != null) asset,
+      if (site != null) site,
+    ];
+    final bool hasDetails = item.description != null ||
+        item.assignedTo != null ||
+        item.dueDate != null;
+
+    return TpCard(
+      key: TasksScreenKeys.task(item.id),
+      margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      padding: EdgeInsets.zero,
+      borderColor: palette.border,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(TpRadius.lg - 1),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              ColoredBox(color: accent, child: const SizedBox(width: 4)),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    TpSpace.md,
+                    TpSpace.md,
+                    TpSpace.sm,
+                    TpSpace.md,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              item.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          const SizedBox(width: TpSpace.sm),
+                          _CompactBadge(
+                            label: priority,
+                            color: accent,
+                            background: section == TaskBoardSection.urgent
+                                ? palette.critical.soft
+                                : palette.surfaceAlt,
+                          ),
+                        ],
+                      ),
+                      if (meta.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: TpSpace.xs),
+                        TpIdentifierText(
+                          meta.join('  •  '),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: palette.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ],
+                      if (item.description != null) ...<Widget>[
+                        const SizedBox(height: TpSpace.xs),
+                        Text(
+                          item.description!,
+                          maxLines: expanded ? null : 2,
+                          overflow: expanded ? null : TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                      ],
+                      if (expanded) ...<Widget>[
+                        const SizedBox(height: TpSpace.sm),
+                        Divider(height: 1, color: palette.border),
+                        const SizedBox(height: TpSpace.sm),
+                        if (item.assignedTo != null)
+                          _DetailLine(
+                            icon: Icons.person_outline_rounded,
+                            label: copy('assigned'),
+                            value: item.assignedTo!,
+                          ),
+                        if (item.dueDate != null)
+                          _DetailLine(
+                            icon: Icons.schedule_rounded,
+                            label: copy('due'),
+                            value: MaterialLocalizations.of(context)
+                                .formatMediumDate(item.dueDate!.toLocal()),
+                          ),
+                        if (item.status != null)
+                          _DetailLine(
+                            icon: Icons.flag_outlined,
+                            label: copy('status'),
+                            value: item.status!,
+                          ),
+                      ],
+                      if (hasDetails) ...<Widget>[
+                        const SizedBox(height: TpSpace.xs),
+                        Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: TextButton.icon(
+                            onPressed: onToggleDetails,
+                            iconAlignment: IconAlignment.end,
+                            icon: Icon(
+                              expanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : (TpDirection.isRtl(context)
+                                      ? Icons.arrow_back_ios_new_rounded
+                                      : Icons.arrow_forward_ios_rounded),
+                              size: TpSizing.iconSm,
+                            ),
+                            label: Text(copy('details')),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactBadge extends StatelessWidget {
+  const _CompactBadge({
+    required this.label,
+    required this.color,
+    required this.background,
+  });
+
+  final String label;
+  final Color color;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: TpSpace.xs,
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TpSpace.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+          const SizedBox(width: TpSpace.xs),
+          Text(
+            '$label: ',
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: palette.textMuted),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: palette.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

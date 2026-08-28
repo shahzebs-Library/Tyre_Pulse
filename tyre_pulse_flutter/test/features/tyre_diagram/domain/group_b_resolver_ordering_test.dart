@@ -45,7 +45,7 @@ void main() {
       'match PLACING BOOM at all, so a naive PL-prefix bug cannot produce '
       'Pickup for the wrong reason', () {
     final Match? m =
-        RegExp(r'^([A-Za-z]{2,3})\s*\d').firstMatch('PLACING BOOM');
+        RegExp(r'^([A-Za-z]{2,3})[\s-]*\d').firstMatch('PLACING BOOM');
     expect(m, isNull);
   });
 

@@ -8,6 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
 
@@ -153,4 +156,75 @@ void main() {
     expect(find.text('Total tyres'), findsNothing);
     expect(find.text('Layout view'), findsNothing);
   });
+
+  for (final String vehicleClass in <String>[
+    'Tri-mixer',
+    'Line pump',
+    'Concrete pump',
+  ]) {
+    testWidgets(
+      '$vehicleClass compact board is fully scroll-clear above a fixed action '
+      'bar on a 720x1560 phone',
+      (WidgetTester tester) async {
+        tester.view.physicalSize = const Size(720, 1560);
+        tester.view.devicePixelRatio = 2;
+        addTearDown(tester.view.reset);
+        final DiagramLayout layout = kTyreDiagramLayouts[vehicleClass]!;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: TpTheme.light,
+            supportedLocales: TpLocalizations.supportedLocales,
+            localizationsDelegates: TpLocalizations.delegates,
+            home: Scaffold(
+              bottomNavigationBar: const SizedBox(
+                key: Key('fixed-action-bar'),
+                height: 64,
+              ),
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+                child: Column(
+                  children: <Widget>[
+                    const SizedBox(height: 360),
+                    TyreDiagramBoard(
+                      vehicleType: vehicleClass,
+                      positions:
+                          layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+                      tyreData: const <String, Map<String, Object?>>{},
+                      width: 336,
+                      compact: true,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final Finder scrollable = find.byType(SingleChildScrollView);
+        await tester.drag(scrollable, const Offset(0, -1200));
+        await tester.pump();
+
+        final Rect bodyRect = tester.getRect(find.byType(TyreDiagramBody));
+        final Rect actionRect = tester.getRect(
+          find.byKey(const Key('fixed-action-bar')),
+        );
+        final Finder wheelTargets = find.descendant(
+          of: find.byType(VehicleTyreDiagram),
+          matching: find.byType(GestureDetector),
+        );
+        final Rect lastRearRect = tester.getRect(wheelTargets.last);
+        final VehicleTyreDiagram rendered = tester.widget<VehicleTyreDiagram>(
+          find.byType(VehicleTyreDiagram),
+        );
+
+        expect(rendered.width, 252);
+        expect(bodyRect.top, greaterThanOrEqualTo(0));
+        expect(bodyRect.bottom, lessThan(actionRect.top));
+        expect(lastRearRect.bottom, lessThan(actionRect.top));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }

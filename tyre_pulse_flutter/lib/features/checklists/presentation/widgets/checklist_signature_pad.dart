@@ -32,6 +32,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:signature/signature.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -130,15 +131,9 @@ class _ChecklistSignaturePadState extends State<ChecklistSignaturePad> {
               borderRadius: BorderRadius.circular(TpRadius.md),
               border: Border.all(color: palette.border),
             ),
-            child: Image.memory(
-              _decodeDataUrl(widget.value!),
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stack) => Center(
-                child: Text(
-                  l10n.checklistSignatureSavedLabel,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
+            child: _SavedSignaturePreview(
+              value: widget.value!,
+              fallbackLabel: l10n.checklistSignatureSavedLabel,
             ),
           ),
           const SizedBox(height: TpSpace.sm),
@@ -180,10 +175,54 @@ class _ChecklistSignaturePadState extends State<ChecklistSignaturePad> {
       ],
     );
   }
+}
 
-  static Uint8List _decodeDataUrl(String dataUrl) {
-    final int comma = dataUrl.indexOf(',');
-    final String b64 = comma < 0 ? dataUrl : dataUrl.substring(comma + 1);
-    return base64Decode(b64);
+class _SavedSignaturePreview extends StatelessWidget {
+  const _SavedSignaturePreview({
+    required this.value,
+    required this.fallbackLabel,
+  });
+
+  final String value;
+  final String fallbackLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final String trimmed = value.trimLeft();
+    if (trimmed.startsWith('<svg')) {
+      return SvgPicture.string(
+        trimmed,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => _fallback(context),
+      );
+    }
+
+    final Uint8List? bytes = _decodeBase64DataUrl(value);
+    if (bytes == null) return _fallback(context);
+    return Image.memory(
+      bytes,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => _fallback(context),
+    );
+  }
+
+  Widget _fallback(BuildContext context) => Center(
+        child: Text(
+          fallbackLabel,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+
+  static Uint8List? _decodeBase64DataUrl(String value) {
+    final int comma = value.indexOf(',');
+    if (comma < 0 ||
+        !value.substring(0, comma).toLowerCase().contains(';base64')) {
+      return null;
+    }
+    try {
+      return base64Decode(value.substring(comma + 1));
+    } on FormatException {
+      return null;
+    }
   }
 }

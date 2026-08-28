@@ -35,11 +35,19 @@ class TpSegmented<T> extends StatelessWidget {
     required this.options,
     required this.value,
     required this.onChanged,
+    this.expanded = false,
     super.key,
   });
 
   final List<TpSegmentedOption<T>> options;
   final T value;
+
+  /// Shares the available width evenly between segments.
+  ///
+  /// Use this when the control sits in a phone-width surface and localized
+  /// labels may be wider than their English equivalents. The default keeps
+  /// the compact, content-sized behaviour used by existing callers.
+  final bool expanded;
 
   /// Null disables every segment - a disabled control is honest (see
   /// [TpButton]'s own doc comment); this design system never renders a
@@ -63,17 +71,30 @@ class TpSegmented<T> extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(3),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
           children: <Widget>[
             for (final TpSegmentedOption<T> option in options)
-              _Segment<T>(
-                option: option,
-                isSelected: option.value == value,
-                palette: palette,
-                textStyle: text.labelMedium,
-                onTap:
-                    onChanged == null ? null : () => onChanged!(option.value),
-              ),
+              if (expanded)
+                Expanded(
+                  child: _Segment<T>(
+                    option: option,
+                    isSelected: option.value == value,
+                    palette: palette,
+                    textStyle: text.labelMedium,
+                    onTap: onChanged == null
+                        ? null
+                        : () => onChanged!(option.value),
+                  ),
+                )
+              else
+                _Segment<T>(
+                  option: option,
+                  isSelected: option.value == value,
+                  palette: palette,
+                  textStyle: text.labelMedium,
+                  onTap:
+                      onChanged == null ? null : () => onChanged!(option.value),
+                ),
           ],
         ),
       ),
@@ -120,11 +141,15 @@ class _Segment<T> extends StatelessWidget {
                   Icon(option.icon, size: TpSizing.iconSm, color: foreground),
                   const SizedBox(width: TpSpace.xs),
                 ],
-                Text(
-                  option.label,
-                  style: textStyle?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    option.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyle?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],

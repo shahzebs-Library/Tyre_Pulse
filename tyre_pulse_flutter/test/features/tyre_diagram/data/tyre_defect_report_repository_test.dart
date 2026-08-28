@@ -138,6 +138,40 @@ void main() {
     expect(payload['root_cause'], isNull);
   });
 
+  test('due date, assignment and photos survive into the offline queue',
+      () async {
+    final DateTime due = DateTime.utc(2026, 9, 4, 12);
+    await repository.submitDefectReport(
+      workspace: _workspace(),
+      input: SubmitTyreDefectReportInput(
+        title: 'Hydraulic leak',
+        description: 'Leak below pump housing.',
+        assignedTo: 'Eng Vinay',
+        dueDate: due,
+        photoLocalPaths: const <String>[
+          r'C:\drafts\leak-1.jpg',
+          r'C:\drafts\leak-2.jpg',
+        ],
+      ),
+    );
+
+    final PendingCommand stored = await theOnlyQueuedCommand();
+    final Map<String, Object?> payload = decode(stored);
+    expect(payload['assigned_to'], 'Eng Vinay');
+    expect(payload['due_date'], due.toIso8601String());
+    expect(payload['photos'], <String>[
+      r'C:\drafts\leak-1.jpg',
+      r'C:\drafts\leak-2.jpg',
+    ]);
+    final List<PendingMediaUpload> uploads =
+        await db.mediaDao.mediaForCommand(stored.id);
+    expect(uploads, hasLength(2));
+    expect(uploads.map((PendingMediaUpload row) => row.fileName), <String>[
+      'leak-1.jpg',
+      'leak-2.jpg',
+    ]);
+  });
+
   test(
       'the queue bookkeeping country falls back to the active country when '
       'the caller supplies none', () async {

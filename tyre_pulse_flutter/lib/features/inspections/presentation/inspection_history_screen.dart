@@ -1,36 +1,16 @@
 /// "My Inspections" - this inspector's own work, whatever state it is in.
 ///
-/// # Scope, and why this is not the generic activity history screen
+/// Artifact 01 section 2.11 records production's `app/(app)/history.tsx` as
+/// inspection history: the signed-in person's queued and synced inspections,
+/// with status filtering and detail/PDF access. This implementation adds the
+/// device-only unfinished drafts that production could lose, then merges the
+/// queued submission and confirmed server row through
+/// [InspectionHistoryEntry]/[sortInspectionHistory]. Drafts remain a separate
+/// section because "still being filled in" is not a submitted state.
 ///
-/// `docs/flutter-migration/01-feature-inventory.md` section 2.11 records
-/// production's `app/(app)/history.tsx` as a cross-feature activity feed
-/// (checklists, work orders, accidents - not just inspections), reached
-/// through `RouteModule.history` / `TpRouteId.activityHistory`. This
-/// port's own task brief is explicit that building THAT screen is a later
-/// phase's job. What this screen is instead: a scoped surface, owned
-/// entirely by `features/inspections/`, answering one narrower question -
-/// "what has THIS inspector done, and what is still on its way to the
-/// server" - by merging three sources this feature already has no other
-/// single place to see together: an unfinished draft (never submitted at
-/// all), a queued submission (submitted, not yet confirmed), and a synced
-/// server row (confirmed). [InspectionHistoryEntry]/[sortInspectionHistory]
-/// do the queued/synced merge; drafts are shown as their own, earlier
-/// section, since "still being filled in" is a genuinely different state
-/// from "submitted and waiting" - see `InspectionDraftSummary`.
-///
-/// # Why this is reached by a plain [Navigator.push], not a typed route
-///
-/// This phase is only asked to register screens for
-/// [TpRouteId.newInspection] and [TpRouteId.inspectionDetail] -
-/// `app/router/routes.dart` (out of bounds for this phase) defines no
-/// third route id for a scoped inspections list. Rather than leave "the
-/// natural landing view" unreachable, the header step
-/// ([NewInspectionScreen]) offers a "My Inspections" action that opens
-/// THIS screen with an ordinary [MaterialPageRoute] push - ordinary
-/// Flutter navigation, no [TpRoute] involved. From inside it, tapping a
-/// row that already has a real registered destination
-/// ([InspectionDetailRoute]) uses [GoRouter] normally, so that screen
-/// works exactly as if it had been reached any other way.
+/// The screen is registered for [TpRouteId.activityHistory] and is also opened
+/// from [NewInspectionScreen] with an ordinary [MaterialPageRoute]. Both entry
+/// points intentionally share the same truthful data and detail navigation.
 library;
 
 import 'dart:async';

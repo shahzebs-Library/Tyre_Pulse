@@ -14,6 +14,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
@@ -22,6 +23,7 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_matcher.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
@@ -40,6 +42,8 @@ class VehicleTyreDiagram extends StatelessWidget {
     this.onPositionTap,
     this.pending = TyreDiagramPending.none,
     this.width = 320,
+    this.compact = false,
+    this.captureMode = false,
     super.key,
   });
 
@@ -77,6 +81,14 @@ class VehicleTyreDiagram extends StatelessWidget {
   /// resolved layout's `viewH`.
   final double width;
 
+  /// Focused inspection/approval presentation matching the approved mock.
+  final bool compact;
+
+  /// Focused inspection capture presentation. The real vehicle artwork and
+  /// authored wheel geometry stay unchanged; only the surrounding hierarchy
+  /// gains FRONT/REAR orientation and visible inner/outer position labels.
+  final bool captureMode;
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -108,6 +120,10 @@ class VehicleTyreDiagram extends StatelessWidget {
       width: width,
       viewH: layout.viewH,
     );
+    final Map<String, Rect> hitRects = buildTyreHitRects(
+      layout: layout,
+      viewport: viewport,
+    );
     final Set<String> pendingKeys = pending.resolveKeys();
 
     final List<_ResolvedWheel> resolved = <_ResolvedWheel>[
@@ -119,8 +135,52 @@ class VehicleTyreDiagram extends StatelessWidget {
       for (final _ResolvedWheel wheel in resolved)
         if (wheel.isOutstanding) wheel,
     ];
+    _ResolvedWheel? selectedWheel;
+    for (final _ResolvedWheel wheel in resolved) {
+      if (wheel.tyre.positionId == selectedPosition ||
+          wheel.tyre.id == selectedPosition) {
+        selectedWheel = wheel;
+        break;
+      }
+    }
+
+    final Widget diagramCanvas = _diagramCanvas(
+      context: context,
+      layout: layout,
+      viewport: viewport,
+      hitRects: hitRects,
+      wheels: resolved,
+      showPositionLabels: captureMode,
+    );
+
+    if (captureMode) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            l10n.tyreDiagramFrontLabel,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: TpSpace.sm),
+          diagramCanvas,
+          const SizedBox(height: TpSpace.sm),
+          Text(
+            l10n.inspectionRearLabel,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
+      );
+    }
 
     return TpCard(
+      padding: EdgeInsets.all(compact ? TpSpace.sm : TpSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -136,19 +196,21 @@ class VehicleTyreDiagram extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: TpSpace.xs),
-          Text(
-            '$vehicleType · ${l10n.tyreDiagramTyreCount(tyres.length)}',
-            style: Theme.of(context).textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            l10n.tyreDiagramTapHint,
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-          if (pendingOnScreen.isNotEmpty) ...<Widget>[
+          if (!compact) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              '$vehicleType · ${l10n.tyreDiagramTyreCount(tyres.length)}',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              l10n.tyreDiagramTapHint,
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (!compact && pendingOnScreen.isNotEmpty) ...<Widget>[
             const SizedBox(height: TpSpace.sm),
             Text(
               l10n.tyreDiagramPendingLeadIn(pendingOnScreen.length),
@@ -179,19 +241,54 @@ class VehicleTyreDiagram extends StatelessWidget {
             ),
           ],
           const SizedBox(height: TpSpace.md),
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: SizedBox(
+          diagramCanvas,
+          const SizedBox(height: TpSpace.md),
+          if (selectedWheel != null) ...<Widget>[
+            _SelectedTyreSummary(wheel: selectedWheel, l10n: l10n),
+            const SizedBox(height: TpSpace.md),
+          ],
+          _ConditionLegend(l10n: l10n, compact: compact),
+        ],
+      ),
+    );
+  }
+
+  Widget _diagramCanvas({
+    required BuildContext context,
+    required DiagramLayout layout,
+    required TyreDiagramViewport viewport,
+    required Map<String, Rect> hitRects,
+    required List<_ResolvedWheel> wheels,
+    required bool showPositionLabels,
+  }) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final double gutter = showPositionLabels ? 56 : 0;
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: SizedBox(
+        width: viewport.width + (gutter * 2),
+        height: viewport.height,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned(
+              left: gutter,
+              top: 0,
               width: viewport.width,
               height: viewport.height,
               child: Stack(
                 children: <Widget>[
-                  TyreDiagramBody(bodyKey: layout.bodyKey, viewport: viewport),
+                  TyreDiagramBody(
+                    bodyKey: layout.bodyKey,
+                    viewport: viewport,
+                  ),
                   CustomPaint(
                     size: Size(viewport.width, viewport.height),
                     painter: TyreWheelPainter(
                       wheels: <TyreWheelPaintData>[
-                        for (final _ResolvedWheel wheel in resolved)
+                        for (final _ResolvedWheel wheel in wheels)
                           wheel.paintData(
                             isSelected:
                                 wheel.tyre.positionId == selectedPosition,
@@ -201,10 +298,10 @@ class VehicleTyreDiagram extends StatelessWidget {
                       palette: palette,
                     ),
                   ),
-                  for (final _ResolvedWheel wheel in resolved)
+                  for (final _ResolvedWheel wheel in wheels)
                     _WheelHitTarget(
                       wheel: wheel,
-                      viewport: viewport,
+                      rect: hitRects[wheel.tyre.id]!,
                       isSelected: wheel.tyre.positionId == selectedPosition,
                       label: tyreDiagramAccessibilityLabel(
                         l10n,
@@ -219,10 +316,18 @@ class VehicleTyreDiagram extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _ConditionLegend(l10n: l10n),
-        ],
+            if (showPositionLabels)
+              for (final _ResolvedWheel wheel in wheels)
+                _CapturePositionLabel(
+                  label: _capturePositionLabel(wheel.tyre),
+                  position: parsePositionStruct(wheel.tyre.id),
+                  wheelRect: hitRects[wheel.tyre.id]!,
+                  diagramLeft: gutter,
+                  diagramWidth: viewport.width,
+                  viewportHeight: viewport.height,
+                ),
+          ],
+        ),
       ),
     );
   }
@@ -237,13 +342,10 @@ class VehicleTyreDiagram extends StatelessWidget {
     // carries the canonical code (or vice versa).
     final Map<String, Object?>? entry =
         tyreData[tyre.positionId] ?? tyreData[tyre.id];
-    // `?? TyreCondition.good` mirrors the previous inline default exactly:
-    // an unrecorded wheel is drawn as though it were seeded Good (the same
-    // seed both capture forms pre-fill), while its [status] below still
-    // reads [TpStatus.unknown] rather than [TpStatus.ok] - see
-    // `wheelConditionFor`'s own doc comment for why the two are kept apart.
-    final TyreCondition condition =
-        wheelConditionFor(entry) ?? TyreCondition.good;
+    // An unchecked seeded Good value is not a result. Keep the condition
+    // nullable so paint, the selected summary and screen-reader semantics all
+    // agree that the wheel is not measured until there is deliberate evidence.
+    final TyreCondition? condition = wheelConditionFor(entry);
     final TpStatus status = wheelStatusFor(entry);
     // "Has evidence" (and the pressure reading that goes with it) is
     // answered ONCE, by the completeness engine's own rule, and read from a
@@ -271,6 +373,74 @@ class VehicleTyreDiagram extends StatelessWidget {
   }
 }
 
+String _capturePositionLabel(MatchedTyreSlot tyre) {
+  final PositionStruct position = parsePositionStruct(tyre.id);
+  final String side = switch (position.side) {
+    PositionSide.left => 'L',
+    PositionSide.right => 'R',
+    null => '',
+  };
+  return switch (position.kind) {
+    PositionKind.steer => tyre.id.toUpperCase(),
+    PositionKind.drive when position.role == PositionRole.inner =>
+      '$side${position.axle} I',
+    PositionKind.drive when position.role == PositionRole.outer =>
+      '$side${position.axle} O',
+    PositionKind.drive => tyre.id.toUpperCase(),
+    _ => tyre.id.toUpperCase(),
+  };
+}
+
+class _CapturePositionLabel extends StatelessWidget {
+  const _CapturePositionLabel({
+    required this.label,
+    required this.position,
+    required this.wheelRect,
+    required this.diagramLeft,
+    required this.diagramWidth,
+    required this.viewportHeight,
+  });
+
+  final String label;
+  final PositionStruct position;
+  final Rect wheelRect;
+  final double diagramLeft;
+  final double diagramWidth;
+  final double viewportHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool onLeft = position.side != PositionSide.right;
+    final double roleOffset = switch (position.role) {
+      PositionRole.outer => -10,
+      PositionRole.inner => 10,
+      PositionRole.single => 0,
+    };
+    final double top = (wheelRect.center.dy - 9 + roleOffset)
+        .clamp(0, viewportHeight - 18)
+        .toDouble();
+    return Positioned(
+      left: onLeft ? 0 : diagramLeft + diagramWidth + TpSpace.sm,
+      top: top,
+      width: 48,
+      child: ExcludeSemantics(
+        child: Align(
+          alignment: onLeft ? Alignment.centerRight : Alignment.centerLeft,
+          child: TpIdentifierText(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.visible,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: TpPalette.of(context).textSecondary,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// One wheel's resolved presentation state, computed once per build so the
 /// painter and the hit-target/accessibility layer never disagree about it.
 class _ResolvedWheel {
@@ -286,7 +456,7 @@ class _ResolvedWheel {
 
   final MatchedTyreSlot tyre;
   final String code;
-  final TyreCondition condition;
+  final TyreCondition? condition;
   final TpStatus status;
   final bool isRecorded;
   final bool isOutstanding;
@@ -307,26 +477,20 @@ class _ResolvedWheel {
 class _WheelHitTarget extends StatelessWidget {
   const _WheelHitTarget({
     required this.wheel,
-    required this.viewport,
+    required this.rect,
     required this.isSelected,
     required this.label,
     required this.onTap,
   });
 
   final _ResolvedWheel wheel;
-  final TyreDiagramViewport viewport;
+  final Rect rect;
   final bool isSelected;
   final String label;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final Rect rect = viewport.hitRect(
-      wheel.tyre.x,
-      wheel.tyre.y,
-      wheel.tyre.w,
-      wheel.tyre.h,
-    );
     return Positioned.fromRect(
       rect: rect,
       child: Semantics(
@@ -343,10 +507,99 @@ class _WheelHitTarget extends StatelessWidget {
   }
 }
 
+class _SelectedTyreSummary extends StatelessWidget {
+  const _SelectedTyreSummary({required this.wheel, required this.l10n});
+
+  final _ResolvedWheel wheel;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatusColors colors = palette.forStatus(wheel.status);
+    final bool isImmediateAttention =
+        wheel.condition == TyreCondition.puncture ||
+            wheel.condition == TyreCondition.flat;
+    final String conditionLabel = wheel.condition == null
+        ? l10n.tyreDiagramListNotRecorded
+        : tyreConditionLabel(l10n, wheel.condition!);
+    final String summarySemanticsLabel = wheel.pressureText == null
+        ? conditionLabel
+        : '$conditionLabel, '
+            '${l10n.tyreDiagramPressureDetail(wheel.pressureText!)}';
+
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      excludeSemantics: true,
+      label: summarySemanticsLabel,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.soft,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          border: Border.all(
+            color: colors.base,
+            width: TpBorderWidth.strong,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: TpSpace.md,
+            vertical: TpSpace.sm,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                isImmediateAttention
+                    ? Icons.report_problem_outlined
+                    : Icons.tire_repair_outlined,
+                color: colors.onSoft,
+                size: TpSizing.iconMd,
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      wheel.code,
+                      textDirection: TextDirection.ltr,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: colors.onSoft,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    Text(
+                      conditionLabel,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: colors.onSoft,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (wheel.pressureText != null)
+                Text(
+                  l10n.tyreDiagramPressureDetail(wheel.pressureText!),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colors.onSoft,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ConditionLegend extends StatelessWidget {
-  const _ConditionLegend({required this.l10n});
+  const _ConditionLegend({required this.l10n, required this.compact});
 
   final AppLocalizations l10n;
+  final bool compact;
 
   static const List<TyreCondition> _kOrder = <TyreCondition>[
     TyreCondition.good,
@@ -359,6 +612,30 @@ class _ConditionLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      return Wrap(
+        alignment: WrapAlignment.center,
+        spacing: TpSpace.md,
+        runSpacing: TpSpace.xs,
+        children: <Widget>[
+          TpStatusChip(
+            status: TpStatus.ok,
+            label: l10n.tyreDiagramStatOk,
+            isCompact: true,
+          ),
+          TpStatusChip(
+            status: TpStatus.warning,
+            label: l10n.tyreDiagramStatMonitor,
+            isCompact: true,
+          ),
+          TpStatusChip(
+            status: TpStatus.critical,
+            label: l10n.tyreDiagramStatCritical,
+            isCompact: true,
+          ),
+        ],
+      );
+    }
     return Wrap(
       alignment: WrapAlignment.center,
       spacing: TpSpace.xs,
@@ -368,6 +645,11 @@ class _ConditionLegend extends StatelessWidget {
           TpStatusChip(
             status: tyreConditionStatus(condition),
             label: tyreConditionLabel(l10n, condition),
+            icon: switch (condition) {
+              TyreCondition.puncture => Icons.report_problem_outlined,
+              TyreCondition.flat => Icons.warning_amber_rounded,
+              _ => null,
+            },
             isCompact: true,
           ),
       ],

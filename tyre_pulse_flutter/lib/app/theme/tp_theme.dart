@@ -32,6 +32,9 @@ abstract final class TpTheme {
   /// the sun and most of this application is used outdoors.
   static ThemeData get dark => _themeFor(TpPalette.dark);
 
+  /// Builds a scoped theme for an approved feature palette.
+  static ThemeData forPalette(TpPalette palette) => _themeFor(palette);
+
   static ThemeData _themeFor(TpPalette palette) {
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: palette.primary,
@@ -61,6 +64,9 @@ abstract final class TpTheme {
       visualDensity: VisualDensity.standard,
       // Spec section 55: avoid unnecessary animation on low-memory phones.
       splashFactory: NoSplash.splashFactory,
+      extensions: <ThemeExtension<dynamic>>[
+        TpPaletteTheme(palette),
+      ],
     );
   }
 }

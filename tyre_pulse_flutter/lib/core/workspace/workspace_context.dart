@@ -171,6 +171,7 @@ final class WorkspaceContext {
     this.activeSites = const <String>[],
     this.currency,
     this.legacySite,
+    this.fullName,
   });
 
   /// Builds the context for a freshly loaded profile.
@@ -200,6 +201,7 @@ final class WorkspaceContext {
         activeSites: List<String>.unmodifiable(activeSites ?? const <String>[]),
         currency: currency,
         legacySite: profile.legacySite,
+        fullName: profile.fullName,
       );
 
   final String userId;
@@ -236,6 +238,11 @@ final class WorkspaceContext {
 
   /// `profiles.site`, the legacy scalar, carried for form pre-fill only.
   final String? legacySite;
+
+  /// The signed-in person's display name from the verified profile row.
+  /// Presentation surfaces use it for personalisation only; it is never an
+  /// identity key or an authorization input.
+  final String? fullName;
 
   /// Spec section 8's `siteIds`.
   List<String> get siteIds => activeSites;
@@ -279,6 +286,7 @@ final class WorkspaceContext {
     String? currency,
     bool clearCurrency = false,
     String? legacySite,
+    String? fullName,
   }) =>
       WorkspaceContext(
         userId: userId,
@@ -295,6 +303,7 @@ final class WorkspaceContext {
             : List<String>.unmodifiable(activeSites),
         currency: clearCurrency ? null : (currency ?? this.currency),
         legacySite: legacySite ?? this.legacySite,
+        fullName: fullName ?? this.fullName,
       );
 
   @override
@@ -311,6 +320,7 @@ final class WorkspaceContext {
           other.activeCountry == activeCountry &&
           other.currency == currency &&
           other.legacySite == legacySite &&
+          other.fullName == fullName &&
           _sameStrings(other.activeSites, activeSites);
 
   @override
@@ -325,6 +335,7 @@ final class WorkspaceContext {
         activeCountry,
         currency,
         legacySite,
+        fullName,
         Object.hashAll(activeSites),
       );
 

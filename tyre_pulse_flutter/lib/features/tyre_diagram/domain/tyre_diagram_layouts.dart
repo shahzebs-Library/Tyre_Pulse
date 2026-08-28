@@ -243,19 +243,32 @@ final Map<String, String> _layoutKeyIndex = <String, String>{
 String _compact(String s) =>
     s.toLowerCase().replaceAll(RegExp(r'[\s\-_]+'), '');
 
-/// Asset-code prefix (first two letters, IMMEDIATELY followed by a digit)
-/// to layout key. Mirrors `PREFIX_MAP` in the source exactly - a closed,
-/// curated list, never an inference engine (artifact test 37: an
-/// unmapped prefix like `IP` is never guessed as "ice plant").
+/// Asset-code prefix (first two letters, followed by an optional fleet-code
+/// separator and then a digit)
+/// to layout key. The first five entries preserve the mobile `PREFIX_MAP`;
+/// BH, LP and MB close its measured tyre-class gap using the imported fleet
+/// register's own Asset Type values. This remains a closed, curated list,
+/// never an inference engine (artifact test 37: an unmapped prefix such as
+/// `IP` is never guessed as "ice plant").
 const Map<String, String> _kAssetPrefixLayout = <String, String>{
   'TM': 'Tri-mixer',
   'MP': 'Concrete pump',
   'WL': 'Wheel loader',
   'SL': 'Skid loader',
   'PL': 'Pickup',
+  // These are tyre-carrying production classes too (see asset_classes.dart).
+  // Leaving them out made a BH bus, LP line pump, or MB bus silently fall
+  // through to the generic Pickup layout whenever the fleet row's type was
+  // blank or imported as a catch-all value such as HEAVY EQP.
+  'BH': 'Bus',
+  'LP': 'Line pump',
+  'MB': 'Bus',
 };
 
-final RegExp _assetCodePrefixRe = RegExp(r'^([A-Za-z]{2,3})\s*\d');
+// Hyphenated codes are real production values (for example BH-037 and
+// PL-090). Requiring the following digit still prevents prose such as
+// "PLACING BOOM" from being mistaken for the PL asset class.
+final RegExp _assetCodePrefixRe = RegExp(r'^([A-Za-z]{2,3})[\s-]*\d');
 final RegExp _wheelerRe = RegExp(r'(\d+)wheeler');
 
 /// Resolves ONE string, returning `null` when nothing matched rather than
@@ -275,8 +288,8 @@ String? _resolveOne(String? vt) {
 
   // R2: asset-code prefix detection, for a caller passing an asset number
   // (TM634) instead of a type. MUST require a digit immediately after the
-  // letters: matching on leading letters alone reads "PLACING BOOM" as a
-  // PL-prefixed pickup before the keyword rules below ever see "boom".
+  // letters: a following digit is still mandatory, so "PLACING BOOM" cannot
+  // become a PL-prefixed pickup before the keyword rules see "boom".
   final Match? assetCode = _assetCodePrefixRe.firstMatch(raw);
   if (assetCode != null) {
     final String captured = assetCode.group(1)!.toUpperCase();

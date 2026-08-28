@@ -15,12 +15,10 @@
 ///    `tyreCompleteness` engine `VehicleTyreDiagram` renders from -
 ///    checked BEFORE the signature so an inspector is sent back to the
 ///    tyres rather than being asked to sign for wheels nobody looked at.
-///    This port uses the completeness engine's OWN default options
-///    (`requireEvidence: false`, `requirePressure: false`) rather than the
-///    RN screen's `{ requireEvidence: true }` override - a deliberate,
-///    disclosed policy choice: widening the gate is a product decision for
-///    whoever owns this app, not something to carry over silently. See the
-///    final report for the reasoning.
+///    Capture uses `requireEvidence: true`: every physical tyre must be
+///    deliberately checked before review. Pressure remains optional, so an
+///    inspector can explicitly confirm a Good tyre without a gauge, but a
+///    seeded unchecked Good value can never pass as an inspection result.
 /// 4. A signature is required last.
 library;
 
@@ -203,13 +201,19 @@ int touchedPositionCount(Map<String, TyrePositionReading> tyreConditions) {
   return tyreConditions.values.where((r) => r.isTouched).length;
 }
 
-/// Runs [tyreCompleteness] over [payload] with the engine's OWN default
-/// options - see the library comment for why this is deliberate.
+/// Tyre inspection capture is stricter than legacy/read-only diagram views:
+/// every resolved physical position must contain deliberate evidence, while a
+/// pressure reading remains optional.
+const TyreCompletenessOptions kInspectionCompletenessOptions =
+    TyreCompletenessOptions(requireEvidence: true);
+
+/// Runs [tyreCompleteness] over [payload] with the capture policy above.
 TyreCompletenessResult inspectionCompleteness(InspectionPayload payload) {
   return tyreCompleteness(
     payload.vehicleType,
     payload.assetNo,
     payload.tyreConditionsJson(),
+    kInspectionCompletenessOptions,
   );
 }
 

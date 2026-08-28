@@ -133,22 +133,22 @@ void main() {
     // marks), so textContaining rather than an exact match - see
     // vehicles_list_screen_test.dart's identical note.
     expect(find.textContaining(_assetNo), findsWidgets);
-    expect(find.text('FN-88'), findsOneWidget);
+    expect(find.text('FN-88'), findsNWidgets(2));
     // make + model, joined with a single space by _DetailView's own
     // _join - NOT the comma-separated join the list screen's summary
     // uses. Getting this separator wrong is exactly the kind of thing
     // that would silently pass a looser assertion.
     expect(find.text('Sinotruk HOWO'), findsOneWidget);
     expect(find.text('2019'), findsOneWidget);
-    expect(find.text('128,000 km'), findsOneWidget);
+    expect(find.text('128,000 km'), findsNWidgets(2));
     expect(find.text('A. Rahman'), findsOneWidget);
     expect(find.text('Operations'), findsOneWidget);
-    expect(find.text('NHC'), findsOneWidget);
+    expect(find.text('NHC'), findsNWidgets(2));
     expect(find.text('Central'), findsOneWidget);
     expect(find.text('KSA'), findsOneWidget);
-    expect(find.text('315/80R22.5'), findsOneWidget);
+    expect(find.text('315/80R22.5'), findsNWidgets(2));
     expect(find.text('ABC-1234'), findsOneWidget);
-    expect(find.text('TR-MIXER'), findsOneWidget);
+    expect(find.text('TR-MIXER'), findsNWidgets(2));
     _expectNoStateWidget();
   });
 

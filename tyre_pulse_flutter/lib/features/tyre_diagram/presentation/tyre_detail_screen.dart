@@ -24,6 +24,8 @@
 /// value (AGENTS.md rule 1; spec section 32).
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -31,6 +33,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/app/theme/tp_typography.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_take_action_screen.dart';
@@ -107,6 +110,12 @@ class TyreDetailScreen extends StatelessWidget {
     );
     final String? photoUrl = _stringOrNull(entry?['photo_url']);
     final String? photoLocalPath = _stringOrNull(entry?['photo_uri']);
+    // A freshly seeded wheel is a non-empty map (`condition: Good`,
+    // `checked: false`) but still has no inspector-entered evidence. Reuse the
+    // diagram/completeness classifier so an untouched wheel always presents
+    // Add details instead of being mistaken for an existing record.
+    final bool hasRecordedDetails =
+        classifyEntry(entry).state != TyreSlotState.blank;
 
     return TpScaffold(
       appBar: TpAppBar(
@@ -120,6 +129,20 @@ class TyreDetailScreen extends StatelessWidget {
         // through the router-aware default.
         onBack: () => Navigator.of(context).pop(),
       ),
+      bottomNavigationBar: _ActionBar(
+        label: onAdjustReading == null
+            ? l10n.tyreDetailTakeActionButton
+            : hasRecordedDetails
+                ? l10n.tyreDetailEditDetailsButton
+                : l10n.tyreDetailAddDetailsButton,
+        onPressed: () => pushTyreTakeActionScreen(
+          context,
+          positionCode: positionCode,
+          assetNo: assetNo,
+          siteName: siteName,
+          onAdjustReading: onAdjustReading,
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           TpSpace.lg,
@@ -128,54 +151,47 @@ class TyreDetailScreen extends StatelessWidget {
           TpSpace.xxl,
         ),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: TpIdentifierText(
-                  positionCode,
-                  style: TpTypography.identifier(
-                    palette,
-                  ).copyWith(fontSize: 26, color: palette.text),
-                ),
-              ),
-              TpStatusChip(
-                status: status,
-                label: condition == null
-                    ? null
-                    : tyreConditionLabel(l10n, condition),
-              ),
-            ],
+          _TyreIdentityHeader(
+            positionCode: positionCode,
+            vehicleType: vehicleType,
+            status: status,
+            conditionLabel:
+                condition == null ? null : tyreConditionLabel(l10n, condition),
           ),
           const SizedBox(height: TpSpace.lg),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _statCard(
-                  entry,
-                  const <String>['tread_depth_mm', 'tread_depth'],
-                  label: l10n.tyreDetailStatTread,
-                  unit: 'mm',
-                  status: status,
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: _statCard(
-                  entry,
-                  const <String>['pressure_psi', 'pressure'],
-                  label: l10n.tyreDetailStatPressure,
-                  unit: 'psi',
-                  status: status,
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: TpStatCard.unavailable(
-                  label: l10n.tyreDetailStatTemperature,
-                  caption: l10n.tyreDetailNotRecordedCaption,
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final int columns = constraints.maxWidth >= 600 ? 3 : 2;
+              return GridView.count(
+                crossAxisCount: columns,
+                crossAxisSpacing: TpSpace.sm,
+                mainAxisSpacing: TpSpace.sm,
+                mainAxisExtent: 136,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: <Widget>[
+                  _statCard(
+                    entry,
+                    const <String>['tread_depth_mm', 'tread_depth'],
+                    label: l10n.tyreDetailStatTread,
+                    unit: 'mm',
+                    status: status,
+                  ),
+                  _statCard(
+                    entry,
+                    const <String>['pressure_psi', 'pressure'],
+                    label: l10n.tyreDetailStatPressure,
+                    unit: 'psi',
+                    status: status,
+                  ),
+                  TpStatCard.unavailable(
+                    label: l10n.tyreDetailStatTemperature,
+                    caption: l10n.tyreDetailNotRecordedCaption,
+                  ),
+                  _remainingLifeCard(entry, l10n),
+                ],
+              );
+            },
           ),
           const SizedBox(height: TpSpace.xl),
           Text(
@@ -257,7 +273,7 @@ class TyreDetailScreen extends StatelessWidget {
                 child: Image(
                   image: photoUrl != null
                       ? NetworkImage(photoUrl)
-                      : AssetImage(photoLocalPath!) as ImageProvider,
+                      : FileImage(File(photoLocalPath!)) as ImageProvider,
                   height: 160,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -277,19 +293,6 @@ class TyreDetailScreen extends StatelessWidget {
                   ?.copyWith(color: palette.textMuted),
             ),
           ],
-          const SizedBox(height: TpSpace.xl),
-          TpButton.primary(
-            label: l10n.tyreDetailTakeActionButton,
-            icon: Icons.build_outlined,
-            isFullWidth: true,
-            onPressed: () => pushTyreTakeActionScreen(
-              context,
-              positionCode: positionCode,
-              assetNo: assetNo,
-              siteName: siteName,
-              onAdjustReading: onAdjustReading,
-            ),
-          ),
         ],
       ),
     );
@@ -310,6 +313,28 @@ class TyreDetailScreen extends StatelessWidget {
       label: label,
       value: '$value $unit',
       status: status,
+    );
+  }
+
+  Widget _remainingLifeCard(
+    Map<String, Object?>? entry,
+    AppLocalizations l10n,
+  ) {
+    final String? remaining = _numberText(
+      entry,
+      const <String>['remaining_km', 'remainingKm', 'km_remaining'],
+    );
+    if (remaining == null) {
+      return TpStatCard.unavailable(
+        label: l10n.tyreDetailRemainingKmLabel,
+        caption: l10n.tyreDetailRemainingKmUnavailable,
+      );
+    }
+    return TpStatCard.text(
+      label: l10n.tyreDetailRemainingKmLabel,
+      value: '$remaining km',
+      caption: l10n.tyreDetailRemainingKmCaption,
+      status: TpStatus.info,
     );
   }
 
@@ -334,6 +359,118 @@ class TyreDetailScreen extends StatelessWidget {
       if (text.isNotEmpty) return text;
     }
     return null;
+  }
+}
+
+class _TyreIdentityHeader extends StatelessWidget {
+  const _TyreIdentityHeader({
+    required this.positionCode,
+    required this.vehicleType,
+    required this.status,
+    required this.conditionLabel,
+  });
+
+  final String positionCode;
+  final String vehicleType;
+  final TpStatus status;
+  final String? conditionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatusColors tone = palette.forStatus(status);
+    final String vehicle = vehicleType.trim();
+
+    return Semantics(
+      container: true,
+      child: TpCard(
+        background: tone.soft,
+        borderColor: tone.base,
+        padding: const EdgeInsets.all(TpSpace.md),
+        child: Row(
+          children: <Widget>[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: tone.base,
+                borderRadius: BorderRadius.circular(TpRadius.md),
+              ),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: Icon(
+                  Icons.tire_repair_outlined,
+                  color: tone.onBase,
+                  size: TpSizing.iconLg,
+                ),
+              ),
+            ),
+            const SizedBox(width: TpSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TpIdentifierText(
+                    positionCode,
+                    style: TpTypography.identifier(
+                      palette,
+                    ).copyWith(fontSize: 26, color: palette.text),
+                  ),
+                  if (vehicle.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    TpIdentifierText(
+                      vehicle,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelMedium
+                          ?.copyWith(color: palette.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            TpStatusChip(status: status, label: conditionLabel),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.sm,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: TpButton.primary(
+            label: label,
+            icon: Icons.build_outlined,
+            isFullWidth: true,
+            onPressed: onPressed,
+          ),
+        ),
+      ),
+    );
   }
 }
 

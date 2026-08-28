@@ -44,6 +44,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 
@@ -65,7 +66,7 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
 }
 
 /// Renders [bodyKey]'s real artwork, sized to exactly fill [viewport].
-class TyreDiagramBody extends StatelessWidget {
+class TyreDiagramBody extends StatefulWidget {
   const TyreDiagramBody({
     required this.bodyKey,
     required this.viewport,
@@ -76,19 +77,108 @@ class TyreDiagramBody extends StatelessWidget {
   final TyreDiagramViewport viewport;
 
   @override
+  State<TyreDiagramBody> createState() => _TyreDiagramBodyState();
+}
+
+class _TyreDiagramBodyState extends State<TyreDiagramBody>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _indicatorController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 720),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _indicatorController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SvgPicture.asset(
-      tyreDiagramBodyAsset(bodyKey),
-      width: viewport.width,
-      height: viewport.height,
-      fit: BoxFit.fill,
-      // The composite Stack this sits in already paints the app's own
-      // surface underneath; a failed asset load should leave that surface
-      // visible (no wheels are affected - they are a separate CustomPaint)
-      // rather than throwing out of the whole diagram.
-      placeholderBuilder: (BuildContext context) => const SizedBox.shrink(),
-      errorBuilder: (BuildContext context, Object error, StackTrace? stack) =>
-          const SizedBox.shrink(),
+    final TpPalette palette = TpPalette.of(context);
+    return SizedBox(
+      width: widget.viewport.width,
+      height: widget.viewport.height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          SvgPicture.asset(
+            tyreDiagramBodyAsset(widget.bodyKey),
+            fit: BoxFit.fill,
+            // The composite Stack this sits in already paints the app's own
+            // surface underneath; a failed asset load should leave that
+            // surface visible rather than throwing out the whole diagram.
+            placeholderBuilder: (BuildContext context) =>
+                const SizedBox.shrink(),
+            errorBuilder: (
+              BuildContext context,
+              Object error,
+              StackTrace? stack,
+            ) =>
+                const SizedBox.shrink(),
+          ),
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _indicatorController,
+              builder: (BuildContext context, Widget? child) {
+                final double opacity =
+                    0.28 + (_indicatorController.value * 0.72);
+                return Opacity(
+                  opacity: opacity,
+                  child: _IndicatorOverlay(
+                    color: palette.warning.base,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A deliberately subtle life signal layered over the real body artwork.
+/// It never intercepts taps and never communicates tyre condition; those
+/// remain the wheel painter's job. All layouts face upward, so the same four
+/// corner lamps remain meaningful across pickups, buses, loaders and trucks.
+class _IndicatorOverlay extends StatelessWidget {
+  const _IndicatorOverlay({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) => Stack(
+        children: <Widget>[
+          _lamp(constraints, left: 0.30, top: 0.025),
+          _lamp(constraints, left: 0.67, top: 0.025),
+          _lamp(constraints, left: 0.30, top: 0.945),
+          _lamp(constraints, left: 0.67, top: 0.945),
+        ],
+      ),
+    );
+  }
+
+  Widget _lamp(
+    BoxConstraints constraints, {
+    required double left,
+    required double top,
+  }) {
+    return Positioned(
+      left: left * constraints.maxWidth,
+      top: top * constraints.maxHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          boxShadow: <BoxShadow>[
+            BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: 8),
+          ],
+        ),
+        child: const SizedBox(width: 7, height: 7),
+      ),
     );
   }
 }

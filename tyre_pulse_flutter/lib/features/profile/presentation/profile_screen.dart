@@ -12,12 +12,11 @@
 /// somebody signs in through `login_screen.dart`, there was no control in the
 /// entire app that could sign them back out.
 ///
-/// This screen is deliberately minimal - the same stopgap posture
-/// `home_screen.dart`'s own earlier version documented for itself before
-/// its replacement landed: real, honest content and one real action (sign
-/// out), not an invented settings surface. A later phase may replace this
-/// screen builder entirely, the same way that one was replaced; it should
-/// not need to extend this one to do it.
+/// The first implementation was deliberately minimal: one identity card and
+/// sign out. This is the richer PMV operations presentation that replaces
+/// that stopgap. It follows Home's daylight visual language while retaining
+/// the same deliberately small FUNCTIONAL surface: real profile/access facts
+/// and the one real account action already supported by the application.
 ///
 /// # What is shown, and why nothing here is fabricated
 ///
@@ -72,6 +71,14 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+
+/// Stable finders for Profile's responsive visual regions.
+@visibleForTesting
+abstract final class ProfileScreenKeys {
+  static const Key hero = Key('profile.hero');
+  static const Key access = Key('profile.access');
+  static const Key account = Key('profile.account');
+}
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({required this.route, super.key});
@@ -146,31 +153,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           // fabricated one - the same choice `TpAppShell` itself makes for
           // "something is still being decided" via `TpBootScreen`.
           ? const TpLoadingState()
-          : ListView(
-              padding: const EdgeInsets.all(TpSpace.lg),
-              children: <Widget>[
-                _ProfileHeader(profile: profile),
-                const SizedBox(height: TpSpace.xxl),
-                TpButton.danger(
-                  label: l10n.actionSignOut,
-                  icon: Icons.logout,
-                  isFullWidth: true,
-                  isBusy: _isSigningOut,
-                  onPressed: _isSigningOut
-                      ? null
-                      : () => unawaited(_confirmAndSignOut()),
-                ),
-              ],
+          : LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double horizontalPadding =
+                    constraints.maxWidth >= 760 ? TpSpace.xxl : TpSpace.lg;
+
+                return ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    TpSpace.lg,
+                    horizontalPadding,
+                    TpSpace.xxxl,
+                  ),
+                  children: <Widget>[
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 960),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            _IdentityHero(profile: profile),
+                            const SizedBox(height: TpSpace.lg),
+                            _ProfileGroups(
+                              profile: profile,
+                              isSigningOut: _isSigningOut,
+                              onSignOut: () => unawaited(_confirmAndSignOut()),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
     );
   }
 }
 
-/// The identity card at the top of the screen: name, role, super-admin
-/// badge and site, each rendered from real [WorkspaceProfile] fields and
-/// never fabricated - see the file's own library comment.
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.profile});
+/// The visual anchor shared with Home's richer presentation: one tinted,
+/// high-contrast card that establishes the signed-in identity before any
+/// access facts or account action.
+class _IdentityHero extends StatelessWidget {
+  const _IdentityHero({required this.profile});
 
   final WorkspaceProfile profile;
 
@@ -184,22 +209,27 @@ class _ProfileHeader extends StatelessWidget {
     final String? site = profile.legacySite;
 
     return TpCard(
+      key: ProfileScreenKeys.hero,
+      background: palette.primarySoft,
+      borderColor: palette.primary.withValues(alpha: 0.32),
+      padding: const EdgeInsets.all(TpSpace.xl),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: palette.primarySoft,
-                  shape: BoxShape.circle,
+                  color: palette.primary,
+                  borderRadius: BorderRadius.circular(TpRadius.lg),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(TpSpace.md),
+                  padding: const EdgeInsets.all(TpSpace.lg),
                   child: Icon(
                     Icons.person_outline,
-                    size: TpSizing.iconLg,
-                    color: palette.primaryDark,
+                    size: TpSizing.iconState,
+                    color: palette.onPrimary,
                   ),
                 ),
               ),
@@ -213,58 +243,294 @@ class _ProfileHeader extends StatelessWidget {
                       (name == null || name.trim().isEmpty)
                           ? l10n.valueUnavailable
                           : name,
-                      style: text.titleLarge,
-                      maxLines: 1,
+                      style: text.headlineSmall?.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      profile.role.displayName,
-                      style: text.bodySmall?.copyWith(color: palette.textMuted),
+                    const SizedBox(height: TpSpace.xs),
+                    Wrap(
+                      spacing: TpSpace.sm,
+                      runSpacing: TpSpace.sm,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: <Widget>[
+                        _IdentityBadge(
+                          label: profile.role.displayName,
+                          background: palette.surface,
+                          foreground: palette.primaryDark,
+                          icon: Icons.badge_outlined,
+                        ),
+                        if (profile.isSuperAdmin)
+                          _IdentityBadge(
+                            label: l10n.profileSuperAdminBadge,
+                            background: palette.info.soft,
+                            foreground: palette.info.onSoft,
+                            icon: Icons.verified_user_outlined,
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          if (profile.isSuperAdmin) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: palette.info.soft,
-                  borderRadius: BorderRadius.circular(TpRadius.pill),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TpSpace.md,
-                    vertical: TpSpace.xs,
+          const SizedBox(height: TpSpace.xl),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.surface.withValues(alpha: 0.78),
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TpSpace.md,
+                vertical: TpSpace.sm,
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: TpSizing.iconMd,
+                    color: palette.primaryDark,
                   ),
-                  child: Text(
-                    l10n.profileSuperAdminBadge,
-                    style:
-                        text.labelSmall?.copyWith(color: palette.info.onSoft),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Text(
+                      (site == null || site.trim().isEmpty)
+                          ? l10n.homeSiteStatUnavailable
+                          : site,
+                      style: text.bodyMedium?.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IdentityBadge extends StatelessWidget {
+  const _IdentityBadge({
+    required this.label,
+    required this.background,
+    required this.foreground,
+    required this.icon,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: TpSpace.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: TpSizing.iconSm, color: foreground),
+            const SizedBox(width: TpSpace.xs),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ),
           ],
-          const Divider(height: TpSpace.xxl),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileGroups extends StatelessWidget {
+  const _ProfileGroups({
+    required this.profile,
+    required this.isSigningOut,
+    required this.onSignOut,
+  });
+
+  final WorkspaceProfile profile;
+  final bool isSigningOut;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget access = _AccessCard(profile: profile);
+    final Widget account = _AccountCard(
+      isSigningOut: isSigningOut,
+      onSignOut: onSignOut,
+    );
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        if (constraints.maxWidth >= 720) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(flex: 3, child: access),
+              const SizedBox(width: TpSpace.lg),
+              Expanded(flex: 2, child: account),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            access,
+            const SizedBox(height: TpSpace.lg),
+            account,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AccessCard extends StatelessWidget {
+  const _AccessCard({required this.profile});
+
+  final WorkspaceProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+
+    return TpCard(
+      key: ProfileScreenKeys.access,
+      padding: const EdgeInsets.all(TpSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _GroupHeading(
+            icon: Icons.admin_panel_settings_outlined,
+            title: l10n.loginOperationsTitle,
+            tone: palette.info,
+          ),
+          const SizedBox(height: TpSpace.lg),
           _ProfileRow(
             icon: Icons.badge_outlined,
             label: l10n.profileRoleLabel,
             value: profile.role.displayName,
           ),
-          const SizedBox(height: TpSpace.md),
+          const Divider(height: TpSpace.xxl),
+          _ProfileRow(
+            icon: Icons.public_outlined,
+            label: l10n.vehiclesFieldCountry,
+            value: _countryScopeLabel(profile, l10n),
+          ),
+          const Divider(height: TpSpace.xxl),
           _ProfileRow(
             icon: Icons.location_on_outlined,
-            label: l10n.homeSiteStatLabel,
-            value: (site == null || site.trim().isEmpty)
-                ? l10n.homeSiteStatUnavailable
-                : site,
+            label: l10n.vehiclesFieldSite,
+            value: _siteScopeLabel(profile, l10n),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({
+    required this.isSigningOut,
+    required this.onSignOut,
+  });
+
+  final bool isSigningOut;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+
+    return TpCard(
+      key: ProfileScreenKeys.account,
+      padding: const EdgeInsets.all(TpSpace.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _GroupHeading(
+            icon: Icons.manage_accounts_outlined,
+            title: l10n.profileNavTitle,
+            tone: palette.neutral,
+          ),
+          const SizedBox(height: TpSpace.lg),
+          Text(
+            l10n.profileSignOutConfirmMessage,
+            style: text.bodyMedium?.copyWith(color: palette.textMuted),
+          ),
+          const SizedBox(height: TpSpace.lg),
+          TpButton.danger(
+            label: l10n.actionSignOut,
+            icon: Icons.logout,
+            isFullWidth: true,
+            isBusy: isSigningOut,
+            onPressed: isSigningOut ? null : onSignOut,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupHeading extends StatelessWidget {
+  const _GroupHeading({
+    required this.icon,
+    required this.title,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String title;
+  final TpStatusColors tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: tone.soft,
+            borderRadius: BorderRadius.circular(TpRadius.md),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(TpSpace.sm),
+            child: Icon(icon, size: TpSizing.iconMd, color: tone.onSoft),
+          ),
+        ),
+        const SizedBox(width: TpSpace.md),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -286,17 +552,43 @@ class _ProfileRow extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Icon(icon, size: TpSizing.iconMd, color: palette.textMuted),
         const SizedBox(width: TpSpace.sm),
         Expanded(
+          flex: 2,
           child: Text(label, style: text.bodyMedium),
         ),
-        Text(
-          value,
-          style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+        const SizedBox(width: TpSpace.md),
+        Expanded(
+          flex: 3,
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );
   }
+}
+
+String _countryScopeLabel(
+  WorkspaceProfile profile,
+  AppLocalizations l10n,
+) {
+  if (profile.countryScope.seesAllCountries) {
+    return l10n.vehiclesAllFilter;
+  }
+  final List<String> countries = profile.countryScope.namedCountries;
+  return countries.isEmpty ? l10n.valueUnavailable : countries.join(', ');
+}
+
+String _siteScopeLabel(WorkspaceProfile profile, AppLocalizations l10n) {
+  if (profile.siteScope.isOrganisationWide) {
+    return l10n.vehiclesAllFilter;
+  }
+  final List<String> sites = profile.siteScope.namedSites;
+  return sites.isEmpty ? l10n.valueUnavailable : sites.join(', ');
 }

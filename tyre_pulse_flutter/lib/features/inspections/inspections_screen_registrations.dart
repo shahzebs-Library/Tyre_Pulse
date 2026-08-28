@@ -10,13 +10,10 @@
 /// router-owning layer needs to import; nothing else here is reached from
 /// outside `features/inspections/`.
 ///
-/// Registers exactly the two routes this phase's task brief names:
-/// [TpRouteId.newInspection] and [TpRouteId.inspectionDetail].
-/// [InspectionHistoryScreen] - "My Inspections" - deliberately has NO entry
-/// here: it is reached from inside [NewInspectionScreen] by an ordinary
-/// [Navigator] push rather than through a [TpRoute], because this phase's
-/// router files define no third route id for it. See that screen's own
-/// library comment.
+/// Registers the inspection capture/detail routes and the existing
+/// [TpRouteId.activityHistory] destination. The latter is production's merged
+/// queued-and-synced inspection history from artifact 01 section 2.11; the
+/// same screen also remains reachable from inside [NewInspectionScreen].
 library;
 
 import 'package:flutter/widgets.dart';
@@ -25,6 +22,8 @@ import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/features/inspections/presentation/'
     'inspection_detail_screen.dart';
 import 'package:tyre_pulse/features/inspections/presentation/'
+    'inspection_history_screen.dart';
+import 'package:tyre_pulse/features/inspections/presentation/'
     'new_inspection_screen.dart';
 
 /// The routes this feature builds a screen for.
@@ -32,6 +31,7 @@ final Map<String, TpScreenBuilder> inspectionsScreenRegistrations =
     <String, TpScreenBuilder>{
   TpRouteId.newInspection: _buildNewInspectionScreen,
   TpRouteId.inspectionDetail: _buildInspectionDetailScreen,
+  TpRouteId.activityHistory: _buildActivityHistoryScreen,
 };
 
 /// Guards the cast from the router's typed [TpRoute] union down to
@@ -55,4 +55,11 @@ Widget _buildInspectionDetailScreen(BuildContext context, TpRoute route) {
     return TpScreenNotAvailable(route: route);
   }
   return InspectionDetailScreen(route: route);
+}
+
+Widget _buildActivityHistoryScreen(BuildContext context, TpRoute route) {
+  if (route is! ActivityHistoryRoute) {
+    return TpScreenNotAvailable(route: route);
+  }
+  return const InspectionHistoryScreen();
 }

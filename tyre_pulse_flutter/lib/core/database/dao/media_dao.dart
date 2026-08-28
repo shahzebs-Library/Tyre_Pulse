@@ -360,6 +360,23 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
         .get();
   }
 
+  /// Removes the mark for one field without disturbing any other signature
+  /// captured on the same draft.
+  Future<int> deleteSignature({
+    required String ownerKind,
+    required String ownerKey,
+    required String fieldKey,
+  }) {
+    return (delete(capturedSignatures)
+          ..where(
+            (t) =>
+                t.ownerKind.equals(ownerKind) &
+                t.ownerKey.equals(ownerKey) &
+                t.fieldKey.equals(fieldKey),
+          ))
+        .go();
+  }
+
   /// Whether a template's `require_signature` flag is satisfied.
   ///
   /// Satisfied by the template-level pad OR any signed field, which is a query

@@ -135,6 +135,14 @@ class _FillFormView extends ConsumerWidget {
       checklistFillControllerProvider.notifier,
     );
     final ChecklistSubmitGate? gate = state.submitGate;
+    final _ChecklistProgress progress = _ChecklistProgress.fromState(
+      state: state,
+      fields: fields,
+    );
+    final List<_ChecklistSection> sections = _ChecklistSection.fromFields(
+      fields,
+      state,
+    );
 
     return TpScaffold(
       backFallback: TpRoutePaths.checklists,
@@ -143,14 +151,24 @@ class _FillFormView extends ConsumerWidget {
         subtitle: state.assetNo,
         backFallback: TpRoutePaths.checklists,
       ),
+      bottomNavigationBar: _SubmitDock(
+        state: state,
+        progress: progress,
+        onSubmit: controller.submit,
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           TpSpace.lg,
           TpSpace.lg,
           TpSpace.lg,
-          TpSpace.xxl * 2,
+          TpSpace.xxl,
         ),
         children: <Widget>[
+          _ProgressOverview(
+            state: state,
+            progress: progress,
+          ),
+          const SizedBox(height: TpSpace.lg),
           if (state.errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(bottom: TpSpace.lg),
@@ -171,33 +189,61 @@ class _FillFormView extends ConsumerWidget {
                       ),
               ),
             ),
-          _HeaderCard(state: state, controller: controller),
+          _HeaderCard(
+            state: state,
+            controller: controller,
+            languages: _availableLanguages(template),
+          ),
           const SizedBox(height: TpSpace.lg),
-          for (final ChecklistField field in fields)
-            _buildField(context, controller, field),
-          if (state.templateRecord!.requireSignature) ...<Widget>[
+          if (sections.length > 1) ...<Widget>[
+            _SectionProgressRail(sections: sections, state: state),
             const SizedBox(height: TpSpace.lg),
-            Text(
-              l10n.checklistPrimarySignatureLabel,
-              style: Theme.of(context).textTheme.titleSmall,
+          ],
+          for (int sectionIndex = 0;
+              sectionIndex < sections.length;
+              sectionIndex++) ...<Widget>[
+            _SectionHeading(
+              index: sectionIndex,
+              section: sections[sectionIndex],
+              state: state,
+              showTitle: sections.length > 1 ||
+                  sections[sectionIndex].title.trim().isNotEmpty,
             ),
+            for (int fieldIndex = 0;
+                fieldIndex < sections[sectionIndex].fields.length;
+                fieldIndex++)
+              _QuestionCard(
+                number: sections.take(sectionIndex).fold<int>(
+                          0,
+                          (int total, _ChecklistSection item) =>
+                              total + item.fields.length,
+                        ) +
+                    fieldIndex +
+                    1,
+                field: sections[sectionIndex].fields[fieldIndex],
+                state: state,
+                child: _buildField(
+                  context,
+                  controller,
+                  sections[sectionIndex].fields[fieldIndex],
+                ),
+              ),
             const SizedBox(height: TpSpace.sm),
-            ChecklistSignaturePad(
-              value: state.primarySignature,
-              onChanged: (capture) =>
-                  controller.savePrimarySignature(capture?.dataUrl),
+          ],
+          if (state.templateRecord!.requireSignature) ...<Widget>[
+            _SignOffCard(
+              title: l10n.checklistPrimarySignatureLabel,
+              isComplete: (state.primarySignature ?? '').trim().isNotEmpty,
+              child: ChecklistSignaturePad(
+                value: state.primarySignature,
+                onChanged: (capture) =>
+                    controller.savePrimarySignature(capture?.dataUrl),
+              ),
             ),
           ],
           const SizedBox(height: TpSpace.xl),
           if (gate != null && !gate.canSubmit)
             _GateSummary(gate: gate, l10n: l10n),
-          const SizedBox(height: TpSpace.md),
-          TpButton.primary(
-            label: l10n.checklistSubmitAction,
-            isFullWidth: true,
-            isBusy: state.phase == ChecklistFillPhase.submitting,
-            onPressed: state.canSubmit ? controller.submit : null,
-          ),
         ],
       ),
     );
@@ -229,64 +275,867 @@ class _FillFormView extends ConsumerWidget {
       ];
     }
 
-    return ChecklistFieldAnswerTile(
-      key: ValueKey<String>(field.id),
-      field: field,
-      label: label,
-      value: value,
-      options: options,
-      onChanged: (Object? v) => controller.updateAnswer(field.id, v),
-      readOnly: readOnly,
-      locked: locked,
-      errorText: errorText,
-      note: state.notes[field.id]?.toString(),
-      onNoteChanged: field.allowNote == false
-          ? null
-          : (String v) => controller.updateNote(field.id, v),
-      noteRequired: noteRequired,
-      showNoteField: field.allowNote != false,
-      photos: (state.photosByField[field.id] ?? const <ChecklistDraftPhoto>[])
-          .map((ChecklistDraftPhoto p) => p.localPath)
-          .toList(growable: false),
-      onCapturePhoto: field.type == 'photo'
-          ? (ChecklistPhotoPickSource source) => controller.capturePhoto(
-                fieldId: field.id,
-                capture: () async {
-                  final String? draftKey = state.draftKey;
-                  if (draftKey == null) return null;
-                  final CapturedChecklistPhoto? captured =
-                      await ChecklistPhotoCapture().captureAndStore(
-                    draftKey: draftKey,
-                    fieldKey: field.id,
-                    source: source == ChecklistPhotoPickSource.camera
-                        ? ChecklistPhotoSource.camera
-                        : ChecklistPhotoSource.gallery,
-                  );
-                  if (captured == null) return null;
-                  return ChecklistDraftPhotoCaptureResult(
-                    localPath: captured.localPath,
-                    capturedAt: captured.capturedAt,
-                    sizeBytes: captured.sizeBytes,
-                  );
-                },
-              )
-          : null,
-      signatureBuilder: field.type == 'signature'
-          ? (BuildContext context) => ChecklistSignaturePad(
-                value: state.signaturesByField[field.id],
-                onChanged: (capture) =>
-                    controller.saveSignature(field.id, capture?.dataUrl),
-              )
-          : null,
+    return Directionality(
+      textDirection:
+          isRtlLang(state.readLang) ? TextDirection.rtl : TextDirection.ltr,
+      child: ChecklistFieldAnswerTile(
+        key: ValueKey<String>(field.id),
+        field: field,
+        label: label,
+        value: value,
+        options: options,
+        onChanged: (Object? v) => controller.updateAnswer(field.id, v),
+        readOnly: readOnly,
+        locked: locked,
+        errorText: errorText,
+        note: state.notes[field.id]?.toString(),
+        onNoteChanged: field.allowNote == false
+            ? null
+            : (String v) => controller.updateNote(field.id, v),
+        noteRequired: noteRequired,
+        showNoteField: field.allowNote != false,
+        photos: (state.photosByField[field.id] ?? const <ChecklistDraftPhoto>[])
+            .map((ChecklistDraftPhoto p) => p.localPath)
+            .toList(growable: false),
+        onCapturePhoto: field.type == 'photo'
+            ? (ChecklistPhotoPickSource source) => controller.capturePhoto(
+                  fieldId: field.id,
+                  capture: () async {
+                    final String? draftKey = state.draftKey;
+                    if (draftKey == null) return null;
+                    final CapturedChecklistPhoto? captured =
+                        await ChecklistPhotoCapture().captureAndStore(
+                      draftKey: draftKey,
+                      fieldKey: field.id,
+                      source: source == ChecklistPhotoPickSource.camera
+                          ? ChecklistPhotoSource.camera
+                          : ChecklistPhotoSource.gallery,
+                    );
+                    if (captured == null) return null;
+                    return ChecklistDraftPhotoCaptureResult(
+                      localPath: captured.localPath,
+                      capturedAt: captured.capturedAt,
+                      sizeBytes: captured.sizeBytes,
+                    );
+                  },
+                )
+            : null,
+        signatureBuilder: field.type == 'signature'
+            ? (BuildContext context) => ChecklistSignaturePad(
+                  value: state.signaturesByField[field.id],
+                  onChanged: (capture) =>
+                      controller.saveSignature(field.id, capture?.dataUrl),
+                )
+            : null,
+      ),
+    );
+  }
+}
+
+List<ChecklistLang> _availableLanguages(ChecklistTemplate template) {
+  return <ChecklistLang>[
+    for (final ChecklistLang language in kChecklistLangs)
+      if (language.code == kChecklistDefaultLang ||
+          template.fields.any(
+            (ChecklistField field) =>
+                (field.labels[language.code] ?? '').trim().isNotEmpty ||
+                (field.optionsI18n[language.code]?.isNotEmpty ?? false),
+          ) ||
+          template.optionSets.values.any(
+            (set) => set.i18n[language.code]?.isNotEmpty ?? false,
+          ))
+        language,
+  ];
+}
+
+bool _hasAnswer(Object? value) {
+  if (value == null) return false;
+  if (value is String) return value.trim().isNotEmpty;
+  if (value is Iterable) return value.isNotEmpty;
+  if (value is Map) return value.isNotEmpty;
+  return true;
+}
+
+bool _isFieldComplete(ChecklistField field, ChecklistFillState state) {
+  return switch (field.type) {
+    'photo' => (state.photosByField[field.id] ?? const <ChecklistDraftPhoto>[])
+        .isNotEmpty,
+    'signature' => (state.signaturesByField[field.id] ?? '').trim().isNotEmpty,
+    _ => _hasAnswer(state.answers[field.id]),
+  };
+}
+
+bool _fieldNeedsAttention(ChecklistField field, ChecklistFillState state) {
+  final ChecklistSubmitGate? gate = state.submitGate;
+  if (gate == null) return false;
+  return gate.fieldErrors.containsKey(field.id) ||
+      gate.signatureFieldErrors.containsKey(field.id) ||
+      gate.missingNotes.any((item) => item.id == field.id);
+}
+
+final class _ChecklistProgress {
+  const _ChecklistProgress({
+    required this.completed,
+    required this.total,
+    required this.photoCount,
+  });
+
+  factory _ChecklistProgress.fromState({
+    required ChecklistFillState state,
+    required List<ChecklistField> fields,
+  }) {
+    final List<ChecklistField> answerable = <ChecklistField>[
+      for (final ChecklistField field in fields)
+        if (field.type != 'section') field,
+    ];
+    return _ChecklistProgress(
+      completed: answerable
+          .where((ChecklistField field) => _isFieldComplete(field, state))
+          .length,
+      total: answerable.length,
+      photoCount: state.photosByField.values.fold<int>(
+        0,
+        (int count, List<ChecklistDraftPhoto> photos) => count + photos.length,
+      ),
+    );
+  }
+
+  final int completed;
+  final int total;
+  final int photoCount;
+
+  double get fraction => total == 0 ? 0 : completed / total;
+  int get percent => (fraction * 100).round();
+}
+
+final class _ChecklistSection {
+  const _ChecklistSection({required this.title, required this.fields});
+
+  static List<_ChecklistSection> fromFields(
+    List<ChecklistField> fields,
+    ChecklistFillState state,
+  ) {
+    final List<_ChecklistSection> sections = <_ChecklistSection>[];
+    String title = '';
+    List<ChecklistField> current = <ChecklistField>[];
+
+    void finishCurrent() {
+      if (title.trim().isEmpty && current.isEmpty) return;
+      sections.add(
+        _ChecklistSection(
+          title: title,
+          fields: List<ChecklistField>.unmodifiable(current),
+        ),
+      );
+    }
+
+    for (final ChecklistField field in fields) {
+      if (field.type == 'section') {
+        finishCurrent();
+        title = fieldLabel(field, state.readLang);
+        current = <ChecklistField>[];
+      } else {
+        current.add(field);
+      }
+    }
+    finishCurrent();
+
+    if (sections.isEmpty) {
+      sections
+          .add(const _ChecklistSection(title: '', fields: <ChecklistField>[]));
+    }
+    return sections;
+  }
+
+  final String title;
+  final List<ChecklistField> fields;
+
+  int completed(ChecklistFillState state) => fields
+      .where((ChecklistField field) => _isFieldComplete(field, state))
+      .length;
+
+  bool isComplete(ChecklistFillState state) =>
+      fields.isNotEmpty && completed(state) == fields.length;
+}
+
+class _ProgressOverview extends StatelessWidget {
+  const _ProgressOverview({
+    required this.state,
+    required this.progress,
+  });
+
+  final ChecklistFillState state;
+  final _ChecklistProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final bool ready = state.canSubmit;
+    return TpCard(
+      borderColor: ready ? palette.ok.base : palette.borderStrong,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final Widget details = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                l10n.checklistResumeProgress(
+                  progress.completed,
+                  progress.total,
+                ),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: TpSpace.sm),
+              LinearProgressIndicator(
+                value: progress.fraction,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(TpRadius.pill),
+                backgroundColor: palette.surfaceSunken,
+                color: ready ? palette.ok.base : palette.primary,
+              ),
+              const SizedBox(height: TpSpace.md),
+              Wrap(
+                spacing: TpSpace.sm,
+                runSpacing: TpSpace.sm,
+                children: <Widget>[
+                  TpStatusChip(
+                    status: ready ? TpStatus.ok : TpStatus.warning,
+                    icon: ready ? Icons.task_alt : Icons.pending_actions,
+                  ),
+                  if (progress.photoCount > 0)
+                    _EvidenceBadge(
+                      count: progress.photoCount,
+                      semanticLabel: l10n.checklistAddPhotoTitle,
+                    ),
+                ],
+              ),
+            ],
+          );
+          final Widget ring = _ProgressRing(progress: progress, ready: ready);
+          if (constraints.maxWidth < 430) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(child: details),
+                const SizedBox(width: TpSpace.lg),
+                ring,
+              ],
+            );
+          }
+          return Row(
+            children: <Widget>[
+              Expanded(child: details),
+              const SizedBox(width: TpSpace.xl),
+              ring,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ProgressRing extends StatelessWidget {
+  const _ProgressRing({required this.progress, required this.ready});
+
+  final _ChecklistProgress progress;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      value: '${progress.percent}%',
+      child: SizedBox.square(
+        dimension: 72,
+        child: Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            SizedBox.square(
+              dimension: 68,
+              child: CircularProgressIndicator(
+                value: progress.fraction,
+                strokeWidth: 8,
+                strokeCap: StrokeCap.round,
+                backgroundColor: palette.surfaceSunken,
+                color: ready ? palette.ok.base : palette.primary,
+              ),
+            ),
+            Text(
+              '${progress.percent}%',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EvidenceBadge extends StatelessWidget {
+  const _EvidenceBadge({required this.count, required this.semanticLabel});
+
+  final int count;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      label: '$semanticLabel: $count',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.info.soft,
+          borderRadius: BorderRadius.circular(TpRadius.pill),
+          border: Border.all(color: palette.info.base),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: TpSpace.md,
+            vertical: TpSpace.xs,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                Icons.photo_camera_outlined,
+                size: TpSizing.iconSm,
+                color: palette.info.onSoft,
+              ),
+              const SizedBox(width: TpSpace.xs),
+              Text(
+                '$count',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: palette.info.onSoft),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionProgressRail extends StatelessWidget {
+  const _SectionProgressRail({required this.sections, required this.state});
+
+  final List<_ChecklistSection> sections;
+  final ChecklistFillState state;
+
+  @override
+  Widget build(BuildContext context) {
+    int current = sections.indexWhere(
+      (_ChecklistSection section) => !section.isComplete(state),
+    );
+    if (current < 0) current = sections.length - 1;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: <Widget>[
+          for (int index = 0; index < sections.length; index++) ...<Widget>[
+            _SectionStep(
+              index: index,
+              section: sections[index],
+              state: state,
+              isCurrent: index == current,
+            ),
+            if (index != sections.length - 1)
+              Container(
+                width: TpSpace.xxl,
+                height: 1,
+                color: TpPalette.of(context).borderStrong,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionStep extends StatelessWidget {
+  const _SectionStep({
+    required this.index,
+    required this.section,
+    required this.state,
+    required this.isCurrent,
+  });
+
+  final int index;
+  final _ChecklistSection section;
+  final ChecklistFillState state;
+  final bool isCurrent;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final bool complete = section.isComplete(state);
+    final Color color = complete
+        ? palette.ok.base
+        : isCurrent
+            ? palette.primary
+            : palette.borderStrong;
+    return SizedBox(
+      width: 104,
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: complete || isCurrent ? color : palette.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: TpBorderWidth.strong),
+            ),
+            child: complete
+                ? Icon(
+                    Icons.check,
+                    size: TpSizing.iconMd,
+                    color: palette.onPrimary,
+                  )
+                : Text(
+                    '${index + 1}',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: isCurrent ? palette.onPrimary : palette.text,
+                        ),
+                  ),
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Directionality(
+            textDirection: isRtlLang(state.readLang)
+                ? TextDirection.rtl
+                : TextDirection.ltr,
+            child: Text(
+              section.title,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: isCurrent || complete
+                        ? palette.text
+                        : palette.textMuted,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({
+    required this.index,
+    required this.section,
+    required this.state,
+    required this.showTitle,
+  });
+
+  final int index;
+  final _ChecklistSection section;
+  final ChecklistFillState state;
+  final bool showTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showTitle) return const SizedBox.shrink();
+    final TpPalette palette = TpPalette.of(context);
+    final bool complete = section.isComplete(state);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TpSpace.md),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: complete ? palette.ok.soft : palette.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            child: complete
+                ? Icon(
+                    Icons.check,
+                    color: palette.ok.base,
+                    size: TpSizing.iconMd,
+                  )
+                : Text(
+                    '${index + 1}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(color: palette.primaryDark),
+                  ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Directionality(
+              textDirection: isRtlLang(state.readLang)
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
+              child: Text(
+                section.title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ),
+          if (complete)
+            const TpStatusChip(
+              status: TpStatus.ok,
+              icon: Icons.check_circle_outline,
+              isCompact: true,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuestionCard extends StatelessWidget {
+  const _QuestionCard({
+    required this.number,
+    required this.field,
+    required this.state,
+    required this.child,
+  });
+
+  final int number;
+  final ChecklistField field;
+  final ChecklistFillState state;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final bool complete = _isFieldComplete(field, state);
+    final bool attention = _fieldNeedsAttention(field, state);
+    final Color border = attention
+        ? palette.critical.base
+        : complete
+            ? palette.ok.base
+            : palette.border;
+    return TpCard(
+      margin: const EdgeInsets.only(bottom: TpSpace.md),
+      borderColor: border,
+      padding: const EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        TpSpace.md,
+        TpSpace.lg,
+        0,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 30,
+                height: 30,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: attention
+                      ? palette.critical.soft
+                      : complete
+                          ? palette.ok.soft
+                          : palette.surfaceAlt,
+                  shape: BoxShape.circle,
+                ),
+                child: complete && !attention
+                    ? Icon(
+                        Icons.check,
+                        size: TpSizing.iconSm,
+                        color: palette.ok.base,
+                      )
+                    : Text(
+                        '$number',
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: attention
+                                      ? palette.critical.base
+                                      : palette.textSecondary,
+                                ),
+                      ),
+              ),
+              const Spacer(),
+              if (attention)
+                const TpStatusChip(
+                  status: TpStatus.critical,
+                  icon: Icons.error_outline,
+                  isCompact: true,
+                )
+              else if (complete)
+                const TpStatusChip(
+                  status: TpStatus.ok,
+                  icon: Icons.check_circle_outline,
+                  isCompact: true,
+                ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.md),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SignOffCard extends StatelessWidget {
+  const _SignOffCard({
+    required this.title,
+    required this.isComplete,
+    required this.child,
+  });
+
+  final String title;
+  final bool isComplete;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      borderColor: isComplete ? palette.ok.base : palette.borderStrong,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.draw_outlined,
+                color: isComplete ? palette.ok.base : palette.primary,
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              if (isComplete)
+                const TpStatusChip(
+                  status: TpStatus.ok,
+                  icon: Icons.check_circle_outline,
+                  isCompact: true,
+                ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.md),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SubmitDock extends StatelessWidget {
+  const _SubmitDock({
+    required this.state,
+    required this.progress,
+    required this.onSubmit,
+  });
+
+  final ChecklistFillState state;
+  final _ChecklistProgress progress;
+  final Future<bool> Function() onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final bool ready = state.canSubmit;
+    return Material(
+      color: palette.surface,
+      child: SafeArea(
+        top: false,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: palette.border)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              TpSpace.lg,
+              TpSpace.md,
+              TpSpace.lg,
+              TpSpace.md,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        l10n.checklistResumeProgress(
+                          progress.completed,
+                          progress.total,
+                        ),
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        ready ? l10n.statusOk : l10n.statusWarning,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: ready
+                                  ? palette.ok.base
+                                  : palette.warning.base,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TpSpace.md),
+                Flexible(
+                  child: TpButton.primary(
+                    label: l10n.checklistSubmitAction,
+                    icon: Icons.send_outlined,
+                    isBusy: state.phase == ChecklistFillPhase.submitting,
+                    onPressed: ready ? () => unawaited(onSubmit()) : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContextRow extends StatelessWidget {
+  const _ContextRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.md,
+        vertical: TpSpace.sm,
+      ),
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, color: palette.primary, size: TpSizing.iconMd),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadingLanguagePicker extends StatelessWidget {
+  const _ReadingLanguagePicker({
+    required this.languages,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<ChecklistLang> languages;
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String value = languages.any(
+      (ChecklistLang language) => language.code == selected,
+    )
+        ? selected
+        : kChecklistDefaultLang;
+    return Semantics(
+      label: langMeta(value).label,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          border: Border.all(color: palette.borderStrong),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: TpSizing.minTouchTarget,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  Icons.translate,
+                  color: palette.primary,
+                  size: TpSizing.iconMd,
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: value,
+                      isExpanded: true,
+                      dropdownColor: palette.surface,
+                      iconEnabledColor: palette.textSecondary,
+                      onChanged: (String? next) {
+                        if (next != null) onChanged(next);
+                      },
+                      items: <DropdownMenuItem<String>>[
+                        for (final ChecklistLang language in languages)
+                          DropdownMenuItem<String>(
+                            value: language.code,
+                            child: Directionality(
+                              textDirection: language.isRtl
+                                  ? TextDirection.rtl
+                                  : TextDirection.ltr,
+                              child: Align(
+                                alignment: language.isRtl
+                                    ? AlignmentDirectional.centerEnd
+                                    : AlignmentDirectional.centerStart,
+                                child: Text(
+                                  language.native,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class _HeaderCard extends StatefulWidget {
-  const _HeaderCard({required this.state, required this.controller});
+  const _HeaderCard({
+    required this.state,
+    required this.controller,
+    required this.languages,
+  });
 
   final ChecklistFillState state;
   final ChecklistFillController controller;
+  final List<ChecklistLang> languages;
 
   @override
   State<_HeaderCard> createState() => _HeaderCardState();
@@ -326,6 +1175,13 @@ class _HeaderCardState extends State<_HeaderCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          _ContextRow(
+            icon: Icons.directions_car,
+            label: state.assetNo?.trim().isNotEmpty ?? false
+                ? state.assetNo!.trim()
+                : l10n.checklistNoAssetLabel,
+          ),
+          const SizedBox(height: TpSpace.md),
           if (state.siteOptions.isNotEmpty)
             TpDropdown<String>(
               label: l10n.checklistSiteLabel,
@@ -349,6 +1205,14 @@ class _HeaderCardState extends State<_HeaderCard> {
             hint: l10n.checklistPrintedNamePlaceholder,
             onChanged: widget.controller.setPrintedName,
           ),
+          if (widget.languages.length > 1) ...<Widget>[
+            const SizedBox(height: TpSpace.md),
+            _ReadingLanguagePicker(
+              languages: widget.languages,
+              selected: state.readLang,
+              onChanged: widget.controller.setReadLang,
+            ),
+          ],
         ],
       ),
     );

@@ -363,6 +363,36 @@ void main() {
         contains('M5 5'),
       );
     });
+
+    test('clearing one signature keeps every sibling signing slot', () async {
+      final String key = repo.draftKeyFor(
+        userId: 'user-1',
+        templateId: 't1',
+        assetNo: 'TM514',
+      );
+      await repo.saveSignature(
+        draftKey: key,
+        fieldKey: 'sign_mechanic',
+        payload: '<svg><path d="M0 0"/></svg>',
+        source: 'drawn',
+      );
+      await repo.saveSignature(
+        draftKey: key,
+        fieldKey: 'sign_electrician',
+        payload: '<svg><path d="M5 5"/></svg>',
+        source: 'drawn',
+      );
+
+      await repo.clearSignature(
+        draftKey: key,
+        fieldKey: 'sign_mechanic',
+      );
+
+      final List<ChecklistDraftSignature> signatures =
+          await repo.signaturesFor(key);
+      expect(signatures, hasLength(1));
+      expect(signatures.single.fieldKey, 'sign_electrician');
+    });
   });
 
   group('hasContent', () {

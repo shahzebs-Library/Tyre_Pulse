@@ -19,6 +19,8 @@
 /// `tyre_take_action_screen.dart`'s own build of this input.
 library;
 
+import 'package:tyre_pulse/core/database/dao/queue_dao.dart'
+    show QueuedMediaAttachment;
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
@@ -48,6 +50,9 @@ final class SubmitTyreDefectReportInput {
     this.priority,
     this.rootCause,
     this.country,
+    this.assignedTo,
+    this.dueDate,
+    this.photoLocalPaths = const <String>[],
   });
 
   final String title;
@@ -69,6 +74,9 @@ final class SubmitTyreDefectReportInput {
   final String? rootCause;
 
   final String? country;
+  final String? assignedTo;
+  final DateTime? dueDate;
+  final List<String> photoLocalPaths;
 }
 
 /// Records a tyre defect report. Never throws for an ordinary offline
@@ -95,6 +103,10 @@ final class DefaultTyreDefectReportRepository
     required SubmitTyreDefectReportInput input,
   }) async {
     final String title = input.title.trim();
+    final List<String> photos = <String>[
+      for (final String path in input.photoLocalPaths)
+        if (path.trim().isNotEmpty) path.trim(),
+    ];
 
     final EnqueueResult result = await _commands.enqueue(
       type: CommandType.reportIssue,
@@ -109,9 +121,20 @@ final class DefaultTyreDefectReportRepository
         'status': 'Open',
         'created_by': workspace.userId.trim().isEmpty ? null : workspace.userId,
         'country': input.country,
+        'assigned_to': _trimmedOrNull(input.assignedTo),
+        'due_date': input.dueDate?.toUtc().toIso8601String(),
+        'photos': photos.isEmpty ? null : photos,
       },
       workspace: workspace,
       now: DateTime.now(),
+      attachments: <QueuedMediaAttachment>[
+        for (int i = 0; i < photos.length; i++)
+          QueuedMediaAttachment(
+            localPath: photos[i],
+            fileName: _basename(photos[i]),
+            orderIndex: i,
+          ),
+      ],
       country: input.country ?? workspace.activeCountry,
       idempotencyKey: 'tyredefect_${_slug(input.assetNo ?? title)}_'
           '${_uuid.v4().substring(0, 8)}',
@@ -122,6 +145,11 @@ final class DefaultTyreDefectReportRepository
 
   static String _slug(String value) =>
       value.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+
+  static String _basename(String path) {
+    final int slash = path.lastIndexOf(RegExp(r'[\\/]'));
+    return slash < 0 ? path : path.substring(slash + 1);
+  }
 }
 
 String? _trimmedOrNull(String? raw) {

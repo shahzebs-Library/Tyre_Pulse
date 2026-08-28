@@ -653,8 +653,33 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String inspectionResumeProgress(int filled, int total) {
-    return '$filled من $total إطارات مسجلة';
+    return 'تم فحص $filled من $total';
   }
+
+  @override
+  String get inspectionWorkflowNotStarted => 'لم يبدأ';
+
+  @override
+  String get inspectionWorkflowInProgress => 'قيد التنفيذ';
+
+  @override
+  String get inspectionWorkflowReadyForReview => 'جاهز للمراجعة';
+
+  @override
+  String inspectionWorkflowResumeSummary(String status, String progress) {
+    return '$status • $progress';
+  }
+
+  @override
+  String get inspectionWorkflowTapTyre => 'اضغط على إطار لإضافة تفاصيل الفحص.';
+
+  @override
+  String get inspectionWorkflowContinueChecking =>
+      'واصل فحص مواضع الإطارات حتى يحتوي كل موضع على تفاصيل كافية.';
+
+  @override
+  String get inspectionWorkflowAllChecked =>
+      'تم فحص جميع مواضع الإطارات. يمكنك الآن المراجعة والتوقيع.';
 
   @override
   String get inspectionChangeVehicleButton => 'تغيير';
@@ -700,6 +725,64 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get inspectionTyrePositionsTitle => 'مواضع الإطارات';
+
+  @override
+  String get inspectionDraftLabel => 'مسودة';
+
+  @override
+  String inspectionTyreConfiguration(int count) {
+    return 'تكوين $count إطارًا';
+  }
+
+  @override
+  String inspectionStepOfTotal(int step, int total) {
+    return 'الخطوة $step من $total';
+  }
+
+  @override
+  String get inspectionRearLabel => 'الخلف';
+
+  @override
+  String get inspectionSelectedTyre => 'الإطار المحدد';
+
+  @override
+  String get inspectionPressureShort => 'الضغط';
+
+  @override
+  String get inspectionTreadDepthShort => 'عمق النقشة';
+
+  @override
+  String get inspectionAddEvidencePhoto => 'إضافة دليل (صورة)';
+
+  @override
+  String get inspectionSaveAndNext => 'حفظ والتالي';
+
+  @override
+  String get inspectionFrontLeft => 'أمامي يسار';
+
+  @override
+  String get inspectionFrontRight => 'أمامي يمين';
+
+  @override
+  String get inspectionInnerLeft => 'داخلي يسار';
+
+  @override
+  String get inspectionOuterLeft => 'خارجي يسار';
+
+  @override
+  String get inspectionInnerRight => 'داخلي يمين';
+
+  @override
+  String get inspectionOuterRight => 'خارجي يمين';
+
+  @override
+  String get inspectionRearLeft => 'خلفي يسار';
+
+  @override
+  String get inspectionRearRight => 'خلفي يمين';
+
+  @override
+  String get inspectionTyrePositionFallback => 'موضع الإطار';
 
   @override
   String get inspectionNotRecordedYet => 'لم يُسجَّل بعد';
@@ -1716,6 +1799,95 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeGreeting => 'مرحبًا بعودتك';
 
   @override
+  String get homeGoodMorning => 'صباح الخير،';
+
+  @override
+  String get homeGoodAfternoon => 'مساء الخير،';
+
+  @override
+  String get homeGoodEvening => 'مساء الخير،';
+
+  @override
+  String get homeFallbackUser => 'عضو الفريق';
+
+  @override
+  String get homeSearchAssetsHint => 'ابحث عن أصل أو إطار أو مهمة...';
+
+  @override
+  String get homeAttentionRequired => 'يتطلب الانتباه';
+
+  @override
+  String get homeViewAll => 'عرض الكل';
+
+  @override
+  String get homeApprovalsMetric => 'الموافقات';
+
+  @override
+  String get homeOverdueMetric => 'متأخر';
+
+  @override
+  String get homeCriticalMetric => 'حرج';
+
+  @override
+  String get homeTyreIssueDetected => 'تم اكتشاف مشكلة في الإطار';
+
+  @override
+  String get homeNoCriticalIssueTitle => 'لا توجد مشكلة حرجة في الإطارات';
+
+  @override
+  String get homeNoCriticalIssueMessage =>
+      'لم يتم العثور على تنبيه حرج نشط للإطارات.';
+
+  @override
+  String get homeReviewAction => 'مراجعة';
+
+  @override
+  String get homeMyWork => 'عملي';
+
+  @override
+  String get homeQuickActions => 'إجراءات سريعة';
+
+  @override
+  String get homeInspectAction => 'فحص';
+
+  @override
+  String get homeAssetAction => 'الأصل';
+
+  @override
+  String get homeReportIssueAction => 'الإبلاغ عن مشكلة';
+
+  @override
+  String get homeOpenAction => 'فتح';
+
+  @override
+  String get homeNoUrgentWorkTitle => 'لا يوجد عمل عاجل';
+
+  @override
+  String get homeNoUrgentWorkMessage =>
+      'لا توجد مهمة متأخرة أو عالية الأولوية مسندة.';
+
+  @override
+  String get homeMoreAction => 'المزيد';
+
+  @override
+  String get homeAlertsAction => 'التنبيهات';
+
+  @override
+  String get homeMenuTooltip => 'فتح الخدمات';
+
+  @override
+  String get homeNotificationsTooltip => 'فتح تنبيهات الإطارات';
+
+  @override
+  String get homeSiteSelectorTooltip => 'عرض الموقع الحالي';
+
+  @override
+  String get homeReportIssueSheetTitle => 'الإبلاغ عن مشكلة';
+
+  @override
+  String get homeReportAccidentAction => 'الإبلاغ عن حادث';
+
+  @override
   String get homeFieldSectionHeading => 'الميدان';
 
   @override
@@ -2106,6 +2278,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tyreDetailTakeActionButton => 'اتخاذ إجراء';
 
   @override
+  String get tyreDetailAddDetailsButton => 'إضافة التفاصيل';
+
+  @override
+  String get tyreDetailEditDetailsButton => 'تعديل التفاصيل';
+
+  @override
+  String get tyreDetailRemainingKmLabel => 'العمر المتبقي';
+
+  @override
+  String get tyreDetailRemainingKmCaption => 'تقدير عمر الأسطول';
+
+  @override
+  String get tyreDetailRemainingKmUnavailable => 'لا يتوفر تقدير مقاس للعمر';
+
+  @override
   String get tyreDetailNoEvidenceMessage =>
       'لم يسجل أحد أي شيء لهذا الإطار بعد.';
 
@@ -2325,6 +2512,51 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get loginOperationsTitle => 'عمليات PMV المتكاملة';
+
+  @override
+  String get loginWelcomeTitle => 'مرحبًا بعودتك';
+
+  @override
+  String get loginWelcomeSubtitle => 'سجّل الدخول إلى العمليات المعيّنة لك';
+
+  @override
+  String get loginSelectCountryTitle => 'اختر بلدك';
+
+  @override
+  String get loginSelectCountrySubtitle =>
+      'اختر البلد الخاص بالعمليات المعيّنة لك.';
+
+  @override
+  String get loginChangeCountryAction => 'تغيير البلد';
+
+  @override
+  String get loginCountrySaudiArabia => 'المملكة العربية السعودية';
+
+  @override
+  String get loginCountryUnitedArabEmirates => 'الإمارات العربية المتحدة';
+
+  @override
+  String get loginCountryEgypt => 'مصر';
+
+  @override
+  String get loginCountrySelectorSemantics => 'محدد البلد';
+
+  @override
+  String loginSelectedCountrySemantics(String country) {
+    return 'البلد المحدد: $country';
+  }
+
+  @override
+  String get loginScopeFleetAssets => 'الأسطول والأصول';
+
+  @override
+  String get loginScopeInspectionsChecklists => 'عمليات التفتيش وقوائم التحقق';
+
+  @override
+  String get loginScopeMaintenanceWorkshop => 'الصيانة والورشة';
+
+  @override
   String get profileNavTitle => 'حسابي';
 
   @override
@@ -2334,9 +2566,56 @@ class AppLocalizationsAr extends AppLocalizations {
   String get profileSuperAdminBadge => 'مسؤول المنصة';
 
   @override
+  String get accidentReportCaptureSubtitle => 'التقاط أدلة خاصة';
+
+  @override
+  String get accidentSubmitUnavailable =>
+      'الإرسال غير متاح حتى يضمن مسار المزامنة المحمي رفع كل صور الأدلة الخاصة قبل سجل الحادث. تبقى الصور الملتقطة على هذا الجهاز.';
+
+  @override
+  String get tasksCopyCatalog =>
+      'title=عملي~today=اليوم~inProgress=قيد التنفيذ~completed=مكتمل~urgent=عاجل~upcoming=قادم~open=مفتوحة~emptyTitle=لا توجد مهام~emptyMessage=لا توجد أعمال تطابق هذا العرض.~loadError=تعذر تحميل أعمالي الآن.~due=الاستحقاق~assigned=مُسند إلى~unassigned=غير مُسند~normal=عادي~overdue=متأخر~details=تفاصيل المهمة~description=الوصف~site=الموقع~asset=المعدة~priority=الأولوية~status=الحالة~retry=إعادة المحاولة';
+
+  @override
+  String get alertsCopyCatalog =>
+      'title=تنبيهات الإطارات~all=الكل~critical=حرج~warnings=تحذيرات~info=معلومات~flagged=تنبيهات~criticalCount=حرجة~emptyTitle=لا توجد تنبيهات نشطة~emptyFilter=لا توجد تنبيهات تطابق هذا الفلتر.~loadError=تعذر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة.~unknownAsset=معدة غير معروفة~pressureLow=ضغط الإطار منخفض~treadLow=عمق النقشة منخفض~position=الموضع~serial=الرقم التسلسلي~tread=عمق النقشة~retry=إعادة المحاولة';
+
+  @override
+  String get notificationInboxCopyCatalog =>
+      'title=الإشعارات~markAll=تعيين الكل كمقروء~fallbackTitle=إشعار~emptyTitle=اطلعت على كل المستجدات~emptyBody=ستظهر هنا المهام والموافقات والتحديثات التشغيلية.~loadFailed=تعذر تحميل الإشعارات. اسحب للأسفل لإعادة المحاولة.~markFailed=تعذر تعيين هذا الإشعار كمقروء.~markAllFailed=تعذر تعيين جميع الإشعارات كمقروءة.~justNow=الآن~minutesAgo=قبل %count% د~hoursAgo=قبل %count% س~daysAgo=قبل %count% ي';
+
+  @override
+  String get reportIssueCopyCatalog =>
+      'title=الإبلاغ عن مشكلة~problem=ما المشكلة؟~problemHint=صف المشكلة باختصار~priority=الأولوية~low=منخفضة~medium=متوسطة~high=عالية~critical=حرجة~site=الموقع~siteHint=مكان اكتشاف المشكلة~asset=المعدة~assetHint=رقم المعدة~due=الاستحقاق خلال~noDate=بدون تاريخ~threeDays=3 أيام~oneWeek=أسبوع~twoWeeks=أسبوعان~details=التفاصيل~detailsHint=أضف الأعراض والموقع وأي إجراء فوري تم اتخاذه~photos=الصور~optional=(اختياري)~addPhoto=إضافة صورة~camera=الكاميرا~gallery=المعرض~photoFailed=تعذرت إضافة الصورة.~submit=رفع المشكلة~titleRequired=أدخل عنوان المشكلة قبل الحفظ.~workspaceUnavailable=لا تزال مساحة العمل قيد التحميل. حاول بعد قليل.~savedTitle=تم حفظ المشكلة~savedBody=أضيفت المشكلة إلى عملي وستتم مزامنتها تلقائياً.~stay=البقاء هنا~viewTasks=عرض عملي~saveFailed=تعذر حفظ المشكلة. حاول مرة أخرى.';
+
+  @override
+  String get rcaCopyCatalog =>
+      'title=تحليل السبب الجذري~records=سجلات~newRecord=تحليل جديد~none=لا توجد سجلات تحليل~noneBody=ستظهر هنا سجلات تحليل السبب الجذري المكتملة.~unknown=معدة غير معروفة~asset=المعدة~serial=الرقم التسلسلي للإطار~brand=العلامة التجارية~site=الموقع~km=الكيلومترات عند العطل~factors=العوامل المساهمة~rootCause=السبب الجذري~photos=صور الأدلة~photo=صورة~addPhoto=إضافة صورة~camera=الكاميرا~gallery=المعرض~photoFailed=تعذرت إضافة الصورة.~save=حفظ التحليل~missingCause=أدخل السبب الجذري قبل الحفظ.~invalidKm=أدخل قراءة كيلومترات صحيحة.~loadFailed=تعذر تحميل سجلات التحليل.~saveFailed=تعذر حفظ التحليل. حاول مرة أخرى.';
+
+  @override
+  String get pmCopyCatalog =>
+      'title=الصيانة الوقائية~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.';
+
+  @override
+  String get stockCountCopyCatalog =>
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر';
+
+  @override
+  String get calendarCopyCatalog =>
+      'title=التقويم~scheduled=مجدولة~overdue=متأخرة~today=مستحقة اليوم~week=هذا الأسبوع~later=لاحقاً~inspection=فحص~maintenance=صيانة~task=إجراء تصحيحي~empty=لا توجد أعمال مجدولة~emptyBody=ستظهر هنا الفحوصات والصيانة والإجراءات التصحيحية القادمة.~loadFailed=تعذر تحميل الجدول.';
+
+  @override
+  String get managementCopyCatalog =>
+      'overviewTitle=نظرة عامة على الأسطول~analyticsTitle=تحليلات الأسطول~reportsTitle=التقارير~reportsSubtitle=لقطة تنفيذية موثوقة~teamTitle=الفريق~last=آخر~days=يوم~days30=30 يوماً~days90=90 يوماً~year1=سنة~allSites=كل المواقع~tyres=الإطارات~vehicles=المركبات~critical=حرجة~openActions=إجراءات مفتوحة~highRisk=مخاطر عالية~inspections30=الفحوصات (30 يوم)~tyreSpend=تكلفة الإطارات~risk=توزيع المخاطر~sites=أعلى المواقع~brands=أعلى العلامات~analyticsFailed=تعذر تحميل التحليلات.~reportsFailed=تعذر تحميل بيانات التقرير.~reportUnavailable=التقرير المباشر غير متاح~reportUnavailableBody=لقطة الخادم الموثوقة غير متاحة. لم يتم اختلاق أي أرقام.~retry=إعادة المحاولة~generated=تم الإنشاء~costPerformance=التكلفة والأداء~fleet=الأسطول~tyre_spend=تكلفة الإطارات~accidents=الحوادث~open_accidents=الحوادث المفتوحة~claims_claimed=المطالبات المقدمة~claims_recovered=المطالبات المستردة~inspections=الفحوصات~work_orders_open=أوامر العمل المفتوحة~tyre_cost=تكلفة الإطارات~maintenance_cost=تكلفة الصيانة~total_cost=إجمالي التكلفة~km=الكيلومترات~engine_hours=ساعات التشغيل~m3=الإنتاج م3~cost_per_km=التكلفة لكل كم~cost_per_hour=التكلفة لكل ساعة~cost_per_m3=التكلفة لكل م3~tyre_cpk=تكلفة الإطار لكل كم~severity=شدة الحوادث~accidents_by_site=الحوادث حسب الموقع~tyres_by_site=الإطارات حسب الموقع~claim_status=حالة المطالبة~members=أعضاء~manage=إدارة الفريق~active=نشط~pending=قيد الانتظار~teamSearch=بحث بالاسم أو الدور أو الموقع~noMembers=لا يوجد أعضاء~trySearch=جرّب بحثاً آخر.~teamFailed=تعذر تحميل دليل الفريق.';
+
+  @override
   String get profileSignOutConfirmTitle => 'تسجيل الخروج؟';
 
   @override
   String get profileSignOutConfirmMessage =>
       'ستحتاج إلى تسجيل الدخول مرة أخرى لمواصلة العمل. أي عمل محفوظ بالفعل على هذا الجهاز يبقى محفوظاً.';
+
+  @override
+  String get accidentCopyCatalog =>
+      'loadFailed=تعذر تحميل سجل الحادث. حاول مرة أخرى.~notRecorded=غير مسجل~dashboardTitle=مركز قيادة الحوادث~dashboardSubtitle=سجل مباشر حسب الصلاحيات~reportAction=الإبلاغ عن حادث~reportShort=إبلاغ~loadingRegister=جارٍ تحميل سجل الحوادث…~dashboardEyebrow=إدارة حوادث المعدات والمركبات~dashboardHeroTitle=كل حالة بمسار مسؤول واحد~dashboardHeroMessage=الأسطول والتأمين والورشة والفحص والتسليم والاسترداد ظاهرة دون مؤشرات مختلقة.~searchHint=ابحث بالمعدة أو المرجع أو الموقع~allCases=كل الحالات~reportedByMe=بلاغاتي~anyStatus=أي حالة~open=مفتوح~closed=مغلق~noMatches=لا توجد حالات مطابقة~noMatchesMessage=غيّر التصفية أو أنشئ بلاغًا جديدًا.~loadMore=تحميل حالات أخرى~loading=جارٍ التحميل…~detailTitle=تفاصيل الحادث~loadingFacts=جارٍ تحميل بيانات الحالة…~notFound=الحادث غير موجود~notFoundMessage=السجل خارج نطاق صلاحيتك أو لم يعد موجودًا.~openFlow=فتح مسار الحالة المسؤول~incidentFacts=بيانات الحادث~incidentFactsHint=أدلة المبلّغ وهوية المركبة~liability=المسؤولية والدفع~liabilityHint=المتسبب والمسؤول والجهة الدافعة~insurance=التأمين والاسترداد~insuranceHint=المطالبة والاسترداد منفصلان عن الإغلاق~workshopRelease=الورشة والتسليم~workshopReleaseHint=التقييم والإصلاح والفحص وإعادة المركبة~closure=ضوابط الإغلاق~closureHint=اعتماد الإغلاق وحالة القضية منفصلان~vehicleType=نوع المركبة~plate=اللوحة / رقم الأسطول~type=نوع الحادث~severity=الخطورة~reporter=المبلّغ~evidenceFiles=ملفات الأدلة~description=الوصف~damage=الضرر~fault=حالة الخطأ~responsible=الطرف المتسبب~liable=الطرف المسؤول~payer=الجهة الدافعة~insurer=شركة التأمين~policy=الوثيقة~claimNo=رقم المطالبة~claimStatus=حالة المطالبة~claimed=المبلغ المطالب به~approved=المبلغ المعتمد~recoveryStatus=حالة الاسترداد~recovered=المبلغ المسترد~repairType=نوع الإصلاح~workshop=الورشة~repairCost=تكلفة الإصلاح~expectedRelease=التسليم المتوقع~actualRelease=التسليم الفعلي~nextAction=الإجراء التالي~workflowStage=مرحلة سير العمل~caseStatus=حالة القضية~closureRequest=طلب الإغلاق~closureLevel=مستوى الإغلاق~caseTitle=مسؤولية القضية~loadingWorkstreams=جارٍ تحميل مسارات العمل…~caseNotFound=القضية غير موجودة~caseNotFoundMessage=الحادث خارج نطاق صلاحيتك أو لم يعد موجودًا.~endToEnd=مسار القضية من البداية للنهاية~notActivated=مسار القضية غير مفعّل~notActivatedMessage=الحادث موجود لكن نموذج مسارات العمل غير مهيأ. لم يتم افتراض أي تقدم.~noWorkstreams=لا توجد مسارات معيّنة~noWorkstreamsMessage=نموذج القضية متاح لكن لم تُوجّه لها مسارات بعد.~timeline=الخط الزمني للمسؤولية~timelineHint=بيانات للقراءة فقط من سجل مسارات القضية~boundary=حدود التحكم~boundaryHint=لا يتم اختلاق أي إجراءات~boundaryMessage=قرارات التأمين والتقييم والإصلاح والفحص والتسليم والإغلاق والاسترداد تتطلب إجراءات خادم موثقة. لا توجد تعديلات مباشرة غير آمنة.~done=مكتمل~inProgress=قيد التنفيذ~pending=معلق~notRequired=غير مطلوب~reason=السبب~wsIncident=الحادث والأدلة~wsFleet=تحقق الأسطول~wsLiability=المسؤولية والسلامة~wsInsurance=مطالبة التأمين~wsAssessment=تقييم الورشة~wsRepair=تنفيذ الإصلاح~wsQc=فحص الورشة~wsHandover=تسليم المركبة~wsFinance=الاسترداد والمالية~wsCorrective=الإجراءات التصحيحية~selectAsset=اختر معدة من الأسطول~changeAsset=تغيير المعدة~assetSearch=المعدة أو رقم الأسطول أو اللوحة أو الطراز~unrecordedAsset=معدة غير مسجلة~photoFailed=تعذر حفظ صورة الدليل. حاول مرة أخرى.~workspaceLoading=مساحة العمل ما زالت قيد التحميل. حاول مرة أخرى.~required=المعدة والموقع والوصف وصورة دليل واحدة على الأقل مطلوبة.~fieldsDropped=تعذر حفظ جميع الحقول. لم يتم عرض البلاغ كمقدم.~saveFailed=تعذر حفظ البلاغ على هذا الجهاز. حاول مرة أخرى.~saved=تم حفظ البلاغ~savedTitle=تم حفظ بلاغ الحادث بأمان~savedMessage=البلاغ والأدلة في قائمة مزامنة الجهاز وسيتم رفعهما ضمن مساحة العمل النشطة.~backRegister=العودة إلى سجل الحوادث~reportTitle=الإبلاغ عن حادث~reportSubtitle=التقاط أدلة يعمل دون اتصال~firstResponse=الاستجابة الأولى~captureFacts=سجّل الوقائع في الموقع~captureFactsMessage=اختر المعدة أولاً لتعبئة موقعها وهويتها من سجل الأسطول. صورة دليل واحدة على الأقل إلزامية.~assetLocation=1. المعدة والموقع~assetLocationHint=سجل الأسطول هو المرجع عند توفره~fleetUnavailable=البحث في الأسطول غير متاح. الإدخال اليدوي متاح.~assetNo=رقم المعدة~site=الموقع~exactLocation=المكان الدقيق للحادث~classification=2. التصنيف~classificationHint=يمكن مراجعة التصنيف الميداني لاحقًا~minor=بسيط~moderate=متوسط~severe=خطير~fatal=مميت~collision=تصادم~rollover=انقلاب~propertyDamage=ضرر ممتلكات~other=أخرى~whatHappened=ماذا حدث؟~notes=ملاحظات فورية~evidence=3. الأدلة~evidenceAttached=صور أدلة مرفقة • الحد الأدنى 1~camera=الكاميرا~gallery=المعرض~evidencePhoto=صورة دليل~removePhoto=إزالة الصورة~saveReport=حفظ بلاغ الحادث';
 }

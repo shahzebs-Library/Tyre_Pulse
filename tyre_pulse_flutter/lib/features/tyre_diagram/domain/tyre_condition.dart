@@ -33,6 +33,7 @@
 library;
 
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 
 /// The six tyre-condition values the fleet register carries, matching the
 /// web app's set exactly: `Good / Worn / Damaged / Puncture / Flat /
@@ -81,7 +82,12 @@ TpStatus tyreConditionStatus(TyreCondition condition) => switch (condition) {
     };
 
 /// The condition recorded on a raw `tyre_conditions` entry, or `null` when
-/// nothing was ever recorded for this wheel. `entry` is the plain
+/// nothing was ever recorded for this wheel. A capture form seeds every slot
+/// with `condition: Good, checked: false`; that seed is not an inspection
+/// result and must remain visually/accessibly "not measured" until the entry
+/// contains evidence or the inspector explicitly checks it.
+///
+/// `entry` is the plain
 /// `Map<String, Object?>` shape both [VehicleTyreDiagram] and this app's
 /// tyre-completeness engine already read `tyre_conditions` payloads as -
 /// never a typed model, so a caller in ANY top-level feature can classify a
@@ -90,6 +96,7 @@ TpStatus tyreConditionStatus(TyreCondition condition) => switch (condition) {
 /// sibling features do not share domain code).
 TyreCondition? wheelConditionFor(Map<String, Object?>? entry) {
   if (entry == null) return null;
+  if (classifyEntry(entry).state == TyreSlotState.blank) return null;
   return normaliseCondition(entry['condition']?.toString());
 }
 

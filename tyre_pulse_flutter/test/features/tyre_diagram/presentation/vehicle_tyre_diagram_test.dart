@@ -10,6 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
 
 Future<void> _pump(
@@ -172,6 +176,37 @@ void main() {
   );
 
   testWidgets(
+    'an unchecked seeded Good wheel is announced as not recorded, never Good',
+    (WidgetTester tester) async {
+      final SemanticsHandle handle = tester.ensureSemantics();
+      await _pump(
+        tester,
+        const VehicleTyreDiagram(
+          vehicleType: 'PICKUP',
+          positions: <String>['FL', 'FR', 'RL', 'RR'],
+          tyreData: <String, Map<String, Object?>>{
+            'FL': <String, Object?>{
+              'condition': 'Good',
+              'checked': false,
+            },
+          },
+        ),
+      );
+
+      expect(
+        find.bySemanticsLabel(RegExp('LHF1.*Not recorded')),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp('LHF1.*Good')),
+        findsNothing,
+      );
+
+      handle.dispose();
+    },
+  );
+
+  testWidgets(
       'the selected wheel is marked selected in its semantics '
       'node', (WidgetTester tester) async {
     final SemanticsHandle handle = tester.ensureSemantics();
@@ -217,6 +252,50 @@ void main() {
     ]) {
       expect(find.widgetWithText(TpStatusChip, label), findsOneWidget);
     }
+  });
+
+  testWidgets(
+    'selected flat tyre has a persistent warning summary with pressure',
+    (WidgetTester tester) async {
+      await _pump(
+        tester,
+        const VehicleTyreDiagram(
+          vehicleType: 'PICKUP',
+          positions: <String>['FL', 'FR', 'RL', 'RR'],
+          tyreData: <String, Map<String, Object?>>{
+            'FL': <String, Object?>{
+              'condition': 'Flat',
+              'pressure_psi': 0,
+            },
+          },
+          selectedPosition: 'FL',
+        ),
+      );
+
+      expect(find.text('LHF1'), findsOneWidget);
+      expect(find.text('Flat'), findsNWidgets(2));
+      expect(find.textContaining('0'), findsWidgets);
+      expect(find.byIcon(Icons.report_problem_outlined), findsWidgets);
+    },
+  );
+
+  testWidgets('puncture remains visible in the selected tyre summary', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const VehicleTyreDiagram(
+        vehicleType: 'PICKUP',
+        positions: <String>['FL', 'FR', 'RL', 'RR'],
+        tyreData: <String, Map<String, Object?>>{
+          'FR': <String, Object?>{'condition': 'Puncture'},
+        },
+        selectedPosition: 'FR',
+      ),
+    );
+
+    expect(find.text('RHF1'), findsOneWidget);
+    expect(find.text('Puncture'), findsNWidgets(2));
   });
 
   testWidgets(
@@ -271,4 +350,54 @@ void main() {
       expect(size.height, greaterThanOrEqualTo(48));
     }
   });
+
+  for (final String vehicleClass in <String>[
+    'Tri-mixer',
+    'Line pump',
+    'Concrete pump',
+  ]) {
+    testWidgets(
+      '$vehicleClass compact map routes every rear inner/outer wheel centre '
+      'to its exact empty position',
+      (WidgetTester tester) async {
+        final DiagramLayout layout = kTyreDiagramLayouts[vehicleClass]!;
+        String? tapped;
+        await _pump(
+          tester,
+          VehicleTyreDiagram(
+            vehicleType: vehicleClass,
+            positions: layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+            tyreData: const <String, Map<String, Object?>>{},
+            onPositionTap: (String id) => tapped = id,
+            width: 190,
+            compact: true,
+          ),
+        );
+
+        final Offset viewportOrigin = tester.getTopLeft(
+          find.byType(TyreDiagramBody),
+        );
+        final TyreDiagramViewport viewport = TyreDiagramViewport(
+          width: 190,
+          viewH: layout.viewH,
+        );
+        final List<TyreSlot> rearDuals = layout.tyres
+            .where((TyreSlot tyre) => tyre.id.startsWith('R'))
+            .toList();
+
+        for (final TyreSlot wheel in rearDuals) {
+          tapped = null;
+          final Offset paintedCentre = viewportOrigin +
+              viewport.wheelRect(wheel.x, wheel.y, wheel.w, wheel.h).center;
+          await tester.tapAt(paintedCentre);
+          await tester.pump();
+          expect(
+            tapped,
+            wheel.id,
+            reason: '$vehicleClass ${wheel.id} empty-wheel tap was swapped',
+          );
+        }
+      },
+    );
+  }
 }

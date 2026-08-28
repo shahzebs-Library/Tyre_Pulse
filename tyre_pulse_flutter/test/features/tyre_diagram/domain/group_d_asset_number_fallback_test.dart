@@ -23,6 +23,34 @@ void main() {
     expect(resolveVehicleType('PL077'), 'Pickup');
   });
 
+  test('all eight tyre-carrying fleet prefixes select their real layout', () {
+    const Map<String, String> expected = <String, String>{
+      'TM514': 'Tri-mixer',
+      'MP083': 'Concrete pump',
+      'PL077': 'Pickup',
+      'WL003': 'Wheel loader',
+      'BH021': 'Bus',
+      'SL019': 'Skid loader',
+      'LP003': 'Line pump',
+      'MB003': 'Bus',
+    };
+
+    for (final MapEntry<String, String> entry in expected.entries) {
+      expect(
+        resolveVehicleType('HEAVY EQP', entry.key),
+        entry.value,
+        reason: entry.key,
+      );
+    }
+  });
+
+  test('real separated fleet codes keep the same class fallback', () {
+    expect(resolveVehicleType('HEAVY EQP', 'BH-037'), 'Bus');
+    expect(resolveVehicleType('HEAVY EQP', 'PL-090'), 'Pickup');
+    expect(resolveVehicleType('HEAVY EQP', 'MP-1042'), 'Concrete pump');
+    expect(resolveVehicleType('HEAVY EQP', 'LP 003'), 'Line pump');
+  });
+
   test('case 35: a junk type falls back to the asset number', () {
     expect(resolveVehicleType('HEAVY EQP', 'WL003'), 'Wheel loader');
   });

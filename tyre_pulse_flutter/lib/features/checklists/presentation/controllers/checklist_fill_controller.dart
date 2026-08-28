@@ -313,10 +313,19 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
 
   Future<void> saveSignature(String fieldId, String? svgOrDataUrl) async {
     final String? draftKey = state.draftKey;
-    if (draftKey == null || svgOrDataUrl == null) return;
+    if (draftKey == null) return;
     final ChecklistDraftRepository drafts = ref.read(
       checklistDraftRepositoryProvider,
     );
+    if (svgOrDataUrl == null) {
+      await drafts.clearSignature(draftKey: draftKey, fieldKey: fieldId);
+      final Map<String, String> next = <String, String>{
+        ...state.signaturesByField,
+      }..remove(fieldId);
+      state = state.copyWith(signaturesByField: next);
+      _recomputeGate();
+      return;
+    }
     await drafts.saveSignature(
       draftKey: draftKey,
       fieldKey: fieldId,
@@ -333,10 +342,19 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
 
   Future<void> savePrimarySignature(String? svgOrDataUrl) async {
     final String? draftKey = state.draftKey;
-    if (draftKey == null || svgOrDataUrl == null) return;
+    if (draftKey == null) return;
     final ChecklistDraftRepository drafts = ref.read(
       checklistDraftRepositoryProvider,
     );
+    if (svgOrDataUrl == null) {
+      await drafts.clearSignature(
+        draftKey: draftKey,
+        fieldKey: primarySignatureFieldKey,
+      );
+      state = state.copyWith(primarySignature: null);
+      _recomputeGate();
+      return;
+    }
     await drafts.saveSignature(
       draftKey: draftKey,
       fieldKey: primarySignatureFieldKey,

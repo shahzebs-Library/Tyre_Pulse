@@ -23,6 +23,10 @@ import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
+import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
+import 'package:tyre_pulse/features/tasks/data/task_item.dart';
+import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
 
 /// The number Home's sync indicator shows: every queued command not yet
 /// marked `synced` for the active workspace, [QueueDao.pendingCount]'s own
@@ -41,4 +45,29 @@ final FutureProvider<int> homePendingSyncCountProvider = FutureProvider<int>((
   if (workspace == null) return 0;
   final AppDatabase db = ref.watch(appDatabaseProvider);
   return db.queueDao.pendingCount(workspaceId: workspaceIdFor(workspace));
+});
+
+/// The real pending inspection approvals used by Home's attention row.
+///
+/// The screen watches this only when the active role can access approvals.
+/// Errors stay as [AsyncError] so Home can render an honest dash instead of
+/// inventing a zero.
+final FutureProvider<List<InspectionApprovalItem>>
+    homePendingInspectionApprovalsProvider =
+    FutureProvider<List<InspectionApprovalItem>>((ref) {
+  return ref.watch(inspectionApprovalRepositoryProvider).listPending(
+        country: ref.watch(activeCountryProvider),
+      );
+});
+
+/// The real corrective-action list used by Home's My Work preview.
+///
+/// This remains a provider rather than a repository call in the widget so the
+/// presentation layer only observes async state and never owns data access.
+final FutureProvider<List<TaskItem>> homeTaskPreviewProvider =
+    FutureProvider<List<TaskItem>>((ref) {
+  return ref.watch(tasksRepositoryProvider).listRecent(
+        country: ref.watch(activeCountryProvider),
+        limit: 100,
+      );
 });

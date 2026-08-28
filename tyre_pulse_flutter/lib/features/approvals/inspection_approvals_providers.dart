@@ -13,6 +13,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 
 final inspectionApprovalRepositoryProvider =
@@ -20,4 +21,18 @@ final inspectionApprovalRepositoryProvider =
   (ref) => SupabaseInspectionApprovalRepository(
     ref.watch(supabaseClientProvider),
   ),
+);
+
+/// One short-lived URL for one submitted private evidence reference.
+///
+/// Auto-dispose is deliberate: a signed URL must not remain cached by the app
+/// after its TTL once the evidence tile leaves the widget tree.
+final inspectionApprovalEvidenceUrlProvider =
+    FutureProvider.autoDispose.family<String, String>(
+  (ref, reference) =>
+      ref.watch(privateStorageReferenceResolverProvider).resolve(reference),
+  // Evidence errors need an explicit, honest UI state. Riverpod's default
+  // automatic retry would keep this tile on "loading" while repeatedly
+  // signing a reference that Storage RLS has definitively denied.
+  retry: (int retryCount, Object error) => null,
 );

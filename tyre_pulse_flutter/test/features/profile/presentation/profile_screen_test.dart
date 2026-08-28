@@ -42,6 +42,9 @@ Future<_Pumped> _pumpSignedIn(
   String? fullName = 'Amina Yusuf',
   String? site = 'NHC',
   bool isSuperAdmin = false,
+  List<String> countries = const <String>['ALL'],
+  List<String> sites = const <String>['ALL'],
+  Locale locale = const Locale('en'),
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final FakeProfileRepository profiles = FakeProfileRepository();
@@ -49,8 +52,8 @@ Future<_Pumped> _pumpSignedIn(
     WorkspaceProfile.fromRow(<String, Object?>{
       'id': 'user-1',
       'role': 'Manager',
-      'country': const <String>['ALL'],
-      'sites': const <String>['ALL'],
+      'country': countries,
+      'sites': sites,
       'org_id': 'org-1',
       'organisation_id': 'org-1',
       'is_super_admin': isSuperAdmin,
@@ -87,7 +90,7 @@ Future<_Pumped> _pumpSignedIn(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
-        locale: const Locale('en'),
+        locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
         home: const ProfileScreen(route: ProfileRoute()),
@@ -108,7 +111,7 @@ Future<_Pumped> _pumpSignedIn(
 void main() {
   testWidgets(
     'a loaded profile with a full name, role and site renders all three, '
-    'and shows no super-admin badge',
+    'shows its real access scope and no super-admin badge',
     (WidgetTester tester) async {
       await _pumpSignedIn(
         tester,
@@ -119,7 +122,24 @@ void main() {
       expect(find.text('Amina Yusuf'), findsOneWidget);
       expect(find.text('Manager'), findsWidgets);
       expect(find.text('NHC'), findsWidgets);
+      expect(find.text('Complete PMV Operations'), findsOneWidget);
+      expect(find.text('All'), findsNWidgets(2));
       expect(find.text('Platform administrator'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'named country and site scopes render the stored values without '
+    'inventing access',
+    (WidgetTester tester) async {
+      await _pumpSignedIn(
+        tester,
+        countries: const <String>['Saudi Arabia', 'UAE'],
+        sites: const <String>['NHC', 'Riyadh Workshop'],
+      );
+
+      expect(find.text('Saudi Arabia, UAE'), findsOneWidget);
+      expect(find.text('NHC, Riyadh Workshop'), findsOneWidget);
     },
   );
 
@@ -149,6 +169,55 @@ void main() {
       await _pumpSignedIn(tester, isSuperAdmin: true);
 
       expect(find.text('Platform administrator'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'profile groups stack on a phone and sit side-by-side on a wide layout',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpSignedIn(tester);
+
+      final double narrowAccessTop =
+          tester.getTopLeft(find.byKey(ProfileScreenKeys.access)).dy;
+      final double narrowAccountTop =
+          tester.getTopLeft(find.byKey(ProfileScreenKeys.account)).dy;
+      expect(narrowAccountTop, greaterThan(narrowAccessTop));
+      expect(tester.takeException(), isNull);
+
+      await tester.binding.setSurfaceSize(const Size(900, 900));
+      await tester.pumpAndSettle();
+
+      final double wideAccessTop =
+          tester.getTopLeft(find.byKey(ProfileScreenKeys.access)).dy;
+      final double wideAccountTop =
+          tester.getTopLeft(find.byKey(ProfileScreenKeys.account)).dy;
+      expect(wideAccountTop, closeTo(wideAccessTop, 0.1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Arabic keeps the richer profile layout RTL without overflow',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpSignedIn(
+        tester,
+        fullName: 'Amina Yusuf',
+        countries: const <String>['Saudi Arabia'],
+        sites: const <String>['NHC'],
+        locale: const Locale('ar'),
+      );
+
+      expect(
+        Directionality.of(tester.element(find.byKey(ProfileScreenKeys.hero))),
+        TextDirection.rtl,
+      );
+      expect(find.byKey(ProfileScreenKeys.access), findsOneWidget);
+      expect(find.byKey(ProfileScreenKeys.account), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 

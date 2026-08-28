@@ -303,8 +303,8 @@ bool layoutIsKnown(String? vehicleType, String? assetNo) {
   if (resolveVehicleType(vt, an) != 'Pickup') return true;
   // Pickup is also a real answer, but only when something actually said so.
   return RegExp(r'pickup|pick[\s-]?up', caseSensitive: false).hasMatch(vt) ||
-      RegExp(r'^PL\s*\d', caseSensitive: false).hasMatch(vt) ||
-      RegExp(r'^PL\s*\d', caseSensitive: false).hasMatch(an);
+      RegExp(r'^PL[\s-]*\d', caseSensitive: false).hasMatch(vt) ||
+      RegExp(r'^PL[\s-]*\d', caseSensitive: false).hasMatch(an);
 }
 
 /// One wheel slot's completeness state, positioned by both vocabularies.

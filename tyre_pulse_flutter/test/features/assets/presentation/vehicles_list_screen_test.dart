@@ -131,7 +131,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(TpStateKeys.empty), findsOneWidget);
-      expect(find.byType(TpAssetCard), findsNothing);
+      expect(find.byKey(VehiclesListScreenKeys.asset('missing')), findsNothing);
     },
   );
 
@@ -153,7 +153,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(TpAssetCard), findsNWidgets(2));
+      expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
       _expectNoStateWidget();
     },
   );
@@ -181,7 +182,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.byType(TpAssetCard), findsOneWidget);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
     _expectNoStateWidget();
   });
 
@@ -204,7 +205,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(TpStateKeys.offlineCached), findsOneWidget);
-    expect(find.byType(TpAssetCard), findsNothing);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsNothing);
   });
 
   testWidgets(
@@ -263,13 +264,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(TpAssetCard), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsNothing);
 
       await tester.enterText(find.byType(TextField), 'GN101');
       await tester.pumpAndSettle();
 
-      expect(find.byType(TpAssetCard), findsOneWidget);
-      // Not find.text('GN101'): TpAssetCard draws the identifier through
+      expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
+      // Not find.text('GN101'): the fleet card draws the identifier through
       // TpIdentifierText, which wraps it in invisible bidi isolate marks
       // (U+2066/U+2069) so it can never be reordered next to Arabic or
       // Urdu text - see tp_direction.dart. find.text does an exact match
@@ -282,7 +284,7 @@ void main() {
       // actual thing under test.
       expect(
         find.descendant(
-          of: find.byType(TpAssetCard),
+          of: find.byKey(VehiclesListScreenKeys.asset('v2')),
           matching: find.textContaining('GN101'),
         ),
         findsOneWidget,
@@ -309,7 +311,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(TpAssetCard), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsNothing);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
       final TextField field = tester.widget<TextField>(find.byType(TextField));
       expect(field.controller?.text, 'TM515');
     },
@@ -331,11 +334,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byType(TpAssetCard), findsOneWidget);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsNothing);
 
     await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(TpAssetCard), findsNWidgets(2));
+    expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
   });
 }

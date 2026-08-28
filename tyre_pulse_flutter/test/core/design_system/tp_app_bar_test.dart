@@ -64,7 +64,7 @@ void main() {
     ) async {
       await _pumpAppBar(tester, const TpAppBar(title: 'Tyre Records'));
 
-      expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
     });
 
     testWidgets('false renders no leading control at all', (
@@ -75,8 +75,8 @@ void main() {
         const TpAppBar(title: 'Tyre Records', showBack: false),
       );
 
-      expect(find.byIcon(Icons.arrow_back), findsNothing);
-      expect(find.byIcon(Icons.arrow_forward), findsNothing);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
+      expect(find.byIcon(Icons.arrow_forward_ios_rounded), findsNothing);
       final AppBar bar = tester.widget<AppBar>(find.byType(AppBar));
       expect(bar.leading, isNull);
     });
@@ -93,8 +93,8 @@ void main() {
       locale: const Locale('ar'),
     );
 
-    expect(find.byIcon(Icons.arrow_forward), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_back), findsNothing);
+    expect(find.byIcon(Icons.arrow_forward_ios_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsNothing);
   });
 
   group('the Back control', () {
@@ -107,7 +107,7 @@ void main() {
         TpAppBar(title: 'Tyre Records', onBack: () => taps++),
       );
 
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
       await tester.pump();
 
       expect(taps, 1);
@@ -121,7 +121,7 @@ void main() {
       // exactly the case that comment names.
       await _pumpAppBar(tester, const TpAppBar(title: 'Tyre Records'));
 
-      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
       await tester.pump();
     });
   });

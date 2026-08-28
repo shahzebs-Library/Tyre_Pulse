@@ -425,7 +425,7 @@ void main() {
       expect(find.text('Saudi Arabia'), findsOneWidget);
       expect(
         find.byKey(
-          const ValueKey<String>('assets/login/saudi_arabia_hero.png'),
+          const ValueKey<String>('assets/login/figma_city_background.png'),
         ),
         findsOneWidget,
       );

@@ -195,7 +195,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
     final Locale? activeLocale = ref.watch(localeProvider);
 
     return TpScaffold(
@@ -205,7 +204,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // `backFallback` means.
       backgroundColor: const Color(0xFFFFFBF3),
       body: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
+        builder: (BuildContext context, BoxConstraints _) {
           return SingleChildScrollView(
             child: Center(
               child: ConstrainedBox(
@@ -232,12 +231,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                        _LanguageToggle(
-                          active: activeLocale,
-                          onSelect: (Locale locale) => ref
-                              .read(localeProvider.notifier)
-                              .setLocale(locale),
-                        ),
+                          _LanguageToggle(
+                            active: activeLocale,
+                            onSelect: (Locale locale) => ref
+                                .read(localeProvider.notifier)
+                                .setLocale(locale),
+                          ),
                         const SizedBox(height: TpSpace.xxl),
                         Text(
                           l10n.homeGreeting,
@@ -341,8 +340,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           label: l10n.actionSignIn,
                           isFullWidth: true,
                           isBusy: _isSubmitting,
-                          onPressed:
-                              _isSubmitting ? null : () => unawaited(_submit()),
+                          onPressed: _isSubmitting
+                              ? null
+                              : () => unawaited(_submit()),
                         ),
                         ],
                       ),
@@ -414,9 +414,14 @@ class _LanguageToggle extends StatelessWidget {
                         ),
                         child: Text(
                           _kLanguageOptions[i].label,
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
+                              ?.copyWith(
                                 color: active?.languageCode ==
-                                        _kLanguageOptions[i].locale.languageCode
+                                        _kLanguageOptions[i]
+                                            .locale
+                                            .languageCode
                                     ? Colors.white
                                     : navy,
                               ),

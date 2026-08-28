@@ -216,7 +216,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     AspectRatio(
                       aspectRatio: 852 / 960,
                       child: Image.asset(
-                        'assets/branding/login_hero_saudi.png',
+                        'assets/branding/login_hero_saudi.webp',
                         fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
                         semanticLabel: l10n.loginAppSubtitle,

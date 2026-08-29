@@ -970,7 +970,8 @@ class AppLocalizationsUr extends AppLocalizations {
       'اثاثے کے لیے درست ورک فلو منتخب کریں';
 
   @override
-  String get checklistsAssetSearchHint => 'QR اسکین کریں یا اثاثہ نمبر درج کریں';
+  String get checklistsAssetSearchHint =>
+      'QR اسکین کریں یا اثاثہ نمبر درج کریں';
 
   @override
   String get checklistsLanguageStorageHint =>

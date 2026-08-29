@@ -781,10 +781,10 @@
   "globalSearchSourceFailedNotice": "کچھ نتائج ابھی چیک نہیں ہو سکے۔ ریفریش کرنے کے لیے نیچے کھینچیں یا دوبارہ کوشش کریں۔",
 
   "loginAppSubtitle": "انسپکٹر ایپ",
-  "loginTagline": "TyrePulse · ٹائر مین پورٹل",
+  "loginTagline": "فلیٹ · ورکشاپ · معائنے · ٹائر · حفاظت",
   "loginCardTitle": "سائن ان کریں",
   "loginCardSubtitle": "اپنا ای میل، صارف نام یا ملازم نمبر استعمال کریں",
-  "loginIdentifierLabel": "ای میل / صارف نام / ملازم نمبر",
+  "loginIdentifierLabel": "ای میل یا ملازم نمبر",
   "loginIdentifierPlaceholder": "ای میل، نام یا نمبر درج کریں",
   "loginPasswordLabel": "پاس ورڈ",
   "loginPasswordPlaceholder": "پاس ورڈ درج کریں",
@@ -793,9 +793,9 @@
   "loginErrorRequired": "براہ کرم لاگ ان اور پاس ورڈ درج کریں۔",
   "loginErrorLocked": "{minutes, plural, =1{بہت زیادہ ناکام کوششیں۔ براہ کرم 1 منٹ بعد دوبارہ کوشش کریں۔} other{بہت زیادہ ناکام کوششیں۔ براہ کرم {minutes} منٹ بعد دوبارہ کوشش کریں۔}}",
 
-  "loginOperationsTitle": "مکمل PMV آپریشنز",
+  "loginOperationsTitle": "ہر PMV اثاثے کے لیے ایک پلیٹ فارم",
   "loginWelcomeTitle": "دوبارہ خوش آمدید",
-  "loginWelcomeSubtitle": "اپنی تفویض کردہ کارروائیوں میں سائن ان کریں",
+  "loginWelcomeSubtitle": "اپنے تفویض کردہ فلیٹ، ورکشاپ اور فیلڈ کاموں تک رسائی حاصل کریں",
   "loginSelectCountryTitle": "اپنا ملک منتخب کریں",
   "loginSelectCountrySubtitle": "اپنی تفویض کردہ کارروائیوں کے لیے ملک منتخب کریں۔",
   "loginChangeCountryAction": "ملک تبدیل کریں",
@@ -807,6 +807,7 @@
   "loginScopeFleetAssets": "فلیٹ اور اثاثے",
   "loginScopeInspectionsChecklists": "معائنے اور چیک لسٹس",
   "loginScopeMaintenanceWorkshop": "دیکھ بھال اور ورکشاپ",
+  "loginSecurityCopyCatalog": "secure=محفوظ کمپنی ورک اسپیس · %country%~forgot=پاس ورڈ بھول گئے؟~access=رسائی چاہیے؟ اپنے منتظم سے رابطہ کریں~or=یا~biometric=ڈیوائس بایومیٹرکس استعمال کریں~authorized=صرف مجاز PMV اہلکار~audited=سرگرمی کا آڈٹ کیا جاتا ہے~version=ورژن %version%~biometricReason=Tyre Pulse میں سائن ان کے لیے اپنی شناخت کی تصدیق کریں~biometricUnavailable=ڈیوائس بایومیٹرکس دستیاب یا رجسٹرڈ نہیں ہیں۔~biometricLocked=ڈیوائس بایومیٹرکس عارضی طور پر مقفل ہیں۔ اپنا پاس ورڈ استعمال کریں۔~biometricFailed=ڈیوائس کی تصدیق مکمل نہیں ہو سکی۔~credentialsRequired=ڈیوائس بایومیٹرکس استعمال کرنے سے پہلے ای میل یا ملازم نمبر اور پاس ورڈ درج کریں۔~helpTitle=سائن ان مدد~forgotHelp=پاس ورڈ ری سیٹ Tyre Pulse منتظم سنبھالتا ہے۔ رسائی بحال کرنے کے لیے منتظم سے رابطہ کریں۔~accessHelp=Tyre Pulse منتظم موبائل رسائی اور اکاؤنٹ کی منظوری سنبھالتا ہے۔",
 
   "profileNavTitle": "پروفائل",
   "profileRoleLabel": "کردار",

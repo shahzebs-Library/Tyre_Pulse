@@ -781,10 +781,10 @@
   "globalSearchSourceFailedNotice": "تعذّر التحقق من بعض النتائج الآن. اسحب للتحديث أو حاول مجدداً.",
 
   "loginAppSubtitle": "تطبيق المفتش",
-  "loginTagline": "TyrePulse · بوابة فني الإطارات",
+  "loginTagline": "الأسطول · الورشة · الفحوصات · الإطارات · السلامة",
   "loginCardTitle": "تسجيل الدخول",
   "loginCardSubtitle": "استخدم بريدك الإلكتروني أو اسم المستخدم أو رقم الموظف",
-  "loginIdentifierLabel": "البريد الإلكتروني / اسم المستخدم / رقم الموظف",
+  "loginIdentifierLabel": "البريد الإلكتروني أو رقم الموظف",
   "loginIdentifierPlaceholder": "أدخل البريد أو الاسم أو الرقم",
   "loginPasswordLabel": "كلمة المرور",
   "loginPasswordPlaceholder": "أدخل كلمة المرور",
@@ -793,9 +793,9 @@
   "loginErrorRequired": "يرجى إدخال بيانات تسجيل الدخول وكلمة المرور.",
   "loginErrorLocked": "{minutes, plural, =1{محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد دقيقة واحدة.} other{محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد {minutes} دقيقة.}}",
 
-  "loginOperationsTitle": "عمليات PMV المتكاملة",
+  "loginOperationsTitle": "منصة واحدة لكل معدة PMV",
   "loginWelcomeTitle": "مرحبًا بعودتك",
-  "loginWelcomeSubtitle": "سجّل الدخول إلى العمليات المعيّنة لك",
+  "loginWelcomeSubtitle": "الوصول إلى الأسطول والورشة والمهام الميدانية المعيّنة لك",
   "loginSelectCountryTitle": "اختر بلدك",
   "loginSelectCountrySubtitle": "اختر البلد الخاص بالعمليات المعيّنة لك.",
   "loginChangeCountryAction": "تغيير البلد",
@@ -807,6 +807,7 @@
   "loginScopeFleetAssets": "الأسطول والأصول",
   "loginScopeInspectionsChecklists": "عمليات التفتيش وقوائم التحقق",
   "loginScopeMaintenanceWorkshop": "الصيانة والورشة",
+  "loginSecurityCopyCatalog": "secure=مساحة عمل شركة آمنة · %country%~forgot=هل نسيت كلمة المرور؟~access=تحتاج إلى صلاحية؟ تواصل مع مسؤول النظام~or=أو~biometric=استخدام بصمة الجهاز~authorized=لموظفي PMV المصرح لهم فقط~audited=يتم تدقيق النشاط~version=الإصدار %version%~biometricReason=أكد هويتك لتسجيل الدخول إلى Tyre Pulse~biometricUnavailable=بصمة الجهاز غير متاحة أو غير مسجلة.~biometricLocked=بصمة الجهاز مقفلة مؤقتًا. استخدم كلمة المرور.~biometricFailed=تعذر إكمال التحقق من الجهاز.~credentialsRequired=أدخل بريدك الإلكتروني أو رقم الموظف وكلمة المرور قبل استخدام بصمة الجهاز.~helpTitle=مساعدة تسجيل الدخول~forgotHelp=يدير مسؤول Tyre Pulse إعادة تعيين كلمات المرور. تواصل معه لاستعادة الوصول.~accessHelp=يدير مسؤول Tyre Pulse صلاحية الهاتف واعتماد الحساب.",
 
   "profileNavTitle": "حسابي",
   "profileRoleLabel": "الدور",

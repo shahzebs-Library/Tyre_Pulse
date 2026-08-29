@@ -65,17 +65,23 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
   };
 }
 
-/// Returns the approved replaceable vehicle photograph used by the focused
-/// inspection mock. The tyre controls remain native widgets and retain their
-/// canonical position ids; this asset only replaces the visual body layer.
+/// Returns the approved orthographic vehicle photograph used by the focused
+/// inspection map. These are deliberately separate from the three-quarter
+/// fleet-card photos resolved by `vehicle_photo_resolver.dart`: putting a
+/// side-view card photo behind top-down tyre positions makes the diagram look
+/// plausible while pointing at the wrong physical wheels.
+///
+/// The tyre controls remain native widgets and retain their canonical
+/// position ids; this asset replaces only the visual body layer.
 String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) {
   return switch (bodyKey) {
     TyreDiagramBodyKey.pickup => 'assets/vehicle_photos/pickup.png',
     TyreDiagramBodyKey.wheelLoader => 'assets/vehicle_photos/wheel_loader.png',
+    TyreDiagramBodyKey.triMixer =>
+      'assets/vehicle_photos/tri_mixer_top_down.webp',
     TyreDiagramBodyKey.concretePump =>
-      'assets/vehicle_photos/concrete_pump.png',
+      'assets/vehicle_photos/concrete_pump_top_down.webp',
     TyreDiagramBodyKey.canter ||
-    TyreDiagramBodyKey.triMixer ||
     TyreDiagramBodyKey.bus ||
     TyreDiagramBodyKey.tata ||
     TyreDiagramBodyKey.ashokLeyland =>

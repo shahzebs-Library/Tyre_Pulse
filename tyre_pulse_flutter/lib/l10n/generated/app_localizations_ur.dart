@@ -2502,7 +2502,7 @@ class AppLocalizationsUr extends AppLocalizations {
   String get loginAppSubtitle => 'انسپکٹر ایپ';
 
   @override
-  String get loginTagline => 'TyrePulse · ٹائر مین پورٹل';
+  String get loginTagline => 'فلیٹ · ورکشاپ · معائنے · ٹائر · حفاظت';
 
   @override
   String get loginCardTitle => 'سائن ان کریں';
@@ -2512,7 +2512,7 @@ class AppLocalizationsUr extends AppLocalizations {
       'اپنا ای میل، صارف نام یا ملازم نمبر استعمال کریں';
 
   @override
-  String get loginIdentifierLabel => 'ای میل / صارف نام / ملازم نمبر';
+  String get loginIdentifierLabel => 'ای میل یا ملازم نمبر';
 
   @override
   String get loginIdentifierPlaceholder => 'ای میل، نام یا نمبر درج کریں';
@@ -2545,14 +2545,14 @@ class AppLocalizationsUr extends AppLocalizations {
   }
 
   @override
-  String get loginOperationsTitle => 'مکمل PMV آپریشنز';
+  String get loginOperationsTitle => 'ہر PMV اثاثے کے لیے ایک پلیٹ فارم';
 
   @override
   String get loginWelcomeTitle => 'دوبارہ خوش آمدید';
 
   @override
   String get loginWelcomeSubtitle =>
-      'اپنی تفویض کردہ کارروائیوں میں سائن ان کریں';
+      'اپنے تفویض کردہ فلیٹ، ورکشاپ اور فیلڈ کاموں تک رسائی حاصل کریں';
 
   @override
   String get loginSelectCountryTitle => 'اپنا ملک منتخب کریں';
@@ -2589,6 +2589,10 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get loginScopeMaintenanceWorkshop => 'دیکھ بھال اور ورکشاپ';
+
+  @override
+  String get loginSecurityCopyCatalog =>
+      'secure=محفوظ کمپنی ورک اسپیس · %country%~forgot=پاس ورڈ بھول گئے؟~access=رسائی چاہیے؟ اپنے منتظم سے رابطہ کریں~or=یا~biometric=ڈیوائس بایومیٹرکس استعمال کریں~authorized=صرف مجاز PMV اہلکار~audited=سرگرمی کا آڈٹ کیا جاتا ہے~version=ورژن %version%~biometricReason=Tyre Pulse میں سائن ان کے لیے اپنی شناخت کی تصدیق کریں~biometricUnavailable=ڈیوائس بایومیٹرکس دستیاب یا رجسٹرڈ نہیں ہیں۔~biometricLocked=ڈیوائس بایومیٹرکس عارضی طور پر مقفل ہیں۔ اپنا پاس ورڈ استعمال کریں۔~biometricFailed=ڈیوائس کی تصدیق مکمل نہیں ہو سکی۔~credentialsRequired=ڈیوائس بایومیٹرکس استعمال کرنے سے پہلے ای میل یا ملازم نمبر اور پاس ورڈ درج کریں۔~helpTitle=سائن ان مدد~forgotHelp=پاس ورڈ ری سیٹ Tyre Pulse منتظم سنبھالتا ہے۔ رسائی بحال کرنے کے لیے منتظم سے رابطہ کریں۔~accessHelp=Tyre Pulse منتظم موبائل رسائی اور اکاؤنٹ کی منظوری سنبھالتا ہے۔';
 
   @override
   String get profileNavTitle => 'پروفائل';

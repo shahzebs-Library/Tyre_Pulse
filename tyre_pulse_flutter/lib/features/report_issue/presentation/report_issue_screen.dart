@@ -83,6 +83,22 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                AnimatedBuilder(
+                  animation: Listenable.merge(<Listenable>[_asset, _site]),
+                  builder: (BuildContext context, Widget? child) {
+                    if (_asset.text.trim().isEmpty &&
+                        _site.text.trim().isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: TpSpace.lg),
+                      child: _SelectedAssetSummary(
+                        assetNo: _asset.text.trim(),
+                        site: _site.text.trim(),
+                      ),
+                    );
+                  },
+                ),
                 _FieldLabel(copy('problem')),
                 TextField(
                   key: const Key('reportIssue.title'),
@@ -200,16 +216,12 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                       setState(() => _photos.removeAt(index)),
                 ),
                 const SizedBox(height: TpSpace.xxl),
-                FilledButton.icon(
+                TpButton.primary(
                   key: const Key('reportIssue.submit'),
+                  label: copy('submit'),
                   onPressed: _saving ? null : () => unawaited(_submit(copy)),
-                  icon: _saving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send_rounded),
-                  label: Text(copy('submit')),
+                  isBusy: _saving,
+                  isFullWidth: true,
                 ),
               ],
             ),
@@ -334,10 +346,63 @@ class _FieldLabel extends StatelessWidget {
           text,
           style: Theme.of(context)
               .textTheme
-              .labelLarge
-              ?.copyWith(fontWeight: FontWeight.w800),
+              .labelSmall
+              ?.copyWith(
+                color: TpPalette.of(context).textSecondary,
+                fontWeight: FontWeight.w600,
+                height: 16 / 12,
+                letterSpacing: 0.2,
+              ),
         ),
       );
+}
+
+class _SelectedAssetSummary extends StatelessWidget {
+  const _SelectedAssetSummary({required this.assetNo, required this.site});
+
+  final String assetNo;
+  final String site;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.lg,
+        vertical: TpSpace.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (assetNo.isNotEmpty)
+            Text(
+              assetNo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                    height: 22 / 16,
+                  ),
+            ),
+          if (site.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 2),
+            Text(
+              site,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.textMuted,
+                    fontWeight: FontWeight.w600,
+                    height: 16 / 12,
+                    letterSpacing: 0.2,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _LabeledInput extends StatelessWidget {
@@ -383,48 +448,131 @@ class _PhotoStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Wrap(
-      spacing: TpSpace.sm,
-      runSpacing: TpSpace.sm,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        for (int i = 0; i < photos.length; i++)
-          Stack(
+        Material(
+          color: palette.surfaceAlt,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            key: const Key('reportIssue.addPhoto'),
+            onTap: onAdd,
+            borderRadius: BorderRadius.circular(14),
+            child: CustomPaint(
+              painter: _UploadBorderPainter(
+                color: onAdd == null ? palette.border : palette.borderStrong,
+              ),
+              child: SizedBox(
+                height: 132,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(
+                      Icons.add_rounded,
+                      color: onAdd == null
+                          ? palette.textMuted
+                          : palette.primary,
+                      size: 32,
+                    ),
+                    const SizedBox(height: TpSpace.sm),
+                    Text(
+                      addLabel,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w700,
+                            height: 22 / 16,
+                          ),
+                    ),
+                    const SizedBox(height: TpSpace.sm),
+                    Text(
+                      '${photos.length}/${ReportIssuePhotoCapture.maxPhotos}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: palette.textMuted,
+                            fontWeight: FontWeight.w600,
+                            height: 16 / 12,
+                            letterSpacing: 0.2,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (photos.isNotEmpty) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
             children: <Widget>[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(TpRadius.sm),
-                child: Image.file(
-                  File(photos[i]),
-                  width: 88,
-                  height: 88,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 88,
-                    height: 88,
-                    color: palette.surfaceSunken,
-                    child: const Icon(Icons.broken_image_outlined),
-                  ),
+              for (int i = 0; i < photos.length; i++)
+                Stack(
+                  children: <Widget>[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(TpRadius.sm),
+                      child: Image.file(
+                        File(photos[i]),
+                        width: 88,
+                        height: 88,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 88,
+                          height: 88,
+                          color: palette.surfaceSunken,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      top: 2,
+                      end: 2,
+                      child: IconButton.filled(
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 16,
+                        onPressed: () => onRemove(i),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              PositionedDirectional(
-                top: 2,
-                end: 2,
-                child: IconButton.filled(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 16,
-                  onPressed: () => onRemove(i),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ),
             ],
           ),
-        if (onAdd != null)
-          OutlinedButton.icon(
-            key: const Key('reportIssue.addPhoto'),
-            onPressed: onAdd,
-            icon: const Icon(Icons.add_a_photo_outlined),
-            label: Text(addLabel),
-          ),
+        ],
       ],
     );
+  }
+}
+
+class _UploadBorderPainter extends CustomPainter {
+  const _UploadBorderPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final Path path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          const Radius.circular(14),
+        ),
+      );
+    for (final metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final double end = (distance + 6).clamp(0.0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + 4;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _UploadBorderPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }

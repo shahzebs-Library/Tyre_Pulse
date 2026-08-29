@@ -977,6 +977,34 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checklistsHomeTitle => 'قوائم التحقق';
 
   @override
+  String get checklistsLibraryTitle => 'مكتبة الفحص';
+
+  @override
+  String get checklistsLibrarySubtitle => 'اختر سير العمل الصحيح للأصل';
+
+  @override
+  String checklistsAvailableCount(int count) {
+    return '$count متاح';
+  }
+
+  @override
+  String checklistItemCount(int count) {
+    return '$count بندًا';
+  }
+
+  @override
+  String checklistPositionCount(int count) {
+    return '$count موضعًا';
+  }
+
+  @override
+  String get checklistPhotosOnFailure =>
+      'الصور مطلوبة للعناصر غير المجتازة';
+
+  @override
+  String get checklistStartAction => 'ابدأ';
+
+  @override
   String get checklistsHistoryAction => 'سجل قوائم التحقق الخاص بي';
 
   @override

@@ -88,6 +88,7 @@ void main() {
     await _pump(tester, repository);
 
     expect(find.text('My Work'), findsOneWidget);
+    expect(find.byKey(TasksScreenKeys.stats), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.todayTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.inProgressTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.completedTab), findsOneWidget);

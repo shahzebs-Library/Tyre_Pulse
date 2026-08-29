@@ -60,23 +60,23 @@ void main() {
     );
     expect(find.text('EVIDENCE (4)'), findsOneWidget);
 
-    await tester.tap(find.text('Evidence'));
+    await tester.tap(find.widgetWithText(Tab, 'Evidence'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.evidence), findsOneWidget);
 
-    await tester.tap(find.text('Insurance'));
+    await tester.tap(find.widgetWithText(Tab, 'Insurance'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
     expect(find.text('CLM-8821'), findsOneWidget);
 
-    await tester.tap(find.text('Repair'));
+    await tester.tap(find.widgetWithText(Tab, 'Repair'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.repair), findsOneWidget);
     expect(find.text('Central Workshop'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Closure controls'));
+    await tester.ensureVisible(find.widgetWithText(Tab, 'Closure controls'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Closure controls'));
+    await tester.tap(find.widgetWithText(Tab, 'Closure controls'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.more), findsOneWidget);
 

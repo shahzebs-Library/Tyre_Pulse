@@ -23,4 +23,30 @@ void main() {
 
     expect(vehiclePhotoAsset(asset), isNull);
   });
+
+  test('TR-MIXER assets resolve to the real perspective mixer artwork', () {
+    const VehicleAsset asset = VehicleAsset(
+      id: 'vehicle-3',
+      assetNo: 'TM-214',
+      vehicleType: 'TR-MIXER',
+    );
+
+    expect(
+      vehiclePhotoAsset(asset),
+      'assets/vehicle_photos/tri_mixer_perspective.webp',
+    );
+  });
+
+  test('an explicit registered class wins over a historical fleet prefix', () {
+    const VehicleAsset asset = VehicleAsset(
+      id: 'vehicle-4',
+      assetNo: 'TM514',
+      vehicleType: 'Concrete Pump',
+    );
+
+    expect(
+      vehiclePhotoAsset(asset),
+      'assets/vehicle_photos/concrete_pump.png',
+    );
+  });
 }

@@ -197,6 +197,14 @@ void main() {
       expect(find.byIcon(Icons.schedule_rounded), findsNothing);
 
       expect(find.byType(HomeScreen), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'assets/vehicle_photos/concrete_pump.png',
+          ),
+        ),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     },
   );

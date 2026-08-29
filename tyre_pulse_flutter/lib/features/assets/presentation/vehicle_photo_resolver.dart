@@ -12,12 +12,16 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 String? vehiclePhotoAsset(VehicleAsset asset) {
   final String type = _searchableVehicleText(asset);
   final String assetNo = asset.assetNo?.trim().toLowerCase() ?? '';
+  if (type.contains('transit mixer') ||
+      type.contains('tri mixer') ||
+      type.contains('tr mixer') ||
+      type.contains('concrete mixer')) {
+    return 'assets/vehicle_photos/tri_mixer_perspective.webp';
+  }
   if (type.contains('wheel loader') || type.contains('loader')) {
     return 'assets/vehicle_photos/wheel_loader.png';
   }
-  if (type.contains('concrete pump') ||
-      type.contains('pump truck') ||
-      RegExp(r'^cp[-\s]?\d').hasMatch(assetNo)) {
+  if (type.contains('concrete pump') || type.contains('pump truck')) {
     return 'assets/vehicle_photos/concrete_pump.png';
   }
   if (type.contains('truck mounted pump') || type.contains('boom pump')) {
@@ -28,6 +32,16 @@ String? vehiclePhotoAsset(VehicleAsset asset) {
   }
   if (type.contains('bus') || type.contains('coach')) {
     return 'assets/vehicle_photos/staff_bus.png';
+  }
+  // Asset-number prefixes are a fallback for old/imported rows whose class
+  // fields are blank. Never let a prefix override an explicit vehicle type:
+  // production data can contain historical numbering that no longer matches
+  // the registered class (for example a Concrete Pump stored as TM514).
+  if (RegExp(r'^tm[-\s]?\d').hasMatch(assetNo)) {
+    return 'assets/vehicle_photos/tri_mixer_perspective.webp';
+  }
+  if (RegExp(r'^cp[-\s]?\d').hasMatch(assetNo)) {
+    return 'assets/vehicle_photos/concrete_pump.png';
   }
   return null;
 }
@@ -51,4 +65,9 @@ String _searchableVehicleText(VehicleAsset asset) => <String?>[
       asset.make,
       asset.model,
       asset.assetNo,
-    ].whereType<String>().join(' ').toLowerCase();
+    ]
+        .whereType<String>()
+        .join(' ')
+        .toLowerCase()
+        .replaceAll(RegExp(r'[-_/]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');

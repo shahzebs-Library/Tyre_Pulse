@@ -52,6 +52,8 @@ void main() {
 
     expect(find.byKey(AccidentCaseScreenKeys.tabs), findsOneWidget);
     expect(find.byKey(AccidentCaseScreenKeys.overview), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.header), findsOneWidget);
+    expect(find.text('ACC-2026-0182 • Mixer 3208'), findsOneWidget);
     expect(
       find.text('Vehicle collided with barrier while reversing.'),
       findsOneWidget,

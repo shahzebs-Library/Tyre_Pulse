@@ -1136,7 +1136,7 @@
   "checklistApprovalsStatusNoApproval": "No approval needed",
   "@checklistApprovalsStatusNoApproval": {},
 
-  "checklistApprovalReviewTitle": "Approval",
+  "checklistApprovalReviewTitle": "Checklist approval",
   "@checklistApprovalReviewTitle": {},
   "checklistApprovalLoadErrorMessage": "This checklist could not be loaded. Check your connection and try again.",
   "@checklistApprovalLoadErrorMessage": {},

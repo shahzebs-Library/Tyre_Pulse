@@ -11,10 +11,13 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 
 String? vehiclePhotoAsset(VehicleAsset asset) {
   final String type = _searchableVehicleText(asset);
+  final String assetNo = asset.assetNo?.trim().toLowerCase() ?? '';
   if (type.contains('wheel loader') || type.contains('loader')) {
     return 'assets/vehicle_photos/wheel_loader.png';
   }
-  if (type.contains('concrete pump') || type.contains('pump truck')) {
+  if (type.contains('concrete pump') ||
+      type.contains('pump truck') ||
+      RegExp(r'^cp[-\s]?\d').hasMatch(assetNo)) {
     return 'assets/vehicle_photos/concrete_pump.png';
   }
   if (type.contains('truck mounted pump') || type.contains('boom pump')) {

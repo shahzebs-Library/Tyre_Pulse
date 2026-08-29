@@ -407,7 +407,7 @@
   "checklistApprovalsStatusWaitingApproval": "منظوری کی منتظر",
   "checklistApprovalsStatusNoApproval": "منظوری کی ضرورت نہیں",
 
-  "checklistApprovalReviewTitle": "منظوری",
+  "checklistApprovalReviewTitle": "چیک لسٹ کی منظوری",
   "checklistApprovalLoadErrorMessage": "یہ چیک لسٹ لوڈ نہیں ہو سکی۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
   "checklistApprovalNotFoundTitle": "چیک لسٹ نہیں ملی",
   "checklistApprovalNotFoundMessage": "یہ چیک لسٹ نہیں مل سکی۔ ہو سکتا ہے اس کا جائزہ لیا جا چکا ہو یا اسے ہٹا دیا گیا ہو۔",

@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -19,6 +20,7 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 
 abstract final class AccidentCaseScreenKeys {
   static const Key tabs = Key('accident.case.tabs');
+  static const Key header = Key('accident.case.header');
   static const Key overview = Key('accident.case.overview');
   static const Key evidence = Key('accident.case.evidence');
   static const Key insurance = Key('accident.case.insurance');
@@ -208,6 +210,7 @@ class _OverviewTab extends StatelessWidget {
       key: AccidentCaseScreenKeys.overview,
       onRefresh: onRefresh,
       children: <Widget>[
+        _CaseHeader(snapshot: snapshot, copy: copy),
         _CaseSection(
           title: copy('incidentFacts'),
           child: Column(
@@ -238,6 +241,14 @@ class _OverviewTab extends StatelessWidget {
             evidenceLabel: copy('evidencePhoto'),
           ),
         ),
+        _WorkstreamSummary(
+          workstreams: _matching(snapshot.workstreams, const <String>{
+            'incident_evidence',
+            'fleet_validation',
+          }),
+          copy: copy,
+          provisioned: snapshot.provisioned,
+        ),
       ],
     );
   }
@@ -261,6 +272,7 @@ class _EvidenceTab extends StatelessWidget {
       key: AccidentCaseScreenKeys.evidence,
       onRefresh: onRefresh,
       children: <Widget>[
+        _CaseHeader(snapshot: snapshot, copy: copy),
         _CaseSection(
           title: '${_compactCopy(copy('evidence'))} (${record.photos.length})',
           child: AccidentEvidenceStrip(
@@ -308,7 +320,9 @@ class _InsuranceTab extends StatelessWidget {
       key: AccidentCaseScreenKeys.insurance,
       onRefresh: onRefresh,
       children: <Widget>[
-        _CaseSection(
+        _CaseHeader(snapshot: snapshot, copy: copy),
+        _StepCaseCard(
+          step: 1,
           title: copy('insurance'),
           child: Column(
             children: <Widget>[
@@ -316,8 +330,26 @@ class _InsuranceTab extends StatelessWidget {
               AccidentInfoRow(copy('policy'), record.policyNo),
               AccidentInfoRow(copy('claimNo'), record.insuranceClaimNo),
               AccidentInfoRow(copy('claimStatus'), record.claimStatus),
+            ],
+          ),
+        ),
+        const SizedBox(height: TpSpace.md),
+        _StepCaseCard(
+          step: 2,
+          title: copy('claimed'),
+          child: Column(
+            children: <Widget>[
               AccidentInfoRow(copy('claimed'), record.claimAmount),
               AccidentInfoRow(copy('approved'), record.claimApprovedAmount),
+            ],
+          ),
+        ),
+        const SizedBox(height: TpSpace.md),
+        _StepCaseCard(
+          step: 3,
+          title: copy('recoveryStatus'),
+          child: Column(
+            children: <Widget>[
               AccidentInfoRow(copy('recoveryStatus'), record.recoveryStatus),
               AccidentInfoRow(copy('recovered'), record.recoveredAmount),
             ],
@@ -354,6 +386,7 @@ class _RepairTab extends StatelessWidget {
       key: AccidentCaseScreenKeys.repair,
       onRefresh: onRefresh,
       children: <Widget>[
+        _CaseHeader(snapshot: snapshot, copy: copy),
         _CaseSection(
           title: copy('workshopRelease'),
           child: Column(
@@ -403,6 +436,7 @@ class _MoreTab extends StatelessWidget {
       key: AccidentCaseScreenKeys.more,
       onRefresh: onRefresh,
       children: <Widget>[
+        _CaseHeader(snapshot: snapshot, copy: copy),
         _CaseSection(
           title: copy('liability'),
           child: Column(
@@ -446,6 +480,119 @@ class _MoreTab extends StatelessWidget {
           title: copy('boundary'),
           child: Text(copy('boundaryMessage')),
         ),
+      ],
+    );
+  }
+}
+
+class _CaseHeader extends StatelessWidget {
+  const _CaseHeader({required this.snapshot, required this.copy});
+
+  final AccidentCaseSnapshot snapshot;
+  final AccidentCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final AccidentRecord record = snapshot.accident;
+    final TpPalette palette = TpPalette.of(context);
+    final AccidentWorkstream? active = _activeWorkstream(snapshot.workstreams);
+    final int activeIndex = active == null
+        ? -1
+        : snapshot.workstreams.indexWhere(
+            (AccidentWorkstream workstream) => workstream.id == active.id,
+          );
+    final String owner = <String?>[active?.team, active?.ownerRole]
+        .whereType<String>()
+        .where((String value) => value.trim().isNotEmpty)
+        .join(' / ');
+    final String statusToken = record.displayStatus.trim().isNotEmpty
+        ? record.displayStatus
+        : record.workflowStage ?? '';
+    final bool rtl = TpDirection.isRtl(context);
+    final String title = <String>[
+      rtl ? TpDirection.isolateLtr(record.reference) : record.reference,
+      if (record.assetNo.trim().isNotEmpty)
+        rtl
+            ? TpDirection.isolateLtr(record.assetNo.trim())
+            : record.assetNo.trim(),
+    ].join(' • ');
+
+    return Column(
+      key: AccidentCaseScreenKeys.header,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
+              ),
+        ),
+        const SizedBox(height: TpSpace.sm),
+        Wrap(
+          spacing: TpSpace.sm,
+          runSpacing: TpSpace.sm,
+          children: <Widget>[
+            if (record.severity?.trim().isNotEmpty ?? false)
+              TpStatusChip(
+                status: accidentTone(record.severity),
+                label: humaniseAccidentToken(record.severity),
+                isCompact: true,
+              ),
+            TpStatusChip(
+              status: accidentTone(statusToken),
+              label: humaniseAccidentToken(statusToken).isEmpty
+                  ? copy('notRecorded')
+                  : humaniseAccidentToken(statusToken),
+              isCompact: true,
+            ),
+          ],
+        ),
+        if (active != null) ...<Widget>[
+          const SizedBox(height: TpSpace.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(
+                Icons.fact_check_outlined,
+                size: TpSizing.iconMd,
+                color: palette.primary,
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  '${activeIndex + 1}/${snapshot.workstreams.length}  '
+                  '${workstreamLabel(copy, active.key)}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              if (owner.isNotEmpty) ...<Widget>[
+                const SizedBox(width: TpSpace.sm),
+                Icon(
+                  Icons.person_outline_rounded,
+                  size: TpSizing.iconMd,
+                  color: palette.textSecondary,
+                ),
+                const SizedBox(width: TpSpace.xs),
+                Flexible(
+                  child: Text(
+                    owner,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+        const SizedBox(height: TpSpace.lg),
+        AccidentProgressLadder(
+          steps: _caseProgressSteps(snapshot, copy),
+        ),
+        const SizedBox(height: TpSpace.md),
+        Divider(height: 1, color: palette.border),
       ],
     );
   }
@@ -518,6 +665,65 @@ class _CaseSection extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _StepCaseCard extends StatelessWidget {
+  const _StepCaseCard({
+    required this.step,
+    required this.title,
+    required this.child,
+  });
+
+  final int step;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: palette.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '$step',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: palette.onPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Divider(height: 1, color: palette.border),
+          const SizedBox(height: TpSpace.xs),
+          child,
+        ],
+      ),
+    );
+  }
 }
 
 class _WorkstreamSummary extends StatelessWidget {
@@ -660,6 +866,76 @@ List<AccidentWorkstream> _matching(
     workstreams
         .where((AccidentWorkstream workstream) => keys.contains(workstream.key))
         .toList(growable: false);
+
+AccidentWorkstream? _activeWorkstream(List<AccidentWorkstream> workstreams) {
+  for (final AccidentWorkstream workstream in workstreams) {
+    if (workstream.chip == AccidentWorkstreamChip.inProgress) {
+      return workstream;
+    }
+  }
+  for (final AccidentWorkstream workstream in workstreams) {
+    if (workstream.chip == AccidentWorkstreamChip.pending) return workstream;
+  }
+  return null;
+}
+
+List<AccidentProgressStep> _caseProgressSteps(
+  AccidentCaseSnapshot snapshot,
+  AccidentCopy copy,
+) {
+  final bool closed = <String?>[
+    snapshot.accident.caseStatus,
+    snapshot.accident.closureStatus,
+    snapshot.accident.status,
+  ].whereType<String>().any((String token) {
+    final String normal = token.trim().toLowerCase();
+    return normal == 'closed' || normal == 'completed';
+  });
+  return <AccidentProgressStep>[
+    AccidentProgressStep(
+      label: copy('reportShort'),
+      state: AccidentProgressState.done,
+    ),
+    AccidentProgressStep(
+      label: _shortCopy(copy('wsFleet')),
+      state: _caseWorkstreamProgress(snapshot, 'fleet_validation'),
+    ),
+    AccidentProgressStep(
+      label: _shortCopy(copy('insurance')),
+      state: _caseWorkstreamProgress(snapshot, 'insurance'),
+    ),
+    AccidentProgressStep(
+      label: _shortCopy(copy('wsRepair')),
+      state: _caseWorkstreamProgress(snapshot, 'repair'),
+    ),
+    AccidentProgressStep(
+      label: copy('closed'),
+      state:
+          closed ? AccidentProgressState.done : AccidentProgressState.pending,
+    ),
+  ];
+}
+
+AccidentProgressState _caseWorkstreamProgress(
+  AccidentCaseSnapshot snapshot,
+  String key,
+) {
+  if (!snapshot.provisioned) return AccidentProgressState.unknown;
+  AccidentWorkstream? match;
+  for (final AccidentWorkstream workstream in snapshot.workstreams) {
+    if (workstream.key == key) {
+      match = workstream;
+      break;
+    }
+  }
+  if (match == null) return AccidentProgressState.unknown;
+  return switch (match.chip) {
+    AccidentWorkstreamChip.done => AccidentProgressState.done,
+    AccidentWorkstreamChip.inProgress => AccidentProgressState.current,
+    AccidentWorkstreamChip.pending => AccidentProgressState.pending,
+    AccidentWorkstreamChip.notRequired => AccidentProgressState.unknown,
+  };
+}
 
 String _shown(String? value, AccidentCopy copy) {
   final String text = value?.trim() ?? '';

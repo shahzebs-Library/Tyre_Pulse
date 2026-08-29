@@ -1325,7 +1325,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get checklistApprovalsStatusNoApproval => 'No approval needed';
 
   @override
-  String get checklistApprovalReviewTitle => 'Approval';
+  String get checklistApprovalReviewTitle => 'Checklist approval';
 
   @override
   String get checklistApprovalLoadErrorMessage =>

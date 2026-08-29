@@ -581,16 +581,14 @@ class _TaskCard extends StatelessWidget {
                         asset,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelMedium
-                            ?.copyWith(
-                              color: palette.primary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                              height: 18 / 14,
-                              letterSpacing: 0.4,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: palette.primary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  height: 18 / 14,
+                                  letterSpacing: 0.4,
+                                ),
                       ),
                     Text(
                       item.title,

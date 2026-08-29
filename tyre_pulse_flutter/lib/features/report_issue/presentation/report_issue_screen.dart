@@ -344,10 +344,7 @@ class _FieldLabel extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: TpSpace.sm),
         child: Text(
           text,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: TpPalette.of(context).textSecondary,
                 fontWeight: FontWeight.w600,
                 height: 16 / 12,
@@ -469,9 +466,8 @@ class _PhotoStrip extends StatelessWidget {
                   children: <Widget>[
                     Icon(
                       Icons.add_rounded,
-                      color: onAdd == null
-                          ? palette.textMuted
-                          : palette.primary,
+                      color:
+                          onAdd == null ? palette.textMuted : palette.primary,
                       size: 32,
                     ),
                     const SizedBox(height: TpSpace.sm),

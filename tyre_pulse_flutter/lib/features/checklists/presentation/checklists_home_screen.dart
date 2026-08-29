@@ -345,9 +345,8 @@ class _DraftRow extends StatelessWidget {
       onTap: onTap,
       child: _ChecklistRowLayout(
         title: draft.templateName,
-        subtitle: draft.assetNo.isEmpty
-            ? l10n.checklistNoAssetLabel
-            : draft.assetNo,
+        subtitle:
+            draft.assetNo.isEmpty ? l10n.checklistNoAssetLabel : draft.assetNo,
         footer: l10n.checklistResumeProgress(draft.filled, draft.total),
         chip: _CountChip(
           label: '${draft.filled}/${draft.total}',
@@ -411,15 +410,14 @@ class _TemplateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final int count = record.template.fields
-        .where((field) => field.type != 'section')
-        .length;
+    final int count =
+        record.template.fields.where((field) => field.type != 'section').length;
     final String searchable = <String?>[
       record.template.name,
       record.category,
     ].whereType<String>().join(' ').toLowerCase();
-    final bool tyreWorkflow = searchable.contains('tyre') ||
-        searchable.contains('tire');
+    final bool tyreWorkflow =
+        searchable.contains('tyre') || searchable.contains('tire');
     final bool usesPhotos = record.template.fields.any(
       (field) => field.type == 'photo' || field.allowPhoto,
     );

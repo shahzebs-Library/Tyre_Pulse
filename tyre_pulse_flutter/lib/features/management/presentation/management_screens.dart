@@ -269,6 +269,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
     }
     final ExecutiveSnapshot snapshot = _snapshot!;
+    final String? currency = ref.watch(activeCurrencyProvider);
     if (!snapshot.available) {
       return TpEmptyState(
         icon: Icons.cloud_off_outlined,
@@ -289,6 +290,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           TpSpace.xxxl,
         ),
         children: <Widget>[
+          _FinancialReportHeader(
+            company: snapshot.company,
+            generatedAt: snapshot.generatedAt,
+            currency: currency,
+            generatedLabel: copy('generated'),
+          ),
+          const SizedBox(height: TpSpace.lg),
           SegmentedButton<int>(
             segments: <ButtonSegment<int>>[
               ButtonSegment<int>(value: 30, label: Text(copy('days30'))),
@@ -301,16 +309,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               unawaited(_load());
             },
           ),
-          const SizedBox(height: TpSpace.md),
-          Text(
-            snapshot.company,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          if (snapshot.generatedAt != null)
-            Text(
-              '${copy('generated')} ${MaterialLocalizations.of(context).formatMediumDate(snapshot.generatedAt!.toLocal())}',
-            ),
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.lg),
           _MetricGrid(
             values: snapshot.kpis.entries
                 .map(
@@ -319,18 +318,44 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 )
                 .toList(growable: false),
           ),
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.xl),
           Text(
             copy('costPerformance'),
-            style: Theme.of(context).textTheme.titleMedium,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
           ),
           const SizedBox(height: TpSpace.sm),
-          for (final MapEntry<String, num?> entry in snapshot.cost.entries)
-            if (entry.value != null)
-              _ValueCard(label: copy(entry.key), value: entry.value!),
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
+            children: <Widget>[
+              for (final MapEntry<String, num?> entry in snapshot.cost.entries)
+                if (entry.value != null)
+                  SizedBox(
+                    width: (MediaQuery.sizeOf(context).width -
+                            (TpSpace.lg * 2) -
+                            TpSpace.sm) /
+                        2,
+                    child: _CostValueCard(
+                      label: copy(entry.key),
+                      value: entry.value!,
+                      currency: currency,
+                    ),
+                  ),
+            ],
+          ),
           for (final MapEntry<String, List<MetricSlice>> entry
-              in snapshot.breakdowns.entries)
-            _Distribution(title: copy(entry.key), rows: entry.value),
+              in snapshot.breakdowns.entries) ...<Widget>[
+            if (entry.value.any((MetricSlice row) => row.cost != null))
+              _CostComposition(
+                title: copy(entry.key),
+                rows: entry.value,
+                currency: currency,
+              )
+            else
+              _Distribution(title: copy(entry.key), rows: entry.value),
+          ],
         ],
       ),
     );
@@ -498,6 +523,234 @@ class _MetricGrid extends StatelessWidget {
       );
 }
 
+class _FinancialReportHeader extends StatelessWidget {
+  const _FinancialReportHeader({
+    required this.company,
+    required this.generatedAt,
+    required this.currency,
+    required this.generatedLabel,
+  });
+
+  final String company;
+  final DateTime? generatedAt;
+  final String? currency;
+  final String generatedLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      background: palette.surfaceAlt,
+      child: Row(
+        children: <Widget>[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: palette.primarySoft,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Icon(
+                Icons.assessment_outlined,
+                color: palette.primaryDark,
+                size: 32,
+              ),
+            ),
+          ),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  company,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                if (generatedAt != null) ...<Widget>[
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    '$generatedLabel ${MaterialLocalizations.of(context).formatMediumDate(generatedAt!.toLocal())}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.textSecondary,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          TpStatusChip(
+            status: currency == null || currency!.trim().isEmpty
+                ? TpStatus.unknown
+                : TpStatus.info,
+            label: currency == null || currency!.trim().isEmpty
+                ? '—'
+                : currency!.trim().toUpperCase(),
+            isCompact: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CostValueCard extends StatelessWidget {
+  const _CostValueCard({
+    required this.label,
+    required this.value,
+    required this.currency,
+  });
+
+  final String label;
+  final num value;
+  final String? currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            _money(value, currency),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: palette.textSecondary,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CostComposition extends StatelessWidget {
+  const _CostComposition({
+    required this.title,
+    required this.rows,
+    required this.currency,
+  });
+
+  final String title;
+  final List<MetricSlice> rows;
+  final String? currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<MetricSlice> measured = rows
+        .where((MetricSlice row) => row.cost != null && row.cost! >= 0)
+        .toList(growable: false);
+    if (measured.isEmpty) return const SizedBox.shrink();
+    final TpPalette palette = TpPalette.of(context);
+    final num total = measured.fold<num>(
+      0,
+      (num value, MetricSlice row) => value + row.cost!,
+    );
+    final List<Color> colors = <Color>[
+      palette.primary,
+      palette.info.base,
+      palette.warning.base,
+      palette.unknown.base,
+      palette.critical.base,
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: TpSpace.xl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: TpSpace.sm),
+          TpCard(
+            child: Column(
+              children: <Widget>[
+                if (total > 0)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(TpRadius.pill),
+                    child: SizedBox(
+                      height: 18,
+                      child: Row(
+                        children: <Widget>[
+                          for (int index = 0; index < measured.length; index++)
+                            Expanded(
+                              flex: (measured[index].cost! / total * 1000)
+                                  .round()
+                                  .clamp(1, 1000)
+                                  .toInt(),
+                              child: ColoredBox(
+                                color: colors[index % colors.length],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (total > 0) const SizedBox(height: TpSpace.md),
+                for (int index = 0;
+                    index < measured.length;
+                    index++) ...<Widget>[
+                  Row(
+                    children: <Widget>[
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: colors[index % colors.length],
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: TpSpace.sm),
+                      Expanded(
+                        child: Text(
+                          measured[index].label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        _money(measured[index].cost!, currency),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      if (total > 0) ...<Widget>[
+                        const SizedBox(width: TpSpace.xs),
+                        Text(
+                          '${(measured[index].cost! / total * 100).round()}%',
+                          style: TextStyle(color: palette.textMuted),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (index != measured.length - 1)
+                    const SizedBox(height: TpSpace.sm),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ValueCard extends StatelessWidget {
   const _ValueCard({required this.label, required this.value});
   final String label;
@@ -647,4 +900,10 @@ String _compact(num value) {
   if (absolute >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';
   if (absolute >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
   return value.round().toString();
+}
+
+String _money(num value, String? currency) {
+  final String code = (currency ?? '').trim().toUpperCase();
+  if (code.isEmpty) return '—';
+  return '$code ${_compact(value)}';
 }

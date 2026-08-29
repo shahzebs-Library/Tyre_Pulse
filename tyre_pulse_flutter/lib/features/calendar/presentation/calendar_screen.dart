@@ -10,6 +10,8 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/calendar/calendar_providers.dart';
 import 'package:tyre_pulse/features/calendar/domain/schedule_item.dart';
 import 'package:tyre_pulse/features/calendar/presentation/calendar_copy.dart';
@@ -23,6 +25,7 @@ class CalendarScreen extends ConsumerWidget {
     final CalendarCopy copy = CalendarCopy.of(context);
     final AsyncValue<List<ScheduleItem>> state =
         ref.watch(calendarItemsProvider);
+    final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
     final String fallback = TpBackFallbacks.forRoute(route);
     return TpScaffold(
       backFallback: fallback,
@@ -53,6 +56,10 @@ class CalendarScreen extends ConsumerWidget {
         data: (List<ScheduleItem> items) => _CalendarBody(
           items: items,
           copy: copy,
+          assignee: workspace?.fullName,
+          scopeLabel: workspace?.activeSites.isNotEmpty == true
+              ? workspace!.activeSites.join(', ')
+              : workspace?.legacySite ?? workspace?.activeCountry,
           onRefresh: () async {
             ref.invalidate(calendarItemsProvider);
             await ref.read(calendarItemsProvider.future);
@@ -67,10 +74,14 @@ class _CalendarBody extends StatelessWidget {
   const _CalendarBody({
     required this.items,
     required this.copy,
+    required this.assignee,
+    required this.scopeLabel,
     required this.onRefresh,
   });
   final List<ScheduleItem> items;
   final CalendarCopy copy;
+  final String? assignee;
+  final String? scopeLabel;
   final Future<void> Function() onRefresh;
 
   @override
@@ -94,31 +105,49 @@ class _CalendarBody extends StatelessWidget {
           TpSpace.xxxl,
         ),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _Metric(
-                  value: groups[ScheduleBucket.overdue]!.length,
-                  label: copy('overdue'),
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: _Metric(
-                  value: groups[ScheduleBucket.today]!.length,
-                  label: copy('today'),
-                ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: _Metric(
-                  value: groups[ScheduleBucket.week]!.length,
-                  label: copy('week'),
-                ),
-              ),
-            ],
+          _FieldPlanHeader(
+            title: copy('title'),
+            assignee: assignee,
+            scopeLabel: scopeLabel,
           ),
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.lg),
+          TpCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.sm,
+              vertical: TpSpace.lg,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: _PlanMetric(
+                    value: items.length,
+                    label: copy('scheduled'),
+                    icon: Icons.assignment_outlined,
+                    status: TpStatus.info,
+                  ),
+                ),
+                const _MetricDivider(),
+                Expanded(
+                  child: _PlanMetric(
+                    value: groups[ScheduleBucket.today]!.length,
+                    label: copy('today'),
+                    icon: Icons.event_available_outlined,
+                    status: TpStatus.ok,
+                  ),
+                ),
+                const _MetricDivider(),
+                Expanded(
+                  child: _PlanMetric(
+                    value: groups[ScheduleBucket.overdue]!.length,
+                    label: copy('overdue'),
+                    icon: Icons.warning_amber_rounded,
+                    status: TpStatus.critical,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TpSpace.xl),
           if (items.isEmpty)
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.45,
@@ -132,10 +161,9 @@ class _CalendarBody extends StatelessWidget {
             for (final ScheduleBucket bucket in ScheduleBucket.values)
               if (groups[bucket]!.isNotEmpty) ...<Widget>[
                 Text(
-                  copy(bucket.name).toUpperCase(),
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  copy(bucket.name),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
                       ),
                 ),
                 const SizedBox(height: TpSpace.sm),
@@ -151,20 +179,129 @@ class _CalendarBody extends StatelessWidget {
   }
 }
 
-class _Metric extends StatelessWidget {
-  const _Metric({required this.value, required this.label});
-  final int value;
-  final String label;
+class _FieldPlanHeader extends StatelessWidget {
+  const _FieldPlanHeader({
+    required this.title,
+    required this.assignee,
+    required this.scopeLabel,
+  });
+
+  final String title;
+  final String? assignee;
+  final String? scopeLabel;
 
   @override
-  Widget build(BuildContext context) => TpCard(
-        padding: const EdgeInsets.all(TpSpace.md),
-        child: Column(
-          children: <Widget>[
-            Text('$value', style: Theme.of(context).textTheme.headlineSmall),
-            Text(label, textAlign: TextAlign.center),
-          ],
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final MaterialLocalizations localizations =
+        MaterialLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
         ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          localizations.formatFullDate(DateTime.now()),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: palette.textSecondary,
+              ),
+        ),
+        if ((assignee ?? '').trim().isNotEmpty ||
+            (scopeLabel ?? '').trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: TpSpace.md),
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.person_outline_rounded,
+                color: palette.primary,
+                size: TpSizing.iconLg,
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  (assignee ?? '').trim().isEmpty ? '—' : assignee!.trim(),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              if ((scopeLabel ?? '').trim().isNotEmpty)
+                TpStatusChip(
+                  status: TpStatus.neutral,
+                  label: scopeLabel!.trim(),
+                  icon: Icons.location_on_outlined,
+                  isCompact: true,
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PlanMetric extends StatelessWidget {
+  const _PlanMetric({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.status,
+  });
+
+  final int value;
+  final String label;
+  final IconData icon;
+  final TpStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).forStatus(status);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.soft,
+            shape: BoxShape.circle,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(TpSpace.sm),
+            child: Icon(icon, color: colors.onSoft, size: TpSizing.iconLg),
+          ),
+        ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          '$value',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: colors.base,
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricDivider extends StatelessWidget {
+  const _MetricDivider();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 74,
+        color: TpPalette.of(context).border,
       );
 }
 
@@ -196,14 +333,53 @@ class _ScheduleCard extends StatelessWidget {
     return TpCard(
       key: Key('calendar.item.${item.id}'),
       padding: EdgeInsets.zero,
+      borderColor: palette.borderStrong,
       child: InkWell(
         onTap: actionable ? () => _open(context) : null,
         borderRadius: BorderRadius.circular(TpRadius.lg),
         child: Padding(
           padding: const EdgeInsets.all(TpSpace.md),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Icon(icon, color: palette.primary, size: TpSizing.iconLg),
+              SizedBox(
+                width: 58,
+                child: Column(
+                  children: <Widget>[
+                    Text(
+                      MaterialLocalizations.of(context).formatTimeOfDay(
+                        TimeOfDay.fromDateTime(item.date.toLocal()),
+                        alwaysUse24HourFormat:
+                            MediaQuery.alwaysUse24HourFormatOf(context),
+                      ),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: TpSpace.xs),
+                    TpStatusChip(
+                      status: status,
+                      label: copy(bucket.name),
+                      isCompact: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: TpSpace.md),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: palette.forStatus(status).soft,
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(TpSpace.md),
+                  child: Icon(
+                    icon,
+                    color: palette.forStatus(status).onSoft,
+                    size: TpSizing.iconLg,
+                  ),
+                ),
+              ),
               const SizedBox(width: TpSpace.md),
               Expanded(
                 child: Column(
@@ -224,13 +400,6 @@ class _ScheduleCard extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              TpStatusChip(
-                status: status,
-                label: MaterialLocalizations.of(context)
-                    .formatShortDate(item.date.toLocal()),
-                isCompact: true,
               ),
               if (actionable)
                 const Icon(Icons.chevron_right_rounded, size: TpSizing.iconSm),

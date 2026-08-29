@@ -92,7 +92,7 @@ void main() {
     expect(find.byKey(TasksScreenKeys.todayTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.inProgressTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.completedTab), findsOneWidget);
-    expect(find.text('URGENT'), findsOneWidget);
+    expect(find.text('URGENT'), findsNWidgets(2));
     expect(find.text('IN PROGRESS'), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.task('urgent')), findsOneWidget);
     expect(repository.lastCountry, 'KSA');

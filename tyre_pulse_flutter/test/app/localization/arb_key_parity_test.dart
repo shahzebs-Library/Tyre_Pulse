@@ -432,10 +432,10 @@ void main() {
     // this number - do not just raise it blind.
     // Notifications, RCA, PM, stock, calendar and management add their
     // locale-owned catalogs without introducing per-locale drift.
-    test('en, ar and ur each carry exactly 772 translatable keys today', () {
-      expect(_translatableKeys(en).length, 772);
-      expect(_translatableKeys(ar).length, 772);
-      expect(_translatableKeys(ur).length, 772);
+    test('en, ar and ur each carry exactly 779 translatable keys today', () {
+      expect(_translatableKeys(en).length, 779);
+      expect(_translatableKeys(ar).length, 779);
+      expect(_translatableKeys(ur).length, 779);
     });
   });
 

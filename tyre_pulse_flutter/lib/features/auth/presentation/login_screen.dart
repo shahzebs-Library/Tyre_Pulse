@@ -276,10 +276,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final double canvasWidth =
         constraints.maxWidth > 390 ? 390 : constraints.maxWidth;
     final String configuredVersion = ref.watch(currentAppVersionProvider);
-    final String? visibleVersion = configuredVersion == '999.0.0' ||
-            configuredVersion.trim().isEmpty
-        ? null
-        : configuredVersion;
+    final String? visibleVersion =
+        configuredVersion == '999.0.0' || configuredVersion.trim().isEmpty
+            ? null
+            : configuredVersion;
 
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -349,10 +349,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required Locale activeLocale,
   }) {
     final String configuredVersion = ref.watch(currentAppVersionProvider);
-    final String? visibleVersion = configuredVersion == '999.0.0' ||
-            configuredVersion.trim().isEmpty
-        ? null
-        : configuredVersion;
+    final String? visibleVersion =
+        configuredVersion == '999.0.0' || configuredVersion.trim().isEmpty
+            ? null
+            : configuredVersion;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(TpSpace.xxl),
       child: Center(
@@ -512,12 +512,10 @@ class _ExactLoginHero extends StatelessWidget {
                   child: Text(
                     'TYRE\nPULSE',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: country ==
-                                  LoginCountry.unitedArabEmirates
+                          color: country == LoginCountry.unitedArabEmirates
                               ? const Color(0xFF092B72)
                               : Colors.white,
-                          fontSize: country ==
-                                  LoginCountry.unitedArabEmirates
+                          fontSize: country == LoginCountry.unitedArabEmirates
                               ? 21
                               : 24,
                           height: 0.98,
@@ -552,9 +550,8 @@ class _ExactLoginHero extends StatelessWidget {
                       color: country == LoginCountry.unitedArabEmirates
                           ? const Color(0xFF092B72)
                           : Colors.white,
-                      fontSize: country == LoginCountry.unitedArabEmirates
-                          ? 20
-                          : 18,
+                      fontSize:
+                          country == LoginCountry.unitedArabEmirates ? 20 : 18,
                       height: 1.2,
                       fontWeight: FontWeight.w500,
                     ),
@@ -825,9 +822,7 @@ class _ExactLoginForm extends StatelessWidget {
                     icon: Icons.fingerprint,
                     isFullWidth: true,
                     isBusy: isBiometricChecking,
-                    onPressed: busy
-                        ? null
-                        : () => unawaited(onBiometric()),
+                    onPressed: busy ? null : () => unawaited(onBiometric()),
                   ),
                 ),
                 Positioned(

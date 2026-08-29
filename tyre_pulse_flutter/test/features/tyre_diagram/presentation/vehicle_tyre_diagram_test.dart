@@ -388,8 +388,7 @@ void main() {
 
   for (final MapEntry<String, String> vehicle in <String, String>{
     'Tri-mixer': 'assets/vehicle_photos/tri_mixer_top_down.webp',
-    'Concrete pump':
-        'assets/vehicle_photos/concrete_pump_top_down.webp',
+    'Concrete pump': 'assets/vehicle_photos/concrete_pump_top_down.webp',
   }.entries) {
     testWidgets(
       '${vehicle.key} capture uses its orthographic production photo',

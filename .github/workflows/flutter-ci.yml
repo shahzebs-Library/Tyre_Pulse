@@ -88,13 +88,7 @@ jobs:
             echo "No hand-written Dart found - nothing to format check."
             exit 0
           fi
-          if ! dart format --set-exit-if-changed $files; then
-            echo "--- formatter patch for the changed login and tyre tests ---"
-            git --no-pager diff -- \
-              lib/features/auth/presentation/login_screen.dart \
-              test/features/tyre_diagram/presentation/vehicle_tyre_diagram_test.dart
-            exit 1
-          fi
+          dart format --set-exit-if-changed $files
 
       - name: Analyze
         # --fatal-infos because analysis_options.yaml promotes the rules that

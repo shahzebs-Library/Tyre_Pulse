@@ -248,9 +248,9 @@ void main() {
         const Locale('ur'),
       );
 
-      expect(en.loginOperationsTitle, 'Complete PMV Operations');
-      expect(ar.loginOperationsTitle, 'عمليات PMV المتكاملة');
-      expect(ur.loginOperationsTitle, 'مکمل PMV آپریشنز');
+      expect(en.loginOperationsTitle, 'One platform for every PMV asset');
+      expect(ar.loginOperationsTitle, 'منصة واحدة لكل معدة PMV');
+      expect(ur.loginOperationsTitle, 'ہر PMV اثاثے کے لیے ایک پلیٹ فارم');
     });
 
     test('exposes all three country labels in every locale', () async {

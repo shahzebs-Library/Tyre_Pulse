@@ -52,9 +52,11 @@ import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
+import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/sign_in_outcome.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/security/device_biometric_authenticator.dart';
 import 'package:tyre_pulse/features/auth/data/login_country_preference_repository.dart';
 import 'package:tyre_pulse/features/auth/domain/login_country.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_country_preference_provider.dart';
@@ -68,6 +70,7 @@ final class _Pumped {
     required this.auth,
     required this.container,
     required this.countryRepository,
+    required this.biometrics,
   });
 
   final FakeAuthRepository auth;
@@ -77,6 +80,19 @@ final class _Pumped {
   /// `TpLocaleController.state`, which the framework marks `@protected`.
   final ProviderContainer container;
   final _LoginCountryRepository countryRepository;
+  final _FakeDeviceBiometricAuthenticator biometrics;
+}
+
+final class _FakeDeviceBiometricAuthenticator
+    implements DeviceBiometricAuthenticator {
+  DeviceBiometricResult result = DeviceBiometricResult.authenticated;
+  int calls = 0;
+
+  @override
+  Future<DeviceBiometricResult> authenticate({required String reason}) async {
+    calls++;
+    return result;
+  }
 }
 
 final class _LoginCountryRepository
@@ -114,11 +130,14 @@ Future<_Pumped> _pump(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
   LoginCountry? country = LoginCountry.saudiArabia,
+  ThemeData? theme,
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final _LoginCountryRepository countryRepository = _LoginCountryRepository(
     country,
   );
+  final _FakeDeviceBiometricAuthenticator biometrics =
+      _FakeDeviceBiometricAuthenticator();
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       ...authTestOverrides(
@@ -132,6 +151,8 @@ Future<_Pumped> _pump(
       loginCountryPreferenceRepositoryProvider.overrideWithValue(
         countryRepository,
       ),
+      currentAppVersionProvider.overrideWithValue('2.0'),
+      deviceBiometricAuthenticatorProvider.overrideWithValue(biometrics),
     ],
   );
   addTearDown(container.dispose);
@@ -148,7 +169,7 @@ Future<_Pumped> _pump(
       container: container,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: TpTheme.light,
+        theme: theme ?? TpTheme.light,
         locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
@@ -162,6 +183,7 @@ Future<_Pumped> _pump(
     auth: auth,
     container: container,
     countryRepository: countryRepository,
+    biometrics: biometrics,
   );
 }
 
@@ -421,7 +443,7 @@ void main() {
       expect(brand, findsOneWidget);
       expect(form, findsOneWidget);
       expect(tester.getTopLeft(brand).dx, lessThan(tester.getTopLeft(form).dx));
-      expect(find.text('Complete PMV Operations'), findsOneWidget);
+      expect(find.text('One platform for every PMV asset'), findsOneWidget);
       expect(find.text('Saudi Arabia'), findsOneWidget);
       expect(
         find.byKey(
@@ -470,15 +492,16 @@ void main() {
         p.countryRepository.value,
         LoginCountry.unitedArabEmirates,
       );
-      expect(find.text('United Arab Emirates'), findsOneWidget);
+      expect(find.text('Secure company workspace · UAE'), findsOneWidget);
       expect(
         find.byKey(
           const ValueKey<String>(
-            'assets/login/united_arab_emirates_hero.png',
+            'assets/login/united_arab_emirates_pmv_hero.webp',
           ),
         ),
         findsOneWidget,
       );
+      expect(find.text('Secure company workspace · UAE'), findsOneWidget);
     },
   );
 
@@ -633,6 +656,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'device biometrics verifies locally before using the existing sign-in path',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pump(
+        tester,
+        country: LoginCountry.unitedArabEmirates,
+      );
+      p.auth.signInHandler =
+          (String identifier, String password) async => const SignInSucceeded();
+
+      await _fillValidCredentials(tester);
+      await tester.tap(find.byKey(LoginActionKeys.biometric));
+      await tester.pump();
+      await tester.pump();
+
+      expect(p.biometrics.calls, 1);
+      expect(p.auth.calls, <String>['signIn']);
+      expect(find.byKey(LoginBannerKeys.error), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'unavailable device biometrics is explicit and never bypasses credentials',
+    (WidgetTester tester) async {
+      final _Pumped p = await _pump(tester);
+      p.biometrics.result = DeviceBiometricResult.unavailable;
+
+      await _fillValidCredentials(tester);
+      await tester.tap(find.byKey(LoginActionKeys.biometric));
+      await tester.pump();
+
+      expect(p.biometrics.calls, 1);
+      expect(p.auth.calls, isEmpty);
+      expect(find.byKey(LoginBannerKeys.error), findsOneWidget);
+      expect(
+        find.text('Device biometrics are unavailable or not enrolled.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'forgot-password and access controls open truthful administrator help',
+    (WidgetTester tester) async {
+      await _pump(tester);
+
+      await tester.tap(find.byKey(LoginActionKeys.forgotPassword));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sign-in help'), findsOneWidget);
+      expect(
+        find.textContaining('Password resets are managed'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(LoginActionKeys.accessHelp));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('manages mobile access'), findsOneWidget);
+    },
+  );
+
   testWidgets('approved 390x844 mobile composition keeps the exact anchors', (
     WidgetTester tester,
   ) async {
@@ -641,24 +727,55 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await _pump(tester);
+    await _pump(tester, country: LoginCountry.unitedArabEmirates);
 
     final Finder hero = find.byKey(const Key('login.brand.panel'));
     final Finder form = find.byKey(const Key('login.form.card'));
     expect(tester.getSize(hero), const Size(390, 354));
     expect(tester.getTopLeft(form).dy, 328);
-    expect(tester.getSize(_identifierField()).height, 56);
-    expect(tester.getSize(_passwordField()).height, 56);
-    expect(tester.getSize(_submitButton()).height, 54);
+    expect(tester.getSize(_identifierField()).height, 48);
+    expect(tester.getSize(_passwordField()).height, 48);
+    expect(tester.getSize(_submitButton()).height, 52);
     expect(find.byIcon(Icons.fingerprint), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_forward), findsOneWidget);
+    expect(find.text('Use device biometrics'), findsOneWidget);
+    expect(find.text('Version 2.0'), findsOneWidget);
     expect(
       find.byKey(
-        const ValueKey<String>('assets/login/figma_city_background.png'),
+        const ValueKey<String>(
+          'assets/login/united_arab_emirates_pmv_hero.webp',
+        ),
       ),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'dark appearance keeps the complete mobile login composition in the '
+    'real dark palette',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(
+        tester,
+        country: LoginCountry.unitedArabEmirates,
+        theme: TpTheme.dark,
+      );
+
+      final BuildContext formContext = tester.element(
+        find.byKey(const Key('login.form.card')),
+      );
+      expect(Theme.of(formContext).brightness, Brightness.dark);
+      expect(find.byType(TextField), findsNWidgets(2));
+      expect(find.byKey(LoginActionKeys.biometric), findsOneWidget);
+      expect(find.text('Version 2.0'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('wide Arabic remains responsive and keeps one functional form', (
     WidgetTester tester,

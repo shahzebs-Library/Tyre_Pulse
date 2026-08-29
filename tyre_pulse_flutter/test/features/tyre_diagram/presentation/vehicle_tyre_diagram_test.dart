@@ -386,6 +386,41 @@ void main() {
     },
   );
 
+  for (final MapEntry<String, String> vehicle in <String, String>{
+    'Tri-mixer': 'assets/vehicle_photos/tri_mixer_top_down.webp',
+    'Concrete pump': 'assets/vehicle_photos/concrete_pump_top_down.webp',
+  }.entries) {
+    testWidgets(
+      '${vehicle.key} capture uses its orthographic production photo',
+      (WidgetTester tester) async {
+        final DiagramLayout layout = kTyreDiagramLayouts[vehicle.key]!;
+        await _pump(
+          tester,
+          VehicleTyreDiagram(
+            vehicleType: vehicle.key,
+            positions: layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+            tyreData: const <String, Map<String, Object?>>{},
+            width: 366,
+            compact: true,
+            captureMode: true,
+          ),
+        );
+
+        expect(
+          find.byKey(ValueKey<String>(vehicle.value)),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            const ValueKey<String>('assets/vehicle_photos/concrete_pump.png'),
+          ),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final String vehicleClass in <String>[
     'Tri-mixer',
     'Line pump',

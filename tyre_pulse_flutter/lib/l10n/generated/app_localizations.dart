@@ -4525,7 +4525,7 @@ abstract class AppLocalizations {
   /// Footer line at the bottom of the sign-in screen.
   ///
   /// In en, this message translates to:
-  /// **'TyrePulse Fleet Intelligence · Tyre Man Portal'**
+  /// **'Fleet · Workshop · Inspections · Tyres · Safety'**
   String get loginTagline;
 
   /// No description provided for @loginCardTitle.
@@ -4543,7 +4543,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginIdentifierLabel.
   ///
   /// In en, this message translates to:
-  /// **'Email / Username / Employee ID'**
+  /// **'Email or employee ID'**
   String get loginIdentifierLabel;
 
   /// No description provided for @loginIdentifierPlaceholder.
@@ -4591,7 +4591,7 @@ abstract class AppLocalizations {
   /// Generic product description on every country-specific login screen. PMV is the product's established operational acronym.
   ///
   /// In en, this message translates to:
-  /// **'Complete PMV Operations'**
+  /// **'One platform for every PMV asset'**
   String get loginOperationsTitle;
 
   /// No description provided for @loginWelcomeTitle.
@@ -4603,7 +4603,7 @@ abstract class AppLocalizations {
   /// No description provided for @loginWelcomeSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to your assigned operations'**
+  /// **'Access your assigned fleet, workshop and field tasks'**
   String get loginWelcomeSubtitle;
 
   /// No description provided for @loginSelectCountryTitle.
@@ -4671,6 +4671,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Maintenance & workshop'**
   String get loginScopeMaintenanceWorkshop;
+
+  /// Complete copy catalogue for the security and help controls on the latest login composition.
+  ///
+  /// In en, this message translates to:
+  /// **'secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Authorized PMV personnel only~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.'**
+  String get loginSecurityCopyCatalog;
 
   /// No description provided for @profileNavTitle.
   ///

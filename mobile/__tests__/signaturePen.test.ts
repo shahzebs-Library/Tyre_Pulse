@@ -11,7 +11,7 @@
  *
  * These tests pin the guard that makes it unreachable.
  */
-import { legiblePen, PAD_SURFACE, DEFAULT_PEN } from '../components/SignaturePad'
+import { legiblePen, PAD_SURFACE, DEFAULT_PEN } from '../lib/signaturePen'
 
 describe('legiblePen', () => {
   it('refuses the exact ink that produced the two invisible signatures', () => {

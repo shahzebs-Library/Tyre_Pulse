@@ -1983,7 +1983,7 @@
   "@loginAppSubtitle": {
     "description": "Small line under the app name on the sign-in screen."
   },
-  "loginTagline": "TyrePulse Fleet Intelligence · Tyre Man Portal",
+  "loginTagline": "Fleet · Workshop · Inspections · Tyres · Safety",
   "@loginTagline": {
     "description": "Footer line at the bottom of the sign-in screen."
   },
@@ -1991,7 +1991,7 @@
   "@loginCardTitle": {},
   "loginCardSubtitle": "Use your email, username, or Employee ID",
   "@loginCardSubtitle": {},
-  "loginIdentifierLabel": "Email / Username / Employee ID",
+  "loginIdentifierLabel": "Email or employee ID",
   "@loginIdentifierLabel": {},
   "loginIdentifierPlaceholder": "Enter email, username, or ID",
   "@loginIdentifierPlaceholder": {},
@@ -2022,13 +2022,13 @@
     }
   },
 
-  "loginOperationsTitle": "Complete PMV Operations",
+  "loginOperationsTitle": "One platform for every PMV asset",
   "@loginOperationsTitle": {
     "description": "Generic product description on every country-specific login screen. PMV is the product's established operational acronym."
   },
   "loginWelcomeTitle": "Welcome back",
   "@loginWelcomeTitle": {},
-  "loginWelcomeSubtitle": "Sign in to your assigned operations",
+  "loginWelcomeSubtitle": "Access your assigned fleet, workshop and field tasks",
   "@loginWelcomeSubtitle": {},
   "loginSelectCountryTitle": "Select your country",
   "@loginSelectCountryTitle": {},
@@ -2067,6 +2067,10 @@
   "loginScopeMaintenanceWorkshop": "Maintenance & workshop",
   "@loginScopeMaintenanceWorkshop": {
     "description": "Concise capability label on the login screen."
+  },
+  "loginSecurityCopyCatalog": "secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Authorized PMV personnel only~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.",
+  "@loginSecurityCopyCatalog": {
+    "description": "Complete copy catalogue for the security and help controls on the latest login composition."
   },
 
   "profileNavTitle": "Profile",

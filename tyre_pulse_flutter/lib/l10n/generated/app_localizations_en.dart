@@ -2491,7 +2491,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginAppSubtitle => 'Inspector App';
 
   @override
-  String get loginTagline => 'TyrePulse Fleet Intelligence · Tyre Man Portal';
+  String get loginTagline => 'Fleet · Workshop · Inspections · Tyres · Safety';
 
   @override
   String get loginCardTitle => 'Sign In';
@@ -2500,7 +2500,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginCardSubtitle => 'Use your email, username, or Employee ID';
 
   @override
-  String get loginIdentifierLabel => 'Email / Username / Employee ID';
+  String get loginIdentifierLabel => 'Email or employee ID';
 
   @override
   String get loginIdentifierPlaceholder => 'Enter email, username, or ID';
@@ -2532,13 +2532,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get loginOperationsTitle => 'Complete PMV Operations';
+  String get loginOperationsTitle => 'One platform for every PMV asset';
 
   @override
   String get loginWelcomeTitle => 'Welcome back';
 
   @override
-  String get loginWelcomeSubtitle => 'Sign in to your assigned operations';
+  String get loginWelcomeSubtitle =>
+      'Access your assigned fleet, workshop and field tasks';
 
   @override
   String get loginSelectCountryTitle => 'Select your country';
@@ -2575,6 +2576,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loginScopeMaintenanceWorkshop => 'Maintenance & workshop';
+
+  @override
+  String get loginSecurityCopyCatalog =>
+      'secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Authorized PMV personnel only~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.';
 
   @override
   String get profileNavTitle => 'Profile';

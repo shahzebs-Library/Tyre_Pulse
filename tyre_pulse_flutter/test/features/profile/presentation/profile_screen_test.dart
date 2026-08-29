@@ -123,7 +123,7 @@ void main() {
       expect(find.text('AY'), findsOneWidget);
       expect(find.text('Manager'), findsWidgets);
       expect(find.text('NHC'), findsWidgets);
-      expect(find.text('Complete PMV Operations'), findsOneWidget);
+      expect(find.text('One platform for every PMV asset'), findsOneWidget);
       expect(find.text('All'), findsNWidgets(2));
       expect(find.text('Platform administrator'), findsNothing);
     },

@@ -47,3 +47,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.biometric:biometric:1.1.0")
+}

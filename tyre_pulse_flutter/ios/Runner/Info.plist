@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>TyrePulse needs camera access to photograph tyres, vehicles, and operational evidence.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Tyre Pulse uses Face ID to verify authorized PMV personnel before sign-in.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TyrePulse tags inspections with your current location so fleet managers can see where tyre checks were performed.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

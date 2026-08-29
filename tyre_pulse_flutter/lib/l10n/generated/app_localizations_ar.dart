@@ -2495,7 +2495,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get loginAppSubtitle => 'تطبيق المفتش';
 
   @override
-  String get loginTagline => 'TyrePulse · بوابة فني الإطارات';
+  String get loginTagline => 'الأسطول · الورشة · الفحوصات · الإطارات · السلامة';
 
   @override
   String get loginCardTitle => 'تسجيل الدخول';
@@ -2505,8 +2505,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'استخدم بريدك الإلكتروني أو اسم المستخدم أو رقم الموظف';
 
   @override
-  String get loginIdentifierLabel =>
-      'البريد الإلكتروني / اسم المستخدم / رقم الموظف';
+  String get loginIdentifierLabel => 'البريد الإلكتروني أو رقم الموظف';
 
   @override
   String get loginIdentifierPlaceholder => 'أدخل البريد أو الاسم أو الرقم';
@@ -2539,13 +2538,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get loginOperationsTitle => 'عمليات PMV المتكاملة';
+  String get loginOperationsTitle => 'منصة واحدة لكل معدة PMV';
 
   @override
   String get loginWelcomeTitle => 'مرحبًا بعودتك';
 
   @override
-  String get loginWelcomeSubtitle => 'سجّل الدخول إلى العمليات المعيّنة لك';
+  String get loginWelcomeSubtitle =>
+      'الوصول إلى الأسطول والورشة والمهام الميدانية المعيّنة لك';
 
   @override
   String get loginSelectCountryTitle => 'اختر بلدك';
@@ -2582,6 +2582,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get loginScopeMaintenanceWorkshop => 'الصيانة والورشة';
+
+  @override
+  String get loginSecurityCopyCatalog =>
+      'secure=مساحة عمل شركة آمنة · %country%~forgot=هل نسيت كلمة المرور؟~access=تحتاج إلى صلاحية؟ تواصل مع مسؤول النظام~or=أو~biometric=استخدام بصمة الجهاز~authorized=لموظفي PMV المصرح لهم فقط~audited=يتم تدقيق النشاط~version=الإصدار %version%~biometricReason=أكد هويتك لتسجيل الدخول إلى Tyre Pulse~biometricUnavailable=بصمة الجهاز غير متاحة أو غير مسجلة.~biometricLocked=بصمة الجهاز مقفلة مؤقتًا. استخدم كلمة المرور.~biometricFailed=تعذر إكمال التحقق من الجهاز.~credentialsRequired=أدخل بريدك الإلكتروني أو رقم الموظف وكلمة المرور قبل استخدام بصمة الجهاز.~helpTitle=مساعدة تسجيل الدخول~forgotHelp=يدير مسؤول Tyre Pulse إعادة تعيين كلمات المرور. تواصل معه لاستعادة الوصول.~accessHelp=يدير مسؤول Tyre Pulse صلاحية الهاتف واعتماد الحساب.';
 
   @override
   String get profileNavTitle => 'حسابي';

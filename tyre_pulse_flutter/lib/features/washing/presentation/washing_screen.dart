@@ -63,6 +63,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
@@ -446,23 +447,38 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
             onSelect: _selectDueAsset,
           ),
           const SizedBox(height: TpSpace.md),
+          if (_master == null)
+            TpCard(
+              child: TpInput(
+                label: l10n.washAssetLabel,
+                controller: _assetController,
+                hint: l10n.washAssetHint,
+                textCapitalization: TextCapitalization.characters,
+                isRequired: true,
+                prefixIcon: Icons.qr_code_scanner_rounded,
+              ),
+            )
+          else
+            SelectedVehicleCard(
+              asset: _master!,
+              changeLabel: l10n.washAssetHint,
+              unavailableLabel: l10n.valueUnavailable,
+              meterValue: _master!.currentKm == null
+                  ? null
+                  : l10n.meterLogRecentKmValue(
+                      formatVehicleOdometer(_master!.currentKm!),
+                    ),
+              onChange: () {
+                _assetController.clear();
+                setState(() => _master = null);
+              },
+            ),
+          const SizedBox(height: TpSpace.md),
           TpCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TpInput(
-                  label: l10n.washAssetLabel,
-                  controller: _assetController,
-                  hint: l10n.washAssetHint,
-                  textCapitalization: TextCapitalization.characters,
-                  isRequired: true,
-                ),
-                if (_master != null) ...<Widget>[
-                  const SizedBox(height: TpSpace.sm),
-                  _MasterInfoLine(master: _master!, l10n: l10n),
-                ],
-                const SizedBox(height: TpSpace.md),
                 TpInput(
                   label: l10n.washSiteLabel,
                   controller: _siteController,
@@ -516,20 +532,14 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
             ),
           ),
           const SizedBox(height: TpSpace.md),
-          TpCard(
-            child: TpDropdown<String>(
-              label: l10n.washTypeLabel,
-              value: _washType,
-              isRequired: true,
-              items: <TpDropdownItem<String>>[
-                for (final String type in kWashTypes)
-                  TpDropdownItem<String>(
-                    value: type,
-                    label: _washTypeLabel(l10n, type),
-                  ),
-              ],
-              onChanged: (String? value) => setState(() => _washType = value),
-            ),
+          _WashTypeSelector(
+            label: l10n.washTypeLabel,
+            selected: _washType,
+            labels: <String, String>{
+              for (final String type in kWashTypes)
+                type: _washTypeLabel(l10n, type),
+            },
+            onSelected: (String value) => setState(() => _washType = value),
           ),
           const SizedBox(height: TpSpace.md),
           TpCard(
@@ -683,51 +693,114 @@ num? _parseNum(String raw) {
   return num.tryParse(trimmed);
 }
 
-class _MasterInfoLine extends StatelessWidget {
-  const _MasterInfoLine({required this.master, required this.l10n});
+class _WashTypeSelector extends StatelessWidget {
+  const _WashTypeSelector({
+    required this.label,
+    required this.selected,
+    required this.labels,
+    required this.onSelected,
+  });
 
-  final VehicleAsset master;
-  final AppLocalizations l10n;
+  final String label;
+  final String? selected;
+  final Map<String, String> labels;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final String joinedMakeModel = <String?>[
-      master.make,
-      master.model,
-    ].where((String? v) => v != null && v.trim().isNotEmpty).join(' ');
-    final String? makeModel = joinedMakeModel.isEmpty ? null : joinedMakeModel;
-
-    final List<String> parts = <String>[
-      if (master.vehicleType != null && master.vehicleType!.trim().isNotEmpty)
-        master.vehicleType!,
-      if (makeModel != null) makeModel,
-      if (master.fleetNumber != null && master.fleetNumber!.trim().isNotEmpty)
-        l10n.washMasterFleetNumber(master.fleetNumber!),
-      if (master.site != null && master.site!.trim().isNotEmpty) master.site!,
-    ];
-    if (parts.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.md,
-        vertical: TpSpace.sm,
-      ),
-      decoration: BoxDecoration(
-        color: palette.info.soft,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        border: Border.all(color: palette.info.base),
-      ),
-      child: Text(
-        parts.join(' · '),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context)
-            .textTheme
-            .bodySmall
-            ?.copyWith(color: palette.info.onSoft, fontWeight: FontWeight.w700),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: TpSpace.xs),
+        SizedBox(
+          height: 112,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: labels.length,
+            separatorBuilder: (_, __) => const SizedBox(width: TpSpace.sm),
+            itemBuilder: (BuildContext context, int index) {
+              final MapEntry<String, String> entry = labels.entries.elementAt(
+                index,
+              );
+              final bool isSelected = selected == entry.key;
+              return SizedBox(
+                width: 104,
+                child: Material(
+                  color: isSelected ? palette.info.soft : palette.surface,
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(
+                      color: isSelected ? palette.primary : palette.border,
+                    ),
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => onSelected(entry.key),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: TpSpace.sm,
+                        vertical: TpSpace.md,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Icon(
+                            _washTypeIcon(entry.key),
+                            color: isSelected
+                                ? palette.primary
+                                : palette.textSecondary,
+                            size: TpSizing.iconLg,
+                          ),
+                          const SizedBox(height: TpSpace.sm),
+                          Text(
+                            entry.value,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
+                                  color: isSelected
+                                      ? palette.primary
+                                      : palette.text,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
+  }
+
+  static IconData _washTypeIcon(String type) {
+    switch (type) {
+      case 'Interior':
+        return Icons.airline_seat_recline_normal_outlined;
+      case 'Full':
+        return Icons.water_drop_outlined;
+      case 'Engine Bay':
+        return Icons.settings_outlined;
+      case 'Undercarriage':
+        return Icons.cleaning_services_outlined;
+      case 'Steam':
+        return Icons.cloud_outlined;
+      case 'Waterless':
+        return Icons.auto_awesome_outlined;
+      default:
+        return Icons.local_car_wash_outlined;
+    }
   }
 }
 

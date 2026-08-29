@@ -2659,7 +2659,7 @@ abstract class AppLocalizations {
   /// No description provided for @meterLogNavTitle.
   ///
   /// In en, this message translates to:
-  /// **'Daily Meter Log'**
+  /// **'Record meter reading'**
   String get meterLogNavTitle;
 
   /// No description provided for @meterLogWorkspaceLoadingMessage.
@@ -2965,7 +2965,7 @@ abstract class AppLocalizations {
   /// No description provided for @washNavTitle.
   ///
   /// In en, this message translates to:
-  /// **'Vehicle Washing'**
+  /// **'Log vehicle wash'**
   String get washNavTitle;
 
   /// No description provided for @washWorkspaceLoadingMessage.

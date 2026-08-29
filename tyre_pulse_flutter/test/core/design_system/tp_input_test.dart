@@ -183,6 +183,22 @@ void main() {
     expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
   });
 
+  testWidgets('a supplied text style reaches the editable value', (
+    WidgetTester tester,
+  ) async {
+    const TextStyle valueStyle = TextStyle(
+      fontSize: 28,
+      fontWeight: FontWeight.w800,
+    );
+    await pumpTp(
+      tester,
+      const TpInput(label: 'Reading', textStyle: valueStyle),
+    );
+
+    final TextField field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.style, valueStyle);
+  });
+
   testWidgets('exposes itself as a text field to assistive technology', (
     WidgetTester tester,
   ) async {

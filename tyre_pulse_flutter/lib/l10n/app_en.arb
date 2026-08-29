@@ -1245,7 +1245,7 @@
   "checklistApprovalSignatureRedraw": "Draw a new signature",
   "@checklistApprovalSignatureRedraw": {},
 
-  "meterLogNavTitle": "Daily Meter Log",
+  "meterLogNavTitle": "Record meter reading",
   "@meterLogNavTitle": {},
   "meterLogWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
   "@meterLogWorkspaceLoadingMessage": {},
@@ -1375,7 +1375,7 @@
     }
   },
 
-  "washNavTitle": "Vehicle Washing",
+  "washNavTitle": "Log vehicle wash",
   "@washNavTitle": {},
   "washWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
   "@washWorkspaceLoadingMessage": {},

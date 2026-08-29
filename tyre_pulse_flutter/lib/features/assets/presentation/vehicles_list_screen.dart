@@ -43,6 +43,7 @@ import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 
 class VehiclesListScreen extends ConsumerStatefulWidget {
   const VehiclesListScreen({
@@ -463,7 +464,7 @@ class _FleetAssetCard extends StatelessWidget {
     final TpStatusColors statusColors = palette.forStatus(
       vehicleStatusTone(asset.status),
     );
-    final String? photo = _assetPhoto(asset);
+    final String? photo = vehiclePhotoAsset(asset);
 
     return Semantics(
       button: onTap != null,
@@ -494,7 +495,7 @@ class _FleetAssetCard extends StatelessWidget {
                   alignment: Alignment.center,
                   child: photo == null
                       ? Icon(
-                          _assetIcon(asset),
+                          vehicleFallbackIcon(asset),
                           size: 38,
                           color: palette.primary,
                         )
@@ -580,47 +581,6 @@ class _FleetAssetCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String? _assetPhoto(VehicleAsset asset) {
-  final String type = <String?>[
-    asset.vehicleType,
-    asset.make,
-    asset.model,
-    asset.assetNo,
-  ].whereType<String>().join(' ').toLowerCase();
-  if (type.contains('wheel loader') || type.contains('loader')) {
-    return 'assets/vehicle_photos/wheel_loader.png';
-  }
-  if (type.contains('concrete pump') || type.contains('pump truck')) {
-    return 'assets/vehicle_photos/concrete_pump.png';
-  }
-  if (type.contains('truck mounted pump') || type.contains('boom pump')) {
-    return 'assets/vehicle_photos/truck_mounted_pump.png';
-  }
-  if (type.contains('pickup')) {
-    return 'assets/vehicle_photos/pickup.png';
-  }
-  return null;
-}
-
-IconData _assetIcon(VehicleAsset asset) {
-  final String type = <String?>[
-    asset.vehicleType,
-    asset.make,
-    asset.model,
-    asset.assetNo,
-  ].whereType<String>().join(' ').toLowerCase();
-  if (type.contains('loader')) return Icons.construction_outlined;
-  if (type.contains('bus') || type.contains('hiace')) {
-    return Icons.directions_bus_outlined;
-  }
-  if (type.contains('pickup')) return Icons.airport_shuttle_outlined;
-  if (type.contains('generator') || type.contains('chiller')) {
-    return Icons.precision_manufacturing_outlined;
-  }
-  if (type.contains('trailer')) return Icons.rv_hookup_outlined;
-  return Icons.local_shipping_outlined;
 }
 
 /// Joins the non-blank values in [parts] with [separator]. Returns null when

@@ -32,6 +32,7 @@ class TpInput extends StatelessWidget {
     this.inputFormatters,
     this.prefixIcon,
     this.suffix,
+    this.textStyle,
     this.autofocus = false,
     this.onChanged,
     this.onSubmitted,
@@ -57,6 +58,7 @@ class TpInput extends StatelessWidget {
   final List<TextInputFormatter>? inputFormatters;
   final IconData? prefixIcon;
   final Widget? suffix;
+  final TextStyle? textStyle;
   final bool autofocus;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
@@ -105,7 +107,7 @@ class TpInput extends StatelessWidget {
           autofocus: autofocus,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
-          style: text.bodyLarge,
+          style: textStyle ?? text.bodyLarge,
           decoration: InputDecoration(
             hintText: hint,
             errorText: errorText,

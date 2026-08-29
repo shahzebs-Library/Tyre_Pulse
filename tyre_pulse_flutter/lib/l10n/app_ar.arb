@@ -455,7 +455,7 @@
   "checklistApprovalSignatureSavedLabel": "تم حفظ التوقيع",
   "checklistApprovalSignatureRedraw": "ارسم توقيعًا جديدًا",
 
-  "meterLogNavTitle": "سجل القراءة اليومي",
+  "meterLogNavTitle": "تسجيل قراءة العداد",
   "meterLogWorkspaceLoadingMessage": "لا تزال بيانات مساحة العمل قيد التحميل. يرجى المحاولة مرة أخرى بعد لحظات.",
   "meterLogAssetLabel": "الأصل",
   "meterLogAssetHint": "اكتب رقم الأصل أو امسحه ضوئيًا",
@@ -507,7 +507,7 @@
   "meterLogRecentLoadErrorMessage": "تعذّر تحميل القراءات الأخيرة.",
   "meterLogRecentKmValue": "{km} كم",
 
-  "washNavTitle": "غسيل المركبات",
+  "washNavTitle": "تسجيل غسيل المركبة",
   "washWorkspaceLoadingMessage": "لا تزال بيانات مساحة العمل قيد التحميل. يرجى المحاولة مرة أخرى بعد لحظات.",
   "washDueTitle": "بحاجة إلى الغسيل",
   "washDueNone": "لا توجد مركبات بحاجة إلى الغسيل حاليًا.",

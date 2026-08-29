@@ -443,7 +443,6 @@ class _ChecklistApprovalReviewScreenState
       ],
     );
   }
-
 }
 
 /// Mirrors `decisionRequirementError`'s own branch order exactly, so the
@@ -772,7 +771,9 @@ class _ApprovalOutcomeCard extends StatelessWidget {
       (int count, List<String> photos) => count + photos.length,
     );
     final Set<String> signatures = <String>{
-      ...item.signatures.values.where((String value) => value.trim().isNotEmpty),
+      ...item.signatures.values.where(
+        (String value) => value.trim().isNotEmpty,
+      ),
       if (item.signatureData?.trim().isNotEmpty ?? false) item.signatureData!,
     };
     return TpCard(
@@ -880,7 +881,11 @@ class _OutcomeStat extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconLg, color: TpPalette.of(context).primary),
+          Icon(
+            icon,
+            size: TpSizing.iconLg,
+            color: TpPalette.of(context).primary,
+          ),
           const SizedBox(height: TpSpace.xs),
           Text(
             value,

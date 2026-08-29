@@ -652,13 +652,13 @@ class _NewInspectionHero extends StatelessWidget {
                     excludeFromSemantics: true,
                   ),
                 ),
-                PositionedDirectional(
+                const PositionedDirectional(
                   start: 0,
                   top: 0,
                   bottom: 0,
                   width: 224,
                   child: DecoratedBox(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: AlignmentDirectional.centerStart,
                         end: AlignmentDirectional.centerEnd,

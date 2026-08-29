@@ -12,6 +12,8 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/pm_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/presentation/pm_copy.dart';
@@ -92,20 +94,57 @@ class _PreventiveMaintenanceScreenState
           TpSpace.xxxl,
         ),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _PmMetric(value: overdue, label: copy('overdue')),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(child: _PmMetric(value: soon, label: copy('dueSoon'))),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: _PmMetric(value: plans.length, label: copy('active')),
-              ),
-            ],
+          Text(
+            copy('title'),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
           ),
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            copy('active'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: TpPalette.of(context).textSecondary,
+                ),
+          ),
+          const SizedBox(height: TpSpace.lg),
+          TpCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.sm,
+              vertical: TpSpace.lg,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: _PmMetric(
+                    value: overdue,
+                    label: copy('overdue'),
+                    icon: Icons.warning_amber_rounded,
+                    status: TpStatus.critical,
+                  ),
+                ),
+                const _PmMetricDivider(),
+                Expanded(
+                  child: _PmMetric(
+                    value: soon,
+                    label: copy('dueSoon'),
+                    icon: Icons.schedule_rounded,
+                    status: TpStatus.warning,
+                  ),
+                ),
+                const _PmMetricDivider(),
+                Expanded(
+                  child: _PmMetric(
+                    value: plans.length,
+                    label: copy('active'),
+                    icon: Icons.assignment_turned_in_outlined,
+                    status: TpStatus.ok,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TpSpace.lg),
           SegmentedButton<bool>(
             segments: <ButtonSegment<bool>>[
               ButtonSegment<bool>(value: true, label: Text(copy('due'))),
@@ -115,7 +154,14 @@ class _PreventiveMaintenanceScreenState
             onSelectionChanged: (Set<bool> value) =>
                 setState(() => dueOnly = value.single),
           ),
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.lg),
+          Text(
+            dueOnly ? copy('due') : copy('all'),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: TpSpace.sm),
           if (visible.isEmpty)
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.45,
@@ -155,19 +201,58 @@ class _PreventiveMaintenanceScreenState
 }
 
 class _PmMetric extends StatelessWidget {
-  const _PmMetric({required this.value, required this.label});
+  const _PmMetric({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.status,
+  });
+
   final int value;
   final String label;
+  final IconData icon;
+  final TpStatus status;
 
   @override
-  Widget build(BuildContext context) => TpCard(
-        padding: const EdgeInsets.all(TpSpace.md),
-        child: Column(
-          children: <Widget>[
-            Text('$value', style: Theme.of(context).textTheme.headlineSmall),
-            Text(label, textAlign: TextAlign.center),
-          ],
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).forStatus(status);
+    return Column(
+      children: <Widget>[
+        DecoratedBox(
+          decoration: BoxDecoration(color: colors.soft, shape: BoxShape.circle),
+          child: Padding(
+            padding: const EdgeInsets.all(TpSpace.sm),
+            child: Icon(icon, color: colors.onSoft, size: TpSizing.iconLg),
+          ),
         ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          '$value',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: colors.base,
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ],
+    );
+  }
+}
+
+class _PmMetricDivider extends StatelessWidget {
+  const _PmMetricDivider();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 74,
+        color: TpPalette.of(context).border,
       );
 }
 
@@ -199,6 +284,14 @@ class _PmPlanCard extends StatelessWidget {
       if (plan.site != null) plan.site!,
       if (plan.assetCategory != null) plan.assetCategory!,
     ];
+    final VehicleAsset asset = VehicleAsset(
+      id: plan.id,
+      assetNo: plan.assetNo,
+      vehicleType: plan.assetCategory,
+      site: plan.site,
+      status: plan.status,
+    );
+    final String? photo = vehiclePhotoAsset(asset);
     return TpCard(
       key: Key('pm.plan.${plan.id}'),
       padding: const EdgeInsets.all(TpSpace.md),
@@ -206,17 +299,59 @@ class _PmPlanCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
+              Container(
+                width: 94,
+                height: 82,
+                decoration: BoxDecoration(
+                  color: palette.surfaceAlt,
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                  border: Border.all(color: palette.border),
+                ),
+                clipBehavior: Clip.antiAlias,
+                alignment: Alignment.center,
+                child: photo == null
+                    ? Icon(
+                        vehicleFallbackIcon(asset),
+                        size: 38,
+                        color: palette.primary,
+                      )
+                    : Image.asset(
+                        photo,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
+              ),
+              const SizedBox(width: TpSpace.md),
               Expanded(
-                child: Text(
-                  plan.name ?? plan.assetNo ?? copy('plan'),
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      plan.name ?? plan.assetNo ?? copy('plan'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    if (meta.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        meta.join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: palette.textSecondary),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+              const SizedBox(width: TpSpace.sm),
               TpStatusChip(
                 status: status,
                 label: switch (band) {
@@ -228,26 +363,27 @@ class _PmPlanCard extends StatelessWidget {
               ),
             ],
           ),
-          if (meta.isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.xs),
-            Text(
-              meta.join(' / '),
-              style: TextStyle(color: palette.textSecondary),
-            ),
-          ],
           if (plan.nextDueMeter != null &&
               plan.meterUnit.isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.xs),
-            Text('${plan.nextDueMeter} ${plan.meterUnit}'),
-          ],
-          const SizedBox(height: TpSpace.sm),
-          Align(
-            alignment: AlignmentDirectional.centerEnd,
-            child: FilledButton.icon(
-              onPressed: onRecord,
-              icon: const Icon(Icons.check_circle_outline_rounded),
-              label: Text(copy('record')),
+            const SizedBox(height: TpSpace.md),
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.speed_rounded,
+                  size: TpSizing.iconSm,
+                  color: palette.textMuted,
+                ),
+                const SizedBox(width: TpSpace.xs),
+                Text('${plan.nextDueMeter} ${plan.meterUnit}'),
+              ],
             ),
+          ],
+          const SizedBox(height: TpSpace.md),
+          TpButton.primary(
+            label: copy('record'),
+            icon: Icons.check_circle_outline_rounded,
+            onPressed: onRecord,
+            isFullWidth: true,
           ),
         ],
       ),

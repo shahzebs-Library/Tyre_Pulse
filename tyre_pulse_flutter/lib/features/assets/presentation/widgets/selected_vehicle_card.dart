@@ -124,7 +124,9 @@ class SelectedVehicleCard extends StatelessWidget {
                           meterValue?.trim().isNotEmpty == true)
                         Text(
                           '  ·  ',
-                          style: Theme.of(context).textTheme.labelSmall
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
                               ?.copyWith(color: palette.textMuted),
                         ),
                       if (meterValue?.trim().isNotEmpty == true)

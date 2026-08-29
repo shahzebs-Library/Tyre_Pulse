@@ -482,14 +482,14 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                   inputFormatters: <TextInputFormatter>[
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                   ],
-                  textStyle: Theme.of(context).textTheme.headlineMedium
-                      ?.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 34,
-                        height: 42 / 34,
-                        letterSpacing: 0.2,
-                      ),
+                  textStyle:
+                      Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 34,
+                            height: 42 / 34,
+                            letterSpacing: 0.2,
+                          ),
                   suffix: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: TpSpace.md,

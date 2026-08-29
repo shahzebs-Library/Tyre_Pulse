@@ -250,6 +250,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     workspace: workspace,
                     onSiteTap: () => _showSite(workspace, l10n),
                   ),
+                  if (canInspect) ...<Widget>[
+                    const SizedBox(height: 14),
+                    _NewInspectionHero(
+                      l10n: l10n,
+                      onTap: () =>
+                          context.go(const NewInspectionRoute().location),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   SizedBox(
                     height: 42,
@@ -600,6 +608,126 @@ class _DashboardSearchField extends StatelessWidget {
           borderSide: BorderSide(
             color: palette.primary,
             width: TpBorderWidth.strong,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NewInspectionHero extends StatelessWidget {
+  const _NewInspectionHero({required this.l10n, required this.onTap});
+
+  final AppLocalizations l10n;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    return Semantics(
+      button: true,
+      label: l10n.inspectionNewInspection,
+      child: Material(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 166,
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                PositionedDirectional(
+                  end: -8,
+                  top: 4,
+                  bottom: 0,
+                  width: 220,
+                  child: Image.asset(
+                    'assets/login/figma_pump_truck.png',
+                    fit: BoxFit.contain,
+                    alignment: AlignmentDirectional.centerEnd,
+                    filterQuality: FilterQuality.high,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+                PositionedDirectional(
+                  start: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 224,
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: AlignmentDirectional.centerStart,
+                        end: AlignmentDirectional.centerEnd,
+                        colors: <Color>[
+                          Color(0xFF008E45),
+                          Color(0xFF008E45),
+                          Color(0xE6008E45),
+                          Color(0x00008E45),
+                        ],
+                        stops: <double>[0, 0.62, 0.82, 1],
+                      ),
+                    ),
+                  ),
+                ),
+                PositionedDirectional(
+                  start: 20,
+                  top: 18,
+                  bottom: 18,
+                  width: 190,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      const Icon(
+                        Icons.note_add_outlined,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                      const Spacer(),
+                      Text(
+                        l10n.inspectionNewInspection,
+                        style: text.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.loginScopeInspectionsChecklists,
+                        style: text.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PositionedDirectional(
+                  end: 18,
+                  bottom: 18,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                      color: palette.primaryDark,
+                      size: 30,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

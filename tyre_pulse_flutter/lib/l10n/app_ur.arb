@@ -299,6 +299,13 @@
   "checklistSignatureRedraw": "نیا دستخط بنائیں",
 
   "checklistsHomeTitle": "چیک لسٹیں",
+  "checklistsLibraryTitle": "معائنہ لائبریری",
+  "checklistsLibrarySubtitle": "اثاثے کے لیے درست ورک فلو منتخب کریں",
+  "checklistsAvailableCount": "{count} دستیاب",
+  "checklistItemCount": "{count} آئٹمز",
+  "checklistPositionCount": "{count} پوزیشنز",
+  "checklistPhotosOnFailure": "ناکام آئٹمز کے لیے تصاویر درکار ہیں",
+  "checklistStartAction": "شروع کریں",
   "checklistsHistoryAction": "میری چیک لسٹ کی تاریخ",
   "checklistsEmptyTitle": "ابھی بھرنے کے لیے کچھ نہیں",
   "checklistsEmptyMessage": "اس وقت آپ کے لیے کوئی چیک لسٹ، اسائنمنٹ یا نامکمل شیٹ دستیاب نہیں ہے۔",

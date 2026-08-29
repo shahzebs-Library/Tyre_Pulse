@@ -961,6 +961,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get checklistsHomeTitle => 'Checklists';
 
   @override
+  String get checklistsLibraryTitle => 'Inspection library';
+
+  @override
+  String get checklistsLibrarySubtitle =>
+      'Choose the correct workflow for the asset';
+
+  @override
+  String checklistsAvailableCount(int count) {
+    return '$count available';
+  }
+
+  @override
+  String checklistItemCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String checklistPositionCount(int count) {
+    return '$count positions';
+  }
+
+  @override
+  String get checklistPhotosOnFailure => 'Photos required on failed items';
+
+  @override
+  String get checklistStartAction => 'Start';
+
+  @override
   String get checklistsHistoryAction => 'My checklist history';
 
   @override

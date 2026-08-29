@@ -20,6 +20,7 @@ import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
 
 abstract final class TasksScreenKeys {
   static Key task(String id) => ValueKey<String>('tasks.task.$id');
+  static const Key stats = ValueKey<String>('tasks.stats');
   static const Key todayTab = ValueKey<String>('tasks.tab.today');
   static const Key inProgressTab = ValueKey<String>('tasks.tab.in-progress');
   static const Key completedTab = ValueKey<String>('tasks.tab.completed');
@@ -149,6 +150,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final List<TaskItem> shown = filterTasks(_items, _filter);
     return Column(
       children: <Widget>[
+        _TaskStats(items: _items, copy: copy),
         _TaskTabs(
           selected: _filter,
           todayCount: filterTasks(_items, TaskBoardFilter.today).length,
@@ -186,6 +188,114 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _TaskStats extends StatelessWidget {
+  const _TaskStats({required this.items, required this.copy});
+
+  final List<TaskItem> items;
+  final TasksCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime now = DateTime.now();
+    final int inProgress = items.where(isTaskInProgress).length;
+    final int completed = items.where(isTaskCompleted).length;
+    final int urgent = items.where((TaskItem item) {
+      return isTaskUrgent(item, now);
+    }).length;
+
+    return Padding(
+      key: TasksScreenKeys.stats,
+      padding: const EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        TpSpace.md,
+        TpSpace.lg,
+        TpSpace.md,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _TaskStatCard(
+              value: inProgress,
+              label: copy('inProgress'),
+              status: TpStatus.warning,
+            ),
+          ),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: _TaskStatCard(
+              value: completed,
+              label: copy('completed'),
+              status: TpStatus.ok,
+            ),
+          ),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: _TaskStatCard(
+              value: urgent,
+              label: copy('urgent'),
+              status: TpStatus.critical,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskStatCard extends StatelessWidget {
+  const _TaskStatCard({
+    required this.value,
+    required this.label,
+    required this.status,
+  });
+
+  final int value;
+  final String label;
+  final TpStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatusColors colors = palette.forStatus(status);
+    return SizedBox(
+      height: 96,
+      child: TpCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.md,
+          vertical: TpSpace.md,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '$value',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: colors.onSoft,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 26,
+                    height: 32 / 26,
+                    letterSpacing: -0.3,
+                  ),
+            ),
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              label.toUpperCase(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: palette.textMuted,
+                    fontWeight: FontWeight.w600,
+                    height: 16 / 12,
+                    letterSpacing: 0.2,
+                  ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -425,133 +535,144 @@ class _TaskCard extends StatelessWidget {
     final String? site = item.site;
     final String priority = item.priority ?? copy('normal');
     final List<String> meta = <String>[
-      if (asset != null) asset,
       if (site != null) site,
     ];
     final bool hasDetails = item.description != null ||
         item.assignedTo != null ||
         item.dueDate != null;
+    final TpStatus tone = switch (section) {
+      TaskBoardSection.urgent => TpStatus.critical,
+      TaskBoardSection.inProgress => TpStatus.warning,
+      TaskBoardSection.upcoming => TpStatus.info,
+      TaskBoardSection.completed => TpStatus.ok,
+    };
+    final TpStatusColors statusColors = palette.forStatus(tone);
+    final String badgeLabel = (item.status ?? priority).toUpperCase();
+    final String? dueLabel;
+    if (item.dueDate == null) {
+      dueLabel = null;
+    } else {
+      final String date = MaterialLocalizations.of(context)
+          .formatMediumDate(item.dueDate!.toLocal());
+      dueLabel = '${copy('due')} $date';
+    }
 
     return TpCard(
       key: TasksScreenKeys.task(item.id),
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
-      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: TpSpace.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.lg,
+        vertical: TpSpace.md,
+      ),
       borderColor: palette.border,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(TpRadius.lg - 1),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      onTap: hasDetails ? onToggleDetails : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              ColoredBox(color: accent, child: const SizedBox(width: 4)),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    TpSpace.md,
-                    TpSpace.md,
-                    TpSpace.sm,
-                    TpSpace.md,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                          const SizedBox(width: TpSpace.sm),
-                          _CompactBadge(
-                            label: priority,
-                            color: accent,
-                            background: section == TaskBoardSection.urgent
-                                ? palette.critical.soft
-                                : palette.surfaceAlt,
-                          ),
-                        ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (asset != null)
+                      Text(
+                        asset,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: palette.primary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                  height: 18 / 14,
+                                  letterSpacing: 0.4,
+                                ),
                       ),
-                      if (meta.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: TpSpace.xs),
-                        TpIdentifierText(
-                          meta.join('  •  '),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: palette.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                        ),
-                      ],
-                      if (item.description != null) ...<Widget>[
-                        const SizedBox(height: TpSpace.xs),
-                        Text(
-                          item.description!,
-                          maxLines: expanded ? null : 2,
-                          overflow: expanded ? null : TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: palette.textMuted),
-                        ),
-                      ],
-                      if (expanded) ...<Widget>[
-                        const SizedBox(height: TpSpace.sm),
-                        Divider(height: 1, color: palette.border),
-                        const SizedBox(height: TpSpace.sm),
-                        if (item.assignedTo != null)
-                          _DetailLine(
-                            icon: Icons.person_outline_rounded,
-                            label: copy('assigned'),
-                            value: item.assignedTo!,
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w700,
+                            height: 22 / 16,
                           ),
-                        if (item.dueDate != null)
-                          _DetailLine(
-                            icon: Icons.schedule_rounded,
-                            label: copy('due'),
-                            value: MaterialLocalizations.of(context)
-                                .formatMediumDate(item.dueDate!.toLocal()),
-                          ),
-                        if (item.status != null)
-                          _DetailLine(
-                            icon: Icons.flag_outlined,
-                            label: copy('status'),
-                            value: item.status!,
-                          ),
-                      ],
-                      if (hasDetails) ...<Widget>[
-                        const SizedBox(height: TpSpace.xs),
-                        Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: TextButton.icon(
-                            onPressed: onToggleDetails,
-                            iconAlignment: IconAlignment.end,
-                            icon: Icon(
-                              expanded
-                                  ? Icons.keyboard_arrow_up_rounded
-                                  : (TpDirection.isRtl(context)
-                                      ? Icons.arrow_back_ios_new_rounded
-                                      : Icons.arrow_forward_ios_rounded),
-                              size: TpSizing.iconSm,
-                            ),
-                            label: Text(copy('details')),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              _CompactBadge(
+                label: badgeLabel,
+                color: statusColors.onSoft,
+                background: statusColors.soft,
               ),
             ],
           ),
-        ),
+          if (meta.isNotEmpty || item.dueDate != null) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    <String>[
+                      ...meta,
+                      if (dueLabel != null) dueLabel,
+                    ].join('  •  '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: palette.textMuted,
+                          fontWeight: FontWeight.w600,
+                          height: 16 / 12,
+                          letterSpacing: 0.2,
+                        ),
+                  ),
+                ),
+                if (hasDetails)
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : (TpDirection.isRtl(context)
+                            ? Icons.arrow_back_ios_new_rounded
+                            : Icons.arrow_forward_ios_rounded),
+                    size: TpSizing.iconSm,
+                    color: accent,
+                  ),
+              ],
+            ),
+          ],
+          if (item.description != null) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              item.description!,
+              maxLines: expanded ? null : 2,
+              overflow: expanded ? null : TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+            ),
+          ],
+          if (expanded) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Divider(height: 1, color: palette.border),
+            const SizedBox(height: TpSpace.sm),
+            if (item.assignedTo != null)
+              _DetailLine(
+                icon: Icons.person_outline_rounded,
+                label: copy('assigned'),
+                value: item.assignedTo!,
+              ),
+            if (item.status != null)
+              _DetailLine(
+                icon: Icons.flag_outlined,
+                label: copy('status'),
+                value: item.status!,
+              ),
+          ],
+        ],
       ),
     );
   }

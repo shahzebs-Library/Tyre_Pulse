@@ -823,6 +823,38 @@
 
   "checklistsHomeTitle": "Checklists",
   "@checklistsHomeTitle": {},
+  "checklistsLibraryTitle": "Inspection library",
+  "@checklistsLibraryTitle": {},
+  "checklistsLibrarySubtitle": "Choose the correct workflow for the asset",
+  "@checklistsLibrarySubtitle": {},
+  "checklistsAvailableCount": "{count} available",
+  "@checklistsAvailableCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistItemCount": "{count} items",
+  "@checklistItemCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistPositionCount": "{count} positions",
+  "@checklistPositionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "checklistPhotosOnFailure": "Photos required on failed items",
+  "@checklistPhotosOnFailure": {},
+  "checklistStartAction": "Start",
+  "@checklistStartAction": {},
   "checklistsHistoryAction": "My checklist history",
   "@checklistsHistoryAction": {},
   "checklistsEmptyTitle": "Nothing to fill yet",

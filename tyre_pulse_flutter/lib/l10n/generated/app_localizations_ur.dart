@@ -963,6 +963,34 @@ class AppLocalizationsUr extends AppLocalizations {
   String get checklistsHomeTitle => 'چیک لسٹیں';
 
   @override
+  String get checklistsLibraryTitle => 'معائنہ لائبریری';
+
+  @override
+  String get checklistsLibrarySubtitle =>
+      'اثاثے کے لیے درست ورک فلو منتخب کریں';
+
+  @override
+  String checklistsAvailableCount(int count) {
+    return '$count دستیاب';
+  }
+
+  @override
+  String checklistItemCount(int count) {
+    return '$count آئٹمز';
+  }
+
+  @override
+  String checklistPositionCount(int count) {
+    return '$count پوزیشنز';
+  }
+
+  @override
+  String get checklistPhotosOnFailure => 'ناکام آئٹمز کے لیے تصاویر درکار ہیں';
+
+  @override
+  String get checklistStartAction => 'شروع کریں';
+
+  @override
   String get checklistsHistoryAction => 'میری چیک لسٹ کی تاریخ';
 
   @override

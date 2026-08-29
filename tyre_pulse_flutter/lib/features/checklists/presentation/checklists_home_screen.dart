@@ -187,6 +187,10 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
                 icon: Icons.checklist_outlined,
               ),
             ),
+          if (!nothingAtAll) ...<Widget>[
+            _LibraryIntro(count: _templates.length, l10n: l10n),
+            const SizedBox(height: TpSpace.lg),
+          ],
           if (_drafts.isNotEmpty) ...<Widget>[
             _SectionHeader(label: l10n.checklistsUnfinishedSection),
             for (final ChecklistDraftHeader d in _drafts)
@@ -200,12 +204,66 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
             const SizedBox(height: TpSpace.lg),
           ],
           if (_templates.isNotEmpty) ...<Widget>[
-            _SectionHeader(label: l10n.checklistsAvailableSection),
+            if (_drafts.isNotEmpty || _assignments.isNotEmpty)
+              _SectionHeader(label: l10n.checklistsAvailableSection),
             for (final ChecklistTemplateRecord t in _templates)
-              _TemplateRow(record: t, onTap: () => _openTemplate(t)),
+              _TemplateRow(
+                record: t,
+                l10n: l10n,
+                onTap: () => _openTemplate(t),
+              ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _LibraryIntro extends StatelessWidget {
+  const _LibraryIntro({required this.count, required this.l10n});
+
+  final int count;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                l10n.checklistsLibraryTitle,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 21,
+                      height: 27 / 21,
+                      letterSpacing: -0.2,
+                    ),
+              ),
+              const SizedBox(height: TpSpace.xs),
+              Text(
+                l10n.checklistsLibrarySubtitle,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 15,
+                      height: 22 / 15,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: TpSpace.sm),
+        _CountChip(
+          label: l10n.checklistsAvailableCount(count).toUpperCase(),
+          status: TpStatus.info,
+        ),
+      ],
     );
   }
 }
@@ -277,39 +335,25 @@ class _DraftRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
     return TpCard(
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      margin: const EdgeInsets.only(bottom: TpSpace.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.lg,
+        vertical: TpSpace.md,
+      ),
       onTap: onTap,
-      child: Row(
-        children: <Widget>[
-          Icon(
-            Icons.edit_note_outlined,
-            color: TpPalette.of(context).info.base,
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  draft.templateName,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                Text(
-                  draft.assetNo.isEmpty
-                      ? l10n.checklistNoAssetLabel
-                      : draft.assetNo,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                Text(
-                  l10n.checklistResumeProgress(draft.filled, draft.total),
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right),
-        ],
+      child: _ChecklistRowLayout(
+        title: draft.templateName,
+        subtitle:
+            draft.assetNo.isEmpty ? l10n.checklistNoAssetLabel : draft.assetNo,
+        footer: l10n.checklistResumeProgress(draft.filled, draft.total),
+        chip: _CountChip(
+          label: '${draft.filled}/${draft.total}',
+          status: TpStatus.info,
+        ),
+        actionLabel: l10n.checklistStartAction,
+        actionColor: palette.primary,
       ),
     );
   }
@@ -323,66 +367,227 @@ class _AssignmentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
     final List<String> subtitleParts = <String>[
       for (final String? v in <String?>[assignment.assetNo, assignment.site])
         if (v != null && v.isNotEmpty) v,
     ];
+    final bool overdue = assignment.status == 'overdue';
     return TpCard(
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      margin: const EdgeInsets.only(bottom: TpSpace.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.lg,
+        vertical: TpSpace.md,
+      ),
       onTap: onTap,
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  assignment.templateName ?? '',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                Text(
-                  subtitleParts.join(' - '),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          TpStatusChip(
-            status: assignment.status == 'overdue'
-                ? TpStatus.critical
-                : TpStatus.info,
-            label: assignment.status ?? 'pending',
-            isCompact: true,
-          ),
-        ],
+      child: _ChecklistRowLayout(
+        title: assignment.templateName ?? '',
+        subtitle: subtitleParts.join('  •  '),
+        footer: assignment.dueDate,
+        chip: _CountChip(
+          label: (assignment.status ?? 'pending').toUpperCase(),
+          status: overdue ? TpStatus.critical : TpStatus.warning,
+        ),
+        actionLabel: l10n.checklistStartAction,
+        actionColor: overdue ? palette.critical.base : palette.primary,
       ),
     );
   }
 }
 
 class _TemplateRow extends StatelessWidget {
-  const _TemplateRow({required this.record, required this.onTap});
+  const _TemplateRow({
+    required this.record,
+    required this.l10n,
+    required this.onTap,
+  });
 
   final ChecklistTemplateRecord record;
+  final AppLocalizations l10n;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final int count =
+        record.template.fields.where((field) => field.type != 'section').length;
+    final String searchable = <String?>[
+      record.template.name,
+      record.category,
+    ].whereType<String>().join(' ').toLowerCase();
+    final bool tyreWorkflow =
+        searchable.contains('tyre') || searchable.contains('tire');
+    final bool usesPhotos = record.template.fields.any(
+      (field) => field.type == 'photo' || field.allowPhoto,
+    );
+    final TpStatus chipStatus = tyreWorkflow
+        ? TpStatus.info
+        : count > 24
+            ? TpStatus.warning
+            : count > 0
+                ? TpStatus.ok
+                : TpStatus.neutral;
+    final String subtitle = record.description ?? record.category ?? '';
+    final String? footer =
+        usesPhotos ? l10n.checklistPhotosOnFailure : record.docPrefix;
+
     return TpCard(
-      margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      margin: const EdgeInsets.only(bottom: TpSpace.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.lg,
+        vertical: TpSpace.md,
+      ),
       onTap: onTap,
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.assignment_outlined, color: TpPalette.of(context).primary),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: Text(
-              record.template.name ?? '',
-              style: Theme.of(context).textTheme.titleSmall,
+      child: _ChecklistRowLayout(
+        title: record.template.name ?? '',
+        subtitle: subtitle,
+        footer: footer,
+        chip: _CountChip(
+          label: (tyreWorkflow
+                  ? l10n.checklistPositionCount(count)
+                  : l10n.checklistItemCount(count))
+              .toUpperCase(),
+          status: chipStatus,
+        ),
+        actionLabel: l10n.checklistStartAction,
+        actionColor: palette.primary,
+      ),
+    );
+  }
+}
+
+class _ChecklistRowLayout extends StatelessWidget {
+  const _ChecklistRowLayout({
+    required this.title,
+    required this.subtitle,
+    required this.footer,
+    required this.chip,
+    required this.actionLabel,
+    required this.actionColor,
+  });
+
+  final String title;
+  final String subtitle;
+  final String? footer;
+  final Widget chip;
+  final String actionLabel;
+  final Color actionColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w700,
+                          height: 22 / 16,
+                        ),
+                  ),
+                  if (subtitle.trim().isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: palette.textMuted,
+                            fontWeight: FontWeight.w600,
+                            height: 16 / 12,
+                            letterSpacing: 0.2,
+                          ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right),
-        ],
+            const SizedBox(width: TpSpace.sm),
+            chip,
+          ],
+        ),
+        const SizedBox(height: TpSpace.sm),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                footer ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      height: 16 / 12,
+                      letterSpacing: 0.2,
+                    ),
+              ),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Text(
+              actionLabel.toUpperCase(),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: actionColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    height: 17 / 13,
+                    letterSpacing: 0.2,
+                  ),
+            ),
+            const SizedBox(width: TpSpace.xs),
+            Icon(
+              Directionality.of(context) == TextDirection.rtl
+                  ? Icons.arrow_back_rounded
+                  : Icons.arrow_forward_rounded,
+              color: actionColor,
+              size: TpSizing.iconSm,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CountChip extends StatelessWidget {
+  const _CountChip({required this.label, required this.status});
+
+  final String label;
+  final TpStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors = TpPalette.of(context).forStatus(status);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.soft,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: 6,
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colors.onSoft,
+                fontWeight: FontWeight.w700,
+                height: 16 / 12,
+                letterSpacing: 0.2,
+              ),
+        ),
       ),
     );
   }

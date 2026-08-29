@@ -299,6 +299,13 @@
   "checklistSignatureRedraw": "رسم توقيع جديد",
 
   "checklistsHomeTitle": "قوائم التحقق",
+  "checklistsLibraryTitle": "مكتبة الفحص",
+  "checklistsLibrarySubtitle": "اختر سير العمل الصحيح للأصل",
+  "checklistsAvailableCount": "{count} متاح",
+  "checklistItemCount": "{count} بندًا",
+  "checklistPositionCount": "{count} موضعًا",
+  "checklistPhotosOnFailure": "الصور مطلوبة للعناصر غير المجتازة",
+  "checklistStartAction": "ابدأ",
   "checklistsHistoryAction": "سجل قوائم التحقق الخاص بي",
   "checklistsEmptyTitle": "لا يوجد شيء لتعبئته الآن",
   "checklistsEmptyMessage": "لا توجد قوائم تحقق أو مهام أو استمارات غير مكتملة متاحة لك حاليًا.",

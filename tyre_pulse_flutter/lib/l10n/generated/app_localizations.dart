@@ -1762,6 +1762,48 @@ abstract class AppLocalizations {
   /// **'Checklists'**
   String get checklistsHomeTitle;
 
+  /// No description provided for @checklistsLibraryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection library'**
+  String get checklistsLibraryTitle;
+
+  /// No description provided for @checklistsLibrarySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose the correct workflow for the asset'**
+  String get checklistsLibrarySubtitle;
+
+  /// No description provided for @checklistsAvailableCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} available'**
+  String checklistsAvailableCount(int count);
+
+  /// No description provided for @checklistItemCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String checklistItemCount(int count);
+
+  /// No description provided for @checklistPositionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} positions'**
+  String checklistPositionCount(int count);
+
+  /// No description provided for @checklistPhotosOnFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos required on failed items'**
+  String get checklistPhotosOnFailure;
+
+  /// No description provided for @checklistStartAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get checklistStartAction;
+
   /// No description provided for @checklistsHistoryAction.
   ///
   /// In en, this message translates to:

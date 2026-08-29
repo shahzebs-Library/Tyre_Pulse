@@ -166,6 +166,7 @@ void main() {
 
       expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v3')), findsNothing);
       final Image vehiclePhoto = tester.widget<Image>(
         find.descendant(
           of: find.byKey(VehiclesListScreenKeys.asset('v1')),
@@ -176,6 +177,12 @@ void main() {
         (vehiclePhoto.image as AssetImage).assetName,
         'assets/vehicle_photos/concrete_pump.png',
       );
+
+      // BUS is not a tyre-carrying class, so the production default filter
+      // correctly keeps it hidden until the user asks to browse every asset.
+      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+      await tester.pumpAndSettle();
+
       final Image busPhoto = tester.widget<Image>(
         find.descendant(
           of: find.byKey(VehiclesListScreenKeys.asset('v3')),

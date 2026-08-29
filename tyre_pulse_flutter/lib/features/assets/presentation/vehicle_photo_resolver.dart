@@ -21,8 +21,7 @@ String? vehiclePhotoAsset(VehicleAsset asset) {
   if (type.contains('wheel loader') || type.contains('loader')) {
     return 'assets/vehicle_photos/wheel_loader.png';
   }
-  if (type.contains('concrete pump') ||
-      type.contains('pump truck')) {
+  if (type.contains('concrete pump') || type.contains('pump truck')) {
     return 'assets/vehicle_photos/concrete_pump.png';
   }
   if (type.contains('truck mounted pump') || type.contains('boom pump')) {

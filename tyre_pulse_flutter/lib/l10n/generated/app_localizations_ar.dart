@@ -2495,8 +2495,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get loginAppSubtitle => 'تطبيق المفتش';
 
   @override
-  String get loginTagline =>
-      'الأسطول · الورشة · الفحوصات · الإطارات · السلامة';
+  String get loginTagline => 'الأسطول · الورشة · الفحوصات · الإطارات · السلامة';
 
   @override
   String get loginCardTitle => 'تسجيل الدخول';

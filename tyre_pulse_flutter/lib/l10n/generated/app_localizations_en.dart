@@ -2491,8 +2491,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginAppSubtitle => 'Inspector App';
 
   @override
-  String get loginTagline =>
-      'Fleet · Workshop · Inspections · Tyres · Safety';
+  String get loginTagline => 'Fleet · Workshop · Inspections · Tyres · Safety';
 
   @override
   String get loginCardTitle => 'Sign In';

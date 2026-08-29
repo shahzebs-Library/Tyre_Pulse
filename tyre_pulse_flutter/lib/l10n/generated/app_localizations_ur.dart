@@ -1330,7 +1330,7 @@ class AppLocalizationsUr extends AppLocalizations {
   String get checklistApprovalsStatusNoApproval => 'منظوری کی ضرورت نہیں';
 
   @override
-  String get checklistApprovalReviewTitle => 'منظوری';
+  String get checklistApprovalReviewTitle => 'چیک لسٹ کی منظوری';
 
   @override
   String get checklistApprovalLoadErrorMessage =>

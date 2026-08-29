@@ -96,6 +96,8 @@ import 'package:tyre_pulse/features/approvals/domain/approval_decision_requireme
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_status_chip.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_field.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
 import 'package:tyre_pulse/features/checklists/presentation/widgets/checklist_field_answer_tile.dart';
@@ -342,14 +344,13 @@ class _ChecklistApprovalReviewScreenState
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
-    final ChecklistApprovalItem? item = _item;
-    final String title = item == null
-        ? l10n.checklistApprovalReviewTitle
-        : _titleFor(item, l10n.checklistApprovalFallbackTitle);
 
     return TpScaffold(
       backFallback: fallback,
-      appBar: TpAppBar(title: title, backFallback: fallback),
+      appBar: TpAppBar(
+        title: l10n.checklistApprovalReviewTitle,
+        backFallback: fallback,
+      ),
       body: _body(l10n),
     );
   }
@@ -370,6 +371,8 @@ class _ChecklistApprovalReviewScreenState
 
     final workspace = ref.watch(workspaceContextProvider);
     final ApprovalStage? stage = _stage;
+    final ApprovalStatusSummary summary =
+        statusSummary(_templateLike, item.asSubmissionLike);
     final bool myTurn = canDecide(
       _templateLike,
       item.asSubmissionLike,
@@ -385,14 +388,7 @@ class _ChecklistApprovalReviewScreenState
         TpSpace.xxl,
       ),
       children: <Widget>[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ChecklistApprovalStatusChip(
-            summary: statusSummary(_templateLike, item.asSubmissionLike),
-          ),
-        ),
-        const SizedBox(height: TpSpace.md),
-        _SummaryCard(item: item),
+        _ApprovalSummaryCard(item: item, summary: summary),
         const SizedBox(height: TpSpace.lg),
         Text(
           l10n.checklistApprovalSignOffsTitle,
@@ -400,6 +396,8 @@ class _ChecklistApprovalReviewScreenState
         ),
         const SizedBox(height: TpSpace.sm),
         _SignOffLadder(item: item, templateInfo: _templateInfo, l10n: l10n),
+        const SizedBox(height: TpSpace.lg),
+        _ApprovalOutcomeCard(item: item),
         const SizedBox(height: TpSpace.lg),
         Text(
           l10n.checklistApprovalResponsesTitle,
@@ -443,13 +441,6 @@ class _ChecklistApprovalReviewScreenState
           ),
       ],
     );
-  }
-
-  static String _titleFor(ChecklistApprovalItem item, String fallback) {
-    final String title = item.title?.trim() ?? '';
-    if (title.isNotEmpty) return title;
-    final String templateName = item.templateName?.trim() ?? '';
-    return templateName.isNotEmpty ? templateName : fallback;
   }
 }
 
@@ -546,59 +537,384 @@ String? _formatDateTime(String? iso) {
   return '$y-$m-$d $hh:$mm';
 }
 
+String _submissionTitle(ChecklistApprovalItem item, String fallback) {
+  final String title = item.title?.trim() ?? '';
+  if (title.isNotEmpty) return title;
+  final String templateName = item.templateName?.trim() ?? '';
+  return templateName.isNotEmpty ? templateName : fallback;
+}
+
 Uint8List _decodeSignatureDataUrl(String dataUrl) {
   final int comma = dataUrl.indexOf(',');
   final String b64 = comma < 0 ? dataUrl : dataUrl.substring(comma + 1);
   return base64Decode(b64);
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.item});
+class _ApprovalSummaryCard extends StatelessWidget {
+  const _ApprovalSummaryCard({required this.item, required this.summary});
+
+  final ChecklistApprovalItem item;
+  final ApprovalStatusSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final VehicleAsset asset = VehicleAsset(
+      id: item.id,
+      assetNo: item.assetNo,
+      site: item.site,
+    );
+    final String? photo = vehiclePhotoAsset(asset);
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final Widget image = _ApprovalVehicleImage(
+            item: item,
+            asset: asset,
+            photo: photo,
+          );
+          final Widget details = _ApprovalSummaryDetails(item: item);
+          final Widget status = _ApprovalStatusPanel(summary: summary);
+          if (constraints.maxWidth < 330) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    image,
+                    const SizedBox(width: TpSpace.md),
+                    Expanded(child: details),
+                  ],
+                ),
+                const SizedBox(height: TpSpace.md),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: status,
+                ),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              image,
+              const SizedBox(width: TpSpace.md),
+              Expanded(child: details),
+              const SizedBox(width: TpSpace.sm),
+              status,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ApprovalVehicleImage extends StatelessWidget {
+  const _ApprovalVehicleImage({
+    required this.item,
+    required this.asset,
+    required this.photo,
+  });
+
+  final ChecklistApprovalItem item;
+  final VehicleAsset asset;
+  final String? photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Container(
+      width: 92,
+      height: 124,
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: palette.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: photo == null
+          ? Icon(
+              vehicleFallbackIcon(asset),
+              color: palette.textMuted,
+              size: 44,
+            )
+          : Image.asset(
+              photo!,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              semanticLabel: item.assetNo,
+            ),
+    );
+  }
+}
+
+class _ApprovalSummaryDetails extends StatelessWidget {
+  const _ApprovalSummaryDetails({required this.item});
 
   final ChecklistApprovalItem item;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    return TpCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _SummaryRow(
-            icon: Icons.description_outlined,
-            text: item.templateName?.trim().isNotEmpty ?? false
-                ? item.templateName!.trim()
-                : l10n.valueUnavailable,
-          ),
-          if (item.documentNo != null)
-            _SummaryRow(icon: Icons.sell_outlined, text: item.documentNo!),
-          if (item.site != null || item.assetNo != null)
-            _SummaryRow(
-              icon: Icons.place_outlined,
-              text: <String?>[
-                item.site,
-                item.assetNo,
-              ].where((v) => v != null && v.isNotEmpty).join(' | '),
-            ),
-          _SummaryRow(
-            icon: Icons.event_outlined,
-            text: _formatDateTime(item.submittedAt) ?? l10n.valueUnavailable,
-          ),
-          if (item.scorePct != null)
-            _SummaryRow(
-              icon: Icons.emoji_events_outlined,
-              text: l10n.checklistApprovalScoreLine(
-                item.scorePct!,
-                item.scorePassed == false
-                    ? l10n.checklistApprovalScoreFailed
-                    : l10n.checklistApprovalScorePassed,
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          _submissionTitle(item, l10n.checklistApprovalFallbackTitle),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
               ),
+        ),
+        if (item.documentNo != null) ...<Widget>[
+          const SizedBox(height: 2),
+          Text(
+            item.documentNo!,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: palette.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+        const SizedBox(height: TpSpace.xs),
+        if (item.assetNo != null)
+          _SummaryRow(
+            icon: Icons.local_shipping_outlined,
+            text: item.assetNo!,
+          ),
+        if (item.site != null)
+          _SummaryRow(icon: Icons.place_outlined, text: item.site!),
+        _SummaryRow(
+          icon: Icons.event_outlined,
+          text: _formatDateTime(item.submittedAt) ?? l10n.valueUnavailable,
+        ),
+        if (item.printedName != null || item.submittedBy != null)
+          _SummaryRow(
+            icon: Icons.person_outline_rounded,
+            text: item.printedName ?? item.submittedBy!,
+          ),
+      ],
+    );
+  }
+}
+
+class _ApprovalStatusPanel extends StatelessWidget {
+  const _ApprovalStatusPanel({required this.summary});
+
+  final ApprovalStatusSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpStatus tone = switch (summary.tone) {
+      ApprovalStatusTone.good => TpStatus.ok,
+      ApprovalStatusTone.bad => TpStatus.critical,
+      ApprovalStatusTone.warn => TpStatus.warning,
+      ApprovalStatusTone.muted => TpStatus.neutral,
+    };
+    final TpStatusColors colors = TpPalette.of(context).forStatus(tone);
+    return Container(
+      width: 104,
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.sm,
+        vertical: TpSpace.md,
+      ),
+      decoration: BoxDecoration(
+        color: colors.soft,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: colors.base),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(
+            summary.tone == ApprovalStatusTone.warn
+                ? Icons.hourglass_top_rounded
+                : summary.tone == ApprovalStatusTone.good
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.info_outline_rounded,
+            size: TpSizing.iconMd,
+            color: colors.onSoft,
+          ),
+          const SizedBox(width: TpSpace.xs),
+          Expanded(
+            child: Text(
+              checklistApprovalStatusLabel(l10n, summary),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.onSoft,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
+          ),
         ],
       ),
     );
   }
+}
+
+class _ApprovalOutcomeCard extends StatelessWidget {
+  const _ApprovalOutcomeCard({required this.item});
+
+  final ChecklistApprovalItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final int photoCount = item.photos.values.fold<int>(
+      0,
+      (int count, List<String> photos) => count + photos.length,
+    );
+    final Set<String> signatures = <String>{
+      ...item.signatures.values.where(
+        (String value) => value.trim().isNotEmpty,
+      ),
+      if (item.signatureData?.trim().isNotEmpty ?? false) item.signatureData!,
+    };
+    return TpCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: <Widget>[
+          if (item.scorePct != null)
+            Padding(
+              padding: const EdgeInsets.all(TpSpace.lg),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          l10n.checklistApprovalScoreLine(
+                            item.scorePct!,
+                            item.scorePassed == false
+                                ? l10n.checklistApprovalScoreFailed
+                                : l10n.checklistApprovalScorePassed,
+                          ),
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: TpSpace.xs),
+                        Text(
+                          '${item.scorePct}%',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: item.scorePassed == false
+                                    ? palette.critical.base
+                                    : palette.ok.base,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    item.scorePassed == false
+                        ? Icons.error_outline_rounded
+                        : Icons.verified_outlined,
+                    color: item.scorePassed == false
+                        ? palette.critical.base
+                        : palette.ok.base,
+                    size: 36,
+                  ),
+                ],
+              ),
+            ),
+          if (item.scorePct != null) Divider(height: 1, color: palette.border),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.sm,
+              vertical: TpSpace.md,
+            ),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: _OutcomeStat(
+                    icon: Icons.fact_check_outlined,
+                    value: '${item.answers.length}',
+                    label: l10n.checklistApprovalResponsesTitle,
+                  ),
+                ),
+                _VerticalDivider(color: palette.border),
+                Expanded(
+                  child: _OutcomeStat(
+                    icon: Icons.photo_library_outlined,
+                    value: '$photoCount',
+                    label: l10n.washPhotosLabel,
+                  ),
+                ),
+                _VerticalDivider(color: palette.border),
+                Expanded(
+                  child: _OutcomeStat(
+                    icon: Icons.draw_outlined,
+                    value: '${signatures.length}',
+                    label: l10n.checklistPrimarySignatureLabel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutcomeStat extends StatelessWidget {
+  const _OutcomeStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(
+            icon,
+            size: TpSizing.iconLg,
+            color: TpPalette.of(context).primary,
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ],
+      );
+}
+
+class _VerticalDivider extends StatelessWidget {
+  const _VerticalDivider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 56,
+        margin: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+        color: color,
+      );
 }
 
 class _SummaryRow extends StatelessWidget {
@@ -647,34 +963,216 @@ class _SignOffLadder extends StatelessWidget {
     );
     final bool twoStage = isTwoStage(templateLike);
 
-    return TpCard(
-      child: Column(
-        children: <Widget>[
-          _RungRow(
-            index: 1,
-            label: l10n.checklistApprovalStageFilledBy,
-            name: item.printedName,
-            at: item.submittedAt,
-            done: true,
-            current: false,
-            signature: item.signatureData,
-          ),
-          for (int i = 0; i < progress.length; i++)
-            _RungRow(
-              index: i + 2,
-              label: progress[i].key == ApprovalStage.areaManager
-                  ? l10n.checklistApprovalStageAreaManager
-                  : twoStage
-                      ? l10n.checklistApprovalStageSupervisor
-                      : l10n.checklistApprovalStageApproval,
-              name: progress[i].name,
-              at: progress[i].at,
-              done: progress[i].done,
-              current: progress[i].current,
-              signature: progress[i].signature,
+    final List<_ApprovalRungData> rungs = <_ApprovalRungData>[
+      _ApprovalRungData(
+        index: 1,
+        label: l10n.checklistApprovalStageFilledBy,
+        name: item.printedName,
+        at: item.submittedAt,
+        done: true,
+        current: false,
+        signature: item.signatureData,
+      ),
+      for (int i = 0; i < progress.length; i++)
+        _ApprovalRungData(
+          index: i + 2,
+          label: progress[i].key == ApprovalStage.areaManager
+              ? l10n.checklistApprovalStageAreaManager
+              : twoStage
+                  ? l10n.checklistApprovalStageSupervisor
+                  : l10n.checklistApprovalStageApproval,
+          name: progress[i].name,
+          at: progress[i].at,
+          done: progress[i].done,
+          current: progress[i].current,
+          signature: progress[i].signature,
+        ),
+      _ApprovalRungData(
+        index: progress.length + 2,
+        label: l10n.checklistApprovalsStatusClosed,
+        name: null,
+        at: item.approvedAt,
+        done: item.approvalStatus == 'approved',
+        current: false,
+        signature: item.approverSignature,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        if (constraints.maxWidth >= 360) {
+          return TpCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.md,
+              vertical: TpSpace.lg,
             ),
+            child: _HorizontalSignOffLadder(rungs: rungs),
+          );
+        }
+        return TpCard(
+          child: Column(
+            children: <Widget>[
+              for (final _ApprovalRungData rung in rungs)
+                _RungRow(
+                  index: rung.index,
+                  label: rung.label,
+                  name: rung.name,
+                  at: rung.at,
+                  done: rung.done,
+                  current: rung.current,
+                  signature: rung.signature,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ApprovalRungData {
+  const _ApprovalRungData({
+    required this.index,
+    required this.label,
+    required this.name,
+    required this.at,
+    required this.done,
+    required this.current,
+    required this.signature,
+  });
+
+  final int index;
+  final String label;
+  final String? name;
+  final String? at;
+  final bool done;
+  final bool current;
+  final String? signature;
+}
+
+class _HorizontalSignOffLadder extends StatelessWidget {
+  const _HorizontalSignOffLadder({required this.rungs});
+
+  final List<_ApprovalRungData> rungs;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          for (int index = 0; index < rungs.length; index++) ...<Widget>[
+            Expanded(
+              flex: 3,
+              child: _HorizontalRung(rung: rungs[index]),
+            ),
+            if (index < rungs.length - 1)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Container(
+                    height: TpBorderWidth.strong,
+                    color: rungs[index].done
+                        ? TpPalette.of(context).ok.base
+                        : TpPalette.of(context).borderStrong,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      );
+}
+
+class _HorizontalRung extends StatelessWidget {
+  const _HorizontalRung({required this.rung});
+
+  final _ApprovalRungData rung;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final Color color = rung.done
+        ? palette.ok.base
+        : rung.current
+            ? palette.primary
+            : palette.textMuted;
+    final bool hasSignature = rung.signature?.trim().isNotEmpty ?? false;
+    final String? whenText = _formatDateTime(rung.at);
+    final String? isolatedName = rung.name?.trim().isNotEmpty ?? false
+        ? TpDirection.isolateLtr(rung.name!.trim())
+        : null;
+    final String meta = <String?>[
+      isolatedName,
+      whenText,
+    ].where((String? value) => value?.isNotEmpty ?? false).join('\n');
+
+    final Widget child = Semantics(
+      selected: rung.current,
+      button: hasSignature,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: rung.done || rung.current ? color : palette.surface,
+              border: Border.all(color: color, width: 1.5),
+            ),
+            child: Center(
+              child: rung.done
+                  ? Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: palette.onPrimary,
+                    )
+                  : Text(
+                      '${rung.index}',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: rung.current ? palette.onPrimary : color,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Text(
+            rung.label,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: rung.done || rung.current ? color : palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            meta.isEmpty ? l10n.checklistApprovalNotSignedYet : meta,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: rung.current ? palette.primary : palette.textMuted,
+                ),
+          ),
+          if (hasSignature) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Icon(Icons.draw_outlined, size: 14, color: color),
+          ],
         ],
       ),
+    );
+    if (!hasSignature) return child;
+    return InkWell(
+      onTap: () => _RungRow._openSignature(
+        context,
+        rung.label,
+        rung.name,
+        rung.signature!,
+      ),
+      borderRadius: BorderRadius.circular(TpRadius.md),
+      child: child,
     );
   }
 }

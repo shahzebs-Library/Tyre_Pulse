@@ -2383,7 +2383,7 @@ abstract class AppLocalizations {
   /// No description provided for @checklistApprovalReviewTitle.
   ///
   /// In en, this message translates to:
-  /// **'Approval'**
+  /// **'Checklist approval'**
   String get checklistApprovalReviewTitle;
 
   /// No description provided for @checklistApprovalLoadErrorMessage.

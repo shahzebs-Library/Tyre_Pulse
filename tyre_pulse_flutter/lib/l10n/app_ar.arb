@@ -407,7 +407,7 @@
   "checklistApprovalsStatusWaitingApproval": "بانتظار الموافقة",
   "checklistApprovalsStatusNoApproval": "لا حاجة إلى موافقة",
 
-  "checklistApprovalReviewTitle": "الموافقة",
+  "checklistApprovalReviewTitle": "الموافقة على قائمة التحقق",
   "checklistApprovalLoadErrorMessage": "تعذّر تحميل قائمة التحقق هذه. تحقق من اتصالك وحاول مرة أخرى.",
   "checklistApprovalNotFoundTitle": "قائمة التحقق غير موجودة",
   "checklistApprovalNotFoundMessage": "تعذّر العثور على قائمة التحقق هذه. ربما تمت مراجعتها أو إزالتها بالفعل.",

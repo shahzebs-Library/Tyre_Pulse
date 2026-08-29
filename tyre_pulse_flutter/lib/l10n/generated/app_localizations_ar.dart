@@ -1338,7 +1338,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checklistApprovalsStatusNoApproval => 'لا حاجة إلى موافقة';
 
   @override
-  String get checklistApprovalReviewTitle => 'الموافقة';
+  String get checklistApprovalReviewTitle => 'الموافقة على قائمة التحقق';
 
   @override
   String get checklistApprovalLoadErrorMessage =>

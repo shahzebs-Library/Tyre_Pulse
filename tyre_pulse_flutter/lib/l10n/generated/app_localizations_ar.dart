@@ -983,6 +983,38 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checklistsLibrarySubtitle => 'اختر سير العمل الصحيح للأصل';
 
   @override
+  String get checklistsAssetSearchHint => 'امسح رمز QR أو أدخل رقم الأصل';
+
+  @override
+  String get checklistsLanguageStorageHint =>
+      'تُخزَّن الإجابات بشكل موحّد عبر اللغات';
+
+  @override
+  String get checklistsRequiredForAsset => 'مطلوب لهذا الأصل';
+
+  @override
+  String get checklistsGeneralLibraryTitle => 'مكتبة قوائم التحقق العامة';
+
+  @override
+  String get checklistsGeneralLibrarySubtitle =>
+      'قوائم تحقق السلامة والوردية والمعدات والغسيل';
+
+  @override
+  String get checklistsTyreInspectionTitle => 'فحص الإطارات';
+
+  @override
+  String get checklistsTyreInspectionSubtitle =>
+      'سير عمل مخصص للمحاور والإطارات الداخلية والخارجية';
+
+  @override
+  String checklistsAssetHistoryTitle(String assetNo) {
+    return 'سجل قوائم التحقق لـ $assetNo';
+  }
+
+  @override
+  String get checklistsMasterDataVerified => 'تم التحقق من البيانات الرئيسية';
+
+  @override
   String checklistsAvailableCount(int count) {
     return '$count متاح';
   }

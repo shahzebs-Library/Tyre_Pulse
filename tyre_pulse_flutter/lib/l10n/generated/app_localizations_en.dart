@@ -968,6 +968,38 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose the correct workflow for the asset';
 
   @override
+  String get checklistsAssetSearchHint => 'Scan QR or enter asset number';
+
+  @override
+  String get checklistsLanguageStorageHint =>
+      'Answers are stored consistently across languages';
+
+  @override
+  String get checklistsRequiredForAsset => 'Required for this asset';
+
+  @override
+  String get checklistsGeneralLibraryTitle => 'General checklist library';
+
+  @override
+  String get checklistsGeneralLibrarySubtitle =>
+      'Safety, shift, equipment and washing checklists';
+
+  @override
+  String get checklistsTyreInspectionTitle => 'Tyre inspection';
+
+  @override
+  String get checklistsTyreInspectionSubtitle =>
+      'Dedicated axle/inner/outer tyre workflow';
+
+  @override
+  String checklistsAssetHistoryTitle(String assetNo) {
+    return 'Checklist history for $assetNo';
+  }
+
+  @override
+  String get checklistsMasterDataVerified => 'Master data verified';
+
+  @override
   String checklistsAvailableCount(int count) {
     return '$count available';
   }

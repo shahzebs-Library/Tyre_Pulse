@@ -1774,6 +1774,60 @@ abstract class AppLocalizations {
   /// **'Choose the correct workflow for the asset'**
   String get checklistsLibrarySubtitle;
 
+  /// No description provided for @checklistsAssetSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR or enter asset number'**
+  String get checklistsAssetSearchHint;
+
+  /// No description provided for @checklistsLanguageStorageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers are stored consistently across languages'**
+  String get checklistsLanguageStorageHint;
+
+  /// No description provided for @checklistsRequiredForAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for this asset'**
+  String get checklistsRequiredForAsset;
+
+  /// No description provided for @checklistsGeneralLibraryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'General checklist library'**
+  String get checklistsGeneralLibraryTitle;
+
+  /// No description provided for @checklistsGeneralLibrarySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety, shift, equipment and washing checklists'**
+  String get checklistsGeneralLibrarySubtitle;
+
+  /// No description provided for @checklistsTyreInspectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get checklistsTyreInspectionTitle;
+
+  /// No description provided for @checklistsTyreInspectionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dedicated axle/inner/outer tyre workflow'**
+  String get checklistsTyreInspectionSubtitle;
+
+  /// No description provided for @checklistsAssetHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist history for {assetNo}'**
+  String checklistsAssetHistoryTitle(String assetNo);
+
+  /// No description provided for @checklistsMasterDataVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Master data verified'**
+  String get checklistsMasterDataVerified;
+
   /// No description provided for @checklistsAvailableCount.
   ///
   /// In en, this message translates to:

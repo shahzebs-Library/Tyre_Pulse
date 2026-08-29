@@ -26,6 +26,26 @@ import 'package:tyre_pulse/features/checklists/data/checklist_history_repository
 import 'package:tyre_pulse/features/checklists/data/checklist_photo_capture.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_remote_repository.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_submission_repository.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
+
+/// The checklist-content language selected on the asset hub. This is separate
+/// from the app locale: an English app can still show an Arabic, Hindi or Urdu
+/// checklist to the operator. Existing drafts keep their own saved language;
+/// this preference seeds only a newly opened sheet.
+final NotifierProvider<ChecklistContentLanguageController, String>
+    checklistContentLanguageProvider =
+    NotifierProvider<ChecklistContentLanguageController, String>(
+  ChecklistContentLanguageController.new,
+);
+
+final class ChecklistContentLanguageController extends Notifier<String> {
+  @override
+  String build() => kChecklistDefaultLang;
+
+  void select(String language) {
+    state = normalizeLang(language);
+  }
+}
 
 final Provider<ChecklistRemoteRepository> checklistRemoteRepositoryProvider =
     Provider<ChecklistRemoteRepository>(

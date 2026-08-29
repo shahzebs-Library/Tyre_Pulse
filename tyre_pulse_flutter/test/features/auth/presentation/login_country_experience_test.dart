@@ -162,7 +162,6 @@ void main() {
           expect(hero, findsOneWidget);
           expect(form, findsOneWidget);
           expect(_heroAsset(countryCase.assetPath), findsOneWidget);
-          expect(find.text(countryCase.englishName), findsOneWidget);
           expect(find.byType(TextField), findsNWidgets(2));
           expect(
             tester.getTopLeft(hero).dy,

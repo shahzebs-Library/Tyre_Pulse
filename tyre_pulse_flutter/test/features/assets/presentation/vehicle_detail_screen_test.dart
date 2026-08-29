@@ -149,6 +149,14 @@ void main() {
     expect(find.text('315/80R22.5'), findsNWidgets(2));
     expect(find.text('ABC-1234'), findsOneWidget);
     expect(find.text('TR-MIXER'), findsNWidgets(2));
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'assets/vehicle_photos/tri_mixer_perspective.webp',
+        ),
+      ),
+      findsOneWidget,
+    );
     _expectNoStateWidget();
   });
 

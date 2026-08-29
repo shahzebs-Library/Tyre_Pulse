@@ -12,6 +12,13 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 String? vehiclePhotoAsset(VehicleAsset asset) {
   final String type = _searchableVehicleText(asset);
   final String assetNo = asset.assetNo?.trim().toLowerCase() ?? '';
+  if (type.contains('transit mixer') ||
+      type.contains('tri mixer') ||
+      type.contains('tr mixer') ||
+      type.contains('concrete mixer') ||
+      RegExp(r'^tm[-\s]?\d').hasMatch(assetNo)) {
+    return 'assets/vehicle_photos/tri_mixer_perspective.webp';
+  }
   if (type.contains('wheel loader') || type.contains('loader')) {
     return 'assets/vehicle_photos/wheel_loader.png';
   }
@@ -51,4 +58,9 @@ String _searchableVehicleText(VehicleAsset asset) => <String?>[
       asset.make,
       asset.model,
       asset.assetNo,
-    ].whereType<String>().join(' ').toLowerCase();
+    ]
+        .whereType<String>()
+        .join(' ')
+        .toLowerCase()
+        .replaceAll(RegExp(r'[-_/]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');

@@ -63,6 +63,7 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 
 class VehicleDetailScreen extends StatelessWidget {
   const VehicleDetailScreen({required this.assetNo, super.key});
@@ -187,6 +188,7 @@ class _DetailView extends ConsumerWidget {
     final bool canStartInspection = ref.watch(
       canAccessModuleProvider(ModuleKey.inspect),
     );
+    final String? vehiclePhoto = vehiclePhotoAsset(asset);
 
     final List<(String, String?)> fields = <(String, String?)>[
       (l10n.vehiclesFieldFleetNo, asset.fleetNumber),
@@ -255,17 +257,30 @@ class _DetailView extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Container(
-                            width: 58,
-                            height: 58,
+                            width: 126,
+                            height: 92,
                             decoration: BoxDecoration(
-                              color: palette.primarySoft,
+                              color: palette.surfaceAlt,
                               borderRadius: BorderRadius.circular(TpRadius.md),
+                              border: Border.all(color: palette.border),
                             ),
-                            child: Icon(
-                              Icons.local_shipping_outlined,
-                              color: palette.primary,
-                              size: 30,
-                            ),
+                            clipBehavior: Clip.antiAlias,
+                            alignment: Alignment.center,
+                            child: vehiclePhoto == null
+                                ? Icon(
+                                    vehicleFallbackIcon(asset),
+                                    color: palette.primary,
+                                    size: 40,
+                                  )
+                                : Image.asset(
+                                    vehiclePhoto,
+                                    key: ValueKey<String>(vehiclePhoto),
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.high,
+                                    semanticLabel: asset.displayIdentity,
+                                  ),
                           ),
                           const SizedBox(width: TpSpace.md),
                           Expanded(

@@ -645,7 +645,10 @@ class _NewInspectionHero extends StatelessWidget {
                   bottom: 0,
                   width: 220,
                   child: Image.asset(
-                    'assets/login/figma_pump_truck.png',
+                    'assets/vehicle_photos/concrete_pump.png',
+                    key: const ValueKey<String>(
+                      'assets/vehicle_photos/concrete_pump.png',
+                    ),
                     fit: BoxFit.contain,
                     alignment: AlignmentDirectional.centerEnd,
                     filterQuality: FilterQuality.high,

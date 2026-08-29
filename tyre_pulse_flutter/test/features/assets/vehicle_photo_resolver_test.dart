@@ -23,4 +23,17 @@ void main() {
 
     expect(vehiclePhotoAsset(asset), isNull);
   });
+
+  test('TR-MIXER assets resolve to the real perspective mixer artwork', () {
+    const VehicleAsset asset = VehicleAsset(
+      id: 'vehicle-3',
+      assetNo: 'TM-214',
+      vehicleType: 'TR-MIXER',
+    );
+
+    expect(
+      vehiclePhotoAsset(asset),
+      'assets/vehicle_photos/tri_mixer_perspective.webp',
+    );
+  });
 }

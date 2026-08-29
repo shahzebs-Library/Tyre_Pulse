@@ -264,7 +264,10 @@ void main() {
       expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsOneWidget);
       expect(find.text('12-Tyre Configuration'), findsOneWidget);
       expect(find.text('Step 2 of 4'), findsOneWidget);
-      expect(find.text('FRONT'), findsOneWidget);
+      expect(
+        find.byKey(const Key('tyre.diagram.figma_capture_stage')),
+        findsOneWidget,
+      );
       expect(find.text('REAR'), findsOneWidget);
       expect(
         find.byKey(NewInspectionScreenKeys.tyreSelectedCard),

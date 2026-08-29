@@ -144,7 +144,12 @@ void main() {
         _resolved(
           const VehicleFleetListLoaded(
             assets: <VehicleAsset>[
-              VehicleAsset(id: 'v1', assetNo: 'TM514', site: 'NHC'),
+              VehicleAsset(
+                id: 'v1',
+                assetNo: 'TM514',
+                site: 'NHC',
+                vehicleType: 'Concrete Pump',
+              ),
               VehicleAsset(id: 'v2', assetNo: 'MP093', site: 'NHC'),
             ],
             truncated: false,
@@ -155,6 +160,22 @@ void main() {
 
       expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
+      final Image vehiclePhoto = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(VehiclesListScreenKeys.asset('v1')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        (vehiclePhoto.image as AssetImage).assetName,
+        'assets/vehicle_photos/concrete_pump.png',
+      );
+      expect(
+        Theme.of(
+          tester.element(find.byKey(VehiclesListScreenKeys.asset('v1'))),
+        ).brightness,
+        Brightness.light,
+      );
       _expectNoStateWidget();
     },
   );

@@ -36,7 +36,6 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
-import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -120,27 +119,21 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
       vehicleFleetListProvider,
     );
 
-    return Theme(
-      data: TpTheme.dark,
-      child: Builder(
-        builder: (BuildContext darkContext) => TpScaffold(
-          backFallback: widget.backFallback,
-          appBar: TpAppBar(
-            title: l10n.vehiclesTitle,
-            backFallback: widget.backFallback,
-            actions: <Widget>[
-              IconButton(
-                tooltip: l10n.scannerTitle,
-                onPressed: () => darkContext.push(
-                  const ScannerRoute().location,
-                ),
-                icon: const Icon(Icons.qr_code_scanner_rounded),
-              ),
-            ],
+    return TpScaffold(
+      backFallback: widget.backFallback,
+      backgroundColor: TpPalette.of(context).surface,
+      appBar: TpAppBar(
+        title: l10n.appTitle,
+        backFallback: widget.backFallback,
+        actions: <Widget>[
+          IconButton(
+            tooltip: l10n.scannerTitle,
+            onPressed: () => context.push(const ScannerRoute().location),
+            icon: const Icon(Icons.qr_code_scanner_rounded),
           ),
-          body: _buildBody(darkContext, l10n, outcomeAsync),
-        ),
+        ],
       ),
+      body: _buildBody(context, l10n, outcomeAsync),
     );
   }
 
@@ -228,7 +221,19 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(
             TpSpace.lg,
-            TpSpace.md,
+            TpSpace.lg,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: _FleetRegisterHeading(
+            title: l10n.loginScopeFleetAssets,
+            countLabel: l10n.vehiclesCount(assets.length),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.sm,
             TpSpace.lg,
             TpSpace.xs,
           ),
@@ -253,17 +258,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Text(
-              l10n.vehiclesCount(assets.length),
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ),
-        ),
-        const SizedBox(height: TpSpace.xs),
+        const SizedBox(height: TpSpace.sm),
         _ClassChipsRow(
           selected: _classFilter,
           classesPresent: classesPresent,
@@ -324,6 +319,77 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   }
 }
 
+class _FleetRegisterHeading extends StatelessWidget {
+  const _FleetRegisterHeading({
+    required this.title,
+    required this.countLabel,
+  });
+
+  final String title;
+  final String countLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                style: text.headlineMedium?.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                countLabel,
+                style: text.bodyMedium?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.primarySoft,
+            borderRadius: BorderRadius.circular(TpRadius.pill),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  Icons.cloud_done_outlined,
+                  size: 17,
+                  color: palette.primaryDark,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  AppLocalizations.of(context).inspectionStatusSynced,
+                  style: text.labelSmall?.copyWith(
+                    color: palette.primaryDark,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SquareScannerButton extends StatelessWidget {
   const _SquareScannerButton({
     required this.tooltip,
@@ -359,10 +425,12 @@ class _SquareScannerButton extends StatelessWidget {
   }
 }
 
-/// The production fleet row rendered in the compact black/yellow mock style.
-/// The leading artwork slot uses a real Material class icon because the
-/// verified `vehicle_fleet` row has no image column; showing a made-up vehicle
-/// photograph would misrepresent the asset.
+/// The production fleet row rendered in the approved light register style.
+///
+/// The leading artwork is one of the exact vehicle assets supplied with the
+/// Figma hand-off. It is selected only when the real make/model/type text
+/// identifies that class; an unrecognised class keeps the honest generic icon
+/// instead of receiving a random vehicle photograph.
 class _FleetAssetCard extends StatelessWidget {
   const _FleetAssetCard({
     required this.asset,
@@ -395,36 +463,49 @@ class _FleetAssetCard extends StatelessWidget {
     final TpStatusColors statusColors = palette.forStatus(
       vehicleStatusTone(asset.status),
     );
+    final String? photo = _assetPhoto(asset);
 
     return Semantics(
       button: onTap != null,
       label: identity,
       child: Material(
-        color: palette.surfaceAlt,
+        color: palette.surface,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: palette.border),
-          borderRadius: BorderRadius.circular(TpRadius.md),
+          borderRadius: BorderRadius.circular(TpRadius.lg),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(TpSpace.sm),
+            padding: const EdgeInsets.all(TpSpace.md),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Container(
-                  width: 62,
-                  height: 48,
+                  width: 94,
+                  height: 82,
                   decoration: BoxDecoration(
-                    color: palette.surfaceSunken,
-                    borderRadius: BorderRadius.circular(TpRadius.sm),
+                    color: palette.surfaceAlt,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                    border: Border.all(color: palette.border),
                   ),
+                  clipBehavior: Clip.antiAlias,
                   alignment: Alignment.center,
-                  child: Icon(
-                    _assetIcon(asset),
-                    size: 32,
-                    color: palette.primary,
-                  ),
+                  child: photo == null
+                      ? Icon(
+                          _assetIcon(asset),
+                          size: 38,
+                          color: palette.primary,
+                        )
+                      : Image.asset(
+                          photo,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          semanticLabel: identity,
+                        ),
                 ),
                 const SizedBox(width: TpSpace.md),
                 Expanded(
@@ -439,7 +520,7 @@ class _FleetAssetCard extends StatelessWidget {
                         ),
                       ),
                       if (description != null) ...<Widget>[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           description,
                           maxLines: 1,
@@ -449,7 +530,7 @@ class _FleetAssetCard extends StatelessWidget {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 7),
                       Row(
                         children: <Widget>[
                           if (asset.status?.trim().isNotEmpty == true)
@@ -499,6 +580,28 @@ class _FleetAssetCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _assetPhoto(VehicleAsset asset) {
+  final String type = <String?>[
+    asset.vehicleType,
+    asset.make,
+    asset.model,
+    asset.assetNo,
+  ].whereType<String>().join(' ').toLowerCase();
+  if (type.contains('wheel loader') || type.contains('loader')) {
+    return 'assets/vehicle_photos/wheel_loader.png';
+  }
+  if (type.contains('concrete pump') || type.contains('pump truck')) {
+    return 'assets/vehicle_photos/concrete_pump.png';
+  }
+  if (type.contains('truck mounted pump') || type.contains('boom pump')) {
+    return 'assets/vehicle_photos/truck_mounted_pump.png';
+  }
+  if (type.contains('pickup')) {
+    return 'assets/vehicle_photos/pickup.png';
+  }
+  return null;
 }
 
 IconData _assetIcon(VehicleAsset asset) {

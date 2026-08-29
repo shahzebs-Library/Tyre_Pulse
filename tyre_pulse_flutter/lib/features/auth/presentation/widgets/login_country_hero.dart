@@ -23,7 +23,7 @@ abstract final class LoginCountryKeys {
 }
 
 String _assetPath(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => 'assets/login/saudi_arabia_hero.png',
+      LoginCountry.saudiArabia => 'assets/login/figma_city_background.png',
       LoginCountry.unitedArabEmirates =>
         'assets/login/united_arab_emirates_hero.png',
       LoginCountry.egypt => 'assets/login/egypt_hero.png',
@@ -114,6 +114,7 @@ class LoginCountryHero extends StatelessWidget {
                         const SizedBox(width: TpSpace.md),
                         Expanded(
                           child: Semantics(
+                            key: const Key('login.brand.title'),
                             header: true,
                             child: Text(
                               l10n.appTitle,

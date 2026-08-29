@@ -67,7 +67,8 @@ void main() {
       expect(decision, isA<ModuleAccessAllowed>());
     });
 
-    test('a role with no default for the module is refused, not silently '
+    test(
+        'a role with no default for the module is refused, not silently '
         'let through', () {
       // ModuleKey.records is admin-only; Reporter holds no role default and
       // no grant.
@@ -89,7 +90,8 @@ void main() {
       expect(decision, isA<ModuleAccessAllowed>());
     });
 
-    test('a sensitive module with unreadable permission data fails closed '
+    test(
+        'a sensitive module with unreadable permission data fails closed '
         'with the distinct "unavailable" reason, not "not granted"', () {
       final ModuleAccessDecision decision = _resolverFor(
         _permissionsUnavailable,
@@ -101,7 +103,8 @@ void main() {
       );
     });
 
-    test('a non-sensitive module still fails open when permission data is '
+    test(
+        'a non-sensitive module still fails open when permission data is '
         'unreadable, matching resolveModuleAccess\'s own asymmetry', () {
       final ModuleAccessDecision decision = _resolverFor(
         _permissionsUnavailable,
@@ -109,7 +112,8 @@ void main() {
       expect(decision, isA<ModuleAccessAllowed>());
     });
 
-    test('a module string this app version does not recognise is refused, '
+    test(
+        'a module string this app version does not recognise is refused, '
         'never silently allowed', () {
       final ModuleAccessDecision decision = _resolverFor(
         _admin,

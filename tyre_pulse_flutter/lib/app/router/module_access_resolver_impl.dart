@@ -83,7 +83,8 @@ final class RealModuleAccessResolver implements ModuleAccessResolver {
   /// uses this guard rather than the `approvals` module: using the module
   /// there would loosen an admin-only gate to admit every role the
   /// `approvals` module's own role default lists.
-  bool get _isAdminOrAbove => _access.isSuperAdmin || _access.role.isAdministrator;
+  bool get _isAdminOrAbove =>
+      _access.isSuperAdmin || _access.role.isAdministrator;
 
   ModuleAccessDecision _decideModule(RouteModule module) {
     // `RouteModule.value` and `ModuleKey.wireKey` share one string space by

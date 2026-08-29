@@ -191,9 +191,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
-/// The visual anchor shared with Home's richer presentation: one tinted,
-/// high-contrast card that establishes the signed-in identity before any
-/// access facts or account action.
+/// The compact identity block from the approved profile mock.
+///
+/// Only verified profile fields are rendered. The mock contains employee ID
+/// and email examples, but the current `WorkspaceProfile` query does not own
+/// those columns, so this screen does not invent them to fill visual space.
 class _IdentityHero extends StatelessWidget {
   const _IdentityHero({required this.profile});
 
@@ -210,110 +212,155 @@ class _IdentityHero extends StatelessWidget {
 
     return TpCard(
       key: ProfileScreenKeys.hero,
-      background: palette.primarySoft,
-      borderColor: palette.primary.withValues(alpha: 0.32),
-      padding: const EdgeInsets.all(TpSpace.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      background: palette.surface,
+      borderColor: palette.border,
+      padding: const EdgeInsets.all(TpSpace.lg),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Stack(
+            clipBehavior: Clip.none,
             children: <Widget>[
-              DecoratedBox(
+              Container(
+                width: 80,
+                height: 80,
                 decoration: BoxDecoration(
-                  color: palette.primary,
-                  borderRadius: BorderRadius.circular(TpRadius.lg),
+                  shape: BoxShape.circle,
+                  color: palette.primarySoft,
+                  border: Border.all(
+                    color: palette.primary.withValues(alpha: 0.28),
+                  ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(TpSpace.lg),
-                  child: Icon(
-                    Icons.person_outline,
-                    size: TpSizing.iconState,
-                    color: palette.onPrimary,
+                alignment: Alignment.center,
+                child: Text(
+                  _profileInitials(name),
+                  style: text.headlineMedium?.copyWith(
+                    color: palette.primaryDark,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              const SizedBox(width: TpSpace.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      (name == null || name.trim().isEmpty)
-                          ? l10n.valueUnavailable
-                          : name,
-                      style: text.headlineSmall?.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: TpSpace.xs),
-                    Wrap(
-                      spacing: TpSpace.sm,
-                      runSpacing: TpSpace.sm,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: <Widget>[
-                        _IdentityBadge(
-                          label: profile.role.displayName,
-                          background: palette.surface,
-                          foreground: palette.primaryDark,
-                          icon: Icons.badge_outlined,
-                        ),
-                        if (profile.isSuperAdmin)
-                          _IdentityBadge(
-                            label: l10n.profileSuperAdminBadge,
-                            background: palette.info.soft,
-                            foreground: palette.info.onSoft,
-                            icon: Icons.verified_user_outlined,
-                          ),
-                      ],
-                    ),
-                  ],
+              PositionedDirectional(
+                end: 2,
+                bottom: 2,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: profile.isLocked
+                        ? palette.critical.base
+                        : palette.ok.base,
+                    border: Border.all(color: palette.surface, width: 3),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: TpSpace.xl),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.surface.withValues(alpha: 0.78),
-              borderRadius: BorderRadius.circular(TpRadius.md),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: TpSpace.md,
-                vertical: TpSpace.sm,
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(
-                    Icons.location_on_outlined,
-                    size: TpSizing.iconMd,
-                    color: palette.primaryDark,
+          const SizedBox(width: TpSpace.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  (name == null || name.trim().isEmpty)
+                      ? l10n.valueUnavailable
+                      : name,
+                  style: text.titleLarge?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(width: TpSpace.sm),
-                  Expanded(
-                    child: Text(
-                      (site == null || site.trim().isEmpty)
-                          ? l10n.homeSiteStatUnavailable
-                          : site,
-                      style: text.bodyMedium?.copyWith(
-                        color: palette.text,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: TpSpace.xs),
+                _IdentityLine(
+                  icon: Icons.badge_outlined,
+                  value: profile.role.displayName,
+                ),
+                const SizedBox(height: 3),
+                _IdentityLine(
+                  icon: Icons.location_on_outlined,
+                  value: (site == null || site.trim().isEmpty)
+                      ? l10n.homeSiteStatUnavailable
+                      : site,
+                ),
+                const SizedBox(height: 5),
+                _IdentityLine(
+                  icon: profile.isApproved && !profile.isLocked
+                      ? Icons.verified_user_outlined
+                      : Icons.gpp_bad_outlined,
+                  value: profile.isApproved && !profile.isLocked
+                      ? l10n.inspectionStatusSynced
+                      : l10n.accessBlockedMessage,
+                  color: profile.isApproved && !profile.isLocked
+                      ? palette.ok.base
+                      : palette.critical.base,
+                ),
+                if (profile.isSuperAdmin) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  _IdentityBadge(
+                    label: l10n.profileSuperAdminBadge,
+                    background: palette.info.soft,
+                    foreground: palette.info.onSoft,
+                    icon: Icons.admin_panel_settings_outlined,
                   ),
                 ],
-              ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _IdentityLine extends StatelessWidget {
+  const _IdentityLine({
+    required this.icon,
+    required this.value,
+    this.color,
+  });
+
+  final IconData icon;
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color foreground = color ?? palette.textSecondary;
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 16, color: foreground),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _profileInitials(String? raw) {
+  final List<String> words = (raw ?? '')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((String value) => value.isNotEmpty)
+      .toList(growable: false);
+  if (words.isEmpty) return '—';
+  final String first = String.fromCharCode(words.first.runes.first);
+  if (words.length == 1) return first.toUpperCase();
+  final String last = String.fromCharCode(words.last.runes.first);
+  return '$first$last'.toUpperCase();
 }
 
 class _IdentityBadge extends StatelessWidget {

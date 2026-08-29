@@ -429,9 +429,8 @@ class _TemplateRow extends StatelessWidget {
                 ? TpStatus.ok
                 : TpStatus.neutral;
     final String subtitle = record.description ?? record.category ?? '';
-    final String? footer = usesPhotos
-        ? l10n.checklistPhotosOnFailure
-        : record.docPrefix;
+    final String? footer =
+        usesPhotos ? l10n.checklistPhotosOnFailure : record.docPrefix;
 
     return TpCard(
       margin: const EdgeInsets.only(bottom: TpSpace.md),

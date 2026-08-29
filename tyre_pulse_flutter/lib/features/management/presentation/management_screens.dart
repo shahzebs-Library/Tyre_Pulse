@@ -690,9 +690,7 @@ class _CostComposition extends StatelessWidget {
                       height: 18,
                       child: Row(
                         children: <Widget>[
-                          for (int index = 0;
-                              index < measured.length;
-                              index++)
+                          for (int index = 0; index < measured.length; index++)
                             Expanded(
                               flex: (measured[index].cost! / total * 1000)
                                   .round()
@@ -707,7 +705,9 @@ class _CostComposition extends StatelessWidget {
                     ),
                   ),
                 if (total > 0) const SizedBox(height: TpSpace.md),
-                for (int index = 0; index < measured.length; index++) ...<Widget>[
+                for (int index = 0;
+                    index < measured.length;
+                    index++) ...<Widget>[
                   Row(
                     children: <Widget>[
                       Container(

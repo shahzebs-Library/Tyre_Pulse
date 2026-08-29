@@ -120,6 +120,7 @@ void main() {
       );
 
       expect(find.text('Amina Yusuf'), findsOneWidget);
+      expect(find.text('AY'), findsOneWidget);
       expect(find.text('Manager'), findsWidgets);
       expect(find.text('NHC'), findsWidgets);
       expect(find.text('Complete PMV Operations'), findsOneWidget);

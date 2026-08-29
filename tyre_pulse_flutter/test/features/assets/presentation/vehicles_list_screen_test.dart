@@ -151,6 +151,12 @@ void main() {
                 vehicleType: 'Concrete Pump',
               ),
               VehicleAsset(id: 'v2', assetNo: 'MP093', site: 'NHC'),
+              VehicleAsset(
+                id: 'v3',
+                assetNo: 'BUS-062',
+                site: 'NHC',
+                vehicleType: '32-Seater Bus',
+              ),
             ],
             truncated: false,
           ),
@@ -169,6 +175,16 @@ void main() {
       expect(
         (vehiclePhoto.image as AssetImage).assetName,
         'assets/vehicle_photos/concrete_pump.png',
+      );
+      final Image busPhoto = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(VehiclesListScreenKeys.asset('v3')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        (busPhoto.image as AssetImage).assetName,
+        'assets/vehicle_photos/staff_bus.png',
       );
       expect(
         Theme.of(

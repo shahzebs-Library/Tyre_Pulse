@@ -455,7 +455,7 @@
   "checklistApprovalSignatureSavedLabel": "دستخط محفوظ ہو گئے",
   "checklistApprovalSignatureRedraw": "نیا دستخط بنائیں",
 
-  "meterLogNavTitle": "روزانہ میٹر لاگ",
+  "meterLogNavTitle": "میٹر ریڈنگ ریکارڈ کریں",
   "meterLogWorkspaceLoadingMessage": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ براہ کرم تھوڑی دیر بعد دوبارہ کوشش کریں۔",
   "meterLogAssetLabel": "اثاثہ",
   "meterLogAssetHint": "اثاثے کا نمبر ٹائپ کریں یا اسکین کریں",
@@ -507,7 +507,7 @@
   "meterLogRecentLoadErrorMessage": "حالیہ ریڈنگز لوڈ نہیں ہو سکیں۔",
   "meterLogRecentKmValue": "{km} کلومیٹر",
 
-  "washNavTitle": "گاڑی دھلائی",
+  "washNavTitle": "گاڑی کی دھلائی درج کریں",
   "washWorkspaceLoadingMessage": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ براہ کرم تھوڑی دیر بعد دوبارہ کوشش کریں۔",
   "washDueTitle": "دھلائی کے لیے واجب",
   "washDueNone": "فی الحال کوئی گاڑی دھلائی کے لیے واجب نہیں ہے۔",

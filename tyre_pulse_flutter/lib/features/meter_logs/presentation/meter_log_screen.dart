@@ -66,7 +66,9 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
 import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
 import 'package:tyre_pulse/features/meter_logs/meter_logs_providers.dart';
 import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_recent_sheet.dart';
@@ -102,6 +104,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
   bool _siteTouched = false;
   Timer? _lookupDebounce;
   LastOdometerReading? _last;
+  VehicleAsset? _master;
   bool _loadingLast = false;
   MeterLogSignatureCapture? _signature;
   bool _isProcessingContinue = false;
@@ -153,6 +156,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     if (asset.isEmpty) {
       setState(() {
         _last = null;
+        _master = null;
         _loadingLast = false;
       });
       return;
@@ -181,17 +185,19 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     // must never overwrite the panel or the site field for the CURRENT one.
     if (_assetController.text.trim() != asset) return;
 
+    VehicleAsset? resolved;
+    if (assetOutcome is VehicleDetailLoaded) {
+      resolved = assetOutcome.asset;
+    } else if (assetOutcome is VehicleDetailFromCache) {
+      resolved = assetOutcome.asset;
+    }
     setState(() {
       _last = last;
+      _master = resolved;
       _loadingLast = false;
     });
 
-    String? masterSite;
-    if (assetOutcome is VehicleDetailLoaded) {
-      masterSite = assetOutcome.asset.site;
-    } else if (assetOutcome is VehicleDetailFromCache) {
-      masterSite = assetOutcome.asset.site;
-    }
+    final String? masterSite = resolved?.site;
     final String trimmedMasterSite = masterSite?.trim() ?? '';
     if (trimmedMasterSite.isNotEmpty &&
         !_siteTouched &&
@@ -333,6 +339,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     setState(() {
       _signature = null;
       _last = null;
+      _master = null;
       _loadingLast = false;
       _sessionKey = _uuid.v4();
     });
@@ -377,6 +384,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
+    final TpPalette palette = TpPalette.of(context);
 
     return TpScaffold(
       backFallback: fallback,
@@ -400,19 +408,114 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
           TpSpace.xxl,
         ),
         children: <Widget>[
+          if (_master == null)
+            TpCard(
+              child: TpInput(
+                label: l10n.meterLogAssetLabel,
+                controller: _assetController,
+                hint: l10n.meterLogAssetHint,
+                textCapitalization: TextCapitalization.characters,
+                isRequired: true,
+                prefixIcon: Icons.qr_code_scanner_rounded,
+              ),
+            )
+          else
+            SelectedVehicleCard(
+              asset: _master!,
+              changeLabel: l10n.meterLogAssetHint,
+              unavailableLabel: l10n.valueUnavailable,
+              meterValue: _master!.currentKm == null
+                  ? null
+                  : l10n.meterLogRecentKmValue(
+                      formatVehicleOdometer(_master!.currentKm!),
+                    ),
+              onChange: () {
+                _assetController.clear();
+                setState(() => _master = null);
+              },
+            ),
+          const SizedBox(height: TpSpace.md),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.md,
+              vertical: TpSpace.sm,
+            ),
+            decoration: BoxDecoration(
+              color: palette.info.soft,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              border: Border.all(color: palette.info.base),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: palette.info.base,
+                  size: TpSizing.iconSm,
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(
+                  child: Text(
+                    l10n.meterLogEngineHoursHelpWithoutHours,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.info.onSoft,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TpInput(
+                  label: l10n.meterLogOdometerLabel,
+                  controller: _odometerController,
+                  hint: l10n.meterLogOdometerHint,
+                  isRequired: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  textStyle: Theme.of(context).textTheme.headlineMedium
+                      ?.copyWith(
+                        color: palette.text,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 34,
+                        height: 42 / 34,
+                        letterSpacing: 0.2,
+                      ),
+                  suffix: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: TpSpace.md,
+                    ),
+                    child: Text(
+                      l10n.meterLogRecentKmValue('').trim().toUpperCase(),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: palette.textSecondary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                ),
+                if (_assetController.text.trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: TpSpace.md),
+                  _LastReadingPanel(loading: _loadingLast, last: _last),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: TpSpace.md),
           TpCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TpInput(
-                  label: l10n.meterLogAssetLabel,
-                  controller: _assetController,
-                  hint: l10n.meterLogAssetHint,
-                  textCapitalization: TextCapitalization.characters,
-                  isRequired: true,
-                ),
-                const SizedBox(height: TpSpace.md),
                 TpInput(
                   label: l10n.meterLogSiteLabel,
                   controller: _siteController,
@@ -427,25 +530,6 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                       .bodySmall
                       ?.copyWith(color: TpPalette.of(context).textMuted),
                 ),
-              ],
-            ),
-          ),
-          if (_assetController.text.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.md),
-            _LastReadingPanel(loading: _loadingLast, last: _last),
-          ],
-          const SizedBox(height: TpSpace.md),
-          TpCard(
-            child: TpInput(
-              label: l10n.meterLogOdometerLabel,
-              controller: _odometerController,
-              hint: l10n.meterLogOdometerHint,
-              isRequired: true,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
             ),
           ),

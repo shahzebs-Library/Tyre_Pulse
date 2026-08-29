@@ -1486,7 +1486,7 @@ class AppLocalizationsUr extends AppLocalizations {
   String get checklistApprovalSignatureRedraw => 'نیا دستخط بنائیں';
 
   @override
-  String get meterLogNavTitle => 'روزانہ میٹر لاگ';
+  String get meterLogNavTitle => 'میٹر ریڈنگ ریکارڈ کریں';
 
   @override
   String get meterLogWorkspaceLoadingMessage =>
@@ -1660,7 +1660,7 @@ class AppLocalizationsUr extends AppLocalizations {
   }
 
   @override
-  String get washNavTitle => 'گاڑی دھلائی';
+  String get washNavTitle => 'گاڑی کی دھلائی درج کریں';
 
   @override
   String get washWorkspaceLoadingMessage =>

@@ -307,7 +307,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 height: 516 + feedbackExtra,
                 child: _ExactLoginForm(
                   key: const Key('login.form.card'),
-                  countryControlKey: LoginCountryKeys.change,
+                  countryControlKey: const Key('login.country.change'),
                   activeLocale: activeLocale,
                   country: selectedCountry,
                   identifierController: _identifierController,

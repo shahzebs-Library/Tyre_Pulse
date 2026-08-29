@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/features/auth/data/login_country_preference_repository.dart';
 import 'package:tyre_pulse/features/auth/domain/login_country.dart';
 import 'package:tyre_pulse/features/auth/presentation/login_country_preference_provider.dart';
@@ -45,7 +46,7 @@ const List<_CountryCase> _countries = <_CountryCase>[
   _CountryCase(
     country: LoginCountry.unitedArabEmirates,
     englishName: 'United Arab Emirates',
-    assetPath: 'assets/login/united_arab_emirates_hero.png',
+    assetPath: 'assets/login/united_arab_emirates_pmv_hero.webp',
   ),
   _CountryCase(
     country: LoginCountry.egypt,
@@ -115,6 +116,7 @@ Future<_PumpedLogin> _pumpLogin(
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       loginCountryPreferenceRepositoryProvider.overrideWithValue(repository),
+      currentAppVersionProvider.overrideWithValue('2.0'),
     ],
   );
   addTearDown(container.dispose);
@@ -357,7 +359,7 @@ void main() {
       expect(repository.value, LoginCountry.egypt);
       expect(_heroAsset('assets/login/egypt_hero.png'), findsOneWidget);
       expect(
-        _heroAsset('assets/login/united_arab_emirates_hero.png'),
+        _heroAsset('assets/login/united_arab_emirates_pmv_hero.webp'),
         findsNothing,
       );
       expect(find.byType(SnackBar), findsOneWidget);

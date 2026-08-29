@@ -307,6 +307,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 height: 516 + feedbackExtra,
                 child: _ExactLoginForm(
                   key: const Key('login.form.card'),
+                  countryControlKey: LoginCountryKeys.change,
                   activeLocale: activeLocale,
                   country: selectedCountry,
                   identifierController: _identifierController,
@@ -378,6 +379,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 620,
                   child: _ExactLoginForm(
                     key: const Key('login.form.card'),
+                    countryControlKey: const Key('login.country.form_change'),
                     activeLocale: activeLocale,
                     country: selectedCountry,
                     identifierController: _identifierController,
@@ -582,6 +584,7 @@ class _ExactLoginHero extends StatelessWidget {
 
 class _ExactLoginForm extends StatelessWidget {
   const _ExactLoginForm({
+    required this.countryControlKey,
     required this.activeLocale,
     required this.country,
     required this.identifierController,
@@ -604,6 +607,7 @@ class _ExactLoginForm extends StatelessWidget {
     super.key,
   });
 
+  final Key countryControlKey;
   final Locale activeLocale;
   final LoginCountry country;
   final TextEditingController identifierController;
@@ -770,10 +774,11 @@ class _ExactLoginForm extends StatelessWidget {
                   ),
                 Positioned(
                   left: left,
-                  top: 288 + feedbackOffset,
+                  top: 272 + feedbackOffset,
                   width: fieldWidth,
-                  height: 28,
+                  height: TpSizing.minTouchTarget,
                   child: _LoginSecurityLine(
+                    controlKey: countryControlKey,
                     country: country,
                     copy: copy,
                     onTap: onChangeCountry,
@@ -985,11 +990,13 @@ class _LanguageToggle extends StatelessWidget {
 
 class _LoginSecurityLine extends StatelessWidget {
   const _LoginSecurityLine({
+    required this.controlKey,
     required this.country,
     required this.copy,
     required this.onTap,
   });
 
+  final Key controlKey;
   final LoginCountry country;
   final LoginSecurityCopy copy;
   final VoidCallback onTap;
@@ -1005,30 +1012,33 @@ class _LoginSecurityLine extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        key: const Key('login.country.change'),
+        key: controlKey,
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              Icons.shield_outlined,
-              size: 22,
-              color: palette.primary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                copy.secureWorkspace(countryName),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: palette.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+        child: Align(
+          alignment: const Alignment(0, 0.25),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                Icons.shield_outlined,
+                size: 22,
+                color: palette.primary,
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  copy.secureWorkspace(countryName),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: palette.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

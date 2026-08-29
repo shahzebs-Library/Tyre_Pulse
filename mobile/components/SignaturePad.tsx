@@ -27,6 +27,9 @@ import { View, Text, TouchableOpacity, PanResponder, StyleSheet, LayoutChangeEve
 import Svg, { Path, SvgXml } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
 import { useLanguage } from '../contexts/LanguageContext'
+import { legiblePen, PAD_SURFACE } from '../lib/signaturePen'
+
+export { legiblePen, PAD_SURFACE, DEFAULT_PEN } from '../lib/signaturePen'
 
 type Point = { x: number; y: number }
 
@@ -41,39 +44,6 @@ export interface SignaturePadProps {
   height?: number
   penColor?: string
   disabled?: boolean
-}
-
-/** The pad surface. Fixed in BOTH themes: a signature is a document artifact
- *  and is re-rendered on white in every PDF, so it must be dark ink. */
-export const PAD_SURFACE = '#f8fafc'
-export const DEFAULT_PEN = '#0f172a'
-
-/**
- * The pen colour is BAKED INTO the stored SVG, so an illegible pen is not a
- * display bug - it silently stores a signature nobody can ever see, in the app
- * or in the PDF. A caller that passes a theme text colour gets near-white ink
- * in dark mode. So a pen without enough contrast against PAD_SURFACE is
- * refused here rather than trusted. Returns the pen to actually use.
- */
-export function legiblePen(pen?: string | null, surface: string = PAD_SURFACE): string {
-  const lum = (hex?: string | null): number | null => {
-    if (typeof hex !== 'string') return null
-    let h = hex.trim().replace(/^#/, '')
-    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
-    if (h.length === 8) h = h.slice(0, 6)
-    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null
-    const v = (i: number) => {
-      const c = parseInt(h.slice(i, i + 2), 16) / 255
-      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-    }
-    return 0.2126 * v(0) + 0.7152 * v(2) + 0.0722 * v(4)
-  }
-  const p = lum(pen)
-  const s = lum(surface)
-  // A pen we cannot parse is not trusted either - fall back rather than guess.
-  if (p === null || s === null) return DEFAULT_PEN
-  const ratio = (Math.max(p, s) + 0.05) / (Math.min(p, s) + 0.05)
-  return ratio >= 3 ? (pen as string) : DEFAULT_PEN
 }
 
 const STROKE_WIDTH = 2.5

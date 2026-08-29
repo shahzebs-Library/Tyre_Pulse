@@ -344,7 +344,6 @@ class _ChecklistApprovalReviewScreenState
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
-    final ChecklistApprovalItem? item = _item;
 
     return TpScaffold(
       backFallback: fallback,

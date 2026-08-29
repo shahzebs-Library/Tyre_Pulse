@@ -985,8 +985,7 @@ class AppLocalizationsUr extends AppLocalizations {
   }
 
   @override
-  String get checklistPhotosOnFailure =>
-      'ناکام آئٹمز کے لیے تصاویر درکار ہیں';
+  String get checklistPhotosOnFailure => 'ناکام آئٹمز کے لیے تصاویر درکار ہیں';
 
   @override
   String get checklistStartAction => 'شروع کریں';

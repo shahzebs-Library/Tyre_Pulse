@@ -998,8 +998,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get checklistPhotosOnFailure =>
-      'الصور مطلوبة للعناصر غير المجتازة';
+  String get checklistPhotosOnFailure => 'الصور مطلوبة للعناصر غير المجتازة';
 
   @override
   String get checklistStartAction => 'ابدأ';

@@ -983,8 +983,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get checklistPhotosOnFailure =>
-      'Photos required on failed items';
+  String get checklistPhotosOnFailure => 'Photos required on failed items';
 
   @override
   String get checklistStartAction => 'Start';

@@ -22,6 +22,7 @@ import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useLanguage } from '../contexts/LanguageContext'
 import { isOverdueWorkOrder } from '../lib/dailyOpsPriority'
+import { listActionItems, updateActionItem } from '../lib/api/actionCenter'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -120,6 +121,11 @@ export default function DailyOps() {
   const [capped, setCapped]            = useState(false)
   const [queueSeverity, setQueueSeverity] = useState('All')
   const [queueLimit, setQueueLimit] = useState(12)
+  const [actionItems, setActionItems] = useState([])
+  const [actionStatus, setActionStatus] = useState('active')
+  const [actionOwner, setActionOwner] = useState('All')
+  const [actionSaving, setActionSaving] = useState('')
+  const [actionError, setActionError] = useState('')
 
   const fetchData = useCallback(async (date) => {
     setLoading(true)
@@ -142,12 +148,13 @@ export default function DailyOps() {
     const scopeRows = (rows) =>
       scoped ? rows.filter(r => r.country == null || r.country === activeCountry) : rows
 
-    const [trRes, insRes, woRes, alRes, t30Res] = await Promise.allSettled([
+    const [trRes, insRes, woRes, alRes, t30Res, actionsRes] = await Promise.allSettled([
       dailyOpsApi.listDailyTyreRecords({ thirtyDaysAgo, wEnd }),
       dailyOpsApi.listDailyInspections({ thirtyDaysAgo, wEnd }),
       dailyOpsApi.listDailyWorkOrders({ thirtyDaysAgo, wEnd, country }),
       dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd, country }),
       dailyOpsApi.listDailyTyreFitments({ thirtyDaysAgo, date }),
+      listActionItems({ country, limit: 1000 }),
     ])
 
     const sources = [
@@ -156,6 +163,7 @@ export default function DailyOps() {
       ['work orders', woRes],
       ['alerts', alRes],
       ['fitments', t30Res],
+      ['operational actions', actionsRes],
     ]
     setFailedSources(sources.filter(([, result]) =>
       result.status === 'rejected' || result.value?.error,
@@ -166,6 +174,7 @@ export default function DailyOps() {
     setWorkOrders(woRes.status === 'fulfilled' && woRes.value.data ? woRes.value.data : [])
     setAlerts(alRes.status === 'fulfilled' && alRes.value.data ? alRes.value.data : [])
     setAllTyres30(t30Res.status === 'fulfilled' && t30Res.value.data ? scopeRows(t30Res.value.data) : [])
+    setActionItems(actionsRes.status === 'fulfilled' && Array.isArray(actionsRes.value) ? actionsRes.value : [])
     setCapped(
       (woRes.status === 'fulfilled' && woRes.value.truncated === true) ||
       (alRes.status === 'fulfilled' && alRes.value.truncated === true),
@@ -491,6 +500,32 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
   const visibleQueue = queueSeverity === 'All'
     ? priorityQueue
     : priorityQueue.filter((item) => item.severity === queueSeverity)
+  const actionOwners = [...new Set(actionItems.map((item) => item.assigned_to).filter(Boolean))].sort()
+  const coreFailedCount = failedSources.filter((source) => source !== 'operational actions').length
+  const visibleActions = actionItems.filter((item) => {
+    const active = !['resolved', 'dismissed'].includes(item.status)
+    if (actionStatus === 'active' && !active) return false
+    if (actionStatus === 'overdue' && (!active || !item.due_date || item.due_date >= selectedDate)) return false
+    if (actionStatus === 'resolved' && active) return false
+    if (actionOwner !== 'All' && item.assigned_to !== actionOwner) return false
+    return true
+  })
+
+  async function transitionAction(item, status) {
+    setActionSaving(item.id)
+    setActionError('')
+    try {
+      const updated = await updateActionItem(item.id, {
+        status,
+        resolution: status === 'resolved' ? (item.resolution || `Completed from Daily Operations on ${selectedDate}`) : item.resolution,
+      })
+      setActionItems((rows) => rows.map((row) => row.id === item.id ? updated : row))
+    } catch (err) {
+      setActionError(err?.message || 'Could not update the action. Try again.')
+    } finally {
+      setActionSaving('')
+    }
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -534,14 +569,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
         </div>
       )}
 
-      {!loading && failedSources.length === 5 && (
+      {!loading && coreFailedCount === 5 && (
         <div role="alert" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm text-red-300 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-3">
           <span className="flex items-start gap-2"><AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />Daily operations data could not be loaded. No operational conclusion is shown.</span>
           <button type="button" onClick={() => fetchData(selectedDate)} className="btn-secondary text-xs shrink-0">Retry all sources</button>
         </div>
       )}
 
-      {!loading && failedSources.length < 5 && (
+      {!loading && coreFailedCount < 5 && (
         <>
           {failedSources.length > 0 && (
             <div role="status" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm text-amber-300 bg-amber-900/15 border border-amber-800/40 rounded-lg px-4 py-3">
@@ -562,6 +597,55 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
               <span>Capped view. This 30-day window holds more work orders or alerts than the display limit (20,000), so some rows are not shown. Narrow the date or pick a country for a complete view.</span>
             </div>
           )}
+
+          {/* Owned operational work: the writable system-of-record queue. */}
+          <section className="card space-y-3" aria-labelledby="daily-work-heading">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div className="mr-auto">
+                <h2 id="daily-work-heading" className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Operational work</h2>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Acknowledge, start and complete owned actions without leaving today&apos;s briefing.</p>
+              </div>
+              <select className="input text-sm" value={actionStatus} onChange={(e) => setActionStatus(e.target.value)} aria-label="Filter operational work by status">
+                <option value="active">Active work</option>
+                <option value="overdue">Overdue work</option>
+                <option value="resolved">Resolved work</option>
+                <option value="all">All work</option>
+              </select>
+              <select className="input text-sm" value={actionOwner} onChange={(e) => setActionOwner(e.target.value)} aria-label="Filter operational work by owner">
+                <option value="All">All owners</option>
+                {actionOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+              </select>
+              <a href="/action-center" className="btn-secondary text-sm text-center">Open Action Center</a>
+            </div>
+            {actionError && <p role="alert" className="text-sm text-red-300">{actionError}</p>}
+            {visibleActions.length === 0 ? (
+              <div className="rounded-lg border border-[var(--input-border)] p-5 text-center text-sm text-[var(--text-muted)]">No actions match these filters.</div>
+            ) : (
+              <div className="divide-y divide-[var(--input-border)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                {visibleActions.slice(0, 20).map((item) => (
+                  <div key={item.id} className="p-3 flex flex-col md:flex-row md:items-center gap-3 bg-[var(--surface-2)]/30">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-sm text-[var(--text-primary)]">{item.title}</span>
+                        <span className="badge text-xs">{item.severity}</span>
+                        <span className="badge text-xs">{item.status?.replace('_', ' ')}</span>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">
+                        {item.asset_no || 'No asset'} · {item.assigned_to || 'Unassigned'} · {item.due_date ? `Due ${item.due_date}` : 'No due date'}
+                      </p>
+                    </div>
+                    {!['resolved', 'dismissed'].includes(item.status) && (
+                      <div className="flex flex-wrap gap-2">
+                        {item.status === 'open' && <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'acknowledged')} className="btn-secondary text-xs">Acknowledge</button>}
+                        {item.status !== 'in_progress' && <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'in_progress')} className="btn-secondary text-xs">Start</button>}
+                        <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'resolved')} className="btn-primary text-xs">Complete</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
           {/* Priority Action Queue */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { dashboard } from '../lib/api'
@@ -298,8 +298,6 @@ export default function Dashboard() {
       .catch(() => { if (!cancelled) setCostSplit(null) })
     return () => { cancelled = true }
   }, [activeCountry])
-  useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
-
   // Independent PM load: own lifecycle + cancel guard so a slow/failed PM fetch
   // never blocks the tyre dashboard, and a stale in-flight result (after a fast
   // country switch) is discarded. Honest error state; missing table yields [].
@@ -332,7 +330,7 @@ export default function Dashboard() {
   // window's rows under the new filter chips - wrong numbers, no error.
   const latestLoad = useLatestRequest()
 
-  async function load() {
+  const load = useCallback(async () => {
     const stale = latestLoad.begin()
     setLoading(true); setError(null)
     try {
@@ -371,7 +369,9 @@ export default function Dashboard() {
     } finally {
       if (!stale()) setLoading(false)
     }
-  }
+  }, [activeCountry, dateFrom, dateTo, latestLoad, t])
+
+  useEffect(() => { load() }, [load])
 
   // Distinct sites for the site filter dropdown (real values from loaded data).
   const siteOptions = useMemo(() => {

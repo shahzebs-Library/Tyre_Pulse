@@ -12,6 +12,7 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { listSubmissions, listTemplates } from '../lib/api/checklists'
 import { isValueField, fieldTypeDef } from '../lib/checklist/fieldTypes'
@@ -366,6 +367,8 @@ export default function ChecklistInsights() {
     }
     return rows.sort((a, b) => a.yesPct - b.yesPct)
   }, [templates, filteredSubs, templateFilter])
+  const templatesPager = usePagedRows(byTemplate)
+  const passRatesPager = usePagedRows(boolPassRates)
 
   const hasActivity = submissions.length > 0 || templates.length > 0
 
@@ -565,7 +568,7 @@ export default function ChecklistInsights() {
                 </tr>
               </thead>
               <tbody>
-                {byTemplate.map((row) => (
+                {templatesPager.pageRows.map((row) => (
                   <tr
                     key={String(row.id)}
                     className="border-b border-[var(--border-dim)] last:border-0 cursor-pointer hover:bg-[var(--surface-2)]"
@@ -587,6 +590,7 @@ export default function ChecklistInsights() {
                 ))}
               </tbody>
             </table>
+            <TablePagination {...templatesPager} />
           </div>
         )}
       </div>
@@ -613,7 +617,7 @@ export default function ChecklistInsights() {
                 </tr>
               </thead>
               <tbody>
-                {boolPassRates.map((r) => {
+                {passRatesPager.pageRows.map((r) => {
                   const color = r.yesPct >= 85 ? 'text-green-400' : r.yesPct >= 60 ? 'text-amber-400' : 'text-red-400'
                   return (
                     <tr key={r.key} className="border-b border-[var(--border-dim)] last:border-0">
@@ -626,6 +630,7 @@ export default function ChecklistInsights() {
                 })}
               </tbody>
             </table>
+            <TablePagination {...passRatesPager} />
           </div>
         )}
       </div>

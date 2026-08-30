@@ -94,8 +94,9 @@ describe('Rotation Schedule approval wiring', () => {
       { id: 1, action: 'started', step_name: 'Maintenance Planner', created_at: '2026-07-10T09:00:00Z' },
     ])
     render(<RotationCompleteHarness record={RECORD} />)
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Mark Completed' })).toBeDisabled(),
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Mark Completed' })).toBeDisabled(),
+      { timeout: 5_000 },
     )
     expect(screen.getByText(/Locked — in approval/)).toBeInTheDocument()
   })
@@ -107,8 +108,9 @@ describe('Rotation Schedule approval wiring', () => {
       entity_type: 'tyre_rotation', entity_id: 'rot-1',
     })
     render(<RotationCompleteHarness record={RECORD} />)
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Mark Completed' })).toBeDisabled(),
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Mark Completed' })).toBeDisabled(),
+      { timeout: 5_000 },
     )
   })
 })

@@ -23,6 +23,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
@@ -209,6 +210,9 @@ export default function SafetyCompliance() {
       accidentCorrelation, accidents: accidents.length, accidentsWithTyreIssue: accidentsWithTyreIssue.length,
     }
   }, [tyreRecords, inspections, accidents])
+  const treadFailsPager = usePagedRows(compliance?.treadFails || [], { pageSize: 25 })
+  const inspectionsPager = usePagedRows(inspections, { pageSize: 25 })
+  const siteTreadPager = usePagedRows(compliance?.siteTread || [], { pageSize: 25 })
 
   // ── Chart data ────────────────────────────────────────────────────────────
   const riskChartData = useMemo(() => {
@@ -558,7 +562,7 @@ export default function SafetyCompliance() {
                       </tr>
                     </thead>
                     <tbody>
-                      {compliance.treadFails.slice(0, 50).map(r => {
+                      {treadFailsPager.pageRows.map(r => {
                         const pos = getPosition(r.tyre_position || r.position)
                         const limit = LEGAL_TREAD[pos] || LEGAL_TREAD.default
                         const deficit = (limit - parseFloat(r.tread_depth)).toFixed(1)
@@ -582,6 +586,7 @@ export default function SafetyCompliance() {
                       )}
                     </tbody>
                   </table>
+                  <TablePagination {...treadFailsPager} />
                 </div>
               </div>
             </motion.div>
@@ -654,7 +659,7 @@ export default function SafetyCompliance() {
                       </tr>
                     </thead>
                     <tbody>
-                      {inspections.slice(0, 30).map(r => (
+                      {inspectionsPager.pageRows.map(r => (
                         <tr key={r.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
                           <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
                           <td className="px-4 py-3 text-[var(--text-dim)]">{r.inspector || '-'}</td>
@@ -669,6 +674,7 @@ export default function SafetyCompliance() {
                       )}
                     </tbody>
                   </table>
+                  <TablePagination {...inspectionsPager} />
                 </div>
               </div>
             </motion.div>
@@ -695,7 +701,7 @@ export default function SafetyCompliance() {
                       </tr>
                     </thead>
                     <tbody>
-                      {compliance.siteTread.map(s => {
+                      {siteTreadPager.pageRows.map(s => {
                         const sl = scoreLabel(s.compliance)
                         return (
                           <tr key={s.site} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
@@ -718,6 +724,7 @@ export default function SafetyCompliance() {
                       })}
                     </tbody>
                   </table>
+                  <TablePagination {...siteTreadPager} />
                 </div>
               </div>
             </motion.div>

@@ -27,6 +27,11 @@ import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContex
 import { IS_CONSOLE_SURFACE } from './lib/supabase'
 import ConsoleLayout from './console/components/ConsoleLayout'
 import ConsoleAuthBridge from './console/ConsoleAuthBridge'
+function LegacyRedirect({ to }) {
+  const { search, hash } = useLocation()
+  return <Navigate to={`${to}${search}${hash}`} replace />
+}
+
 // Console pages are admin/super-admin only and rarely loaded; lazy-load them so
 // their code stays out of the main entry chunk for the typical user.
 const ConsoleLogin         = lazy(() => import('./console/pages/ConsoleLogin'))
@@ -417,6 +422,9 @@ function ChecklistOnlyGate({ children }) {
 // admin with no console login at all. That path now gets this screen instead.
 function ConsoleSurfaceGate({ children }) {
   if (IS_CONSOLE_SURFACE) return children
+  const consoleTarget = window.location.pathname.startsWith('/console/')
+    ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+    : '/console'
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
       <div className="max-w-md w-full text-center rounded-2xl border border-gray-800 bg-gray-900/50 p-8">
@@ -431,7 +439,7 @@ function ConsoleSurfaceGate({ children }) {
         </p>
         <button
           type="button"
-          onClick={() => window.open('/console', '_blank', 'noopener,noreferrer')}
+          onClick={() => window.open(consoleTarget, '_blank', 'noopener,noreferrer')}
           className="w-full rounded-xl bg-orange-500 hover:bg-orange-400 text-white text-sm font-semibold py-2.5 transition-colors"
         >
           Open the secure console tab
@@ -563,10 +571,10 @@ function MainApp() {
             {/* PUBLIC account & data deletion page - the URL for the Google Play
                 Data Safety form's deletion mechanism. Anon, no app shell. */}
             <Route path="/data-deletion"   element={<Safe><DataDeletion /></Safe>} />
-            <Route path="/delete-account"  element={<Navigate to="/data-deletion" replace />} />
+            <Route path="/delete-account"  element={<LegacyRedirect to="/data-deletion" />} />
             {/* PUBLIC privacy policy - the URL for Play Console App content + Data Safety. */}
             <Route path="/privacy"         element={<Safe><Privacy /></Safe>} />
-            <Route path="/privacy-policy"  element={<Navigate to="/privacy" replace />} />
+            <Route path="/privacy-policy"  element={<LegacyRedirect to="/privacy" />} />
             {/* Public, light-theme, auto-rotating TV/kiosk report viewer (V251/V252
                 share token) - ANON, no chrome. The single public report-share surface
                 (replaces the retired /display/:token executive board). The
@@ -637,7 +645,7 @@ function MainApp() {
                       <Route path="/scheduled-reports"   element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></RoleRoute></Safe>} />
                       <Route path="/knowledge-base"       element={<Safe><FlagRoute flag="ai_tools"><KnowledgeBase /></FlagRoute></Safe>} />
                       <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
-                      <Route path="/ai-administration"    element={<Navigate to="/console/ai-admin" replace />} />
+                      <Route path="/ai-administration"    element={<LegacyRedirect to="/console/ai-admin" />} />
                       <Route path="/gate-pass"            element={<Safe><ModuleRoute moduleKey="gate_pass"><GatePass /></ModuleRoute></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><RoleRoute allowed={['Admin']} moduleKey="serial_tracker"><SerialTracker /></RoleRoute></Safe>} />
                       <Route path="/work-orders"          element={<Safe><ModuleRoute moduleKey="work_orders"><WorkOrders /></ModuleRoute></Safe>} />
@@ -710,13 +718,13 @@ function MainApp() {
                       <Route path="/anomalies"               element={<Safe><ModuleRoute moduleKey="tyre_records"><Anomalies /></ModuleRoute></Safe>} />
                       <Route path="/vehicle-history"         element={<Safe><ModuleRoute moduleKey="fleet_master"><VehicleHistory /></ModuleRoute></Safe>} />
                       {/* Smart Analytics merged into the theme-aware AI Command Center (fixes the black reply background). */}
-                      <Route path="/ai"                      element={<Navigate to="/ai-command-center" replace />} />
+                      <Route path="/ai"                      element={<LegacyRedirect to="/ai-command-center" />} />
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
                       <Route path="/data-reconciliation" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><DataReconciliation /></RoleRoute></Safe>} />
                       <Route path="/erp-import"  element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><ErpImport /></RoleRoute></Safe>} />
                       <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
-                      <Route path="/users"       element={<Navigate to="/console/users" replace />} />
+                      <Route path="/users"       element={<LegacyRedirect to="/console/users" />} />
                       {/* ── Universal ── */}
                       <Route path="/upload"      element={<Safe><FlagRoute flag="data_intake"><UploadData /></FlagRoute></Safe>} />
                       <Route path="/data-intake" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></RoleRoute></Safe>} />

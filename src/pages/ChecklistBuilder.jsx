@@ -1989,7 +1989,7 @@ export default function ChecklistBuilder() {
   const toggleExpand = (fieldId) => setExpandedId((cur) => (cur === fieldId ? null : fieldId))
 
   // ── Derived counts ──
-  const fields = draft?.fields || []
+  const fields = useMemo(() => draft?.fields || [], [draft])
   const contentCount = useMemo(() => fields.filter((f) => !isLayoutField(f.type)).length, [fields])
   const totalPoints = useMemo(
     () =>

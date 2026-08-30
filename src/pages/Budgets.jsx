@@ -67,9 +67,7 @@ export default function Budgets() {
   const [plannerEdits, setPlannerEdits] = useState({})
   const [savingPlanner, setSavingPlanner] = useState(false)
 
-  useEffect(() => { load() }, [filterYear, filterMonth, plannerYear, viewMode, activeCountry])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
 
     if (viewMode === 'month') {
@@ -114,7 +112,9 @@ export default function Budgets() {
     }
 
     setLoading(false)
-  }
+  }, [activeCountry, filterMonth, filterYear, plannerYear, viewMode])
+
+  useEffect(() => { load() }, [load])
 
   async function save(e) {
     e.preventDefault()
@@ -165,14 +165,14 @@ export default function Budgets() {
     return found ? found.monthly_budget : ''
   }
 
-  function getSpend(site, m, year) {
+  const getSpend = useCallback((site, m, year) => {
     return spending[`${site}~${year ?? filterYear}~${m}`] ?? 0
-  }
+  }, [filterYear, spending])
 
   const totalBudget = useMemo(() =>
     budgets.reduce((s, b) => s + b.monthly_budget, 0), [budgets])
   const totalSpend = useMemo(() =>
-    budgets.reduce((s, b) => s + getSpend(b.site, filterMonth), 0), [budgets, spending, filterMonth])
+    budgets.reduce((s, b) => s + getSpend(b.site, filterMonth), 0), [budgets, filterMonth, getSpend])
 
   const utilPct = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : 0
   const utilColor = utilPct >= 100 ? 'text-red-400' : utilPct >= 80 ? 'text-yellow-400' : 'text-green-400'
@@ -197,7 +197,7 @@ export default function Budgets() {
         },
       ],
     }
-  }, [viewMode, budgets, spending, filterMonth, activeCurrency, t])
+  }, [viewMode, budgets, filterMonth, activeCurrency, getSpend, t])
 
   // Monthly table columns for EnterpriseTable
   const monthlyColumns = useMemo(() => [
@@ -252,7 +252,7 @@ export default function Budgets() {
         )
       },
     },
-  ], [activeCurrency, filterMonth, spending, t])
+  ], [activeCurrency, filterMonth, getSpend, t])
 
   const cumulativeChartData = useMemo(() => {
     if (viewMode !== 'annual' || !annualSites.length) return null
@@ -293,7 +293,7 @@ export default function Budgets() {
         },
       ],
     }
-  }, [viewMode, annualSites, budgets, spending, plannerYear, monthLabels, t])
+  }, [viewMode, annualSites, budgets, plannerYear, monthLabels, getSpend, t])
 
   function exportExcel() {
     if (viewMode === 'month') {

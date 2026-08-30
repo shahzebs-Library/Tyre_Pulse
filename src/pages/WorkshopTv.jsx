@@ -18,6 +18,7 @@
  *  - Copy contains NO em or en dashes, arrows, middle dots or curly quotes.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useParams } from 'react-router-dom'
 import {
   Maximize2, Minimize2, RotateCw, AlertTriangle, Lock, Clock, KeyRound, Loader2,
@@ -283,6 +284,7 @@ export default function WorkshopTv() {
   const kpis = snapshot?.kpis || {}
   const jobsByStatus = useMemo(() => arr(snapshot?.jobs_by_status).filter((x) => Number(x?.value) > 0), [snapshot])
   const openCards = useMemo(() => arr(snapshot?.open_job_cards), [snapshot])
+  const cardsPager = usePagedRows(openCards)
   const vorList = useMemo(() => arr(snapshot?.vor_list), [snapshot])
   const alerts = useMemo(() => arr(snapshot?.safety_alerts), [snapshot])
   const utilization = Number.isFinite(Number(kpis.utilization)) ? Number(kpis.utilization) : null
@@ -400,7 +402,7 @@ export default function WorkshopTv() {
                   </tr>
                 </thead>
                 <tbody>
-                  {openCards.map((c, i) => (
+                  {cardsPager.pageRows.map((c, i) => (
                     <tr key={`${c.wo_no || 'wo'}-${i}`}>
                       <td className="wt-mono">{safeStr(c.wo_no)}</td>
                       <td className="wt-mono">{safeStr(c.asset_no)}</td>
@@ -411,6 +413,7 @@ export default function WorkshopTv() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...cardsPager} />
             </div>
           </Card>
 

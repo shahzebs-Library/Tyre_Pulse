@@ -23,6 +23,7 @@ import {
   Eye, ShieldAlert, Power, PowerOff, Info,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import SharedModal from '../components/ui/Modal'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -304,6 +305,8 @@ function ActiveBadge({ active }) {
 const EMPTY_DEPT = { name: '', code: '', description: '', active: true, sort_order: 0 }
 
 function DepartmentsTab({ rows, setRows, canWrite, loading, error, onRetry, clearError }) {
+  const sortedRows = useMemo(() => [...rows].sort(sortDept), [rows])
+  const pager = usePagedRows(sortedRows, { pageSize: 25 })
   const [modal, setModal] = useState(null) // { mode:'create'|'edit', values }
   const [confirmDel, setConfirmDel] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -384,7 +387,7 @@ function DepartmentsTab({ rows, setRows, canWrite, loading, error, onRetry, clea
               </tr>
             </thead>
             <tbody>
-              {[...rows].sort(sortDept).map((d) => (
+              {pager.pageRows.map((d) => (
                 <tr key={d.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
                   <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{d.name}</td>
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">{d.code || 'N/A'}</td>
@@ -401,6 +404,7 @@ function DepartmentsTab({ rows, setRows, canWrite, loading, error, onRetry, clea
               ))}
             </tbody>
           </table>
+          <TablePagination {...pager} />
         </div>
       )}
 
@@ -469,6 +473,8 @@ const EMPTY_RULE = {
 }
 
 function RulesTab({ rows, setRows, deptNames, canWrite, loading, error, onRetry, clearError }) {
+  const sortedRows = useMemo(() => [...rows].sort(sortRule), [rows])
+  const pager = usePagedRows(sortedRows, { pageSize: 25 })
   const [modal, setModal] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -602,7 +608,7 @@ function RulesTab({ rows, setRows, deptNames, canWrite, loading, error, onRetry,
               </tr>
             </thead>
             <tbody>
-              {[...rows].sort(sortRule).map((r) => (
+              {pager.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50 align-top">
                   <td className="py-2 pr-3">
                     <div className="text-[var(--text-primary)] font-medium">{r.name}</div>
@@ -629,6 +635,7 @@ function RulesTab({ rows, setRows, deptNames, canWrite, loading, error, onRetry,
               ))}
             </tbody>
           </table>
+          <TablePagination {...pager} />
         </div>
       )}
 
@@ -745,6 +752,7 @@ function sortRule(a, b) { return (a.priority ?? 0) - (b.priority ?? 0) || String
 /* ─────────────────────────── Email Templates ─────────────────────────── */
 
 function TemplatesTab({ rows, setRows, canWrite, loading, error, onRetry, clearError }) {
+  const pager = usePagedRows(rows, { pageSize: 25 })
   const [modal, setModal] = useState(null)
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
@@ -814,7 +822,7 @@ function TemplatesTab({ rows, setRows, canWrite, loading, error, onRetry, clearE
                 </tr>
               </thead>
               <tbody>
-                {rows.map((t) => (
+                {pager.pageRows.map((t) => (
                   <tr key={t.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
                     <td className="py-2 pr-3">
                       <div className="text-[var(--text-primary)] font-medium">{t.name || t.key}</div>
@@ -832,6 +840,7 @@ function TemplatesTab({ rows, setRows, canWrite, loading, error, onRetry, clearE
                 ))}
               </tbody>
             </table>
+            <TablePagination {...pager} />
           </div>
         )}
       </div>

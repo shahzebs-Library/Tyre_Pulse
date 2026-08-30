@@ -11,6 +11,7 @@
  * Director only (RLS-enforced); the UI surfaces failures rather than hiding them.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   CreditCard, Plus, Search, X, Filter, Trash2, Pencil, AlertTriangle,
   CheckCircle2, Clock, DollarSign, CalendarClock, Loader2, FileSpreadsheet,
@@ -266,6 +267,7 @@ export default function FuelCards() {
   // Export — card numbers are masked here too, never exported in full. ---------
   const EXPORT_COLS = ['card_number', 'provider', 'asset_no', 'driver_name', 'monthly_limit', 'currency', 'status', 'expiry_date', 'expiry']
   const EXPORT_HEADERS = ['Card', 'Provider', 'Asset', 'Driver', 'Monthly limit', 'Currency', 'Status', 'Expiry', 'Expiry status']
+  const cardsPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => ({
     card_number: maskCardNumber(r.card_number), provider: r.provider || '',
     asset_no: r.asset_no || '', driver_name: r.driver_name || '',
@@ -409,7 +411,7 @@ export default function FuelCards() {
                       )}
                     </td></tr>
                   ) : (
-                    filtered.map((r) => {
+                    cardsPager.pageRows.map((r) => {
                       const meta = STATUS_META[r.status] || STATUS_META.unknown
                       const StatusIcon = meta.icon
                       const exp = EXPIRY_META[r._expiryBand] || EXPIRY_META.unknown
@@ -460,6 +462,7 @@ export default function FuelCards() {
                   )}
                 </tbody>
               </table>
+              <TablePagination {...cardsPager} />
             </div>
           </div>
         </>

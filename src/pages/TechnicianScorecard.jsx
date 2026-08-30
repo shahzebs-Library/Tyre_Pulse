@@ -30,6 +30,7 @@ import {
   ChevronRight, BadgeCheck, Star, AlertCircle, Loader2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import {
@@ -135,7 +136,7 @@ export default function TechnicianScorecard() {
   const [skillModal, setSkillModal] = useState(null) // { user_id }
   const [certModal, setCertModal] = useState(null) // { user_id }
 
-  const nowMs = useMemo(() => Date.now(), [orders, certs])
+  const nowMs = updatedAt?.getTime() ?? 0
 
   const load = useCallback(async () => {
     setRefreshing(true); setError('')
@@ -211,6 +212,7 @@ export default function TechnicianScorecard() {
     completionRate: `${r.completionRate}%`, avgTurnaround: r.avgTurnaround == null ? '' : r.avgTurnaround,
     totalCost: r.totalCost, avgCostPerJob: r.avgCostPerJob, score: r.score, rating: completionRating(r.completionRate),
   }))
+  const leaderboardPager = usePagedRows(sorted)
 
   const kpis = [
     { label: 'Technicians', value: totals.technicians, icon: Users, tone: 'text-[var(--text-primary)]' },
@@ -297,6 +299,7 @@ export default function TechnicianScorecard() {
         return av - bv
       })
   }, [certs, profiles, nowMs])
+  const certPager = usePagedRows(certRows)
 
   const expiringSoon = useMemo(
     () => certRows.filter((c) => c.status === 'warning' || c.status === 'expired'),
@@ -448,7 +451,7 @@ export default function TechnicianScorecard() {
                   ) : sorted.length === 0 ? (
                     <tr><td colSpan={11} className="px-4 py-12 text-center text-[var(--text-muted)]"><Filter size={22} className="mx-auto mb-2 opacity-60" />No technicians match these filters.</td></tr>
                   ) : (
-                    sorted.map((r) => {
+                    leaderboardPager.pageRows.map((r) => {
                       const rating = completionRating(r.completionRate)
                       return (
                         <tr key={r.technician} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -486,6 +489,7 @@ export default function TechnicianScorecard() {
                 </tbody>
               </table>
             </div>
+            <TablePagination {...leaderboardPager} />
           </div>
         </>
       )}
@@ -724,7 +728,7 @@ export default function TechnicianScorecard() {
                   ) : certRows.length === 0 ? (
                     <tr><td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)]"><ShieldCheck size={22} className="mx-auto mb-2 opacity-60" />No certifications recorded yet. Add certifications from the Technicians tab.</td></tr>
                   ) : (
-                    certRows.map((c) => {
+                    certPager.pageRows.map((c) => {
                       const rowTone = c.status === 'expired' || (c.days != null && c.days < 30)
                         ? 'text-red-300' : c.status === 'warning' ? 'text-amber-300' : 'text-[var(--text-secondary)]'
                       const href = safeHref(c.document_url)
@@ -745,6 +749,7 @@ export default function TechnicianScorecard() {
                 </tbody>
               </table>
             </div>
+            <TablePagination {...certPager} />
           </div>
         </>
       )}

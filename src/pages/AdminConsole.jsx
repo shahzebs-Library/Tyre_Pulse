@@ -56,7 +56,7 @@ const SECTIONS = [
     description: 'Users, roles, permissions and authentication',
     Icon: KeyRound,
     cards: [
-      { label: 'Users', to: '/users', Icon: Users, stat: 'users',
+      { label: 'Users', to: '/console/users', Icon: Users, stat: 'users',
         desc: 'Invite, approve, and manage user accounts' },
       { label: 'Master Access Control', to: '/master-access-control', Icon: KeyRound,
         desc: 'Role-based module permissions and access matrix' },
@@ -118,7 +118,7 @@ const SECTIONS = [
     description: 'AI model configuration, prompts, budgets and usage intelligence',
     Icon: Sparkles,
     cards: [
-      { label: 'AI Administration', to: '/ai-administration', Icon: Bot,
+      { label: 'AI Administration', to: '/console/ai-admin', Icon: Bot,
         desc: 'Model catalogue, agent prompts, spend budgets and answer feedback' },
       { label: 'AI Cost Monitor', to: '/ai-cost-monitor', Icon: DollarSign,
         desc: 'Token usage, spend tracking and cost analysis across features' },

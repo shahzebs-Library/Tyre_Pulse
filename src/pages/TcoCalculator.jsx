@@ -26,6 +26,7 @@ import {
   PiggyBank, Download, FileText, Loader2, AlertTriangle, ArrowRight, TrendingUp,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
@@ -104,6 +105,7 @@ function FleetActuals() {
   const muted = chartMutedColor()
 
   const { assets, rollup, monthly, breakdown, savings, benchmarks, meta } = actuals
+  const assetsPager = usePagedRows(assets)
 
   const doughnut = {
     labels: breakdown.map((b) => b.label),
@@ -318,7 +320,7 @@ function FleetActuals() {
               </tr>
             </thead>
             <tbody>
-              {assets.slice(0, 50).map((a) => (
+              {assetsPager.pageRows.map((a) => (
                 <tr
                   key={a.asset_no}
                   className="border-b border-[var(--border)]/50 hover:bg-[var(--surface-hover)] cursor-pointer"
@@ -340,6 +342,7 @@ function FleetActuals() {
               ))}
             </tbody>
           </table>
+          <TablePagination {...assetsPager} />
         </div>
         {assets.length > 50 && (
           <p className="text-[11px] text-[var(--text-muted)] mt-2">Showing top 50 of {assets.length} assets by spend. Export for the full list.</p>

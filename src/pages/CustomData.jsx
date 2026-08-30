@@ -23,6 +23,7 @@ import {
   FileSpreadsheet, ChevronDown,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 // Canonical tyre_records fields the user can map to
 const CANONICAL_FIELDS = [
@@ -94,13 +95,9 @@ export default function CustomData() {
   const [backfillRunning, setBackfillRunning] = useState(false)
   const [backfillResult, setBackfillResult] = useState(null)
 
-  useEffect(() => { loadFieldStats() }, [activeCountry])
-  useEffect(() => { loadSynonyms() }, [])
-  useEffect(() => { if (tab === 2) loadRecords() }, [tab, filterKey, filterVal, recPage, activeCountry])
-
   // ── Loaders ─────────────────────────────────────────────────────────────────
 
-  async function loadFieldStats() {
+  const loadFieldStats = useCallback(async () => {
     setLoading(true)
     const country = activeCountry !== 'All' ? activeCountry : null
     try {
@@ -110,9 +107,9 @@ export default function CustomData() {
       setFieldStats([])
     }
     setLoading(false)
-  }
+  }, [activeCountry])
 
-  async function loadSynonyms() {
+  const loadSynonyms = useCallback(async () => {
     setSynLoading(true)
     try {
       const data = await customData.listFieldSynonyms()
@@ -121,9 +118,9 @@ export default function CustomData() {
       setSynonyms([])
     }
     setSynLoading(false)
-  }
+  }, [])
 
-  async function loadRecords() {
+  const loadRecords = useCallback(async () => {
     setRecLoading(true)
     try {
       const { data, count } = await customData.listRecordsWithExtraFields({
@@ -140,7 +137,11 @@ export default function CustomData() {
       setTotalRecords(0)
     }
     setRecLoading(false)
-  }
+  }, [activeCountry, filterKey, filterVal, recPage])
+
+  useEffect(() => { loadFieldStats() }, [loadFieldStats])
+  useEffect(() => { loadSynonyms() }, [loadSynonyms])
+  useEffect(() => { if (tab === 2) loadRecords() }, [tab, loadRecords])
 
   // ── Synonym CRUD ─────────────────────────────────────────────────────────────
 
@@ -265,6 +266,8 @@ export default function CustomData() {
     fieldStats.filter(f => !statsSearch || f.field_key.toLowerCase().includes(statsSearch.toLowerCase())),
     [fieldStats, statsSearch]
   )
+  const statsPager = usePagedRows(filteredStats)
+  const synonymsPager = usePagedRows(synonyms)
 
   const totalCustomRecords = fieldStats.reduce((a, b) => a + Number(b.record_count), 0)
 
@@ -383,7 +386,7 @@ export default function CustomData() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                {filteredStats.map(stat => {
+                {statsPager.pageRows.map(stat => {
                   const hasSynonym = synonymMap[stat.field_key.toLowerCase()]
                   const isPromoting = promoteKey === stat.field_key
                   const isBackfilling = backfillKey === stat.field_key
@@ -486,6 +489,7 @@ export default function CustomData() {
                     </motion.div>
                   )
                 })}
+                <TablePagination {...statsPager} />
               </div>
             )}
           </motion.div>
@@ -574,7 +578,7 @@ export default function CustomData() {
                     </tr>
                   </thead>
                   <tbody>
-                    {synonyms.map(s => (
+                    {synonymsPager.pageRows.map(s => (
                       <tr key={s.id} className="hover:bg-[var(--input-bg)]/30 transition-colors">
                         <td className="table-cell font-mono text-yellow-300">{s.custom_name}</td>
                         <td className="table-cell">
@@ -596,6 +600,7 @@ export default function CustomData() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...synonymsPager} />
               </div>
             )}
 

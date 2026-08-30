@@ -258,6 +258,8 @@ export default function CommandPalette() {
 
   // ── Build the visible group list ────────────────────────────────────────────
   const groups = useMemo(() => {
+    // Reopening intentionally rebuilds stored favourites and recents.
+    if (!open) return []
     const q = query.trim()
     if (!q) {
       // A stored route becomes a row only after the registry gives it a label
@@ -302,10 +304,6 @@ export default function CommandPalette() {
     if (commands.length) result.push({ label: t('ui.command.groups.commands'), items: commands })
     for (const g of recordGroups) result.push({ label: g.label, items: g.items })
     return result
-    // `open` is deliberate and the exhaustive-deps warning about it is expected:
-    // loadFavorites/loadRecents/loadRecent read localStorage, which the linter
-    // cannot see, so reopening the palette is what re-reads a star pinned in the
-    // sidebar while it was closed. Removing it serves a stale list.
   }, [query, open, navCommands, actionCommands, navIndex, canSeePath, canSeeRecord, commandByPath, recordGroups, t])
 
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups])

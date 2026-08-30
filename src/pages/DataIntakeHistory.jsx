@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import {
   History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, ChevronDown, Database, CheckCircle2, Link2, Plus, Coins,
@@ -10,6 +10,8 @@ import * as imports from '../lib/api/imports'
 import { reconcileBatch } from '../lib/import/reconcile'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
+import FilterBar from '../components/ui/FilterBar'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 const ELEVATED = ['admin', 'manager', 'director']
 const TABS = [
@@ -65,11 +67,33 @@ export default function DataIntakeHistory() {
   const [drill, setDrill] = useState(null) // { batch, rows }
   const [busyId, setBusyId] = useState(null)
   const [reconId, setReconId] = useState(null) // batch id whose reconciliation row is expanded
+  const [batchSearch, setBatchSearch] = useState('')
+  const [batchStatus, setBatchStatus] = useState('')
+  const [batchModule, setBatchModule] = useState('')
+
+  const batchModules = useMemo(() => [...new Set(batches.map((b) => b.module).filter(Boolean))].sort(), [batches])
+  const batchStatuses = useMemo(() => [...new Set(batches.map((b) => b.import_status).filter(Boolean))].sort(), [batches])
+  const filteredBatches = useMemo(() => {
+    const q = batchSearch.trim().toLowerCase()
+    return batches.filter((b) => {
+      if (batchStatus && b.import_status !== batchStatus) return false
+      if (batchModule && b.module !== batchModule) return false
+      if (!q) return true
+      return [b.module, b.country, b.import_status, b.file_name, b.id]
+        .some((value) => String(value || '').toLowerCase().includes(q))
+    })
+  }, [batches, batchSearch, batchStatus, batchModule])
+  const batchesPager = usePagedRows(filteredBatches)
+  const drillPager = usePagedRows(drill?.rows || [])
+  const profilesPager = usePagedRows(profiles)
+  const customFieldsPager = usePagedRows(customFields)
+  const aliasesPager = usePagedRows(aliases)
+  const fxRatesPager = usePagedRows(fxRates)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      if (tab === 'imports') setBatches(await imports.listBatches({ country: activeCountry, limit: 100 }))
+      if (tab === 'imports') setBatches(await imports.listBatches({ country: activeCountry, limit: null }))
       else if (tab === 'quality') setQuality(await imports.importControlStats({ country: activeCountry }))
       else if (tab === 'profiles') setProfiles(await imports.listProfiles({ country: activeCountry }))
       else if (tab === 'custom') setCustomFields(await imports.listCustomFields({ country: activeCountry }))
@@ -78,7 +102,7 @@ export default function DataIntakeHistory() {
     } catch (e) {
       setError(toUserMessage(e, t('intakehistory.errors.loadFailed')))
     } finally { setLoading(false) }
-  }, [tab, activeCountry])
+  }, [tab, activeCountry, t])
 
   async function addAlias() {
     if (!aliasForm.rawValue.trim() || !aliasForm.canonicalValue.trim()) return
@@ -116,7 +140,7 @@ export default function DataIntakeHistory() {
 
   async function openDrill(batch) {
     setDrill({ batch, rows: null })
-    try { setDrill({ batch, rows: await imports.getBatchRows(batch.id) }) }
+    try { setDrill({ batch, rows: await imports.getBatchRows(batch.id, null) }) }
     catch (e) { setDrill({ batch, rows: [], error: toUserMessage(e, 'Could not load rows.') }) }
   }
 
@@ -182,12 +206,25 @@ export default function DataIntakeHistory() {
         <>
           {/* IMPORTS */}
           {tab === 'imports' && !drill && (
+            <div className="space-y-3">
+            <FilterBar
+              search={batchSearch}
+              onSearch={setBatchSearch}
+              searchLabel="Search import history"
+              placeholder="Search module, file, country, status or batch ID"
+              resultCount={filteredBatches.length}
+              onClearAll={() => { setBatchSearch(''); setBatchStatus(''); setBatchModule('') }}
+              selects={[
+                { key: 'module', value: batchModule, onChange: setBatchModule, placeholder: 'All modules', options: batchModules.map((value) => ({ value, label: value })) },
+                { key: 'status', value: batchStatus, onChange: setBatchStatus, placeholder: 'All statuses', options: batchStatuses.map((value) => ({ value, label: value })) },
+              ]}
+            />
             <div className="border border-[var(--input-border)] rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-[var(--input-bg)] text-muted text-xs"><tr><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.module')}</th><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.country')}</th><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.status')}</th><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.rows')}</th><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.errorsDups')}</th><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.reconcile')}</th><th className="text-left px-3 py-2">{t('intakehistory.imports.columns.when')}</th><th className="px-3 py-2"></th></tr></thead>
                 <tbody>
-                  {batches.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-dim">{t('intakehistory.imports.empty')}</td></tr>}
-                  {batches.map((b) => {
+                  {filteredBatches.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-dim">{batches.length ? 'No imports match these filters.' : t('intakehistory.imports.empty')}</td></tr>}
+                  {batchesPager.pageRows.map((b) => {
                     const recon = reconcileBatch(b)
                     const canRecon = recon.indicator !== 'pending'
                     const open = reconId === b.id
@@ -245,6 +282,8 @@ export default function DataIntakeHistory() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...batchesPager} />
+            </div>
             </div>
           )}
 
@@ -259,7 +298,7 @@ export default function DataIntakeHistory() {
                     <thead className="bg-[var(--input-bg)] text-muted text-xs sticky top-0"><tr><th className="text-left px-3 py-2">{t('intakehistory.drill.columns.index')}</th><th className="text-left px-3 py-2">{t('intakehistory.drill.columns.validation')}</th><th className="text-left px-3 py-2">{t('intakehistory.drill.columns.dup')}</th><th className="text-left px-3 py-2">{t('intakehistory.drill.columns.action')}</th><th className="text-left px-3 py-2">{t('intakehistory.drill.columns.committedId')}</th></tr></thead>
                     <tbody>
                       {drill.rows.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-dim">{t('intakehistory.drill.empty')}</td></tr>}
-                      {drill.rows.map((r) => (
+                      {drillPager.pageRows.map((r) => (
                         <tr key={r.id} className="border-t border-[var(--input-border)]">
                           <td className="px-3 py-1.5 text-muted">{r.source_row_no}</td>
                           <td className="px-3 py-1.5 text-xs">{r.validation_status}</td>
@@ -270,6 +309,7 @@ export default function DataIntakeHistory() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePagination {...drillPager} />
                 </div>
               )}
             </div>
@@ -336,7 +376,7 @@ export default function DataIntakeHistory() {
                 <thead className="bg-[var(--input-bg)] text-muted text-xs"><tr><th className="text-left px-3 py-2">{t('intakehistory.profiles.columns.name')}</th><th className="text-left px-3 py-2">{t('intakehistory.profiles.columns.module')}</th><th className="text-left px-3 py-2">{t('intakehistory.profiles.columns.source')}</th><th className="text-left px-3 py-2">{t('intakehistory.profiles.columns.country')}</th><th className="text-left px-3 py-2">{t('intakehistory.profiles.columns.version')}</th><th className="text-left px-3 py-2">{t('intakehistory.profiles.columns.lastUsed')}</th></tr></thead>
                 <tbody>
                   {profiles.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-dim">{t('intakehistory.profiles.empty')}</td></tr>}
-                  {profiles.map((p) => (
+                  {profilesPager.pageRows.map((p) => (
                     <tr key={p.id} className="border-t border-[var(--input-border)]">
                       <td className="px-3 py-2 font-medium">{p.name}</td>
                       <td className="px-3 py-2 capitalize text-muted">{p.module}</td>
@@ -348,6 +388,7 @@ export default function DataIntakeHistory() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...profilesPager} />
             </div>
           )}
 
@@ -358,7 +399,7 @@ export default function DataIntakeHistory() {
                 <thead className="bg-[var(--input-bg)] text-muted text-xs"><tr><th className="text-left px-3 py-2">{t('intakehistory.custom.columns.field')}</th><th className="text-left px-3 py-2">{t('intakehistory.custom.columns.module')}</th><th className="text-left px-3 py-2">{t('intakehistory.custom.columns.country')}</th><th className="text-left px-3 py-2">{t('intakehistory.custom.columns.seen')}</th><th className="text-left px-3 py-2">{t('intakehistory.custom.columns.status')}</th></tr></thead>
                 <tbody>
                   {customFields.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-dim">{t('intakehistory.custom.empty')}</td></tr>}
-                  {customFields.map((c) => (
+                  {customFieldsPager.pageRows.map((c) => (
                     <tr key={c.id} className="border-t border-[var(--input-border)]">
                       <td className="px-3 py-2 font-medium">{c.field_name}</td>
                       <td className="px-3 py-2 capitalize text-muted">{c.module}</td>
@@ -369,6 +410,7 @@ export default function DataIntakeHistory() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...customFieldsPager} />
             </div>
           )}
 
@@ -402,7 +444,7 @@ export default function DataIntakeHistory() {
                   <thead className="bg-[var(--input-bg)] text-muted text-xs"><tr><th className="text-left px-3 py-2">{t('intakehistory.aliases.columns.entity')}</th><th className="text-left px-3 py-2">{t('intakehistory.aliases.columns.rawValue')}</th><th className="text-left px-3 py-2"></th><th className="text-left px-3 py-2">{t('intakehistory.aliases.columns.canonical')}</th><th className="text-left px-3 py-2">{t('intakehistory.aliases.columns.country')}</th><th className="text-left px-3 py-2">{t('intakehistory.aliases.columns.added')}</th></tr></thead>
                   <tbody>
                     {aliases.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-dim">{t('intakehistory.aliases.empty')}</td></tr>}
-                    {aliases.map((a) => (
+                    {aliasesPager.pageRows.map((a) => (
                       <tr key={a.id} className="border-t border-[var(--input-border)]">
                         <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded bg-[var(--input-bg)] text-secondary capitalize">{a.entity_type}</span></td>
                         <td className="px-3 py-2 text-secondary">{a.raw_value}</td>
@@ -414,6 +456,7 @@ export default function DataIntakeHistory() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...aliasesPager} />
               </div>
             </div>
           )}
@@ -437,7 +480,7 @@ export default function DataIntakeHistory() {
                   <thead className="bg-[var(--input-bg)] text-muted text-xs"><tr><th className="text-left px-3 py-2">{t('intakehistory.fx.columns.pair')}</th><th className="text-left px-3 py-2">{t('intakehistory.fx.columns.rate')}</th><th className="text-left px-3 py-2">{t('intakehistory.fx.columns.date')}</th><th className="text-left px-3 py-2">{t('intakehistory.fx.columns.source')}</th><th className="text-left px-3 py-2">{t('intakehistory.fx.columns.status')}</th><th className="text-right px-3 py-2">{t('intakehistory.fx.columns.action')}</th></tr></thead>
                   <tbody>
                     {fxRates.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-dim">{t('intakehistory.fx.empty')}</td></tr>}
-                    {fxRates.map((r) => (
+                    {fxRatesPager.pageRows.map((r) => (
                       <tr key={r.id} className="border-t border-[var(--input-border)]">
                         <td className="px-3 py-2 font-medium">{r.quote_currency} → {r.base_currency}</td>
                         <td className="px-3 py-2 text-secondary tabular-nums">{r.rate}</td>
@@ -451,6 +494,7 @@ export default function DataIntakeHistory() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...fxRatesPager} />
               </div>
             </div>
           )}

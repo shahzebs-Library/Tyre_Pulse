@@ -15,6 +15,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { exportToPdf, exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import {
@@ -628,6 +629,7 @@ function DeliveryStatusPill({ status, td }) {
 
 /** Expandable delivery-history panel: recent report_send_log runs in a table. */
 function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefresh, td }) {
+  const runsPager = usePagedRows(runs)
   return (
     <div className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4">
@@ -692,7 +694,7 @@ function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefr
                   </tr>
                 </thead>
                 <tbody>
-                  {runs.map((r) => (
+                  {runsPager.pageRows.map((r) => (
                     <tr key={r.id} className="border-b border-[var(--border-bright)] last:border-0 hover:bg-[var(--surface-3)]/40">
                       <td className="px-5 py-2.5 text-[var(--text-primary)] max-w-[16rem] truncate">
                         {r.schedule_name || td('schedreports.history.unnamed', 'Unnamed schedule')}
@@ -709,6 +711,7 @@ function DeliveryHistory({ runs, summary, loading, error, open, onToggle, onRefr
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...runsPager} />
             </div>
           )}
         </div>

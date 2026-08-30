@@ -41,7 +41,7 @@ const ROLE_CONTENT = {
     ],
     primary: { to: '/', label: 'Go to Dashboard', icon: LayoutDashboard },
     features: [
-      { to: '/users', label: 'User Management', icon: Users, desc: 'Create & approve accounts' },
+      { to: '/console/users', label: 'User Management', icon: Users, desc: 'Create & approve accounts' },
       { to: '/upload', label: 'Data Intake', icon: Boxes, desc: 'Import fleet & tyre data' },
       { to: '/executive-report', label: 'Executive Report', icon: FileText, desc: 'Board-ready insights' },
       { to: '/settings', label: 'Settings', icon: ShieldCheck, desc: 'Platform configuration' },

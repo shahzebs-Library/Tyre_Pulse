@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import * as aiApi from '../lib/api/aiAnalytics'
 import { useSettings } from '../contexts/SettingsContext'
 import { detectAnomalies } from '../lib/anomalyEngine'
@@ -18,6 +18,7 @@ import {
   TrendingUp, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -100,6 +101,7 @@ function AiChart({ chartType, chartData, chartTitle }) {
 }
 
 function AiTable({ tableHeaders, tableRows }) {
+  const tablePager = usePagedRows(tableRows)
   if (!tableHeaders?.length || !tableRows?.length) return null
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-800">
@@ -112,7 +114,7 @@ function AiTable({ tableHeaders, tableRows }) {
           </tr>
         </thead>
         <tbody>
-          {tableRows.map((row, i) => (
+          {tablePager.pageRows.map((row, i) => (
             <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
               {row.map((cell, j) => (
                 <td key={j} className="px-3 py-2 text-[var(--panel-ink-2)]">{cell}</td>
@@ -121,6 +123,7 @@ function AiTable({ tableHeaders, tableRows }) {
           ))}
         </tbody>
       </table>
+      <TablePagination {...tablePager} />
     </div>
   )
 }
@@ -277,9 +280,7 @@ export default function AiAnalytics() {
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
-  useEffect(() => { load() }, [activeCountry])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     const [tyreRes, inspRes, actionRes] = await Promise.all([
       aiApi.listAiTyreRecords({ country: activeCountry }),
@@ -290,7 +291,9 @@ export default function AiAnalytics() {
     setInspections(inspRes.data ?? [])
     setActions(actionRes.data ?? [])
     setLoading(false)
-  }
+  }, [activeCountry])
+
+  useEffect(() => { load() }, [load])
 
   const anomalies   = useMemo(() => detectAnomalies(records), [records])
   const dataContext = useMemo(() => buildDataContext(records, anomalies, inspections, actions), [records, anomalies, inspections, actions])

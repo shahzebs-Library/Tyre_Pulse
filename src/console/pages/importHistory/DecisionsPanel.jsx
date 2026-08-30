@@ -134,7 +134,7 @@ export default function DecisionsPanel() {
   useEffect(() => { load() }, [load])
 
   const countries = useMemo(() => summariseCountries(data?.countries), [data])
-  const allItems = data?.items || []
+  const allItems = useMemo(() => data?.items || [], [data?.items])
   const flaggedCount = useMemo(() => allItems.filter(needsAttention).length, [allItems])
   const items = useMemo(() => {
     const base = onlyFlagged ? allItems.filter(needsAttention) : allItems

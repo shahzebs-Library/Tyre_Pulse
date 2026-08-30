@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { Link } from 'react-router-dom'
 import {
   CalendarClock, Plus, RefreshCw, AlertTriangle, Trash2, Zap, Loader2,
@@ -78,6 +79,7 @@ export default function ChecklistSchedules() {
   const { options: siteOptions } = useSites(activeCountry)
 
   const [schedules, setSchedules] = useState([])
+  const schedulesPager = usePagedRows(schedules)
   const [templates, setTemplates] = useState([])
   const [roles, setRoles] = useState(FALLBACK_ROLES)
   const [loading, setLoading] = useState(true)
@@ -573,7 +575,7 @@ export default function ChecklistSchedules() {
                     </tr>
                   </thead>
                   <tbody>
-                    {schedules.map((s) => {
+                    {schedulesPager.pageRows.map((s) => {
                       const busy = rowBusyId === s.id
                       const overdue = s.active && isOverdue(s.next_due)
                       return (
@@ -633,6 +635,7 @@ export default function ChecklistSchedules() {
                     })}
                   </tbody>
                 </table>
+                <TablePagination {...schedulesPager} />
               </div>
             )}
 

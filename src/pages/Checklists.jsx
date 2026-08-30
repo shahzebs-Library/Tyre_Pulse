@@ -19,6 +19,7 @@ import { toUserMessage } from '../lib/safeError'
 import { useTenant } from '../contexts/TenantContext'
 import ChecklistViewerDrawer from '../components/checklist/ChecklistViewerDrawer'
 import MonthlyGridPanel from '../components/checklist/MonthlyGridPanel'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 const ELEVATED = ['admin', 'manager', 'director']
 
@@ -149,6 +150,7 @@ export default function Checklists() {
     return byTemplate.filter((s) =>
       [s.template_name, s.title, s.asset_no, s.site, s.status].filter(Boolean).some((v) => String(v).toLowerCase().includes(q)))
   }, [submissions, search, templateParam])
+  const submissionsPager = usePagedRows(filteredSubmissions)
 
   // Name the template we were sent to look at, so a filtered-to-nothing list
   // reads as "this template has no submissions" rather than as a broken page.
@@ -449,7 +451,7 @@ export default function Checklists() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSubmissions.map((s) => (
+                {submissionsPager.pageRows.map((s) => (
                   <tr
                     key={s.id}
                     // Opens in place rather than navigating away. Reading a
@@ -490,6 +492,7 @@ export default function Checklists() {
                 ))}
               </tbody>
             </table>
+            <TablePagination {...submissionsPager} />
           </div>
         )
       )}

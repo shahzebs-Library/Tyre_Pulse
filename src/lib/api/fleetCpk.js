@@ -29,12 +29,12 @@ function emptyResult() {
 /**
  * Fetch unit-aware fleet CPK for a period.
  *
- * @param {{ country?:string, from?:string, to?:string }} [opts]
+ * @param {{ country?:string, from?:string, to?:string, strict?:boolean }} [opts]
  *   country: a single country ('KSA'/'UAE'/'Egypt') or 'All'/null for every country.
  *   from/to: ISO YYYY-MM-DD date bounds (either may be omitted).
  * @returns {Promise<{ perVehicle:Array, byType:Array, fleet:Array }>}
  *   Camel-cased arrays parsed from the RPC's per_vehicle / by_type / fleet.
- *   Always resolves; never rejects.
+ *   Forgiving by default; strict callers receive source failures for explicit UI recovery.
  */
 /**
  * KM SOURCE for CPK (V462): trace the fleet CPK km back to the exact tyre rows.
@@ -160,20 +160,28 @@ export async function getFleetAreaMap({ country } = {}) {
   }
 }
 
-export async function getFleetCpk({ country, from, to } = {}) {
+export async function getFleetCpk({ country, from, to, strict = false } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_fleet_cpk', {
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
     })
-    if (error || !data) return emptyResult()
+    if (error) {
+      if (strict) throw error
+      return emptyResult()
+    }
+    if (!data) {
+      if (strict) throw new Error('Fleet CPK returned no response.')
+      return emptyResult()
+    }
     return {
       perVehicle: Array.isArray(data.per_vehicle) ? data.per_vehicle : [],
       byType: Array.isArray(data.by_type) ? data.by_type : [],
       fleet: Array.isArray(data.fleet) ? data.fleet : [],
     }
-  } catch {
+  } catch (error) {
+    if (strict) throw error
     return emptyResult()
   }
 }

@@ -68,7 +68,6 @@ export const NAV_COMMANDS = [
   { id: 'tyre-specs',     label: 'Tyre Specifications',  path: '/tyre-specs',   icon: 'FileText',   adminOnly: true },
   { id: 'rotation',       label: 'Rotation Schedule',    path: '/rotation',     icon: 'RefreshCcw', adminOnly: true },
   { id: 'root-cause',     label: 'Root Cause Engine',    path: '/root-cause',   icon: 'Search',     adminOnly: true, moduleKey: 'root_cause_engine' },
-  { id: 'ai',             label: 'Smart Analytics',      path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center' },
   // Workshop & Downtime
   { id: 'work-orders',    label: 'Work Orders',          path: '/work-orders',  icon: 'Wrench', keywords: ['job card', 'jobcard', 'jc', 'repair order', 'wo', 'maintenance job'] },
   { id: 'repair-requests', label: 'Repair Requests (RFR)', path: '/repair-requests', icon: 'ClipboardList', keywords: ['rfr', 'request for repair', 'repair request', 'raise a request', 'fault report', 'job card request'] },
@@ -106,7 +105,7 @@ export const NAV_COMMANDS = [
   { id: 'report-center',  label: 'Report Center',        path: '/report-center', icon: 'FileText' },
   { id: 'scheduled-reports', label: 'Scheduled Reports', path: '/scheduled-reports', icon: 'CalendarCheck' },
   { id: 'executive-report', label: 'Executive Report',   path: '/executive-report', icon: 'Presentation', adminOnly: true, moduleKey: 'executive_report' },
-  { id: 'ai-command-center', label: 'AI Command Center', path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center' },
+  { id: 'ai-command-center', label: 'AI Command Center', path: '/ai-command-center', icon: 'Cpu',    adminOnly: true, moduleKey: 'ai_command_center', keywords: ['smart analytics', 'ai analytics', 'assistant'] },
   { id: 'knowledge-base', label: 'Knowledge Base',       path: '/knowledge-base', icon: 'FileText', adminOnly: true },
   { id: 'ai-cost-monitor', label: 'AI Cost Monitor',     path: '/ai-cost-monitor', icon: 'BarChart2', adminOnly: true },
   { id: 'continuous-improvement', label: 'Continuous Improvement', path: '/continuous-improvement', icon: 'Zap', adminOnly: true, moduleKey: 'analytics' },
@@ -117,7 +116,7 @@ export const NAV_COMMANDS = [
   { id: 'upload-approvals', label: 'Upload Approvals',   path: '/upload-approvals', icon: 'ClipboardCheck', adminOnly: true },
   { id: 'custom-data',    label: 'Custom Data',          path: '/custom-data',  icon: 'FileText' },
   { id: 'audit',          label: 'Audit Trail',          path: '/audit',        icon: 'History',    adminOnly: true, moduleKey: 'audit_trail' },
-  { id: 'users',          label: 'User Management',      path: '/users',        icon: 'UserCog',    adminOnly: true, moduleKey: 'user_management' },
+  { id: 'users',          label: 'User Management',      path: '/console/users', icon: 'UserCog',    adminOnly: true, moduleKey: 'user_management' },
   { id: 'settings',       label: 'Settings',             path: '/settings',     icon: 'Settings' },
   { id: 'scan',           label: 'Tyre Scan (QR)',       path: '/scan',         icon: 'QrCode' },
   // Platform (roadmap tranche)

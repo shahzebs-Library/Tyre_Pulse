@@ -100,6 +100,13 @@ export default function CostM3Table({
                 <tr
                   key={keyOf(row, i)}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  onKeyDown={onRowClick ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onRowClick(row)
+                    }
+                  } : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
                   className={onRowClick ? 'cursor-pointer' : undefined}
                   style={{ borderTop: '1px solid var(--border-subtle)' }}
                 >

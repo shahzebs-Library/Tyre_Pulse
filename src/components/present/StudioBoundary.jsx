@@ -24,7 +24,6 @@ export default class StudioBoundary extends Component {
     // Best-effort, never re-throw: the host page must keep working.
     try {
       if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-        // eslint-disable-next-line no-console
         console.warn('[ChartBuilder] contained render error:', error)
       }
     } catch { /* ignore */ }

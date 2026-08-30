@@ -76,6 +76,12 @@ export default function ErpConnectionPanel() {
           <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">API base URL (https)</span>
           <input className="input w-full mt-1 font-mono text-sm" value={cfg.base_url} disabled={!isAdmin} onChange={(e) => set('base_url', e.target.value)} placeholder="https://erp.yourcompany.com/api/v1" />
         </label>
+        <label className="block md:col-span-2">
+          <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Server credential reference</span>
+          <input className="input w-full mt-1 font-mono text-sm" value={cfg.credential_ref || ''} disabled={!isAdmin}
+            onChange={(e) => set('credential_ref', e.target.value.toUpperCase())} placeholder="ERP_API_KEY" pattern="[A-Z][A-Z0-9_]{2,79}" />
+          <span className="text-[11px] text-[var(--text-muted)]">Secret name only. Never paste the key or token value.</span>
+        </label>
         <label className="block">
           <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Authentication</span>
           <select className="input w-full mt-1" value={cfg.auth_type} disabled={!isAdmin} onChange={(e) => set('auth_type', e.target.value)}>
@@ -117,7 +123,7 @@ export default function ErpConnectionPanel() {
       <div className="rounded-lg px-3 py-3 text-xs leading-relaxed bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] space-y-1.5">
         <p className="flex items-center gap-2 font-semibold text-[var(--text-primary)]"><KeyRound size={13} className="text-[var(--accent)]" /> Where does the API key go?</p>
         <p>Your ERP key/token is <b>never stored here or in the browser</b>. It's set once as a secure server secret. After saving this config, an admin runs:</p>
-        <code className="block font-mono bg-black/30 rounded px-2 py-1.5 text-[11px] text-emerald-300 overflow-x-auto">supabase secrets set ERP_API_KEY=your-key-here</code>
+        <code className="block font-mono bg-black/30 rounded px-2 py-1.5 text-[11px] text-emerald-300 overflow-x-auto">supabase secrets set {cfg.credential_ref || 'ERP_API_KEY'}=your-key-here</code>
         <p className="flex items-start gap-1.5 text-[var(--text-muted)]"><Info size={12} className="mt-0.5 shrink-0" /> A scheduled edge function then reads that secret, pulls the selected entities from your ERP, and stages every row into the Data Intake Center for validation before commit, the same controlled pipeline as manual uploads.</p>
       </div>
 

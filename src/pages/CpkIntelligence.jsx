@@ -20,7 +20,7 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import {
   Gauge, Truck, Factory, FlaskConical, TrendingUp, Table2,
-  FileSpreadsheet, FileText, RefreshCcw, Info, Milestone, Layers,
+  FileSpreadsheet, FileText, RefreshCcw, Info, Milestone, Layers, AlertTriangle,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
@@ -36,6 +36,7 @@ import {
 import { fmtCpkValue, fmtDistance, fmtMoney, fmtCoverage, sortByTypeWorstFirst } from '../lib/fleetCpkView'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import CpkDataTable from '../components/cpk/CpkDataTable'
+import { toUserMessage } from '../lib/safeError'
 
 const CpkScenarioStudioPanel = lazy(() => import('../components/cpk/CpkScenarioStudioPanel'))
 const CpkDriversPanel = lazy(() => import('../components/cpk/CpkDriversPanel'))
@@ -80,13 +81,20 @@ export default function CpkIntelligence() {
   // Core fleet CPK - loaded for every tab (small: one country + one bounded window).
   const [fleetCpk, setFleetCpk] = useState({ perVehicle: [], byType: [], fleet: [] })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    getFleetCpk({ country, from: bounds.from, to: bounds.to })
+    setError('')
+    getFleetCpk({ country, from: bounds.from, to: bounds.to, strict: true })
       .then((res) => { if (!cancelled) setFleetCpk(res || { perVehicle: [], byType: [], fleet: [] }) })
-      .catch(() => { if (!cancelled) setFleetCpk({ perVehicle: [], byType: [], fleet: [] }) })
+      .catch((loadError) => {
+        if (!cancelled) {
+          setFleetCpk({ perVehicle: [], byType: [], fleet: [] })
+          setError(toUserMessage(loadError, 'Could not load CPK data.'))
+        }
+      })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [country, bounds.from, bounds.to])
@@ -110,20 +118,25 @@ export default function CpkIntelligence() {
   const [drivers, setDrivers] = useState({ ok: false, windows: null, segments: [] })
   const [brandRows, setBrandRows] = useState([])
   const [advLoading, setAdvLoading] = useState(false)
+  const [advancedError, setAdvancedError] = useState('')
 
   useEffect(() => {
     if (tab !== 'drivers' && tab !== 'brand') return
     let cancelled = false
     setAdvLoading(true)
-    Promise.all([
+    setAdvancedError('')
+    Promise.allSettled([
       tab === 'drivers'
-        ? getCpkDrivers({ country, from: bounds.from, to: bounds.to }).catch(() => ({ ok: false, windows: null, segments: [] }))
+        ? getCpkDrivers({ country, from: bounds.from, to: bounds.to, strict: true })
         : Promise.resolve(null),
-      getBrandSizeCpk({ country, from: bounds.from, to: bounds.to }).catch(() => []),
+      getBrandSizeCpk({ country, from: bounds.from, to: bounds.to, strict: true }),
     ]).then(([d, b]) => {
       if (cancelled) return
-      if (d) setDrivers(d)
-      setBrandRows(Array.isArray(b) ? b : [])
+      if (d.status === 'fulfilled' && d.value) setDrivers(d.value)
+      else if (d.status === 'rejected') setDrivers({ ok: false, windows: null, segments: [] })
+      setBrandRows(b.status === 'fulfilled' && Array.isArray(b.value) ? b.value : [])
+      const failed = [d.status === 'rejected' && 'change drivers', b.status === 'rejected' && 'brand value'].filter(Boolean)
+      if (failed.length) setAdvancedError(`Could not load ${failed.join(' and ')} for this period.`)
     }).finally(() => { if (!cancelled) setAdvLoading(false) })
     return () => { cancelled = true }
   }, [tab, country, bounds.from, bounds.to])
@@ -259,6 +272,19 @@ export default function CpkIntelligence() {
         Distance = total tyre-km (the sum of each tyre's total_km from the uploaded change data),
         matched to the tyre's change month. Cost is per country in its own currency.
       </p>
+
+      {error && (
+        <div role="alert" className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-red-700/40 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+          <span className="flex items-center gap-2"><AlertTriangle size={15} />{error}</span>
+          <button type="button" onClick={load} className="inline-flex items-center gap-1.5 rounded-md border border-red-700/50 px-3 py-1.5 text-xs"><RefreshCcw size={13} /> Retry</button>
+        </div>
+      )}
+
+      {advancedError && (tab === 'drivers' || tab === 'brand') && (
+        <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-amber-700/40 bg-amber-900/15 px-4 py-3 text-sm text-amber-300">
+          <AlertTriangle size={15} />{advancedError}
+        </div>
+      )}
 
       {/* Tabs. Only the open tab's advanced data is fetched. */}
       <div className="mb-4 flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">

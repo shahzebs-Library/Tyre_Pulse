@@ -16,6 +16,7 @@
  * computed in exactly one place (page, table, exports).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
@@ -254,6 +255,7 @@ export default function RetreadClaims() {
   // ── Export ────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['claim_no', 'tyre_serial', 'asset_no', 'vendor', 'reason', 'claim_date', 'cost', 'amount_recovered', 'status']
   const EXPORT_HEADERS = ['Claim No', 'Tyre Serial', 'Asset', 'Vendor', 'Reason', 'Claim Date', 'Cost', 'Recovered', 'Status']
+  const claimsPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => ({
     claim_no: r.claim_no || '', tyre_serial: r.tyre_serial || '', asset_no: r.asset_no || '',
     vendor: r.vendor || '', reason: r.reason || '', claim_date: fmtDate(r.claim_date),
@@ -503,7 +505,7 @@ export default function RetreadClaims() {
                     {summary.total === 0 ? 'No retread claims yet. Record your first claim.' : 'No claims match these filters.'}
                   </td></tr>
                 ) : (
-                  filtered.map((r) => (
+                  claimsPager.pageRows.map((r) => (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{r.claim_no || 'N/A'}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-secondary)]">{r.tyre_serial || 'N/A'}{r.asset_no ? <span className="text-[var(--text-muted)]"> | {r.asset_no}</span> : ''}</td>
@@ -524,6 +526,7 @@ export default function RetreadClaims() {
                 )}
               </tbody>
             </table>
+            <TablePagination {...claimsPager} />
           </div>
         </div>
       )}

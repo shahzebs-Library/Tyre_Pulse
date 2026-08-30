@@ -30,6 +30,7 @@ import {
   listUserGrants, setUserAccessGrant, revokeUserAccessGrant,
 } from '../lib/api/accessGrants'
 import { toUserMessage } from '../lib/safeError'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 const ROLE_TINT = {
   Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
@@ -154,6 +155,7 @@ export default function AccessGrantsManager() {
   // Grants for the selected user
   const [grants, setGrants] = useState(null)        // null = loading
   const [grantsError, setGrantsError] = useState('')
+  const grantsPager = usePagedRows(grants)
 
   // Add-grant form
   const [form, setForm] = useState(EMPTY_FORM)
@@ -589,7 +591,7 @@ export default function AccessGrantsManager() {
                             No per-user grants yet. This user gets exactly their role baseline.
                           </td>
                         </tr>
-                      ) : grants.map((g) => {
+                      ) : grantsPager.pageRows.map((g) => {
                         const revoke = g.effect === 'revoke'
                         return (
                           <tr key={g.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -622,6 +624,7 @@ export default function AccessGrantsManager() {
                       })}
                     </tbody>
                   </table>
+                  {Array.isArray(grants) && grants.length > 0 && <TablePagination {...grantsPager} />}
                 </div>
               </div>
             </div>

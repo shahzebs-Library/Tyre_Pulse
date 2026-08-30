@@ -4,7 +4,7 @@
  * Only users with is_super_admin = true can enter the console.
  * Supports TOTP MFA (Supabase built-in AAL2).
  */
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase, IS_CONSOLE_SURFACE } from '../lib/supabase'
 import { hasUnmetMfa } from '../lib/authAssurance'
 
@@ -21,18 +21,6 @@ export function ConsoleAuthProvider({ children }) {
   const [loading, setLoading]     = useState(true)
   const [activeOrg, setActiveOrg] = useState(null)
   const [orgs, setOrgs]           = useState([])
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) await resolveAdmin(session.user.id)
-      else setLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      if (session?.user) await resolveAdmin(session.user.id)
-      else { setAdmin(null); setLoading(false) }
-    })
-    return () => subscription.unsubscribe()
-  }, [])
 
   // Idle + absolute-lifetime auto sign-out for the ISOLATED console session (a
   // separately-opened console tab on its own tab-local sessionStorage session).
@@ -60,7 +48,15 @@ export function ConsoleAuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [admin])
 
-  async function resolveAdmin(userId) {
+  const loadOrgs = useCallback(async () => {
+    const { data } = await supabase
+      .from('organisations')
+      .select('id, name, slug, countries, country, plan, active, locked, contact_email')
+      .order('name')
+    setOrgs(data ?? [])
+  }, [])
+
+  const resolveAdmin = useCallback(async (userId) => {
     const { data } = await supabase
       .from('profiles')
       .select('*, email')
@@ -94,15 +90,19 @@ export function ConsoleAuthProvider({ children }) {
       setAdmin(null)
     }
     setLoading(false)
-  }
+  }, [loadOrgs])
 
-  async function loadOrgs() {
-    const { data } = await supabase
-      .from('organisations')
-      .select('id, name, slug, countries, country, plan, active, locked, contact_email')
-      .order('name')
-    setOrgs(data ?? [])
-  }
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) await resolveAdmin(session.user.id)
+      else setLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
+      if (session?.user) await resolveAdmin(session.user.id)
+      else { setAdmin(null); setLoading(false) }
+    })
+    return () => subscription.unsubscribe()
+  }, [resolveAdmin])
 
   /**
    * signIn - step 1 of login.

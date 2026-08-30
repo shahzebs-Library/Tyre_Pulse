@@ -88,7 +88,7 @@ export default function ConsoleAuditLog() {
         ;(data ?? []).forEach(p => { map[p.id] = p })
         setAdminCache(prev => ({ ...prev, ...map }))
       })
-  }, [logs])
+  }, [logs, adminCache])
 
   async function exportCsv() {
     const rows = logs.map(l => [

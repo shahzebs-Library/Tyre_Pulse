@@ -164,7 +164,7 @@ export default function Analytics() {
     return () => { cancelled = true }
   }, [activeCountry])
 
-  const costByMonth = costSplit?.byMonth || []
+  const costByMonth = useMemo(() => costSplit?.byMonth || [], [costSplit])
   const costTotals = useMemo(() => splitTotals(costByMonth), [costByMonth])
   const costModeColor = useMemo(() => {
     const idx = Math.max(0, COST_MODES.findIndex((m) => m.key === costMode))

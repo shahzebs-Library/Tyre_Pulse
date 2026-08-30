@@ -1047,7 +1047,7 @@ export default function TyreSpecifications() {
 
   // ── Derive vehicle type from asset number prefix when fleet_master unavailable ─
 
-  function deriveVehicleType(assetNo) {
+  const deriveVehicleType = useCallback((assetNo) => {
     if (!assetNo) return null
     const fm = fleetMaster.find(f => f.asset_no === assetNo)
     if (fm?.vehicle_type) return fm.vehicle_type
@@ -1061,7 +1061,7 @@ export default function TyreSpecifications() {
       if (prefix.startsWith(k)) return v
     }
     return null
-  }
+  }, [fleetMaster])
 
   // ── Compliance analysis ────────────────────────────────────────────────────────
 
@@ -1096,7 +1096,7 @@ export default function TyreSpecifications() {
 
       return { ...tr, vehicleType, site, specStatus, violations, matchingSpec }
     })
-  }, [tyreRecords, specs, fleetMaster])
+  }, [tyreRecords, specs, fleetMaster, deriveVehicleType])
 
   // normalizePosition sourced from lib/tyrePositions (coded + free-text aware).
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as rca from '../lib/api/rca'
 import * as correctiveActions from '../lib/api/correctiveActions'
@@ -88,9 +88,7 @@ export default function RcaRecords() {
     reader.readAsDataURL(file)
   }
 
-  useEffect(() => { load() }, [activeCountry])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     let data
     try {
@@ -100,7 +98,9 @@ export default function RcaRecords() {
     }
     setRecords(data ?? [])
     setLoading(false)
-  }
+  }, [activeCountry])
+
+  useEffect(() => { load() }, [load])
 
   function startAdd() {
     setForm({ ...EMPTY_FORM, country: defaultCountryFor(activeCountry) })

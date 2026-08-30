@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import * as gatePassPageApi from '../lib/api/gatePassPage'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -9,12 +10,15 @@ import {
   Download, Search, RefreshCw, Activity, Lock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import EmptyState from '../components/EmptyState'
 import StatusBadge from '../components/ui/StatusBadge'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { gatePasses } from '../lib/api'
 import { logAudit } from '../lib/audit'
 import { publish } from '../lib/events'
+import { toUserMessage } from '../lib/safeError'
 
 const STATUS_CONFIG = {
   Cleared: { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700/50' },
@@ -34,6 +38,10 @@ export default function GatePass() {
   const [issueError, setIssueError]   = useState('')
   const [passes, setPasses]           = useState([])
   const [sites, setSites]             = useState([])
+  const [todayLoading, setTodayLoading] = useState(true)
+  const [todayError, setTodayError] = useState('')
+  const [historyError, setHistoryError] = useState('')
+  const [sitesError, setSitesError] = useState('')
   const [checking, setChecking]       = useState(false)
   const [issuing, setIssuing]         = useState(false)
   const [denialReason, setDenialReason] = useState('')
@@ -59,35 +67,56 @@ export default function GatePass() {
   const today = new Date().toISOString().split('T')[0]
   const todayDisplay = formatDate(new Date(), 'All', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
+  const loadSites = useCallback(async () => {
+    setSitesError('')
+    try {
+      const { data, error } = await gatePassPageApi.listGatePassSites()
+      if (error) throw error
+      if (data) setSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
+    } catch (error) {
+      setSitesError(toUserMessage(error, 'Could not load the site list.'))
+    }
+  }, [])
+
+  const loadPasses = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setTodayLoading(true)
+    setTodayError('')
+    try {
+      const { data, error } = await gatePassPageApi.listGatePasses({ date: today, site: siteFilter })
+      if (error) throw error
+      setPasses(data || [])
+    } catch (error) {
+      setTodayError(toUserMessage(error, "Could not load today's gate passes."))
+    } finally {
+      if (!silent) setTodayLoading(false)
+    }
+  }, [siteFilter, today])
+
+  const loadHistoryPasses = useCallback(async (date) => {
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const { data, error } = await gatePassPageApi.listGatePasses({ date, site: siteFilter })
+      if (error) throw error
+      setHistoryPasses(data || [])
+    } catch (error) {
+      setHistoryError(toUserMessage(error, 'Could not load historical gate passes.'))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [siteFilter])
+
   useEffect(() => {
     loadPasses()
     loadSites()
     // Auto-refresh every 60 s for gate station use
     clearInterval(autoRefreshRef.current)
-    autoRefreshRef.current = setInterval(loadPasses, 60_000)
+    autoRefreshRef.current = setInterval(() => loadPasses({ silent: true }), 60_000)
     return () => clearInterval(autoRefreshRef.current)
-  }, [siteFilter, activeCountry])
-
-  async function loadSites() {
-    const { data } = await gatePassPageApi.listGatePassSites()
-    if (data) setSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
-  }
-
-  async function loadPasses() {
-    const { data } = await gatePassPageApi.listGatePasses({ date: today, site: siteFilter })
-    setPasses(data || [])
-  }
-
-  async function loadHistoryPasses(date) {
-    setHistoryLoading(true)
-    const { data } = await gatePassPageApi.listGatePasses({ date, site: siteFilter })
-    setHistoryPasses(data || [])
-    setHistoryLoading(false)
-  }
+  }, [activeCountry, loadPasses, loadSites])
 
   function handleHistoryDateChange(date) {
     setHistoryDate(date)
-    loadHistoryPasses(date)
   }
 
   // Load history when switching to history tab
@@ -95,7 +124,7 @@ export default function GatePass() {
     if (logTab === 'history') {
       loadHistoryPasses(historyDate)
     }
-  }, [logTab, siteFilter])
+  }, [historyDate, loadHistoryPasses, logTab])
 
   // Reset the approval lock whenever a different asset/inspection is loaded into
   // the clearance panel (or cleared); EntityApprovalPanel re-reports the true
@@ -113,15 +142,21 @@ export default function GatePass() {
     // Safety gate: surface open critical defects for this asset before release.
     gatePasses.listGatePassBlockers({ assetNo: assetSearch.trim(), country: activeCountry })
       .then(setBlockers).catch(() => setBlockers(null))
-    const { data } = await gatePassPageApi.findAssetInspectionForClearance({ assetNo: assetSearch.trim(), date: today })
-    if (data?.[0]) {
-      setInspection(data[0])
-      setCheckResult('found')
-      if (data[0].site && !siteFilter) setSiteFilter(data[0].site)
-    } else {
-      setCheckResult('not-found')
+    try {
+      const { data, error } = await gatePassPageApi.findAssetInspectionForClearance({ assetNo: assetSearch.trim(), date: today })
+      if (error) throw error
+      if (data?.[0]) {
+        setInspection(data[0])
+        setCheckResult('found')
+        if (data[0].site && !siteFilter) setSiteFilter(data[0].site)
+      } else {
+        setCheckResult('not-found')
+      }
+    } catch (error) {
+      setIssueError(toUserMessage(error, 'Could not check clearance. Try again.'))
+    } finally {
+      setChecking(false)
     }
-    setChecking(false)
   }
 
   async function issuePass(status) {
@@ -261,6 +296,7 @@ export default function GatePass() {
       p.denial_reason?.toLowerCase().includes(q)
     )
   }, [activePassList, logSearch])
+  const passesPager = usePagedRows(filteredPassList)
 
   return (
     <div className="space-y-6">
@@ -338,6 +374,7 @@ export default function GatePass() {
               <option value="">All Sites</option>
               {sites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+            {sitesError && <p className="mt-1 text-xs text-amber-400">Site list unavailable. You can still enter an asset number.</p>}
           </div>
           <div className="flex items-end">
             <button onClick={checkClearance} disabled={checking || !assetSearch.trim()}
@@ -361,6 +398,7 @@ export default function GatePass() {
               <p>Type: <span className="text-white">{inspection.inspection_type}</span></p>
               <p>Inspector: <span className="text-white">{inspection.inspector || 'Not specified'}</span></p>
               <p>Recorded: <span className="text-white">{new Date(inspection.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span></p>
+              <p><Link to={`/assets/${encodeURIComponent(assetSearch.trim())}`} className="text-blue-300 underline underline-offset-2">Open vehicle record</Link></p>
             </div>
             {blockers?.blocked && (
               <div className="rounded-lg p-3 mb-3" style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.45)' }}>
@@ -467,12 +505,12 @@ export default function GatePass() {
         {logTab === 'history' && (
           <div className="mb-4">
             <label className="label">Select Date</label>
-            <input
-              type="date"
+            <DateField
               className="input w-48"
               value={historyDate}
               max={yesterday}
-              onChange={e => handleHistoryDateChange(e.target.value)}
+              onChange={handleHistoryDateChange}
+              ariaLabel="Historical pass date"
             />
           </div>
         )}
@@ -491,7 +529,12 @@ export default function GatePass() {
         )}
 
         {/* Table */}
-        {logTab === 'history' && historyLoading ? (
+        {(logTab === 'today' ? todayError : historyError) ? (
+          <div role="alert" className="rounded-lg border border-red-700/40 bg-red-900/20 p-4 text-sm text-red-300 flex items-center justify-between gap-3">
+            <span>{logTab === 'today' ? todayError : historyError}</span>
+            <button type="button" className="btn-secondary text-xs" onClick={() => logTab === 'today' ? loadPasses() : loadHistoryPasses(historyDate)}>Retry</button>
+          </div>
+        ) : (logTab === 'history' ? historyLoading : todayLoading) ? (
           <div className="text-center py-8 text-gray-500">Loading...</div>
         ) : filteredPassList.length === 0 ? (
           <EmptyState
@@ -514,14 +557,16 @@ export default function GatePass() {
                 </tr>
               </thead>
               <tbody>
-                {filteredPassList.map(p => {
+                {passesPager.pageRows.map(p => {
                   const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.Pending
                   return (
                     <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                       <td className="py-2 pr-4 text-gray-400 text-xs font-mono">
                         {new Date(p.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                       </td>
-                      <td className="py-2 pr-4 font-mono text-white font-semibold">{p.asset_no}</td>
+                      <td className="py-2 pr-4 font-mono text-white font-semibold">
+                        <Link to={`/assets/${encodeURIComponent(p.asset_no)}`} className="hover:text-blue-300 underline-offset-2 hover:underline">{p.asset_no}</Link>
+                      </td>
                       <td className="py-2 pr-4 text-gray-300">{p.site || '-'}</td>
                       <td className="py-2 pr-4">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
@@ -534,6 +579,7 @@ export default function GatePass() {
                 })}
               </tbody>
             </table>
+            <TablePagination {...passesPager} />
             <div className="px-0 pt-2 text-xs text-gray-600 text-right">
               {filteredPassList.length} pass{filteredPassList.length !== 1 ? 'es' : ''}
               {logSearch && activePassList.length !== filteredPassList.length && ` (filtered from ${activePassList.length})`}

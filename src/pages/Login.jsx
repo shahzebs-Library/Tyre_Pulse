@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2,
+  Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle, CheckCircle2,
   Loader2, User, Zap, Wifi, WifiOff, Clock,
   BarChart3, Shield, Smartphone, Brain, TrendingUp, Bell,
 } from 'lucide-react'
@@ -18,6 +18,12 @@ import TwoFactorChallenge from '../components/TwoFactorChallenge'
 import { Illustration } from '../components/illustrations'
 import BrandIcon from '../components/ui/BrandIcon'
 import ThemeToggle from '../components/ui/ThemeToggle'
+import {
+  RECOVERY_GENERIC_MESSAGE,
+  recoveryDestinationIsValid,
+  requestPasswordRecovery,
+  verifyPasswordRecovery,
+} from '../lib/accountRecovery'
 
 // Login renders before the org is known, so it uses the logo cached on this
 // device after the last successful sign-in (V120), falling back to the mark.
@@ -214,7 +220,10 @@ export default function Login() {
   const [showSignupPw, setShowSignupPw] = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
   const [forgotMode, setForgotMode]   = useState(false)
-  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotChannel, setForgotChannel] = useState('email')
+  const [forgotDestination, setForgotDestination] = useState('')
+  const [forgotChallengeId, setForgotChallengeId] = useState('')
+  const [forgotCode, setForgotCode] = useState('')
   const [forgotSent, setForgotSent]   = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
@@ -259,7 +268,7 @@ export default function Login() {
       localStorage.removeItem('tp_pending_approval')
       setPendingApproval(true)
     }
-  }, [])
+  }, [sessionExpired, accessRevoked])
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -414,10 +423,15 @@ export default function Login() {
   async function handleForgot(e) {
     e.preventDefault(); setError(''); setForgotLoading(true)
     try {
-      const { error: fErr } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-        redirectTo: window.location.origin + '/reset-password',
-      })
-      if (fErr) setError(fErr.message); else setForgotSent(true)
+      if (!recoveryDestinationIsValid(forgotChannel, forgotDestination)) {
+        setError(forgotChannel === 'email'
+          ? 'Enter a valid recovery email address.'
+          : 'Enter a mobile number in international format, for example +966501234567.')
+        return
+      }
+      const result = await requestPasswordRecovery({ channel: forgotChannel, destination: forgotDestination })
+      setForgotChallengeId(result.challengeId || '')
+      setForgotSent(true)
     } catch (err) {
       setError(err?.message || t('auth.login.errUnexpected'))
     } finally {
@@ -425,7 +439,25 @@ export default function Login() {
     }
   }
 
-  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setPendingApproval(false) }
+  async function handleRecoveryCode(e) {
+    e.preventDefault(); setError(''); setForgotLoading(true)
+    try {
+      if (!/^\d{6}$/.test(forgotCode)) { setError('Enter the 6-digit code.'); return }
+      const actionLink = await verifyPasswordRecovery({
+        channel: forgotChannel,
+        destination: forgotDestination,
+        challengeId: forgotChallengeId,
+        code: forgotCode,
+      })
+      window.location.assign(actionLink)
+    } catch (err) {
+      setError(err?.message || 'The code is invalid or expired.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false); setForgotCode(''); setForgotChallengeId(''); setPendingApproval(false) }
 
   const inputStyle = (field) => ({
     width: '100%',
@@ -569,11 +601,11 @@ export default function Login() {
             ))}
           </div>
 
-          {/* Stats row */}
+          {/* Product capabilities — avoid unsupported operational statistics on the public surface. */}
           <div style={{ display:'flex', gap:32, marginTop:40 }}>
-            {[['10K+','auth.login.stats.tyresTracked'],['99.9%','auth.login.stats.uptime'],['3s','auth.login.stats.alertTime']].map(([val, lblKey]) => (
+            {[['auth.login.stats.lifecycle','auth.login.stats.tyresTracked'],['auth.login.stats.scoped','auth.login.stats.uptime'],['auth.login.stats.actionable','auth.login.stats.alertTime']].map(([valKey, lblKey]) => (
               <div key={lblKey}>
-                <div style={{fontSize:22, fontWeight:800, color:'var(--brand-on-tint)', letterSpacing:'-0.02em'}}>{val}</div>
+                <div style={{fontSize:22, fontWeight:800, color:'var(--brand-on-tint)', letterSpacing:'-0.02em'}}>{t(valKey)}</div>
                 <div style={{fontSize:11, color:'var(--login-text-dim)', fontWeight:500, marginTop:2}}>{t(lblKey)}</div>
               </div>
             ))}
@@ -752,7 +784,7 @@ export default function Login() {
                 >
                   {/* Unified identifier input - accepts email, username, or employee ID */}
                   <div>
-                    <div style={labelStyle}>{t('auth.login.idAnyLabel')}</div>
+                    <label htmlFor="login-identifier" style={labelStyle}>{t('auth.login.idAnyLabel')}</label>
                     <div style={{ position:'relative' }}>
                       <div style={{
                         position:'absolute', left:13, top:'50%', transform:'translateY(-50%)',
@@ -762,6 +794,8 @@ export default function Login() {
                         <User size={15}/>
                       </div>
                       <input
+                        id="login-identifier"
+                        name="identifier"
                         type="text"
                         style={{ ...inputStyle('id'), paddingLeft:40 }}
                         placeholder={t('auth.login.idAnyPlaceholder')}
@@ -777,9 +811,15 @@ export default function Login() {
                   {/* Password */}
                   <div>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
-                      <span style={labelStyle}>{t('auth.passwordLabel')}</span>
+                      <label htmlFor="login-password" style={labelStyle}>{t('auth.passwordLabel')}</label>
                       <button type="button"
-                        onClick={() => { setForgotMode(true); setForgotEmail(identifier.includes('@') ? identifier : ''); setError('') }}
+                        onClick={() => {
+                          const typed = identifier.trim()
+                          const looksLikePhone = /^(?:\+|00)[\d\s().-]+$/.test(typed)
+                          setForgotChannel(looksLikePhone ? 'sms' : 'email')
+                          setForgotDestination(typed.includes('@') || looksLikePhone ? typed : '')
+                          setForgotMode(true); setError('')
+                        }}
                         style={{ fontSize:11, color:'var(--brand-on-tint)', opacity:0.75, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'opacity 0.2s', letterSpacing:'0.02em' }}
                         onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
@@ -789,6 +829,8 @@ export default function Login() {
                     </div>
                     <div style={{ position:'relative' }}>
                       <input
+                        id="login-password"
+                        name="password"
                         type={showLoginPw ? 'text' : 'password'}
                         style={{ ...inputStyle('pw'), paddingRight:44 }}
                         placeholder="••••••••"
@@ -798,7 +840,7 @@ export default function Login() {
                         onBlur={() => setFocusedField(null)}
                         required autoComplete="current-password"
                       />
-                      <button type="button" onClick={() => setShowLoginPw(v => !v)} style={{
+                      <button type="button" aria-label={showLoginPw ? 'Hide password' : 'Show password'} onClick={() => setShowLoginPw(v => !v)} style={{
                         position:'absolute', right:13, top:'50%', transform:'translateY(-50%)',
                         color:'var(--login-icon)', background:'none', border:'none',
                         cursor:'pointer', padding:4, transition:'color 0.2s', display:'flex',
@@ -865,12 +907,33 @@ export default function Login() {
                       {t('auth.login.backToSignIn')}
                     </button>
                     <div style={{ fontSize:20, fontWeight:800, color:'var(--login-text)', marginBottom:5, letterSpacing:'-0.02em' }}>{t('auth.login.resetPasswordTitle')}</div>
-                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>{t('auth.login.resetPasswordDesc')}</div>
+                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>Use a recovery email or mobile number that you previously verified in Account Settings.</div>
+                  </div>
+                  <div role="group" aria-label="Recovery method" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                    {[
+                      ['email', Mail, 'Email'],
+                      ['sms', Phone, 'Mobile SMS'],
+                    ].map(([value, Icon, label]) => (
+                      <button key={value} type="button" aria-pressed={forgotChannel === value}
+                        onClick={() => { setForgotChannel(value); setForgotDestination(''); setError('') }}
+                        style={{
+                          padding:'10px', borderRadius:12, cursor:'pointer', fontSize:13, fontWeight:700,
+                          display:'flex', alignItems:'center', justifyContent:'center', gap:7,
+                          color:forgotChannel === value ? 'var(--brand-on-tint)' : 'var(--login-text-dim)',
+                          background:forgotChannel === value ? 'rgba(22,163,74,0.12)' : 'var(--login-input-bg)',
+                          border:`1.5px solid ${forgotChannel === value ? 'rgba(74,222,128,0.45)' : 'var(--login-input-border)'}`,
+                        }}>
+                        <Icon size={15}/>{label}
+                      </button>
+                    ))}
                   </div>
                   <div>
-                    <div style={labelStyle}>{t('auth.login.emailAddress')}</div>
-                    <input type="email" style={inputStyle('forgot')} placeholder="you@company.com"
-                      value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                    <label htmlFor="recovery-destination" style={labelStyle}>{forgotChannel === 'email' ? 'Verified recovery email' : 'Verified mobile number'}</label>
+                    <input id="recovery-destination" type={forgotChannel === 'email' ? 'email' : 'tel'} style={inputStyle('forgot')}
+                      autoComplete={forgotChannel === 'email' ? 'email' : 'tel'}
+                      inputMode={forgotChannel === 'email' ? 'email' : 'tel'}
+                      placeholder={forgotChannel === 'email' ? 'you@company.com' : '+966501234567'}
+                      value={forgotDestination} onChange={e => setForgotDestination(e.target.value)}
                       onFocus={() => setFocusedField('forgot')} onBlur={() => setFocusedField(null)}
                       required autoFocus/>
                   </div>
@@ -881,15 +944,18 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
                     boxShadow:'0 4px 24px rgba(22,163,74,0.35)',
                   }}>
-                    {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : <Mail size={16}/>}
-                    {forgotLoading ? t('auth.login.sending') : t('auth.login.sendResetLink')}
+                    {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : forgotChannel === 'email' ? <Mail size={16}/> : <Phone size={16}/>}
+                    {forgotLoading ? t('auth.login.sending') : 'Send verification code'}
                   </button>
+                  <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
+                    For security, TyrePulse gives the same response whether or not an account exists. Codes expire after 10 minutes.
+                  </p>
                 </motion.form>
               )}
 
               {/* Forgot sent success */}
               {forgotMode && forgotSent && (
-                <motion.div initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }}
+                <motion.form onSubmit={handleRecoveryCode} initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }}
                   style={{ textAlign:'center', padding:'8px 0' }}>
                   <div style={{
                     width:64, height:64, borderRadius:20, margin:'0 auto 18px',
@@ -897,17 +963,26 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center',
                     boxShadow:'0 0 40px rgba(22,163,74,0.25)',
                   }}>
-                    <CheckCircle2 size={30} style={{color:'var(--brand-on-tint)'}}/>
+                    <KeyRound size={30} style={{color:'var(--brand-on-tint)'}}/>
                   </div>
-                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>{t('auth.login.resetLinkSent')}</div>
-                  <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6}}>{t('auth.login.resetLinkSentDesc')}</div>
-                  <button onClick={() => { setForgotMode(false); setForgotSent(false) }} style={{
+                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>Enter your verification code</div>
+                  <div role="status" style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6}}>{RECOVERY_GENERIC_MESSAGE}</div>
+                  <label htmlFor="recovery-code" style={{ ...labelStyle, textAlign:'left', marginTop:18 }}>6-digit code</label>
+                  <input id="recovery-code" className="input" inputMode="numeric" autoComplete="one-time-code"
+                    pattern="[0-9]{6}" maxLength={6} value={forgotCode}
+                    onChange={e => setForgotCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    style={{ ...inputStyle('recovery-code'), textAlign:'center', fontSize:22, letterSpacing:'0.35em' }} autoFocus required />
+                  <button type="submit" disabled={forgotLoading || forgotCode.length !== 6} className="tp-btn-shine" style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
                     background:'linear-gradient(135deg, #16a34a, #15803d)',
-                    color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer',
+                    color:'#fff', fontSize:14, fontWeight:700, cursor:forgotLoading?'not-allowed':'pointer',
                     boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
-                  }}>{t('auth.login.backToSignInBtn')}</button>
-                </motion.div>
+                  }}>{forgotLoading ? 'Verifying…' : 'Verify and reset password'}</button>
+                  <button type="button" onClick={() => { setForgotSent(false); setForgotCode(''); setForgotChallengeId(''); setError('') }}
+                    style={{ marginTop:12, background:'none', border:'none', color:'var(--brand-on-tint)', cursor:'pointer', fontSize:12, fontWeight:600 }}>
+                    Change recovery method
+                  </button>
+                </motion.form>
               )}
 
               {/* ── SIGNUP FORM ───────────────────────────────────────────── */}

@@ -51,6 +51,13 @@ function monthsInRange(from, to) {
 }
 
 const EMPTY_SLICE = { data: [], error: null, truncated: false }
+const CATEGORY_LABEL = {
+  vehicle: 'Vehicle', generator: 'Generator', plant: 'Plant',
+  machinery: 'Machinery', equipment: 'Equipment', other: 'Other',
+}
+const OUTCOME_LABEL = {
+  completed: 'Completed', partial: 'Partial', deferred: 'Deferred', failed: 'Failed',
+}
 
 export default function ExecutiveAnalytics() {
   const { profile } = useAuth()
@@ -408,14 +415,7 @@ export default function ExecutiveAnalytics() {
   }, [riskData, palette, baseTooltip, fmtC])
 
   // ── Preventive Maintenance shaped datasets (pure lib) ───────────────────────
-  const pmNow = useMemo(() => new Date(), [pm.plans, pm.records])
-  const CATEGORY_LABEL = {
-    vehicle: 'Vehicle', generator: 'Generator', plant: 'Plant',
-    machinery: 'Machinery', equipment: 'Equipment', other: 'Other',
-  }
-  const OUTCOME_LABEL = {
-    completed: 'Completed', partial: 'Partial', deferred: 'Deferred', failed: 'Failed',
-  }
+  const [pmNow] = useState(() => new Date())
   const monthShort = (key) => {
     const m = /^(\d{4})-(\d{2})$/.exec(String(key || ''))
     if (!m) return String(key || '')

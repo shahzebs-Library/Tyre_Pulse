@@ -170,7 +170,10 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
   // Admins (and super-admins) may jump to ANY stage; managers/directors get the
   // guided forward/close/cancel set only.
   const isAdmin = String(profile?.role || '').toLowerCase() === 'admin' || profile?.is_super_admin === true
-  const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
+  const fmtCurrency = useCallback(
+    (v) => _fmtCurrencyBase(v, activeCurrency, 0),
+    [activeCurrency],
+  )
   const [downloading, setDownloading] = useState(false)
   const [caseDownloading, setCaseDownloading] = useState(false)
 
@@ -331,7 +334,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     } finally {
       setDownloading(false)
     }
-  }, [acc, parts, remarks, branding, company]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [acc, parts, remarks, branding, company, fmtCurrency])
 
   // The V417 case model must be provisioned for the case-summary PDF to carry
   // real workstream completion + closure level; pre-migration loadCase degrades
@@ -857,7 +860,10 @@ function WorkflowStageSection({ acc, elevated, isAdmin, locked, reload, setErr }
 }
 
 function OverviewTab({ acc, fmtCurrency }) {
-  const photos = Array.isArray(acc.photos) ? acc.photos.filter(Boolean) : []
+  const photos = useMemo(
+    () => (Array.isArray(acc.photos) ? acc.photos.filter(Boolean) : []),
+    [acc.photos],
+  )
   const [resolvedPhotos, setResolvedPhotos] = useState([])
 
   useEffect(() => {
@@ -866,7 +872,7 @@ function OverviewTab({ acc, fmtCurrency }) {
       if (mounted) setResolvedPhotos(urls)
     })
     return () => { mounted = false }
-  }, [JSON.stringify(photos)])
+  }, [photos])
 
   return (
     <div className="space-y-4">

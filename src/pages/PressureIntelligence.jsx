@@ -144,6 +144,7 @@ const HISTOGRAM_BANDS = [
   { label: '130-140', min: 130, max: 140, color: 'rgba(249,115,22,0.75)' },
   { label: '140+',    min: 140, max: Infinity, color: 'rgba(239,68,68,0.8)' },
 ]
+const SEVERITY_RANK = { critical_under: 0, under: 1, over: 2 }
 
 function bandFor(val) {
   return HISTOGRAM_BANDS.findIndex(b => val >= b.min && val < b.max)
@@ -437,7 +438,6 @@ export default function PressureIntelligence() {
   }), [])
 
   // ── Anomaly table ────────────────────────────────────────────────────────────
-  const SEVERITY_RANK = { critical_under: 0, under: 1, over: 2 }
   const anomalies = useMemo(() => {
     let rows = enriched.filter(r => r.status !== 'ok' && r.status !== 'unknown')
     if (tableSearch) {

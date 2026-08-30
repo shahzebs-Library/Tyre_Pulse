@@ -390,11 +390,7 @@ export default function AssetManagement() {
   const listRef = useScrollRestore('asset-management', !loading && assets.length > 0)
 
   // ── load data ─────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    loadAll()
-  }, [refreshKey, activeCountry])
-
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     setLoading(true)
     setLoadError('')
     try {
@@ -435,7 +431,11 @@ export default function AssetManagement() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeCountry, t])
+
+  useEffect(() => {
+    loadAll()
+  }, [loadAll, refreshKey])
 
   // ── derived data ──────────────────────────────────────────────────────────────
   const overviewMap = useMemo(() => {

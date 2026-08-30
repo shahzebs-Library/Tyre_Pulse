@@ -288,7 +288,7 @@ export default function AdvancedAnalytics() {
       }
     }
     load()
-  }, [activeCountry, datePreset, latestLoad])
+  }, [activeCountry, datePreset, latestLoad, t])
 
   // ── Derived filter options ─────────────────────────────────────────────────
   const uniqueSites = useMemo(() => {

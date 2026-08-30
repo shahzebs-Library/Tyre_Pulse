@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   fetchLoginHistory,
   fetchRecentSecurityEvents,
@@ -228,6 +229,8 @@ export default function SecurityCenter() {
       (r.action || '').toLowerCase().includes(q),
     )
   }, [rows, search])
+  const historyPager = usePagedRows(visibleRows, { pageSize: 25 })
+  const eventsPager = usePagedRows(events, { pageSize: 25 })
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -377,7 +380,7 @@ export default function SecurityCenter() {
                       </span>
                     </td>
                   </tr>
-                ) : visibleRows.map(r => (
+                ) : historyPager.pageRows.map(r => (
                   <tr key={r.id} className="border-b border-[var(--input-border)] last:border-0 hover:bg-[var(--input-bg)] transition-colors">
                     <td className="px-5 py-2.5">
                       <span className="text-[var(--text-primary)] font-medium">{actorName(r)}</span>
@@ -392,6 +395,7 @@ export default function SecurityCenter() {
                 ))}
               </tbody>
             </table>
+            {!historyLoading && !historyError && <TablePagination {...historyPager} />}
           </div>
         )}
       </div>
@@ -423,7 +427,7 @@ export default function SecurityCenter() {
                     <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">Loading security events…</td></tr>
                   ) : events.length === 0 ? (
                     <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">No sensitive actions recorded in the last {SECURITY_EVENT_WINDOW_DAYS} days.</td></tr>
-                  ) : events.map(ev => (
+                  ) : eventsPager.pageRows.map(ev => (
                     <tr key={ev.id} className="border-b border-[var(--input-border)] last:border-0 hover:bg-[var(--input-bg)] transition-colors">
                       <td className="px-5 py-2.5">
                         <span className="text-[var(--text-primary)] font-medium">{actorName(ev)}</span>
@@ -439,6 +443,7 @@ export default function SecurityCenter() {
                   ))}
                 </tbody>
               </table>
+              {!eventsLoading && !eventsError && <TablePagination {...eventsPager} />}
             </div>
           )}
         </div>

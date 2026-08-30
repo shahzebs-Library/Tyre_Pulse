@@ -203,11 +203,6 @@ export default function DataCleaning() {
   const [fixingDup, setFixingDup]         = useState(false)
   const [fixingOdom, setFixingOdom]       = useState(false)
 
-  // ── Effects ─────────────────────────────────────────────────────────────────
-  useEffect(() => { loadStats(); loadSites() }, [saveCount, activeCountry])
-  useEffect(() => { tab === 'pending' ? loadPending() : tab === 'cleaned' ? loadCleaned() : null }, [tab, page, filterConf, filterSite, saveCount, activeCountry])
-  useEffect(() => { if (tab === 'quality') runAllChecks() }, [tab, activeCountry])
-
   // Load previous score from localStorage
   useEffect(() => {
     const cached = localStorage.getItem('tp_dq_score_prev')
@@ -215,18 +210,18 @@ export default function DataCleaning() {
   }, [])
 
   // ── Existing loaders ─────────────────────────────────────────────────────────
-  async function loadStats() {
+  const loadStats = useCallback(async () => {
     const [p, c] = await Promise.all([
       dataCleaning.countTyreRecords({ country: activeCountry, cleaned: false }),
       dataCleaning.countTyreRecords({ country: activeCountry, cleaned: true }),
     ])
     setStats({ pending: p.count ?? 0, cleaned: c.count ?? 0 })
-  }
+  }, [activeCountry])
 
-  async function loadSites() {
+  const loadSites = useCallback(async () => {
     const { data } = await dataCleaning.listUncleanedSites({ country: activeCountry })
     setSites([...new Set((data ?? []).map(r => r.site))].sort())
-  }
+  }, [activeCountry])
 
   // Paging and both filters drive this read; a slower earlier one would repaint
   // the previous page's records and, worse, reset the selection under them.
@@ -253,38 +248,17 @@ export default function DataCleaning() {
     setLoading(false)
   }, [page, filterConf, filterSite, activeCountry, latestPending])
 
-  async function loadCleaned() {
+  const loadCleaned = useCallback(async () => {
     setLoading(true)
     const { data } = await dataCleaning.listCleanedRecords()
     setCleanedRecords(data ?? [])
     setCleanedSelected(new Set())
     setReclassifyProposed(null)
     setLoading(false)
-  }
+  }, [])
 
   // ── Quality Intelligence checks ─────────────────────────────────────────────
-  async function runAllChecks() {
-    setQiLoading(true)
-    setCheckLoading({ serialIssues: true, duplicateSerial: true, invalidPressure: true, missingTread: true, missingInspect: true, odometer: true, unrealisticLife: true })
-
-    // Get total record count
-    const { count: total } = await dataCleaning.countTyreRecords({ country: activeCountry })
-    setTotalRecords(total ?? 0)
-
-    await Promise.all([
-      checkSerialIssues(),
-      checkDuplicateSerials(),
-      checkInvalidPressure(),
-      checkMissingTread(),
-      checkMissingInspections(),
-      checkOdometerIssues(),
-      checkUnrealisticLife(),
-    ])
-
-    setQiLoading(false)
-  }
-
-  async function checkSerialIssues() {
+  const checkSerialIssues = useCallback(async () => {
     setCheckLoading(p => ({ ...p, serialIssues: true }))
     try {
       const { data } = await dataCleaning.listSerialRecords({ country: activeCountry })
@@ -321,9 +295,9 @@ export default function DataCleaning() {
       setSerialIssues({ count: 0, issues: [], error: true })
     }
     setCheckLoading(p => ({ ...p, serialIssues: false }))
-  }
+  }, [activeCountry])
 
-  async function checkDuplicateSerials() {
+  const checkDuplicateSerials = useCallback(async () => {
     setCheckLoading(p => ({ ...p, duplicateSerial: true }))
     try {
       const { data } = await dataCleaning.listActiveSerialRecords({ country: activeCountry })
@@ -352,9 +326,9 @@ export default function DataCleaning() {
       setDuplicateSerial({ groups: [], affectedCount: 0, groupCount: 0, error: true })
     }
     setCheckLoading(p => ({ ...p, duplicateSerial: false }))
-  }
+  }, [activeCountry])
 
-  async function checkInvalidPressure() {
+  const checkInvalidPressure = useCallback(async () => {
     setCheckLoading(p => ({ ...p, invalidPressure: true }))
     try {
       // Try pressure_reading column; gracefully handle if it doesn't exist
@@ -375,9 +349,9 @@ export default function DataCleaning() {
       setInvalidPressure({ count: 0, records: [], error: true })
     }
     setCheckLoading(p => ({ ...p, invalidPressure: false }))
-  }
+  }, [activeCountry])
 
-  async function checkMissingTread() {
+  const checkMissingTread = useCallback(async () => {
     setCheckLoading(p => ({ ...p, missingTread: true }))
     try {
       // Records that look like inspections but lack tread depth
@@ -403,9 +377,9 @@ export default function DataCleaning() {
       setMissingTread({ count: 0, pct: 0, bySite: [], records: [], error: true })
     }
     setCheckLoading(p => ({ ...p, missingTread: false }))
-  }
+  }, [activeCountry])
 
-  async function checkMissingInspections() {
+  const checkMissingInspections = useCallback(async () => {
     setCheckLoading(p => ({ ...p, missingInspect: true }))
     try {
       // Get all distinct asset_nos from tyre_records
@@ -433,9 +407,9 @@ export default function DataCleaning() {
       setMissingInspect({ count: 0, asset_nos: [], error: true })
     }
     setCheckLoading(p => ({ ...p, missingInspect: false }))
-  }
+  }, [activeCountry])
 
-  async function checkOdometerIssues() {
+  const checkOdometerIssues = useCallback(async () => {
     setCheckLoading(p => ({ ...p, odometer: true }))
     try {
       const { data } = await dataCleaning.listOdometerRecords({ country: activeCountry })
@@ -480,9 +454,9 @@ export default function DataCleaning() {
       setOdometerIssues({ count: 0, issues: [], error: true })
     }
     setCheckLoading(p => ({ ...p, odometer: false }))
-  }
+  }, [activeCountry])
 
-  async function checkUnrealisticLife() {
+  const checkUnrealisticLife = useCallback(async () => {
     setCheckLoading(p => ({ ...p, unrealisticLife: true }))
     try {
       const { data } = await dataCleaning.listLifeRecords({ country: activeCountry })
@@ -513,7 +487,36 @@ export default function DataCleaning() {
       setUnrealisticLife({ count: 0, issues: [], error: true })
     }
     setCheckLoading(p => ({ ...p, unrealisticLife: false }))
-  }
+  }, [activeCountry])
+
+  const runAllChecks = useCallback(async () => {
+    setQiLoading(true)
+    setCheckLoading({ serialIssues: true, duplicateSerial: true, invalidPressure: true, missingTread: true, missingInspect: true, odometer: true, unrealisticLife: true })
+
+    const { count: total } = await dataCleaning.countTyreRecords({ country: activeCountry })
+    setTotalRecords(total ?? 0)
+
+    await Promise.all([
+      checkSerialIssues(),
+      checkDuplicateSerials(),
+      checkInvalidPressure(),
+      checkMissingTread(),
+      checkMissingInspections(),
+      checkOdometerIssues(),
+      checkUnrealisticLife(),
+    ])
+
+    setQiLoading(false)
+  }, [activeCountry, checkDuplicateSerials, checkInvalidPressure, checkMissingInspections, checkMissingTread, checkOdometerIssues, checkSerialIssues, checkUnrealisticLife])
+
+  // Effects are declared after their stable loaders so dependency changes are
+  // explicit and cannot accidentally create a render/request loop.
+  useEffect(() => { loadStats(); loadSites() }, [loadSites, loadStats, saveCount])
+  useEffect(() => {
+    if (tab === 'pending') loadPending()
+    else if (tab === 'cleaned') loadCleaned()
+  }, [activeCountry, loadCleaned, loadPending, saveCount, tab])
+  useEffect(() => { if (tab === 'quality') runAllChecks() }, [runAllChecks, tab])
 
   // Recompute score whenever checks complete
   useEffect(() => {

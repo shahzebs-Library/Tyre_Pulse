@@ -23,6 +23,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
@@ -309,6 +310,8 @@ export default function RecallTracker() {
       score: Math.max(0, 100 - b.active * 10 - b.critical * 5),
     })).sort((a, b) => a.score - b.score)
   }, [recalls])
+  const recallsPager = usePagedRows(filtered)
+  const brandsPager = usePagedRows(brandHistory)
 
   // ── Timeline ──────────────────────────────────────────────────────────────
   const timeline = useMemo(() => {
@@ -782,7 +785,7 @@ export default function RecallTracker() {
                       </td>
                     </tr>
                   )}
-                  {!loading && filtered.map((r, i) => {
+                  {!loading && recallsPager.pageRows.map((r, i) => {
                     const affectedCount = matchTyresForRecall(r).length
                     return (
                       <motion.tr
@@ -859,6 +862,7 @@ export default function RecallTracker() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...recallsPager} />
             </div>
             <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
               {filtered.length} of {recalls.length} recalls
@@ -1051,7 +1055,7 @@ export default function RecallTracker() {
                 </tr>
               </thead>
               <tbody>
-                {brandHistory.map((b, i) => (
+                {brandsPager.pageRows.map((b, i) => (
                   <motion.tr
                     key={b.brand}
                     initial={{ opacity: 0 }}
@@ -1095,6 +1099,7 @@ export default function RecallTracker() {
                 ))}
               </tbody>
             </table>
+            <TablePagination {...brandsPager} />
           </div>
           <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
             Score = 100 - (active × 10 + total critical × 5) · Brands below 60 flagged

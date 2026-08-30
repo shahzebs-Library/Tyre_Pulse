@@ -28,6 +28,7 @@ import {
   Title, Tooltip as ChartTooltip, Legend, Filler,
 } from 'chart.js'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency, formatDate } from '../lib/formatters'
 import { getPassportBundle, searchSerials } from '../lib/api/tyrePassport'
@@ -223,9 +224,16 @@ export default function TyrePassport() {
       retreadClaims: bundle.retreadClaims,
     })
   }, [bundle])
+  const journeyPager = usePagedRows(passport?.journey)
+  const servicePager = usePagedRows(passport?.serviceEvents)
+  const warrantyPager = usePagedRows(passport?.warranty)
+  const retreadPager = usePagedRows(passport?.retreadClaims)
 
   const money = (v) => (v == null ? NA : formatCurrencyCompact(v, activeCurrency))
-  const moneyFull = (v) => (v == null ? NA : formatCurrency(v, activeCurrency))
+  const moneyFull = useCallback(
+    (v) => (v == null ? NA : formatCurrency(v, activeCurrency)),
+    [activeCurrency],
+  )
   const kmTxt = (v) => (v == null ? NA : Number(v).toLocaleString())
   const dateTxt = (v) => (v ? formatDate(v) : NA)
 
@@ -280,7 +288,7 @@ export default function TyrePassport() {
       reportFileName('Tyre Passport', passport.serial),
       'landscape',
     )
-  }, [passport])
+  }, [passport, moneyFull])
 
   const exportExcel = useCallback(async () => {
     if (!passport) return
@@ -554,7 +562,7 @@ export default function TyrePassport() {
                       <tbody>
                         {passport.journey.length === 0 ? (
                           <tr><td colSpan={9} className="px-4 py-10 text-center text-[var(--text-muted)]">No stint history on record.</td></tr>
-                        ) : passport.journey.map((e, i) => (
+                        ) : journeyPager.pageRows.map((e, i) => (
                           <tr key={e.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                             <td className="px-4 py-2.5 font-mono">
                               {e.asset_no ? <Link to={`/assets/${encodeURIComponent(e.asset_no)}`} className="text-[var(--brand-bright)] hover:underline">{e.asset_no}</Link> : <span className="text-[var(--text-muted)]">{NA}</span>}
@@ -572,6 +580,7 @@ export default function TyrePassport() {
                       </tbody>
                     </table>
                   </div>
+                  <TablePagination {...journeyPager} />
                 </div>
               )}
 
@@ -601,7 +610,7 @@ export default function TyrePassport() {
                       <tbody>
                         {passport.serviceEvents.length === 0 ? (
                           <tr><td colSpan={9} className="px-4 py-10 text-center text-[var(--text-muted)]">No service or repair events recorded for this tyre.</td></tr>
-                        ) : passport.serviceEvents.map((e, i) => (
+                        ) : servicePager.pageRows.map((e, i) => (
                           <tr key={e.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                             <td className="px-4 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{dateTxt(e.date)}</td>
                             <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${EVENT_TONE(e.type)}`}>{e.type}</span></td>
@@ -617,6 +626,7 @@ export default function TyrePassport() {
                       </tbody>
                     </table>
                   </div>
+                  <TablePagination {...servicePager} />
                 </div>
               )}
 
@@ -638,7 +648,7 @@ export default function TyrePassport() {
                         <tbody>
                           {passport.warranty.length === 0 ? (
                             <tr><td colSpan={7} className="px-4 py-10 text-center text-[var(--text-muted)]">No warranty claims recorded for this tyre.</td></tr>
-                          ) : passport.warranty.map((c, i) => (
+                          ) : warrantyPager.pageRows.map((c, i) => (
                             <tr key={c.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                               <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{c.claim_no || NA}</td>
                               <td className="px-4 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded ${STATUS_TONE(c.status)}`}>{c.status || NA}</span></td>
@@ -652,6 +662,7 @@ export default function TyrePassport() {
                         </tbody>
                       </table>
                     </div>
+                    <TablePagination {...warrantyPager} />
                   </div>
 
                   {passport.retreadClaims.length > 0 && (
@@ -668,7 +679,7 @@ export default function TyrePassport() {
                             </tr>
                           </thead>
                           <tbody>
-                            {passport.retreadClaims.map((c, i) => (
+                            {retreadPager.pageRows.map((c, i) => (
                               <tr key={c.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                                 <td className="px-4 py-2.5 font-mono text-[var(--text-secondary)]">{c.claim_no || NA}</td>
                                 <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.vendor || NA}</td>
@@ -682,6 +693,7 @@ export default function TyrePassport() {
                           </tbody>
                         </table>
                       </div>
+                      <TablePagination {...retreadPager} />
                     </div>
                   )}
                 </div>

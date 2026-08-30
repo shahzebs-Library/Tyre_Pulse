@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -253,6 +254,8 @@ export default function RepairRequests() {
     () => filterJobCardRfrs(cardViews, filters),
     [cardViews, filters],
   )
+  const queuePager = usePagedRows(sortedQueue)
+  const cardsPager = usePagedRows(filteredCards)
   const cardSummary = useMemo(() => summarizeJobCardRfrs(filteredCards), [filteredCards])
 
   // ── derived: analytics (over whichever tab's set is in view) ──────────────
@@ -749,7 +752,7 @@ export default function RepairRequests() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedQueue.map((r) => {
+                        {queuePager.pageRows.map((r) => {
                           const overdue = isRfrOverdue(r, now)
                           return (
                             <tr key={r.id}
@@ -786,6 +789,7 @@ export default function RepairRequests() {
                         })}
                       </tbody>
                     </table>
+                    <TablePagination {...queuePager} />
                   </div>
                 )}
               </div>
@@ -886,7 +890,7 @@ export default function RepairRequests() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredCards.slice(0, 500).map((r) => (
+                        {cardsPager.pageRows.map((r) => (
                           <tr key={r.id} style={{ borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.05))' }}>
                             <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{r.rfr_no || 'N/A'}</td>
                             <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-dim)' }}>{r.rfr_period || 'N/A'}</td>
@@ -901,11 +905,7 @@ export default function RepairRequests() {
                         ))}
                       </tbody>
                     </table>
-                    {filteredCards.length > 500 && (
-                      <p className="text-[11px] px-3 py-2" style={{ color: 'var(--text-dim)' }}>
-                        Showing the newest 500 of {filteredCards.length}. The Excel and PDF exports carry every row in this view.
-                      </p>
-                    )}
+                    <TablePagination {...cardsPager} />
                   </div>
                 )}
               </div>

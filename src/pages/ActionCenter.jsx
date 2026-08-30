@@ -153,7 +153,7 @@ export default function ActionCenter() {
 
   useEffect(() => { load() }, [load])
 
-  const allRows = rows || []
+  const allRows = rows
   const summary = useMemo(() => summariseActions(allRows, nowMs), [allRows, nowMs])
   const categoryBreakdown = useMemo(() => byCategory(allRows), [allRows])
   const severityCounts = useMemo(() => bySeverity(allRows), [allRows])

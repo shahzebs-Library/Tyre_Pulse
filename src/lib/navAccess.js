@@ -14,6 +14,8 @@
  * Route-level enforcement is unchanged; this only governs sidebar visibility.
  */
 
+import { canonicalRoute } from './routeOwnership'
+
 /** Paths every signed-in user may open regardless of role (ungated routes). */
 export const ALWAYS_ALLOWED_PATHS = new Set(['/settings'])
 
@@ -76,10 +78,10 @@ export const NAV_MODULE_KEY = {
   '/erp-sync': 'erp_sync',
   '/anomalies': 'tyre_records',
   '/vehicle-history': 'fleet_master',
-  '/ai': 'ai_analytics',
   '/cleaning': 'data_cleaning',
   '/audit': 'audit_trail',
-  '/users': 'user_management',
+  '/console/users': 'user_management',
+  '/console/ai-admin': 'ai_administration',
   '/custom-data': 'custom_data',
 }
 
@@ -112,7 +114,8 @@ function slugify(route) {
  * @returns {string}
  */
 export function governingModuleKey(path) {
-  return NAV_MODULE_KEY[path] || slugify(path)
+  const canonical = canonicalRoute(path)
+  return NAV_MODULE_KEY[canonical] || slugify(canonical)
 }
 
 /**
@@ -121,7 +124,7 @@ export function governingModuleKey(path) {
  * @param {(k:string)=>boolean} hasPermission  AuthContext.hasPermission
  */
 export function navItemAllowedForCustomRole(path, hasPermission) {
-  if (ALWAYS_ALLOWED_PATHS.has(path)) return true
+  if (ALWAYS_ALLOWED_PATHS.has(canonicalRoute(path))) return true
   const key = governingModuleKey(path)
   if (!key) return false
   return typeof hasPermission === 'function' ? hasPermission(key) === true : false

@@ -20,6 +20,7 @@ import {
   FileSpreadsheet, FileText, Activity, Percent, Target, Wrench, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
 import EChart from '../components/charts/EChart'
 import { useSettings } from '../contexts/SettingsContext'
@@ -145,6 +146,8 @@ export default function WorkshopAnalytics() {
 
   const siteOptions = useMemo(() => distinctSites(data.events, data.jobs, data.shifts), [data])
   const hasActivity = analytics.dailyTrend.length > 0 || analytics.technicianLeaderboard.length > 0
+  const techniciansPager = usePagedRows(analytics.technicianLeaderboard)
+  const delaysPager = usePagedRows(analytics.delayByReason)
 
   // ── ECharts options ─────────────────────────────────────────────────────────
   const trend = analytics.dailyTrend
@@ -504,7 +507,7 @@ export default function WorkshopAnalytics() {
                     </tr>
                   </thead>
                   <tbody>
-                    {analytics.technicianLeaderboard.map((t) => (
+                    {techniciansPager.pageRows.map((t) => (
                       <tr key={t.userId} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
                         <td className="py-2 pr-3 text-[var(--text-muted)]">{t.rank}</td>
                         <td className="py-2 pr-3 text-[var(--text-primary)]">{t.name}</td>
@@ -516,6 +519,7 @@ export default function WorkshopAnalytics() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...techniciansPager} />
               </div>
             )}
           </div>
@@ -540,7 +544,7 @@ export default function WorkshopAnalytics() {
                     </tr>
                   </thead>
                   <tbody>
-                    {analytics.delayByReason.map((d) => (
+                    {delaysPager.pageRows.map((d) => (
                       <tr key={d.reason} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/50">
                         <td className="py-2 pr-3 text-[var(--text-primary)]">{labelReason(d.reason)}</td>
                         <td className="py-2 pr-3 text-right text-[var(--text-secondary)]">{fmtNum(d.hoursLost)}</td>
@@ -556,6 +560,7 @@ export default function WorkshopAnalytics() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...delaysPager} />
               </div>
             </div>
           )}

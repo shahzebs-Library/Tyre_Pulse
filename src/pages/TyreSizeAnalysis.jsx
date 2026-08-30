@@ -379,7 +379,7 @@ export default function TyreSizeAnalysis() {
         borderRadius: 3,
       }],
     }
-  }, [sizeMetrics])
+  }, [sizeMetrics, t])
 
   const cpkBarOpts = useMemo(() => ({
     ...CHART_BASE,

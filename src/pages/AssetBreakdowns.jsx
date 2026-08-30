@@ -14,6 +14,7 @@
  * functions, so a figure on screen and the same figure in Excel cannot drift.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   AlertTriangle, Wrench, Clock, RefreshCw, Filter, X, Plus, Download,
   FileText, CheckCircle2, RotateCcw, Search, MapPin, Timer,
@@ -124,6 +125,7 @@ export default function AssetBreakdowns() {
     () => [...filtered].sort((a, b) => (downDays(b, now) || 0) - (downDays(a, now) || 0)),
     [filtered, now],
   )
+  const breakdownPager = usePagedRows(sorted)
 
   const doExportExcel = () => {
     const { columns, headers, rows: out } = breakdownExportRows(sorted, now)
@@ -379,7 +381,7 @@ export default function AssetBreakdowns() {
                           : 'No breakdown has been recorded yet.'}
                       </td>
                     </tr>
-                  ) : sorted.map((r) => {
+                  ) : breakdownPager.pageRows.map((r) => {
                     const d = downDays(r, now)
                     const dtr = daysToReturn(r, now)
                     const overdue = isOverdue(r, now)
@@ -425,6 +427,7 @@ export default function AssetBreakdowns() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...breakdownPager} />
             </div>
           </div>
         </>

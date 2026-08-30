@@ -422,7 +422,10 @@ export default function Accidents() {
   const reportMeta = useReportMeta('Accident & Claims Tracker')
   const { profile } = useAuth()
   const { activeCountry, activeCurrency, appSettings } = useSettings()
-  const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency, 0)
+  const fmtCurrency = useCallback(
+    (val) => _fmtCurrencyBase(val, activeCurrency, 0),
+    [activeCurrency],
+  )
   const navigate = useNavigate()
   const location = useLocation()
   // The register's page-local filters live in the URL search params (via
@@ -549,19 +552,6 @@ export default function Accidents() {
   }, [activeCountry])
 
   useEffect(() => { loadRecords() }, [loadRecords])
-
-  // Deep-link into the ONE unified editor: the detail page's "Edit Incident"
-  // action navigates here with { state: { editId } }. Once records are loaded,
-  // open that record in the inline form and clear the state so refresh/back
-  // does not re-open it.
-  useEffect(() => {
-    const editId = location.state?.editId
-    if (!editId || loading) return
-    const row = records.find(r => String(r.id) === String(editId))
-    navigate('/accidents', { replace: true, state: null })
-    if (row) openEdit(row)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state, loading, records])
 
   // Fleet SIZE for the "N / 100 vehicles" tile: an exact server count, no rows.
   // Null (not 0) when it cannot be read, so an unreadable fleet never renders as
@@ -768,7 +758,7 @@ export default function Accidents() {
   }, [records])
 
   // Status funnel data for analytics
-  const funnelStatuses = [
+  const funnelStatuses = useMemo(() => [
     'Reported',
     'Under Investigation',
     'Repair In Progress',
@@ -776,7 +766,7 @@ export default function Accidents() {
     'Awaiting Approval',
     'Insurance Claim',
     'Closed',
-  ]
+  ], [])
   const funnelData = useMemo(() => {
     const total = records.length || 1
     return funnelStatuses.map(s => ({
@@ -784,7 +774,7 @@ export default function Accidents() {
       count: statusCounts[s] ?? 0,
       pct: Math.round(((statusCounts[s] ?? 0) / total) * 100),
     }))
-  }, [records, statusCounts])
+  }, [records, statusCounts, funnelStatuses])
 
   // ---- Claims & cost-recovery analytics (V19 module) ----
   const claimAnalytics = useMemo(() => {
@@ -1451,7 +1441,7 @@ export default function Accidents() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function openEdit(row) {
+  const openEdit = useCallback((row) => {
     setAssetQuery(row.asset_no ?? '')
     const d = (v) => (v ? String(v).split('T')[0] : '')
     setForm({
@@ -1543,7 +1533,19 @@ export default function Accidents() {
     // value showing. Without this it renders as "Not set" and a save wipes it.
     const ws = canonWorkshop(row.workshop_name)
     setWorkshopIsOther(!!ws && !workshopsFor(row.repair_type).includes(ws))
-  }
+  }, [])
+
+  // Deep-link into the ONE unified editor: the detail page's "Edit Incident"
+  // action navigates here with { state: { editId } }. Once records are loaded,
+  // open that record in the inline form and clear the state so refresh/back
+  // does not re-open it.
+  useEffect(() => {
+    const editId = location.state?.editId
+    if (!editId || loading) return
+    const row = records.find(r => String(r.id) === String(editId))
+    navigate('/accidents', { replace: true, state: null })
+    if (row) openEdit(row)
+  }, [location.state, loading, records, navigate, openEdit])
 
   function handlePhotoFiles(e) {
     const files = Array.from(e.target.files ?? [])
@@ -1778,30 +1780,30 @@ export default function Accidents() {
     setSaving(false)
   }
 
-  async function handleDelete(id) {
+  const handleDelete = useCallback(async (id) => {
     if (!window.confirm('Delete this incident record?')) return
     await accidentsApi.deleteAccident(id)
     loadRecords()
-  }
+  }, [loadRecords])
 
   // ── Multi-select helpers (Admin only) ─────────────────────────────────────
-  function toggleSelect(id) {
+  const toggleSelect = useCallback((id) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
-  }
-  const pageIds = filtered.map(r => r.id)
+  }, [])
+  const pageIds = useMemo(() => filtered.map(r => r.id), [filtered])
   const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
-  function toggleSelectPage() {
+  const toggleSelectPage = useCallback(() => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (allPageSelected) pageIds.forEach(id => next.delete(id))
       else pageIds.forEach(id => next.add(id))
       return next
     })
-  }
+  }, [allPageSelected, pageIds])
 
   async function confirmBulkDelete() {
     if (selectedIds.size === 0) return
@@ -1830,7 +1832,7 @@ export default function Accidents() {
     }
   }
 
-  function raiseAction(row) {
+  const raiseAction = useCallback((row) => {
     navigate('/actions', {
       state: {
         prefill: {
@@ -1840,10 +1842,10 @@ export default function Accidents() {
         },
       },
     })
-  }
+  }, [navigate])
 
   // Full export - every incident + claim + recovery + cost field ("everything").
-  const EXPORT_FIELDS = [
+  const EXPORT_FIELDS = useMemo(() => [
     ['incident_date', 'Date', r => r.incident_date],
     ['asset_no', 'Asset', r => r.asset_no],
     ['plate_number', 'Fleet No', r => r.plate_number],
@@ -1902,7 +1904,7 @@ export default function Accidents() {
     ['release_date', 'Release Date', r => r.release_date],
     ['inspector', 'Inspector', r => r.inspector],
     ['reporter_name', 'Reported By', r => r.reporter_name],
-  ]
+  ], [])
   const exportCols    = EXPORT_FIELDS.map(f => f[0])
   const exportHeaders = EXPORT_FIELDS.map(f => f[1])
   // Excel keeps every column; the PDF uses a focused, readable subset (a 52-column
@@ -1923,7 +1925,7 @@ export default function Accidents() {
       EXPORT_FIELDS.forEach(([k, , get]) => { o[k] = get(r) ?? '' })
       return o
     }),
-    [filtered],
+    [filtered, EXPORT_FIELDS],
   )
 
   // ── Claims Summary (daily report) ──────────────────────────────────────────
@@ -1948,7 +1950,7 @@ export default function Accidents() {
       EXPORT_FIELDS.forEach(([k, , get]) => { o[k] = get(r) ?? '' })
       return o
     }),
-    [filtered],
+    [filtered, EXPORT_FIELDS],
   )
 
   const exportClaimsSummary = (kind) => {
@@ -2120,7 +2122,7 @@ export default function Accidents() {
       },
     )
     return cols
-  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail])
+  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail, openEdit, toggleSelectPage, toggleSelect, raiseAction, handleDelete])
 
   return (
     <div className="space-y-4">

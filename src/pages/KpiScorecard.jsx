@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
 import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import {
@@ -50,7 +51,7 @@ export default function KpiScorecard() {
   const { profile } = useAuth()
   const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
-  const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
+  const fmtCurrency = useCallback((v) => _fmtCurrencyBase(v, activeCurrency, 0), [activeCurrency])
   const [records, setRecords]         = useState([])
   const [actions, setActions]         = useState([])
   const [targets, setTargets]         = useState(DEFAULT_TARGETS)
@@ -97,7 +98,7 @@ export default function KpiScorecard() {
     } finally {
       setLoading(false)
     }
-  }, [activeCountry, yearFilter])
+  }, [activeCountry, yearFilter, t])
 
   useEffect(() => { load() }, [load])
 
@@ -370,7 +371,7 @@ export default function KpiScorecard() {
     const avgCost = currentMonth.count ? Math.round(currentMonth.totalCost / currentMonth.count) : 0
     check('max_avg_cost_tyre',   avgCost,                    targets.max_avg_cost_tyre,   true, t('kpiscorecard.cards.avgCostPerTyre'),   fmtCost)
     return alerts
-  }, [currentMonth, targets, activeCurrency, t])
+  }, [currentMonth, targets, fmtCurrency, t])
 
   // Site breakdown for current month
   const siteBreakdown = useMemo(() => {
@@ -395,6 +396,8 @@ export default function KpiScorecard() {
       return { site, totalCost, count, highRiskPct, overdueActions: overdueCount, avgCostPerTyre }
     }).sort((a, b) => b.totalCost - a.totalCost)
   }, [filteredRecords, filteredActions, currentMonthStr, t])
+  const actualsPager = usePagedRows(actuals)
+  const sitePager = usePagedRows(siteBreakdown)
 
   if (loading) return <div className="flex items-center justify-center h-64 text-[var(--panel-ink-3)]">{t('kpiscorecard.states.loading')}</div>
 
@@ -742,7 +745,7 @@ export default function KpiScorecard() {
                 </tr>
               </thead>
               <tbody>
-                {actuals.map(a => {
+                {actualsPager.pageRows.map(a => {
                   const overBudget = a.totalCost > targets.max_monthly_cost
                   const overRisk   = a.highRiskPct > targets.max_high_risk_pct
                   const lyData     = showYoY ? yoyActualsMap[a.month] : null
@@ -798,6 +801,7 @@ export default function KpiScorecard() {
               </tbody>
             </table>
           </div>
+          <TablePagination {...actualsPager} />
         </>
       )}
 
@@ -825,7 +829,7 @@ export default function KpiScorecard() {
                 </tr>
               </thead>
               <tbody>
-                {siteBreakdown.map(s => {
+                {sitePager.pageRows.map(s => {
                   const costFail    = s.totalCost > targets.max_monthly_cost
                   const riskFail    = s.highRiskPct > targets.max_high_risk_pct
                   const countFail   = s.count < targets.min_records_month
@@ -887,6 +891,7 @@ export default function KpiScorecard() {
               </tfoot>
             </table>
           )}
+          <TablePagination {...sitePager} />
         </div>
       )}
     </div>

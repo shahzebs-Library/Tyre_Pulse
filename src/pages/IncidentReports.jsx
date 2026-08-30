@@ -10,6 +10,7 @@
  * table (apply MIGRATIONS_V138_INCIDENT_REPORTS.sql).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   AlertOctagon, Plus, Trash2, Pencil, X, Search, Filter, ShieldAlert,
   CheckCircle2, Inbox, FileSpreadsheet, FileText, AlertTriangle, Loader2,
@@ -135,6 +136,7 @@ export default function IncidentReports() {
   // Export --------------------------------------------------------------------
   const EXPORT_COLS = ['incident_no', 'incident_type', 'asset_no', 'site', 'incident_date', 'severity', 'status', 'age_days', 'reported_by', 'description']
   const EXPORT_HEADERS = ['Incident #', 'Type', 'Asset', 'Site', 'Date', 'Severity', 'Status', 'Age (days)', 'Reported by', 'Description']
+  const incidentsPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => ({
     incident_no: r.incident_no || '',
     incident_type: typeLabel(r.incident_type),
@@ -344,7 +346,7 @@ export default function IncidentReports() {
                   )}
                 </td></tr>
               ) : (
-                filtered.map((r) => {
+                incidentsPager.pageRows.map((r) => {
                   const age = incidentAgeDays(r, Date.now())
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -368,6 +370,7 @@ export default function IncidentReports() {
               )}
             </tbody>
           </table>
+          <TablePagination {...incidentsPager} />
         </div>
       </div>
 

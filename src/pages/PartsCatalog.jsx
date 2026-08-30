@@ -19,6 +19,7 @@ import {
   ShoppingCart, BarChart3, ClipboardList, ShieldAlert,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatCurrency } from '../lib/formatters'
 import {
@@ -162,6 +163,8 @@ export default function PartsCatalog() {
       return true
     })
   }, [rows, categoryFilter, statusFilter, search])
+  const partsPager = usePagedRows(filtered)
+  const reorderPager = usePagedRows(analytics.reorder)
 
   const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setFormError(''); setShowForm(true) }
   const openEdit = (p) => {
@@ -338,7 +341,7 @@ export default function PartsCatalog() {
                   ) : 'No parts match these filters.'}
                 </td></tr>
               ) : (
-                filtered.map((p) => {
+                partsPager.pageRows.map((p) => {
                   const low = partIsLowStock(p)
                   return (
                     <tr key={p.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${low ? 'bg-red-900/10' : ''}`}>
@@ -367,6 +370,7 @@ export default function PartsCatalog() {
               )}
             </tbody>
           </table>
+          <TablePagination {...partsPager} />
         </div>
       </div>
 
@@ -437,7 +441,7 @@ export default function PartsCatalog() {
                       </tr>
                     </thead>
                     <tbody>
-                      {analytics.reorder.map((r) => (
+                      {reorderPager.pageRows.map((r) => (
                         <tr key={r.id} className="border-b border-[var(--input-border)]/50">
                           <td className="px-3 py-2">
                             <div className="font-mono text-xs text-[var(--text-primary)]">{r.part_no}</div>
@@ -454,6 +458,7 @@ export default function PartsCatalog() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePagination {...reorderPager} />
                 </div>
               )}
             </div>

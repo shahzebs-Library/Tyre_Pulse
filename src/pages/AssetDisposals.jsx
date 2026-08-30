@@ -29,6 +29,7 @@ import {
   Banknote, RefreshCw, Activity, History, Tag,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import Modal from '../components/ui/Modal'
 import StudioBoundary from '../components/present/StudioBoundary'
 import { useSettings } from '../contexts/SettingsContext'
@@ -263,6 +264,8 @@ export default function AssetDisposals() {
     () => disposalCandidatesFromBreakdowns(breakdownRows, baseRows, { now: Date.now() }),
     [breakdownRows, baseRows],
   )
+  const disposalsPager = usePagedRows(filtered)
+  const candidatesPager = usePagedRows(missingCandidates)
   // Totals follow the FILTERED rows: a filtered table under register-wide
   // headlines is how a reader ends up quoting a number that is not on screen.
   const totals = useMemo(() => disposalSummary(filtered), [filtered])
@@ -803,7 +806,7 @@ export default function AssetDisposals() {
                     </tr>
                   </thead>
                   <tbody>
-                    {missingCandidates.map((c) => (
+                    {candidatesPager.pageRows.map((c) => (
                       <tr key={c.asset_no} className="border-t border-[var(--input-border)]">
                         <td className="px-3 py-1.5 font-medium whitespace-nowrap">
                           <Link to={`/assets/${encodeURIComponent(c.asset_no)}`} className="text-blue-400 hover:underline">
@@ -817,6 +820,7 @@ export default function AssetDisposals() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...candidatesPager} />
               </div>
             </div>
           )}
@@ -836,7 +840,7 @@ export default function AssetDisposals() {
                   {filtered.length === 0 && (
                     <tr><td colSpan={12} className="px-3 py-6 text-center text-[var(--text-muted)]">No machines match these filters.</td></tr>
                   )}
-                  {filtered.map((r) => {
+                  {disposalsPager.pageRows.map((r) => {
                     const e = assetEconomics(r, { peerSpendPerYear: baselines[r?.asset_type] })
                     return (
                       <tr
@@ -876,6 +880,7 @@ export default function AssetDisposals() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...disposalsPager} />
             </div>
           </div>
           </>

@@ -28,6 +28,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { toUserMessage } from '../lib/safeError'
 import { loadAutoTable } from '../lib/pdfEngine'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -331,7 +332,7 @@ export default function TyreScrapManagement() {
     const retreadSavings    = retreadCandidates * avgCost * 0.40
 
     return { scrapCount, totalCost, avgKmLife, scrapRate, retreadSavings, retreadCandidates }
-  }, [scrapped, filtered, appSettings])
+  }, [scrapped, filtered])
 
   // ── Monthly trend (last 12 months) ────────────────────────────────────────────
   const monthlyTrend = useMemo(() => {
@@ -419,7 +420,7 @@ export default function TyreScrapManagement() {
       : 0
     const savings = count * avgCost * 0.40
     return { count, savings }
-  }, [thisMonthScrap, appSettings])
+  }, [thisMonthScrap])
 
   // ── Brand analysis ────────────────────────────────────────────────────────────
   const brandAnalysis = useMemo(() => {
@@ -566,6 +567,9 @@ export default function TyreScrapManagement() {
         return db.localeCompare(da)
       })
   }, [allScrapped, logSearch, logBrand, logSite, logDateFrom, logDateTo])
+  const brandPager = usePagedRows(brandAnalysis)
+  const sitePager = usePagedRows(siteAnalysis)
+  const disposalPager = usePagedRows(disposalLog)
 
   // ── Mark as disposed ──────────────────────────────────────────────────────────
   const markDisposed = useCallback((id, status = 'Disposed') => {
@@ -1140,7 +1144,7 @@ export default function TyreScrapManagement() {
                         </tr>
                       </thead>
                       <tbody>
-                        {brandAnalysis.map((b, i) => (
+                        {brandPager.pageRows.map((b, i) => (
                           <motion.tr
                             key={b.brand}
                             initial={{ opacity: 0 }}
@@ -1200,6 +1204,7 @@ export default function TyreScrapManagement() {
                         ))}
                       </tbody>
                     </table>
+                    <TablePagination {...brandPager} />
                   </div>
                 )}
                 <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
@@ -1255,7 +1260,7 @@ export default function TyreScrapManagement() {
                         </tr>
                       </thead>
                       <tbody>
-                        {siteAnalysis.map((s, i) => (
+                        {sitePager.pageRows.map((s, i) => (
                           <motion.tr
                             key={s.site}
                             initial={{ opacity: 0 }}
@@ -1292,6 +1297,7 @@ export default function TyreScrapManagement() {
                         ))}
                       </tbody>
                     </table>
+                    <TablePagination {...sitePager} />
                   </div>
                 )}
               </div>
@@ -1443,7 +1449,7 @@ export default function TyreScrapManagement() {
                           </td>
                         </tr>
                       )}
-                      {disposalLog.map((t, i) => {
+                      {disposalPager.pageRows.map((t, i) => {
                         const life   = kmLife(t)
                         const status = disposals[t.id] ?? 'Pending'
                         const cfg    = DISPOSAL_STATUSES[status] ?? DISPOSAL_STATUSES.Pending
@@ -1558,6 +1564,7 @@ export default function TyreScrapManagement() {
                       })}
                     </tbody>
                   </table>
+                  <TablePagination {...disposalPager} />
                 </div>
 
                 <div className="px-4 py-2 border-t border-[var(--input-border)] flex items-center justify-between text-xs text-[var(--text-muted)]">

@@ -3,18 +3,19 @@
 // Route: /ai-command-center
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain, Send, Trash2, Copy, Check, Download, RefreshCw,
   ChevronDown, ChevronUp, AlertTriangle, Activity, BarChart2,
-  ClipboardList, Cpu, Zap, Filter, X, User, Bot, Sparkles,
+  ClipboardList, Cpu, Zap, User, Bot, Sparkles, MessageSquarePlus, Archive,
   TrendingUp, TrendingDown, Minus, Clock, Database, ShieldAlert, ShoppingCart,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import { supabase } from '../lib/supabase'
 import { classifyQuery, AGENT_TYPES, AGENT_LABELS, AGENT_COLORS, AGENT_DESCRIPTIONS } from '../lib/aiRouter'
-import { runOrchestration } from '../lib/agents/orchestrator'
+import {
+  archiveConversation, listConversationMessages, listConversations, sendOrchestratorMessage,
+} from '../lib/aiOrchestratorClient'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState } from '../lib/exportUtils'
@@ -331,6 +332,25 @@ function MessageBubble({ message, onCopy }) {
           {expanded && message.agentType === AGENT_TYPES.PLANNER && message.planningData && (
             <PlannerPanel planningData={message.planningData} />
           )}
+          {expanded && (message.sources?.length > 0 || message.usage) && (
+            <div className="mt-4 pt-3 border-t border-[var(--input-border)]/60 text-xs text-[var(--text-muted)]">
+              {message.sources?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5" aria-label="AI response sources">
+                  <span className="font-medium text-[var(--text-secondary)]">Sources:</span>
+                  {message.sources.map(source => (
+                    <span key={source.id} className="px-2 py-0.5 rounded-full bg-[var(--surface-1)] border border-[var(--input-border)]">
+                      {source.label} · {source.status}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {message.usage && (
+                <p className="mt-2 tabular-nums" aria-label="AI request usage">
+                  {Number(message.usage.total_tokens || 0).toLocaleString()} tokens · estimated ${Number(message.usage.estimated_cost_usd || 0).toFixed(6)} · {message.usage.model}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Action bar */}
@@ -395,7 +415,7 @@ function TypingIndicator({ agentType }) {
 // ── Main Page Component ───────────────────────────────────────────────────────
 
 export default function AiCommandCenter() {
-  const { site: contextSite, appSettings } = useSettings()
+  const { appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
@@ -403,89 +423,32 @@ export default function AiCommandCenter() {
   const [query, setQuery]                 = useState('')
   const [loading, setLoading]             = useState(false)
   const [activeAgent, setActiveAgent]     = useState(null)
-  const [records, setRecords]             = useState([])
-  const [inspections, setInspections]     = useState([])
-  const [actions, setActions]             = useState([])
-  const [accidents, setAccidents]         = useState([])
-  const [assets, setAssets]               = useState([])
-  const [selectedAsset, setSelectedAsset] = useState('')
-  const [selectedSite, setSelectedSite]   = useState('')
-  const [sites, setSites]                 = useState([])
-  const [dataLoading, setDataLoading]     = useState(true)
-  const [showFilters, setShowFilters]     = useState(false)
+  const [conversations, setConversations] = useState([])
+  const [conversationId, setConversationId] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historyError, setHistoryError]   = useState('')
   const [previewAgent, setPreviewAgent]   = useState(null)
 
   const chatEndRef   = useRef(null)
   const inputRef     = useRef(null)
-  const abortRef     = useRef(false)
+  const requestRef   = useRef(0)
 
   // ── Load initial context data ───────────────────────────────────────────────
 
+  const refreshConversations = useCallback(async () => {
+    const rows = await listConversations()
+    setConversations(rows)
+    return rows
+  }, [])
+
   useEffect(() => {
-    loadContextData()
-  }, [contextSite])
-
-  async function loadContextData() {
-    setDataLoading(true)
-    try {
-      const cutoff = new Date()
-      cutoff.setMonth(cutoff.getMonth() - 3)
-      const cutoffStr = cutoff.toISOString().split('T')[0]
-
-      const [recordsRes, inspRes, actionsRes, accidentsRes, assetsRes] = await Promise.all([
-        supabase
-          .from('tyre_changes')
-          .select('asset_no, tyre_serial, brand, position, km_at_fitment, km_at_removal, cost_per_tyre, issue_date, removal_date, risk_level, category, site, removal_reason, qty')
-          .gte('issue_date', cutoffStr)
-          .order('issue_date', { ascending: false })
-          .limit(500),
-
-        supabase
-          .from('inspections')
-          .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector')
-          .gte('scheduled_date', cutoffStr)
-          .order('scheduled_date', { ascending: false })
-          .limit(200),
-
-        supabase
-          .from('corrective_actions')
-          .select('asset_no, description, status, priority, site, created_at, closed_at')
-          .order('created_at', { ascending: false })
-          .limit(100),
-
-        supabase
-          .from('accidents')
-          .select('asset_no, incident_date, severity, status, site, description')
-          .order('incident_date', { ascending: false })
-          .limit(200),
-
-        supabase
-          .from('fleet_master')
-          .select('asset_no, vehicle_type, site')
-          .order('asset_no')
-          .limit(500),
-      ])
-
-      const recs = recordsRes.data ?? []
-      const insp = inspRes.data ?? []
-      const acts = actionsRes.data ?? []
-      const accs = accidentsRes.data ?? []
-      const assetList = assetsRes.data ?? []
-
-      setRecords(recs)
-      setInspections(insp)
-      setActions(acts)
-      setAccidents(accs)
-      setAssets(assetList)
-
-      const uniqueSites = [...new Set([...recs.map(r => r.site), ...assetList.map(a => a.site)].filter(Boolean))].sort()
-      setSites(uniqueSites)
-    } catch (err) {
-      console.error('Failed to load AI context data:', err)
-    } finally {
-      setDataLoading(false)
-    }
-  }
+    let live = true
+    setHistoryLoading(true)
+    refreshConversations()
+      .catch(() => { if (live) setHistoryError('Conversation history is unavailable.') })
+      .finally(() => { if (live) setHistoryLoading(false) })
+    return () => { live = false; requestRef.current += 1 }
+  }, [refreshConversations])
 
   // ── Auto-scroll ─────────────────────────────────────────────────────────────
 
@@ -505,33 +468,13 @@ export default function AiCommandCenter() {
 
   // ── Context for agents ──────────────────────────────────────────────────────
 
-  const agentContext = useMemo(() => {
-    const filteredRecords = selectedSite
-      ? records.filter(r => r.site === selectedSite)
-      : records
-    const filteredInspections = selectedSite
-      ? inspections.filter(i => i.site === selectedSite)
-      : inspections
-    const filteredAccidents = selectedSite
-      ? accidents.filter(a => a.site === selectedSite)
-      : accidents
-    return {
-      records: filteredRecords,
-      inspections: filteredInspections,
-      actions,
-      accidents: filteredAccidents,
-      assetNo: selectedAsset || null,
-      site: selectedSite || null,
-    }
-  }, [records, inspections, actions, accidents, selectedAsset, selectedSite])
-
   // ── Send message ─────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(async (queryText = query) => {
     const text = queryText.trim()
     if (!text || loading) return
 
-    abortRef.current = false
+    const requestId = ++requestRef.current
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     const agentType = classifyQuery(text)
 
@@ -543,19 +486,22 @@ export default function AiCommandCenter() {
     inputRef.current?.focus()
 
     try {
-      // Orchestrated run: a focused question uses one specialist; a cross-domain
-      // question fans out to several agents and fuses their answers.
-      const result = await runOrchestration(text, agentContext)
+      const result = await sendOrchestratorMessage({
+        message: text,
+        conversationId,
+        agent: agentType || 'auto',
+      })
 
-      if (abortRef.current) return
+      if (requestId !== requestRef.current) return
 
       const aiMsg = {
         id:          Date.now() + 1,
         role:        'assistant',
-        content:     result.response,
-        agentType:   result.agentType ?? agentType,
-        agents:      result.agents,
-        synthesized: result.synthesized,
+        content:     result.content,
+        agentType,
+        toolCalls:   result.tool_calls ?? [],
+        sources:     result.sources ?? [],
+        usage:       result.usage,
         timestamp:   new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         // Agent-specific data for panels
         kpis:         result.kpis,
@@ -569,9 +515,11 @@ export default function AiCommandCenter() {
       }
 
       setMessages(prev => [...prev, aiMsg])
+      setConversationId(result.conversation_id)
+      refreshConversations().catch(() => setHistoryError('Conversation saved, but history could not be refreshed.'))
     } catch (err) {
       console.error('Agent error:', err)
-      if (!abortRef.current) {
+      if (requestId === requestRef.current) {
         setMessages(prev => [...prev, {
           id:        Date.now() + 1,
           role:      'assistant',
@@ -581,12 +529,12 @@ export default function AiCommandCenter() {
         }])
       }
     } finally {
-      if (!abortRef.current) {
+      if (requestId === requestRef.current) {
         setLoading(false)
         setActiveAgent(null)
       }
     }
-  }, [query, loading, agentContext])
+  }, [query, loading, conversationId, refreshConversations])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -596,11 +544,47 @@ export default function AiCommandCenter() {
   }
 
   function clearChat() {
-    abortRef.current = true
+    requestRef.current += 1
     setMessages([])
+    setConversationId(null)
     setLoading(false)
     setActiveAgent(null)
   }
+
+  const openConversation = useCallback(async (conversation) => {
+    if (loading) return
+    const requestId = ++requestRef.current
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const rows = await listConversationMessages(conversation.id)
+      if (requestId !== requestRef.current) return
+      setMessages(rows.filter(row => row.role !== 'tool').map(row => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        agentType: row.role === 'assistant' ? (conversation.agent || AGENT_TYPES.ANALYST) : null,
+        timestamp: row.created_at ? new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+      })))
+      setConversationId(conversation.id)
+    } catch {
+      if (requestId === requestRef.current) setHistoryError('This conversation could not be loaded.')
+    } finally {
+      if (requestId === requestRef.current) setHistoryLoading(false)
+    }
+  }, [loading])
+
+  const handleArchive = useCallback(async (id) => {
+    if (loading) return
+    setHistoryError('')
+    try {
+      await archiveConversation(id)
+      if (conversationId === id) clearChat()
+      await refreshConversations()
+    } catch {
+      setHistoryError('This conversation could not be archived.')
+    }
+  }, [conversationId, loading, refreshConversations])
 
   // ── Export chat as PDF ──────────────────────────────────────────────────────
 
@@ -612,7 +596,7 @@ export default function AiCommandCenter() {
     const maxWidth = pageWidth - margin * 2
     const brand = await resolvePdfBrand(branding)
 
-    pdfHeader(doc, 'AI Command Center - Chat Export', `${records.length} records loaded`, company, brand)
+    pdfHeader(doc, 'AI Command Center - Chat Export', 'Secure orchestrator conversation', company, brand)
 
     // ── Empty state: nothing to export ──
     if (messages.length === 0) {
@@ -653,11 +637,6 @@ export default function AiCommandCenter() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const filteredAssets = useMemo(() => {
-    const base = selectedSite ? assets.filter(a => a.site === selectedSite) : assets
-    return base.slice(0, 200)
-  }, [assets, selectedSite])
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -666,25 +645,10 @@ export default function AiCommandCenter() {
         icon={Brain}
         actions={
           <div className="flex items-center gap-2 flex-shrink-0">
-            {dataLoading ? (
-              <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Loading context...
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {records.length} records loaded
-              </span>
-            )}
-
-            <button
-              onClick={() => setShowFilters(f => !f)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${showFilters ? 'bg-blue-600/20 border-blue-600/40 text-blue-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              Context
-            </button>
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Secure server orchestration
+            </span>
 
             {messages.length > 0 && (
               <>
@@ -708,62 +672,25 @@ export default function AiCommandCenter() {
         }
       />
 
-      {/* Context filter panel */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-4 pt-4 border-t border-[var(--input-border)] grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 font-medium">Site Filter</label>
-                  <select
-                    value={selectedSite}
-                    onChange={e => { setSelectedSite(e.target.value); setSelectedAsset('') }}
-                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">All sites ({records.length} records)</option>
-                    {sites.map(s => (
-                      <option key={s} value={s}>{s} ({records.filter(r => r.site === s).length} records)</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 font-medium">Vehicle Context (optional)</label>
-                  <select
-                    value={selectedAsset}
-                    onChange={e => setSelectedAsset(e.target.value)}
-                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">No specific vehicle</option>
-                    {filteredAssets.map(a => (
-                      <option key={a.asset_no} value={a.asset_no}>{a.asset_no}{a.vehicle_type ? ` - ${a.vehicle_type}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              {(selectedAsset || selectedSite) && (
-                <div className="flex items-center gap-2 mt-2">
-                  {selectedSite && (
-                    <span className="flex items-center gap-1 text-xs bg-blue-900/30 text-blue-300 border border-blue-800/40 px-2 py-1 rounded-full">
-                      Site: {selectedSite}
-                      <button onClick={() => setSelectedSite('')} className="hover:text-white ml-1"><X className="w-3 h-3" /></button>
-                    </span>
-                  )}
-                  {selectedAsset && (
-                    <span className="flex items-center gap-1 text-xs bg-purple-900/30 text-purple-300 border border-purple-800/40 px-2 py-1 rounded-full">
-                      Vehicle: {selectedAsset}
-                      <button onClick={() => setSelectedAsset('')} className="hover:text-white ml-1"><X className="w-3 h-3" /></button>
-                    </span>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <section aria-label="Conversation history" className="px-4 sm:px-6 py-3 border-b border-[var(--input-border)]/50">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button onClick={clearChat} disabled={loading} className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-blue-600/20 border border-blue-600/40 text-blue-300 disabled:opacity-50">
+            <MessageSquarePlus className="w-3.5 h-3.5" /> New chat
+          </button>
+          {historyLoading && <span className="text-xs text-[var(--text-muted)]">Loading history...</span>}
+          {!historyLoading && conversations.map(conversation => (
+            <div key={conversation.id} className={`flex-shrink-0 flex items-center rounded-lg border ${conversationId === conversation.id ? 'border-blue-500 bg-blue-600/10' : 'border-[var(--input-border)] bg-[var(--input-bg)]'}`}>
+              <button onClick={() => openConversation(conversation)} disabled={loading} className="max-w-48 truncate px-3 py-2 text-xs text-[var(--text-secondary)] disabled:opacity-50" title={conversation.title}>
+                {conversation.title || 'Untitled conversation'}
+              </button>
+              <button onClick={() => handleArchive(conversation.id)} disabled={loading} className="p-2 text-[var(--text-muted)] hover:text-amber-400 disabled:opacity-50" aria-label={`Archive ${conversation.title || 'conversation'}`}>
+                <Archive className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        {historyError && <p role="alert" className="text-xs text-red-400 mt-2">{historyError}</p>}
+      </section>
 
       {/* ── Agent cards row ── */}
       <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-[var(--input-border)]/50">
@@ -817,7 +744,7 @@ export default function AiCommandCenter() {
                   <button
                     key={action.label}
                     onClick={() => sendMessage(action.query)}
-                    disabled={loading || dataLoading}
+                    disabled={loading}
                     className={`flex items-center gap-2.5 px-3.5 py-3 rounded-xl border text-left transition-all hover:scale-[1.01] ${color.bg} ${color.border} border group`}
                   >
                     <AgentIcon className={`w-4 h-4 ${color.text} flex-shrink-0`} />
@@ -884,8 +811,8 @@ export default function AiCommandCenter() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={dataLoading ? 'Loading fleet context...' : 'Ask about CPK, failures, root causes, planning, or data quality...'}
-              disabled={loading || dataLoading}
+              placeholder="Ask about CPK, failures, root causes, planning, or data quality..."
+              disabled={loading}
               rows={1}
               className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-4 py-3 pr-12 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"
               style={{ minHeight: '48px', maxHeight: '120px' }}
@@ -901,7 +828,7 @@ export default function AiCommandCenter() {
 
           <button
             onClick={() => sendMessage()}
-            disabled={!query.trim() || loading || dataLoading}
+            disabled={!query.trim() || loading}
             className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed flex items-center justify-center transition-colors shadow-lg"
           >
             {loading

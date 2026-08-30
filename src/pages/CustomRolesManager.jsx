@@ -10,6 +10,7 @@
  * success feedback and Escape-to-close modals.
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   UserCog, Plus, Pencil, Trash2, X, Check, AlertTriangle, Search, Loader2,
   KeyRound, Info, Copy, Users, Power, CheckCircle2,
@@ -286,6 +287,7 @@ export default function CustomRolesManager() {
 
   const totalModulesSelected = form.moduleKeys.length
   const customRoleNames = (roles || []).map((r) => r.name)
+  const rolesPager = usePagedRows(roles)
   const deleteBlocked = typeof deleteCount === 'number' && deleteCount > 0
 
   if (!isAdmin) {
@@ -355,7 +357,7 @@ export default function CustomRolesManager() {
                   <UserCog size={26} className="mx-auto mb-2 opacity-60" />
                   {notProvisioned ? 'Enable the module to start building roles.' : 'No custom roles yet — create your first one.'}
                 </td></tr>
-              ) : roles.map((r) => (
+              ) : rolesPager.pageRows.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                   <td className="px-4 py-2.5">
                     <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text-primary)]">
@@ -395,6 +397,7 @@ export default function CustomRolesManager() {
               ))}
             </tbody>
           </table>
+          <TablePagination {...rolesPager} />
         </div>
       </div>
 

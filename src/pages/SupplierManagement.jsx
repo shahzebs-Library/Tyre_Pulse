@@ -13,6 +13,7 @@ import { toUserMessage } from '../lib/safeError'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
@@ -831,6 +832,14 @@ export default function SupplierManagement() {
   const filteredContracts = useMemo(() => {
     return contracts.filter(c => !contractSearch || c.supplier_name?.toLowerCase().includes(contractSearch.toLowerCase()))
   }, [contracts, contractSearch])
+  const sortedMetrics = useMemo(
+    () => [...allMetrics].sort((a, b) => (a.avgCpk ?? Infinity) - (b.avgCpk ?? Infinity)),
+    [allMetrics],
+  )
+  const metricsPager = usePagedRows(sortedMetrics)
+  const contractsPager = usePagedRows(filteredContracts)
+  const scorecardPager = usePagedRows(scorecard.suppliers)
+  const yoyPager = usePagedRows(spendAnalysis.yoy)
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1206,7 +1215,7 @@ export default function SupplierManagement() {
                     {spendAnalysis.yoy.length === 0 && (
                       <tr><td colSpan={4} className="px-4 py-6 text-center text-[var(--text-dim)]">{t('suppliers.spend.noYoyData')}</td></tr>
                     )}
-                    {spendAnalysis.yoy.map(row => (
+                    {yoyPager.pageRows.map(row => (
                       <tr key={row.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
                         <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{row.brand}</td>
                         <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{fmtCurrency(row.thisYear, activeCurrency)}</td>
@@ -1225,6 +1234,7 @@ export default function SupplierManagement() {
                     ))}
                   </tbody>
                 </table>
+                <TablePagination {...yoyPager} />
               </div>
             </div>
           </motion.div>
@@ -1279,7 +1289,7 @@ export default function SupplierManagement() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredContracts.map(c => {
+                      {contractsPager.pageRows.map(c => {
                         const status = getContractStatus(c)
                         const statusConfig = {
                           Active: { color: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-700' },
@@ -1325,6 +1335,7 @@ export default function SupplierManagement() {
                       })}
                     </tbody>
                   </table>
+                  <TablePagination {...contractsPager} />
                 </div>
               </div>
             )}
@@ -1413,7 +1424,7 @@ export default function SupplierManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...allMetrics].sort((a, b) => (a.avgCpk ?? Infinity) - (b.avgCpk ?? Infinity)).map(m => {
+                    {metricsPager.pageRows.map(m => {
                       const vsB = m.avgCpk != null ? ((m.avgCpk - CPK_BENCHMARK) / CPK_BENCHMARK) * 100 : null
                       return (
                         <tr key={m.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
@@ -1436,6 +1447,7 @@ export default function SupplierManagement() {
                     })}
                   </tbody>
                 </table>
+                <TablePagination {...metricsPager} />
               </div>
             </div>
           </motion.div>
@@ -1488,7 +1500,7 @@ export default function SupplierManagement() {
                 </thead>
                 <tbody>
                   {scorecard.suppliers.length === 0 && <tr><td colSpan={12} className="px-3 py-6 text-center text-[var(--text-dim)]">{t('suppliers.scorecard.empty')}</td></tr>}
-                  {scorecard.suppliers.map((s) => (
+                  {scorecardPager.pageRows.map((s) => (
                     <tr key={s.supplier} className="border-t border-[var(--input-border)]">
                       <td className="px-3 py-2 text-[var(--text-muted)]">{s.rank}</td>
                       <td className="px-3 py-2">
@@ -1513,6 +1525,7 @@ export default function SupplierManagement() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...scorecardPager} />
             </div>
 
             {/* Flagged issues — threshold-driven, actionable */}

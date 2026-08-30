@@ -19,6 +19,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { exportDailyOpsBriefingPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -107,6 +108,7 @@ export default function DailyOps() {
   const { branding } = useTenant()
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
   const [loading, setLoading] = useState(true)
+  const [failedSources, setFailedSources] = useState([])
   const [weekOpen, setWeekOpen] = useState(true)
 
   const [tyreRecords, setTyreRecords] = useState([])
@@ -118,6 +120,7 @@ export default function DailyOps() {
 
   const fetchData = useCallback(async (date) => {
     setLoading(true)
+    setFailedSources([])
     const { start: wStart, end: wEnd } = weekRange(date)
     const thirtyDaysAgo = addDays(date, -30)
 
@@ -143,6 +146,17 @@ export default function DailyOps() {
       dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd, country }),
       dailyOpsApi.listDailyTyreFitments({ thirtyDaysAgo, date }),
     ])
+
+    const sources = [
+      ['tyre records', trRes],
+      ['inspections', insRes],
+      ['work orders', woRes],
+      ['alerts', alRes],
+      ['fitments', t30Res],
+    ]
+    setFailedSources(sources.filter(([, result]) =>
+      result.status === 'rejected' || result.value?.error,
+    ).map(([name]) => name))
 
     setTyreRecords(trRes.status === 'fulfilled' && trRes.value.data ? scopeRows(trRes.value.data) : [])
     setInspections(insRes.status === 'fulfilled' && insRes.value.data ? insRes.value.data : [])
@@ -371,6 +385,7 @@ export default function DailyOps() {
     return workOrders.filter(r => r.scheduled_date && r.scheduled_date > selectedDate && r.scheduled_date <= nextWeekEnd && r.status !== 'Completed' && r.status !== 'Cancelled')
       .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))
   }, [workOrders, selectedDate])
+  const upcomingPager = usePagedRows(upcomingWOs)
 
   function weekDelta(curr, prev) {
     if (prev === 0 && curr === 0) return { val: 0, pct: 0 }
@@ -516,8 +531,21 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
         </div>
       )}
 
-      {!loading && (
+      {!loading && failedSources.length === 5 && (
+        <div role="alert" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm text-red-300 bg-red-900/20 border border-red-800/40 rounded-lg px-4 py-3">
+          <span className="flex items-start gap-2"><AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />Daily operations data could not be loaded. No operational conclusion is shown.</span>
+          <button type="button" onClick={() => fetchData(selectedDate)} className="btn-secondary text-xs shrink-0">Retry all sources</button>
+        </div>
+      )}
+
+      {!loading && failedSources.length < 5 && (
         <>
+          {failedSources.length > 0 && (
+            <div role="status" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm text-amber-300 bg-amber-900/15 border border-amber-800/40 rounded-lg px-4 py-3">
+              <span className="flex items-start gap-2"><AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />Partial view: {failedSources.join(', ')} could not be loaded. Totals exclude those sources.</span>
+              <button type="button" onClick={() => fetchData(selectedDate)} className="btn-secondary text-xs shrink-0">Retry all sources</button>
+            </div>
+          )}
           {activeCountry === 'All' && (
             <div className="flex items-start gap-2 text-xs text-amber-400/90 bg-amber-900/15 border border-amber-800/40 rounded-lg px-3 py-2">
               <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
@@ -761,7 +789,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                       </tr>
                     </thead>
                     <tbody>
-                      {upcomingWOs.map((wo, i) => {
+                      {upcomingPager.pageRows.map((wo, i) => {
                         const pc = { Critical: 'text-red-400', High: 'text-orange-400', Medium: 'text-yellow-400', Low: 'text-blue-400' }
                         return (
                           <tr key={wo.id} className={`border-b border-gray-800/50 hover:bg-white/[0.02] transition-colors ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
@@ -779,6 +807,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     </tbody>
                   </table>
                 </div>
+                <TablePagination {...upcomingPager} />
               </div>
             )}
           </motion.section>

@@ -3,7 +3,7 @@
  * Handles TOTP enrollment, verification, and unenrollment for the super-admin.
  * Opened from the ConsoleLayout sidebar.
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Smartphone, Shield, CheckCircle, X, AlertTriangle, Copy, Eye, EyeOff } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import { toUserMessage } from '../../lib/safeError'
@@ -27,16 +27,16 @@ export default function Console2FAModal({ onClose }) {
   const [code, setCode]   = useState(['', '', '', '', '', ''])
   const inputRefs         = useRef([])
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     const f = await listMfaFactors()
     setFactors(f)
     setLoading(false)
-  }
+  }, [listMfaFactors])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   async function startEnroll() {
     setError(null); setLoading(true)

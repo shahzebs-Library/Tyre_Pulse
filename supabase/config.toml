@@ -33,3 +33,9 @@ jwt_expiry = 3600
 enable_signup = true
 
 [functions]
+
+# Recovery requests start before a session exists. The function performs its
+# own action-level authentication: public recovery is enumeration-safe, while
+# contact enrollment/status/removal validates the caller's bearer token.
+[functions.account-recovery]
+verify_jwt = false

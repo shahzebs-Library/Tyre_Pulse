@@ -1,0 +1,602 @@
+{
+  "generatedAt": "2026-08-30T13:35:23.921Z",
+  "scope": "Legacy thin/data-without-state candidates only; table paging is classified separately.",
+  "methodology": {
+    "rule": "Classify the rendered workflow and delegated engine, never file length alone.",
+    "limitations": "Static source evidence does not certify tenant authorization, deployed schema, or live browser behavior."
+  },
+  "counts": {
+    "remediated": 6,
+    "not-applicable": 8,
+    "verified-custom-state": 8,
+    "not-thin": 7,
+    "ownership-excluded": 1
+  },
+  "unresolved": [],
+  "pages": [
+    {
+      "page": "AccidentPortalView",
+      "lineCount": 158,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty",
+        "heuristic-missing-error"
+      ],
+      "classification": "operational-singleton",
+      "status": "remediated",
+      "evidence": "Transport failures fail closed with generic copy and retry; token/database details are not exposed.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": false,
+        "empty": false,
+        "retry": true,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "Alerts",
+      "lineCount": 461,
+      "candidateReasons": [],
+      "classification": "operational-data",
+      "status": "remediated",
+      "evidence": "A failed safety source now aborts the scan; the page never renders a false all-clear and offers retry.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "BrandAssets",
+      "lineCount": 423,
+      "candidateReasons": [
+        "heuristic-missing-error"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Static committed design-system registry browser.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": false,
+        "empty": true,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "ClaimsSummary",
+      "lineCount": 580,
+      "candidateReasons": [
+        "heuristic-missing-empty"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "CostPerM3",
+      "lineCount": 584,
+      "candidateReasons": [],
+      "classification": "operational-data",
+      "status": "remediated",
+      "evidence": "The primary RPC has a blocking retry state; supporting-source failures are identified as partial.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "CostScenarioPlanner",
+      "lineCount": 366,
+      "candidateReasons": [
+        "heuristic-missing-empty",
+        "heuristic-missing-error",
+        "heuristic-missing-loading"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Pure client-side scenario model driven by operator inputs.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "CpkIntelligence",
+      "lineCount": 475,
+      "candidateReasons": [],
+      "classification": "operational-data",
+      "status": "remediated",
+      "evidence": "Core and advanced reads expose blocking/partial error states with retry.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "DailyOps",
+      "lineCount": 819,
+      "candidateReasons": [],
+      "classification": "operational-data",
+      "status": "remediated",
+      "evidence": "All five source outcomes are classified; total failure blocks conclusions and partial failure qualifies totals.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "DataDeletion",
+      "lineCount": 133,
+      "candidateReasons": [
+        "short-file"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Public static policy and request instructions; no remote collection.",
+      "state": {
+        "data": false,
+        "loading": false,
+        "error": true,
+        "empty": false,
+        "retry": false,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "DigitalTwin",
+      "lineCount": 280,
+      "candidateReasons": [
+        "heuristic-missing-empty"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": false,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "ErpIntake",
+      "lineCount": 732,
+      "candidateReasons": [
+        "heuristic-missing-loading"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "ErpSync",
+      "lineCount": 168,
+      "candidateReasons": [
+        "short-file"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "ErpConnectionPanel",
+        "WebhooksPanel"
+      ],
+      "evidence": "Page delegates to ErpConnectionPanel, WebhooksPanel; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": false,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "ExpenseImport",
+      "lineCount": 482,
+      "candidateReasons": [
+        "heuristic-missing-loading"
+      ],
+      "classification": "external-workstream",
+      "status": "ownership-excluded",
+      "evidence": "Owned by the separate enterprise paging/filter remediation stream; intentionally not modified or adjudicated here.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "FleetMaster",
+      "lineCount": 830,
+      "candidateReasons": [
+        "heuristic-missing-empty"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "GatePass",
+      "lineCount": 593,
+      "candidateReasons": [
+        "heuristic-missing-loading"
+      ],
+      "classification": "operational-data",
+      "status": "remediated",
+      "evidence": "Today/history/site/clearance reads now expose loading, error and retry states; asset rows drill into vehicle records.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "Login",
+      "lineCount": 1085,
+      "candidateReasons": [
+        "heuristic-missing-empty"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Authentication form; list empty state is not applicable.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": false,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "MasterAccessControl",
+      "lineCount": 128,
+      "candidateReasons": [
+        "short-file"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "PermissionMatrix",
+        "CustomRolesManager",
+        "AccessGrantsManager",
+        "SecurityCenter"
+      ],
+      "evidence": "Page delegates to PermissionMatrix, CustomRolesManager, AccessGrantsManager, SecurityCenter; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": false,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "NotFound",
+      "lineCount": 23,
+      "candidateReasons": [
+        "short-file"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Static route fallback.",
+      "state": {
+        "data": false,
+        "loading": false,
+        "error": true,
+        "empty": false,
+        "retry": false,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "Privacy",
+      "lineCount": 121,
+      "candidateReasons": [
+        "short-file"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Static public policy.",
+      "state": {
+        "data": false,
+        "loading": false,
+        "error": true,
+        "empty": false,
+        "retry": false,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "ProductionM3",
+      "lineCount": 67,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty",
+        "heuristic-missing-error",
+        "heuristic-missing-loading"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "LedgerPage",
+        "ProductionMonthlySummary",
+        "ProductionRejectionsPanel",
+        "StationMapPanel"
+      ],
+      "evidence": "Page delegates to LedgerPage, ProductionMonthlySummary, ProductionRejectionsPanel, StationMapPanel; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "RepairRequests",
+      "lineCount": 1273,
+      "candidateReasons": [
+        "heuristic-missing-loading"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "ReportSharing",
+      "lineCount": 178,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "ReportSharesPanel"
+      ],
+      "evidence": "Page delegates to ReportSharesPanel; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "ResetPassword",
+      "lineCount": 152,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Authentication recovery form; list empty state is not applicable.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "RoiCalculator",
+      "lineCount": 157,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty",
+        "heuristic-missing-error",
+        "heuristic-missing-loading"
+      ],
+      "classification": "non-list-or-static",
+      "status": "not-applicable",
+      "evidence": "Pure client-side calculator driven by operator inputs.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "SanyInvoices",
+      "lineCount": 75,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty",
+        "heuristic-missing-error",
+        "heuristic-missing-loading"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "LedgerPage",
+        "LedgerMonthlySummary",
+        "SanyInvoiceLinesModal"
+      ],
+      "evidence": "Page delegates to LedgerPage, LedgerMonthlySummary, SanyInvoiceLinesModal; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "ScoCosts",
+      "lineCount": 46,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty",
+        "heuristic-missing-error",
+        "heuristic-missing-loading"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "LedgerPage",
+        "LedgerMonthlySummary"
+      ],
+      "evidence": "Page delegates to LedgerPage, LedgerMonthlySummary; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "Settings",
+      "lineCount": 1656,
+      "candidateReasons": [
+        "heuristic-missing-loading"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "SitesIntake",
+      "lineCount": 41,
+      "candidateReasons": [
+        "short-file",
+        "heuristic-missing-empty",
+        "heuristic-missing-error",
+        "heuristic-missing-loading"
+      ],
+      "classification": "composed-workflow",
+      "status": "not-thin",
+      "engines": [
+        "LedgerPage"
+      ],
+      "evidence": "Page delegates to LedgerPage; assess the rendered engine, not wrapper line count.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": false,
+        "empty": false,
+        "retry": false,
+        "drillDown": false
+      }
+    },
+    {
+      "page": "UploadData",
+      "lineCount": 1853,
+      "candidateReasons": [
+        "heuristic-missing-loading"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": false,
+        "error": true,
+        "empty": true,
+        "retry": true,
+        "drillDown": true
+      }
+    },
+    {
+      "page": "WorkshopSettings",
+      "lineCount": 384,
+      "candidateReasons": [
+        "heuristic-missing-empty"
+      ],
+      "classification": "operational-data",
+      "status": "verified-custom-state",
+      "evidence": "Source review confirms explicit loading/sentinel, error/retry, and true-empty or filtered-empty handling; the legacy keyword heuristic missed its implementation vocabulary.",
+      "state": {
+        "data": true,
+        "loading": true,
+        "error": true,
+        "empty": false,
+        "retry": true,
+        "drillDown": false
+      }
+    }
+  ]
+}

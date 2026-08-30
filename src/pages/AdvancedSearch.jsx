@@ -12,6 +12,7 @@
  * states throughout. Pure roll-ups live in `src/lib/advancedSearch.js`.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil, Trash2, Pin,
   PinOff, Play, Bookmark, Layers, Database, AlertTriangle, Truck, Package,
@@ -199,6 +200,7 @@ export default function AdvancedSearch() {
   // ── Export (saved-search library) ───────────────────────────────────────
   const EXPORT_COLS = ['name', 'entity', 'query_text', 'result_count', 'pinned', 'last_run_at', 'notes']
   const EXPORT_HEADERS = ['Name', 'Entity', 'Query', 'Last results', 'Pinned', 'Last run', 'Notes']
+  const savedPager = usePagedRows(filteredSaved)
   const exportRows = filteredSaved.map((r) => ({
     name: r.name || '', entity: ENTITY_META[r.entity]?.short || r.entity || 'all',
     query_text: r.query_text || '', result_count: r.result_count ?? '',
@@ -498,7 +500,7 @@ export default function AdvancedSearch() {
                   {(saved.length === 0 && !notProvisioned) ? 'No saved searches yet — run a search above and save it.' : notProvisioned ? 'Enable saved searches to build a reusable library.' : 'No saved searches match these filters.'}
                 </td></tr>
               ) : (
-                filteredSaved.map((r) => {
+                savedPager.pageRows.map((r) => {
                   const meta = ENTITY_META[r.entity] || ENTITY_META.all
                   const Icon = meta.icon
                   return (
@@ -530,6 +532,7 @@ export default function AdvancedSearch() {
               )}
             </tbody>
           </table>
+          <TablePagination {...savedPager} />
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Radio, Tag, Truck, MapPin, AlertCircle, CheckCircle,
@@ -12,6 +12,8 @@ import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
 import RfidScanner from '../components/RfidScanner'
 import { toUserMessage } from '../lib/safeError'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { fetchAllPages } from '../lib/fetchAll'
 
 const STATUS_COLORS = {
   available: 'text-blue-400 bg-blue-400/15 border-blue-400/30',
@@ -73,6 +75,8 @@ export default function RfidRegistry() {
   // Alerts data
   const [alerts, setAlerts] = useState([])
   const [alertsFilter, setAlertsFilter] = useState('open')
+  const alertsFilterRef = useRef(alertsFilter)
+  alertsFilterRef.current = alertsFilter
 
   // History data
   const [history, setHistory] = useState([])
@@ -89,21 +93,21 @@ export default function RfidRegistry() {
     site: '',
   })
 
-  useEffect(() => {
-    loadData()
-  }, [activeTab])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       // Load stats
-      const { data: tagStats } = await supabase.from('rfid_tags').select('status')
-      const { data: readerStats } = await supabase.from('rfid_readers').select('status')
-      const { data: alertStats } = await supabase
-        .from('rfid_alerts')
-        .select('created_at')
-        .is('resolved_at', null)
+      const [tagStatsResult, readerStatsResult, alertStatsResult] = await Promise.all([
+        fetchAllPages((from, to) => supabase.from('rfid_tags').select('status').range(from, to)),
+        fetchAllPages((from, to) => supabase.from('rfid_readers').select('status').range(from, to)),
+        fetchAllPages((from, to) => supabase.from('rfid_alerts').select('created_at').is('resolved_at', null).range(from, to)),
+      ])
+      const statsError = tagStatsResult.error || readerStatsResult.error || alertStatsResult.error
+      if (statsError) throw statsError
+      const tagStats = tagStatsResult.data
+      const readerStats = readerStatsResult.data
+      const alertStats = alertStatsResult.data
 
       setStats({
         totalTags: tagStats?.length || 0,
@@ -121,14 +125,15 @@ export default function RfidRegistry() {
 
       // Load tags with tyre info
       if (activeTab === 'tags' || activeTab === 'dashboard') {
-        const { data: tyreTags } = await supabase
+        const { data: tyreTags, error: tagsError } = await fetchAllPages((from, to) => supabase
           .from('rfid_tags')
           .select(`
             *,
             tyre_records!left(id, serial_no, asset_no, brand, site, status)
           `)
           .order('created_at', { ascending: false })
-          .limit(500)
+          .range(from, to))
+        if (tagsError) throw tagsError
         setTags(tyreTags || [])
         
         // Get unique sites
@@ -138,38 +143,43 @@ export default function RfidRegistry() {
 
       // Load readers
       if (activeTab === 'readers' || activeTab === 'dashboard') {
-        const { data: readerData } = await supabase
+        const { data: readerData, error: readersError } = await fetchAllPages((from, to) => supabase
           .from('rfid_readers')
           .select('*')
           .order('site')
           .order('zone_name')
+          .range(from, to))
+        if (readersError) throw readersError
         setReaders(readerData || [])
       }
 
       // Load alerts
       if (activeTab === 'alerts' || activeTab === 'dashboard') {
-        const { data: alertData } = await supabase
-          .from('rfid_alerts')
-          .select(`
-            *,
-            rfid_tags!left(tag_uid)
-          `)
-          .is('resolved_at', alertsFilter === 'open' ? null : undefined)
-          .order('created_at', { ascending: false })
-          .limit(100)
+        const { data: alertData, error: alertsError } = await fetchAllPages((from, to) => {
+          let query = supabase
+            .from('rfid_alerts')
+            .select(`
+              *,
+              rfid_tags!left(tag_uid)
+            `)
+          if (alertsFilterRef.current === 'open') query = query.is('resolved_at', null)
+          return query.order('created_at', { ascending: false }).range(from, to)
+        })
+        if (alertsError) throw alertsError
         setAlerts(alertData || [])
       }
 
       // Load history
       if (activeTab === 'history') {
-        const { data: historyData } = await supabase
+        const { data: historyData, error: historyError } = await fetchAllPages((from, to) => supabase
           .from('rfid_read_events')
           .select(`
             *,
             rfid_readers!left(name, zone_name)
           `)
           .order('read_at', { ascending: false })
-          .limit(200)
+          .range(from, to))
+        if (historyError) throw historyError
         setHistory(historyData || [])
       }
 
@@ -180,7 +190,11 @@ export default function RfidRegistry() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [activeTab])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -210,6 +224,17 @@ export default function RfidRegistry() {
     }
     return alerts
   }, [alerts, alertsFilter])
+
+  const filteredReaders = useMemo(() => readers.filter(r => (
+    !readersSearch || r.name?.toLowerCase().includes(readersSearch.toLowerCase()) || r.zone_name?.toLowerCase().includes(readersSearch.toLowerCase())
+  )), [readers, readersSearch])
+  const filteredHistory = useMemo(() => history.filter(h => (
+    !historySearch || h.tag_uid?.toLowerCase().includes(historySearch.toLowerCase()) || h.zone_name?.toLowerCase().includes(historySearch.toLowerCase())
+  )), [history, historySearch])
+  const tagsPager = usePagedRows(filteredTags)
+  const readersPager = usePagedRows(filteredReaders)
+  const alertsPager = usePagedRows(filteredAlerts)
+  const historyPager = usePagedRows(filteredHistory)
 
   // Tag form handlers
   function openTagForm(tag = null) {
@@ -474,7 +499,7 @@ export default function RfidRegistry() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTags.map(tag => (
+                    {tagsPager.pageRows.map(tag => (
                       <tr key={tag.id} className="border-t border-white/5 hover:bg-white/2">
                         <td className="px-4 py-2.5 font-mono text-xs text-[var(--text-primary)]">{tag.tag_uid}</td>
                         <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{tag.tag_type || '-'}</td>
@@ -508,6 +533,7 @@ export default function RfidRegistry() {
                     )}
                   </tbody>
                 </table>
+                <TablePagination {...tagsPager} />
               </div>
             )}
           </div>
@@ -535,9 +561,7 @@ export default function RfidRegistry() {
 
           {/* Readers Grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {readers
-              .filter(r => !readersSearch || r.name?.toLowerCase().includes(readersSearch.toLowerCase()) || r.zone_name?.toLowerCase().includes(readersSearch.toLowerCase()))
-              .map(reader => (
+            {readersPager.pageRows.map(reader => (
                 <div key={reader.id} className="card p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
@@ -571,6 +595,7 @@ export default function RfidRegistry() {
                 </div>
               ))}
           </div>
+          <TablePagination {...readersPager} />
         </motion.div>
       )}
 
@@ -607,7 +632,7 @@ export default function RfidRegistry() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAlerts.map(alert => (
+                      {alertsPager.pageRows.map(alert => (
                         <tr key={alert.id} className="border-t border-white/5 hover:bg-white/2">
                           <td className="px-4 py-2.5">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${SEVERITY_COLORS[alert.severity]}`}>
@@ -636,6 +661,7 @@ export default function RfidRegistry() {
                 )}
               </div>
             )}
+            {!loading && filteredAlerts.length > 0 && <TablePagination {...alertsPager} />}
           </div>
         </motion.div>
       )}
@@ -674,10 +700,8 @@ export default function RfidRegistry() {
                     </tr>
                   </thead>
                   <tbody>
-                    {history
-                      .filter(h => !historySearch || h.tag_uid?.toLowerCase().includes(historySearch.toLowerCase()) || h.zone_name?.toLowerCase().includes(historySearch.toLowerCase()))
-                      .map((read, idx) => (
-                        <tr key={idx} className="border-t border-white/5 hover:bg-white/2">
+                    {historyPager.pageRows.map((read) => (
+                        <tr key={read.id || `${read.tag_uid}-${read.read_at}`} className="border-t border-white/5 hover:bg-white/2">
                           <td className="px-4 py-2.5 text-[var(--text-secondary)] text-xs">{new Date(read.read_at).toLocaleString()}</td>
                           <td className="px-3 py-2.5 font-mono text-xs text-[var(--text-primary)]">{read.tag_uid}</td>
                           <td className="px-3 py-2.5 text-[var(--text-secondary)] text-xs">{read.rfid_readers?.zone_name || read.zone_name || '-'}</td>
@@ -700,6 +724,7 @@ export default function RfidRegistry() {
                 </table>
               </div>
             )}
+            {!loading && filteredHistory.length > 0 && <TablePagination {...historyPager} />}
           </div>
         </motion.div>
       )}

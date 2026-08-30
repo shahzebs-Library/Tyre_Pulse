@@ -58,6 +58,13 @@ const PERIOD_PRESETS = [
 ]
 
 const RISK_LEVELS = ['Critical', 'High', 'Medium', 'Low']
+const CAUSE_KEY_MAP = {
+  'Critical Failure':    'criticalFailure',
+  'Wear-Related':        'wearRelated',
+  'Pressure Issue':      'pressureIssue',
+  'Routine Replacement': 'routineReplacement',
+  'Unknown':             'unknown',
+}
 
 const CHART_BASE = {
   responsive: true,
@@ -472,13 +479,6 @@ export default function DowntimeTracker() {
   }, [filtered, actualByAsset, t])
 
   // ── Downtime by Cause ────────────────────────────────────────────────────────
-  const CAUSE_KEY_MAP = {
-    'Critical Failure':    'criticalFailure',
-    'Wear-Related':        'wearRelated',
-    'Pressure Issue':      'pressureIssue',
-    'Routine Replacement': 'routineReplacement',
-    'Unknown':             'unknown',
-  }
   const causeData = useMemo(() => {
     const map = {}
     filtered.forEach(r => {

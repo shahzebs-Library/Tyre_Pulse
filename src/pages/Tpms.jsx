@@ -131,6 +131,8 @@ const SORTS = {
   recent:   { label: 'Most recent' },
 }
 const BAND_RANK = { critical: 0, under: 1, over: 2, optimal: 3, unknown: 4 }
+const EXPORT_COLS = ['asset_no', 'serial', 'position', 'size', 'pressure', 'target', 'deviation', 'temperature', 'status', 'site', 'country', 'recorded', 'source']
+const EXPORT_HEADERS = ['Asset No', 'Serial', 'Position', 'Size', 'Pressure (bar)', 'Target (bar)', 'Deviation', 'Temp (C)', 'Status', 'Site', 'Country', 'Recorded', 'Source']
 
 export default function Tpms() {
   const { activeCountry, appSettings } = useSettings()
@@ -299,9 +301,6 @@ export default function Tpms() {
     recorded: r.date ? String(r.date).slice(0, 10) : 'N/A',
     source: r.source,
   })), [filtered])
-
-  const EXPORT_COLS = ['asset_no', 'serial', 'position', 'size', 'pressure', 'target', 'deviation', 'temperature', 'status', 'site', 'country', 'recorded', 'source']
-  const EXPORT_HEADERS = ['Asset No', 'Serial', 'Position', 'Size', 'Pressure (bar)', 'Target (bar)', 'Deviation', 'Temp (C)', 'Status', 'Site', 'Country', 'Recorded', 'Source']
 
   const exportExcel = useCallback(async () => {
     setExporting(true)

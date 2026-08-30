@@ -16,6 +16,7 @@ import * as ciApi from '../lib/api/continuousImprovement'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import { toUserMessage } from '../lib/safeError'
 
@@ -1041,6 +1042,7 @@ export default function ContinuousImprovement() {
     })
     return { open, inProgress, closed, overdue, openTable }
   }, [actions])
+  const openActionsPager = usePagedRows(actionStats.openTable)
 
   // ── ROI summary ───────────────────────────────────────────────────────────────
 
@@ -1381,7 +1383,7 @@ export default function ContinuousImprovement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {actionStats.openTable.slice(0, 30).map(a => {
+                    {openActionsPager.pageRows.map(a => {
                       const days = daysOpen(a.created_at)
                       const isOverdue = days > 14
                       return (
@@ -1415,6 +1417,7 @@ export default function ContinuousImprovement() {
                     })}
                   </tbody>
                 </table>
+                <TablePagination {...openActionsPager} />
                 {actionStats.openTable.length > 30 && (
                   <p className="text-xs text-[var(--text-dim)] text-center pt-2">{actionStats.openTable.length - 30} more actions not shown</p>
                 )}

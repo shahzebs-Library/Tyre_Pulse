@@ -50,6 +50,12 @@ describe('service layer - getFleetCpk', () => {
     expect(out).toEqual({ perVehicle: [], byType: [], fleet: [] })
   })
 
+  it('propagates an RPC error in strict mode so operational pages can show retry', async () => {
+    const sourceError = { message: 'boom', code: '42883' }
+    h.state.rpc = { data: null, error: sourceError }
+    await expect(getFleetCpk({ country: 'KSA', strict: true })).rejects.toBe(sourceError)
+  })
+
   it('degrades to empty shape when arrays are absent', async () => {
     h.state.rpc = { data: {}, error: null }
     const out = await getFleetCpk({})

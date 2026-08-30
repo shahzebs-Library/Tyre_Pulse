@@ -46,6 +46,10 @@ export default function ResetPassword() {
       setError(toUserMessage(updateErr, 'Could not update your password. Please try again.'))
       setLoading(false)
     } else {
+      // A recovery proves control of the verified out-of-band contact, but any
+      // stolen/forgotten sessions should not survive the credential change.
+      // Supabase global sign-out revokes refresh tokens on every device.
+      await supabase.auth.signOut({ scope: 'global' })
       setDone(true)
       setTimeout(() => navigate('/login'), 2500)
     }

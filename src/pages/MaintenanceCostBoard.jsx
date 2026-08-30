@@ -22,6 +22,9 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
+import FilterBar from '../components/ui/FilterBar'
+import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import { useFilterState } from '../hooks/useFilterState'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { getMaintenanceSnapshot } from '../lib/api/maintenanceAnalytics'
@@ -40,6 +43,7 @@ ChartJS.register(
 )
 
 const LS_KEY = 'maintenanceBoard.sections.v1'
+const FILTER_DEFAULTS = { q: '', rowType: '', site: '', from: '', to: '' }
 const SECTIONS = [
   ['kpis', 'KPIs', Wallet],
   ['spend', 'Spend', PieChart],
@@ -86,6 +90,7 @@ function ChartCard({ title, children, refCb, height = 240 }) {
 }
 
 export default function MaintenanceCostBoard() {
+  const [filters, setFilter, resetFilters, hasActiveFilters] = useFilterState(FILTER_DEFAULTS)
   const { activeCountry, appSettings, activeCurrency } = useSettings()
   const [snapshot, setSnapshot] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -93,9 +98,9 @@ export default function MaintenanceCostBoard() {
   const [refreshing, setRefreshing] = useState(false)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [exporting, setExporting] = useState(false)
-  // Optional calendar date range. Empty = all time (the previous behavior).
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  // URL-backed date range keeps a board scope bookmarkable and shareable.
+  const fromDate = filters.from
+  const toDate = filters.to
 
   const [sections, setSections] = useState(() => {
     try {
@@ -153,6 +158,18 @@ export default function MaintenanceCostBoard() {
   const recs = useMemo(() => buildMaintenanceRecommendations(snapshot), [snapshot])
 
   const hasAny = hasData && (k.jobCards || k.lineItems || k.totalSpend)
+  const detailRows = useMemo(() => [
+    ...(snapshot?.top_tasks || []).map((r, index) => ({ id: `task-${index}-${r?.label}`, type: 'task', name: String(r?.label ?? '') || 'N/A', site: '', jobs: null, occurrences: Number(r?.n) || 0, spend: null })),
+    ...(snapshot?.spend_by_site || []).map((r, index) => ({ id: `site-${index}-${r?.label}`, type: 'site', name: String(r?.label ?? '') || 'N/A', site: String(r?.label ?? '') || 'N/A', jobs: Number(r?.jobs) || 0, occurrences: null, spend: Number(r?.spend) || 0 })),
+  ], [snapshot])
+  const siteOptions = useMemo(() => [...new Set(detailRows.map((r) => r.site).filter(Boolean))].sort(), [detailRows])
+  const filteredDetails = useMemo(() => {
+    const q = filters.q.trim().toLowerCase()
+    return detailRows.filter((row) => (!q || `${row.name} ${row.site}`.toLowerCase().includes(q))
+      && (!filters.rowType || row.type === filters.rowType)
+      && (!filters.site || row.site === filters.site))
+  }, [detailRows, filters.q, filters.rowType, filters.site])
+  const detailPager = usePagedRows(filteredDetails)
 
   // Build the PDF doc. Mirrors BoardOverview.buildBoardDoc (chart capture on paper).
   async function buildBoardDoc() {
@@ -246,6 +263,22 @@ export default function MaintenanceCostBoard() {
     <div className="space-y-5">
       <PageHeader title="Maintenance Cost & Tasks" subtitle="Job cards, spend and the most common tasks across the fleet" icon={Wrench} />
 
+      <FilterBar
+        search={filters.q}
+        onSearch={(value) => setFilter('q', value)}
+        searchLabel="Search maintenance task and site details"
+        placeholder="Search task or site"
+        selects={[
+          { key: 'rowType', value: filters.rowType, onChange: (value) => setFilter('rowType', value), placeholder: 'All detail types', ariaLabel: 'Filter maintenance details by type', options: [{ value: 'task', label: 'Tasks' }, { value: 'site', label: 'Sites' }] },
+          { key: 'site', value: filters.site, onChange: (value) => setFilter('site', value), placeholder: 'All sites', ariaLabel: 'Filter maintenance details by site', options: siteOptions.map((value) => ({ value, label: value })) },
+        ]}
+        resultCount={filteredDetails.length}
+        onClearAll={hasActiveFilters ? resetFilters : undefined}
+      >
+        <DateField value={fromDate} onChange={(value) => setFilter('from', value)} placeholder="From date" ariaLabel="Maintenance data from date" max={toDate || undefined} />
+        <DateField value={toDate} onChange={(value) => setFilter('to', value)} placeholder="To date" ariaLabel="Maintenance data to date" min={fromDate || undefined} />
+      </FilterBar>
+
       {/* Section toggles + actions */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -260,16 +293,6 @@ export default function MaintenanceCostBoard() {
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <DateField className="text-sm w-40" value={fromDate} onChange={setFromDate} placeholder="From date" ariaLabel="From date" max={toDate || undefined} />
-          <DateField className="text-sm w-40" value={toDate} onChange={setToDate} placeholder="To date" ariaLabel="To date" min={fromDate || undefined} />
-          {(fromDate || toDate) && (
-            <button
-              onClick={() => { setFromDate(''); setToDate('') }}
-              className="btn-secondary text-sm px-3 py-1.5"
-            >
-              Clear dates
-            </button>
-          )}
           {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}
           <button onClick={load} disabled={refreshing} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
@@ -328,30 +351,39 @@ export default function MaintenanceCostBoard() {
                   <Bar data={stylize(charts.actions, 'bar')} options={chartBase(false, true)} />
                 </ChartCard>
               </div>
-              <div className="card overflow-x-auto">
-                <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Top tasks</h3>
-                {(snapshot.top_tasks || []).length === 0 ? (
-                  <p className="text-sm text-[var(--text-muted)]">No task data for the selected scope.</p>
+              <div className="card p-0 overflow-hidden">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] p-4 border-b border-[var(--hairline)]">Task and site details</h3>
+                {detailRows.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)] p-4">No task or site data exists for the selected scope.</p>
+                ) : filteredDetails.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)] p-4" role="status">No maintenance details match these filters. Clear or change the search, type, or site.</p>
                 ) : (
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                        <th className="py-2 pr-3 font-semibold">#</th>
-                        <th className="py-2 pr-3 font-semibold">Task</th>
+                        <th className="py-2 px-4 font-semibold">Type</th>
+                        <th className="py-2 pr-3 font-semibold">Name</th>
+                        <th className="py-2 pr-3 font-semibold text-right">Jobs</th>
                         <th className="py-2 pr-3 font-semibold text-right">Occurrences</th>
+                        <th className="py-2 pr-4 font-semibold text-right">Spend</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(snapshot.top_tasks || []).map((r, i) => (
-                        <tr key={i} className="border-b border-[var(--hairline)]/50">
-                          <td className="py-1.5 pr-3 text-[var(--text-dim)]">{i + 1}</td>
-                          <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{String(r?.label ?? '') || 'N/A'}</td>
-                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{num(r?.n)}</td>
+                      {detailPager.pageRows.map((r) => (
+                        <tr key={r.id} className="border-b border-[var(--hairline)]/50">
+                          <td className="py-1.5 px-4 text-[var(--text-dim)] capitalize">{r.type}</td>
+                          <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{r.name}</td>
+                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.jobs == null ? '—' : num(r.jobs)}</td>
+                          <td className="py-1.5 pr-3 text-right text-[var(--text-primary)]">{r.occurrences == null ? '—' : num(r.occurrences)}</td>
+                          <td className="py-1.5 pr-4 text-right text-[var(--text-primary)]">{r.spend == null ? '—' : money0(r.spend)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
+                <TablePagination {...detailPager} />
               </div>
             </section>
           )}

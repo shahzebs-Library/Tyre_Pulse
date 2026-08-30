@@ -37,6 +37,7 @@ import { taskRollup, jobTaskSummary, qcOutcome, TASK_STATUS, TASK_STATUS_LABEL }
 import { recommendTechnicians } from '../lib/workshopAssign'
 import EChart from '../components/charts/EChart'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import WorkshopNewJobModal from '../components/workshop/WorkshopNewJobModal'
 import { colorAt, withAlpha } from '../lib/reportColors'
@@ -560,6 +561,7 @@ function JobCard({
 // ── Delay / root-cause panel ────────────────────────────────────────────────
 
 function DelayPanel({ delays }) {
+  const delaysPager = usePagedRows(delays)
   const option = useMemo(() => {
     const rows = [...delays].reverse() // ECharts hbar renders bottom-up
     return {
@@ -612,7 +614,7 @@ function DelayPanel({ delays }) {
             </tr>
           </thead>
           <tbody className="text-white">
-            {delays.map((d) => (
+            {delaysPager.pageRows.map((d) => (
               <tr key={d.reason} className="border-t border-[var(--border)]">
                 <td className="py-1 pr-2">{labelReason(d.reason)}</td>
                 <td className="py-1 pr-2 tabular-nums">{d.hoursLost}</td>
@@ -629,6 +631,7 @@ function DelayPanel({ delays }) {
             ))}
           </tbody>
         </table>
+        <TablePagination {...delaysPager} />
       </div>
     </div>
   )
@@ -1144,7 +1147,10 @@ export default function WorkshopLive() {
   const techById = useMemo(() => Object.fromEntries(board.map((b) => [b.userId, b])), [board])
 
   // Apply site + KPI filter to the two surfaces.
-  const bySite = (site) => siteFilter === 'All' || site === siteFilter
+  const bySite = useCallback(
+    (site) => siteFilter === 'All' || site === siteFilter,
+    [siteFilter],
+  )
 
   const filteredBoard = useMemo(() => {
     let list = board.filter((b) => bySite(b.site))
@@ -1153,7 +1159,7 @@ export default function WorkshopLive() {
       if (def?.pred) list = list.filter(def.pred)
     }
     return list
-  }, [board, filter, kpiDefs, siteFilter])
+  }, [board, bySite, filter, kpiDefs])
 
   const filteredJobs = useMemo(() => {
     let list = (raw?.jobs || []).filter((j) => bySite(j.site))
@@ -1164,7 +1170,7 @@ export default function WorkshopLive() {
       // openJobs (jobCol null) keeps every open job already returned by the service.
     }
     return list
-  }, [raw, filter, kpiDefs, siteFilter, nowTs])
+  }, [raw, bySite, filter, kpiDefs, nowTs])
 
   const columns = useMemo(() => {
     const buckets = Object.fromEntries(KANBAN_COLUMNS.map((c) => [c.key, []]))
@@ -1177,7 +1183,7 @@ export default function WorkshopLive() {
 
   const openJobsForAssign = useMemo(
     () => (raw?.jobs || []).filter((j) => bySite(j.site)),
-    [raw, siteFilter],
+    [raw, bySite],
   )
 
   // ── Actions ────────────────────────────────────────────────────────────────

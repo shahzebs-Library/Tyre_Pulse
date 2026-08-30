@@ -19,6 +19,10 @@ import {
   Trash2, ArrowRight, Receipt,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import FilterBar from '../components/ui/FilterBar'
+import DateField from '../components/ui/DateField'
+import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import { useFilterState } from '../hooks/useFilterState'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrency } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
@@ -29,7 +33,7 @@ import {
 } from '../lib/api/partsConsumption'
 
 const LARGE_FILE_ROWS = 60000
-const SAMPLE_LIMIT = 20
+const FILTER_DEFAULTS = { q: '', category: '', from: '', to: '' }
 
 const CATEGORY_LABEL = { tyre: 'Tyres', spare: 'Spare', oil: 'Oil' }
 const CATEGORY_STYLE = {
@@ -50,6 +54,7 @@ function KpiTile({ label, value, sub }) {
 }
 
 export default function ExpenseImport() {
+  const [filters, setFilter, resetFilters, hasActiveFilters] = useFilterState(FILTER_DEFAULTS)
   const { activeCountry, activeCurrency } = useSettings()
   const currency = activeCurrency || 'SAR'
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
@@ -83,13 +88,25 @@ export default function ExpenseImport() {
 
   const summary = useMemo(() => (rows.length ? summarizeRows(rows) : null), [rows])
 
-  const sample = useMemo(() => rows.slice(0, SAMPLE_LIMIT).map((r) => {
+  const classifiedRows = useMemo(() => rows.map((r, sourceIndex) => {
     const c = classifyLine({
       description: r.item_description, value: r.value_amount, spare: r.spare_parts_amount,
       tyre: r.tyre_amount, oil: r.oil_amount, total: r.total_amount,
     })
-    return { r, category: c.category, lineCost: c.lineCost }
+    return { r, category: c.category, lineCost: c.lineCost, sourceIndex }
   }), [rows])
+  const previewRows = useMemo(() => {
+    const q = filters.q.trim().toLowerCase()
+    return classifiedRows.filter(({ r, category }) => {
+      const haystack = [r.item_description, r.item_code, r.work_order_no, r.issue_number, r.asset_code, r.store_code, r.cost_center].join(' ').toLowerCase()
+      const date = String(r.txn_date || '').slice(0, 10)
+      return (!q || haystack.includes(q))
+        && (!filters.category || category === filters.category)
+        && (!filters.from || (date && date >= filters.from))
+        && (!filters.to || (date && date <= filters.to))
+    })
+  }, [classifiedRows, filters])
+  const previewPager = usePagedRows(previewRows)
 
   const handleFile = useCallback(async (file) => {
     if (!file) return
@@ -315,13 +332,30 @@ export default function ExpenseImport() {
             </div>
           </div>
 
-          {/* Sample table */}
+          {/* Complete, filterable preview. Import always uses the original full rows array. */}
           <div className="card p-0 overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--border)]">
               <p className="text-sm font-medium text-[var(--text-primary)]">
-                Sample (first {Math.min(SAMPLE_LIMIT, rows.length)} of {rows.length.toLocaleString('en-US')} rows)
+                Import preview ({previewRows.length.toLocaleString('en-US')} of {rows.length.toLocaleString('en-US')} rows)
               </p>
             </div>
+            <FilterBar
+              className="m-3"
+              search={filters.q}
+              onSearch={(value) => setFilter('q', value)}
+              searchLabel="Search expense import preview"
+              placeholder="Search item, work order, asset, store or cost centre"
+              selects={[{
+                key: 'category', value: filters.category, onChange: (value) => setFilter('category', value),
+                placeholder: 'All categories', ariaLabel: 'Filter preview by category',
+                options: Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label })),
+              }]}
+              resultCount={previewRows.length}
+              onClearAll={hasActiveFilters ? resetFilters : undefined}
+            >
+              <DateField value={filters.from} onChange={(value) => setFilter('from', value)} placeholder="From date" ariaLabel="Filter preview from date" max={filters.to || undefined} />
+              <DateField value={filters.to} onChange={(value) => setFilter('to', value)} placeholder="To date" ariaLabel="Filter preview to date" min={filters.from || undefined} />
+            </FilterBar>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -332,8 +366,8 @@ export default function ExpenseImport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sample.map((s, i) => (
-                    <tr key={i} className="border-t border-[var(--border)]">
+                  {previewPager.pageRows.map((s) => (
+                    <tr key={`${s.r.source_row || s.sourceIndex}-${s.r.item_code || s.r.item_description}`} className="border-t border-[var(--border)]">
                       <td className="px-4 py-2 text-[var(--text-secondary)] max-w-md truncate">
                         {s.r.item_description || 'N/A'}
                       </td>
@@ -349,7 +383,13 @@ export default function ExpenseImport() {
                   ))}
                 </tbody>
               </table>
+              {previewRows.length === 0 && (
+                <div className="px-4 py-10 text-center text-sm text-[var(--text-tertiary)]" role="status">
+                  No import rows match these filters. Clear or change the search, category, or date range.
+                </div>
+              )}
             </div>
+            <TablePagination {...previewPager} />
           </div>
 
           {/* Options */}

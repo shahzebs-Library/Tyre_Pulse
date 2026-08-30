@@ -1,0 +1,91 @@
+{
+  "desktop": {
+    "url": "http://127.0.0.1:5173/login",
+    "title": "TyrePulse - Fleet Intelligence Platform",
+    "textLength": 583,
+    "headings": [
+      {
+        "tag": "H2",
+        "text": "Smarter Fleet.Lower Costs."
+      }
+    ],
+    "inputs": [
+      {
+        "type": "text",
+        "name": "identifier",
+        "label": "Email, username, or employee ID",
+        "aria": null,
+        "autocomplete": "username"
+      },
+      {
+        "type": "password",
+        "name": "password",
+        "label": "Password",
+        "aria": null,
+        "autocomplete": "current-password"
+      }
+    ],
+    "buttons": [
+      {
+        "text": "EN",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "ع",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "",
+        "aria": "Theme: Light. Switch to Dark",
+        "disabled": false
+      },
+      {
+        "text": "Sign In",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Create Account",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Forgot password?",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "",
+        "aria": "Show password",
+        "disabled": false
+      },
+      {
+        "text": "Sign In",
+        "aria": null,
+        "disabled": false
+      },
+      {
+        "text": "Sign in with SSO",
+        "aria": null,
+        "disabled": false
+      }
+    ],
+    "imagesWithoutAlt": 0,
+    "unlabeledInputs": 0,
+    "htmlLang": "en",
+    "direction": "ltr"
+  },
+  "mobileMetrics": {
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "horizontalOverflow": false
+  },
+  "protectedRoute": {
+    "requested": "/ai-command-center",
+    "landed": "http://127.0.0.1:5173/ai-command-center"
+  },
+  "consoleErrors": [],
+  "pageErrors": []
+}

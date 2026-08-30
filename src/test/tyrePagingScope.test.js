@@ -75,8 +75,9 @@ describe('a paged register still exports the whole filtered set', () => {
       file: 'pages/Inspections.jsx',
       what: 'register Excel export',
       // The register renders one page of `filtered`; the export must still
-      // carry every row the filters left.
-      required: 'await exportToExcel(\n                filtered,',
+      // carry every row the filters left. The workbook now has a richer first
+      // sheet, so pin the full-set mapping rather than the retired one-sheet API.
+      required: 'rows: filtered.map((r) => ({ ...r, affected_tyres:',
     },
     {
       file: 'pages/Inspections.jsx',

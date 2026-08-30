@@ -790,7 +790,7 @@ export default function Inspections() {
   const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const isTyreMan = profile?.role === 'Tyre Man'
-  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  const isAdmin = isSuperAdmin || (profile?.role || '').toLowerCase() === 'admin'
   /**
    * WHO MAY SIGN OFF AN INSPECTION.
    *
@@ -1085,7 +1085,7 @@ export default function Inspections() {
       } finally { if (!cancelled) { setPdfRow(null); setPdfBusyId(null) } }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [pdfRow])
+  }, [pdfRow, branding, company])
 
   // Virtual scroll ref for the inspections table
   const tableParentRef = useRef(null)
@@ -1154,26 +1154,10 @@ export default function Inspections() {
 
   useEffect(() => {
     const name = profile?.full_name || profile?.username || ''
-    if (name && !clInspector) setClInspector(name)
+    if (name) setClInspector(current => current || name)
   }, [profile])
 
-  // Deep-link: /inspections?asset=ASSET_NO - auto-load checklist for scanned vehicle QR
-  useEffect(() => {
-    const assetParam = searchParams.get('asset')
-    if (!assetParam || authLoading) return
-    setClAsset(assetParam)
-    loadFleetInfo(assetParam)
-    // Remove the consumed param so a refresh does not re-trigger. Only that one
-    // key is dropped: the register's filters now live in the query string too,
-    // and clearing the whole string would wipe them.
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      next.delete('asset')
-      return next
-    }, { replace: true })
-  }, [searchParams, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
@@ -1198,7 +1182,7 @@ export default function Inspections() {
     // is not the whole picture rather than presenting a short read as a measurement.
     setLoadError(error ? toUserMessage(error, 'Could not load every inspection.') : null)
     setLoading(false)
-  }
+  }, [activeCountry, profile?.id, profile?.role])
 
   // Best-effort: the register must still open when the site list cannot be
   // read. With no sites the region control simply does not render, rather than
@@ -1215,7 +1199,7 @@ export default function Inspections() {
   useEffect(() => {
     if (authLoading) return
     load()
-  }, [activeCountry, authLoading, isTyreMan])
+  }, [authLoading, load])
 
   // Best-effort running-life fetch (never blocks the page): builds the
   // per-asset tyre-due flag map used by the slides, row chips and banners.
@@ -1579,7 +1563,7 @@ export default function Inspections() {
     setRaisingAction(null)
   }
 
-  async function loadFleetInfo(assetNo) {
+  const loadFleetInfo = useCallback(async (assetNo) => {
     if (!assetNo.trim()) return
     setClLookingUp(true)
     // Country-scoped: the same asset code in another country is a different
@@ -1595,13 +1579,29 @@ export default function Inspections() {
       // rather than inventing them.
       const positions = layoutSlotsFor(vehicleType)
       setClPositions(positions.map(pos => ({ position: pos, label: legacyPositionCode(vtKey, pos), pressure: '', condition: 'Good', treadDepth: '' })))
-      if (fleetInfo.site && !clSite) setClSite(fleetInfo.site)
+      if (fleetInfo.site) setClSite(current => current || fleetInfo.site)
     } else {
       setClFleetInfo(null)
       setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, label: legacyPositionCode('', pos), pressure: '', condition: 'Good', treadDepth: '' })))
     }
     setClLookingUp(false)
-  }
+  }, [activeCountry])
+
+  // Deep-link: /inspections?asset=ASSET_NO - auto-load checklist for scanned vehicle QR
+  useEffect(() => {
+    const assetParam = searchParams.get('asset')
+    if (!assetParam || authLoading) return
+    setClAsset(assetParam)
+    loadFleetInfo(assetParam)
+    // Remove the consumed param so a refresh does not re-trigger. Only that one
+    // key is dropped: the register's filters now live in the query string too,
+    // and clearing the whole string would wipe them.
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('asset')
+      return next
+    }, { replace: true })
+  }, [searchParams, authLoading, loadFleetInfo, setSearchParams])
 
   /**
    * Which wheels are still outstanding on the checklist tab.

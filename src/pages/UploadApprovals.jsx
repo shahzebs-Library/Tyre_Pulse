@@ -5,6 +5,8 @@ import { useLanguage } from '../contexts/LanguageContext'
 import * as imports from '../lib/api/imports'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
+import { fetchAllPages } from '../lib/fetchAll'
 import {
   ClipboardCheck, CheckCircle, XCircle, Clock, FileSpreadsheet,
   User, Globe, Search, AlertTriangle, Pencil, Package, Save, Trash2, Wand2,
@@ -39,7 +41,7 @@ export default function UploadApprovals() {
   const loadIntake = useCallback(async () => {
     setIntakeLoading(true)
     try {
-      const rows = await imports.listForApproval({ limit: 100 })
+      const rows = await imports.listForApproval({ limit: null })
       setIntake(rows ?? [])
     } catch (e) {
       console.error('[UploadApprovals] loadIntake failed:', e)
@@ -47,16 +49,16 @@ export default function UploadApprovals() {
     } finally {
       setIntakeLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => { loadIntake() }, [loadIntake])
 
   const load = useCallback(async () => {
-    const { data, error: err } = await supabase
+    const { data, error: err } = await fetchAllPages((from, to) => supabase
       .from('pending_uploads')
       .select('id, batch_id, uploaded_by, uploader_name, country, upload_type, target_table, file_name, row_count, rows, status, reviewed_at, review_note, created_at')
       .order('created_at', { ascending: false })
-      .limit(300)
+      .range(from, to))
     if (err) {
       // Surface to the console for debugging instead of silently rendering an empty list.
       console.error('[UploadApprovals] load failed:', err)
@@ -159,7 +161,7 @@ export default function UploadApprovals() {
   async function viewIntake(b) {
     if (acting) return
     setActing(b.id); setError('')
-    try { const rows = await imports.getBatchRows(b.id, 500); setIntakePreview({ batch: b, rows: rows ?? [] }) }
+    try { const rows = await imports.getBatchRows(b.id, null); setIntakePreview({ batch: b, rows: rows ?? [] }) }
     catch (e) { console.error('[UploadApprovals] viewIntake failed:', e); setError(toUserMessage(e, t('uploadapprovals.intake.viewFailed'))) }
     finally { setActing(null) }
   }
@@ -372,11 +374,12 @@ function IntakeRowsModal({ data, onClose }) {
     const first = rows.find(r => r.transformed_data && typeof r.transformed_data === 'object')
     return first ? Object.keys(first.transformed_data).slice(0, 12) : []
   }, [rows])
-  const visible = useMemo(() => {
+  const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return rows.slice(0, 300)
-    return rows.filter(r => JSON.stringify(r.transformed_data ?? {}).toLowerCase().includes(q)).slice(0, 300)
+    if (!q) return rows
+    return rows.filter(r => JSON.stringify(r.transformed_data ?? {}).toLowerCase().includes(q))
   }, [rows, search])
+  const rowsPager = usePagedRows(filteredRows)
   const statusColor = s => s === 'error' ? 'text-red-400' : s === 'warning' ? 'text-yellow-400' : 'text-green-400'
 
   return (
@@ -407,7 +410,7 @@ function IntakeRowsModal({ data, onClose }) {
                 </tr>
               </thead>
               <tbody>
-                {visible.map(r => (
+                {rowsPager.pageRows.map(r => (
                   <tr key={r.id} className="border-b border-gray-800/50">
                     <td className="px-2 py-1 text-gray-500">{r.source_row_no ?? '-'}</td>
                     <td className={`px-2 py-1 font-medium ${statusColor(r.validation_status)}`}>
@@ -423,7 +426,7 @@ function IntakeRowsModal({ data, onClose }) {
               </tbody>
             </table>
           )}
-          {rows.length > 300 && <p className="text-xs text-gray-500 mt-3">{t('uploadapprovals.intakeModal.showingFirst', { count: rows.length.toLocaleString() })}</p>}
+          {filteredRows.length > 0 && <TablePagination {...rowsPager} />}
         </div>
       </div>
     </div>
@@ -431,8 +434,6 @@ function IntakeRowsModal({ data, onClose }) {
 }
 
 const PREFERRED_COLS = ['issue_date', 'asset_no', 'brand', 'serial_no', 'site', 'country', 'category', 'risk_level', 'cost_per_tyre', 'qty', 'description', 'item_code', 'unit_cost']
-const MAX_VISIBLE = 300
-
 function EditBatchModal({ batch, editable, onClose, onSaved }) {
   const { t } = useLanguage()
   const [rows, setRows]     = useState(() => (Array.isArray(batch.rows) ? batch.rows.map(r => ({ ...r })) : []))
@@ -455,8 +456,9 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
     const matched = q
       ? withIdx.filter(({ r }) => cols.some(c => String(r[c] ?? '').toLowerCase().includes(q)))
       : withIdx
-    return { list: matched.slice(0, MAX_VISIBLE), total: matched.length }
+    return matched
   }, [rows, search, cols])
+  const rowsPager = usePagedRows(visible)
 
   function setCell(idx, col, val) {
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, [col]: val } : r)); setDirty(true)
@@ -527,7 +529,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
                 </tr>
               </thead>
               <tbody>
-                {visible.list.map(({ r, idx }) => (
+                {rowsPager.pageRows.map(({ r, idx }) => (
                   <tr key={idx} className="border-b border-gray-800/50">
                     {cols.map(c => (
                       <td key={c} className="px-1 py-1 whitespace-nowrap">
@@ -554,9 +556,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
               </tbody>
             </table>
           )}
-          {visible.total > MAX_VISIBLE && (
-            <p className="text-xs text-gray-500 mt-3">{t('uploadapprovals.editModal.showingMatching', { shown: MAX_VISIBLE, total: visible.total.toLocaleString() })}</p>
-          )}
+          {visible.length > 0 && <TablePagination {...rowsPager} />}
         </div>
 
         {editable && (

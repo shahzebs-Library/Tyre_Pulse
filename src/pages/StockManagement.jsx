@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -8,6 +8,7 @@ import Skeleton from '../components/ui/Skeleton'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { formatDate } from '../lib/formatters'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
@@ -95,13 +96,11 @@ export default function StockManagement() {
   // stock" control while the tyre_transfer workflow is active/locked.
   const [transferWfLocked, setTransferWfLocked] = useState(false)
 
-  useEffect(() => { load() }, [activeCountry])
-
   // Reset the approval lock whenever a different record (or none) is opened in the
   // history modal; EntityApprovalPanel re-reports the true state via onStateChange.
   useEffect(() => { setWfLocked(false); setReturnWfLocked(false) }, [historyFor?.id])
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -139,7 +138,9 @@ export default function StockManagement() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeCountry, t])
+
+  useEffect(() => { load() }, [load])
 
   function deriveStatus(r) {
     if (r.stock_qty <= r.critical_level) return 'Critical'
@@ -299,11 +300,7 @@ export default function StockManagement() {
   // the slower earlier answer lands last and charts the previous window.
   const latestTimeline = useLatestRequest()
 
-  useEffect(() => {
-    if (activeTab === 'timeline') loadTimeline()
-  }, [activeTab, tlFrom, tlTo, activeCountry])
-
-  async function loadTimeline() {
+  const loadTimeline = useCallback(async () => {
     const stale = latestTimeline.begin()
     setTlLoading(true)
     let data = []
@@ -313,7 +310,11 @@ export default function StockManagement() {
     if (stale()) return
     setTlRecords(data ?? [])
     setTlLoading(false)
-  }
+  }, [activeCountry, latestTimeline, tlFrom, tlTo])
+
+  useEffect(() => {
+    if (activeTab === 'timeline') loadTimeline()
+  }, [activeTab, loadTimeline])
 
   // Group timeline records by date
   const tlByDate = useMemo(() => {
@@ -328,6 +329,9 @@ export default function StockManagement() {
     })
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
   }, [tlRecords])
+  const stockPager = usePagedRows(records)
+  const timelinePager = usePagedRows(tlByDate)
+  const movementsPager = usePagedRows(movements)
 
   // Yesterday comparison
   const todayKey     = todayStr()
@@ -496,7 +500,7 @@ export default function StockManagement() {
                     ))
                   ) : records.length === 0 ? (
                     <tr><td colSpan={11} className="text-center py-12 text-[var(--text-muted)]">{t('stock.table.emptyTitle')}</td></tr>
-                  ) : records.map(r => {
+                  ) : stockPager.pageRows.map(r => {
                     const status = deriveStatus(r)
                     const vel    = velocityMap[r.id]
                     const avg    = vel?.avgPerMonth ?? 0
@@ -578,6 +582,7 @@ export default function StockManagement() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...stockPager} />
             </div>
           </div>
         </>
@@ -870,7 +875,7 @@ export default function StockManagement() {
                     <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">{t('stock.timeline.loading')}</td></tr>
                   ) : tlByDate.length === 0 ? (
                     <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">{t('stock.timeline.emptyPeriod')}</td></tr>
-                  ) : tlByDate.map(([date, vals]) => {
+                  ) : timelinePager.pageRows.map(([date, vals]) => {
                     const net = vals.in - vals.out
                     return (
                       <tr key={date} className="hover:bg-[var(--input-bg)]/30 transition-colors">
@@ -887,6 +892,7 @@ export default function StockManagement() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...timelinePager} />
             </div>
           </div>
         </div>
@@ -1010,7 +1016,8 @@ export default function StockManagement() {
               ) : movements.length === 0 ? (
                 <div className="text-center py-8 text-[var(--text-muted)]">{t('stock.historyModal.emptyHistory')}</div>
               ) : (
-                <table className="w-full text-xs">
+                <>
+                  <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-[var(--surface-1)]">
                     <tr className="text-[var(--text-muted)] border-b border-[var(--input-border)]">
                       <th className="table-header py-2">{t('stock.historyModal.columns.date')}</th>
@@ -1023,7 +1030,7 @@ export default function StockManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {movements.map(m => (
+                    {movementsPager.pageRows.map(m => (
                       <tr key={m.id} className="border-b border-[var(--input-border)]/50">
                         <td className="table-cell py-2 text-[var(--text-muted)]">{formatDate(m.created_at)}</td>
                         <td className="table-cell py-2">
@@ -1047,7 +1054,9 @@ export default function StockManagement() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                  <TablePagination {...movementsPager} />
+                </>
               )}
             </div>
           </div>

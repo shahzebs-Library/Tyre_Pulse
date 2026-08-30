@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Users, Building2, Database, AlertTriangle, Zap, Shield,
@@ -22,52 +22,30 @@ export default function ConsoleDashboard() {
   const [attention, setAttention]         = useState(null)   // null = not loaded yet
   const [error, setError]                 = useState('')
 
-  useEffect(() => { loadAll() }, [activeOrg])
-
-  // Every reader settles on its own and the flag is cleared in a finally, so a
-  // single failing panel can never leave the whole page spinning. Promise.all
-  // rejects on the first rejection, which is exactly how a console page ends up
-  // stuck on a loader forever.
-  async function loadAll() {
-    setLoading(true); setError('')
-    const results = await Promise.allSettled([
-      loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend(), loadAttention(),
-    ])
-    const failed = results.filter((r) => r.status === 'rejected')
-    if (failed.length === results.length) {
-      setError(toUserMessage(failed[0].reason, 'Could not load the overview.'))
-    } else if (failed.length) {
-      // Partial data is still worth showing; say which part is missing rather
-      // than presenting a hole as a zero.
-      setError('Some panels could not be loaded. The figures shown are incomplete.')
-    }
-    setLoading(false)
-  }
-
-  async function loadStats() {
+  const loadStats = useCallback(async () => {
     const { data, error: err } = await supabase.rpc('get_console_stats')
     if (err) throw err
     setStats(data)
-  }
+  }, [])
 
   // "Anything waiting on me?" - the loader yields null (UNKNOWN) for anything
   // it could not read, and the pure engine renders that as "could not check"
   // rather than a silent all-clear.
-  async function loadAttention() {
+  const loadAttention = useCallback(async () => {
     const inputs = await loadAttentionInputs()
     setAttention(buildAttention(inputs))
-  }
+  }, [])
 
-  async function loadRecentActions() {
+  const loadRecentActions = useCallback(async () => {
     const { data } = await supabase
       .from('console_sessions')
       .select('action, target_type, details, created_at, admin_id')
       .order('created_at', { ascending: false })
       .limit(8)
     setRecentActions(data ?? [])
-  }
+  }, [])
 
-  async function loadRecentUsers() {
+  const loadRecentUsers = useCallback(async () => {
     let q = supabase
       .from('profiles')
       .select('id, full_name, email, role, site, approved, locked, created_at')
@@ -76,9 +54,9 @@ export default function ConsoleDashboard() {
     if (activeOrg) q = q.eq('organisation_id', activeOrg.id)
     const { data } = await q
     setRecentUsers(data ?? [])
-  }
+  }, [activeOrg])
 
-  async function loadAiTrend() {
+  const loadAiTrend = useCallback(async () => {
     const { data } = await supabase
       .from('ai_usage_log')
       .select('created_at, total_tokens, cost_usd, model')
@@ -94,7 +72,25 @@ export default function ConsoleDashboard() {
       byDay[d].cost   += parseFloat(r.cost_usd ?? 0)
     })
     setAiTrend(Object.values(byDay))
-  }
+  }, [])
+
+  // Every reader settles on its own and the flag is cleared after every panel
+  // settles, so one failed panel cannot leave the overview spinning forever.
+  const loadAll = useCallback(async () => {
+    setLoading(true); setError('')
+    const results = await Promise.allSettled([
+      loadStats(), loadRecentActions(), loadRecentUsers(), loadAiTrend(), loadAttention(),
+    ])
+    const failed = results.filter((result) => result.status === 'rejected')
+    if (failed.length === results.length) {
+      setError(toUserMessage(failed[0].reason, 'Could not load the overview.'))
+    } else if (failed.length) {
+      setError('Some panels could not be loaded. The figures shown are incomplete.')
+    }
+    setLoading(false)
+  }, [loadAiTrend, loadAttention, loadRecentActions, loadRecentUsers, loadStats])
+
+  useEffect(() => { loadAll() }, [loadAll])
 
   const U = stats?.users ?? {}
   const O = stats?.organisations ?? {}

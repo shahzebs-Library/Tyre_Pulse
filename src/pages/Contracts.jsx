@@ -16,6 +16,7 @@
  * there is no data. Writes are Admin/Manager/Director only (RLS-enforced).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   FileText, Plus, Search, X, Filter, Trash2, Pencil, AlertTriangle,
   CheckCircle2, Clock, DollarSign, CalendarClock, Loader2, FileSpreadsheet,
@@ -346,6 +347,7 @@ export default function Contracts() {
   // Export -------------------------------------------------------------------
   const EXPORT_COLS = ['title', 'vendor', 'contract_type', 'start_date', 'end_date', 'value', 'annualized', 'currency', 'status', 'days_remaining']
   const EXPORT_HEADERS = ['Title', 'Vendor', 'Type', 'Start', 'End / renewal', 'Value', 'Annualized', 'Currency', 'Status', 'Days left']
+  const contractsPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => ({
     title: r.title || '', vendor: r.vendor || '', contract_type: r.contract_type || '',
     start_date: fmtDate(r.start_date), end_date: fmtDate(r.end_date),
@@ -635,7 +637,7 @@ export default function Contracts() {
                       )}
                     </td></tr>
                   ) : (
-                    filtered.map((r) => {
+                    contractsPager.pageRows.map((r) => {
                       const meta = STATUS_META[r._status] || STATUS_META.unknown
                       const StatusIcon = meta.icon
                       const urgent = r._status === 'expiring-soon' || r._status === 'expired'
@@ -681,6 +683,7 @@ export default function Contracts() {
                   )}
                 </tbody>
               </table>
+              <TablePagination {...contractsPager} />
             </div>
           </div>
         </>

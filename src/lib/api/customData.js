@@ -9,7 +9,7 @@
  * page touches) and do NOT overlap tyres.js - they exist solely for the
  * extra_fields backfill/export and a generic dynamic-column patch.
  */
-import { supabase, unwrap, fetchAllPages } from './_client'
+import { supabase, unwrap, fetchAllPages, fetchAllRpcPages } from './_client'
 
 export { fetchAllPages }
 
@@ -25,7 +25,12 @@ const SYNONYM_COLS =
  * @param {{country?: string|null}} [opts]
  */
 export async function getExtraFieldStats({ country = null } = {}) {
-  return unwrap(await supabase.rpc('get_extra_field_stats', { p_country: country }))
+  const { data, error } = await fetchAllRpcPages(
+    (from, to) => supabase.rpc('get_extra_field_stats', { p_country: country }).range(from, to),
+    (row) => row?.field_key ?? null,
+  )
+  if (error) return unwrap({ data: null, error })
+  return data
 }
 
 /**
@@ -33,12 +38,13 @@ export async function getExtraFieldStats({ country = null } = {}) {
  * `.select('*').order('use_count', { ascending: false })`.
  */
 export async function listFieldSynonyms() {
-  return unwrap(
-    await supabase
+  const { data, error } = await fetchAllPages((from, to) => supabase
       .from('field_synonyms')
       .select(SYNONYM_COLS)
       .order('use_count', { ascending: false })
-  )
+      .range(from, to))
+  if (error) return unwrap({ data: null, error })
+  return data
 }
 
 /** Create a field synonym; returns the inserted row. */

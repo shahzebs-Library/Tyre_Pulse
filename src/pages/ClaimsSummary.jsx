@@ -13,6 +13,7 @@
  * which is where the operational claim data actually lives.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
@@ -533,6 +534,7 @@ function ClaimsTable({ claims, money }) {
     return <span className="badge text-[11px] px-2 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/50">Open</span>
   }
   const sorted = [...claims].sort((x, y) => String(y.incident_date || '').localeCompare(String(x.incident_date || '')))
+  const claimsPager = usePagedRows(sorted)
   return (
     <div className="card overflow-hidden !p-0">
       <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
@@ -550,7 +552,7 @@ function ClaimsTable({ claims, money }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r, i) => {
+            {claimsPager.pageRows.map((r, i) => {
               const delayed = !isClosed(r) && isDelayed(r, today)
               return (
                 <tr key={r.id || i} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${delayed ? 'bg-red-950/20' : ''}`}>
@@ -571,6 +573,7 @@ function ClaimsTable({ claims, money }) {
           </tbody>
         </table>
       </div>
+      <TablePagination {...claimsPager} />
     </div>
   )
 }

@@ -18,7 +18,7 @@
  * The Budgets tab reads real spend from the existing ai_token_logs table — no
  * fabricated numbers; when that table is absent it shows cap config only.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Children, useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Sparkles, Cpu, BookOpen, Wallet, Star, Search, X, Filter, AlertTriangle,
   FileSpreadsheet, FileText, Plus, Pencil, Trash2, ShieldAlert, CheckCircle2,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { AiOperationsTab, AiDeliveryJobsTab } from '../components/ai/AiOpsTabs'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { supabase } from '../lib/supabase'
@@ -180,6 +181,9 @@ function Toolbar({ search, setSearch, placeholder, extra, onExcel, onPdf, onCrea
 }
 
 function DataTable({ headers, loading, empty, notProvisioned, children }) {
+  const tableRows = useMemo(() => Children.toArray(children), [children])
+  const paging = usePagedRows(tableRows, { pageSize: 25 })
+
   return (
     <div className="card overflow-hidden !p-0">
       <div className="overflow-x-auto">
@@ -201,10 +205,11 @@ function DataTable({ headers, loading, empty, notProvisioned, children }) {
                 <Filter size={22} className="mx-auto mb-2 opacity-60" />
                 {notProvisioned ? 'Not provisioned yet.' : 'No records match these filters.'}
               </td></tr>
-            ) : children}
+            ) : paging.pageRows}
           </tbody>
         </table>
       </div>
+      {!loading && !empty && <TablePagination {...paging} />}
     </div>
   )
 }

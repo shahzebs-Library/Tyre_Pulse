@@ -31,7 +31,7 @@
  * Kept rather than deleted so the reasoning survives with the code; wiring either export
  * back into a layout re-creates the load.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
@@ -101,11 +101,15 @@ export function useRealtimeSync() {
  */
 export function useTableRealtime(table, queryKeys) {
   const qc = useQueryClient()
+  // Callers commonly pass an inline array. Depend on its content rather than
+  // identity so renders do not tear down and recreate the network channel.
+  const queryKeySignature = JSON.stringify(queryKeys ?? [])
+  const stableQueryKeys = useMemo(() => JSON.parse(queryKeySignature), [queryKeySignature])
 
   useEffect(() => {
     if (!table) return
-    const keys = Array.isArray(queryKeys[0]) ? queryKeys : [queryKeys]
+    const keys = Array.isArray(stableQueryKeys[0]) ? stableQueryKeys : [stableQueryKeys]
     const unsub = subscribeTable(qc, table, keys)
     return unsub
-  }, [table, qc])
+  }, [table, qc, stableQueryKeys])
 }

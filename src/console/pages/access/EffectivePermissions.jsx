@@ -131,7 +131,7 @@ export default function EffectivePermissions() {
     })
   }, [users, search, roleFilter])
 
-  const modules = access?.modules || []
+  const modules = useMemo(() => access?.modules || [], [access?.modules])
   const isSuper = !!access?.is_super
 
   const counts = useMemo(() => {

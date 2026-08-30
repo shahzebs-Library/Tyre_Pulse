@@ -16,14 +16,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5174',
 ]
 
-// Any Vercel deployment of this app (stable production alias + the rotating
-// per-push preview subdomains). Safe to allow broadly here because every
-// function still enforces a valid, approved-user JWT via requireApprovedRole -
-// the origin allowance alone grants no data access.
-const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
-
 function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
-  return allowedOrigins.includes(origin) || VERCEL_ORIGIN.test(origin)
+  return allowedOrigins.includes(origin)
 }
 
 export function corsHeaders(req: Request): Record<string, string> {
@@ -36,15 +30,15 @@ export function corsHeaders(req: Request): Record<string, string> {
 
   // Resolve the Allow-Origin value against a strict allow-list.
   //  - No Origin header (server-to-server / curl) → '*'.
-  //  - Explicitly allow-listed origin, a *.vercel.app preview, or localhost
-  //    → reflect it.
+  //  - Explicitly allow-listed origin -> reflect it. Preview deployments and
+  //    extra local ports must be listed in ALLOWED_ORIGINS.
   //  - Anything else (including arbitrary https origins) → refuse ('null').
   //    The JWT remains the primary security boundary, but CORS is no longer a
   //    blanket allow: unknown production/staging domains must be added to
   //    ALLOWED_ORIGINS explicitly.
   let allowOrigin = '*'
   if (origin) {
-    if (isOriginAllowed(origin, allowedOrigins) || origin.startsWith('http://localhost')) {
+    if (isOriginAllowed(origin, allowedOrigins)) {
       allowOrigin = origin
     } else {
       allowOrigin = 'null'
@@ -107,7 +101,8 @@ export async function requireApprovedRole(
     .maybeSingle()
 
   if (profileError || !profile) return jsonResponse(req, { error: 'Profile not found' }, 403)
-  if (profile.approved === false || profile.locked === true) {
+  // Approval is fail-closed: null/missing legacy values must not gain access.
+  if (profile.approved !== true || profile.locked === true) {
     return jsonResponse(req, { error: 'Account is not approved for this action' }, 403)
   }
 

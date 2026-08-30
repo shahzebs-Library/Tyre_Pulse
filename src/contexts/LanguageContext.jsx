@@ -251,7 +251,12 @@ export function LanguageProvider({ children }) {
   // t('ns.key', { vars }) -> localized string; falls back to English, then the key.
   // dictVersion is a dependency so `t` is re-created once a lazy namespace
   // lands and consumers re-render with the translated strings.
-  const t = useCallback((key, vars) => translate(language, key, vars), [language, dictVersion])
+  const t = useCallback((key, vars) => {
+    // Read the version so the callback identity changes when a lazy dictionary
+    // lands; consumers then render the newly available translations.
+    void dictVersion
+    return translate(language, key, vars)
+  }, [language, dictVersion])
 
   const value = useMemo(() => ({ language, isRTL, setLanguage, t, languages: LANGUAGES }),
     [language, isRTL, setLanguage, t])

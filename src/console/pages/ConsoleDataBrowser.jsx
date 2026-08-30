@@ -19,7 +19,7 @@
  * runs through server-side super-admin RPCs that whitelist the table, column and
  * operator and bind the value as a parameter. No raw SQL is ever shown or run.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Database, Search, Sparkles, Play, Download, RefreshCw,
   Table2, Filter, AlertTriangle, Info, Loader2, X, Pencil, Trash2, Undo2, Lock,
@@ -79,17 +79,50 @@ export default function ConsoleDataBrowser() {
   )
 
   // ── Initial load: the safelisted tables with row counts ──
-  useEffect(() => { loadTables() }, [])
   // Show any prior edits/deletes so the undo list survives a page reload.
   useEffect(() => { listRowChanges(20).then(setChanges).catch(() => setChanges([])) }, [])
 
-  async function loadTables() {
+  const loadTables = useCallback(async () => {
     setTablesLoading(true)
-    const data = await listTables()
-    setTables(data)
-    setTablesLoading(false)
-    if (data.length && !selected) selectTable(data[0].table_name, data)
-  }
+    try {
+      setTables(await listTables())
+    } finally {
+      setTablesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    async function loadInitialTable() {
+      setTablesLoading(true)
+      try {
+        const data = await listTables()
+        if (!active) return
+        setTables(data)
+        if (!data.length) return
+        const name = data[0].table_name
+        setSelected(name)
+        setRunning(true)
+        const [cols, initialRows] = await Promise.all([
+          listColumns(name),
+          queryTable({ table: name, column: null, op: null, value: null, limit: 100 }),
+        ])
+        if (!active) return
+        setColumns(cols)
+        setRows(Array.isArray(initialRows) ? initialRows : [])
+        setRan(true)
+      } catch {
+        if (active) setError('Could not load the data browser. Please try again.')
+      } finally {
+        if (active) {
+          setTablesLoading(false)
+          setRunning(false)
+        }
+      }
+    }
+    loadInitialTable()
+    return () => { active = false }
+  }, [])
 
   // ── Pick a table: load its columns, reset the filter, preview first rows ──
   async function selectTable(name, tableSource = tables) {

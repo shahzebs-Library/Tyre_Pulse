@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import * as inspIntelApi from '../lib/api/inspectionIntelligence'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EmailPdfButton from '../components/EmailPdfButton'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -429,6 +430,8 @@ export default function InspectionIntelligence() {
       .map(d => ({ ...d, inspectorNames: [...d.inspectors].join(', ') }))
       .sort((a, b) => b.count - a.count)
   }, [filtered])
+  const activityPager = usePagedRows(activity)
+  const duplicatePager = usePagedRows(duplicates)
 
   // ── inconsistent inspections ──────────────────────────────────────────────────
   const inconsistentInspections = useMemo(() => {
@@ -912,7 +915,7 @@ export default function InspectionIntelligence() {
                 </tr>
               </thead>
               <tbody>
-                {activity.map(a => (
+                {activityPager.pageRows.map(a => (
                   <tr key={a.inspector} className="border-t border-white/5">
                     <td className="table-cell font-medium text-gray-200">{a.inspector}</td>
                     <td className="table-cell text-right font-semibold">{a.total}</td>
@@ -941,6 +944,7 @@ export default function InspectionIntelligence() {
             </table>
           </div>
         )}
+        <TablePagination {...activityPager} />
       </div>
 
       {/* ── Section 2: Charts ── */}
@@ -1009,7 +1013,7 @@ export default function InspectionIntelligence() {
                 </tr>
               </thead>
               <tbody>
-                {duplicates.map((d, i) => (
+                {duplicatePager.pageRows.map((d, i) => (
                   <tr key={i} className="border-t border-white/5 bg-yellow-900/5">
                     <td className="table-cell font-mono text-xs">{d.asset_no || '-'}</td>
                     <td className="table-cell text-[var(--panel-ink-3)]">{d.date || '-'}</td>
@@ -1034,6 +1038,7 @@ export default function InspectionIntelligence() {
             </table>
           </div>
         )}
+        <TablePagination {...duplicatePager} />
       </div>
 
       {/* ── Section 4: Data Quality Issues ── */}

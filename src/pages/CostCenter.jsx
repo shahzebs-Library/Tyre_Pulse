@@ -48,6 +48,8 @@ ChartJS.register(
 // remains. The authoritative grid cost totals are already server-aggregated via
 // loadGovernedCostSplit (the Tyres vs Maintenance panel and Cost per unit section).
 const TYRE_ROW_CEILING = 50000
+const MODE_COLOR = { combined: '#3b82f6', tyres: '#10b981', maintenance: '#f59e0b' }
+const MODE_FILL = { combined: 'rgba(59,130,246,0.7)', tyres: 'rgba(16,185,129,0.7)', maintenance: 'rgba(245,158,11,0.7)' }
 const INDUSTRY_BENCHMARK_CPK = 1.50   // R/km benchmark
 const SAVINGS_OPPORTUNITY_PCT = 0.15  // 15% savings estimate
 const PALETTE = [
@@ -419,15 +421,12 @@ export default function CostCenter() {
   }, [roiSlider, kpis])
 
   // ── Tyres vs Maintenance derived values ───────────────────────────────────────
-  const MODE_COLOR = { combined: '#3b82f6', tyres: '#10b981', maintenance: '#f59e0b' }
-  const MODE_FILL  = { combined: 'rgba(59,130,246,0.7)', tyres: 'rgba(16,185,129,0.7)', maintenance: 'rgba(245,158,11,0.7)' }
+  const splitByMonth = useMemo(() => split?.byMonth ?? [], [split?.byMonth])
 
-  const splitByMonth = split?.byMonth ?? []
-
-  const splitAgg = useMemo(() => splitTotals(splitByMonth), [split])
+  const splitAgg = useMemo(() => splitTotals(splitByMonth), [splitByMonth])
 
 
-  const splitSeries = useMemo(() => pickMonthly(costMode, splitByMonth), [costMode, split])
+  const splitSeries = useMemo(() => pickMonthly(costMode, splitByMonth), [costMode, splitByMonth])
 
   const splitChartData = useMemo(() => ({
     labels: splitSeries.map(m => monthLabel(m.month)),

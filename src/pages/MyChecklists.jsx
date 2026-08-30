@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ClipboardCheck, Play, SkipForward, Eye, RefreshCw, AlertTriangle,
@@ -219,6 +220,7 @@ export default function MyChecklists() {
       default: return decorated.filter((a) => a._status === 'overdue' || a._status === 'pending')
     }
   }, [decorated, tab])
+  const assignmentsPager = usePagedRows(visible)
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true); setError('')
@@ -445,7 +447,7 @@ export default function MyChecklists() {
               </tr>
             </thead>
             <tbody>
-              {visible.map((a) => {
+              {assignmentsPager.pageRows.map((a) => {
                 const status = a._status
                 const hint = dueHint(a.due_date, status)
                 const actionable = status === 'overdue' || status === 'pending'
@@ -545,6 +547,7 @@ export default function MyChecklists() {
               })}
             </tbody>
           </table>
+          <TablePagination {...assignmentsPager} />
         </div>
       )}
 

@@ -10,6 +10,7 @@ import EmptyState from '../components/EmptyState'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
 import { toUserMessage } from '../lib/safeError'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 // ── Config shared with the RecallTracker registry so badges read identically ──
 const SEVERITY_CFG = {
@@ -118,6 +119,7 @@ export default function RecallDetail() {
       t.site?.toLowerCase().includes(s)
     )
   }, [matched, search])
+  const tyresPager = usePagedRows(drawerTyres)
 
   const backBtn = (
     <button
@@ -256,7 +258,7 @@ export default function RecallDetail() {
                   </td>
                 </tr>
               )}
-              {drawerTyres.map((t, i) => {
+              {tyresPager.pageRows.map((t, i) => {
                 const daysOn = t.issue_date ? daysBetween(t.issue_date, t.km_at_removal ? null : new Date().toISOString().slice(0, 10)) : null
                 return (
                   <motion.tr
@@ -286,6 +288,7 @@ export default function RecallDetail() {
               })}
             </tbody>
           </table>
+          <TablePagination {...tyresPager} />
         </div>
       </div>
     </div>

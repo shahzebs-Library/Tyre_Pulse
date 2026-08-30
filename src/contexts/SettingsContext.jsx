@@ -151,13 +151,27 @@ export function SettingsProvider({ children }) {
     // An empty context is a real choice ("All countries", no country filter) for
     // anyone who may see every country - not a missing value to be defaulted.
     const wantsAll = !ctx || !String(ctx.country ?? '').trim()
+    const requestedCountry = String(ctx?.country ?? '').trim()
+    const allowedCountry = allowedCountries.find(
+      (country) => country.toLowerCase() === requestedCountry.toLowerCase(),
+    )
+    // Before the site register answers, the fallback tree intentionally has no
+    // sites. Preserve a requested site for an allowed country until the real
+    // register can validate it; otherwise an unrelated rerender strips the site.
+    const holdPendingSite = !registerReady && !!String(ctx?.site ?? '').trim() && !!allowedCountry
     const context = (wantsAll && canSelectAll)
       ? { ...EMPTY_CONTEXT }
-      : normalizeContext(ctx, allowed).context
+      : holdPendingSite
+        ? {
+            country: allowedCountry,
+            region: String(ctx?.region ?? '').trim() || null,
+            site: String(ctx?.site ?? '').trim(),
+          }
+        : normalizeContext(ctx, allowed).context
     setWorkingContextInternal(prev => (keyOf(prev) === keyOf(context) ? prev : context))
     writeStored(CONTEXT_KEY, context)
     applyCountryValue(contextToCountry(context))
-  }, [allowed, canSelectAll, applyCountryValue])
+  }, [allowed, allowedCountries, canSelectAll, applyCountryValue, registerReady])
 
   /**
    * Legacy setter, unchanged signature. A user may switch among the countries

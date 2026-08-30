@@ -267,9 +267,9 @@ export default function PmPrograms() {
     return m
   }, [catalogParts])
 
-  const plans = dashboard?.plans || []
-  const kmByAsset = dashboard?.kmByAsset || {}
-  const hoursByAsset = dashboard?.hoursByAsset || {}
+  const plans = useMemo(() => dashboard?.plans || [], [dashboard])
+  const kmByAsset = useMemo(() => dashboard?.kmByAsset || {}, [dashboard])
+  const hoursByAsset = useMemo(() => dashboard?.hoursByAsset || {}, [dashboard])
 
   const summary = useMemo(
     () => summarizePmCompliance(plans, { now: nowTs, kmByAsset, hoursByAsset }),
@@ -332,7 +332,7 @@ export default function PmPrograms() {
   const hasHistFilters = histAsset || histProgram !== 'all' || histOutcome !== 'all' || histFrom || histTo
 
   // ── Cost switch derivation ──────────────────────────────────────────────────
-  const byMonth = cost?.byMonth || []
+  const byMonth = useMemo(() => cost?.byMonth || [], [cost])
   const costTotals = useMemo(() => splitTotals(byMonth), [byMonth])
   const costTotal = pickCost(costMode, costTotals)
   const monthly = useMemo(() => pickMonthly(costMode, byMonth), [costMode, byMonth])
@@ -365,7 +365,7 @@ export default function PmPrograms() {
   }), [costMode, activeCurrency])
 
   // ── PM analytics (over loaded plans + the fetched service records) ────────────
-  const records = history || []
+  const records = history
   const hasServiceData = records.length > 0
   const pmCatCost = useMemo(() => costByCategory(plans, records), [plans, records])
   const pmMonthlyCost = useMemo(() => monthlyServiceCost(records, { now: nowTs, months: 12 }), [records, nowTs])

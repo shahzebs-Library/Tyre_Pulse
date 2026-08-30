@@ -22,7 +22,10 @@ import {
 import { currencyFor } from '../../lib/api/tyrePriceBackfill'
 import { exportToExcel } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
+import { filterLedgerRows } from '../../lib/ledgerRows'
 import CostM3Table, { MEASURE_COLUMNS } from './CostM3Table'
+import FilterBar from '../ui/FilterBar'
+import { TablePagination, usePagedRows } from '../ui/TablePagination'
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null)
 
@@ -53,6 +56,8 @@ export default function LedgerPage({
   const [importing, setImporting] = useState(false)
   const [importPct, setImportPct] = useState(0)
   const [notice, setNotice] = useState('')
+  const [rowSearch, setRowSearch] = useState('')
+  const [rowState, setRowState] = useState('')
   // Summary-first (owner preference): the raw row table is collapsed by default
   // behind "Show all rows"; the summary above answers the everyday questions.
   const [showRows, setShowRows] = useState(false)
@@ -152,6 +157,20 @@ export default function LedgerPage({
     ? totalRows.toLocaleString()
     : rows.length.toLocaleString()
   const rowsVisible = !hasSummary || showRows
+
+  // The four config-driven ledgers used to expose every fetched row as one
+  // unfiltered table. Keep the server's country/period boundary, then make the
+  // loaded window navigable without silently discarding anything.
+  const stateField = kind === 'sites' ? 'active' : kind === 'production' ? 'rejected' : null
+  const stateOptions = stateField === 'active'
+    ? [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]
+    : stateField === 'rejected'
+      ? [{ value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Rejected' }]
+      : []
+  const filteredRows = useMemo(() => {
+    return filterLedgerRows(rows, columns, { query: rowSearch, state: rowState, stateField })
+  }, [rows, rowSearch, rowState, stateField, columns])
+  const rowPager = usePagedRows(filteredRows)
 
   function openForm() {
     const blank = { country, period_date: bounds.from }
@@ -491,33 +510,60 @@ export default function LedgerPage({
 
       {/* Table */}
       {rowsVisible && (
-        <CostM3Table
-          columns={[
-            ...columns.map((c) => ({
-              key: c.key,
-              header: c.header,
-              align: c.align,
-              cellClass: 'whitespace-nowrap',
-              render: (r) => fmtCell(c, r),
-            })),
-            {
-              key: '__actions',
-              header: '',
-              align: 'right',
-              width: '1%',
-              render: (r) => (
-                <button type="button" onClick={() => remove(r.id)} title="Delete" className="opacity-60 hover:opacity-100">
-                  <Trash2 size={14} />
-                </button>
-              ),
-            },
-          ]}
-          rows={rows}
-          // "Still fetching" is not "there is nothing here" - the lazy row read
-          // must not render the add-or-import prompt while it is in flight.
-          loading={loading || rowsLoading}
-          empty={`No rows for ${country} in this period. Add one or import a file.`}
-        />
+        <div className="space-y-3">
+          <FilterBar
+            search={rowSearch}
+            onSearch={setRowSearch}
+            searchLabel={`Search ${title}`}
+            placeholder={`Search ${title.toLocaleLowerCase()}...`}
+            selects={stateField ? [{
+              key: 'state',
+              value: rowState,
+              onChange: setRowState,
+              placeholder: 'All states',
+              ariaLabel: `Filter ${title} by state`,
+              options: stateOptions,
+            }] : []}
+            resultCount={filteredRows.length}
+            onClearAll={rowSearch || rowState ? () => { setRowSearch(''); setRowState('') } : undefined}
+          />
+          <CostM3Table
+            columns={[
+              ...columns.map((c) => ({
+                key: c.key,
+                header: c.header,
+                align: c.align,
+                cellClass: 'whitespace-nowrap',
+                render: (r) => fmtCell(c, r),
+              })),
+              {
+                key: '__actions',
+                header: 'Actions',
+                align: 'right',
+                width: '1%',
+                render: (r) => (
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); remove(r.id) }}
+                    aria-label={`Delete ${title} row`}
+                    title="Delete"
+                    className="opacity-60 hover:opacity-100"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                ),
+              },
+            ]}
+            rows={rowPager.pageRows}
+            // "Still fetching" is not "there is nothing here" - the lazy row read
+            // must not render the add-or-import prompt while it is in flight.
+            loading={loading || rowsLoading}
+            empty={rowSearch || rowState
+              ? 'No rows match the current filters. Clear the filters to see all loaded rows.'
+              : `No rows for ${country} in this period. Add one or import a file.`}
+          />
+          <TablePagination {...rowPager} />
+        </div>
       )}
     </div>
   )

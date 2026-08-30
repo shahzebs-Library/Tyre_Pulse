@@ -16,7 +16,6 @@ describe('buildAnalysisPrompt', () => {
     expect(user).toContain('1. [claim_process')
     expect(user).toContain('We reject the claim.')
     expect(system).toContain('STRICT JSON')
-    // eslint-disable-next-line no-control-regex
     expect(/[^\x00-\x7F]/.test(system + user)).toBe(false)
   })
 })

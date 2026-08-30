@@ -407,7 +407,7 @@ export default function CaseTeamDistributionPanel({ record, canEdit = false, onC
       })
       .catch(() => { if (alive) setFileUrls({}) })
     return () => { alive = false }
-  }, [JSON.stringify(allRefs)])
+  }, [allRefs])
 
   const handleAssign = useCallback(async (key, ownerId, currentStatus) => {
     const patch = { owner_id: ownerId }

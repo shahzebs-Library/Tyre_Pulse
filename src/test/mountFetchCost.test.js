@@ -95,9 +95,14 @@ describe('TyreRecords does not query on every keystroke', () => {
     const src = code('src/pages/TyreRecords.jsx')
     const loadEffect = src.match(/useEffect\(\(\) => \{ loadRecords\(\) \}, \[([^\]]*)\]\)/)
     expect(loadEffect, 'the loadRecords effect moved - re-point this guard').toBeTruthy()
-    const deps = loadEffect[1]
+    expect(loadEffect[1]).toContain('loadRecords')
+
+    // The effect now depends on a stable callback. Pin the callback's own
+    // dependencies so the debounce guarantee cannot disappear behind it.
+    const loader = src.match(/const loadRecords = useCallback\([^]*?\}, \[([^\]]*)\]\)/)
+    expect(loader, 'the stable loadRecords callback moved - re-point this guard').toBeTruthy()
+    const deps = loader[1]
     expect(deps).toContain('debouncedSearch')
-    // `debouncedSearch` contains the substring `Search`, not a bare `search`.
     expect(deps).not.toMatch(/(^|[^a-zA-Z])search([^a-zA-Z]|$)/)
   })
 

@@ -42,6 +42,8 @@ const SOURCE = {
   signoff_gap:      'signoff_gap',
 }
 
+const BULKABLE = [SOURCE.accident_closure, SOURCE.checklist, SOURCE.inspection]
+
 const SOURCE_META = {
   workflow:         { label: 'Workflow',          short: 'Workflow',  icon: GitBranch,      tone: 'blue' },
   accident_closure: { label: 'Accident Closure',  short: 'Closure',   icon: Car,            tone: 'red'  },
@@ -1081,7 +1083,6 @@ export default function Approvals() {
   // specific approver, and pressing Approve on a list of them would skip exactly
   // the requirements the engine exists to enforce. A missed sign-off is a fact to
   // correct rather than a decision to make, so it is not bulk-decidable either.
-  const BULKABLE = [SOURCE.accident_closure, SOURCE.checklist, SOURCE.inspection]
   const bulkableList = useMemo(
     () => activeList.filter(i => BULKABLE.includes(i.source)),
     [activeList],

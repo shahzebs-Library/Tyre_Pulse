@@ -8,6 +8,7 @@ import {
   TrendingUp, AlertTriangle, Timer, Filter, BarChart2, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
@@ -354,6 +355,7 @@ export default function CorrectiveActions() {
       return new Date(b.created_at) - new Date(a.created_at)
     })
   }, [actions, statusFilter, priorityFilter, siteFilter, overdueOnly, search, sortBy])
+  const actionsPager = usePagedRows(filtered)
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   function startAdd() {
@@ -703,7 +705,7 @@ export default function CorrectiveActions() {
         <EmptyState hasFilters={!!(search || statusFilter || priorityFilter || siteFilter || overdueOnly)} onAdd={startAdd} />
       ) : viewMode === 'cards' ? (
         <div className="space-y-2.5">
-          {filtered.map(a => (
+          {actionsPager.pageRows.map(a => (
             <ActionCard key={a.id} a={a} country={activeCountry} onEdit={startEdit} onStatusChange={handleStatusChange} />
           ))}
         </div>
@@ -729,12 +731,13 @@ export default function CorrectiveActions() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(a => (
+                {actionsPager.pageRows.map(a => (
                   <TableRow key={a.id} a={a} country={activeCountry} onEdit={startEdit} onStatusChange={handleStatusChange}
                     onRaiseJob={handleRaiseJob} raisingJob={raisingJob} />
                 ))}
               </tbody>
             </table>
+            <TablePagination {...actionsPager} />
           </div>
           <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
             {t('correctiveactions.table.actionsCount', { count: filtered.length })}

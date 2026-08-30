@@ -215,8 +215,8 @@ function CountryTrend({ entry, grain }) {
               </tr>
             </thead>
             <tbody>
-              {t.yoy.map((y) => (
-                <tr key={y.period} className="border-t border-white/5">
+              {t.yoy.map((y, index) => (
+                <tr key={`actual-${y.period}-${index}`} className="border-t border-white/5">
                   <td className="px-3 py-2 font-medium text-slate-200">{y.label}</td>
                   <td className="px-3 py-2 text-right">{fmtMoney(y.tyre, '')}</td>
                   <td className="px-3 py-2 text-right">{fmtMoney(y.spare, '')}</td>
@@ -225,8 +225,8 @@ function CountryTrend({ entry, grain }) {
                   <td className={`px-3 py-2 text-right ${y.pct == null ? 'text-slate-500' : y.pct > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{fmtPct(y.pct)}</td>
                 </tr>
               ))}
-              {t.forecast.map((y) => (
-                <tr key={y.period} className="border-t border-fuchsia-500/20 bg-fuchsia-500/5">
+              {t.forecast.map((y, index) => (
+                <tr key={`forecast-${y.period}-${index}`} className="border-t border-fuchsia-500/20 bg-fuchsia-500/5">
                   <td className="px-3 py-2 font-medium text-fuchsia-300">{y.label} (forecast)</td>
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.tyre, '')}</td>
                   <td className="px-3 py-2 text-right text-fuchsia-200">{fmtMoney(y.spare, '')}</td>

@@ -5,7 +5,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // count-carrying result. Records the table, filters, and mutation payloads.
 const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null, count: 0 }, last: null, rpc: { data: null, error: null }, lastRpc: null }
-  function rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(state.rpc) }
+  function rpc(name, args) {
+    state.lastRpc = { name, args, range: [] }
+    const builder = {
+      range(a, z) { state.lastRpc.range.push([a, z]); return builder },
+      then(onF, onR) { return Promise.resolve(state.rpc).then(onF, onR) },
+    }
+    return builder
+  }
   function from(table) {
     const calls = { eq: [], or: [], not: [], is: [], contains: [], range: [] }
     const b = {
@@ -78,6 +85,7 @@ describe('service layer - customData: extra field tooling', () => {
     const stats = await customData.getExtraFieldStats({ country: 'KSA' })
     expect(h.state.lastRpc.name).toBe('get_extra_field_stats')
     expect(h.state.lastRpc.args).toEqual({ p_country: 'KSA' })
+    expect(h.state.lastRpc.range).toEqual([[0, 999]])
     expect(stats).toEqual([{ field_key: 'x', record_count: 3, sample_vals: ['a'] }])
   })
 

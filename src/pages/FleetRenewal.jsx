@@ -43,6 +43,8 @@ import {
 import { formatCurrencyCompact } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+
+const EPOCH_DATE = new Date(0)
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { usePagedRows, TablePagination } from '../components/ui/TablePagination'
 
@@ -128,7 +130,7 @@ export default function FleetRenewal() {
 
   useEffect(() => { load() }, [load])
 
-  const now = useMemo(() => new Date(), [rows])
+  const now = updatedAt ?? EPOCH_DATE
   const kpi = useMemo(() => buildRenewalKpis(rows || [], now), [rows, now])
   const insights = useMemo(() => buildRenewalInsights(rows || [], now), [rows, now])
   const statusDist = useMemo(() => statusDistribution(rows || []), [rows])

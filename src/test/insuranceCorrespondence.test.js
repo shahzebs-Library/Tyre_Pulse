@@ -90,7 +90,6 @@ describe('buildCorrespondence', () => {
   it('is ASCII only (no em/en dashes or arrows)', () => {
     const { documents } = buildCorrespondence({ policy: POLICY, findings: assessClaim(CONDITIONS, { repairedBeforeApproval: true }), ctx: { repairedBeforeApproval: true }, caseInfo: CASE })
     for (const d of documents) {
-      // eslint-disable-next-line no-control-regex
       expect(/[^\x00-\x7F]/.test(documentToText(d))).toBe(false)
     }
   })

@@ -1,0 +1,1406 @@
+{
+  "schemaVersion": 1,
+  "baseline": "audit/module-inventory-2026-08-30.json#tableWithoutPagination",
+  "baselineCandidateCount": 153,
+  "currentInventoryCandidateCount": 14,
+  "generatedBy": "scripts/classify-table-pagination.mjs",
+  "methodology": "Source-evidence classification; ambiguous dynamic tables fail closed as unsafe/unbounded.",
+  "excludedFromRemediationOwnership": [
+    "DataReconciliation",
+    "ExpenseImport",
+    "MaintenanceCostBoard"
+  ],
+  "counts": {
+    "server-paged": 4,
+    "client-paged/shared-enterprise-table": 141,
+    "intentionally-bounded/small": 8,
+    "virtualized": 0,
+    "unsafe/unbounded": 0,
+    "false-positive": 0
+  },
+  "candidates": [
+    {
+      "page": "AccessGrantsManager",
+      "source": "src/pages/AccessGrantsManager.jsx",
+      "sourceSha256": "66ac0e42e1dbdb64c752c17a0ff9dfe075e2f9c817a625ac5495c7cb0b4a059f",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AccidentWorkflowSettings",
+      "source": "src/pages/AccidentWorkflowSettings.jsx",
+      "sourceSha256": "9135bc75ee32e601977f3012c25adcb060af67c921d61e9321bcf7604846c54c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ActionCenter",
+      "source": "src/pages/ActionCenter.jsx",
+      "sourceSha256": "0cac4fcf2da209034cf8375fc05a6c118d93bd5cb73aff57f47f6bacefec0d40",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AdvancedSearch",
+      "source": "src/pages/AdvancedSearch.jsx",
+      "sourceSha256": "3c324c0e7d3002a922b310d8823c854cec7e737f81df50e09a6cc28a7b52888c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AiAdministration",
+      "source": "src/pages/AiAdministration.jsx",
+      "sourceSha256": "137c26a997955758e08ad9a06346002af86bef5bcb2e5dc43f65d75c687975e6",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AiAnalytics",
+      "source": "src/pages/AiAnalytics.jsx",
+      "sourceSha256": "8d3be3ccce102e0937b71f2a842611e92e53310ea405bb274421eb4fa2e9f94d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ApprovalDelegations",
+      "source": "src/pages/ApprovalDelegations.jsx",
+      "sourceSha256": "6ff738061d1c1530ed4e08f64aec9ef326d5876bb35aa5b499277e812fb5e214",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ApprovalMatrix",
+      "source": "src/pages/ApprovalMatrix.jsx",
+      "sourceSha256": "1ac3b5898f71d1317374222d2ddce205aa1b236e9db0c7d6aca5edd74ade9f59",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AssetBreakdowns",
+      "source": "src/pages/AssetBreakdowns.jsx",
+      "sourceSha256": "bf795b05f91425eaa38e7e8df60faedd32d906963eaba4bcca8ffaa6cc0abdda",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AssetDetail",
+      "source": "src/pages/AssetDetail.jsx",
+      "sourceSha256": "9c2972b53b12eaac32c8266672391e02dec8738d7b5933182771ddc80f1098d1",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "AssetDisposals",
+      "source": "src/pages/AssetDisposals.jsx",
+      "sourceSha256": "b1cd9df578c909572eaa238578fd734b5529891bf07b7b4d1857c334f10af61c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Batteries",
+      "source": "src/pages/Batteries.jsx",
+      "sourceSha256": "f9425ffc9cefec1c0aee1a8247dbff18bde05cf18bc222d54aa68074d5e5db33",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "BayScheduling",
+      "source": "src/pages/BayScheduling.jsx",
+      "sourceSha256": "eecb91319645559b20d5e8de902249e27ce4f4cbf9d3a0117d70c030aa9576ea",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "BreakdownCallouts",
+      "source": "src/pages/BreakdownCallouts.jsx",
+      "sourceSha256": "8d582f849d0571c0867001241ac248a6601d146329cf9b1371c2b155f1bf773d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CarbonTracker",
+      "source": "src/pages/CarbonTracker.jsx",
+      "sourceSha256": "b3754edc6cd2eab7a523faa9e37a88d80c44bc3cc42c1db0c2dcd4baa6fe7a53",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Certifications",
+      "source": "src/pages/Certifications.jsx",
+      "sourceSha256": "5a1c9a44873ae8e63453e24cd71674e0570f5b6778d607155fbbab0a50262187",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ChargingSessions",
+      "source": "src/pages/ChargingSessions.jsx",
+      "sourceSha256": "33abd7868d9ef50d9e4a020d57a53854ede0729a0083257df48f6fdf3e866ed2",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ChecklistInsights",
+      "source": "src/pages/ChecklistInsights.jsx",
+      "sourceSha256": "673a48c064264e67107b8f51aabe84c9eb197c2f1caf3abf834987ebe3b5ba3f",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Checklists",
+      "source": "src/pages/Checklists.jsx",
+      "sourceSha256": "40ea338514ffd9966d95714350e6200c425394f09be56ee2d93290641e289d62",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ChecklistSchedules",
+      "source": "src/pages/ChecklistSchedules.jsx",
+      "sourceSha256": "2dccf57e69b4e8f98a4bab63f36484e74bff1d39d0c0fbb11cf761ecd1d27376",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ClaimsSummary",
+      "source": "src/pages/ClaimsSummary.jsx",
+      "sourceSha256": "a3e66ab1a536a82033bccde52e3801c94ee79cbe3921889e8e3c31fb9b547180",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ColdChain",
+      "source": "src/pages/ColdChain.jsx",
+      "sourceSha256": "085dff6c4e4813430f51f59f68b8ef103a3e1dba8d90a366ce6b116639e255b0",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Combinations",
+      "source": "src/pages/Combinations.jsx",
+      "sourceSha256": "a634da0660cdccad839ad0252ff288111bf47ac9ae8f5e0392bad7ba3ce38644",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ContinuousImprovement",
+      "source": "src/pages/ContinuousImprovement.jsx",
+      "sourceSha256": "38bc5c8ffc00cff38515013de78dfa7d2ea212452ca2f93b42d8b8a9fe8bbb9a",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Contracts",
+      "source": "src/pages/Contracts.jsx",
+      "sourceSha256": "7563770a0556674c8448a4836192cdec5edaf2e99d77bc543e123f35bacd8f0d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CorrectiveActions",
+      "source": "src/pages/CorrectiveActions.jsx",
+      "sourceSha256": "fbd2f6c8f2c9406ec9645564f5f2231fd615751d025ebf20e0fd91eb3269c97c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CostCenter",
+      "source": "src/pages/CostCenter.jsx",
+      "sourceSha256": "9956a386ec20a6fcc0380797f85693fadb1ee72f30548ba70b9fe4dbf307c049",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CostPerM3",
+      "source": "src/pages/CostPerM3.jsx",
+      "sourceSha256": "3e227cd69815a93b500836de0c208e25ff1b360c5f89fc797782b3b69a14e0eb",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CostScenarioPlanner",
+      "source": "src/pages/CostScenarioPlanner.jsx",
+      "sourceSha256": "ca44f1e0f9aebdf9d3b1e1e69ef00618189002de05dd118a9a3125c85762bd0c",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "Scenario comparison is user-authored but hard-capped by the eight-entry SERIES palette; all rows must remain side by side.",
+        "Source anchors: const SERIES = [ | disabled={scenarios.length >= SERIES.length} | r.rows.map((row, i) => ("
+      ]
+    },
+    {
+      "page": "CustomData",
+      "source": "src/pages/CustomData.jsx",
+      "sourceSha256": "88fdd0e5d8d365649cf834b9845559f17e00a368915ddf55b9456a89a18ce4fe",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CustomerPortal",
+      "source": "src/pages/CustomerPortal.jsx",
+      "sourceSha256": "0b8f9bba55c4c99ae9e9ce9160c85d7ffe38be7b6a34e4a91748b0b3947fb944",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Customers",
+      "source": "src/pages/Customers.jsx",
+      "sourceSha256": "b775c4bfbc2d42e68957228da7c2d36a826bec3192bf650ed5dfa18dbb3cc08b",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "CustomRolesManager",
+      "source": "src/pages/CustomRolesManager.jsx",
+      "sourceSha256": "90374c17eff567b5c854147ad3017dab69befd4d7edecc4e48d3f01423530b0c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DailyOps",
+      "source": "src/pages/DailyOps.jsx",
+      "sourceSha256": "293394ce2173c7475b11c207bfa7d110ee23bcba038cbb7b969a1ff23024845e",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DataIntakeCenter",
+      "source": "src/pages/DataIntakeCenter.jsx",
+      "sourceSha256": "0f2a81014b01393a1570fdd5524177bdc09d8556019260584f01c8eda14aecba",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DataIntakeHistory",
+      "source": "src/pages/DataIntakeHistory.jsx",
+      "sourceSha256": "f1205652678fb2fd8f413fc4b168666a54ec8f522f0c347039cde7724391fe1b",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DataReconciliation",
+      "source": "src/pages/DataReconciliation.jsx",
+      "sourceSha256": "3e073ca5a1706a5a2167a58b6b005650af507e42728dd1f4e851f659cc1f56d6",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DeveloperPortal",
+      "source": "src/pages/DeveloperPortal.jsx",
+      "sourceSha256": "fb1841f0f8d692797c5df6db6f312ac5bf83497a3e30ed893b7cb10da9fd2640",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Dispatch",
+      "source": "src/pages/Dispatch.jsx",
+      "sourceSha256": "0ae85b3a4da671f8b1365ee8c919e8c802bb32d91ba4bbe568ebc3928a4f55e1",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DriverCoaching",
+      "source": "src/pages/DriverCoaching.jsx",
+      "sourceSha256": "c790f44dee798f31908d15a329f0a438352796c8dba0f52de464f6a748328fc2",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DriverDocuments",
+      "source": "src/pages/DriverDocuments.jsx",
+      "sourceSha256": "fdafbe4add4f5b67893fb42366b3da60a4ffc6705a75e39734e5212b3f5a1d58",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DriverExpenses",
+      "source": "src/pages/DriverExpenses.jsx",
+      "sourceSha256": "94749f6e5e285d9ccfa877e72b8adbce95c96f372d7fb8c8efb2b4c713a94009",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DriverSafety",
+      "source": "src/pages/DriverSafety.jsx",
+      "sourceSha256": "a9c3163e18ec83a6e6ad2685b88b3b888e8d06f19aa2c98bc8574d0bec2b9fce",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DriverTraining",
+      "source": "src/pages/DriverTraining.jsx",
+      "sourceSha256": "d879fbf9f25fdf670cf9e9bd0a2ac09fc5521e78274771862634cca99762fad6",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "DtcDiagnostics",
+      "source": "src/pages/DtcDiagnostics.jsx",
+      "sourceSha256": "e7c98ece0a4df2c70a660f3783ef8e06000fa55b762df4f7a6481bde2c89d70c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Dvir",
+      "source": "src/pages/Dvir.jsx",
+      "sourceSha256": "f28f9d8e69196cd08eec13c39653d4f2ce5cced96a297f8969220f10e2c7771c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Emissions",
+      "source": "src/pages/Emissions.jsx",
+      "sourceSha256": "86843493676695be542a9b826753e262647226a3ede806e8e484b0160011c502",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "EngineeringKpi",
+      "source": "src/pages/EngineeringKpi.jsx",
+      "sourceSha256": "ce9dd4d20e04cfd071be672fb2d3f61f2b156e954b8553466736362ea1b6cf6a",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "EngineHours",
+      "source": "src/pages/EngineHours.jsx",
+      "sourceSha256": "e55a072b0aa5b9c846912836d6c1aecb172cc836d0b623fc5b8a9ff962ac227b",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Equipment",
+      "source": "src/pages/Equipment.jsx",
+      "sourceSha256": "2ae2bfca5b3195af137f511347d27f13baee8960e1b4ed9787037f0432d7feb4",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ErpImport",
+      "source": "src/pages/ErpImport.jsx",
+      "sourceSha256": "823d4bc352f52910c44555322a9e3a58c3af3e5af61cb0ba75c2dcb6c0cbdbff",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ErpIntake",
+      "source": "src/pages/ErpIntake.jsx",
+      "sourceSha256": "c26de5c633a7ece33499800104ce50109ad1476dd17baae7b48097a5e2f50e06",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "The table is explicitly labelled as a non-grid sample and renders at most SAMPLE_LIMIT rows with the full source count disclosed.",
+        "Source anchors: d.rows.slice(0, SAMPLE_LIMIT).map | Showing first {SAMPLE_LIMIT} of"
+      ]
+    },
+    {
+      "page": "EventStream",
+      "source": "src/pages/EventStream.jsx",
+      "sourceSha256": "264fa08add90eb6daeb9c3c67a0df65a984ba632ab5f8a76026e80b2c1545e24",
+      "classification": "server-paged",
+      "evidence": [
+        "Current source applies a limit/range plus offset with paging state at the data boundary."
+      ]
+    },
+    {
+      "page": "ExpenseImport",
+      "source": "src/pages/ExpenseImport.jsx",
+      "sourceSha256": "e4cb7b63d0dfc95367a0351eb68428c312b87dacd6ab8cde84a8c5887da33910",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ExpenseTrends",
+      "source": "src/pages/ExpenseTrends.jsx",
+      "sourceSha256": "0b338a02924c375e8f310756f40625f222f0d74caab0f7f53306ab900b20d2ba",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "This is a chronological trend/forecast comparison generated by one bounded country-trend model, not an operational record register.",
+        "Source anchors: buildCountryTrend(entry, grain) | t.yoy.map((y, index) => ( | t.forecast.map((y, index) => ("
+      ]
+    },
+    {
+      "page": "FitmentValidation",
+      "source": "src/pages/FitmentValidation.jsx",
+      "sourceSha256": "367c53bf1e5467271cc4304f98700cc023168ce990ec3af5923c43cc1375f09f",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FleetAnalytics",
+      "source": "src/pages/FleetAnalytics.jsx",
+      "sourceSha256": "e0c23eaf0c4ad1c476a277562a64fa302651ff1aa7085280c755f193d898e6e4",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FleetGroups",
+      "source": "src/pages/FleetGroups.jsx",
+      "sourceSha256": "dad639505e399d79b0d5902ba0a35be9644a2c252eac69e6e82bf961e63078dc",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FleetOptimizer",
+      "source": "src/pages/FleetOptimizer.jsx",
+      "sourceSha256": "e88d3bf7a2ac28ac307e1407fb2977a849fa8e1b6bfed16eb0d309552e7c9d2c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FleetRenewal",
+      "source": "src/pages/FleetRenewal.jsx",
+      "sourceSha256": "17273630e85b0fb5334f914e47860fbba42548e666333a411568078f0a1b8406",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FleetRiskScore",
+      "source": "src/pages/FleetRiskScore.jsx",
+      "sourceSha256": "e526adb80a24d9592226f6c9a309711fe924789388fe3d93e7347b20daefe7bc",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FleetUtilization",
+      "source": "src/pages/FleetUtilization.jsx",
+      "sourceSha256": "e0f048ed2fabf36fb8b193e19ce3db54491f29893cef4434d5cbe1d33c6f4085",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FuelCards",
+      "source": "src/pages/FuelCards.jsx",
+      "sourceSha256": "a7e53521facc1c591ce7e7afb717f616ba6fd19bece2ddd56a58061bdb0e8248",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FuelDelivery",
+      "source": "src/pages/FuelDelivery.jsx",
+      "sourceSha256": "3c83fec76fe1fe149ec7acc01814fbe90c9cbb3920e2b2b6095fdff8ebf8d60d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "FuelTheftAlerts",
+      "source": "src/pages/FuelTheftAlerts.jsx",
+      "sourceSha256": "8ea1e27ff4fc3dc39c83200ac9796ff26b800ecb6073727279b326ff59870e16",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "GatePass",
+      "source": "src/pages/GatePass.jsx",
+      "sourceSha256": "5d339187ea60670d53b2b055734b076a093e06f62492d2ea7e30b4ff331717e1",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Geofencing",
+      "source": "src/pages/Geofencing.jsx",
+      "sourceSha256": "80da809b777fbc2428001c21fab2f54ce3e1b51c5bb891433cb87edd1d4a6966",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "GoodsReceipt",
+      "source": "src/pages/GoodsReceipt.jsx",
+      "sourceSha256": "00e8e28ee5966f48e09ec89bfd427709fb90a7233063c15661b6fc2b5c74caf5",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "GpsTracking",
+      "source": "src/pages/GpsTracking.jsx",
+      "sourceSha256": "51caf6cb9356b811d0dd4ce8422d35207037b99cdc201a16c32cac351ed3e681",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "HeatIntelligence",
+      "source": "src/pages/HeatIntelligence.jsx",
+      "sourceSha256": "1eb321538fa279fcbacf4ef178797419d82a09602df628f864b65941a2fe84ea",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "HoldingCompany",
+      "source": "src/pages/HoldingCompany.jsx",
+      "sourceSha256": "a36dab37aa9795ba897785f4f98d7ccb7108dcdfb6c02f159af5245c4c65f829",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "HoursOfService",
+      "source": "src/pages/HoursOfService.jsx",
+      "sourceSha256": "5924854ac77b83f53e0125fa7175b885559a748c1d0c057a3a13992eba4ba17e",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "IftaReporting",
+      "source": "src/pages/IftaReporting.jsx",
+      "sourceSha256": "1a6a098ff716c17e18e57b70f052ebd0868ad1355f23c7d6a47e05838745db1c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "IncidentReports",
+      "source": "src/pages/IncidentReports.jsx",
+      "sourceSha256": "6e45289d3067059105c687ce683ac8eb2d05ed48b52e9b2e3ba4fa0f582e85a3",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "InspectionIntelligence",
+      "source": "src/pages/InspectionIntelligence.jsx",
+      "sourceSha256": "7de011b1947d82a003f82409f5caad2594c43a5d1054dc453ea9fa95a942846f",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "InsuranceClaims",
+      "source": "src/pages/InsuranceClaims.jsx",
+      "sourceSha256": "c32d642e098e44b122e986c9fa27fb9353abfebbab5dc30c6deb50548dd59c8e",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Integrations",
+      "source": "src/pages/Integrations.jsx",
+      "sourceSha256": "7d433d0cf404f98ff6e1e9ca16dbd73bee935c8e1fc6d0c9131a22648acab8c3",
+      "classification": "server-paged",
+      "evidence": [
+        "Current source applies a limit/range plus offset with paging state at the data boundary."
+      ]
+    },
+    {
+      "page": "JourneyLog",
+      "source": "src/pages/JourneyLog.jsx",
+      "sourceSha256": "76785bec35615c9894abc6e0b48e1fe5851e2857b593101810726ba036f586a8",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "KnowledgeBase",
+      "source": "src/pages/KnowledgeBase.jsx",
+      "sourceSha256": "d1e85b8b3ed1fdcf3ed0741409e0e09502ddec48bb034cc9ae3b86e32990674e",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "Every dynamic table explicitly limits a preview/top/recent collection before rendering."
+      ]
+    },
+    {
+      "page": "KpiScorecard",
+      "source": "src/pages/KpiScorecard.jsx",
+      "sourceSha256": "945e5b4ed5055a1ab8b6c4b88fefe5601f3c56fc52c5d6dce401a4e812e9ad80",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "LoadPlanning",
+      "source": "src/pages/LoadPlanning.jsx",
+      "sourceSha256": "d95d03f39a6949988529d2b1dcb2fa4c2b9aee139c430d55f56fc652a0557414",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Materials",
+      "source": "src/pages/Materials.jsx",
+      "sourceSha256": "d891d5b48b240e07f8041a6d671c7b82cb1568acabb763077b67faf2aa006f3c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "MyChecklists",
+      "source": "src/pages/MyChecklists.jsx",
+      "sourceSha256": "bb2af44aaf79449c36c80091506f1e998b9ed2059b765bf6d0ffd28826df0007",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "OcrScanner",
+      "source": "src/pages/OcrScanner.jsx",
+      "sourceSha256": "e0ebee57b9991d996b6387e79f16b951db1741f6b1217246f9e41a128efbc3aa",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "OdometerLogs",
+      "source": "src/pages/OdometerLogs.jsx",
+      "sourceSha256": "d69500b3fcccd386fd297064d23065ac9f8b94d9269727e25e1e0a316e4b7918",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "OpsIntelligence",
+      "source": "src/pages/OpsIntelligence.jsx",
+      "sourceSha256": "df30eb6afdba01fce2b86866c0bf522c4b41fd4192b97e25d1f2bd3080715f8e",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "OrgHierarchy",
+      "source": "src/pages/OrgHierarchy.jsx",
+      "sourceSha256": "037e9991c74a1fc1b93c1308ddb750fe9c661610a059f786a3eaf8e09e7aad89",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "PartsCatalog",
+      "source": "src/pages/PartsCatalog.jsx",
+      "sourceSha256": "8baac0bb0ad0f7eec2578efe75e01d6b84ea6412831ed1bd2bf518948c2891c1",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "PartsRequests",
+      "source": "src/pages/PartsRequests.jsx",
+      "sourceSha256": "c8624c39c2f60f34a2fb0b9d2259cd6bab2da0b304ec38b6aa7d4d15e563ffc3",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "PerformanceBenchmark",
+      "source": "src/pages/PerformanceBenchmark.jsx",
+      "sourceSha256": "31e7fc83e651a158c752e931ba595b6eedfd746d29f5affc1460d9a0d02d3a82",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "PermissionMatrix",
+      "source": "src/pages/PermissionMatrix.jsx",
+      "sourceSha256": "b3153425236203ca43cddae6a44f65304f9d547aafd04f85dd4fe508a45a6e53",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "Both axes come from the static MODULE_GROUPS and ROLES authorization catalogs; the full matrix is required for permission comparison.",
+        "Source anchors: if (!q) return MODULE_GROUPS | filteredGroups.map((g) => ( | ROLES.map((r) => ("
+      ]
+    },
+    {
+      "page": "PmPrograms",
+      "source": "src/pages/PmPrograms.jsx",
+      "sourceSha256": "85a1d6796c7c315f1e5837a6e330bad51603a318a744df5b3caf9f7980c2893a",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "PolicyManagement",
+      "source": "src/pages/PolicyManagement.jsx",
+      "sourceSha256": "65c901f9c22fdf2e8c6d8edbe6620229e950bd1eed6cbb85d2f4e6b164775aeb",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Procurement",
+      "source": "src/pages/Procurement.jsx",
+      "sourceSha256": "db1d6c3d3420910520467fad199fb4a282abddcb159b22b491e09bb19e7697ec",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source renders an explicit client page window and computes totalPages."
+      ]
+    },
+    {
+      "page": "ProofOfDelivery",
+      "source": "src/pages/ProofOfDelivery.jsx",
+      "sourceSha256": "f836c9fa1b2728ce8ec482ae9d84582ff565b1040e93465119efc6d2f459538d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "RecallDetail",
+      "source": "src/pages/RecallDetail.jsx",
+      "sourceSha256": "f749d43a33818a34fb01865c806747b4e0bc6e5ae9334f45f3b52a77f1bd4835",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "RecallTracker",
+      "source": "src/pages/RecallTracker.jsx",
+      "sourceSha256": "b002d6b550ef738638330beb828d6f450544fe7a5831538a7dcfe4378c390a39",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "RepairRequests",
+      "source": "src/pages/RepairRequests.jsx",
+      "sourceSha256": "8adae6bd2428da4bc8bc5c741e3d03e6195263cd6e574324edc03565b5751b53",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ReportShare",
+      "source": "src/pages/ReportShare.jsx",
+      "sourceSha256": "b3f98937c3b30dd070378f4629825a5c5b99fa7d9b126dceaae5a0355447a8bb",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Requisitions",
+      "source": "src/pages/Requisitions.jsx",
+      "sourceSha256": "cdbc8ab084278d25672c34fd371da81c6385a6eff1600c1b90795cc50fea4011",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "RetreadClaims",
+      "source": "src/pages/RetreadClaims.jsx",
+      "sourceSha256": "b95041e15d7f807f85d5375b63d21ca2384109c3f600d88be663eae55e2aa02c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Rfid",
+      "source": "src/pages/Rfid.jsx",
+      "sourceSha256": "3133f8b7dde1207cd3bfaf158cf4a7d8bbcdafe0cdd989d6ab40ce09df849350",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "RfidRegistry",
+      "source": "src/pages/RfidRegistry.jsx",
+      "sourceSha256": "ccaec3bce84f400183a8d87f0ad01513e8dbf8a7cf1ce3f98a8483d45392fcdf",
+      "classification": "server-paged",
+      "evidence": [
+        "Current source applies a limit/range plus offset with paging state at the data boundary."
+      ]
+    },
+    {
+      "page": "RotationOptimizer",
+      "source": "src/pages/RotationOptimizer.jsx",
+      "sourceSha256": "a43f07fd235af3a8aae337b4c81c66d2bc2287eb3ae34a7ddb699058359b38b7",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "The table is an expanded single-asset fitment detail bounded by the physical fitted tyre positions, not a fleet register.",
+        "Source anchors: const tyres = (tyresByAsset.get(a.asset_no) || []) | Fitted tyres ({tyres.length}) | tyres.map((t) => {"
+      ]
+    },
+    {
+      "page": "RotationSchedule",
+      "source": "src/pages/RotationSchedule.jsx",
+      "sourceSha256": "8873f898f6c8dea370e7da151ceb0352968973f5bc64a3c3927373e2395af0af",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source renders an explicit client page window and computes totalPages."
+      ]
+    },
+    {
+      "page": "RouteOptimization",
+      "source": "src/pages/RouteOptimization.jsx",
+      "sourceSha256": "e5e136e40448cd0c7493047f2fe01cb9e8b6db1f688362001e5917d72b02459d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SafetyCompliance",
+      "source": "src/pages/SafetyCompliance.jsx",
+      "sourceSha256": "620beb41688ed2c36ea2fe8298f9bae2b88d52c71e9b6f401f3dc642e3400f08",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SanyDelayPenalty",
+      "source": "src/pages/SanyDelayPenalty.jsx",
+      "sourceSha256": "531f3ce9de27953dffed49d29dfff999abd4a961667ce7fc212ebab87295288b",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ScheduledReports",
+      "source": "src/pages/ScheduledReports.jsx",
+      "sourceSha256": "4f453d20198105d99da67f5966ce0e5ab31f1e5ef247c6036f801f85424c11a8",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SecurityCenter",
+      "source": "src/pages/SecurityCenter.jsx",
+      "sourceSha256": "0aeee9a08638858e249e255e618fe2f76e819acb97b54908c8ba6cbdd3fc3497",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SerialTracker",
+      "source": "src/pages/SerialTracker.jsx",
+      "sourceSha256": "82a0a5c9571c489c4cc592a6a647eb5f292d5c179074c0487383f2b826c223ef",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ServiceRequests",
+      "source": "src/pages/ServiceRequests.jsx",
+      "sourceSha256": "ebdabaa3fcd722c7c4dc8a142569d53ab725f20910cb5be4ae748e8fdbd7e951",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Settings",
+      "source": "src/pages/Settings.jsx",
+      "sourceSha256": "b8917e8b8c0936960d5da3f9d12dba99937175165d84e6fd4d2e771b437df4a1",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "ShiftScheduling",
+      "source": "src/pages/ShiftScheduling.jsx",
+      "sourceSha256": "3253176c5fc1015b95401393b6283ad919302bfe375547349d5852f6671df4a9",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SiteManagement",
+      "source": "src/pages/SiteManagement.jsx",
+      "sourceSha256": "0d41bc971742dc564c1a28a0670c91e24e9e9ee4d3a8c722084b7af0a4dc75d5",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SlaDashboard",
+      "source": "src/pages/SlaDashboard.jsx",
+      "sourceSha256": "27643b4d65661f92fad75de90c5c0f470a28ceba9b4c2118d95c058574a7ed42",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SpeedLimiter",
+      "source": "src/pages/SpeedLimiter.jsx",
+      "sourceSha256": "ed4d2446bfa543f5f4117f116be35f46efce2ed0880f197a02251dbc6a3e693f",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SsoConfiguration",
+      "source": "src/pages/SsoConfiguration.jsx",
+      "sourceSha256": "1b66580193cadf30bdcb52c32f286d4742a8a5a06ea367c77951ba30a4fb8efd",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "StockManagement",
+      "source": "src/pages/StockManagement.jsx",
+      "sourceSha256": "bdcff6a707f9197b922c1fcaa148520e96b4c5297ce388389f91b10944726460",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "StockReplenishment",
+      "source": "src/pages/StockReplenishment.jsx",
+      "sourceSha256": "e4bddd18c3ad987fa3ec802c74ada072b9f2fb9f8b3d2d4cb6db0753004afd80",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SupplierManagement",
+      "source": "src/pages/SupplierManagement.jsx",
+      "sourceSha256": "8c65fe8dc99d16201041cf35ef543782abf834c46bcf3dac1a25bae23c50379f",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "SupplierMarketplace",
+      "source": "src/pages/SupplierMarketplace.jsx",
+      "sourceSha256": "aa8f854f3b6cf7c279df98d2d09605e6627d77a0264a9355f656345eba1ee673",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Taas",
+      "source": "src/pages/Taas.jsx",
+      "sourceSha256": "587789fa72d46813768da1541d7b909af8b68338b9e7314eb00da465c9fec3a2",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Tachograph",
+      "source": "src/pages/Tachograph.jsx",
+      "sourceSha256": "27e0a6c9dc0841d5526d4a036571e8a2e41c608dad3104f369c11b958e826863",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TcoCalculator",
+      "source": "src/pages/TcoCalculator.jsx",
+      "sourceSha256": "91067e4970ec4d91f165176c624e39d2ee0fc427af6b4f38f27fa2603eb277e6",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TechnicianScorecard",
+      "source": "src/pages/TechnicianScorecard.jsx",
+      "sourceSha256": "f92f10a51162b61a8d9b20c738adeeed2fe555d7173d660b9dc987c762ecfc9c",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TelematicsDevices",
+      "source": "src/pages/TelematicsDevices.jsx",
+      "sourceSha256": "10f15116b2c533c9a7a1ffafd9178199a6d1ae002bb702e7f86e668c8a28494b",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TollTransactions",
+      "source": "src/pages/TollTransactions.jsx",
+      "sourceSha256": "251f2e120a309a7addff88dc7d72eaca5b89021e71215d7d83df07bf0dd3bff0",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Tpms",
+      "source": "src/pages/Tpms.jsx",
+      "sourceSha256": "6324afb872ab43430905143c57f41f61ed1531ff0170ffaf67af20c2249cd2e9",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TripReplay",
+      "source": "src/pages/TripReplay.jsx",
+      "sourceSha256": "b7b8c2f4198cb3d943d533c7f664843655ccf88f399056114cd9844e0915e75e",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Trips",
+      "source": "src/pages/Trips.jsx",
+      "sourceSha256": "9a5f050fae3c39d0a6a7500faf2b2985eb2ca78cdbc40df1e7e4249f51341657",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TyreAgeCompliance",
+      "source": "src/pages/TyreAgeCompliance.jsx",
+      "sourceSha256": "ec01f35deb760e3403f20ffd226f463aba06b38045899943caa8ea19a05fb877",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TyreExchange",
+      "source": "src/pages/TyreExchange.jsx",
+      "sourceSha256": "7171797906e3e7cc96ccfc97ed7bc17e410c30b05ac22f878a5564fddc3bbffd",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TyrePassport",
+      "source": "src/pages/TyrePassport.jsx",
+      "sourceSha256": "f198e832c0d544144ee5305071e03001a267992352f45686cf7122fd46067098",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TyrePool",
+      "source": "src/pages/TyrePool.jsx",
+      "sourceSha256": "98fbea83cb5aefd0450232d2b9458ac86f69993c46a6a145b27f064efa887b7e",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TyreScrapManagement",
+      "source": "src/pages/TyreScrapManagement.jsx",
+      "sourceSha256": "8487a9294fac65bb108983325060b47a7d1ee90ea9f8c4a2eda6fa0c25859f85",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "TyreServiceEvents",
+      "source": "src/pages/TyreServiceEvents.jsx",
+      "sourceSha256": "e67f4a1cef6ca62682cf6ccf6c85bc83e0e935c664f202b6cf203f4df86074d9",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "UploadApprovals",
+      "source": "src/pages/UploadApprovals.jsx",
+      "sourceSha256": "871f08b69e842ac9ad3ff00e688bc8e33ddd025feaae6f56e4c85e32ecb0bcd8",
+      "classification": "server-paged",
+      "evidence": [
+        "Current source applies a limit/range plus offset with paging state at the data boundary."
+      ]
+    },
+    {
+      "page": "UploadData",
+      "source": "src/pages/UploadData.jsx",
+      "sourceSha256": "d321885bf788ce197d283d3c05bfae6948905059f32ba587173a2fb7c7076f5e",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "Upload tables are explicitly bounded schema/sample previews: eight raw rows, five mapped rows, and configured schema fields.",
+        "Source anchors: rawAoa.slice(0, 8).map | setPreview(built.slice(0, 5)) | Preview (first 5 rows) | activeFields.filter(f => mapping[f.key]).map"
+      ]
+    },
+    {
+      "page": "UserManagement",
+      "source": "src/pages/UserManagement.jsx",
+      "sourceSha256": "6b14c8fa2febcc3cbe5ad4489583812a2c3196687628c25422a637c466af0632",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "Vehicle360",
+      "source": "src/pages/Vehicle360.jsx",
+      "sourceSha256": "db5c58e8c34834a487f5c5c7691210db23ca474b3da33c8ff78b7ae2a17d46f4",
+      "classification": "intentionally-bounded/small",
+      "evidence": [
+        "Every dynamic table explicitly limits a preview/top/recent collection before rendering."
+      ]
+    },
+    {
+      "page": "VehicleCheckInOut",
+      "source": "src/pages/VehicleCheckInOut.jsx",
+      "sourceSha256": "3d95a74e3a1df04441fee16ba16493e1a81cf05d755f65645c2925d5c33f106d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "VehicleHandover",
+      "source": "src/pages/VehicleHandover.jsx",
+      "sourceSha256": "8881f9125d58541a1f96c622c1cf58df9302fda613da3ddfe3b8e3c0d3be56d8",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "VehicleHistory",
+      "source": "src/pages/VehicleHistory.jsx",
+      "sourceSha256": "e0c0244bb9ba905e75034e5114db1b58ff28ad2e5c232334d8d1fa1ee7d9f18d",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "VehicleReservations",
+      "source": "src/pages/VehicleReservations.jsx",
+      "sourceSha256": "73132685bc17f6c33be08f1a05944c13813870351f209b8c452290854d176ee0",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "VehicleWashing",
+      "source": "src/pages/VehicleWashing.jsx",
+      "sourceSha256": "1b7167268bc6fcf61ed82cfa31c435d769be529d9388df83108505424f1ecb48",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "VideoTelematics",
+      "source": "src/pages/VideoTelematics.jsx",
+      "sourceSha256": "ecec5ed2323e86d68522e64c22dc8227fbb13d8d16365c54168036e8e0c1e4d3",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "WarrantyTracker",
+      "source": "src/pages/WarrantyTracker.jsx",
+      "sourceSha256": "6911f778c964211f10658a5f0be8f3c193aff984820f9d541aab2f85425ee204",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source renders an explicit client page window and computes totalPages."
+      ]
+    },
+    {
+      "page": "Weighbridge",
+      "source": "src/pages/Weighbridge.jsx",
+      "sourceSha256": "cc5150d0fdcf68c99e2a4733c6d16a824eda18a111e7ff462cdb92d74729ed29",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "WorkshopAbsence",
+      "source": "src/pages/WorkshopAbsence.jsx",
+      "sourceSha256": "6fa8b9d8ad70678c0e508a4b38330bcfc8b0543dd42aeb0f4df02671f1d139fc",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "WorkshopAnalytics",
+      "source": "src/pages/WorkshopAnalytics.jsx",
+      "sourceSha256": "5a721759d4a739a5d47c3ab7fa1a9d055974d9800d38df981a51282eb70dfbdf",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "WorkshopLive",
+      "source": "src/pages/WorkshopLive.jsx",
+      "sourceSha256": "6cb25c0ea9504ac8347e9a8c722948902550da066a4d050727334b62aa8f6741",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    },
+    {
+      "page": "WorkshopTv",
+      "source": "src/pages/WorkshopTv.jsx",
+      "sourceSha256": "8997c81570f5df44b9ac158e8b2d4faac8cbff485c666256b6124cdba9b8d652",
+      "classification": "client-paged/shared-enterprise-table",
+      "evidence": [
+        "Current source uses shared paging: usePagedRows + TablePagination."
+      ]
+    }
+  ]
+}

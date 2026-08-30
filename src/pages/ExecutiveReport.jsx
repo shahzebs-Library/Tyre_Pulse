@@ -601,7 +601,7 @@ export default function ExecutiveReport() {
       ? Math.max(1, Math.round((new Date(dates[dates.length - 1]) - new Date(dates[0])) / 2_592_000_000) + 1)
       : 1
     return fleet.reduce((s, v) => s + (Number(v.monthly_tyre_budget) || 0), 0) * months
-  }, [fleet, period])
+  }, [fleet, periodRecords])
 
   const projectedAnnual = useMemo(() => {
     if (!costTrend.avgMonthlyCost) return 0
@@ -653,7 +653,7 @@ export default function ExecutiveReport() {
       ? Math.max(30, (new Date(dates2[dates2.length - 1]) - new Date(dates2[0])) / 86_400_000 + 1)
       : 90
     return improvement * totalKm * (12 / periodDays * 30)
-  }, [kpis, periodRecords, period])
+  }, [kpis, periodRecords])
 
   // ── Risk matrix ───────────────────────────────────────────────────────────
   const riskMatrix = useMemo(() => {
@@ -858,7 +858,7 @@ export default function ExecutiveReport() {
     }
 
     return recs.slice(0, 10)
-  }, [kpis, vendors, topRootCause, worstSiteByFailure, totalSpend, savingsOpportunity, currency, costBySite, t])
+  }, [kpis, vendors, bestBrandByScore, topRootCause, worstSiteByFailure, totalSpend, savingsOpportunity, currency, costBySite, t])
 
   // ── Action plan ───────────────────────────────────────────────────────────
   const actionPlan = useMemo(() => {
@@ -1236,7 +1236,7 @@ export default function ExecutiveReport() {
     } finally {
       setExporting(false)
     }
-  }, [period, kpis, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity, chartImg, visibleBuiltinKeys, costMode, costSplitHeadline, costSplitSums, costSplitHasData])
+  }, [period, rootCauses, riskMatrix, actionPlan, recommendations, kpiCards, currency, company, branding, chartImg, visibleBuiltinKeys, costMode, costSplitHeadline, costSplitSums, costSplitHasData])
 
   // ── PowerPoint Export (WYSIWYG white deck: title + KPI + chart + table slides) ─
   const exportPPTX = useCallback(async () => {

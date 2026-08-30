@@ -64,7 +64,10 @@ vi.mock('../lib/offlineQueue', () => ({
   getFailedInspections: () => Promise.resolve([]),
   retryFailedInspection: () => Promise.resolve(),
 }))
-vi.mock('../lib/api/navLayout', () => ({ getNavLayout: () => Promise.resolve({}) }))
+// Keep unrelated layout I/O pending. Resolving it would schedule a Layout state
+// update after each synchronous navigation assertion and produce false-positive
+// act warnings; nav-layout loading has its own tests.
+vi.mock('../lib/api/navLayout', () => ({ getNavLayout: () => new Promise(() => {}) }))
 vi.mock('../lib/api/brandLogo', () => ({ getCompanyLogo: () => Promise.resolve('') }))
 vi.mock('../lib/brand/library', () => ({ resolveBrandLogo: () => '' }))
 

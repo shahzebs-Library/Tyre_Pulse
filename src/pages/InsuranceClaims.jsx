@@ -18,6 +18,7 @@
  * shared primitives in src/lib/insuranceClaims.js).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement,
@@ -299,6 +300,7 @@ export default function InsuranceClaims() {
   // ── Export ──────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['claim_no', 'asset_no', 'insurer', 'policy_no', 'incident_date', 'claim_date', 'amount_claimed', 'amount_settled', 'outstanding', 'status', 'ageDays']
   const EXPORT_HEADERS = ['Claim No', 'Asset', 'Insurer', 'Policy', 'Incident', 'Claim Date', 'Claimed', 'Settled', 'Outstanding', 'Status', 'Age (days)']
+  const claimsPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => ({
     claim_no: r.claim_no || '', asset_no: r.asset_no || '', insurer: r.insurer || '',
     policy_no: r.policy_no || '', incident_date: fmtDate(r.incident_date), claim_date: fmtDate(r.claim_date),
@@ -522,7 +524,7 @@ export default function InsuranceClaims() {
                   {analysis.total === 0 ? 'No insurance claims yet. Record your first claim.' : 'No claims match these filters.'}
                 </td></tr>
               ) : (
-                filtered.map((r) => {
+                claimsPager.pageRows.map((r) => {
                   const age = claimAgeDays(r, now)
                   const out = outstandingValue(r)
                   return (
@@ -548,6 +550,7 @@ export default function InsuranceClaims() {
               )}
             </tbody>
           </table>
+          <TablePagination {...claimsPager} />
         </div>
       </div>
 

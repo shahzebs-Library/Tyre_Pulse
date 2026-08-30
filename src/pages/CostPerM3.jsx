@@ -13,9 +13,10 @@
  * /production-m3); Internal reuses parts_consumption (ERP intake).
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy, ArrowUpRight } from 'lucide-react'
+import { RefreshCcw, FileSpreadsheet, FileText, Layers, ClipboardCheck, Copy, ArrowUpRight, AlertTriangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -25,6 +26,7 @@ import { fmtMoney, fmtM3, fmtCostPerM3, fmtCostPerM3Guarded, costPerM3Reliable, 
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PresentationStudio from '../components/present/PresentationStudio'
 import StudioBoundary from '../components/present/StudioBoundary'
+import { toUserMessage } from '../lib/safeError'
 
 /**
  * Site-manager review: honest, data-derived issues to flag for the period. Sent
@@ -115,6 +117,8 @@ export default function CostPerM3() {
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [partialErrors, setPartialErrors] = useState([])
   // Date-wise monthly trend (last 12 months, independent of the period chip).
   const [trend, setTrend] = useState({ ok: false, months: [] })
   const [rejections, setRejections] = useState(null)
@@ -124,17 +128,29 @@ export default function CostPerM3() {
   const load = useCallback(() => {
     let cancelled = false
     setLoading(true)
-    Promise.all([
-      getCostPerM3({ country, from: bounds.from, to: bounds.to }).catch(() => null),
-      getCostPerM3Trend({ country }).catch(() => ({ ok: false, months: [] })),
-      getProductionRejections({ country, from: bounds.from, to: bounds.to }).catch(() => null),
-      countCostM3Rows({ country, from: bounds.from, to: bounds.to }).catch(() => null),
+    setError('')
+    setPartialErrors([])
+    Promise.allSettled([
+      getCostPerM3({ country, from: bounds.from, to: bounds.to }),
+      getCostPerM3Trend({ country }),
+      getProductionRejections({ country, from: bounds.from, to: bounds.to }),
+      countCostM3Rows({ country, from: bounds.from, to: bounds.to }),
     ]).then(([d, t, rej, c]) => {
       if (cancelled) return
-      setData(d)
-      setTrend(t || { ok: false, months: [] })
-      setRejections(rej)
-      setCounts(c)
+      if (d.status === 'rejected' || d.value?.ok === false) {
+        setData(null)
+        setError(toUserMessage(d.status === 'rejected' ? d.reason : null, 'Could not load Cost per M3.'))
+      } else {
+        setData(d.value)
+      }
+      setTrend(t.status === 'fulfilled' ? (t.value || { ok: false, months: [] }) : { ok: false, months: [] })
+      setRejections(rej.status === 'fulfilled' ? rej.value : null)
+      setCounts(c.status === 'fulfilled' ? c.value : null)
+      setPartialErrors([
+        (t.status === 'rejected' || t.value?.ok === false) && 'monthly trend',
+        (rej.status === 'rejected' || rej.value?.ok === false) && 'production rejections',
+        (c.status === 'rejected' || c.value == null || Object.values(c.value).some((value) => value == null)) && 'source row counts',
+      ].filter(Boolean))
     }).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [country, bounds.from, bounds.to])
@@ -143,7 +159,7 @@ export default function CostPerM3() {
 
   const currency = data?.currency || country
   const total = data?.total || null
-  const regions = data?.regions || []
+  const regions = useMemo(() => data?.regions || [], [data?.regions])
 
   const review = useMemo(
     () => buildSiteManagerReview({ regions, total, rejections, currency, label: periodLabel(bounds) }),
@@ -199,7 +215,9 @@ export default function CostPerM3() {
     ], `${country} Cost per M3 - ${periodLabel(bounds)}`, `TyrePulse_CostPerM3_${country}`, 'landscape')
   }
 
-  const months = trend?.months || []
+  const months = useMemo(() => trend?.months || [], [trend?.months])
+  const regionPager = usePagedRows(regions)
+  const monthPager = usePagedRows(months)
   const maxGrand = months.reduce((m, r) => Math.max(m, Number(r.grand_total) || 0), 0)
 
   // Chart Builder catalog: region and monthly cost / production, presentation-ready.
@@ -320,13 +338,25 @@ export default function CostPerM3() {
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{periodLabel(bounds)}</span>
       </div>
 
+      {partialErrors.length > 0 && !error && (
+        <div role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 py-2 text-sm text-amber-300">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          Partial view: {partialErrors.join(', ')} unavailable. The headline Cost/M3 is loaded, but affected supporting analysis is omitted.
+        </div>
+      )}
+
       {/* Headline card (matches the All-<country> summary) */}
       <div className="mb-6 rounded-xl border border-[var(--border-subtle)] overflow-hidden">
         <div className="bg-[var(--accent)] text-white px-4 py-2.5 font-semibold flex items-center justify-between gap-2">
           <span>All {country}</span>
           <ExplainThisNumber metricId="cost_per_m3" country={country} label={`Cost per M3 - ${country}`} />
         </div>
-        {loading ? (
+        {error ? (
+          <div role="alert" className="px-4 py-8 text-center text-sm text-red-300">
+            <p>{error}</p>
+            <button type="button" onClick={load} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-red-700/50 px-3 py-1.5"><RefreshCcw size={14} /> Retry</button>
+          </div>
+        ) : loading ? (
           <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>Loading...</div>
         ) : (
           <div className="divide-y divide-[var(--border-subtle)]">
@@ -421,7 +451,7 @@ export default function CostPerM3() {
                 <tr><td colSpan={7} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>Loading...</td></tr>
               ) : regions.length === 0 ? (
                 <tr><td colSpan={7} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No cost or production for {country} in this period.</td></tr>
-              ) : regions.map((r) => (
+              ) : regionPager.pageRows.map((r) => (
                 <tr key={r.region} className="border-t border-[var(--border-subtle)]">
                   <td className="px-3 py-2 text-left">{r.region}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(r.internal_cost, currency)}</td>
@@ -442,6 +472,7 @@ export default function CostPerM3() {
             </tbody>
           </table>
         </div>
+        <TablePagination {...regionPager} />
         <p className="mt-3 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
           Region comes from Site Management (tag each site Central / Western). Untagged sites show as "Unassigned".
         </p>
@@ -470,7 +501,7 @@ export default function CostPerM3() {
                 <tr><td colSpan={8} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>Loading...</td></tr>
               ) : months.length === 0 ? (
                 <tr><td colSpan={8} className="px-3 py-6 text-center" style={{ color: 'var(--text-secondary)' }}>No monthly data for {country}.</td></tr>
-              ) : months.map((r) => {
+              ) : monthPager.pageRows.map((r) => {
                 const pct = maxGrand > 0 ? Math.round((Number(r.grand_total) || 0) / maxGrand * 100) : 0
                 return (
                   <tr key={r.month} className="border-t border-[var(--border-subtle)]">
@@ -492,6 +523,7 @@ export default function CostPerM3() {
             </tbody>
           </table>
         </div>
+        <TablePagination {...monthPager} />
       </div>
 
       {/* Site-manager review: cost + production by region and the issues to flag.

@@ -70,6 +70,35 @@ describe('aiOrchestratorClient - sendOrchestratorMessage', () => {
     h.state.fn = { data: null, error: { message: 'orchestrator unavailable' } }
     await expect(client.sendOrchestratorMessage({ message: 'x' })).rejects.toBeInstanceOf(ServiceError)
   })
+
+  it('trims input and rejects empty or oversized messages before invoking the server', async () => {
+    h.state.fn = { data: { content: 'ok', conversation_id: 'c2' }, error: null }
+    await client.sendOrchestratorMessage({ message: '  Hello  ' })
+    expect(h.state.lastFn.opts.body.message).toBe('Hello')
+
+    h.state.lastFn = null
+    await expect(client.sendOrchestratorMessage({ message: '   ' })).rejects.toBeInstanceOf(TypeError)
+    await expect(client.sendOrchestratorMessage({ message: 'x'.repeat(4001) })).rejects.toBeInstanceOf(RangeError)
+    expect(h.state.lastFn).toBeNull()
+  })
+
+  it('rejects malformed success payloads instead of creating a broken thread', async () => {
+    h.state.fn = { data: { content: 'missing id' }, error: null }
+    await expect(client.sendOrchestratorMessage({ message: 'Hello' }))
+      .rejects.toThrow('AI orchestrator returned an invalid response')
+  })
+
+  it('accepts provenance and cost telemetry and rejects malformed metadata', async () => {
+    h.state.fn = { data: {
+      content: 'Grounded [source-1]', conversation_id: 'c3',
+      sources: [{ id: 'source-1', label: 'Executive KPI digest', status: 'grounded' }],
+      usage: { total_tokens: 42, estimated_cost_usd: 0.000042, model: 'claude-haiku-4-5' },
+    }, error: null }
+    await expect(client.sendOrchestratorMessage({ message: 'Status?' })).resolves.toMatchObject({ conversation_id: 'c3' })
+
+    h.state.fn = { data: { content: 'bad', conversation_id: 'c4', sources: {} }, error: null }
+    await expect(client.sendOrchestratorMessage({ message: 'Status?' })).rejects.toThrow('invalid sources')
+  })
 })
 
 describe('aiOrchestratorClient - conversation reads', () => {

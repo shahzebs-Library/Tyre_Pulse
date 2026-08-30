@@ -24,6 +24,7 @@ import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } f
 import { useLanguage } from '../contexts/LanguageContext'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { loadAutoTable } from '../lib/pdfEngine'
 
 ChartJS.register(
@@ -181,7 +182,6 @@ export default function StockReplenishment() {
     })
     return rates
   }, [tyreRecords])
-
   // ── Derived: avg cost from tyre_records per brand+size ────────────────────
   const avgCostMap = useMemo(() => {
     const sums = {}, counts = {}
@@ -376,6 +376,14 @@ export default function StockReplenishment() {
     })
     return { sizes, sites, grid }
   }, [tyreRecords])
+
+  const matrixPager = usePagedRows(filteredMatrix)
+  const consumptionPager = usePagedRows(consumptionMatrix.sizes)
+  const indexedOrderLines = useMemo(
+    () => orderLines.map((line, index) => ({ line, index })),
+    [orderLines],
+  )
+  const orderPager = usePagedRows(indexedOrderLines)
 
   // ── Seasonal variance note ─────────────────────────────────────────────────
   const seasonalNote = useMemo(() => {
@@ -913,7 +921,7 @@ export default function StockReplenishment() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredMatrix.map(row => {
+                      {matrixPager.pageRows.map(row => {
                         const cfg = URGENCY_CONFIG[row.urgency] || URGENCY_CONFIG.Normal
                         const suggestedDisplay = editingQty[row._key] !== undefined
                           ? editingQty[row._key]
@@ -989,6 +997,7 @@ export default function StockReplenishment() {
                       })}
                     </tbody>
                   </table>
+                  <TablePagination {...matrixPager} />
                 </div>
 
                 {/* Urgency legend */}
@@ -1106,7 +1115,7 @@ export default function StockReplenishment() {
                       </tr>
                     </thead>
                     <tbody>
-                      {consumptionMatrix.sizes.map(size => {
+                      {consumptionPager.pageRows.map(size => {
                         const rowTotal = consumptionMatrix.sites.reduce(
                           (s, site) => s + (consumptionMatrix.grid[`${size}||${site}`] || 0), 0
                         )
@@ -1135,6 +1144,7 @@ export default function StockReplenishment() {
                       })}
                     </tbody>
                   </table>
+                  <TablePagination {...consumptionPager} />
                 </div>
               )}
             </div>
@@ -1223,7 +1233,7 @@ export default function StockReplenishment() {
                         </tr>
                       </thead>
                       <tbody>
-                        {orderLines.map((line, idx) => (
+                        {orderPager.pageRows.map(({ line, index: idx }) => (
                           <tr key={line._key} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/30 transition-colors">
                             <td className="px-4 py-2">
                               <input
@@ -1293,6 +1303,7 @@ export default function StockReplenishment() {
                         ))}
                       </tbody>
                     </table>
+                    <TablePagination {...orderPager} />
                   </div>
 
                   {/* Total row */}

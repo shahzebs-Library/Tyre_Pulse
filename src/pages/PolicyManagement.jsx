@@ -13,6 +13,7 @@
  * CRUD, Excel/PDF export, and full loading / error+Retry / empty states.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   ArcElement, Tooltip, Legend,
@@ -403,6 +404,7 @@ export default function PolicyManagement() {
   // -- export --
   const EXPORT_COLS = ['title', 'category', 'version', 'owner', 'status', 'expiry', 'effective_date', 'review_date', 'premium']
   const EXPORT_HEADERS = ['Title', 'Coverage type', 'Version', 'Owner', 'Status', 'Renewal', 'Effective', 'Renewal date', 'Premium']
+  const policiesPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => {
     const prem = policyPremium(r)
     return {
@@ -581,7 +583,7 @@ export default function PolicyManagement() {
                   )}
                 </td></tr>
               ) : (
-                filtered.map((r) => {
+                policiesPager.pageRows.map((r) => {
                   const e = policyExpiry(r, now)
                   return (
                     <tr key={r.id} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40 ${e.expired ? 'bg-red-900/10' : e.expiringSoon ? 'bg-amber-900/10' : ''}`}>
@@ -611,6 +613,7 @@ export default function PolicyManagement() {
               )}
             </tbody>
           </table>
+          <TablePagination {...policiesPager} />
         </div>
       </div>
 

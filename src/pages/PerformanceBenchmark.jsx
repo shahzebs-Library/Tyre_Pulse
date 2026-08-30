@@ -23,6 +23,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { computeAllKpis, computeCpkByBrand } from '../lib/kpiEngine'
 import { loadAutoTable } from '../lib/pdfEngine'
 
@@ -263,6 +264,7 @@ export default function PerformanceBenchmark() {
       }))
       .sort((a, b) => a.avgCpk - b.avgCpk)
   }, [filtered])
+  const brandsPager = usePagedRows(brandBench)
 
   // ── Radar chart ───────────────────────────────────────────────────────────
   const radarData = useMemo(() => {
@@ -608,7 +610,7 @@ export default function PerformanceBenchmark() {
                       </tr>
                     </thead>
                     <tbody>
-                      {brandBench.map((b, i) => (
+                      {brandsPager.pageRows.map((b, i) => (
                         <tr key={b.brand} className="border-b border-gray-800 hover:bg-gray-800/50">
                           <td className="px-4 py-2.5">
                             {i === 0 ? <Award size={16} className="text-yellow-400" /> :
@@ -628,6 +630,7 @@ export default function PerformanceBenchmark() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePagination {...brandsPager} />
                 </div>
               </div>
             </div>

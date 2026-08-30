@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { ShieldCheck, Plus, Trash2, RefreshCcw, Play, AlertTriangle } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import {
   listApprovalRules, createApprovalRule, updateApprovalRule,
@@ -135,14 +136,15 @@ export default function ApprovalMatrix() {
     } catch (e) { setMsg(toUserMessage(e, 'Could not run the preview.')) }
   }
 
+  const rulesPager = usePagedRows(rules)
   const grouped = useMemo(() => {
     const by = {}
-    for (const r of rules) (by[r.entity_type] ||= []).push(r)
+    for (const r of rulesPager.pageRows) (by[r.entity_type] ||= []).push(r)
     for (const k of Object.keys(by)) {
       by[k].sort((a, b) => (a.level || 1) - (b.level || 1) || specificity(b) - specificity(a))
     }
     return by
-  }, [rules])
+  }, [rulesPager.pageRows])
 
   // A rule with nothing pinned catches everything; without one, a submission
   // that matches no rule has no approver at all - worth saying out loud.
@@ -247,7 +249,8 @@ export default function ApprovalMatrix() {
           <p className="text-sm text-[var(--text-muted)]">
             No rules yet. Until one exists, approvals follow whatever the app did before.
           </p>
-        ) : Object.entries(grouped).map(([type, list]) => (
+        ) : <>
+          {Object.entries(grouped).map(([type, list]) => (
           <div key={type} className="mb-5 last:mb-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">{entityLabel(type)}</p>
             <div className="overflow-x-auto">
@@ -290,7 +293,9 @@ export default function ApprovalMatrix() {
               </table>
             </div>
           </div>
-        ))}
+          ))}
+          <TablePagination {...rulesPager} />
+        </>}
       </div>
 
       {/* ── Preview: ask the server who would sign ─────────────────────────── */}

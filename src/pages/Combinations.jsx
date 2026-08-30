@@ -21,6 +21,7 @@ import {
   DollarSign, Recycle, CircleDot, CheckCircle2, XCircle, Info, Activity, Layers,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listCombinations, createCombination, updateCombination, deleteCombination,
@@ -113,6 +114,7 @@ export default function Combinations() {
 
   const clearFilters = () => { setStatusFilter('all'); setSiteFilter(''); setSearch('') }
   const hasFilters = statusFilter !== 'all' || siteFilter || search
+  const registryPager = usePagedRows(filtered)
 
   // ── Selected combination + rollup (Unit intelligence) ───────────────────────
   const selectedCombo = useMemo(
@@ -315,6 +317,7 @@ export default function Combinations() {
           search={search} setSearch={setSearch}
           siteOptions={siteOptions} hasFilters={hasFilters} clearFilters={clearFilters}
           openEdit={openEdit} setConfirmDelete={setConfirmDelete}
+          registryPager={registryPager}
         />
       ) : (
         <IntelligenceTab
@@ -413,6 +416,7 @@ export default function Combinations() {
 function RegistryTab({
   rows, filtered, summary, kpis, statusFilter, setStatusFilter, siteFilter, setSiteFilter,
   search, setSearch, siteOptions, hasFilters, clearFilters, openEdit, setConfirmDelete,
+  registryPager,
 }) {
   return (
     <>
@@ -470,7 +474,7 @@ function RegistryTab({
                   {rows.length === 0 ? 'No combinations yet — create your first prime-mover ↔ trailer link.' : 'No combinations match these filters.'}
                 </td></tr>
               ) : (
-                filtered.map((r) => {
+                registryPager.pageRows.map((r) => {
                   const trailers = parseTrailerList(r.trailer_nos)
                   return (
                     <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
@@ -500,6 +504,7 @@ function RegistryTab({
             </tbody>
           </table>
         </div>
+        <TablePagination {...registryPager} />
       </div>
     </>
   )

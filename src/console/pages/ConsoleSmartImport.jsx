@@ -98,7 +98,7 @@ export default function ConsoleSmartImport() {
   const [progress, setProgress] = useState(null)
 
   const sheet = parsed?.sheets?.[sheetIdx] || null
-  const fields = module ? (MODULE_FIELDS[module] || []) : []
+  const fields = useMemo(() => (module ? (MODULE_FIELDS[module] || []) : []), [module])
 
   // Re-run auto-mapping whenever the chosen sheet or module changes.
   const remap = useCallback((sh, mod) => {

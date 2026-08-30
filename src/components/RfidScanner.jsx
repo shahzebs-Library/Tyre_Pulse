@@ -172,7 +172,7 @@ export default function RfidScanner({ onClose, onResult }) {
   useEffect(() => {
     if (mode === 'camera') startCamera()
     return stopCamera
-  }, [mode])
+  }, [mode, startCamera, stopCamera])
 
   useEffect(() => () => stopCamera(), [stopCamera])
 

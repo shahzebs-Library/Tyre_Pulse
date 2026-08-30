@@ -242,6 +242,13 @@ export async function detectAlerts(supabase, country = null, { badgeOnly = false
     ), { max: 2000 }),
   ])
 
+  // An alert engine must never translate an unavailable safety source into
+  // "all clear". Propagate the first source failure so every caller can show a
+  // recoverable unavailable state instead of a false zero-alert conclusion.
+  const sourceError = [stockRes, budgetRes, actionsRes, tyreRes, inspRes, fullTyreRes]
+    .find((result) => result?.error)?.error
+  if (sourceError) throw sourceError
+
   const stockRecords = rowsOf(stockRes)
   const budgets      = rowsOf(budgetRes)
   const openActions  = rowsOf(actionsRes)

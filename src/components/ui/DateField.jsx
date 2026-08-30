@@ -106,7 +106,7 @@ export default function DateField({
     setView({ y: base.y, m: base.m })
     setFocusDay(base.d)
     reposition()
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, selected, today, reposition])
 
   // Keep the popover glued to the trigger on scroll / resize while open.
   useEffect(() => {

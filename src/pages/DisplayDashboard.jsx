@@ -79,6 +79,7 @@ function loadEnabledBoards() {
 const SEVERITY_COLORS = {
   Critical: '#ef4444', High: '#f97316', Medium: '#eab308', Low: '#22c55e', Info: '#38bdf8',
 }
+const ACC_SEV_COLOR = { Major: '#ef4444', Moderate: '#f97316', Minor: '#eab308' }
 
 // Force-dark theme tokens so shared components (Gauge/StatTile read CSS vars)
 // render correctly on this page even when the app is in light mode.
@@ -611,7 +612,6 @@ export default function DisplayDashboard() {
   // ── Chart data (ECharts) derived from the same slices, so a wall display gets
   //    a report-grade visual view alongside the number tiles. All honest: empty
   //    arrays yield an empty state, never a fabricated chart.
-  const ACC_SEV_COLOR = { Major: '#ef4444', Moderate: '#f97316', Minor: '#eab308' }
   const accSeverityItems = useMemo(() => (
     countBy(incidents.rows, (a) => canonSeverity(a.severity) || 'Unclassified')
       .map((it) => ({ ...it, color: ACC_SEV_COLOR[it.label] || '#64748b' }))

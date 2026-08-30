@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react'
+import { Search, X, RotateCcw } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useLanguage } from '../../contexts/LanguageContext'
 
@@ -19,6 +19,9 @@ export default function FilterBar({
   selects = [],
   children,
   className,
+  searchLabel,
+  resultCount,
+  onClearAll,
 }) {
   const { t } = useLanguage()
   const searchPlaceholder = placeholder ?? t('ui.filterBar.searchPlaceholder')
@@ -38,6 +41,7 @@ export default function FilterBar({
             value={search}
             onChange={e => onSearch(e.target.value)}
             placeholder={searchPlaceholder}
+            aria-label={searchLabel || searchPlaceholder}
             className={cn(
               'w-full pl-8 pr-8 py-2 rounded-xl text-sm',
               'bg-surface-2 border border-[var(--border-dim)] text-white placeholder-muted',
@@ -47,7 +51,9 @@ export default function FilterBar({
           />
           {search && (
             <button
+              type="button"
               onClick={() => onSearch('')}
+              aria-label={t('common.clearSearch') || 'Clear search'}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors"
             >
               <X className="w-3.5 h-3.5" />
@@ -59,7 +65,9 @@ export default function FilterBar({
       {/* Selects */}
       {selects.map((s, i) => (
         <select
-          key={i}
+          key={s.key || s.name || s.placeholder || i}
+          name={s.name}
+          aria-label={s.ariaLabel || s.placeholder || t('common.filter') || 'Filter'}
           value={s.value}
           onChange={e => s.onChange(e.target.value)}
           className={cn(
@@ -76,6 +84,22 @@ export default function FilterBar({
           ))}
         </select>
       ))}
+
+      {resultCount != null && (
+        <span className="text-xs text-muted px-1" role="status" aria-live="polite">
+          {Number(resultCount).toLocaleString()} {Number(resultCount) === 1 ? 'result' : 'results'}
+        </span>
+      )}
+
+      {onClearAll && (
+        <button
+          type="button"
+          onClick={onClearAll}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-muted hover:text-white border border-[var(--border-dim)]"
+        >
+          <RotateCcw className="w-3.5 h-3.5" /> Clear all
+        </button>
+      )}
 
       {/* Extra */}
       {children}

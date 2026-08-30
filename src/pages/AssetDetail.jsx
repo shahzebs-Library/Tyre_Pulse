@@ -33,6 +33,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
 import LoadingState from '../components/LoadingState'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import EmptyState from '../components/EmptyState'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import TyreBay from '../components/TyreBay'
@@ -495,6 +496,11 @@ export default function AssetDetail() {
     }
     return [...byCountry.values()].sort((a, b) => a.country.localeCompare(b.country))
   }, [masterRow, ownership])
+  const countryPager = usePagedRows(crossCountryRows)
+  const workOrderPager = usePagedRows(workOrders)
+  const inspectionPager = usePagedRows(inspections)
+  const servicePager = usePagedRows(pmServices)
+  const accidentPager = usePagedRows(accidents)
 
   const activeTyres = useMemo(() => tyres.filter(t => !t.km_at_removal), [tyres])
   // Total lifetime tyre cost: authoritative expense-grid amount for this asset
@@ -831,7 +837,7 @@ export default function AssetDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {crossCountryRows.map((r, i) => (
+                  {countryPager.pageRows.map((r, i) => (
                     <tr key={r.country ?? i} className="border-b border-[var(--border-dim)]">
                       <td className="px-3 py-2 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.country || 'N/A'}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
@@ -864,6 +870,7 @@ export default function AssetDetail() {
                   ))}
                 </tbody>
               </table>
+              <TablePagination {...countryPager} />
             </div>
 
             {crossCountryRows.length > 1 && (
@@ -888,7 +895,11 @@ export default function AssetDetail() {
           ))}
         </div>
 
-        <AnimatePresence mode="wait">
+        {/* Tab content must switch immediately. `mode="wait"` made the next
+            panel depend on an exit-animation completion event; under reduced
+            motion, background tabs, and test DOMs that event is not guaranteed
+            to arrive promptly, leaving the selected tab with stale content. */}
+        <AnimatePresence initial={false} mode="sync">
           {/* ── Overview ──────────────────────────────────────────────────────── */}
           {tab === 'overview' && (
             <motion.div key="overview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1038,7 +1049,7 @@ export default function AssetDetail() {
                 </div>
                 {workOrders.length ? (
                   <div className="divide-y divide-[var(--border-bright)]">
-                    {workOrders.slice(0, 20).map((wo, i) => (
+                    {workOrderPager.pageRows.map((wo, i) => (
                       <div key={wo.id ?? i} className="px-4 py-3 flex items-center justify-between">
                         <div>
                           <p className="text-sm text-[var(--text-secondary)]">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
@@ -1058,6 +1069,7 @@ export default function AssetDetail() {
                 ) : (
                   <div className="p-6 text-center text-[var(--text-muted)] text-sm">{t('assetmgmt.detail.noWorkOrders')}</div>
                 )}
+                <TablePagination {...workOrderPager} />
               </div>
             </motion.div>
           )}
@@ -1084,7 +1096,7 @@ export default function AssetDetail() {
                         </tr>
                       </thead>
                       <tbody>
-                        {inspections.map((ins, i) => {
+                        {inspectionPager.pageRows.map((ins, i) => {
                           const sev = String(ins.severity ?? '').toLowerCase()
                           const sevColor = sev === 'critical' || sev === 'high' ? 'text-red-400'
                             : sev === 'medium' ? 'text-yellow-400' : sev ? 'text-green-400' : 'text-[var(--text-dim)]'
@@ -1106,6 +1118,7 @@ export default function AssetDetail() {
                 ) : (
                   <div className="p-6 text-center text-[var(--text-muted)] text-sm">No inspections recorded for this asset.</div>
                 )}
+                <TablePagination {...inspectionPager} />
               </div>
             </motion.div>
           )}
@@ -1181,7 +1194,7 @@ export default function AssetDetail() {
                         </tr>
                       </thead>
                       <tbody>
-                        {pmServices.map((sv, i) => {
+                        {servicePager.pageRows.map((sv, i) => {
                           const outcome = String(sv.outcome ?? '').toLowerCase()
                           const outcomeColor = outcome === 'completed' ? 'text-green-400'
                             : outcome === 'deferred' ? 'text-yellow-400'
@@ -1203,6 +1216,7 @@ export default function AssetDetail() {
                 ) : (
                   <div className="p-6 text-center text-[var(--text-muted)] text-sm">No preventive maintenance service history for this asset.</div>
                 )}
+                <TablePagination {...servicePager} />
               </div>
             </motion.div>
           )}
@@ -1229,7 +1243,7 @@ export default function AssetDetail() {
                         </tr>
                       </thead>
                       <tbody>
-                        {accidents.map((ac, i) => {
+                        {accidentPager.pageRows.map((ac, i) => {
                           const sev = String(ac.severity ?? '').toLowerCase()
                           const sevColor = sev === 'critical' || sev === 'major' || sev === 'high' ? 'text-red-400'
                             : sev === 'moderate' || sev === 'medium' ? 'text-yellow-400' : sev ? 'text-green-400' : 'text-[var(--text-dim)]'
@@ -1253,6 +1267,7 @@ export default function AssetDetail() {
                 ) : (
                   <div className="p-6 text-center text-[var(--text-muted)] text-sm">No incidents recorded for this asset.</div>
                 )}
+                <TablePagination {...accidentPager} />
               </div>
             </motion.div>
           )}

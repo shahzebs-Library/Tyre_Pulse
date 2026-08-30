@@ -55,7 +55,7 @@ function DeltaBadge({ delta, pct }) {
 }
 
 export default function CpkScenarioPanel({ perVehicle = [], loading = false }) {
-  const rows = Array.isArray(perVehicle) ? perVehicle : []
+  const rows = useMemo(() => (Array.isArray(perVehicle) ? perVehicle : []), [perVehicle])
 
   const [excludedAssets, setExcludedAssets] = useState(() => new Set())
   const [excludedTypes, setExcludedTypes] = useState(() => new Set())

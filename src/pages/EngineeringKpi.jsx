@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import DateField from '../components/ui/DateField'
 import ExplainThisNumber from '../components/trust/ExplainThisNumber'
 import YearlyTrendPanel from '../components/expense/YearlyTrendPanel'
@@ -362,7 +363,7 @@ export default function EngineeringKpi() {
         borderRadius: 3,
       }],
     }
-  }, [kpis])
+  }, [kpis, activeCurrency])
 
   // Monthly cost trend chart (13 months)
   const costTrendChart = useMemo(() => {
@@ -409,7 +410,7 @@ export default function EngineeringKpi() {
       })
     }
     return { labels: axis, datasets }
-  }, [kpis])
+  }, [kpis, activeCurrency])
 
   // Failure rate by site chart
   const failureBySiteChart = useMemo(() => {
@@ -513,6 +514,7 @@ export default function EngineeringKpi() {
       count: b.count,
     }))
   }, [kpis])
+  const brandsPager = usePagedRows(brandScorecard)
 
   // ── Export handlers ─────────────────────────────────────────────────────────
   function handleExcelExport() {
@@ -1286,7 +1288,8 @@ export default function EngineeringKpi() {
               {brandScorecard.length === 0 ? (
                 <p className="text-gray-500 text-sm py-8 text-center">No brand data available</p>
               ) : (
-                <table className="w-full text-xs">
+                <>
+                  <table className="w-full text-xs">
                   <thead>
                     <tr className="text-left border-b border-gray-800">
                       <th className="table-header pb-2 pr-2 text-center">#</th>
@@ -1299,7 +1302,7 @@ export default function EngineeringKpi() {
                     </tr>
                   </thead>
                   <tbody>
-                    {brandScorecard.map((b, i) => {
+                    {brandsPager.pageRows.map((b, i) => {
                       const total = brandScorecard.length
                       const isTop = i < Math.ceil(total * 0.3)
                       const isBot = i >= total - Math.floor(total * 0.3)
@@ -1341,7 +1344,9 @@ export default function EngineeringKpi() {
                       )
                     })}
                   </tbody>
-                </table>
+                  </table>
+                  <TablePagination {...brandsPager} />
+                </>
               )}
             </div>
           </div>

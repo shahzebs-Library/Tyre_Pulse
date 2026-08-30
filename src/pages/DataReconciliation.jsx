@@ -1,9 +1,13 @@
-import { useEffect, useState, useCallback, Fragment } from 'react'
+import { useEffect, useState, useCallback, Fragment, useMemo } from 'react'
 import * as api from '../lib/api'
 import { toUserMessage } from '../lib/safeError'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { SkeletonTable } from '../components/ui/Skeleton'
+import FilterBar from '../components/ui/FilterBar'
+import DateField from '../components/ui/DateField'
+import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
+import { useFilterState } from '../hooks/useFilterState'
 import BrandGapSection from '../components/reconciliation/BrandGapSection'
 import TyreLearningSection from '../components/reconciliation/TyreLearningSection'
 import TyrePriceSection from '../components/reconciliation/TyrePriceSection'
@@ -25,6 +29,7 @@ import {
 // missing function degrades a section to a graceful loading/empty state
 // instead of crashing the route.
 const recon = api.dataReconciliation || {}
+const FILTER_DEFAULTS = { q: '', country: '', from: '', to: '' }
 
 // ─── Toast ──────────────────────────────────────────────────────────────────
 function Toast({ message, type = 'success', onClose }) {
@@ -159,6 +164,7 @@ function ErrorBanner({ message, onRetry }) {
 }
 
 export default function DataReconciliation() {
+  const [filters, setFilter, resetFilters, hasActiveFilters] = useFilterState(FILTER_DEFAULTS)
   const [orphans, setOrphans] = useState({ loading: true, error: null, rows: [] })
   const [dupes, setDupes] = useState({ loading: true, error: null, rows: [] })
   const [conflicts, setConflicts] = useState({ loading: true, error: null, rows: [] })
@@ -299,6 +305,29 @@ export default function DataReconciliation() {
   const movementCount = conflicts.rows.length
   const summaryLoading = orphans.loading || dupes.loading || conflicts.loading
 
+  const countries = useMemo(() => [...new Set(orphans.rows.map((r) => String(pick(r, ['country', 'country_code', 'location'], '')).trim()).filter(Boolean))].sort(), [orphans.rows])
+  const query = filters.q.trim().toLowerCase()
+  const matchesQuery = useCallback((row) => !query || JSON.stringify(row).toLowerCase().includes(query), [query])
+  const filteredOrphans = useMemo(() => orphans.rows.filter((r) => {
+    const country = String(pick(r, ['country', 'country_code', 'location'], ''))
+    return matchesQuery(r) && (!filters.country || country === filters.country)
+  }), [orphans.rows, filters.country, matchesQuery])
+  const filteredDupes = useMemo(() => dupes.rows.filter(matchesQuery), [dupes.rows, matchesQuery])
+  const filteredConflicts = useMemo(() => conflicts.rows.filter((r) => {
+    if (!matchesQuery(r)) return false
+    if (!filters.from && !filters.to) return true
+    let movements = pick(r, ['vehicles', 'movements', 'rows', 'placements'], [])
+    if (!Array.isArray(movements)) movements = []
+    return movements.some((v) => {
+      const date = String(pick(v, ['date', 'fitted_at', 'created_at', 'recorded_at', 'updated_at'], '')).slice(0, 10)
+      return date && (!filters.from || date >= filters.from) && (!filters.to || date <= filters.to)
+    })
+  }), [conflicts.rows, filters.from, filters.to, matchesQuery])
+  const orphanPager = usePagedRows(filteredOrphans)
+  const dupePager = usePagedRows(filteredDupes)
+  const conflictPager = usePagedRows(filteredConflicts)
+  const filteredTotal = filteredOrphans.length + filteredDupes.length + filteredConflicts.length
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
@@ -310,6 +339,23 @@ export default function DataReconciliation() {
         refreshing={refreshing}
         updatedAt={updatedAt}
       />
+
+      <FilterBar
+        search={filters.q}
+        onSearch={(value) => setFilter('q', value)}
+        searchLabel="Search reconciliation issues"
+        placeholder="Search asset, serial, type or status"
+        selects={[{
+          key: 'country', value: filters.country, onChange: (value) => setFilter('country', value),
+          placeholder: 'All countries', ariaLabel: 'Filter orphan assets by country',
+          options: countries.map((value) => ({ value, label: value })),
+        }]}
+        resultCount={filteredTotal}
+        onClearAll={hasActiveFilters ? resetFilters : undefined}
+      >
+        <DateField value={filters.from} onChange={(value) => setFilter('from', value)} placeholder="Movement from" ariaLabel="Filter movements from date" max={filters.to || undefined} />
+        <DateField value={filters.to} onChange={(value) => setFilter('to', value)} placeholder="Movement to" ariaLabel="Filter movements to date" min={filters.from || undefined} />
+      </FilterBar>
 
       {/* Category switcher (presentation only) */}
       <div className="flex flex-wrap gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit">
@@ -377,7 +423,7 @@ export default function DataReconciliation() {
         icon={Building2}
         title="Assets missing from the fleet register"
         subtitle="These asset numbers appear on tyre records but were never entered into the fleet register. Add them to close the gap."
-        badge={orphans.loading ? null : orphanCount}
+        badge={orphans.loading ? null : `${filteredOrphans.length} of ${orphanCount}`}
         headerAction={
           !orphans.loading && !orphans.error && orphanCount > 0 && typeof recon.backfillAllOrphanAssets === 'function' ? (
             <button
@@ -400,7 +446,10 @@ export default function DataReconciliation() {
             description="No tyre records reference an asset that is missing from the fleet register."
             compact
           />
+        ) : filteredOrphans.length === 0 ? (
+          <EmptyState icon={Building2} title="No orphan assets match these filters" description="Clear or change the search, country, or date filters to see other reconciliation issues." compact />
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -413,7 +462,7 @@ export default function DataReconciliation() {
                 </tr>
               </thead>
               <tbody>
-                {orphans.rows.map((r, i) => {
+                {orphanPager.pageRows.map((r, i) => {
                   const key = rowKey(r, i)
                   const assetNo = pick(r, ['asset_no', 'assetNo', 'fleet_number'], 'N/A')
                   const type = pick(r, ['type', 'asset_type', 'vehicle_type', 'category'], 'N/A')
@@ -441,6 +490,8 @@ export default function DataReconciliation() {
               </tbody>
             </table>
           </div>
+          <TablePagination {...orphanPager} />
+          </>
         )}
       </Section>
 
@@ -462,7 +513,7 @@ export default function DataReconciliation() {
         icon={Copy}
         title="Exact duplicates"
         subtitle="Byte-identical tyre rows that can be safely merged. Merging keeps the newest copy and removes only the exact duplicates."
-        badge={dupes.loading ? null : dupeCount}
+        badge={dupes.loading ? null : `${filteredDupes.length} of ${dupeCount}`}
       >
         {dupes.error ? (
           <ErrorBanner message={dupes.error} onRetry={loadDupes} />
@@ -475,7 +526,10 @@ export default function DataReconciliation() {
             description="No byte-identical tyre records exist in the current scope."
             compact
           />
+        ) : filteredDupes.length === 0 ? (
+          <EmptyState icon={Copy} title="No exact duplicates match this search" description="Clear or change the search to see other duplicate records." compact />
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -487,7 +541,7 @@ export default function DataReconciliation() {
                 </tr>
               </thead>
               <tbody>
-                {dupes.rows.map((r, i) => {
+                {dupePager.pageRows.map((r, i) => {
                   const key = rowKey(r, i)
                   const serial = pick(r, ['serial', 'serial_no', 'tyre_serial'], 'N/A')
                   const assetNo = pick(r, ['asset_no', 'assetNo', 'fleet_number'], 'N/A')
@@ -512,6 +566,8 @@ export default function DataReconciliation() {
               </tbody>
             </table>
           </div>
+          <TablePagination {...dupePager} />
+          </>
         )}
       </Section>
 
@@ -520,7 +576,7 @@ export default function DataReconciliation() {
         icon={ArrowLeftRight}
         title="Tyre movement (same serial, different vehicles)"
         subtitle="Normal tyre history, no action needed. These are the same tyre fitted to different vehicles over time, not duplicates."
-        badge={conflicts.loading ? null : movementCount}
+        badge={conflicts.loading ? null : `${filteredConflicts.length} of ${movementCount}`}
         headerAction={
           <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-blue-300 bg-blue-950/40 border border-blue-800/40 rounded-full px-2.5 py-1">
             <Info size={12} /> Informational only
@@ -538,7 +594,10 @@ export default function DataReconciliation() {
             description="No serial currently appears on more than one vehicle."
             compact
           />
+        ) : filteredConflicts.length === 0 ? (
+          <EmptyState icon={ArrowLeftRight} title="No movements match these filters" description="Clear or change the search and movement dates to see other records." compact />
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -549,7 +608,7 @@ export default function DataReconciliation() {
                 </tr>
               </thead>
               <tbody>
-                {conflicts.rows.map((r, i) => {
+                {conflictPager.pageRows.map((r, i) => {
                   const serial = pick(r, ['serial', 'serial_no', 'tyre_serial'], 'N/A')
                   const key = String(pick(r, ['serial', 'serial_no', 'id'], serial) ?? i)
                   let vehicles = pick(r, ['vehicles', 'movements', 'rows', 'placements'], [])
@@ -607,6 +666,8 @@ export default function DataReconciliation() {
               </tbody>
             </table>
           </div>
+          <TablePagination {...conflictPager} />
+          </>
         )}
       </Section>
 

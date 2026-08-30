@@ -276,7 +276,7 @@ export default function ReportCenter() {
             <p className="text-xs text-gray-500">{t('reportcenter.branding.activeBranding')}{orgName ? ` · ${orgName}` : ''} · {t('reportcenter.branding.reportsIdentity')}</p>
           </div>
         </div>
-        <Link to="/users" className="btn-secondary text-xs gap-1.5 self-start sm:self-auto">
+        <Link to="/console/appearance" className="btn-secondary text-xs gap-1.5 self-start sm:self-auto">
           <Palette size={13} /> {t('reportcenter.branding.editBranding')} <ArrowRight size={12} />
         </Link>
       </div>

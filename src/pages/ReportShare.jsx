@@ -31,6 +31,7 @@ import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
 import { normalizeLayout, hasCustomLayout } from '../lib/reportShareLayout'
 import ShareBlockView from '../components/display/ShareBlockView'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 
 // ── Light chart palette (pinned literals so canvases read on white paper) ──────
 const P = {
@@ -1270,6 +1271,7 @@ function CostPerUnitPage({ snapshot }) {
   const m3 = arr(c?.trend?.m3)
   const trendEmpty = !labels.length || !someNonZero(total)
   const byCountry = arr(c?.by_country)
+  const countryPager = usePagedRows(byCountry, { pageSize: 25 })
   // Each country reports in its own currency, so with more than one in scope
   // there is no single total to show - the server returns null rather than a
   // blended figure, and the board shows the countries side by side instead.
@@ -1311,7 +1313,7 @@ function CostPerUnitPage({ snapshot }) {
                 </tr>
               </thead>
               <tbody>
-                {byCountry.map((r) => (
+                {countryPager.pageRows.map((r) => (
                   <tr key={r.country}>
                     <td>{r.country}</td>
                     <td>{money(r.total, r.currency)}</td>
@@ -1323,6 +1325,7 @@ function CostPerUnitPage({ snapshot }) {
                 ))}
               </tbody>
             </table>
+            <TablePagination {...countryPager} />
             {/* Say what the figures rest on, and where they are thin. A rate
                 withheld for a good reason must say so or it reads as broken. */}
             {basisNote && <p className="rs-table-more">{basisNote}</p>}
@@ -1641,8 +1644,8 @@ function StatTile({ label, value, icon: Icon, tone = 'indigo', accent }) {
 function OpsTodayPage({ snapshot }) {
   const ops = snapshot?.ops || {}
   const jobs = arr(ops.open_job_cards)
-  const rows = jobs.slice(0, 12)
-  const extra = Math.max(0, jobs.length - rows.length)
+  const jobsPager = usePagedRows(jobs, { pageSize: 25 })
+  const rows = jobsPager.pageRows
   return (
     <div className="rs-page">
       <div className="rs-stat-strip rs-stat-6">
@@ -1692,7 +1695,7 @@ function OpsTodayPage({ snapshot }) {
                 ))}
               </tbody>
             </table>
-            {extra > 0 && <p className="rs-table-more">Plus {fmtInt(extra)} more open job cards</p>}
+            <TablePagination {...jobsPager} />
           </div>
         )}
       </section>
@@ -1704,8 +1707,8 @@ function OpsTodayPage({ snapshot }) {
 function PmDuePage({ snapshot }) {
   const ops = snapshot?.ops || {}
   const list = arr(ops.pm_due_list)
-  const rows = list.slice(0, 12)
-  const extra = Math.max(0, list.length - rows.length)
+  const plansPager = usePagedRows(list, { pageSize: 25 })
+  const rows = plansPager.pageRows
   return (
     <div className="rs-page">
       <div className="rs-stat-strip rs-stat-2">
@@ -1756,7 +1759,7 @@ function PmDuePage({ snapshot }) {
                 })}
               </tbody>
             </table>
-            {extra > 0 && <p className="rs-table-more">Plus {fmtInt(extra)} more plans due</p>}
+            <TablePagination {...plansPager} />
           </div>
         )}
       </section>

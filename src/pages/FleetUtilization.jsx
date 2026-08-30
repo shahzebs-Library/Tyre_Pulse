@@ -9,6 +9,7 @@
  * engine; `src/lib/api/assetUtilization.js` is the only Supabase seam.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   Tooltip, Legend,
@@ -110,6 +111,7 @@ export default function FleetUtilization() {
       return dir * (av - bv)
     })
   }, [filtered, sortKey, sortDir])
+  const utilizationPager = usePagedRows(sorted)
 
   const kpis = useMemo(() => summarizeUtilization(filtered), [filtered])
   const bands = useMemo(() => bandDistribution(filtered), [filtered])
@@ -254,7 +256,7 @@ export default function FleetUtilization() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((r) => (
+                {utilizationPager.pageRows.map((r) => (
                   <tr key={r.id} className="border-t border-white/5 hover:bg-white/5">
                     <td className="px-3 py-2">
                       <div className="font-medium text-slate-100">{r.asset_no}</div>
@@ -279,6 +281,7 @@ export default function FleetUtilization() {
                 ))}
               </tbody>
             </table>
+            <TablePagination {...utilizationPager} />
           </div>
         )}
       </div>

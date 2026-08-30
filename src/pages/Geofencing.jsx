@@ -10,6 +10,7 @@
  * the page renders an actionable "apply the migration" empty state.
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   MapPin, Plus, Search, X, Filter, FileSpreadsheet, FileText, AlertTriangle,
   Pencil, Trash2, Loader2, Layers, CheckCircle2, Ban, Globe2,
@@ -274,6 +275,7 @@ export default function Geofencing() {
   // ── Export ──────────────────────────────────────────────────────────────────
   const EXPORT_COLS = ['name', 'zone_type', 'site', 'center_lat', 'center_lng', 'radius_m', 'area_km2', 'active']
   const EXPORT_HEADERS = ['Name', 'Type', 'Site', 'Latitude', 'Longitude', 'Radius (m)', 'Area (km2)', 'Active']
+  const zonesPager = usePagedRows(filtered)
   const exportRows = filtered.map((r) => {
     const area = zoneAreaKm2(r.radius_m)
     return {
@@ -545,7 +547,7 @@ export default function Geofencing() {
                   )}
                 </td></tr>
               ) : (
-                filtered.map((r) => (
+                zonesPager.pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                     <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">{r.name || 'N/A'}{r.notes ? <span className="block text-xs text-[var(--text-muted)] font-normal truncate max-w-[240px]">{r.notes}</span> : null}</td>
                     <td className="px-4 py-2.5"><span className={`badge text-[11px] px-2 py-0.5 rounded ${TYPE_BADGE[r.zone_type] || TYPE_BADGE.custom}`}>{ZONE_TYPE_META[r.zone_type]?.label || r.zone_type}</span></td>
@@ -564,6 +566,7 @@ export default function Geofencing() {
               )}
             </tbody>
           </table>
+          <TablePagination {...zonesPager} />
         </div>
       </div>
 

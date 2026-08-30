@@ -322,8 +322,8 @@ export default function Equipment() {
 
   useEffect(() => { load() }, [load])
 
-  // Freeze "now" per data load so summaries stay stable between renders.
-  const now = useMemo(() => Date.now(), [rows])
+  // Freeze "now" per successful data load so summaries stay stable between renders.
+  const now = updatedAt?.getTime() ?? 0
   const summary = useMemo(() => summarizeEquipment(rows || [], now), [rows, now])
   const analytics = useMemo(() => equipmentAnalytics(rows || [], now), [rows, now])
   const attention = useMemo(() => equipmentAttention(rows || [], now), [rows, now])

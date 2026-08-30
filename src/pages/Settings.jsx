@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as settingsApi from '../lib/api/settings'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,15 +8,23 @@ import AppearancePanel from '../components/settings/AppearancePanel'
 import MySignaturePanel from '../components/settings/MySignaturePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
+import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Phone, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { sendReportEmail } from '../lib/emailService'
 import TwoFactorSetup from '../components/TwoFactorSetup'
 import * as notifPrefsApi from '../lib/api/notificationPreferences'
 import * as accountDeletionApi from '../lib/api/accountDeletion'
 import { DEFAULT_PREFS, DIGEST_FREQUENCIES, PRIORITY_ORDER, summarisePrefs } from '../lib/notificationPrefs'
 import { toUserMessage } from '../lib/safeError'
+import {
+  getRecoveryContacts,
+  recoveryDestinationIsValid,
+  removeRecoveryContact,
+  requestRecoveryContactVerification,
+  verifyRecoveryContact,
+} from '../lib/accountRecovery'
 
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
@@ -88,6 +96,13 @@ const EMPTY_SCHEDULE = {
   time: '06:00',
   recipients: '',
   active: true,
+}
+
+const DOW_TO_NUM = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 }
+const NUM_TO_DOW = Object.fromEntries(Object.entries(DOW_TO_NUM).map(([key, value]) => [value, key]))
+const NAME_TO_TYPE = {
+  'Fleet Summary': 'fleet', 'KPI Report': 'kpi', 'Vendor Intelligence': 'cost',
+  'Executive Report': 'executive', 'Forecasting': 'kpi', 'Work Orders Summary': 'cost',
 }
 
 function getScheduleLabel(schedule) {
@@ -168,6 +183,7 @@ export default function Settings() {
   // Scheduled Reports page and the pg_cron delivery function use), so
   // schedules made here actually send and are visible to the whole team.
   const [schedules, setSchedules] = useState([])
+  const schedulesPager = usePagedRows(schedules, { pageSize: 25 })
   const [scheduleError, setScheduleError] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [newSchedule, setNewSchedule] = useState({ ...EMPTY_SCHEDULE })
@@ -194,7 +210,6 @@ export default function Settings() {
   const [mfaMsg, setMfaMsg]                     = useState('')
   const [confirmRemoveMfa, setConfirmRemoveMfa] = useState(false)
 
-  useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds(); loadSchedules(); loadNotifPrefs() }, [])
   useEffect(() => { setAppSettings(s => ({ ...s, ...globalSettings })) }, [globalSettings])
   useEffect(() => {
     if (profile) setProfileForm({ full_name: profile.full_name ?? '', username: profile.username ?? '' })
@@ -223,7 +238,7 @@ export default function Settings() {
     setUploadHistory(data ?? [])
   }
 
-  async function loadKpiTargets() {
+  const loadKpiTargets = useCallback(async () => {
     const { data } = await settingsApi.listKpiTargetsByYear(currentYear)
     if (data && data.length > 0) {
       const mapped = { ...KPI_DEFAULTS }
@@ -235,7 +250,7 @@ export default function Settings() {
       setKpiTargets(mapped)
       setDraftKpiTargets(mapped)
     }
-  }
+  }, [currentYear])
 
   async function loadAlertThresholds() {
     const { data } = await settingsApi.getAlertThresholds()
@@ -391,13 +406,7 @@ export default function Settings() {
   }
 
   // report_schedules row ⇄ this section's UI shape
-  const DOW_TO_NUM = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 }
-  const NUM_TO_DOW = Object.fromEntries(Object.entries(DOW_TO_NUM).map(([k, v]) => [v, k]))
-  const NAME_TO_TYPE = {
-    'Fleet Summary': 'fleet', 'KPI Report': 'kpi', 'Vendor Intelligence': 'cost',
-    'Executive Report': 'executive', 'Forecasting': 'kpi', 'Work Orders Summary': 'cost',
-  }
-  const rowToUi = (r) => ({
+  const rowToUi = useCallback((r) => ({
     id: r.id,
     reportName: r.name,
     frequency: (r.frequency || 'daily').replace(/^./, (c) => c.toUpperCase()),
@@ -406,13 +415,22 @@ export default function Settings() {
     time: r.time_of_day || '06:00',
     recipients: (r.recipients || []).join(', '),
     active: r.active !== false,
-  })
+  }), [])
 
-  async function loadSchedules() {
+  const loadSchedules = useCallback(async () => {
     const { data, error } = await settingsApi.listReportSchedules()
     if (error) { setScheduleError(toUserMessage(error, 'Could not load schedules. Please try again.')); return }
     setSchedules((data || []).map(rowToUi))
-  }
+  }, [rowToUi])
+
+  useEffect(() => {
+    loadSettings()
+    loadUploadHistory()
+    loadKpiTargets()
+    loadAlertThresholds()
+    loadSchedules()
+    loadNotifPrefs()
+  }, [loadKpiTargets, loadSchedules])
 
   async function addSchedule() {
     if (!newSchedule.recipients.trim()) return
@@ -630,6 +648,9 @@ export default function Settings() {
             </div>
           </form>
         </div>
+
+        {/* 2FA */}
+        <RecoveryContactsCard />
 
         {/* 2FA */}
         <TwoFactorCard
@@ -1304,7 +1325,7 @@ export default function Settings() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-dim)]">
-                {schedules.map(schedule => (
+                {schedulesPager.pageRows.map(schedule => (
                   <tr key={schedule.id} className="hover:bg-[var(--surface-2)] transition-colors group">
                     <td className="py-3 px-3">
                       <span className="text-[var(--text-primary)] font-medium">{schedule.reportName}</span>
@@ -1371,9 +1392,12 @@ export default function Settings() {
                 ))}
               </tbody>
             </table>
+            <TablePagination {...schedulesPager} />
           </div>
         )}
       </div>
+
+      <RecoveryContactsCard />
 
       {/* Two-Factor Authentication */}
       <TwoFactorCard
@@ -1408,6 +1432,125 @@ export default function Settings() {
 }
 
 /* ── Shared 2FA card ──────────────────────────────────────────────────────── */
+function maskRecoveryContact(channel, value) {
+  if (!value) return 'Not configured'
+  if (channel === 'email') {
+    const [local, domain] = value.split('@')
+    return `${local?.slice(0, 2) || '*'}***@${domain || '***'}`
+  }
+  return `${value.slice(0, Math.min(4, value.length))}••••${value.slice(-3)}`
+}
+
+function RecoveryContactsCard() {
+  const [contacts, setContacts] = useState({})
+  const [drafts, setDrafts] = useState({ email: '', sms: '' })
+  const [challenges, setChallenges] = useState({})
+  const [codes, setCodes] = useState({ email: '', sms: '' })
+  const [busy, setBusy] = useState('')
+  const [message, setMessage] = useState('')
+
+  const refresh = useCallback(() => {
+    getRecoveryContacts().then(setContacts).catch(() => setContacts({}))
+  }, [])
+  useEffect(refresh, [refresh])
+
+  async function requestCode(channel) {
+    setMessage('')
+    if (!recoveryDestinationIsValid(channel, drafts[channel])) {
+      setMessage(channel === 'email' ? 'Enter a valid email address.' : 'Use international format, for example +966501234567.')
+      return
+    }
+    setBusy(channel)
+    try {
+      const result = await requestRecoveryContactVerification({ channel, destination: drafts[channel] })
+      setChallenges(previous => ({ ...previous, [channel]: result.challengeId }))
+      setMessage(`A 6-digit code was sent by ${channel === 'email' ? 'email' : 'SMS'}. It expires in 10 minutes.`)
+    } catch (error) {
+      setMessage(toUserMessage(error, 'Could not send the verification code.'))
+    } finally { setBusy('') }
+  }
+
+  async function verifyCode(channel) {
+    setBusy(channel); setMessage('')
+    try {
+      await verifyRecoveryContact({ channel, destination: drafts[channel], challengeId: challenges[channel], code: codes[channel] })
+      setChallenges(previous => ({ ...previous, [channel]: '' }))
+      setCodes(previous => ({ ...previous, [channel]: '' }))
+      setDrafts(previous => ({ ...previous, [channel]: '' }))
+      setMessage(`${channel === 'email' ? 'Email' : 'Mobile number'} verified and ready for password recovery.`)
+      refresh()
+    } catch (error) {
+      setMessage(toUserMessage(error, 'The code is invalid or expired.'))
+    } finally { setBusy('') }
+  }
+
+  async function remove(channel) {
+    setBusy(channel); setMessage('')
+    try {
+      await removeRecoveryContact(channel)
+      setMessage(`${channel === 'email' ? 'Email' : 'Mobile number'} removed from password recovery.`)
+      refresh()
+    } catch (error) {
+      setMessage(toUserMessage(error, 'Could not remove the recovery contact.'))
+    } finally { setBusy('') }
+  }
+
+  return (
+    <div className="card space-y-4">
+      <div>
+        <h2 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <Lock size={16} className="text-green-400" /> Password recovery
+        </h2>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
+          Verify at least one contact before you need it. Your login email may be a non-routable system address, so only contacts verified here can recover your account.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[
+          { channel: 'email', Icon: Mail, label: 'Recovery email', value: contacts.recovery_email, verified: contacts.recovery_email_verified_at, placeholder: 'you@company.com', type: 'email' },
+          { channel: 'sms', Icon: Phone, label: 'Recovery mobile', value: contacts.recovery_phone, verified: contacts.recovery_phone_verified_at, placeholder: '+966501234567', type: 'tel' },
+        ].map(({ channel, Icon, label, value, verified, placeholder, type }) => (
+          <div key={channel} className="rounded-xl border border-[var(--border-dim)] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2"><Icon size={15}/>{label}</span>
+              <span className={`text-xs ${verified ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>{verified ? 'Verified' : 'Not verified'}</span>
+            </div>
+            {verified ? (
+              <div className="space-y-3">
+                <p className="text-sm text-[var(--text-secondary)]">{maskRecoveryContact(channel, value)}</p>
+                <button type="button" disabled={busy === channel} onClick={() => remove(channel)} className="btn-secondary text-xs text-red-400">Remove</button>
+              </div>
+            ) : challenges[channel] ? (
+              <div className="space-y-2">
+                <label className="label" htmlFor={`settings-recovery-code-${channel}`}>6-digit code</label>
+                <input id={`settings-recovery-code-${channel}`} className="input" inputMode="numeric" autoComplete="one-time-code"
+                  value={codes[channel]} maxLength={6} pattern="[0-9]{6}"
+                  onChange={event => setCodes(previous => ({ ...previous, [channel]: event.target.value.replace(/\D/g, '').slice(0, 6) }))}/>
+                <div className="flex gap-2">
+                  <button type="button" disabled={busy === channel || codes[channel].length !== 6} onClick={() => verifyCode(channel)} className="btn-primary text-xs">Verify</button>
+                  <button type="button" onClick={() => setChallenges(previous => ({ ...previous, [channel]: '' }))} className="btn-secondary text-xs">Change</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="label" htmlFor={`settings-recovery-${channel}`}>{label}</label>
+                <input id={`settings-recovery-${channel}`} className="input" type={type} inputMode={type === 'tel' ? 'tel' : 'email'}
+                  autoComplete={type === 'tel' ? 'tel' : 'email'} placeholder={placeholder} value={drafts[channel]}
+                  onChange={event => setDrafts(previous => ({ ...previous, [channel]: event.target.value }))}/>
+                <button type="button" disabled={busy === channel || !drafts[channel]} onClick={() => requestCode(channel)} className="btn-primary text-xs">
+                  {busy === channel ? 'Sending…' : 'Send verification code'}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {message && <p role="status" className={`text-sm ${/could not|invalid|failed|enter|use international/i.test(message) ? 'text-red-400' : 'text-green-400'}`}>{message}</p>}
+      <p className="text-xs text-amber-300 flex gap-2"><AlertTriangle size={14} className="shrink-0 mt-0.5"/>Keep two methods when possible. Mobile numbers can be recycled; enable two-factor authentication as an additional protection.</p>
+    </div>
+  )
+}
+
 function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemoveMfa, onRemove, removing, msg }) {
   return (
     <div className="card space-y-4">

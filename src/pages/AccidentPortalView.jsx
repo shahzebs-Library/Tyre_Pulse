@@ -53,10 +53,16 @@ export default function AccidentPortalView() {
 
   const load = useCallback(async (pw) => {
     setBusy(true)
-    const { getCasePortalSnapshot } = await import('../lib/api/accidentPortal')
-    const s = await getCasePortalSnapshot(token, pw)
-    setSnap(s)
-    setBusy(false)
+    try {
+      const { getCasePortalSnapshot } = await import('../lib/api/accidentPortal')
+      const s = await getCasePortalSnapshot(token, pw)
+      setSnap(s)
+    } catch {
+      // This public surface must not expose transport, database, or token details.
+      setSnap({ ok: false, reason: 'unavailable' })
+    } finally {
+      setBusy(false)
+    }
   }, [token])
 
   useEffect(() => { load() }, [load])
@@ -102,6 +108,12 @@ export default function AccidentPortalView() {
       <div>
         <h1 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>Case summary unavailable</h1>
         <p style={{ color: '#64748b', fontSize: 13 }}>{REASON_COPY[snap.reason] || REASON_COPY.unavailable}</p>
+        {snap.reason === 'unavailable' && (
+          <button type="button" onClick={() => load(password || undefined)} disabled={busy}
+            style={{ marginTop: 14, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
+            {busy ? 'Trying again...' : 'Try again'}
+          </button>
+        )}
       </div>,
     )
   }

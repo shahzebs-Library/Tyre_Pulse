@@ -18,21 +18,29 @@ import { supabase } from './_client'
 /**
  * Fetch per-size, per-brand price + CPK rows for the value comparison.
  *
- * @param {{ country?:string, from?:string, to?:string }} [opts]
+ * @param {{ country?:string, from?:string, to?:string, strict?:boolean }} [opts]
  *   country: a single country ('KSA'/'UAE'/'Egypt') or 'All'/null for every one.
  *   from/to: ISO YYYY-MM-DD bounds on the tyre's issue/fitment/removal date.
- * @returns {Promise<Array<object>>} raw RPC rows. Always resolves, never rejects.
+ * @returns {Promise<Array<object>>} raw RPC rows. Forgiving by default; strict callers receive failures.
  */
-export async function getBrandSizeCpk({ country, from, to } = {}) {
+export async function getBrandSizeCpk({ country, from, to, strict = false } = {}) {
   try {
     const { data, error } = await supabase.rpc('get_brand_size_cpk', {
       p_country: country && country !== 'All' ? country : null,
       p_from: from || null,
       p_to: to || null,
     })
-    if (error || !Array.isArray(data)) return []
+    if (error) {
+      if (strict) throw error
+      return []
+    }
+    if (!Array.isArray(data)) {
+      if (strict) throw new Error('Brand value returned an invalid response.')
+      return []
+    }
     return data
-  } catch {
+  } catch (error) {
+    if (strict) throw error
     return []
   }
 }

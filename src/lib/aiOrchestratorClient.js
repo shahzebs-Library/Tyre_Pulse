@@ -27,14 +27,26 @@ const MESSAGE_COLS = 'id,role,content,tool_name,created_at'
  * @param {string} opts.message                  the user's message
  * @param {string|null} [opts.conversationId]    existing thread id, or null to start one
  * @param {string} [opts.agent='auto']           'auto'|'analyst'|'tyre_engineer'|'qa_data'|'planner'
- * @returns {Promise<{content:string, conversation_id:string, tool_calls?:Array<object>}>}
+ * @returns {Promise<{content:string, conversation_id:string, tool_calls?:Array<object>, sources?:Array<object>, usage?:object}>}
  */
 export async function sendOrchestratorMessage({ message, conversationId = null, agent = 'auto' } = {}) {
-  return unwrap(
+  const cleanMessage = typeof message === 'string' ? message.trim() : ''
+  if (!cleanMessage) throw new TypeError('A message is required')
+  if (cleanMessage.length > 4000) throw new RangeError('Message must be 4000 characters or fewer')
+
+  const result = unwrap(
     await supabase.functions.invoke('ai-orchestrator', {
-      body: { message, conversation_id: conversationId, agent },
+      body: { message: cleanMessage, conversation_id: conversationId, agent },
     })
   )
+  if (!result?.conversation_id || typeof result?.content !== 'string') {
+    throw new Error('AI orchestrator returned an invalid response')
+  }
+  if (result.sources != null && !Array.isArray(result.sources)) throw new Error('AI orchestrator returned invalid sources')
+  if (result.usage != null && (typeof result.usage !== 'object' || Number(result.usage.estimated_cost_usd) < 0)) {
+    throw new Error('AI orchestrator returned invalid usage telemetry')
+  }
+  return result
 }
 
 /**

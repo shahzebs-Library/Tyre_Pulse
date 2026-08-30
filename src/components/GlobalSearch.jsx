@@ -203,11 +203,11 @@ export default function GlobalSearch({ isOpen, onClose }) {
     return items
   }, [results, navMatches, query])
 
-  function selectItem(item) {
+  const selectItem = useCallback((item) => {
     if (item.type === 'nav') navigate(item.data.route)
     else navigate(item.data.route)
     onClose()
-  }
+  }, [navigate, onClose])
 
   // Keyboard navigation
   useEffect(() => {
@@ -220,7 +220,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [isOpen, flatItems, selected])
+  }, [isOpen, flatItems, selected, onClose, selectItem])
 
   const hasResults = Object.keys(results).some(k => results[k]?.length > 0)
 

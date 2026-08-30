@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, TrendingUp, AlertTriangle, Bell, ArrowRight, X, RefreshCw,
   CheckCircle2, Search, Download, FileText, SlidersHorizontal,
-  ChevronDown, ChevronUp, Eye, EyeOff,
+  ChevronDown, ChevronUp, Eye, EyeOff, AlertCircle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { safeInternalPath } from '../lib/safeUrl'
@@ -17,6 +17,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import Skeleton from '../components/ui/Skeleton'
 import { cn } from '../lib/cn'
+import { toUserMessage } from '../lib/safeError'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
@@ -47,6 +48,7 @@ export default function Alerts() {
 
   const [alerts, setAlerts]     = useState([])
   const [loading, setLoading]   = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [lastRefresh, setLastRefresh] = useState(null)
 
   const [sevFilter, setSevFilter]   = useState('all')
@@ -63,11 +65,18 @@ export default function Alerts() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const country = activeCountry !== 'All' ? activeCountry : null
-    const found   = await detectAlerts(supabase, country)
-    setAlerts(found)
-    setLastRefresh(new Date())
-    setLoading(false)
+    setLoadError('')
+    try {
+      const country = activeCountry !== 'All' ? activeCountry : null
+      const found = await detectAlerts(supabase, country)
+      setAlerts(found)
+      setLastRefresh(new Date())
+    } catch (error) {
+      setAlerts([])
+      setLoadError(toUserMessage(error, 'Could not scan operational alerts.'))
+    } finally {
+      setLoading(false)
+    }
   }, [activeCountry])
 
   useEffect(() => { refresh() }, [refresh])
@@ -305,7 +314,14 @@ export default function Alerts() {
       )}
 
       {/* Alert list */}
-      {loading && active.length === 0 ? (
+      {loadError ? (
+        <div role="alert" className="card py-10 px-6 flex flex-col items-center gap-3 text-center border border-red-700/40">
+          <AlertCircle className="w-8 h-8 text-red-400" />
+          <p className="text-[var(--text-primary)] font-semibold">Alert scan unavailable</p>
+          <p className="text-muted text-sm max-w-md">{loadError} No all-clear conclusion is shown until every safety source can be checked.</p>
+          <button type="button" onClick={refresh} className="btn-secondary text-sm inline-flex items-center gap-1.5"><RefreshCw size={14} /> Retry scan</button>
+        </div>
+      ) : loading && active.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-[76px] w-full rounded-2xl" />

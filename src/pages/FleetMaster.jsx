@@ -156,7 +156,16 @@ export default function FleetMaster() {
 
   // ── tab ──────────────────────────────────────────────────────────────────────
   // ── load ─────────────────────────────────────────────────────────────────────
-  useEffect(() => { loadSites() }, [])
+  const loadSites = useCallback(async () => {
+    try {
+      const siteList = await assets.listSites({ country: activeCountry })
+      setSites(siteList)
+    } catch (e) {
+      console.error(e)
+    }
+  }, [activeCountry])
+
+  useEffect(() => { loadSites() }, [loadSites])
   // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
   // The page reset only fires when the term actually changed, so arriving on a
   // restored URL (`?search=TM&page=3`) keeps its page instead of snapping to 1.
@@ -165,17 +174,6 @@ export default function FleetMaster() {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
     return () => clearTimeout(t)
   }, [search, debouncedSearch, setPage])
-  useEffect(() => { loadRecords() }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
-
-  async function loadSites() {
-    try {
-      const siteList = await assets.listSites({ country: activeCountry })
-      setSites(siteList)
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
   const loadRecords = useCallback(async () => {
     const myReq = ++reqIdRef.current
     setLoading(true)
@@ -201,6 +199,8 @@ export default function FleetMaster() {
       if (myReq === reqIdRef.current) setLoading(false)
     }
   }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
+
+  useEffect(() => { loadRecords() }, [loadRecords])
 
   const totalPages = Math.ceil(total / pageSize)
 

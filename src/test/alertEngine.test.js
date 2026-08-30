@@ -22,12 +22,13 @@ vi.mock('../lib/analyticsEngine', () => ({
 // ─────────────────────────────────────────────────────────────────────────────
 function makeSupabaseMock({
   stockRecords = [],
+  stockError = null,
   budgets = [],
   openActions = [],
   tyreRecords = [],
   inspections = [],
 } = {}) {
-  const makeChain = (resolveData) => {
+  const makeChain = (resolveData, error = null) => {
     const chain = {
       select: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
@@ -42,14 +43,14 @@ function makeSupabaseMock({
       lt:  vi.fn().mockReturnThis(),
       range: vi.fn().mockReturnThis(),
       // Resolve as Promise with { data, error }
-      then: (resolve) => resolve({ data: resolveData, error: null }),
+      then: (resolve) => resolve({ data: resolveData, error }),
     }
     return chain
   }
 
   const supabase = {
     from: vi.fn((table) => {
-      if (table === 'stock_records')     return makeChain(stockRecords)
+      if (table === 'stock_records')     return makeChain(stockRecords, stockError)
       if (table === 'budgets')           return makeChain(budgets)
       if (table === 'corrective_actions') return makeChain(openActions)
       if (table === 'tyre_records')      return makeChain(tyreRecords)
@@ -92,6 +93,13 @@ describe('ALERT_TYPES and SEVERITY constants', () => {
     expect(ALERT_TYPE_LABELS[ALERT_TYPES.OVERDUE_ACTION]).toBe('Action')
     expect(ALERT_TYPE_LABELS[ALERT_TYPES.RISK_SPIKE]).toBe('Risk')
     expect(ALERT_TYPE_LABELS[ALERT_TYPES.INSPECTION_OVERDUE]).toBe('Inspection')
+  })
+})
+
+describe('detectAlerts source integrity', () => {
+  it('rejects a failed safety source instead of returning a false all-clear', async () => {
+    const sourceError = new Error('stock source unavailable')
+    await expect(detectAlerts(makeSupabaseMock({ stockError: sourceError }))).rejects.toBe(sourceError)
   })
 })
 

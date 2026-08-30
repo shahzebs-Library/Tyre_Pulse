@@ -808,7 +808,7 @@ export default function KpiCommandCenter() {
         },
       ],
     }
-  }, [kpiValues, prevKpiValues, BENCHMARKS, t])
+  }, [kpiValues, prevKpiValues, t])
 
   const drillMonthlyData = useMemo(() => {
     if (!drillKpi || !monthlyKpiMatrix.length) return []

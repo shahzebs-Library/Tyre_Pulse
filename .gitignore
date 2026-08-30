@@ -36,6 +36,8 @@ dist/
 .DS_Store
 .claude/
 .playwright-mcp/
+.playwright-auth/
+test-results/
 .idea/
 mobile/expo-start*.log
 .mcp.local.json

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import QRCode from 'qrcode'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -99,17 +99,7 @@ export default function QrLabels() {
     return () => { live = false }
   }, [])
 
-  useEffect(() => {
-    setSelected(new Set())
-    setQrImages({})
-    setSearch('')
-    setFilterSite('all')
-    setTruncated(false)
-    setBulkText(''); setBulkResult(null); setBulkError(null)
-    loadData()
-  }, [mode])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -166,7 +156,17 @@ export default function QrLabels() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [mode])
+
+  useEffect(() => {
+    setSelected(new Set())
+    setQrImages({})
+    setSearch('')
+    setFilterSite('all')
+    setTruncated(false)
+    setBulkText(''); setBulkResult(null); setBulkError(null)
+    loadData()
+  }, [loadData])
 
   const filtered = data.filter(r => {
     const val = mode === 'tyres' ? r.serial_number : r.asset_no

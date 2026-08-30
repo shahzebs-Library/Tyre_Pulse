@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { SkeletonCards } from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import * as sitesApi from '../lib/api/sites'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -27,6 +28,36 @@ import { exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
 const fmt = (n) => (n == null || isNaN(Number(n)) ? '-' : Number(n).toLocaleString('en-US'))
+
+function SiteAssetsTable({ assets, onOpen }) {
+  const pager = usePagedRows(assets, { pageSize: 25 })
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-dim)]">
+            {['Asset No', 'Fleet No', 'Type', 'Current KM', 'Status', ''].map(h => (
+              <th key={h} className="px-5 py-2 text-left font-medium whitespace-nowrap">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {pager.pageRows.map(a => (
+            <tr key={a.id ?? a.asset_no} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+              <td className="px-5 py-2.5 font-mono font-semibold text-blue-300">{a.asset_no}</td>
+              <td className="px-5 py-2.5 text-[var(--text-secondary)]">{a.fleet_number ?? '-'}</td>
+              <td className="px-5 py-2.5 text-[var(--text-secondary)]">{a.vehicle_type ?? '-'}</td>
+              <td className="px-5 py-2.5 text-[var(--text-secondary)]">{a.current_km != null && a.current_km !== '' ? `${fmt(a.current_km)} km` : '-'}</td>
+              <td className="px-5 py-2.5"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.active !== false ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'}`}>{a.active !== false ? 'Active' : 'Inactive'}</span></td>
+              <td className="px-5 py-2.5 text-right"><button onClick={() => onOpen(a)} className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-blue-400" title="View asset"><Eye className="w-4 h-4" /></button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TablePagination {...pager} />
+    </div>
+  )
+}
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, color = 'blue' }) {
@@ -202,6 +233,7 @@ export default function SiteManagement() {
     if (filterActive === 'inactive') list = list.filter(s => !s.active)
     return list
   }, [rollup, search, filterCountry, filterGoverned, filterActive])
+  const sitesPager = usePagedRows(filtered, { pageSize: 25 })
 
   const countryOptions = useMemo(() => [...new Set(rollup.map(s => s.country).filter(Boolean))].sort(), [rollup])
 
@@ -321,7 +353,7 @@ export default function SiteManagement() {
           </div>
         ) : (
           <div className="space-y-3">
-            {filtered.map(s => {
+            {sitesPager.pageRows.map(s => {
               const isOpen = !!expanded[s.name]
               return (
                 <div key={`${s.country}|${s.name}`} className="bg-[var(--surface-1)] rounded-xl border border-[var(--border-dim)] overflow-hidden">
@@ -366,38 +398,7 @@ export default function SiteManagement() {
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden border-t border-[var(--border-dim)]">
                         {s.assets.length ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="text-xs text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-dim)]">
-                                  {['Asset No', 'Fleet No', 'Type', 'Current KM', 'Status', ''].map(h => (
-                                    <th key={h} className="px-5 py-2 text-left font-medium whitespace-nowrap">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {s.assets.map(a => (
-                                  <tr key={a.id ?? a.asset_no} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
-                                    <td className="px-5 py-2.5 font-mono font-semibold text-blue-300">{a.asset_no}</td>
-                                    <td className="px-5 py-2.5 text-[var(--text-secondary)]">{a.fleet_number ?? '-'}</td>
-                                    <td className="px-5 py-2.5 text-[var(--text-secondary)]">{a.vehicle_type ?? '-'}</td>
-                                    <td className="px-5 py-2.5 text-[var(--text-secondary)]">{a.current_km != null && a.current_km !== '' ? `${fmt(a.current_km)} km` : '-'}</td>
-                                    <td className="px-5 py-2.5">
-                                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.active !== false ? 'bg-green-900/50 text-green-300' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'}`}>
-                                        {a.active !== false ? 'Active' : 'Inactive'}
-                                      </span>
-                                    </td>
-                                    <td className="px-5 py-2.5 text-right">
-                                      <button onClick={() => navigate(`/assets/${encodeURIComponent(a.asset_no)}`)}
-                                        className="p-1.5 rounded-lg hover:bg-[var(--surface-3)] text-[var(--text-secondary)] hover:text-blue-400" title="View asset">
-                                        <Eye className="w-4 h-4" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                          <SiteAssetsTable assets={s.assets} onOpen={(a) => navigate(`/assets/${encodeURIComponent(a.asset_no)}`)} />
                         ) : (
                           <div className="px-5 py-6 text-center text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
                             <CheckCircle2 className="w-4 h-4" /> Governed site with no assets assigned yet.
@@ -411,6 +412,7 @@ export default function SiteManagement() {
             })}
           </div>
         )}
+        {!loading && !loadError && filtered.length > 0 && <TablePagination {...sitesPager} />}
       </div>
 
       <AnimatePresence>

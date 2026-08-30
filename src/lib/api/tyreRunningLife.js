@@ -100,7 +100,6 @@ export async function getTyreRunningLife({ country, maxAgeMs = 0, asset = null, 
       if (!Number.isFinite(total)) {
         if (first.rows.length === PAGE) {
           for (let offset = PAGE; offset < MAX_ROWS; offset += PAGE) {
-            // eslint-disable-next-line no-await-in-loop
             const p = await fetchPage(offset)
             if (p.err) return { ok: false, reason: p.err }
             out.rows = out.rows.concat(p.rows)

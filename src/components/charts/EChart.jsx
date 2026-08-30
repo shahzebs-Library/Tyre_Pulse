@@ -19,8 +19,8 @@ let echartsPromise = null
 export function loadEcharts() {
   if (echartsModule) return Promise.resolve(echartsModule)
   if (!echartsPromise) {
-    echartsPromise = import('echarts').then((m) => {
-      echartsModule = m.default ?? m
+    echartsPromise = import('./echartsRuntime').then((module) => {
+      echartsModule = module.default
       return echartsModule
     }).catch((err) => {
       // Allow a retry on a later mount instead of caching the rejection forever.

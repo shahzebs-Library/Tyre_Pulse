@@ -4,7 +4,7 @@
  * explicit columns; every method throws on error.
  */
 import { supabase } from '../supabase'
-import { ServiceError, unwrap, fetchAllRpcPages } from './_client'
+import { ServiceError, unwrap, fetchAllPages, fetchAllRpcPages } from './_client'
 import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
 import { naturalKey } from '../import/validate'
 import { queryClient } from '../queryClient'
@@ -750,6 +750,17 @@ const BATCH_COLS =
   'id,country,module,sheet,source_system,approval_status,import_status,total_rows,ready_rows,warning_rows,error_rows,duplicate_rows,imported_rows,skipped_rows,created_at,approved_at,completed_at'
 
 export async function listBatches({ country, module, status, limit = 50 } = {}) {
+  if (limit == null) {
+    const { data, error } = await fetchAllPages((from, to) => {
+      let q = supabase.from('import_batches').select(BATCH_COLS).order('created_at', { ascending: false })
+      if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+      if (module) q = q.eq('module', module)
+      if (status) q = q.eq('import_status', status)
+      return q.range(from, to)
+    })
+    if (error) throw new ServiceError(error.message, error.code, error)
+    return data
+  }
   let q = supabase.from('import_batches').select(BATCH_COLS).order('created_at', { ascending: false }).limit(limit)
   if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
   if (module) q = q.eq('module', module)
@@ -762,6 +773,13 @@ export async function getBatch(id) {
 }
 
 export async function getBatchRows(batchId, limit = 500) {
+  if (limit == null) {
+    const { data, error } = await fetchAllPages((from, to) => supabase.from('import_rows')
+      .select('id,source_row_no,validation_status,dup_status,action,transformed_data,target_record_id,processed_at')
+      .eq('batch_id', batchId).order('source_row_no').range(from, to))
+    if (error) throw new ServiceError(error.message, error.code, error)
+    return data
+  }
   return unwrap(
     await supabase.from('import_rows')
       .select('id,source_row_no,validation_status,dup_status,action,transformed_data,target_record_id,processed_at')
@@ -817,6 +835,17 @@ export async function deleteFile(fileId) {
 
 /** Data Intake batches awaiting an approver's decision (canonical pipeline). */
 export async function listForApproval({ country, limit = 100 } = {}) {
+  if (limit == null) {
+    const { data, error } = await fetchAllPages((from, to) => {
+      let q = supabase.from('import_batches').select(BATCH_COLS)
+        .eq('approval_status', 'pending_approval')
+        .order('created_at', { ascending: false })
+      if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+      return q.range(from, to)
+    })
+    if (error) throw new ServiceError(error.message, error.code, error)
+    return data
+  }
   let q = supabase.from('import_batches').select(BATCH_COLS)
     .eq('approval_status', 'pending_approval')
     .order('created_at', { ascending: false }).limit(limit)
@@ -842,12 +871,16 @@ export async function getRowIssues(rowId) {
 }
 
 export async function listProfiles({ module, country } = {}) {
-  let q = supabase.from('import_mapping_profiles')
-    .select('id,name,module,source_system,country,version,active,last_used_at')
-    .eq('active', true).order('last_used_at', { ascending: false, nullsFirst: false })
-  if (module) q = q.eq('module', module)
-  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-  return unwrap(await q)
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase.from('import_mapping_profiles')
+      .select('id,name,module,source_system,country,version,active,last_used_at')
+      .eq('active', true).order('last_used_at', { ascending: false, nullsFirst: false })
+    if (module) q = q.eq('module', module)
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    return q.range(from, to)
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
 }
 
 export async function saveProfile(profile, rules = []) {
@@ -1058,12 +1091,16 @@ export async function deleteProfile(profileId) {
 // ── Master-data aliases (directive §9) ───────────────────────────────────────
 /** Active raw→canonical aliases for an entity type, country-scoped. */
 export async function listAliases({ entityType, country } = {}) {
-  let q = supabase.from('import_master_aliases')
-    .select('id,entity_type,country,raw_value,canonical_value,canonical_id,active,created_at')
-    .eq('active', true).order('raw_value')
-  if (entityType) q = q.eq('entity_type', entityType)
-  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-  return unwrap(await q)
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase.from('import_master_aliases')
+      .select('id,entity_type,country,raw_value,canonical_value,canonical_id,active,created_at')
+      .eq('active', true).order('raw_value')
+    if (entityType) q = q.eq('entity_type', entityType)
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    return q.range(from, to)
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
 }
 
 /**
@@ -1103,13 +1140,17 @@ export async function saveAlias({ entityType, country, rawValue, canonicalValue,
 // ── Currency rates (directive §12) ───────────────────────────────────────────
 /** Approved (default) or draft FX rates, newest first. */
 export async function listCurrencyRates({ baseCurrency, quoteCurrency, approvedOnly = true } = {}) {
-  let q = supabase.from('currency_rates')
-    .select('id,base_currency,quote_currency,rate,rate_date,source,approved,approved_at,created_at')
-    .order('rate_date', { ascending: false })
-  if (approvedOnly) q = q.eq('approved', true)
-  if (baseCurrency) q = q.eq('base_currency', baseCurrency)
-  if (quoteCurrency) q = q.eq('quote_currency', quoteCurrency)
-  return unwrap(await q)
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase.from('currency_rates')
+      .select('id,base_currency,quote_currency,rate,rate_date,source,approved,approved_at,created_at')
+      .order('rate_date', { ascending: false })
+    if (approvedOnly) q = q.eq('approved', true)
+    if (baseCurrency) q = q.eq('base_currency', baseCurrency)
+    if (quoteCurrency) q = q.eq('quote_currency', quoteCurrency)
+    return q.range(from, to)
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
 }
 
 /**
@@ -1154,12 +1195,16 @@ export async function approveCurrencyRate(id) {
 }
 
 export async function listCustomFields({ module, country } = {}) {
-  let q = supabase.from('custom_field_catalog')
-    .select('id,module,country,field_name,occurrence_count,example_values,mapping_status,last_seen_at')
-    .order('occurrence_count', { ascending: false }).limit(200)
-  if (module) q = q.eq('module', module)
-  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
-  return unwrap(await q)
+  const { data, error } = await fetchAllPages((from, to) => {
+    let q = supabase.from('custom_field_catalog')
+      .select('id,module,country,field_name,occurrence_count,example_values,mapping_status,last_seen_at')
+      .order('occurrence_count', { ascending: false })
+    if (module) q = q.eq('module', module)
+    if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+    return q.range(from, to)
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
 }
 
 /**

@@ -71,3 +71,61 @@ function installStorage(name) {
 
 installStorage('localStorage');
 installStorage('sessionStorage');
+
+// jsdom intentionally has no canvas renderer. Chart.js only needs a stable 2D
+// context for component tests (pixel output belongs in Playwright visual tests),
+// so provide the small browser-shaped surface it calls instead of emitting a
+// "Not implemented" error for every chart mount.
+if (typeof HTMLCanvasElement !== 'undefined') {
+  const noop = () => {};
+  const contexts = new WeakMap();
+  const contextFor = (canvas) => {
+    if (contexts.has(canvas)) return contexts.get(canvas);
+    const context = new Proxy({
+      canvas,
+      measureText: (text) => ({ width: String(text ?? '').length * 6 }),
+      createLinearGradient: () => ({ addColorStop: noop }),
+      createRadialGradient: () => ({ addColorStop: noop }),
+      createPattern: () => null,
+      getLineDash: () => [],
+      getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
+    }, {
+      get(target, property) {
+        return property in target ? target[property] : noop;
+      },
+      set(target, property, value) {
+        target[property] = value;
+        return true;
+      },
+    });
+    contexts.set(canvas, context);
+    return context;
+  };
+
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    value(type) {
+      if (type !== '2d') return null;
+      return contextFor(this);
+    },
+  });
+  Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+    configurable: true,
+    value() {
+      // Valid transparent 1x1 PNG. Pixel fidelity belongs in Playwright; unit
+      // tests only need export pipelines to receive a browser-shaped data URL.
+      return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9WQAAAABJRU5ErkJggg==';
+    },
+  });
+}
+
+// Chart.js observes its responsive container; jsdom has no layout engine and
+// therefore no ResizeObserver. A no-op observer is the accurate unit-test
+// boundary because browser sizing is covered by Playwright.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

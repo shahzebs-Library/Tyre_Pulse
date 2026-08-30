@@ -147,8 +147,6 @@ export default function TyreRecords() {
     const timer = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
     return () => clearTimeout(timer)
   }, [search, debouncedSearch])
-  useEffect(() => { loadRecords() }, [page, debouncedSearch, siteFilter, brandFilter, riskFilter, activeCountry])
-
   // One RPC, already DISTINCT and sorted server-side. The two reads this
   // replaced were capped by PostgREST at 1000 of 11,193 rows, so the dropdowns
   // silently offered only 16 of 23 sites and 51 of 104 brands - a site with 92
@@ -181,7 +179,9 @@ export default function TyreRecords() {
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)   // never leave the spinner stuck
     }
-  }, [page, debouncedSearch, siteFilter, brandFilter, riskFilter, activeCountry])
+  }, [page, debouncedSearch, siteFilter, brandFilter, riskFilter, activeCountry, clear])
+
+  useEffect(() => { loadRecords() }, [loadRecords])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 

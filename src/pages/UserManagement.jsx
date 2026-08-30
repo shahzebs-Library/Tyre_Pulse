@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import AccessControlMatrix from '../components/AccessControlMatrix'
 import OrgBrandingPanel from '../components/OrgBrandingPanel'
 import BrandLogoStudio from '../components/BrandLogoStudio'
@@ -511,6 +512,8 @@ export default function UserManagement() {
       return matchSearch && matchRole && matchStatus
     })
   }, [users, search, roleFilter, statusFilter])
+  const usersPager = usePagedRows(filtered)
+  const auditPager = usePagedRows(auditLog)
 
   // ── Inline role change ────────────────────────────────────────────────────
 
@@ -913,7 +916,7 @@ export default function UserManagement() {
                         </div>
                       </td>
                     </tr>
-                  ) : filtered.map(u => {
+                  ) : usersPager.pageRows.map(u => {
                     const isSelf      = u.id === currentProfile?.id
                     const isPending   = u.approved === false
                     const displayName = u.full_name || u.username || t('usermgmt.states.unknownUser')
@@ -1088,6 +1091,7 @@ export default function UserManagement() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...usersPager} />
             </div>
           </div>
         </div>
@@ -1225,7 +1229,7 @@ export default function UserManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {auditLog.map(entry => {
+                  {auditPager.pageRows.map(entry => {
                     const isExpanded = expandedRow === entry.id
                     const actor = users.find(u => u.id === entry.user_id)
                     const actorName = actor?.full_name || actor?.username || (entry.user_id ? entry.user_id.slice(0, 8) : t('usermgmt.states.na'))
@@ -1284,6 +1288,7 @@ export default function UserManagement() {
                   })}
                 </tbody>
               </table>
+              <TablePagination {...auditPager} />
             </div>
           )}
         </div>

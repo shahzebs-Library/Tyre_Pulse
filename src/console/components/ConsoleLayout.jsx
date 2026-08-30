@@ -6,12 +6,13 @@ import {
   Globe, Menu, X, AlertTriangle, Layers, Smartphone, Palette, Activity,
   DatabaseBackup, UserCog, History, BellRing, Boxes, HeartPulse, Search, Truck, Trash2, CopyX, FileClock,
   LayoutList, Bug, Wand2, LifeBuoy, Eye, UserX, Brain, ShieldCheck, Sparkles, Scale, GitBranch, Rocket,
-  Map,
+  Map, Command,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 import Console2FAModal from './Console2FAModal'
 import ThemeToggle from '../../components/ui/ThemeToggle'
 import { getCurrentSupportSession, endSupportSession } from '../../lib/api/supportSessions'
+import ConsoleCommandPalette from './ConsoleCommandPalette'
 
 /**
  * Grouped, because a flat list of thirty-three links is a list nobody reads.
@@ -21,7 +22,7 @@ import { getCurrentSupportSession, endSupportSession } from '../../lib/api/suppo
  *
  * Order is deliberate - the first group is what a console visit is usually for.
  */
-const NAV_GROUPS = [
+export const NAV_GROUPS = [
   {
     label: 'Overview',
     items: [
@@ -134,6 +135,7 @@ export default function ConsoleLayout() {
   const visibleGroups = sidebarOpen ? filterGroups(NAV_GROUPS, navFilter) : NAV_GROUPS
   const [orgOpen, setOrgOpen]         = useState(false)
   const [show2FA, setShow2FA]         = useState(false)
+  const [commandOpen, setCommandOpen] = useState(false)
   const [support, setSupport]         = useState(null)   // active support session
   const [supportNow, setSupportNow]   = useState(() => Date.now())
   const [endingSupport, setEndingSupport] = useState(false)
@@ -154,6 +156,17 @@ export default function ConsoleLayout() {
     window.addEventListener('focus', onFocus)
     return () => { clearInterval(poll); clearInterval(tick); window.removeEventListener('focus', onFocus) }
   }, [refreshSupport])
+
+  useEffect(() => {
+    const openPalette = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setCommandOpen(true)
+      }
+    }
+    window.addEventListener('keydown', openPalette)
+    return () => window.removeEventListener('keydown', openPalette)
+  }, [])
 
   const supportOrgName = support
     ? (orgs?.find(o => o.id === support.target_org_id)?.name || support.target_org_id)
@@ -308,6 +321,7 @@ export default function ConsoleLayout() {
         </div>
       </aside>
       {show2FA && <Console2FAModal onClose={() => setShow2FA(false)} />}
+      <ConsoleCommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} groups={NAV_GROUPS} />
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -323,7 +337,14 @@ export default function ConsoleLayout() {
               </>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <button type="button" onClick={() => setCommandOpen(true)}
+            className="ml-auto flex min-w-52 items-center gap-2 rounded-lg border border-gray-800 bg-gray-900/70 px-3 py-1.5 text-xs text-gray-500 hover:border-orange-700/50 hover:text-gray-200"
+            aria-label="Open Super Admin command palette">
+            <Command size={13} className="text-orange-400" />
+            <span className="flex-1 text-left">Search all capabilities</span>
+            <kbd className="rounded border border-gray-700 px-1.5 py-0.5 text-[9px] text-gray-500">Ctrl K</kbd>
+          </button>
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               Live

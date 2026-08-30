@@ -21,6 +21,7 @@ import { exportDailyOpsBriefingPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useLanguage } from '../contexts/LanguageContext'
+import { isOverdueWorkOrder } from '../lib/dailyOpsPriority'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -117,6 +118,8 @@ export default function DailyOps() {
   const [alerts, setAlerts]            = useState([])
   const [allTyres30, setAllTyres30]    = useState([])
   const [capped, setCapped]            = useState(false)
+  const [queueSeverity, setQueueSeverity] = useState('All')
+  const [queueLimit, setQueueLimit] = useState(12)
 
   const fetchData = useCallback(async (date) => {
     setLoading(true)
@@ -227,10 +230,7 @@ export default function DailyOps() {
       })
     })
 
-    const overdueWOs = workOrders.filter(r => {
-      if (!r.scheduled_date || r.status === 'Completed' || r.status === 'Cancelled') return false
-      return r.scheduled_date < selectedDate
-    })
+    const overdueWOs = workOrders.filter(r => isOverdueWorkOrder(r, selectedDate))
     overdueWOs.forEach(r => {
       const daysPast = Math.floor((new Date(selectedDate) - new Date(r.scheduled_date)) / 86400000)
       items.push({
@@ -488,6 +488,9 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
   const critCount = priorityQueue.filter(i => i.severity === 'Critical').length
   const highCount = priorityQueue.filter(i => i.severity === 'High').length
+  const visibleQueue = queueSeverity === 'All'
+    ? priorityQueue
+    : priorityQueue.filter((item) => item.severity === queueSeverity)
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -571,6 +574,19 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   {highCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-orange-900/30 text-orange-300 border border-orange-700/50">{t('dailyops.priorityQueue.highChip', { count: highCount })}</span>}
                 </div>
               )}
+              <div className="ml-auto flex items-center gap-1" aria-label="Filter priority actions by severity">
+                {['All', 'Critical', 'High', 'Medium'].map((severity) => (
+                  <button
+                    key={severity}
+                    type="button"
+                    onClick={() => { setQueueSeverity(severity); setQueueLimit(12) }}
+                    aria-pressed={queueSeverity === severity}
+                    className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${queueSeverity === severity ? 'border-green-600 bg-green-900/30 text-green-300' : 'border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                  >
+                    {severity}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {priorityQueue.length === 0 ? (
@@ -578,10 +594,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                 <CheckCircle2 size={20} />
                 <span className="text-sm font-medium">{t('dailyops.priorityQueue.allClear')}</span>
               </div>
+            ) : visibleQueue.length === 0 ? (
+              <div className="card p-6 text-center text-sm text-[var(--text-muted)]">
+                No {queueSeverity.toLowerCase()} priority actions for this date.
+              </div>
             ) : (
               <div className="space-y-2">
                 <AnimatePresence>
-                  {priorityQueue.slice(0, 12).map((item, i) => {
+                  {visibleQueue.slice(0, queueLimit).map((item, i) => {
                     const cfg = SEV[item.severity] || SEV.Low
                     const Icon = cfg.icon
                     return (
@@ -608,8 +628,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     )
                   })}
                 </AnimatePresence>
-                {priorityQueue.length > 12 && (
-                  <p className="text-xs text-gray-500 text-center py-1">{t('dailyops.priorityQueue.moreItems', { count: priorityQueue.length - 12 })}</p>
+                {visibleQueue.length > queueLimit && (
+                  <button
+                    type="button"
+                    onClick={() => setQueueLimit((limit) => limit + 25)}
+                    className="btn-secondary mx-auto flex text-xs"
+                  >
+                    Show next {Math.min(25, visibleQueue.length - queueLimit)} actions
+                  </button>
                 )}
               </div>
             )}

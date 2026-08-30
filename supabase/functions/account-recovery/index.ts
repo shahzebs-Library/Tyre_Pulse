@@ -66,7 +66,7 @@ function requesterKey(req: Request): string {
 
 async function sendEmail(to: string, code: string): Promise<void> {
   const apiKey = env('RESEND_API_KEY')
-  const from = env('RECOVERY_EMAIL_FROM')
+  const from = env('RECOVERY_EMAIL_FROM') || env('FROM_EMAIL')
   if (!apiKey || !from) throw new Error('Recovery email provider is not configured')
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',

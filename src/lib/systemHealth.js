@@ -56,9 +56,14 @@ export const HEALTH_BUCKETS = Object.freeze([
 
 /** Edge functions invoked from the client (uploads/agents/emailService/embeddingService). */
 export const HEALTH_EDGE_FUNCTIONS = Object.freeze([
+  'account-recovery',
+  'ai-orchestrator',
+  'billing-checkout',
   'chat-ai',
   'generate-embedding',
   'send-email',
+  'send-scheduled-reports',
+  'sentry-issues',
 ])
 
 // ── Pure helpers (unit-tested) ────────────────────────────────────────────────

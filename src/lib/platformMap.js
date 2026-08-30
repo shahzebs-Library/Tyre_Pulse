@@ -136,12 +136,40 @@ export function webSections(navCatalog) {
   return (navCatalog || []).map((g) => ({ label: g.label, items: (g.items || []).map((i) => i.label) }))
 }
 
+/** Actionable web catalog for the Super Admin capability center. */
+export function webCapabilitySections(navCatalog) {
+  return (navCatalog || []).map((g) => ({
+    label: g.label,
+    items: (g.items || []).map((i) => ({ label: i.label, to: i.key })),
+  }))
+}
+
+/** Governed backend surfaces. These open safe operational pages, never raw RPC execution. */
+export const BACKEND_CAPABILITIES = [
+  { label: 'Edge Functions', group: 'Runtime', count: 13, status: 'Live', to: '/console/health', what: 'Authentication, recovery, billing, AI, email, webhooks, scheduled reports and monitoring.' },
+  { label: 'Scheduled Jobs', group: 'Automation', count: 13, status: 'Live', to: '/console/automation', what: 'Cron execution, queues, retries, delivery state and failure history.' },
+  { label: 'Database & RLS', group: 'Data security', count: 356, status: 'Protected', to: '/console/security', what: 'Tenant isolation, row policies, privileged functions and security findings.' },
+  { label: 'API & Integrations', group: 'Connectivity', count: null, status: 'Governed', to: '/console/system', what: 'Public API keys, ERP connectors, webhooks and external provider configuration.' },
+  { label: 'AI Control Plane', group: 'Intelligence', count: null, status: 'Governed', to: '/console/ai-admin', what: 'Models, prompts, budgets, usage, tool policy and provider readiness.' },
+  { label: 'Audit & Evidence', group: 'Governance', count: null, status: 'Immutable', to: '/console/audit-trail', what: 'Before/after history, console actions, security events and operator accountability.' },
+]
+
+export function filterBackendCapabilities(items, term) {
+  const terms = String(term || '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return items
+  return items.filter((item) => {
+    const text = `${item.label} ${item.group} ${item.status} ${item.what}`.toLowerCase()
+    return terms.every((word) => text.includes(word))
+  })
+}
+
 /** Group the mobile module registry for display. */
 export function mobileSections(mobileModules) {
   const by = new Map()
   ;(mobileModules || []).forEach((m) => {
     if (!by.has(m.group)) by.set(m.group, [])
     by.get(m.group).push({
+      key: m.key,
       label: m.label,
       openTo: m.roles && m.roles.length
         ? m.roles.join(', ')
@@ -173,6 +201,7 @@ export function platformCounts({ consoleNav, navCatalog, mobileModules }) {
     consolePages: n(consoleSections(consoleNav)),
     webAreas: n(webSections(navCatalog)),
     mobileModules: (mobileModules || []).length,
+    backendCapabilities: BACKEND_CAPABILITIES.length,
     gaps: NOT_BUILT.length,
   }
 }

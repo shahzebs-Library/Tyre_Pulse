@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   CONSOLE_DESCRIPTIONS, NOT_BUILT, consoleSections, undescribedConsoleRoutes,
-  webSections, mobileSections, filterSections, platformCounts,
+  webSections, webCapabilitySections, mobileSections, filterSections, platformCounts,
+  BACKEND_CAPABILITIES, filterBackendCapabilities,
 } from '../lib/platformMap'
 import { CONSOLE_NAV } from '../console/components/ConsoleLayout'
 import { MOBILE_MODULES } from '../lib/mobileModules'
@@ -72,11 +73,19 @@ describe('shaping + search', () => {
     expect(webSections(null)).toEqual([])
   })
 
+  it('builds actionable web and governed backend capability catalogs', () => {
+    expect(webCapabilitySections([{ label: 'G', items: [{ key: '/a', label: 'A' }] }]))
+      .toEqual([{ label: 'G', items: [{ label: 'A', to: '/a' }] }])
+    expect(BACKEND_CAPABILITIES.length).toBeGreaterThan(4)
+    expect(filterBackendCapabilities(BACKEND_CAPABILITIES, 'row security').some((i) => i.to === '/console/security')).toBe(true)
+  })
+
   it('platformCounts totals every surface', () => {
     const c = platformCounts({ consoleNav: CONSOLE_NAV, navCatalog: [{ label: 'G', items: [{ label: 'A' }] }], mobileModules: MOBILE_MODULES })
     expect(c.consolePages).toBeGreaterThan(30)
     expect(c.webAreas).toBe(1)
     expect(c.mobileModules).toBe(MOBILE_MODULES.length)
+    expect(c.backendCapabilities).toBe(BACKEND_CAPABILITIES.length)
     expect(c.gaps).toBe(NOT_BUILT.length)
   })
 })

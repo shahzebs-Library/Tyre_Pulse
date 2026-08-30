@@ -7,10 +7,11 @@
  */
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Map, Monitor, Smartphone, Shield, AlertTriangle, User, FileUp, Hammer } from 'lucide-react'
+import { Map, Monitor, Smartphone, Shield, AlertTriangle, User, FileUp, Hammer, Server, ExternalLink, SlidersHorizontal } from 'lucide-react'
 import { Panel, PanelHeader, Note, StatTile, SearchInput, Badge } from '../components/ui'
 import {
-  consoleSections, webSections, mobileSections, filterSections, platformCounts, NOT_BUILT,
+  consoleSections, webCapabilitySections, mobileSections, filterSections, platformCounts, NOT_BUILT,
+  BACKEND_CAPABILITIES, filterBackendCapabilities,
 } from '../../lib/platformMap'
 import { CONSOLE_NAV } from '../components/ConsoleLayout'
 import { NAV_CATALOG } from '../../components/Layout'
@@ -27,7 +28,7 @@ export default function ConsolePlatformMap() {
   const [term, setTerm] = useState('')
 
   const consoleSecs = useMemo(() => consoleSections(CONSOLE_NAV), [])
-  const webSecs = useMemo(() => webSections(NAV_CATALOG), [])
+  const webSecs = useMemo(() => webCapabilitySections(NAV_CATALOG), [])
   const mobileSecs = useMemo(() => mobileSections(MOBILE_MODULES), [])
   const counts = useMemo(
     () => platformCounts({ consoleNav: CONSOLE_NAV, navCatalog: NAV_CATALOG, mobileModules: MOBILE_MODULES }),
@@ -37,28 +38,55 @@ export default function ConsolePlatformMap() {
   const fConsole = filterSections(consoleSecs, term)
   const fWeb = filterSections(webSecs, term)
   const fMobile = filterSections(mobileSecs, term)
+  const fBackend = filterBackendCapabilities(BACKEND_CAPABILITIES, term)
   const q = term.trim().toLowerCase()
   const fGaps = q
     ? NOT_BUILT.filter((g) => g.title.toLowerCase().includes(q) || g.what.toLowerCase().includes(q))
     : NOT_BUILT
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5 max-w-7xl">
       <div>
-        <h1 className="text-xl font-bold text-white">Platform Map</h1>
+        <h1 className="text-xl font-bold text-white">Enterprise Capability Center</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Everything the platform has, in plain English - and the honest list of what it does not have yet.
+          Open, govern and inspect console, web, mobile and backend capabilities from one Super Admin workspace.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatTile icon={Shield} label="Console tools" value={counts.consolePages} sub="your control pages" tone="accent" />
         <StatTile icon={Monitor} label="Web app areas" value={counts.webAreas} sub="what your team uses" tone="info" />
         <StatTile icon={Smartphone} label="Mobile modules" value={counts.mobileModules} sub="on the field phones" tone="good" />
+        <StatTile icon={Server} label="Backend domains" value={counts.backendCapabilities} sub="governed services" tone="info" />
         <StatTile icon={AlertTriangle} label="Known gaps" value={counts.gaps} sub="stated, not hidden" tone="warning" />
       </div>
 
-      <SearchInput value={term} onChange={setTerm} placeholder="Search everything (e.g. duplicate, tyre, backup)" className="max-w-md" />
+      <SearchInput value={term} onChange={setTerm} placeholder="Search every capability (e.g. mobile access, cron, backup)" className="max-w-xl" />
+
+      <Panel>
+        <PanelHeader icon={Server} title="Backend control plane"
+          subtitle="Safe operational entry points for every backend domain. Raw SQL and arbitrary RPC execution stay blocked." />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 px-4 pb-4">
+          {fBackend.map((item) => (
+            <button key={item.label} type="button" onClick={() => navigate(item.to)}
+              className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 text-left hover:border-orange-700/60 hover:bg-orange-950/10 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-gray-600">{item.group}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{item.label}</p>
+                </div>
+                <Badge tone={item.status === 'Live' || item.status === 'Protected' ? 'good' : 'accent'}>{item.status}</Badge>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-gray-500">{item.what}</p>
+              <div className="mt-3 flex items-center justify-between text-[10px] text-orange-400">
+                <span>{item.count == null ? 'Open controls' : `${item.count} governed`}</span>
+                <span className="flex items-center gap-1">Manage <ExternalLink size={10} /></span>
+              </div>
+            </button>
+          ))}
+          {fBackend.length === 0 && <p className="text-xs text-gray-600">No backend capability matches that.</p>}
+        </div>
+      </Panel>
 
       {/* The honest part first: what is NOT built, and who can move it. */}
       {fGaps.length > 0 && (
@@ -106,15 +134,22 @@ export default function ConsolePlatformMap() {
       </Panel>
 
       <Panel>
-        <PanelHeader icon={Monitor} title="Web app - what your team works in"
-          subtitle="Every area of the main application, grouped the way the sidebar groups them. Who sees what is governed in Access Control." />
+        <PanelHeader icon={Monitor} title="Web application capabilities"
+          subtitle="Open any live module or jump directly to its access governance." />
         <div className="px-4 pb-4 space-y-3">
           {fWeb.map((g) => (
             <div key={g.label}>
               <p className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold mb-1.5">{g.label}</p>
               <div className="flex flex-wrap gap-1.5">
-                {g.items.map((label) => (
-                  <span key={label} className="text-[11px] px-2 py-1 rounded-md border border-gray-800 bg-gray-900/40 text-gray-300">{label}</span>
+                {g.items.map((it) => (
+                  <div key={it.to} className="flex items-center rounded-md border border-gray-800 bg-gray-900/40 overflow-hidden">
+                    <button type="button" onClick={() => window.open(it.to, '_blank', 'noopener,noreferrer')}
+                      className="px-2 py-1.5 text-[11px] text-gray-200 hover:bg-orange-950/30">{it.label}</button>
+                    <button type="button" onClick={() => navigate(`/console/access?surface=web&module=${encodeURIComponent(it.to)}`)}
+                      className="border-l border-gray-800 px-1.5 py-1.5 text-gray-600 hover:text-orange-400" aria-label={`Manage ${it.label} access`}>
+                      <SlidersHorizontal size={11} />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -124,17 +159,20 @@ export default function ConsolePlatformMap() {
       </Panel>
 
       <Panel>
-        <PanelHeader icon={Smartphone} title="Mobile app - the field phones"
-          subtitle="Each module and which roles open it by default. Per-person overrides live in Access Control; the released version lives in Mobile App Control." />
+        <PanelHeader icon={Smartphone} title="Mobile application capabilities"
+          subtitle="Every field module, its default roles, and direct access controls. Release and forced-update controls remain in Mobile App." />
         <div className="px-4 pb-4 space-y-3">
           {fMobile.map((g) => (
             <div key={g.label}>
               <p className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold mb-1.5">{g.label}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                 {g.items.map((it) => (
-                  <div key={it.label} className="flex items-baseline justify-between gap-2 rounded-md border border-gray-800 bg-gray-900/40 px-2.5 py-1.5">
-                    <span className="text-xs text-gray-200 font-medium">{it.label}</span>
-                    <span className="text-[10px] text-gray-500 text-right">{it.openTo}</span>
+                  <div key={it.label} className="flex items-center justify-between gap-2 rounded-md border border-gray-800 bg-gray-900/40 px-2.5 py-2">
+                    <div><span className="text-xs text-gray-200 font-medium">{it.label}</span><span className="block text-[10px] text-gray-500">{it.openTo}</span></div>
+                    <button type="button" onClick={() => navigate(`/console/access?surface=mobile&module=${encodeURIComponent(it.key)}`)}
+                      className="flex items-center gap-1 rounded border border-gray-700 px-2 py-1 text-[10px] text-gray-400 hover:border-orange-700 hover:text-orange-400">
+                      <SlidersHorizontal size={10} /> Access
+                    </button>
                   </div>
                 ))}
               </div>

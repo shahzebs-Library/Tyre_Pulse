@@ -118,7 +118,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       site = route.siteName?.value;
       assetNo = route.assetNo?.value;
       printedName = '';
-      readLang = kChecklistDefaultLang;
+      readLang = ref.read(checklistContentLanguageProvider);
 
       // autoValue: seed 'today' / 'current_user' fields ONCE, at open.
       // Never re-resolved on a later resume - see

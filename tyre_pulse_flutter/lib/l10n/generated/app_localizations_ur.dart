@@ -970,6 +970,39 @@ class AppLocalizationsUr extends AppLocalizations {
       'اثاثے کے لیے درست ورک فلو منتخب کریں';
 
   @override
+  String get checklistsAssetSearchHint =>
+      'QR اسکین کریں یا اثاثہ نمبر درج کریں';
+
+  @override
+  String get checklistsLanguageStorageHint =>
+      'جوابات تمام زبانوں میں یکساں طور پر محفوظ ہوتے ہیں';
+
+  @override
+  String get checklistsRequiredForAsset => 'اس اثاثے کے لیے درکار';
+
+  @override
+  String get checklistsGeneralLibraryTitle => 'عام چیک لسٹ لائبریری';
+
+  @override
+  String get checklistsGeneralLibrarySubtitle =>
+      'حفاظت، شفٹ، آلات اور دھلائی کی چیک لسٹیں';
+
+  @override
+  String get checklistsTyreInspectionTitle => 'ٹائر معائنہ';
+
+  @override
+  String get checklistsTyreInspectionSubtitle =>
+      'ایکسل/اندرونی/بیرونی ٹائر کا مخصوص ورک فلو';
+
+  @override
+  String checklistsAssetHistoryTitle(String assetNo) {
+    return '$assetNo کے لیے چیک لسٹ کی تاریخ';
+  }
+
+  @override
+  String get checklistsMasterDataVerified => 'ماسٹر ڈیٹا تصدیق شدہ';
+
+  @override
   String checklistsAvailableCount(int count) {
     return '$count دستیاب';
   }

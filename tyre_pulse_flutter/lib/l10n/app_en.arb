@@ -827,6 +827,30 @@
   "@checklistsLibraryTitle": {},
   "checklistsLibrarySubtitle": "Choose the correct workflow for the asset",
   "@checklistsLibrarySubtitle": {},
+  "checklistsAssetSearchHint": "Scan QR or enter asset number",
+  "@checklistsAssetSearchHint": {},
+  "checklistsLanguageStorageHint": "Answers are stored consistently across languages",
+  "@checklistsLanguageStorageHint": {},
+  "checklistsRequiredForAsset": "Required for this asset",
+  "@checklistsRequiredForAsset": {},
+  "checklistsGeneralLibraryTitle": "General checklist library",
+  "@checklistsGeneralLibraryTitle": {},
+  "checklistsGeneralLibrarySubtitle": "Safety, shift, equipment and washing checklists",
+  "@checklistsGeneralLibrarySubtitle": {},
+  "checklistsTyreInspectionTitle": "Tyre inspection",
+  "@checklistsTyreInspectionTitle": {},
+  "checklistsTyreInspectionSubtitle": "Dedicated axle/inner/outer tyre workflow",
+  "@checklistsTyreInspectionSubtitle": {},
+  "checklistsAssetHistoryTitle": "Checklist history for {assetNo}",
+  "@checklistsAssetHistoryTitle": {
+    "placeholders": {
+      "assetNo": {
+        "type": "String"
+      }
+    }
+  },
+  "checklistsMasterDataVerified": "Master data verified",
+  "@checklistsMasterDataVerified": {},
   "checklistsAvailableCount": "{count} available",
   "@checklistsAvailableCount": {
     "placeholders": {

@@ -871,7 +871,7 @@ export default function ConsoleUsers() {
                 <Field label="Capability">
                   <select value={bulkCapability} onChange={e => setBulkCapability(e.target.value)}
                     className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg px-2 text-xs text-white focus:outline-none focus:border-orange-500">
-                    {CAPABILITIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                    {CAPABILITIES.filter(c => c.key !== 'delete').map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                   </select>
                 </Field>
                 <Field label="Effect">

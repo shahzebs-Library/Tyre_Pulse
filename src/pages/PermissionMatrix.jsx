@@ -4,12 +4,12 @@ import {
   RotateCcw, Lock, Info, Eye, Undo2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { listGlobalPermissions, saveModulePermissions } from '../lib/api/modulePermissions'
+import { listGlobalPermissions, saveAccessControlMatrix } from '../lib/api/modulePermissions'
 import {
   MODULE_GROUPS, ROLES, CAPABILITIES,
   getEffectiveMatrix, setPermission, matrixDiff, diffFromDefaults,
   extractViewChanges, stripView, isEmptyDiff, countDiff,
-  getPermissionOverrides, savePermissionOverrides, buildDefaultMatrix,
+  getPermissionOverrides, buildDefaultMatrix,
 } from '../lib/permissionMatrix'
 import { toUserMessage } from '../lib/safeError'
 
@@ -28,8 +28,8 @@ const cellKey = (role, mod) => `${role}::${mod}`
  * app_settings `permission_overrides` for progressive enforcement.
  */
 export default function PermissionMatrix() {
-  const { profile } = useAuth()
-  const isAdmin = profile?.role === 'Admin'
+  const { profile, isSuperAdmin, refreshAccess } = useAuth()
+  const isAdmin = profile?.role === 'Admin' || isSuperAdmin
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -94,7 +94,7 @@ export default function PermissionMatrix() {
   }, [search])
 
   function toggleCap(role, mod, cap) {
-    if (role === 'Admin') return
+    if (role === 'Admin' || cap === 'delete') return
     setNotice('')
     setDraft((d) => setPermission(d, role, mod, cap, !(d[role]?.[mod]?.[cap] === true)))
   }
@@ -133,8 +133,11 @@ export default function PermissionMatrix() {
     setBaseline(nextBaseline)
     try {
       const viewChanges = extractViewChanges(unsavedDiff)
-      if (viewChanges.length) await saveModulePermissions(viewChanges)
-      await savePermissionOverrides(stripView(diffFromDefaults(nextBaseline)))
+      await saveAccessControlMatrix({
+        viewChanges,
+        overrides: stripView(diffFromDefaults(nextBaseline)),
+      })
+      await refreshAccess?.()
       setNotice(
         viewChanges.length
           ? `Saved. ${viewChanges.length} view change${viewChanges.length !== 1 ? 's' : ''} take effect on each user's next load; other capabilities are stored for progressive enforcement.`
@@ -399,10 +402,11 @@ function ModuleRow({ mod, draft, selected, setSelected, unsavedCells, overridden
               </span>
               {CAPABILITIES.map((c) => {
                 const on = draft[selected.role][mod.key][c.key] === true
+                const protectedDelete = c.key === 'delete'
                 const isDefault = defaults[selected.role][mod.key][c.key] === on
                 return (
-                  <button key={c.key} type="button" onClick={() => toggleCap(selected.role, mod.key, c.key)}
-                    title={`${c.description}${c.enforced ? '' : ' (stored, not yet enforced)'}${isDefault ? '' : ', differs from default'}`}
+                  <button key={c.key} type="button" disabled={protectedDelete} onClick={() => toggleCap(selected.role, mod.key, c.key)}
+                    title={protectedDelete ? 'Delete is reserved for Admin and Super Admin' : `${c.description}${c.enforced ? '' : ' (stored, not yet enforced)'}${isDefault ? '' : ', differs from default'}`}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                       on ? 'text-green-300' : 'text-dim hover:text-secondary'}`}
                     style={{
@@ -411,7 +415,9 @@ function ModuleRow({ mod, draft, selected, setSelected, unsavedCells, overridden
                     }}>
                     {on ? <Check size={11} /> : <X size={11} />}
                     {c.label}
-                    {!c.enforced && (
+                    {protectedDelete ? (
+                      <span className="text-[9px] uppercase tracking-wide opacity-70">admin only</span>
+                    ) : !c.enforced && (
                       <span className="text-[9px] uppercase tracking-wide opacity-70">stored</span>
                     )}
                   </button>

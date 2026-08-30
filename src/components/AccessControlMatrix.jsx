@@ -22,7 +22,7 @@ const keyOf = (role, mod) => `${role}::${mod}`
  * saved through the Admin-gated set_module_permissions RPC. Non-Admin viewers
  * see it read-only.
  */
-export default function AccessControlMatrix({ canEdit }) {
+export default function AccessControlMatrix({ canEdit, onSaved }) {
   const [perms, setPerms] = useState({})        // { role: { module: bool } }
   const [draft, setDraft] = useState({})        // same shape, edited
   const [loading, setLoading] = useState(true)
@@ -91,6 +91,7 @@ export default function AccessControlMatrix({ canEdit }) {
     setSaving(true); setError(''); setMsg('')
     try {
       const n = await saveModulePermissions(changes)
+      await onSaved?.()
       setPerms(structuredClone(draft))
       setMsg(`Saved. ${n} access change${n !== 1 ? 's' : ''} applied. Affected users see it on their next load.`)
     } catch (e) {

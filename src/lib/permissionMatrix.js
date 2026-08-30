@@ -48,7 +48,7 @@ export const CAPABILITIES = [
   { key: 'view',    label: 'View',    enforced: true,  description: 'Open the module (routes + navigation). Enforced now via hasPermission.' },
   { key: 'create',  label: 'Create',  enforced: false, description: 'Add new records in the module.' },
   { key: 'edit',    label: 'Edit',    enforced: false, description: 'Modify existing records.' },
-  { key: 'delete',  label: 'Delete',  enforced: false, description: 'Remove records.' },
+  { key: 'delete',  label: 'Delete',  enforced: true,  description: 'Remove records. Reserved for Admin and Super Admin.' },
   { key: 'export',  label: 'Export',  enforced: false, description: 'Download / export module data.' },
   { key: 'approve', label: 'Approve', enforced: false, description: 'Approve workflow items (uploads, work orders…).' },
 ]
@@ -107,7 +107,7 @@ export function buildDefaultMatrix() {
     for (const m of MODULES) {
       const v = defaultViewAccess(role, m.key)
       const caps = {}
-      for (const c of CAPABILITY_KEYS) caps[c] = v
+      for (const c of CAPABILITY_KEYS) caps[c] = c === 'delete' ? role === 'Admin' : v
       row[m.key] = caps
     }
     matrix[role] = row
@@ -128,9 +128,22 @@ export function buildDefaultMatrix() {
  */
 export function getEffectiveMatrix(overrides = null, viewMap = null) {
   const matrix = buildDefaultMatrix()
+  // Custom roles are data, not compile-time constants. Add every safe role
+  // present in either persistence source with deny-by-default capabilities.
+  const dynamicRoles = new Set([
+    ...Object.keys(viewMap && typeof viewMap === 'object' ? viewMap : {}),
+    ...Object.keys(overrides && typeof overrides === 'object' ? overrides : {}),
+  ])
+  for (const role of dynamicRoles) {
+    if (matrix[role] || !isSafeRoleName(role) || role === 'Admin') continue
+    matrix[role] = Object.fromEntries(MODULES.map((m) => [
+      m.key,
+      Object.fromEntries(CAPABILITY_KEYS.map((cap) => [cap, false])),
+    ]))
+  }
   // 1. DB view rows (existing enforcement source)
   if (viewMap && typeof viewMap === 'object') {
-    for (const role of ROLES) {
+    for (const role of Object.keys(matrix)) {
       if (role === 'Admin') continue
       const rows = viewMap[role]
       if (!rows || typeof rows !== 'object' || Object.keys(rows).length === 0) continue
@@ -140,11 +153,11 @@ export function getEffectiveMatrix(overrides = null, viewMap = null) {
   // 2. Stored capability overrides (view excluded — DB owns view)
   if (overrides && typeof overrides === 'object') {
     for (const [role, mods] of Object.entries(overrides)) {
-      if (role === 'Admin' || !ROLE_SET.has(role) || !mods || typeof mods !== 'object') continue
+      if (role === 'Admin' || !isSafeRoleName(role) || !mods || typeof mods !== 'object') continue
       for (const [mod, caps] of Object.entries(mods)) {
         if (!MODULE_KEYS.has(mod) || !caps || typeof caps !== 'object') continue
         for (const [cap, val] of Object.entries(caps)) {
-          if (cap === 'view' || !CAP_SET.has(cap)) continue
+          if (cap === 'view' || cap === 'delete' || !CAP_SET.has(cap)) continue
           matrix[role][mod][cap] = val === true
         }
       }
@@ -162,7 +175,7 @@ export function setPermission(matrix, role, moduleKey, capability, value) {
   if (!ROLE_SET.has(role)) throw new Error(`Unknown role: ${role}`)
   if (!MODULE_KEYS.has(moduleKey)) throw new Error(`Unknown module: ${moduleKey}`)
   if (!CAP_SET.has(capability)) throw new Error(`Unknown capability: ${capability}`)
-  if (role === 'Admin') return matrix
+  if (role === 'Admin' || capability === 'delete') return matrix
   return {
     ...matrix,
     [role]: {
@@ -268,18 +281,24 @@ function sanitizeOverrides(overrides) {
   const out = {}
   if (!overrides || typeof overrides !== 'object') return out
   for (const [role, mods] of Object.entries(overrides)) {
-    if (role === 'Admin' || !ROLE_SET.has(role) || !mods || typeof mods !== 'object') continue
+    if (role === 'Admin' || !isSafeRoleName(role) || !mods || typeof mods !== 'object') continue
     for (const [mod, caps] of Object.entries(mods)) {
       if (!MODULE_KEYS.has(mod) || !caps || typeof caps !== 'object') continue
       const clean = {}
       for (const [cap, val] of Object.entries(caps)) {
-        if (cap === 'view' || !CAP_SET.has(cap) || typeof val !== 'boolean') continue
+        if (cap === 'view' || cap === 'delete' || !CAP_SET.has(cap) || typeof val !== 'boolean') continue
         clean[cap] = val
       }
       if (Object.keys(clean).length) ((out[role] ||= {})[mod] = clean)
     }
   }
   return out
+}
+
+/** Custom role names are database data; accept conservative printable names. */
+function isSafeRoleName(role) {
+  return typeof role === 'string' && role === role.trim() && role.length > 0 && role.length <= 100
+    && !/[\u0000-\u001f\u007f]/.test(role)
 }
 
 /**

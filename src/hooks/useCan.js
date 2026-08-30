@@ -45,7 +45,9 @@ export function buildSubject(profile, orgId) {
     roles: Array.isArray(profile.roles) ? profile.roles : undefined,
     permissions: profile.permissions ?? undefined,
     locations,
-    isSuperAdmin: role === 'Platform Super Admin',
+    // The deployed identity model stores platform authority in this dedicated
+    // profile flag. Keep the role-name alias for imported/legacy accounts.
+    isSuperAdmin: profile.is_super_admin === true || role === 'Platform Super Admin',
     orgId: orgId ?? profile.org_id ?? null,
   }
 }

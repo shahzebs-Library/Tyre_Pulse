@@ -79,13 +79,14 @@ describe('defaults mirror AuthContext ROLE_DEFAULTS exactly', () => {
     expect(defaultViewAccess('Ghost', 'dashboard')).toBe(false)
   })
 
-  it('default matrix view equals the predicates, other capabilities follow view', () => {
+  it('default matrix follows view except delete, which is Admin-only', () => {
     const matrix = buildDefaultMatrix()
     for (const role of ROLES) {
       for (const m of MODULES) {
         const expected = AUTH_CONTEXT_ROLE_DEFAULTS[role](m.key)
         for (const cap of CAPABILITY_KEYS) {
-          expect(matrix[role][m.key][cap], `${role} × ${m.key} × ${cap}`).toBe(expected)
+          expect(matrix[role][m.key][cap], `${role} × ${m.key} × ${cap}`)
+            .toBe(cap === 'delete' ? role === 'Admin' : expected)
         }
       }
     }
@@ -122,12 +123,15 @@ describe('getEffectiveMatrix', () => {
     expect(m.Admin.dashboard.delete).toBe(true)
   })
 
-  it('ignores unknown roles, modules and capabilities in overrides', () => {
+  it('supports data-defined custom roles while ignoring unknown modules and capabilities', () => {
     const m = getEffectiveMatrix({
       Ghost: { dashboard: { edit: false } },
       Driver: { nonsense_module: { edit: false }, dashboard: { hack: true } },
     })
-    expect(m).toEqual(buildDefaultMatrix())
+    expect(m.Ghost.dashboard.edit).toBe(false)
+    expect(m.Ghost.dashboard.view).toBe(false)
+    expect(m.Ghost.nonsense_module).toBeUndefined()
+    expect(m.Driver.dashboard.hack).toBeUndefined()
   })
 
   it('viewMap with rows for a role fully defines its view (missing key ⇒ false), mirroring hasPermission', () => {
@@ -149,16 +153,22 @@ describe('getEffectiveMatrix', () => {
 describe('setPermission', () => {
   it('immutably updates a single cell', () => {
     const base = buildDefaultMatrix()
-    const next = setPermission(base, 'Driver', 'inspections', 'delete', false)
+    const next = setPermission(base, 'Driver', 'inspections', 'approve', false)
     expect(next).not.toBe(base)
-    expect(next.Driver.inspections.delete).toBe(false)
-    expect(base.Driver.inspections.delete).toBe(true) // original untouched
+    expect(next.Driver.inspections.approve).toBe(false)
+    expect(base.Driver.inspections.approve).toBe(true) // original untouched
     expect(next.Manager).toBe(base.Manager)           // untouched branches shared
   })
 
   it('Admin row is locked — returns the matrix unchanged', () => {
     const base = buildDefaultMatrix()
     expect(setPermission(base, 'Admin', 'dashboard', 'view', false)).toBe(base)
+  })
+
+  it('delete is locked for every non-admin role', () => {
+    const base = buildDefaultMatrix()
+    expect(setPermission(base, 'Manager', 'dashboard', 'delete', true)).toBe(base)
+    expect(base.Manager.dashboard.delete).toBe(false)
   })
 
   it('throws on unknown role / module / capability', () => {
@@ -184,11 +194,11 @@ describe('diffFromDefaults / matrixDiff', () => {
 
   it('captures only the changed cells', () => {
     let m = buildDefaultMatrix()
-    m = setPermission(m, 'Reporter', 'reports', 'delete', false)
+    m = setPermission(m, 'Reporter', 'reports', 'approve', false)
     m = setPermission(m, 'Driver', 'alerts', 'export', false)
     const d = diffFromDefaults(m)
     expect(d).toEqual({
-      Reporter: { reports: { delete: false } },
+      Reporter: { reports: { approve: false } },
       Driver: { alerts: { export: false } },
     })
     expect(countDiff(d)).toBe(2)
@@ -197,7 +207,7 @@ describe('diffFromDefaults / matrixDiff', () => {
   it('round-trips: defaults + diff overrides = the edited matrix', () => {
     let m = buildDefaultMatrix()
     m = setPermission(m, 'Inspector', 'inspections', 'approve', false)
-    m = setPermission(m, 'Manager', 'stock', 'delete', false)
+    m = setPermission(m, 'Manager', 'stock', 'edit', false)
     const rebuilt = getEffectiveMatrix(stripView(diffFromDefaults(m)))
     expect(rebuilt).toEqual(m)
   })
@@ -242,13 +252,20 @@ describe('serializeOverrides / parseOverrides', () => {
     expect(parseOverrides([1, 2])).toEqual({})
   })
 
-  it('strips Admin, view, unknown keys and non-boolean values', () => {
+  it('keeps safe custom roles while stripping Admin, view, unknown keys and non-booleans', () => {
     const parsed = parseOverrides({
       Admin: { dashboard: { delete: false } },
       Driver: { dashboard: { view: false, edit: false, hack: true, export: 'yes' }, nope: { edit: false } },
       Ghost: { dashboard: { edit: false } },
     })
-    expect(parsed).toEqual({ Driver: { dashboard: { edit: false } } })
+    expect(parsed).toEqual({
+      Driver: { dashboard: { edit: false } },
+      Ghost: { dashboard: { edit: false } },
+    })
+  })
+
+  it('rejects unsafe custom role names', () => {
+    expect(parseOverrides({ 'Bad\nRole': { dashboard: { edit: true } } })).toEqual({})
   })
 })
 
@@ -305,7 +322,10 @@ describe('persistence', () => {
     expect(row.key).toBe(PERMISSION_OVERRIDES_KEY)
     expect(opts).toEqual({ onConflict: 'key' })
     const stored = JSON.parse(row.value)
-    expect(stored.overrides).toEqual({ Driver: { alerts: { export: false } } }) // view + Ghost stripped
+    expect(stored.overrides).toEqual({
+      Driver: { alerts: { export: false } },
+      Ghost: { alerts: { edit: false } },
+    }) // view stripped; safe custom role retained
   })
 
   it('savePermissionOverrides throws on a DB error', async () => {
@@ -325,9 +345,9 @@ describe('registries', () => {
     ]))
   })
 
-  it('exposes the 6 capability dimensions with only view enforced today', () => {
+  it('exposes the 6 capability dimensions with view and admin-only delete enforced', () => {
     expect(CAPABILITY_KEYS).toEqual(['view', 'create', 'edit', 'delete', 'export', 'approve'])
-    expect(CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)).toEqual(['view'])
+    expect(CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)).toEqual(['view', 'delete'])
   })
 
   it('every default-referenced module key exists in the module catalog', () => {

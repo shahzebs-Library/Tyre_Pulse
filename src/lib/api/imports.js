@@ -7,25 +7,56 @@ import { supabase } from '../supabase'
 import { ServiceError, unwrap, fetchAllRpcPages } from './_client'
 import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
 import { naturalKey } from '../import/validate'
+import { queryClient } from '../queryClient'
 
 const BUCKET = 'import-files'
+const MAX_IMPORT_FILE_BYTES = 100 * 1024 * 1024
+const IMPORT_EXTENSIONS = new Set(['xlsx', 'xls', 'xlsm', 'xlsb', 'ods', 'csv', 'tsv', 'txt'])
+
+function extensionOf(name = '') {
+  const clean = String(name).trim().toLowerCase()
+  const dot = clean.lastIndexOf('.')
+  return dot > -1 ? clean.slice(dot + 1) : ''
+}
+
+/** Client preflight only; storage limits and database guards remain authoritative. */
+export async function validateImportFile(file) {
+  if (!file || typeof file.arrayBuffer !== 'function') throw new ServiceError('Choose a valid import file.', 'IMPORT_FILE_REQUIRED')
+  const ext = extensionOf(file.name)
+  if (!IMPORT_EXTENSIONS.has(ext)) throw new ServiceError('Only XLSX, XLS, XLSM, XLSB, ODS, CSV, TSV, or TXT files are allowed.', 'IMPORT_FILE_TYPE')
+  if (!Number.isFinite(file.size) || file.size <= 0) throw new ServiceError('The selected file is empty.', 'IMPORT_FILE_EMPTY')
+  if (file.size > MAX_IMPORT_FILE_BYTES) throw new ServiceError('The import file exceeds the 100 MB limit.', 'IMPORT_FILE_TOO_LARGE')
+  const head = new Uint8Array(await file.slice(0, 8).arrayBuffer())
+  const zip = head[0] === 0x50 && head[1] === 0x4b && [0x03, 0x05, 0x07].includes(head[2])
+  const ole = head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0
+  const binaryExt = ['xlsx', 'xlsm', 'xlsb', 'ods'].includes(ext)
+  if (binaryExt && !zip) throw new ServiceError('The file contents do not match the selected spreadsheet type.', 'IMPORT_FILE_SIGNATURE')
+  if (ext === 'xls' && !ole) throw new ServiceError('The file contents are not a valid legacy XLS file.', 'IMPORT_FILE_SIGNATURE')
+  if (['csv', 'tsv', 'txt'].includes(ext) && head.includes(0)) throw new ServiceError('The text import contains binary data.', 'IMPORT_FILE_SIGNATURE')
+  return { extension: ext, size: file.size }
+}
 
 function uuid() {
   return (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`)
 }
 
 async function currentUser() {
-  const { data } = await supabase.auth.getUser()
-  return data?.user ?? null
+  const { data, error } = await supabase.auth.getUser()
+  if (error || !data?.user) throw new ServiceError('Your session is no longer valid. Sign in and retry.', 'AUTH_REQUIRED', error)
+  return data.user
 }
 
 /** The caller's organisation_id (for storage paths); falls back to default org.
  * Reads BOTH mirror columns and prefers organisation_id, falling back to org_id,
  * so a row where only one is populated still resolves a real org. */
 async function currentOrgId(userId) {
-  if (!userId) return '00000000-0000-0000-0000-000000000001'
-  const { data } = await supabase.from('profiles').select('organisation_id,org_id').eq('id', userId).maybeSingle()
-  return data?.organisation_id ?? data?.org_id ?? '00000000-0000-0000-0000-000000000001'
+  if (!userId) throw new ServiceError('An authenticated user is required.', 'AUTH_REQUIRED')
+  const { data, error } = await supabase.from('profiles').select('organisation_id,org_id,approved,locked').eq('id', userId).maybeSingle()
+  if (error) throw new ServiceError(error.message, error.code, error)
+  if (!data || data.approved === false || data.locked === true) throw new ServiceError('This account is not active for imports.', 'IMPORT_ACCOUNT_INACTIVE')
+  const org = data.organisation_id ?? data.org_id
+  if (!org) throw new ServiceError('Your account is not assigned to an organisation.', 'IMPORT_ORG_REQUIRED')
+  return org
 }
 
 /**
@@ -54,6 +85,7 @@ async function findFileBySha(sha256) {
  * (c) REUSE the orphaned prior file and let the import continue.
  */
 export async function uploadOriginalFile(file, { module, country, sha256 }) {
+  await validateImportFile(file)
   const user = await currentUser()
   const org = await currentOrgId(user?.id)
   const safeName = (file.name || 'upload').replace(/[^\w.\-]+/g, '_')
@@ -93,6 +125,7 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
       // Orphaned earlier upload (never committed) → reuse it and continue.
       return { fileId: prior?.id ?? null, bucket: BUCKET, path: prior?.storagePath ?? path, sha256, reused: true }
     }
+    await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
     throw new ServiceError(error.message, error.code, error)
   }
   return { fileId: data.id, bucket: BUCKET, path, sha256 }
@@ -129,8 +162,8 @@ export async function uploadAttachment(file, { batchId, country, filename, sha25
   })
   if (upErr) throw new ServiceError(upErr.message, upErr.statusCode, upErr)
 
-  // Record the bytes as an import_files row so the attachment is a first-class,
-  // retention-tracked artefact (best-effort: a missing row must not lose the file).
+  // Metadata and bytes are one logical unit. If metadata fails, remove the bytes
+  // so an untraceable object can never remain in storage.
   let fileId = null
   try {
     const row = {
@@ -144,11 +177,16 @@ export async function uploadAttachment(file, { batchId, country, filename, sha25
       created_by: user?.id ?? null,
     }
     const { data, error } = await supabase.from('import_files').insert(row).select('id').single()
-    if (error && error.code !== '23505') throw new ServiceError(error.message, error.code, error)
+    if (error?.code === '23505') {
+      await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
+      const prior = await findFileBySha(sha256)
+      return { fileId: prior?.id ?? null, bucket: BUCKET, path: prior?.storagePath ?? null, reused: true }
+    }
+    if (error) throw new ServiceError(error.message, error.code, error)
     fileId = data?.id ?? null
   } catch (err) {
-    if (err instanceof ServiceError && err.code === '23505') fileId = null
-    else throw err
+    await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
+    throw err
   }
 
   return { fileId, bucket: BUCKET, path }
@@ -286,9 +324,9 @@ async function verifyStagedRows(batchId, expectedRows) {
     .select('id', { count: 'exact', head: true })
     .eq('batch_id', batchId)
   if (error) throw new ServiceError(error.message, error.code, error)
-  if (Number(count || 0) < expectedRows) {
+  if (Number(count || 0) !== expectedRows) {
     throw new ServiceError(
-      `Only ${Number(count || 0).toLocaleString('en-US')} of ${expectedRows.toLocaleString('en-US')} row(s) reached the database. Retry the upload; no commit was started.`,
+      `${Number(count || 0).toLocaleString('en-US')} of ${expectedRows.toLocaleString('en-US')} expected row(s) are staged. The batch was stopped before commit to prevent missing or duplicated records.`,
       'IMPORT_STAGING_INCOMPLETE',
     )
   }
@@ -513,7 +551,25 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
     // failed on an earlier attempt" - opposite problems with opposite fixes.
     if (d.not_eligible && typeof d.not_eligible === 'object') totals.not_eligible = d.not_eligible
     onProgress?.({ ...totals })
-    if (d.status !== 'partial' || !(d.remaining > 0)) return totals
+    if (d.status !== 'partial' || !(d.remaining > 0)) {
+      const verification = await verifyBatchLanding(batchId)
+      totals.verification = verification
+      if (Number(verification?.dangling || 0) > 0) {
+        throw new ServiceError(
+          `${verification.dangling} committed destination record(s) could not be verified in ${verification.target_table}. The batch remains traceable in Import History.`,
+          'IMPORT_LANDING_MISMATCH',
+        )
+      }
+      // Make the committed canonical rows visible immediately across active
+      // dashboards and detail pages, regardless of which screen initiated it.
+      await queryClient.invalidateQueries()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tyrepulse:data-changed', {
+          detail: { source: 'import', batchId, target: verification.target_table },
+        }))
+      }
+      return totals
+    }
     // Every chunk must make progress (rows become processed or errored).
     const progressed = (d.inserted || 0) + (d.skipped || 0) + (d.failed || 0) + (d.merged || 0)
     stalls = progressed > 0 ? 0 : stalls + 1
@@ -521,6 +577,12 @@ export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onPr
       throw new ServiceError(`Commit stalled with ${d.remaining} row(s) remaining. Re-open the batch from Intake History to retry.`, 'COMMIT_STALLED')
     }
   }
+}
+
+export async function verifyBatchLanding(batchId) {
+  const { data, error } = await supabase.rpc('import_verify_landing', { p_batch_id: batchId })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data || {}
 }
 
 /** Rows enriched per RPC call — smaller than commit chunks because each row

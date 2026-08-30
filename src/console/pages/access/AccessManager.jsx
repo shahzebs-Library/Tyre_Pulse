@@ -29,7 +29,7 @@ import {
   Users, Search, ChevronRight, ChevronDown, ChevronsDownUp,
   ChevronsUpDown, Crown, Save, Loader2, Check, X, RotateCcw, Info,
   AlertTriangle, SlidersHorizontal, UserCog, Eye, Ban, RefreshCw,
-  FolderTree, Zap, Monitor, Smartphone, Layers, ShieldCheck, KeyRound,
+  FolderTree, Zap, Monitor, Smartphone, Layers, ShieldCheck, KeyRound, Lock,
 } from 'lucide-react'
 import { useAuth } from '../../../contexts/AuthContext'
 import {
@@ -37,9 +37,9 @@ import {
 } from '../../../lib/moduleCatalog'
 import {
   CAPABILITIES, defaultViewAccess, resolveCapability,
-  getPermissionOverrides, savePermissionOverrides,
+  getPermissionOverrides,
 } from '../../../lib/permissionMatrix'
-import { listGlobalPermissions, saveModulePermissions } from '../../../lib/api/modulePermissions'
+import { listGlobalPermissions, saveModulePermissions, saveAccessControlMatrix } from '../../../lib/api/modulePermissions'
 import { listProfiles } from '../../../lib/api/users'
 import { listCustomRoles } from '../../../lib/api/customRoles'
 import MobileAccessPanel from './MobileAccessPanel'
@@ -519,6 +519,7 @@ export default function AccessManager() {
 
   function toggleCap(key, cap) {
     if (!draft || !capEditable(key)) return
+    if (cap === 'delete') return
     setNode(key, { caps: { [cap]: !(draft.caps[key]?.[cap] === true) } })
   }
 
@@ -534,7 +535,7 @@ export default function AccessManager() {
       for (const key of keys) {
         next.view[key] = capMap.view
         if (capEditable(key)) {
-          next.caps[key] = Object.fromEntries(EXTRA_CAPS.map((c) => [c.key, capMap[c.key]]))
+          next.caps[key] = Object.fromEntries(EXTRA_CAPS.map((c) => [c.key, c.key === 'delete' ? false : capMap[c.key]]))
         } else {
           // sub-module in role mode: caps mirror view (non-editable)
           next.caps[key] = Object.fromEntries(EXTRA_CAPS.map((c) => [c.key, capMap.view]))
@@ -654,8 +655,6 @@ export default function AccessManager() {
           baselineView: baseline.view, scopeBaseline, roleRows,
         })
         const viewChanges = planned.map(({ role, module_key, enabled }) => ({ role, module_key, enabled }))
-        if (viewChanges.length) await saveModulePermissions(viewChanges)
-
         // 2) base-module non-view caps -> app_settings overrides (merge, keep other roles)
         const roleOverride = {}
         for (const g of MODULE_GROUPS) {
@@ -672,7 +671,7 @@ export default function AccessManager() {
         const nextOverrides = { ...(overrides || {}) }
         if (Object.keys(roleOverride).length) nextOverrides[selectedRole] = roleOverride
         else delete nextOverrides[selectedRole]
-        await savePermissionOverrides(nextOverrides)
+        await saveAccessControlMatrix({ viewChanges, overrides: nextOverrides })
 
         // refresh globals so baseline reflects the DB
         const [vm, ov] = await Promise.all([listGlobalPermissions(), getPermissionOverrides()])
@@ -748,7 +747,7 @@ export default function AccessManager() {
     } finally {
       setSaving(false)
     }
-  }, [draft, baseline, dirtyCount, dirtyKeys, saving, mode, canWriteRole, canWriteUser, selectedRole, selectedUser, overrides, roleBaseline, grantIdx, scopeDraft, scopeBaseline, flash])
+  }, [draft, baseline, dirtyCount, dirtyKeys, saving, mode, canWriteRole, canWriteUser, selectedRole, selectedUser, overrides, roleBaseline, grantIdx, scopeDraft, scopeBaseline, viewMap, flash])
 
   // ── Role-wide surface control (role mode) ─────────────────────────────────────
   // One click to make a whole role Web-only or Mobile-only: set every enabled
@@ -1389,11 +1388,11 @@ function NodeRow({ node, draft, dirty, readOnly, mode, capEditable, advancedOpen
                   key={c.key}
                   type="button"
                   onClick={() => onToggleCap(c.key)}
-                  disabled={readOnly}
-                  title={`${c.description} (stored, not yet enforced)`}
+                  disabled={readOnly || c.key === 'delete'}
+                  title={c.key === 'delete' ? 'Delete is reserved for Admin and Super Admin' : `${c.description} (stored, progressively enforced)`}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border transition-colors disabled:opacity-40 ${cOn ? 'text-green-300 bg-green-900/20 border-green-800/50' : 'text-[var(--text-muted)] bg-[var(--btn-2-bg)] border-[var(--btn-2-border)] hover:text-[var(--text-secondary)]'}`}
                 >
-                  {cOn ? <Check size={10} /> : <X size={10} />} {c.label}<span className="text-[8px] uppercase tracking-wide opacity-60">stored</span>
+                  {c.key === 'delete' ? <Lock size={10} /> : cOn ? <Check size={10} /> : <X size={10} />} {c.label}<span className="text-[8px] uppercase tracking-wide opacity-60">{c.key === 'delete' ? 'admin only' : 'stored'}</span>
                 </button>
               )
             })}

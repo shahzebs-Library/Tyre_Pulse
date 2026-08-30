@@ -736,6 +736,11 @@ export default function DataIntakeCenter() {
     }
     setError(''); setBusy(true)
     try {
+      const unsafeRows = annotated.filter((r) => r.validationStatus === 'error'
+        && ['insert', 'update'].includes(effectiveAction(r)))
+      if (unsafeRows.length) {
+        throw new Error(`${unsafeRows.length} invalid row(s) are still marked for insert/update. Fix them or choose Skip/Reject before staging.`)
+      }
       await imports.stageRows(batchId, annotated.map((r) => {
         // The action is the operator's final call: their per-row override if set,
         // otherwise the smart default derived from the current toggles + flags.
@@ -744,11 +749,10 @@ export default function DataIntakeCenter() {
         // un-insertable row still fails its own per-row INSERT, so the batch is
         // never corrupted.
         const action = effectiveAction(r)
-        const forcedThrough = r.validationStatus === 'error' && (action === 'insert' || action === 'update')
         return {
           sheetName: sheet.name, sourceRowNo: r.sourceRowNo, raw: r.raw, mapped: r.mapped,
           transformed: r.transformed, custom: r.custom,
-          validationStatus: forcedThrough ? 'warning' : r.validationStatus,
+          validationStatus: r.validationStatus,
           dupStatus: r.dupStatus,
           action,
           fingerprint: r.fingerprint,

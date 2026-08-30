@@ -15,6 +15,7 @@
 import { supabase, unwrap } from './_client'
 import { saveModulePermissions, listGlobalPermissions } from './modulePermissions'
 import { ACCESS_ROLES, ALL_MODULES } from '../moduleCatalog'
+import { getPermissionOverrides, savePermissionOverrides } from '../permissionMatrix'
 
 const COLS = 'id,organisation_id,name,description,active,created_by,created_at,updated_at'
 
@@ -147,6 +148,17 @@ export async function createCustomRole({ name, description, moduleKeys } = {}) {
   return row
 }
 
+/** Copy advanced capabilities when a custom role starts from another role. */
+export async function cloneRoleCapabilities(sourceRole, targetRole) {
+  if (!sourceRole || !targetRole) return false
+  const overrides = await getPermissionOverrides()
+  const next = { ...overrides }
+  if (overrides?.[sourceRole]) next[targetRole] = structuredClone(overrides[sourceRole])
+  else delete next[targetRole]
+  await savePermissionOverrides(next)
+  return true
+}
+
 /** Patch description/active only (name is immutable — see file header). */
 export async function updateCustomRole(id, patch = {}) {
   const clean = {}
@@ -160,9 +172,17 @@ export async function updateCustomRole(id, patch = {}) {
  * for the name) so no stale access lingers if the name is ever reused.
  */
 export async function deleteCustomRole(id, name) {
-  await supabase.from('custom_roles').delete().eq('id', id)
+  unwrap(await supabase.from('custom_roles').delete().eq('id', id))
   if (name) {
     try { await setRoleModules(name, []) } catch { /* best-effort revoke */ }
+    try {
+      const overrides = await getPermissionOverrides()
+      if (Object.prototype.hasOwnProperty.call(overrides, name)) {
+        const next = { ...overrides }
+        delete next[name]
+        await savePermissionOverrides(next)
+      }
+    } catch { /* role is deleted; stale capability cleanup remains best-effort */ }
   }
   return true
 }

@@ -19,7 +19,7 @@ import { Suspense, lazy, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ShieldCheck, KeyRound, UserCog, UserCheck, Eye, Globe,
-  Layers, ScrollText, Fingerprint, Loader2, Wand2, SlidersHorizontal,
+  Layers, ScrollText, Fingerprint, Loader2, Wand2, SlidersHorizontal, Repeat2,
 } from 'lucide-react'
 
 import PermissionMatrix from '../../pages/PermissionMatrix'
@@ -34,6 +34,7 @@ const AccessPreviewOverride = lazy(() => import('./access/AccessPreviewOverride'
 const CountryScope = lazy(() => import('./access/CountryScope'))
 const BulkOperations = lazy(() => import('./access/BulkOperations'))
 const AccessAudit = lazy(() => import('./access/AccessAudit'))
+const ApprovalDelegations = lazy(() => import('../../pages/ApprovalDelegations'))
 
 const TABS = [
   { key: 'manager',   label: 'Access Manager',   icon: Wand2,       desc: 'Easy on/off editor for every module and tab, per role or user', Component: AccessManager, lazy: true },
@@ -44,6 +45,7 @@ const TABS = [
   { key: 'preview',   label: 'Preview & Override', icon: SlidersHorizontal, desc: 'Preview a role or user, then allow or deny any module', Component: AccessPreviewOverride, lazy: true },
   { key: 'country',   label: 'Country Scope',    icon: Globe,       desc: 'Which countries a user can see',          Component: CountryScope,         lazy: true  },
   { key: 'bulk',      label: 'Bulk Operations',  icon: Layers,      desc: 'Change role or capability for many users', Component: BulkOperations,       lazy: true  },
+  { key: 'delegation', label: 'Delegations',      icon: Repeat2,     desc: 'Temporary approval authority with start and expiry dates', Component: ApprovalDelegations, lazy: true },
   { key: 'audit',     label: 'Access Audit',     icon: ScrollText,  desc: 'Immutable trail of every access change',  Component: AccessAudit,          lazy: true  },
   { key: 'security',  label: 'Security',         icon: Fingerprint, desc: 'Sessions, login history, security events', Component: SecurityCenter,       lazy: false },
 ]

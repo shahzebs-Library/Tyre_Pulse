@@ -4,7 +4,7 @@ import { queryClient } from '../lib/queryClient'
 import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
-import { resolveCapability } from '../lib/permissionMatrix'
+import { getPermissionOverrides, resolveCapability, resolvePermissions } from '../lib/permissionMatrix'
 import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
@@ -85,6 +85,10 @@ export function AuthProvider({ children }) {
   // Fail-closed to {}. UI-gating only — the server (app_user_can / RLS) is the
   // real boundary; only `view` is server-enforced today.
   const [capabilities, setCapabilities] = useState({})
+  // Effective role-level capability defaults loaded from the same
+  // permission_overrides row edited by the Permission Matrix. User grants are
+  // applied separately in `capabilities` so an explicit revoke can still win.
+  const [roleCapabilities, setRoleCapabilities] = useState({})
   // Module lifecycle status map { module_id: { status, until, note } } from
   // Module Control (V258 + V278 maintenance window). Best-effort: unreadable /
   // pre-migration -> {} so status enforcement fails OPEN (an unknown key is
@@ -189,6 +193,7 @@ export function AuthProvider({ children }) {
     setModulePerms(null)
     setGrantOverrides({})
     setCapabilities({})
+    setRoleCapabilities({})
     setModuleStatuses({})
     unsubscribeFromProfile()
     setMfaEnabled(false)
@@ -308,7 +313,7 @@ export function AuthProvider({ children }) {
     // reject and one failing read can never discard the other four. listFactors
     // in particular is documented as able to throw a non-AuthError.
     const settle = () => ({ data: null, error: true })
-    const [profileRes, permsRes, factorsRes, grantsRes, capsRes] = await Promise.all([
+    const [profileRes, permsRes, factorsRes, grantsRes, capsRes, roleCapsRes] = await Promise.all([
       supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,sites,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single().then(r => r, settle),
       supabase.rpc('get_user_module_permissions').then(r => r, settle),
       supabase.auth.mfa.listFactors().then(r => r, settle),
@@ -318,6 +323,7 @@ export function AuthProvider({ children }) {
       // Per-user capability overrides. Same fail-closed contract: any error keeps
       // {} and never blocks login. UI-gating only (server is the real boundary).
       supabase.rpc('get_my_capabilities').then(r => r, settle),
+      getPermissionOverrides().then(data => ({ data, error: null }), () => settle()),
     ])
 
     const p = profileRes.data
@@ -366,6 +372,12 @@ export function AuthProvider({ children }) {
     // Any non-object (error, null, array) collapses to {} (fail-closed).
     const caps = capsRes?.data
     setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
+    const roleOverrides = roleCapsRes?.data
+    setRoleCapabilities(
+      p && roleOverrides && typeof roleOverrides === 'object' && !Array.isArray(roleOverrides)
+        ? resolvePermissions(p.role, roleOverrides, { [p.role]: permsRes.data ?? {} })
+        : {},
+    )
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     // Module lifecycle statuses - best-effort, never blocks login, always {}-safe.
     listModuleStatuses().then(setModuleStatuses)
@@ -376,10 +388,11 @@ export function AuthProvider({ children }) {
   // SECURITY DEFINER and fail-safe, so a transient error never wipes access.
   const refreshAccess = useCallback(async () => {
     try {
-      const [permsRes, grantsRes, capsRes] = await Promise.all([
+      const [permsRes, grantsRes, capsRes, roleCapsRes] = await Promise.all([
         supabase.rpc('get_user_module_permissions'),
         supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
         supabase.rpc('get_my_capabilities').then(r => r, () => ({ data: null, error: true })),
+        getPermissionOverrides().then(data => ({ data, error: null }), () => ({ data: null, error: true })),
       ])
       if (!permsRes.error) setModulePerms(permsRes.data ?? {})
       if (!grantsRes?.error) {
@@ -390,10 +403,17 @@ export function AuthProvider({ children }) {
         const caps = capsRes?.data
         setCapabilities(caps && typeof caps === 'object' && !Array.isArray(caps) ? caps : {})
       }
+      if (!roleCapsRes?.error && profile?.role) {
+        setRoleCapabilities(resolvePermissions(
+          profile.role,
+          roleCapsRes.data,
+          { [profile.role]: permsRes.error ? (modulePerms ?? {}) : (permsRes.data ?? {}) },
+        ))
+      }
       // Refresh module lifecycle statuses too (best-effort, {}-safe).
       listModuleStatuses().then(setModuleStatuses)
     } catch { /* keep current access on a transient failure */ }
-  }, [])
+  }, [profile?.role, modulePerms])
   // Expose the latest refreshAccess to the profile realtime handler (which is a
   // plain function created before this callback) so a live role change can
   // re-pull the role-keyed module map immediately.
@@ -435,6 +455,7 @@ export function AuthProvider({ children }) {
       .channel(`access-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_access_grants', filter: `user_id=eq.${user.id}` }, () => refreshAccess())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'module_permissions' }, () => refreshAccess())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.permission_overrides' }, () => refreshAccess())
       .subscribe()
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
@@ -497,25 +518,27 @@ export function AuthProvider({ children }) {
   // Per-capability UI gate. For `view` (or no cap given) this delegates to the
   // server-enforced hasPermission (module reach). For create/edit/delete/export/
   // approve it is a CLIENT-SIDE gate ONLY, used to disable/hide action buttons —
-  // the authoritative boundary is the server (app_user_can / RLS). There is no
-  // client role-default source for non-view capabilities today, so roleAllows is
-  // false: a non-view capability is allowed only when the module is reachable AND
-  // it is explicitly granted (override 'grant'), and is blocked on 'revoke'.
+  // the authoritative boundary is the server (app_user_can / RLS). Role defaults
+  // come from the same matrix row used by app_user_can; per-user grants/revokes
+  // are then resolved with revoke precedence.
   // Admin / Super Admin always pass. Callers must NOT treat a true result for a
   // non-view capability as a security guarantee.
   const hasCapability = useCallback((moduleKey, cap) => {
     if (!profile) return false
     if (!cap || cap === 'view') return hasPermission(moduleKey)
+    // Destructive deletion is a protected platform action. A matrix or
+    // per-user grant cannot elevate a non-admin into delete authority.
+    if (cap === 'delete') return profile.role === 'Admin' || isSuperAdmin
     // A non-view action is meaningless if the module itself is not reachable.
     if (!hasPermission(moduleKey)) return false
     const override = capabilities?.[moduleKey]?.[cap]
     return resolveCapability({
       role: profile.role,
       isSuperAdmin,
-      roleAllows: false,
+      roleAllows: roleCapabilities?.[moduleKey]?.[cap] === true,
       override,
     })
-  }, [profile, hasPermission, capabilities, isSuperAdmin])
+  }, [profile, hasPermission, capabilities, isSuperAdmin, roleCapabilities])
 
   const signIn = useCallback(async (identifier, password) => {
     let email = identifier.trim()

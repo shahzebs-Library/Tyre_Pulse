@@ -32,11 +32,11 @@ describe('resolveCapability precedence', () => {
 })
 
 describe('CAPABILITIES enforcement honesty', () => {
-  it('marks only view as server-enforced; the rest are client-gate only', () => {
+  it('marks view and admin-only delete as server-enforced', () => {
     const enforced = CAPABILITIES.filter((c) => c.enforced).map((c) => c.key)
-    expect(enforced).toEqual(['view'])
+    expect(enforced).toEqual(['view', 'delete'])
     for (const c of CAPABILITIES) {
-      if (c.key !== 'view') expect(c.enforced).toBe(false)
+      if (!['view', 'delete'].includes(c.key)) expect(c.enforced).toBe(false)
     }
   })
 })

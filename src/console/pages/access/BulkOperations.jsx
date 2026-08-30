@@ -368,7 +368,7 @@ export default function BulkOperations() {
                   <div>
                     <label className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] font-semibold block mb-1.5">Capability</label>
                     <select className="input py-2 text-sm w-full" value={capability} onChange={(e) => setCapability(e.target.value)}>
-                      {CAPABILITIES.map((c) => (
+                      {CAPABILITIES.filter((c) => c.key !== 'delete').map((c) => (
                         <option key={c.key} value={c.key}>{c.label}{c.enforced ? '' : ' (stored only)'}</option>
                       ))}
                     </select>

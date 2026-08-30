@@ -485,13 +485,13 @@ export default function AccessGrantsManager() {
                       value={form.capability}
                       onChange={(e) => setForm((f) => ({ ...f, capability: e.target.value }))}
                     >
-                      {CAPABILITIES.map((c) => (
+                      {CAPABILITIES.filter((c) => c.key !== 'delete').map((c) => (
                         <option key={c.key} value={c.key}>
                           {c.label}{c.enforced ? ' (enforced)' : ' (stored only)'}
                         </option>
                       ))}
                     </select>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Only View is enforced today.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">View is enforced; Delete is fixed to Admin/Super Admin and cannot be delegated.</p>
                   </div>
 
                   {/* Expiry */}

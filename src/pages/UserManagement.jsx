@@ -347,7 +347,7 @@ function Toast({ toast }) {
 
 export default function UserManagement() {
   const { t } = useLanguage()
-  const { profile: currentProfile } = useAuth()
+  const { profile: currentProfile, isSuperAdmin, refreshAccess } = useAuth()
 
   // Admin-defined custom roles are assignable alongside the built-in ROLES.
   // Re-fetched on mount AND on focus / tab-visibility so a role created in
@@ -421,7 +421,7 @@ export default function UserManagement() {
   // Activity expanded row
   const [expandedRow, setExpandedRow] = useState(null)
 
-  const isAdmin = currentProfile?.role === 'Admin'
+  const isAdmin = currentProfile?.role === 'Admin' || isSuperAdmin
   const isManager = currentProfile?.role === 'Manager'
 
   // ── Toast helper ──────────────────────────────────────────────────────────
@@ -1095,7 +1095,7 @@ export default function UserManagement() {
 
       {/* ── ACCESS MATRIX TAB ────────────────────────────────────────────────── */}
       {activeTab === 'matrix' && (
-        <AccessControlMatrix canEdit={isAdmin} />
+        <AccessControlMatrix canEdit={isAdmin || !!currentProfile?.is_super_admin} onSaved={refreshAccess} />
       )}
 
       {/* ── BRANDING TAB ─────────────────────────────────────────────────────── */}

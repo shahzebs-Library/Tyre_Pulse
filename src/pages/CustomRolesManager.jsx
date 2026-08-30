@@ -21,6 +21,7 @@ import { toUserMessage } from '../lib/safeError'
 import {
   listCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   getRoleModules, setRoleModules, isBuiltInRole, countUsersByRole, duplicateName,
+  cloneRoleCapabilities,
 } from '../lib/api/customRoles'
 
 const EMPTY = { name: '', description: '', moduleKeys: [] }
@@ -238,6 +239,7 @@ export default function CustomRolesManager() {
         await setRoleModules(editing.name, form.moduleKeys)
       } else {
         await createCustomRole({ name, description: form.description, moduleKeys: form.moduleKeys })
+        if (startFrom) await cloneRoleCapabilities(startFrom, name)
       }
       setShowModal(false); setEditing(null); setStartFrom('')
       setNotice(`Role "${name}" is ready. Access applies to signed-in users immediately, no re-login needed.`)
@@ -246,7 +248,7 @@ export default function CustomRolesManager() {
       const msg = String(err?.message || '')
       setFormError(/duplicate|unique/i.test(msg) ? 'A role with that name already exists.' : toUserMessage(err, 'Could not save the role.'))
     } finally { setSaving(false) }
-  }, [form, editing, load])
+  }, [form, editing, startFrom, load])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return

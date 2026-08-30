@@ -380,7 +380,7 @@ export default function Login() {
     // default 8). Never weaken the existing 6-char floor: use the stronger of the two.
     const minLen = Math.max(6, parseInt(cfg?.password_min_length, 10) || 8)
     if (password !== confirm)   { setError(t('auth.login.errPasswordMismatch')); return }
-    if (password.length < minLen) { setError(`Password must be at least ${minLen} characters.`); return }
+    if (password.length < minLen) { setError(t('auth.login.errPasswordMin', { min: minLen })); return }
     if (uname.length < 3)       { setError(t('auth.login.errUsernameRequired')); return }
     if (!/^[a-zA-Z0-9._-]+$/.test(uname)) { setError('Username may only contain letters, numbers, and . _ -'); return }
     if (!empId)                 { setError('Employee ID is required.'); return }
@@ -677,7 +677,7 @@ export default function Login() {
               {/* Tabs */}
               {!forgotMode && !pendingApproval && (
                 <div style={{ display:'flex', marginBottom:24, gap:4 }}>
-                  {[['login','Sign In'],['signup','Create Account']].map(([val,label]) => (
+                  {[['login',t('auth.login.tabSignIn')],['signup',t('auth.login.tabCreateAccount')]].map(([val,label]) => (
                     <button key={val} onClick={() => switchTab(val)} style={{
                       flex:1, padding:'9px 0', fontSize:13, fontWeight:700,
                       border:'none', borderRadius:10,
@@ -777,14 +777,14 @@ export default function Login() {
                   {/* Password */}
                   <div>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
-                      <span style={labelStyle}>Password</span>
+                      <span style={labelStyle}>{t('auth.passwordLabel')}</span>
                       <button type="button"
                         onClick={() => { setForgotMode(true); setForgotEmail(identifier.includes('@') ? identifier : ''); setError('') }}
                         style={{ fontSize:11, color:'var(--brand-on-tint)', opacity:0.75, background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'opacity 0.2s', letterSpacing:'0.02em' }}
                         onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
                         onMouseLeave={e => { e.currentTarget.style.opacity = '0.75' }}
                       >
-                        Forgot password?
+                        {t('auth.forgotPassword')}
                       </button>
                     </div>
                     <div style={{ position:'relative' }}>
@@ -827,14 +827,14 @@ export default function Login() {
                     marginTop:4,
                   }}>
                     {loading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
-                    {loading ? 'Signing in...' : !isOnline ? 'No Connection' : 'Sign In'}
+                    {loading ? t('auth.login.signingIn') : !isOnline ? t('auth.login.noConnection') : t('auth.login.tabSignIn')}
                     {!loading && isOnline && <ArrowRight size={15}/>}
                   </button>
 
                   {/* Enterprise SSO */}
                   <div style={{ display:'flex', alignItems:'center', gap:10, margin:'2px 0' }}>
                     <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
-                    <span style={{ fontSize:10, fontWeight:700, color:'var(--login-text-faint)', letterSpacing:'0.08em' }}>OR</span>
+                    <span style={{ fontSize:10, fontWeight:700, color:'var(--login-text-faint)', letterSpacing:'0.08em' }}>{t('auth.login.or')}</span>
                     <div style={{ flex:1, height:1, background:'var(--login-divider)' }}/>
                   </div>
                   <button type="button" onClick={handleSso} disabled={ssoLoading || !isOnline} style={{
@@ -846,7 +846,7 @@ export default function Login() {
                     transition:'all 0.2s',
                   }}>
                     {ssoLoading ? <Loader2 size={15} className="animate-spin"/> : <Shield size={15}/>}
-                    {ssoLoading ? 'Redirecting…' : 'Sign in with SSO'}
+                    {ssoLoading ? t('auth.login.redirecting') : t('auth.login.signInWithSso')}
                   </button>
                 </motion.form>
               )}
@@ -862,13 +862,13 @@ export default function Login() {
                   <div>
                     <button type="button" onClick={() => { setForgotMode(false); setError('') }}
                       style={{ fontSize:12, color:'var(--brand-on-tint)', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom:14, fontWeight:600 }}>
-                      ← Back to sign in
+                      {t('auth.login.backToSignIn')}
                     </button>
-                    <div style={{ fontSize:20, fontWeight:800, color:'var(--login-text)', marginBottom:5, letterSpacing:'-0.02em' }}>Reset Password</div>
-                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>Enter your email and we'll send a reset link instantly.</div>
+                    <div style={{ fontSize:20, fontWeight:800, color:'var(--login-text)', marginBottom:5, letterSpacing:'-0.02em' }}>{t('auth.login.resetPasswordTitle')}</div>
+                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>{t('auth.login.resetPasswordDesc')}</div>
                   </div>
                   <div>
-                    <div style={labelStyle}>Email address</div>
+                    <div style={labelStyle}>{t('auth.login.emailAddress')}</div>
                     <input type="email" style={inputStyle('forgot')} placeholder="you@company.com"
                       value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
                       onFocus={() => setFocusedField('forgot')} onBlur={() => setFocusedField(null)}
@@ -882,7 +882,7 @@ export default function Login() {
                     boxShadow:'0 4px 24px rgba(22,163,74,0.35)',
                   }}>
                     {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : <Mail size={16}/>}
-                    {forgotLoading ? 'Sending...' : 'Send Reset Link'}
+                    {forgotLoading ? t('auth.login.sending') : t('auth.login.sendResetLink')}
                   </button>
                 </motion.form>
               )}
@@ -899,14 +899,14 @@ export default function Login() {
                   }}>
                     <CheckCircle2 size={30} style={{color:'var(--brand-on-tint)'}}/>
                   </div>
-                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>Reset link sent!</div>
-                  <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6}}>Check your inbox, link expires in 60 minutes.</div>
+                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>{t('auth.login.resetLinkSent')}</div>
+                  <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6}}>{t('auth.login.resetLinkSentDesc')}</div>
                   <button onClick={() => { setForgotMode(false); setForgotSent(false) }} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
                     background:'linear-gradient(135deg, #16a34a, #15803d)',
                     color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer',
                     boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
-                  }}>Back to Sign In</button>
+                  }}>{t('auth.login.backToSignInBtn')}</button>
                 </motion.div>
               )}
 
@@ -926,32 +926,32 @@ export default function Login() {
                       border:'1.5px solid rgba(234,179,8,0.22)', lineHeight:1.5,
                     }}>
                       <AlertCircle size={15} style={{flexShrink:0, marginTop:1}}/>
-                      New account sign-up is currently closed. Please contact your administrator.
+                      {t('auth.login.signupClosedNotice')}
                     </div>
                   )}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                     <div>
-                      <div style={labelStyle}>Full Name</div>
-                      <input style={inputStyle('fname')} placeholder="Your name"
+                      <div style={labelStyle}>{t('auth.login.fullName')}</div>
+                      <input style={inputStyle('fname')} placeholder={t('auth.login.fullNamePlaceholder')}
                         value={fullName} onChange={e => setFullName(e.target.value)}
                         onFocus={() => setFocusedField('fname')} onBlur={() => setFocusedField(null)}/>
                     </div>
                     <div>
-                      <div style={labelStyle}>Username *</div>
-                      <input style={inputStyle('uname')} placeholder="username"
+                      <div style={labelStyle}>{t('auth.login.usernameRequired')}</div>
+                      <input style={inputStyle('uname')} placeholder={t('auth.login.usernamePlaceholder')}
                         value={signupUsername} onChange={e => setSignupUsername(e.target.value)}
                         onFocus={() => setFocusedField('uname')} onBlur={() => setFocusedField(null)} required/>
                     </div>
                   </div>
                   <div>
-                    <div style={labelStyle}>Employee ID *</div>
+                    <div style={labelStyle}>{t('auth.login.employeeIdRequired')}</div>
                     <input style={inputStyle('empid')} placeholder="EMP-1042"
                       value={employeeId} onChange={e => setEmployeeId(e.target.value)}
                       onFocus={() => setFocusedField('empid')} onBlur={() => setFocusedField(null)} required/>
                   </div>
                   {[
-                    { field:'spw',  show:showSignupPw,  set:setShowSignupPw,  val:password,  setVal:setPassword,  label:'Password *' },
-                    { field:'scpw', show:showConfirmPw, set:setShowConfirmPw, val:confirm,   setVal:setConfirm,   label:'Confirm Password *' },
+                    { field:'spw',  show:showSignupPw,  set:setShowSignupPw,  val:password,  setVal:setPassword,  label:t('auth.login.passwordRequired') },
+                    { field:'scpw', show:showConfirmPw, set:setShowConfirmPw, val:confirm,   setVal:setConfirm,   label:t('auth.login.confirmPasswordRequired') },
                   ].map(({ field, show, set, val, setVal, label }) => (
                     <div key={field}>
                       <div style={labelStyle}>{label}</div>
@@ -989,7 +989,7 @@ export default function Login() {
                         })}
                       </div>
                       <div style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600 }}>
-                        {password.length < 8 ? 'Too short' : password.length < 10 ? 'Fair' : password.length < 12 ? 'Good' : 'Strong'}
+                        {password.length < 8 ? t('auth.login.strengthTooShort') : password.length < 10 ? t('auth.login.strengthFair') : password.length < 12 ? t('auth.login.strengthGood') : t('auth.login.strengthStrong')}
                       </div>
                     </div>
                   )}
@@ -999,7 +999,7 @@ export default function Login() {
                     color:'var(--login-text-dim)', lineHeight:1.55,
                     background:'var(--login-notice-bg)', border:'1px solid var(--login-notice-border)',
                   }}>
-                    🔒 New accounts require admin approval before access is granted.
+                    {t('auth.login.approvalNotice')}
                   </div>
 
                   <button type="submit" disabled={loading || signupClosed} className="tp-btn-shine" style={{
@@ -1010,7 +1010,7 @@ export default function Login() {
                     boxShadow: (loading || signupClosed) ? 'none' : '0 4px 28px rgba(22,163,74,0.4)',
                   }}>
                     {loading && <Loader2 size={16} className="animate-spin"/>}
-                    {loading ? 'Creating account...' : signupClosed ? 'Sign-up closed' : 'Create Account'}
+                    {loading ? t('auth.login.creatingAccount') : signupClosed ? t('auth.login.signupClosed') : t('auth.login.createAccount')}
                     {!loading && !signupClosed && <ArrowRight size={15}/>}
                   </button>
                 </motion.form>
@@ -1026,16 +1026,16 @@ export default function Login() {
                     display:'flex', alignItems:'center', justifyContent:'center', fontSize:30,
                     boxShadow:'0 0 40px rgba(234,179,8,0.2)',
                   }}>⏳</div>
-                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>Account Submitted!</div>
+                  <div style={{fontSize:18, fontWeight:800, color:'var(--login-text)', marginBottom:8, letterSpacing:'-0.02em'}}>{t('auth.login.accountSubmitted')}</div>
                   <div style={{fontSize:13, color:'var(--login-text-dim)', lineHeight:1.6, maxWidth:280, margin:'0 auto'}}>
-                    Pending admin approval. You'll receive access once an administrator reviews your request.
+                    {t('auth.login.accountSubmittedDesc')}
                   </div>
                   <button onClick={() => switchTab('login')} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
                     background:'linear-gradient(135deg, #16a34a, #15803d)',
                     color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer',
                     boxShadow:'0 4px 24px rgba(22,163,74,0.3)',
-                  }}>Back to Sign In</button>
+                  }}>{t('auth.login.backToSignInBtn')}</button>
                 </motion.div>
               )}
             </div>
@@ -1046,10 +1046,10 @@ export default function Login() {
               style={{ textAlign:'center', marginTop:20, display:'flex', flexDirection:'column', gap:6 }}
             >
               <p style={{ fontSize:11, color:'var(--login-text-faint)', letterSpacing:'0.04em' }}>
-                © 2026 TyrePulse · Enterprise Fleet Intelligence
+                {t('auth.login.footerCopyright')}
               </p>
               <div style={{ display:'flex', justifyContent:'center', gap:16 }}>
-                {['Privacy','Terms','Support'].map(label => (
+                {[t('auth.login.footerPrivacy'),t('auth.login.footerTerms'),t('auth.login.footerSupport')].map(label => (
                   <span key={label} style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600, cursor:'default', letterSpacing:'0.04em' }}>
                     {label}
                   </span>

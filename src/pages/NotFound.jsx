@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import StateScreen from '../components/StateScreen'
+import { useLanguage } from '../contexts/LanguageContext'
 
 /**
  * NotFound — full-page 404 state shown for any unmatched authenticated route.
@@ -8,13 +9,14 @@ import StateScreen from '../components/StateScreen'
  */
 export default function NotFound() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
 
   return (
     <StateScreen
       illustration="error/404"
-      title="Page not found"
-      description="The page you're looking for doesn't exist, was moved, or you don't have access to it."
-      action={{ label: 'Go to dashboard', onClick: () => navigate('/') }}
+      title={t('console_nz.pageNotFound')}
+      description={t('console_nz.pageNotFoundDescription')}
+      action={{ label: t('console_nz.goToDashboard'), onClick: () => navigate('/') }}
     />
   )
 }

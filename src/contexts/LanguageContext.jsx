@@ -16,6 +16,7 @@ import pwaNs from '../locales/en/pwa.json'
 import rolesNs from '../locales/en/roles.json'
 import shellNs from '../locales/en/shell.json'
 import uiNs from '../locales/en/ui.json'
+import { observeLegacyDom, localiseLegacyDom } from '../lib/uiTranslationMemory'
 
 /**
  * Web i18n for the TyrePulse PWA.
@@ -230,6 +231,16 @@ export function LanguageProvider({ children }) {
     root.classList.toggle('rtl', isRTL)
     try { localStorage.setItem(STORAGE_KEY, language) } catch { /* ignore */ }
   }, [language, isRTL])
+
+  // A number of older, role-specific screens render values from the locale
+  // catalog directly. Keep those screens in sync as well, including content
+  // added later by dialogs, lazy routes and table pagination.
+  useEffect(() => {
+    const root = document.getElementById('root') || document.body
+    const enabled = language === 'ar'
+    localiseLegacyDom(root, enabled)
+    return observeLegacyDom(root, enabled)
+  }, [language, dictVersion])
 
   const setLanguage = useCallback((lang) => {
     // Accept any KNOWN language, not only a loaded one: dictionaries are

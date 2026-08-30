@@ -1,0 +1,8 @@
+{
+  "consoleOwnTab": "The console runs in its own secure tab with its own sign-in. It never opens on your app session.",
+  "openConsole": "Open the secure console tab",
+  "backToApp": "Back to the app",
+  "underMaintenance": "Under maintenance",
+  "maintenanceDefault": "System maintenance in progress. We will be back shortly.",
+  "signOut": "Sign out"
+}

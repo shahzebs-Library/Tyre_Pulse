@@ -12,7 +12,8 @@ import {
   CircleDot, ClipboardList, ShieldAlert, Wrench,
   TrendingUp, TrendingDown, Minus, DollarSign, Activity,
   Truck, FileText, Printer, ChevronDown, ChevronUp,
-  ZapOff, Building2, BarChart2, Bell, Eye,
+  ZapOff, Building2, BarChart2, Bell, Eye, User, Timer, Ban, Siren,
+  History, Send, CheckCheck,
 } from 'lucide-react'
 import * as dailyOpsApi from '../lib/api/dailyOps'
 import { useSettings } from '../contexts/SettingsContext'
@@ -22,7 +23,9 @@ import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useLanguage } from '../contexts/LanguageContext'
 import { isOverdueWorkOrder } from '../lib/dailyOpsPriority'
-import { listActionItems, updateActionItem } from '../lib/api/actionCenter'
+import { listActionItems, listActionItemHistory, subscribeToActionItems, transitionActionItem } from '../lib/api/actionCenter'
+import { listShiftHandovers, submitShiftHandover, reviewShiftHandover } from '../lib/api/operationalWorkflow'
+import { useAuth } from '../contexts/AuthContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -108,6 +111,7 @@ export default function DailyOps() {
   const { t } = useLanguage()
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
+  const { user, profile, isSuperAdmin } = useAuth()
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
   const [loading, setLoading] = useState(true)
   const [failedSources, setFailedSources] = useState([])
@@ -124,8 +128,20 @@ export default function DailyOps() {
   const [actionItems, setActionItems] = useState([])
   const [actionStatus, setActionStatus] = useState('active')
   const [actionOwner, setActionOwner] = useState('All')
+  const [actionSite, setActionSite] = useState('All')
+  const [actionShift, setActionShift] = useState('All')
+  const [myWork, setMyWork] = useState(true)
   const [actionSaving, setActionSaving] = useState('')
   const [actionError, setActionError] = useState('')
+  const [workflowDialog, setWorkflowDialog] = useState(null)
+  const [workflowReason, setWorkflowReason] = useState('')
+  const [historyFor, setHistoryFor] = useState(null)
+  const [historyRows, setHistoryRows] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [liveStatus, setLiveStatus] = useState('connecting')
+  const [handovers, setHandovers] = useState([])
+  const [handoverSummary, setHandoverSummary] = useState('')
+  const [handoverSaving, setHandoverSaving] = useState(false)
 
   const fetchData = useCallback(async (date) => {
     setLoading(true)
@@ -183,6 +199,15 @@ export default function DailyOps() {
   }, [activeCountry])
 
   useEffect(() => { fetchData(selectedDate) }, [selectedDate, fetchData])
+
+  useEffect(() => subscribeToActionItems(
+    () => listActionItems({ country: activeCountry, limit: 1000 }).then(setActionItems).catch(() => setLiveStatus('degraded')),
+    (status) => setLiveStatus(status === 'SUBSCRIBED' ? 'live' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'degraded' : 'connecting'),
+  ), [activeCountry])
+
+  useEffect(() => {
+    listShiftHandovers({ site: actionSite }).then(setHandovers).catch(() => setHandovers([]))
+  }, [actionSite])
 
   function navigate(dir) {
     const d = new Date(selectedDate + 'T00:00:00')
@@ -501,6 +526,8 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
     ? priorityQueue
     : priorityQueue.filter((item) => item.severity === queueSeverity)
   const actionOwners = [...new Set(actionItems.map((item) => item.assigned_to).filter(Boolean))].sort()
+  const actionSites = [...new Set(actionItems.map((item) => item.site).filter(Boolean))].sort()
+  const actionShifts = [...new Set(actionItems.map((item) => item.shift_id).filter(Boolean))].sort()
   const coreFailedCount = failedSources.filter((source) => source !== 'operational actions').length
   const visibleActions = actionItems.filter((item) => {
     const active = !['resolved', 'dismissed'].includes(item.status)
@@ -508,16 +535,24 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
     if (actionStatus === 'overdue' && (!active || !item.due_date || item.due_date >= selectedDate)) return false
     if (actionStatus === 'resolved' && active) return false
     if (actionOwner !== 'All' && item.assigned_to !== actionOwner) return false
+    if (actionSite !== 'All' && item.site !== actionSite) return false
+    if (actionShift !== 'All' && item.shift_id !== actionShift) return false
+    if (myWork && user?.id) {
+      if (item.assigned_user_id !== undefined && item.assigned_user_id !== null) {
+        if (item.assigned_user_id !== user.id) return false
+      } else if (!item.assigned_to || ![profile?.full_name, profile?.username, profile?.employee_id].filter(Boolean).includes(item.assigned_to)) return false
+    }
     return true
   })
 
-  async function transitionAction(item, status) {
+  async function transitionAction(item, status, options = {}) {
     setActionSaving(item.id)
     setActionError('')
     try {
-      const updated = await updateActionItem(item.id, {
-        status,
-        resolution: status === 'resolved' ? (item.resolution || `Completed from Daily Operations on ${selectedDate}`) : item.resolution,
+      const updated = await transitionActionItem(item.id, status, {
+        reason: options.reason,
+        approvalNote: options.approvalNote,
+        resolution: status === 'resolved' ? (options.reason || item.resolution || `Completed from Daily Operations on ${selectedDate}`) : item.resolution,
       })
       setActionItems((rows) => rows.map((row) => row.id === item.id ? updated : row))
     } catch (err) {
@@ -525,6 +560,40 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
     } finally {
       setActionSaving('')
     }
+  }
+
+  function openTransition(item, status, label) {
+    setWorkflowReason('')
+    setWorkflowDialog({ item, status, label })
+  }
+
+  async function confirmTransition() {
+    if (!workflowDialog || !workflowReason.trim()) return
+    await transitionAction(workflowDialog.item, workflowDialog.status, {
+      reason: workflowReason.trim(), approvalNote: workflowReason.trim(),
+    })
+    setWorkflowDialog(null)
+  }
+
+  async function openHistory(item) {
+    setHistoryFor(item)
+    setHistoryRows([])
+    setHistoryLoading(true)
+    try { setHistoryRows(await listActionItemHistory(item.id)) }
+    catch (err) { setActionError(err?.message || 'Could not load action history.') }
+    finally { setHistoryLoading(false) }
+  }
+
+  async function createHandover() {
+    setHandoverSaving(true)
+    setActionError('')
+    try {
+      const activeIds = visibleActions.filter((item) => !['resolved', 'dismissed'].includes(item.status)).map((item) => item.id)
+      const created = await submitShiftHandover({ country: activeCountry, site: actionSite, shiftId: actionShift === 'All' ? null : actionShift, summary: handoverSummary, actionItemIds: activeIds })
+      setHandovers((rows) => [created, ...rows])
+      setHandoverSummary('')
+    } catch (err) { setActionError(err?.message || 'Could not submit shift handover.') }
+    finally { setHandoverSaving(false) }
   }
 
   return (
@@ -603,8 +672,13 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               <div className="mr-auto">
                 <h2 id="daily-work-heading" className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Operational work</h2>
-                <p className="text-xs text-[var(--text-muted)] mt-1">Acknowledge, start and complete owned actions without leaving today&apos;s briefing.</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Owned work, SLA, approvals and exceptions without leaving today&apos;s briefing.</p>
               </div>
+              <span role="status" className={`inline-flex items-center gap-1.5 text-xs ${liveStatus === 'live' ? 'text-green-400' : liveStatus === 'degraded' ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
+                <span className={`h-2 w-2 rounded-full ${liveStatus === 'live' ? 'bg-green-400' : liveStatus === 'degraded' ? 'bg-amber-400' : 'bg-gray-500'}`} />
+                {liveStatus === 'live' ? 'Live' : liveStatus === 'degraded' ? 'Updates paused' : 'Connecting'}
+              </span>
+              <button type="button" onClick={() => setMyWork((value) => !value)} aria-pressed={myWork} className={myWork ? 'btn-primary text-sm' : 'btn-secondary text-sm'}><User size={14} className="inline mr-1" />My work</button>
               <select className="input text-sm" value={actionStatus} onChange={(e) => setActionStatus(e.target.value)} aria-label="Filter operational work by status">
                 <option value="active">Active work</option>
                 <option value="overdue">Overdue work</option>
@@ -615,6 +689,8 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                 <option value="All">All owners</option>
                 {actionOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
               </select>
+              <select className="input text-sm" value={actionSite} onChange={(e) => setActionSite(e.target.value)} aria-label="Filter operational work by site"><option value="All">All sites</option>{actionSites.map((site) => <option key={site} value={site}>{site}</option>)}</select>
+              <select className="input text-sm" value={actionShift} onChange={(e) => setActionShift(e.target.value)} aria-label="Filter operational work by shift"><option value="All">All shifts</option>{actionShifts.map((shift) => <option key={shift} value={shift}>{shift}</option>)}</select>
               <a href="/action-center" className="btn-secondary text-sm text-center">Open Action Center</a>
             </div>
             {actionError && <p role="alert" className="text-sm text-red-300">{actionError}</p>}
@@ -629,22 +705,45 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                         <span className="font-medium text-sm text-[var(--text-primary)]">{item.title}</span>
                         <span className="badge text-xs">{item.severity}</span>
                         <span className="badge text-xs">{item.status?.replace('_', ' ')}</span>
+                        {item.approval_status && item.approval_status !== 'not_required' && <span className="badge text-xs">Approval: {item.approval_status}</span>}
+                        {item.sla_due_at && <span className={`inline-flex items-center gap-1 text-xs ${new Date(item.sla_due_at) < new Date() && !['resolved', 'dismissed'].includes(item.status) ? 'text-red-300' : 'text-[var(--text-muted)]'}`}><Timer size={12} />SLA {new Date(item.sla_due_at).toLocaleString()}</span>}
                       </div>
                       <p className="text-xs text-[var(--text-muted)] mt-1">
                         {item.asset_no || 'No asset'} · {item.assigned_to || 'Unassigned'} · {item.due_date ? `Due ${item.due_date}` : 'No due date'}
                       </p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{item.site || 'No site'} · {item.shift_id ? `Shift ${item.shift_id}` : 'No shift'}</p>
+                      {(item.blocked_reason || item.escalated_reason) && <p className="text-xs text-amber-300 mt-1">{item.blocked_reason || item.escalated_reason}</p>}
                     </div>
-                    {!['resolved', 'dismissed'].includes(item.status) && (
-                      <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => openHistory(item)} className="btn-secondary text-xs"><History size={12} className="inline mr-1" />History</button>
+                      {!['resolved', 'dismissed'].includes(item.status) && <>
                         {item.status === 'open' && <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'acknowledged')} className="btn-secondary text-xs">Acknowledge</button>}
                         {item.status !== 'in_progress' && <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'in_progress')} className="btn-secondary text-xs">Start</button>}
-                        <button type="button" disabled={actionSaving === item.id} onClick={() => transitionAction(item, 'resolved')} className="btn-primary text-xs">Complete</button>
-                      </div>
-                    )}
+                        <button type="button" disabled={actionSaving === item.id} onClick={() => openTransition(item, 'blocked', 'Block work')} className="btn-secondary text-xs"><Ban size={12} className="inline mr-1" />Block</button>
+                        <button type="button" disabled={actionSaving === item.id} onClick={() => openTransition(item, 'escalated', 'Escalate work')} className="btn-secondary text-xs"><Siren size={12} className="inline mr-1" />Escalate</button>
+                        {item.approval_status === 'pending' && (isSuperAdmin || ['Admin', 'Manager', 'Supervisor'].includes(profile?.role)) && <button type="button" disabled={actionSaving === item.id} onClick={() => openTransition(item, 'in_progress', 'Approve work')} className="btn-secondary text-xs"><CheckCheck size={12} className="inline mr-1" />Approve</button>}
+                        {item.status !== 'pending_approval' && <button type="button" disabled={actionSaving === item.id} onClick={() => openTransition(item, item.approval_status === 'pending' ? 'pending_approval' : 'resolved', item.approval_status === 'pending' ? 'Submit for approval' : 'Complete work')} className="btn-primary text-xs">Complete</button>}
+                      </>}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
+          </section>
+
+          <section className="card space-y-3" aria-labelledby="shift-handover-heading">
+            <div className="flex flex-col md:flex-row md:items-start gap-3">
+              <div className="flex-1"><h2 id="shift-handover-heading" className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">Shift handover</h2><p className="text-xs text-[var(--text-muted)] mt-1">Submit the filtered open work with an accountable handover note.</p></div>
+              <span className="text-xs text-[var(--text-muted)]">{visibleActions.filter((item) => !['resolved', 'dismissed'].includes(item.status)).length} open items included</span>
+            </div>
+            <textarea className="input w-full min-h-[84px]" maxLength={8000} value={handoverSummary} onChange={(e) => setHandoverSummary(e.target.value)} aria-label="Shift handover summary" placeholder="Risks, work completed, blocked items, next owner and required follow-up…" />
+            <div className="flex justify-end"><button type="button" onClick={createHandover} disabled={handoverSaving || !handoverSummary.trim()} className="btn-primary text-sm"><Send size={13} className="inline mr-1" />{handoverSaving ? 'Submitting…' : 'Submit handover'}</button></div>
+            {handovers.length > 0 && <div className="divide-y divide-[var(--input-border)] border border-[var(--input-border)] rounded-lg">
+              {handovers.slice(0, 5).map((handover) => <div key={handover.id} className="p-3 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="flex-1 min-w-0"><p className="text-sm text-[var(--text-primary)]">{handover.summary}</p><p className="text-xs text-[var(--text-muted)] mt-1">{handover.site || 'All sites'} · {handover.open_item_count || 0} items · {handover.status}</p></div>
+                {handover.status === 'submitted' && (isSuperAdmin || ['Admin', 'Manager', 'Supervisor'].includes(profile?.role)) && <button type="button" className="btn-primary text-xs" onClick={async () => { try { const row = await reviewShiftHandover(handover.id, true); setHandovers((all) => all.map((h) => h.id === handover.id ? { ...h, ...row } : h)) } catch (err) { setActionError(err?.message || 'Could not accept handover.') } }}>Accept handover</button>}
+              </div>)}
+            </div>}
           </section>
 
           {/* Priority Action Queue */}
@@ -922,6 +1021,25 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             )}
           </motion.section>
         </>
+      )}
+
+      {workflowDialog && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="workflow-dialog-title">
+          <div className="card w-full max-w-lg space-y-4">
+            <div><h2 id="workflow-dialog-title" className="font-semibold text-[var(--text-primary)]">{workflowDialog.label}</h2><p className="text-sm text-[var(--text-muted)] mt-1">{workflowDialog.item.title}</p></div>
+            <label className="block text-sm text-[var(--text-secondary)]">Reason / evidence<textarea autoFocus className="input w-full min-h-[100px] mt-1" maxLength={4000} value={workflowReason} onChange={(e) => setWorkflowReason(e.target.value)} required /></label>
+            <div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setWorkflowDialog(null)}>Cancel</button><button type="button" className="btn-primary" disabled={!workflowReason.trim() || actionSaving === workflowDialog.item.id} onClick={confirmTransition}>{actionSaving === workflowDialog.item.id ? 'Saving…' : 'Confirm'}</button></div>
+          </div>
+        </div>
+      )}
+
+      {historyFor && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="history-dialog-title">
+          <div className="card w-full max-w-2xl max-h-[80vh] overflow-y-auto space-y-4">
+            <div className="flex gap-3"><div className="flex-1"><h2 id="history-dialog-title" className="font-semibold text-[var(--text-primary)]">Action history</h2><p className="text-sm text-[var(--text-muted)]">{historyFor.title}</p></div><button type="button" className="btn-secondary" onClick={() => setHistoryFor(null)}>Close</button></div>
+            {historyLoading ? <p className="text-sm text-[var(--text-muted)]">Loading history…</p> : historyRows.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No recorded transitions yet.</p> : <ol className="border-l border-[var(--input-border)] ml-2 space-y-4">{historyRows.map((event) => <li key={event.id} className="pl-4"><p className="text-sm text-[var(--text-primary)]">{event.event_type?.replaceAll('_', ' ') || 'Updated'}{event.from_status || event.to_status ? ` · ${event.from_status || 'new'} → ${event.to_status || 'updated'}` : ''}</p>{event.reason && <p className="text-sm text-[var(--text-muted)] mt-1">{event.reason}</p>}<time className="text-xs text-[var(--text-muted)]">{new Date(event.created_at).toLocaleString()}</time></li>)}</ol>}
+          </div>
+        </div>
       )}
     </div>
   )

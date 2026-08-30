@@ -24,7 +24,7 @@
  */
 
 const DB_NAME    = 'tyrepulse-offline'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE      = 'inspection_queue'
 export const SYNC_TAG = 'inspection-sync'
 
@@ -92,6 +92,13 @@ function openDB() {
         const store = db.createObjectStore(STORE, { keyPath: '_queueId', autoIncrement: true })
         store.createIndex('queued_at', 'queued_at', { unique: false })
         store.createIndex('status',    'status',    { unique: false })
+      }
+      // DB v2 is shared with the operational mutation queue. Create both stores
+      // regardless of which module opens IndexedDB first.
+      if (!db.objectStoreNames.contains('operational_mutation_queue')) {
+        const ops = db.createObjectStore('operational_mutation_queue', { keyPath: '_queueId', autoIncrement: true })
+        ops.createIndex('status', 'status', { unique: false })
+        ops.createIndex('idempotencyKey', 'idempotencyKey', { unique: true })
       }
     }
     req.onsuccess = e => resolve(e.target.result)

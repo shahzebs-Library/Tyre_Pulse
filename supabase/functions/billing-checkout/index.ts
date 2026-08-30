@@ -51,14 +51,26 @@ Deno.serve(async (req) => {
     return jsonResponse(req, { error: 'This plan is not available for self-serve checkout. Contact sales.' }, 400)
   }
 
-  const origin = req.headers.get('origin') ?? 'https://tyrepulse.app'
+  // Never trust the request Origin for payment redirects. A valid admin JWT can
+  // be sent outside a browser, where CORS provides no protection, and Stripe
+  // would otherwise redirect a completed checkout to an attacker-controlled
+  // host. APP_URL is an operator-controlled Edge secret/config value.
+  let appOrigin = 'https://tyrepulse.app'
+  try {
+    const configuredUrl = new URL(Deno.env.get('APP_URL') || appOrigin)
+    if (configuredUrl.protocol === 'https:' || configuredUrl.hostname === 'localhost') {
+      appOrigin = configuredUrl.origin
+    }
+  } catch {
+    // Fail to the production origin when APP_URL is malformed.
+  }
   const orgId = profile?.org_id ?? ''
 
   // Build the Checkout Session (form-encoded Stripe REST API — no SDK needed).
   const form = new URLSearchParams()
   form.set('mode', 'subscription')
-  form.set('success_url', `${origin}/billing?checkout=success`)
-  form.set('cancel_url', `${origin}/billing?checkout=cancel`)
+  form.set('success_url', `${appOrigin}/billing?checkout=success`)
+  form.set('cancel_url', `${appOrigin}/billing?checkout=cancel`)
   form.set('client_reference_id', orgId)
   form.set('metadata[plan_code]', planCode)
   form.set('metadata[interval]', interval)

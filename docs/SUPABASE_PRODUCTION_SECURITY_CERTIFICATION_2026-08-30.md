@@ -35,9 +35,25 @@ The `vector` and `pg_net` extension-location warnings were not changed during
 launch closure. Moving installed extensions can invalidate dependent objects and
 requires a separately rehearsed maintenance migration.
 
+The follow-up privileged-function audit removed direct client execution from 44
+trigger functions without affecting their installed triggers. All 415 public
+`SECURITY DEFINER` routines have a pinned `search_path`, and `PUBLIC` cannot
+create objects in the public schema. The remaining advisor warnings include 309
+authenticated privileged RPCs and ten intentional anonymous privileged RPCs;
+these require function-by-function role and negative-path tests before any grant
+can safely be removed.
+
+The current npm lockfile has two high advisories, both in the transitive
+`image-size` dependency of `pptxgenjs`. No patched upstream release exists, and
+npm's proposed remediation is a breaking downgrade. The affected parser is
+disabled by the package's browser mapping and is not imported by the published
+browser implementation used by TyrePulse. This is a bounded upstream risk to
+track, not a safe candidate for `npm audit fix --force`.
+
 ## Meaning of this certification
 
 This is a schema/configuration inspection, not proof of every role/tenant pair.
-Final tenant-isolation certification still requires authenticated negative tests
-using users from two seeded organisations and each production role. No
-cross-tenant production records were read during this audit.
+A real approved low-privilege user was tested against 285 RLS-protected tables
+with organisation identifiers and observed zero cross-tenant rows. This proves
+the low-privilege read path; final certification still requires mutation tests
+and the same negative matrix for every production role.

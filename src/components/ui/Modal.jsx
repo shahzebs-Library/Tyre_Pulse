@@ -68,12 +68,12 @@ export default function Modal({
           <header className="tp-dialog-head">
             <div className="flex-1 min-w-0">
               {title && (
-                <h2 id={titleId} className="text-base font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                <h2 id={titleId} className="text-base font-semibold break-words" style={{ color: 'var(--text-primary)' }}>
                   {title}
                 </h2>
               )}
               {subtitle && (
-                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>{subtitle}</p>
+                <p className="text-xs mt-0.5 break-words" style={{ color: 'var(--text-secondary)' }}>{subtitle}</p>
               )}
             </div>
             {headerExtra}

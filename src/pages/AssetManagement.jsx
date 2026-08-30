@@ -330,7 +330,7 @@ export default function AssetManagement() {
 
   // ── filter state ─────────────────────────────────────────────────────────────
   // Search, filters, sort and page live in the URL (useFilterState) so they
-  // SURVIVE opening an asset and pressing Back: a row opens `/assets/:assetNo`
+  // SURVIVE opening an asset and pressing Back: a row opens `/asset-management/:assetNo`
   // as a route, so without this the registry would remount unfiltered on page 1.
   // NOTE: `country` here is the page's own column filter over the loaded rows,
   // NOT the working-context country - that stays in the settings context.
@@ -361,7 +361,7 @@ export default function AssetManagement() {
   // ── pagination ───────────────────────────────────────────────────────────────
   // The URL carries a human-readable 1-based page; the list is 0-based.
   // Page AND size ride in the URL for the same reason the filters do: a row
-  // opens `/assets/:assetNo` as a route, so local state would be lost on Back.
+  // opens `/asset-management/:assetNo` as a route, so local state would be lost on Back.
   // That rules out `usePagedRows`, which owns its page in component state - the
   // shared BAR is still what renders, so there is no second pager UI, and the
   // arithmetic below is the same shape FleetMaster already uses for its own
@@ -377,13 +377,13 @@ export default function AssetManagement() {
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   // Full asset detail (profile, tyres, costs, work orders, disposal approval) now
-  // lives on the dedicated /assets/:assetNo page — the registry navigates there.
+  // lives on the dedicated /asset-management/:assetNo page — the registry navigates there.
   const [editAsset, setEditAsset] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
   const [activeTab, setActiveTab] = useState('registry') // registry | charts | health
 
   const openAsset = useCallback(
-    (assetNo) => navigate(`/assets/${encodeURIComponent(assetNo)}`),
+    (assetNo) => navigate(`/asset-management/${encodeURIComponent(assetNo)}`),
     [navigate],
   )
   // Puts the registry back where it was scrolled to on return from an asset.
@@ -822,7 +822,7 @@ export default function AssetManagement() {
               </div>
 
               {/* Table. The wrapper anchors the scroll-restore hook, so
-                  returning from /assets/:assetNo lands on the same row. */}
+                  returning from /asset-management/:assetNo lands on the same row. */}
               <div ref={listRef} className="bg-[var(--surface-1)] rounded-xl border border-[var(--border-dim)] overflow-hidden">
                 <div className="px-5 py-3 border-b border-[var(--border-dim)] flex items-center justify-between">
                   <span className="text-sm text-[var(--text-secondary)]">

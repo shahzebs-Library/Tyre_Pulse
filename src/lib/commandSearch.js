@@ -31,7 +31,7 @@ export const NAV_COMMANDS = [
   { id: 'tyres',          label: 'Tyre Records',         path: '/tyres',       icon: 'CircleDot' },
   // Operations
   { id: 'fleet-master',   label: 'Fleet Master',         path: '/fleet-master', icon: 'Truck', keywords: ['plate', 'number plate', 'registration', 'vin', 'chassis', 'vehicle list', 'asset register'] },
-  { id: 'assets',         label: 'Asset Management',     path: '/assets',      icon: 'LayoutGrid' },
+  { id: 'assets',         label: 'Asset Management',     path: '/asset-management', icon: 'LayoutGrid' },
   { id: 'asset-disposals', label: 'Asset Disposal',      path: '/asset-disposals', icon: 'Recycle', roles: ANALYTICS_ROLES, moduleKey: 'asset_disposals' },
   { id: 'asset-breakdowns', label: 'Breakdown Register', path: '/asset-breakdowns', icon: 'Wrench', roles: ANALYTICS_ROLES, moduleKey: 'asset_breakdowns' },
   { id: 'broadcast', label: 'Message the Team',      path: '/broadcast', icon: 'Megaphone', roles: ANALYTICS_ROLES, moduleKey: 'broadcast' },

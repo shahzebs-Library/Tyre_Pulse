@@ -369,7 +369,7 @@ export default function ScrappedRegister({ country, currency }) {
                     </td>
                     <td className="py-2 px-3">
                       {r.asset_no ? (
-                        <Link to={`/assets/${encodeURIComponent(r.asset_no)}`}
+                        <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`}
                           className="text-[var(--text-secondary)] hover:text-[var(--accent)]">{r.asset_no}</Link>
                       ) : <span className="text-[var(--text-dim)]">N/A</span>}
                       <span className="block text-[11px] text-[var(--text-dim)]">

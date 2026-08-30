@@ -3325,7 +3325,7 @@ export default function Inspections() {
         return (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <input className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
+              <input aria-label="Search inspections" className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
                 value={search} onChange={e => setFilter('search', e.target.value)} />
               <button
                 onClick={() => setShowFilters(v => !v)}
@@ -3467,6 +3467,7 @@ export default function Inspections() {
                     screen - the delete button then states the real count, so a
                     bulk delete can never be larger than it reads. */}
                 <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+                  aria-label={`Select all ${filtered.length} filtered inspections`}
                   title={`Select all ${filtered.length} records these filters leave`}
                   className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
               </div>
@@ -3532,6 +3533,7 @@ export default function Inspections() {
                     {isAdmin && (
                       <div className="px-3" onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
+                          aria-label={`Select inspection ${r.title || r.asset_no || r.id}`}
                           className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                       </div>
                     )}

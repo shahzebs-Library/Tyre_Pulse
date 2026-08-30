@@ -398,7 +398,7 @@ export default function SiteManagement() {
                       <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden border-t border-[var(--border-dim)]">
                         {s.assets.length ? (
-                          <SiteAssetsTable assets={s.assets} onOpen={(a) => navigate(`/assets/${encodeURIComponent(a.asset_no)}`)} />
+                          <SiteAssetsTable assets={s.assets} onOpen={(a) => navigate(`/asset-management/${encodeURIComponent(a.asset_no)}`)} />
                         ) : (
                           <div className="px-5 py-6 text-center text-[var(--text-muted)] text-sm flex items-center justify-center gap-2">
                             <CheckCircle2 className="w-4 h-4" /> Governed site with no assets assigned yet.

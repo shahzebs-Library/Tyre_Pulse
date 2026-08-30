@@ -120,7 +120,7 @@ const NAV_GROUPS = [
     label: 'Fleet & Assets',
     items: [
       { to: '/fleet-master',        label: 'Fleet Master', parent: 'Registry',       icon: TruckIc },
-      { to: '/assets',              label: 'Asset Management', parent: 'Registry',   icon: LayoutGrid },
+      { to: '/asset-management',    label: 'Asset Management', parent: 'Registry',   icon: LayoutGrid },
       { to: '/sites',               label: 'Site Management', parent: 'Registry',    icon: MapPin },
       { to: '/fleet-groups',        label: 'Fleet Groups', parent: 'Registry',       icon: Network, adminOnly: A },
       { to: '/combinations',        label: 'Combinations', parent: 'Registry',       icon: Combine, adminOnly: A },

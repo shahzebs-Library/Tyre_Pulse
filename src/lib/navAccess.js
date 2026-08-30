@@ -48,7 +48,7 @@ export const NAV_MODULE_KEY = {
   '/work-orders': 'work_orders',
   '/repair-requests': 'repair_requests',
   '/store-material-issue': 'store_material_issue',
-  '/assets': 'fleet_master',
+  '/asset-management': 'fleet_master',
   '/kpi-engine': 'kpi_scorecard',
   '/kpi-command': 'kpi_scorecard',
   '/position-intelligence': 'position_intelligence',

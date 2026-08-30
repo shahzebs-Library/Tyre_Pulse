@@ -1497,7 +1497,7 @@ export default function LiveFleetStatus() {
                   <button
                     onClick={() => {
                       setDrawerOpen(false)
-                      navigate(`/assets/${encodeURIComponent(drawerVehicle.asset_no)}`)
+                      navigate(`/asset-management/${encodeURIComponent(drawerVehicle.asset_no)}`)
                     }}
                     className="btn-primary w-full gap-2"
                   >

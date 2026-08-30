@@ -130,7 +130,7 @@ export default function DailyJobCards({ country }) {
                   {stillOut.map((r) => (
                     <tr key={r.work_order_no} className="border-b border-[var(--hairline)]/60">
                       <td className="py-2 pr-3">
-                        <Link to={`/assets/${encodeURIComponent(r.asset_no || '')}`}
+                        <Link to={`/asset-management/${encodeURIComponent(r.asset_no || '')}`}
                           className="text-[var(--text-primary)] font-medium hover:text-[var(--accent)]">
                           {r.asset_no || 'N/A'}
                         </Link>

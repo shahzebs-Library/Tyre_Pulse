@@ -152,12 +152,12 @@ describe('buildNavModuleCatalog', () => {
       label: 'Operations',
       items: [
         { key: '/live-fleet', label: 'Live Fleet Status' }, // new -> slug
-        { key: '/assets', label: 'Asset Management' },       // maps to existing 'fleet_master'
+        { key: '/asset-management', label: 'Asset Management' }, // maps to existing 'fleet_master'
         { key: '/sites', label: 'Site Management' },         // new -> slug
       ],
     },
   ]
-  const map = { '/': 'dashboard', '/tyres': 'tyre_records', '/assets': 'fleet_master' }
+  const map = { '/': 'dashboard', '/tyres': 'tyre_records', '/asset-management': 'fleet_master' }
 
   it('lists every curated base module first, owning its label + group', () => {
     const out = buildNavModuleCatalog(navCatalog, map)
@@ -173,7 +173,7 @@ describe('buildNavModuleCatalog', () => {
     const ids = out.map((m) => m.module_id)
     expect(new Set(ids).size).toBe(ids.length)                 // globally unique
     expect(ids.filter((k) => k === 'dashboard')).toHaveLength(1)
-    expect(ids.filter((k) => k === 'fleet_master')).toHaveLength(1) // /assets folded in
+    expect(ids.filter((k) => k === 'fleet_master')).toHaveLength(1) // asset-management folded in
   })
 
   it('adds unmapped nav items under their nav group, keyed by slug', () => {

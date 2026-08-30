@@ -353,6 +353,9 @@ const ReportShare            = lazy(() => import('./pages/ReportShare'))
 const AccidentPortalView     = lazy(() => import('./pages/AccidentPortalView'))
 const DataDeletion           = lazy(() => import('./pages/DataDeletion'))
 const Privacy                = lazy(() => import('./pages/Privacy'))
+const Terms                  = lazy(() => import('./pages/Terms'))
+const PublicSupport          = lazy(() => import('./pages/PublicSupport'))
+const PublicStatus           = lazy(() => import('./pages/PublicStatus'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
 const Approvals              = lazy(() => import('./pages/Approvals'))
 const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
@@ -575,6 +578,10 @@ function MainApp() {
             {/* PUBLIC privacy policy - the URL for Play Console App content + Data Safety. */}
             <Route path="/privacy"         element={<Safe><Privacy /></Safe>} />
             <Route path="/privacy-policy"  element={<LegacyRedirect to="/privacy" />} />
+            <Route path="/terms"           element={<Safe><Terms /></Safe>} />
+            <Route path="/terms-of-service" element={<LegacyRedirect to="/terms" />} />
+            <Route path="/support"         element={<Safe><PublicSupport /></Safe>} />
+            <Route path="/status"          element={<Safe><PublicStatus /></Safe>} />
             {/* Public, light-theme, auto-rotating TV/kiosk report viewer (V251/V252
                 share token) - ANON, no chrome. The single public report-share surface
                 (replaces the retired /display/:token executive board). The
@@ -656,7 +663,7 @@ function MainApp() {
                       <Route path="/parts-requests"       element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><PartsRequests /></RoleRoute></Safe>} />
                       <Route path="/maintenance-calendar" element={<Safe><RoleRoute allowed={['Admin']}><MaintenanceCalendar /></RoleRoute></Safe>} />
                       <Route path="/safety-compliance"    element={<Safe><RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute></Safe>} />
-                      <Route path="/assets"               element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
+                      <Route path="/asset-management"     element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetManagement /></ModuleRoute></Safe>} />
                       <Route path="/asset-disposals"       element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_disposals"><AssetDisposals /></RoleRoute></Safe>} />
                       <Route path="/repair-requests"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="repair_requests"><RepairRequests /></RoleRoute></Safe>} />
                       <Route path="/asset-breakdowns"      element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="asset_breakdowns"><AssetBreakdowns /></RoleRoute></Safe>} />
@@ -855,7 +862,7 @@ function MainApp() {
                       <Route path="/automation-rules"    element={<Safe><FlagRoute flag="automation_platform"><AutomationRules /></FlagRoute></Safe>} />
                       <Route path="/integrations"        element={<Safe><FlagRoute flag="automation_platform"><Integrations /></FlagRoute></Safe>} />
                       {/* ── Detail & builder pages (modal→page conversions, Session 15) ── */}
-                      <Route path="/assets/:assetNo"                   element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetDetail /></ModuleRoute></Safe>} />
+                      <Route path="/asset-management/:assetNo"        element={<Safe><ModuleRoute moduleKey="fleet_master"><AssetDetail /></ModuleRoute></Safe>} />
                       <Route path="/suppliers/:supplierId"             element={<Safe><ModuleRoute moduleKey="stock"><SupplierDetail /></ModuleRoute></Safe>} />
                       <Route path="/driver-management/:driverId"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverDetail /></ModuleRoute></Safe>} />
                       <Route path="/workshop/:jobId"                   element={<Safe><ModuleRoute moduleKey="work_orders"><WorkshopJobDetail /></ModuleRoute></Safe>} />

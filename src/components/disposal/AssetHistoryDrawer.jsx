@@ -135,7 +135,7 @@ export default function AssetHistoryDrawer({ row, rows = [], currency = '', onCl
             {row.asset_type || 'Type not recorded'}{row.site ? ` at ${row.site}` : ''}
           </span>
           <Link
-            to={`/assets/${encodeURIComponent(row.asset_no || '')}`}
+            to={`/asset-management/${encodeURIComponent(row.asset_no || '')}`}
             className="ml-auto text-sm text-blue-400 hover:underline inline-flex items-center gap-1"
           >
             Open asset <ExternalLink size={13} />

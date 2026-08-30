@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, Phone, KeyRound, AlertCircle, CheckCircle2,
@@ -20,6 +20,7 @@ import BrandIcon from '../components/ui/BrandIcon'
 import ThemeToggle from '../components/ui/ThemeToggle'
 import {
   RECOVERY_GENERIC_MESSAGE,
+  RECOVERY_SMS_ENABLED,
   recoveryDestinationIsValid,
   requestPasswordRecovery,
   verifyPasswordRecovery,
@@ -907,12 +908,16 @@ export default function Login() {
                       {t('auth.login.backToSignIn')}
                     </button>
                     <div style={{ fontSize:20, fontWeight:800, color:'var(--login-text)', marginBottom:5, letterSpacing:'-0.02em' }}>{t('auth.login.resetPasswordTitle')}</div>
-                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>Use a recovery email or mobile number that you previously verified in Account Settings.</div>
+                    <div style={{ fontSize:13, color:'var(--login-text-dim)', lineHeight:1.5 }}>
+                      {RECOVERY_SMS_ENABLED
+                        ? 'Use a recovery email or mobile number that you previously verified in Account Settings.'
+                        : 'Use the recovery email that you previously verified in Account Settings.'}
+                    </div>
                   </div>
                   <div role="group" aria-label="Recovery method" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                     {[
                       ['email', Mail, 'Email'],
-                      ['sms', Phone, 'Mobile SMS'],
+                      ...(RECOVERY_SMS_ENABLED ? [['sms', Phone, 'Mobile SMS']] : []),
                     ].map(([value, Icon, label]) => (
                       <button key={value} type="button" aria-pressed={forgotChannel === value}
                         onClick={() => { setForgotChannel(value); setForgotDestination(''); setError('') }}
@@ -949,6 +954,9 @@ export default function Login() {
                   </button>
                   <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
                     For security, TyrePulse gives the same response whether or not an account exists. Codes expire after 10 minutes.
+                  </p>
+                  <p style={{ margin:0, fontSize:11, color:'var(--login-text-faint)', lineHeight:1.5 }}>
+                    Cannot access your verified contact? <Link to="/support" style={{ color:'var(--brand-on-tint)', fontWeight:700 }}>Contact support</Link>.
                   </p>
                 </motion.form>
               )}
@@ -1124,10 +1132,15 @@ export default function Login() {
                 {t('auth.login.footerCopyright')}
               </p>
               <div style={{ display:'flex', justifyContent:'center', gap:16 }}>
-                {[t('auth.login.footerPrivacy'),t('auth.login.footerTerms'),t('auth.login.footerSupport')].map(label => (
-                  <span key={label} style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600, cursor:'default', letterSpacing:'0.04em' }}>
+                {[
+                  [t('auth.login.footerPrivacy'), '/privacy'],
+                  [t('auth.login.footerTerms'), '/terms'],
+                  [t('auth.login.footerSupport'), '/support'],
+                  ['Status', '/status'],
+                ].map(([label, to]) => (
+                  <Link key={to} to={to} style={{ fontSize:10, color:'var(--login-text-faint)', fontWeight:600, letterSpacing:'0.04em', textDecoration:'none' }}>
                     {label}
-                  </span>
+                  </Link>
                 ))}
               </div>
             </motion.div>

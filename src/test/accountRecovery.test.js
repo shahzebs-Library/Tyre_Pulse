@@ -7,6 +7,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   RECOVERY_GENERIC_MESSAGE,
+  RECOVERY_SMS_ENABLED,
   normalizeRecoveryDestination,
   recoveryDestinationIsValid,
   requestPasswordRecovery,
@@ -36,6 +37,13 @@ describe('account recovery client', () => {
       body: { action: 'request_recovery', channel: 'email', destination: 'user@example.com' },
     })
     expect(RECOVERY_GENERIC_MESSAGE).toMatch(/If that verified recovery contact/i)
+  })
+
+  it('keeps SMS recovery fail-safe until production explicitly enables it', async () => {
+    expect(RECOVERY_SMS_ENABLED).toBe(false)
+    await expect(requestPasswordRecovery({ channel: 'sms', destination: '+966501234567' }))
+      .rejects.toThrow(/not available yet/i)
+    expect(invoke).not.toHaveBeenCalled()
   })
 
   it('returns only the server-generated one-use recovery link after verification', async () => {

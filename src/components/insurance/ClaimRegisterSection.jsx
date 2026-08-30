@@ -77,7 +77,7 @@ export default function ClaimRegisterSection({
       header: 'Fleet asset',
       render: (r) => (r.asset_no
         ? (
-          <Link to={`/assets/${encodeURIComponent(r.asset_no)}`} className="inline-flex items-center gap-1 font-mono text-xs text-emerald-400 hover:underline">
+          <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`} className="inline-flex items-center gap-1 font-mono text-xs text-emerald-400 hover:underline">
             <Link2 size={12} /> {r.asset_no}
           </Link>
         )

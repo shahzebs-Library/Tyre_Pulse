@@ -245,7 +245,7 @@ describe('sidebar Favourites section', () => {
     // '/' is deliberately absent: navFavorites rejects it as a route, so the
     // dashboard can never be pinned (nor recorded as a recent).
     const full = [
-      '/assets', '/tyres', '/work-orders', '/stock', '/budgets', '/actions',
+      '/asset-management', '/tyres', '/work-orders', '/stock', '/budgets', '/actions',
       '/rca', '/inspections', '/reports', '/gate-pass', '/scrap', '/settings',
     ]
     expect(full).toHaveLength(MAX_FAVORITES)

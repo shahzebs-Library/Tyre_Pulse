@@ -5,7 +5,7 @@
  *    cost-per-km from recorded procurement + odometer stints (tyre_records
  *    joined to vehicle_fleet.vehicle_type), the canonical fleet CPK from the
  *    Engineering-KPI engine (kpiEngine.computeCpkFleet — never re-derived here),
- *    a peer percentile + performance band per asset (drill to /assets/:assetNo),
+ *    a peer percentile + performance band per asset (drill to /asset-management/:assetNo),
  *    a tyre-spend breakdown, a monthly CPK trend, GCC benchmark comparison and
  *    annual savings potential. Honest '—' wherever km/cost is missing.
  *
@@ -324,7 +324,7 @@ function FleetActuals() {
                 <tr
                   key={a.asset_no}
                   className="border-b border-[var(--border)]/50 hover:bg-[var(--surface-hover)] cursor-pointer"
-                  onClick={() => navigate(`/assets/${encodeURIComponent(a.asset_no)}`)}
+                  onClick={() => navigate(`/asset-management/${encodeURIComponent(a.asset_no)}`)}
                 >
                   <td className="py-2 pr-3 font-medium text-[var(--text-secondary)]">{a.asset_no}</td>
                   <td className="py-2 pr-3 text-[var(--text-muted)]">{a.vehicle_type || '—'}</td>

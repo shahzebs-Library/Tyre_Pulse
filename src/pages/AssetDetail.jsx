@@ -585,7 +585,7 @@ export default function AssetDetail() {
     return (
       <div className="text-[var(--text-primary)]">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
-          <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+          <BackButton onClick={() => navigate('/asset-management')} label={t('assetmgmt.detail.backToAssets')} />
           <LoadingState message={t('assetmgmt.detail.loading')} />
         </div>
       </div>
@@ -596,7 +596,7 @@ export default function AssetDetail() {
     return (
       <div className="text-[var(--text-primary)]">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
-          <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+          <BackButton onClick={() => navigate('/asset-management')} label={t('assetmgmt.detail.backToAssets')} />
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <AlertTriangle className="w-12 h-12 mb-3 text-red-400" />
             <p className="text-red-300 font-medium">{t('assetmgmt.detail.loadErrorTitle')}</p>
@@ -614,7 +614,7 @@ export default function AssetDetail() {
     return (
       <div className="text-[var(--text-primary)]">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6">
-          <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+          <BackButton onClick={() => navigate('/asset-management')} label={t('assetmgmt.detail.backToAssets')} />
           <EmptyState
             icon={Truck}
             title={t('assetmgmt.detail.notFoundTitle', { assetNo })}
@@ -626,7 +626,7 @@ export default function AssetDetail() {
                 ? `${assetNo} is not registered in ${matches.requested}. This asset number exists in ${matches.countries.join(', ')}. Switch country to open that machine - an asset number is only unique within its own country, so these are different vehicles.`
                 : t('assetmgmt.detail.notFoundDesc')
             }
-            action={{ label: t('assetmgmt.detail.backToAssets'), onClick: () => navigate('/assets') }}
+            action={{ label: t('assetmgmt.detail.backToAssets'), onClick: () => navigate('/asset-management') }}
           />
         </div>
       </div>
@@ -652,7 +652,7 @@ export default function AssetDetail() {
     <div className="text-[var(--text-primary)]">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-        <BackButton onClick={() => navigate('/assets')} label={t('assetmgmt.detail.backToAssets')} />
+        <BackButton onClick={() => navigate('/asset-management')} label={t('assetmgmt.detail.backToAssets')} />
 
         {/* Same asset number, more than one country = more than one machine
             (V376). Name the one on screen: a silent pick reads as the wrong

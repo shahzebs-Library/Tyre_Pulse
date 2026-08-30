@@ -829,7 +829,7 @@ export default function VehicleWashing() {
                     {dueList.slice(0, 50).map((d) => (
                       <tr key={d.asset_no} className="border-b border-[var(--input-border)]/60">
                         <td className="py-2 pr-3">
-                          <Link to={`/assets/${encodeURIComponent(d.asset_no)}`} className="text-blue-400 hover:text-blue-300">{d.asset_no}</Link>
+                          <Link to={`/asset-management/${encodeURIComponent(d.asset_no)}`} className="text-blue-400 hover:text-blue-300">{d.asset_no}</Link>
                         </td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{d.site || 'N/A'}</td>
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">
@@ -960,7 +960,7 @@ export default function VehicleWashing() {
                         <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.wash_date)}</td>
                         <td className="py-2 pr-3">
                           {r.asset_no ? (
-                            <Link to={`/assets/${encodeURIComponent(r.asset_no)}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300">
+                            <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300">
                               {r.asset_no} <ExternalLink size={11} className="opacity-70" />
                             </Link>
                           ) : <span className="text-[var(--text-muted)]">N/A</span>}
@@ -1448,7 +1448,7 @@ function SchedulePanel({ title, rows, emptyText, loading, lateColumn = false, ca
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">{fmtDate(r.wash_date)}</td>
                   <td className="py-2 pr-3">
                     {r.asset_no ? (
-                      <Link to={`/assets/${encodeURIComponent(r.asset_no)}`} className="text-blue-400 hover:text-blue-300">{r.asset_no}</Link>
+                      <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`} className="text-blue-400 hover:text-blue-300">{r.asset_no}</Link>
                     ) : <span className="text-[var(--text-muted)]">N/A</span>}
                   </td>
                   <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.wash_type || 'N/A'}</td>

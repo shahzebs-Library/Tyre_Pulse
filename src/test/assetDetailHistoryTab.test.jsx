@@ -136,8 +136,8 @@ vi.mock('../lib/api/assetHistory', async (orig) => ({
 import AssetDetail from '../pages/AssetDetail'
 
 const renderPage = () => render(
-  <MemoryRouter initialEntries={['/assets/TM514']}>
-    <Routes><Route path="/assets/:assetNo" element={<AssetDetail />} /></Routes>
+  <MemoryRouter initialEntries={['/asset-management/TM514']}>
+    <Routes><Route path="/asset-management/:assetNo" element={<AssetDetail />} /></Routes>
   </MemoryRouter>,
 )
 

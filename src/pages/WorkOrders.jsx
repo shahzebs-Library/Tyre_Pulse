@@ -746,6 +746,7 @@ export default function WorkOrders() {
           <div className="relative flex-1 min-w-48">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
+              aria-label="Search work orders"
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder={t('workorders.filters.searchPlaceholder')}
@@ -759,6 +760,7 @@ export default function WorkOrders() {
           ].map(({ label, value, setter, opts }) => (
             <select
               key={label}
+              aria-label={`Filter work orders by ${label.toLowerCase()}`}
               value={value}
               onChange={e => { setter(e.target.value); setPage(1) }}
               className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
@@ -802,6 +804,7 @@ export default function WorkOrders() {
                 {isAdmin && (
                   <th className="px-4 py-3 w-10">
                     <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+                      aria-label={t('workorders.columns.selectAllTitle')}
                       title={t('workorders.columns.selectAllTitle')}
                       className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                   </th>
@@ -849,6 +852,7 @@ export default function WorkOrders() {
                     {isAdmin && (
                       <td className="px-4 py-3">
                         <input type="checkbox" checked={selectedIds.has(order.id)} onChange={() => toggleSelect(order.id)}
+                          aria-label={`Select work order ${order.work_order_no || order.id}`}
                           className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                       </td>
                     )}

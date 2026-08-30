@@ -2325,6 +2325,7 @@ export default function Accidents() {
                   <div className="relative">
                     <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
+                      aria-label="Search accidents"
                       className="input pl-8 text-sm w-48"
                       placeholder="Search asset or description"
                       value={search}

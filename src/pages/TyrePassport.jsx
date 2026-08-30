@@ -387,7 +387,7 @@ export default function TyrePassport() {
                         {passport.currentAssetNo ? (
                           <span className="flex items-center gap-1">
                             <Truck size={12} /> On
-                            <Link to={`/assets/${encodeURIComponent(passport.currentAssetNo)}`} className="font-mono text-[var(--brand-bright)] hover:underline">{passport.currentAssetNo}</Link>
+                            <Link to={`/asset-management/${encodeURIComponent(passport.currentAssetNo)}`} className="font-mono text-[var(--brand-bright)] hover:underline">{passport.currentAssetNo}</Link>
                             {passport.currentPosition && <span>pos {passport.currentPosition}</span>}
                           </span>
                         ) : (
@@ -413,7 +413,7 @@ export default function TyrePassport() {
                   <p className="text-xs text-[var(--text-muted)] mt-3 flex items-center gap-1.5 flex-wrap">
                     <Truck size={12} /> Ran on:
                     {passport.assets.map((a) => (
-                      <Link key={a} to={`/assets/${encodeURIComponent(a)}`} className="font-mono text-[var(--text-secondary)] hover:text-[var(--brand-bright)] hover:underline">{a}</Link>
+                      <Link key={a} to={`/asset-management/${encodeURIComponent(a)}`} className="font-mono text-[var(--text-secondary)] hover:text-[var(--brand-bright)] hover:underline">{a}</Link>
                     ))}
                   </p>
                 )}
@@ -565,7 +565,7 @@ export default function TyrePassport() {
                         ) : journeyPager.pageRows.map((e, i) => (
                           <tr key={e.id ?? i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/40">
                             <td className="px-4 py-2.5 font-mono">
-                              {e.asset_no ? <Link to={`/assets/${encodeURIComponent(e.asset_no)}`} className="text-[var(--brand-bright)] hover:underline">{e.asset_no}</Link> : <span className="text-[var(--text-muted)]">{NA}</span>}
+                              {e.asset_no ? <Link to={`/asset-management/${encodeURIComponent(e.asset_no)}`} className="text-[var(--brand-bright)] hover:underline">{e.asset_no}</Link> : <span className="text-[var(--text-muted)]">{NA}</span>}
                             </td>
                             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.position || NA}</td>
                             <td className="px-4 py-2.5 text-[var(--text-secondary)]">{e.site || NA}</td>

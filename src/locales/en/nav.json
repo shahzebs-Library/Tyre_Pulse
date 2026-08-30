@@ -28,7 +28,7 @@
     "/": "Dashboard",
     "/tyres": "Tyre Records",
     "/fleet-master": "Fleet Master",
-    "/assets": "Asset Management",
+    "/asset-management": "Asset Management",
     "/actions": "Corrective Actions",
     "/rca": "Root Cause",
     "/daily-ops": "Daily Ops",

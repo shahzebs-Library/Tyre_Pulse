@@ -398,7 +398,7 @@ export default function GatePass() {
               <p>Type: <span className="text-white">{inspection.inspection_type}</span></p>
               <p>Inspector: <span className="text-white">{inspection.inspector || 'Not specified'}</span></p>
               <p>Recorded: <span className="text-white">{new Date(inspection.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span></p>
-              <p><Link to={`/assets/${encodeURIComponent(assetSearch.trim())}`} className="text-blue-300 underline underline-offset-2">Open vehicle record</Link></p>
+              <p><Link to={`/asset-management/${encodeURIComponent(assetSearch.trim())}`} className="text-blue-300 underline underline-offset-2">Open vehicle record</Link></p>
             </div>
             {blockers?.blocked && (
               <div className="rounded-lg p-3 mb-3" style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.45)' }}>
@@ -565,7 +565,7 @@ export default function GatePass() {
                         {new Date(p.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="py-2 pr-4 font-mono text-white font-semibold">
-                        <Link to={`/assets/${encodeURIComponent(p.asset_no)}`} className="hover:text-blue-300 underline-offset-2 hover:underline">{p.asset_no}</Link>
+                        <Link to={`/asset-management/${encodeURIComponent(p.asset_no)}`} className="hover:text-blue-300 underline-offset-2 hover:underline">{p.asset_no}</Link>
                       </td>
                       <td className="py-2 pr-4 text-gray-300">{p.site || '-'}</td>
                       <td className="py-2 pr-4">

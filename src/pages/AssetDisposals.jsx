@@ -809,7 +809,7 @@ export default function AssetDisposals() {
                     {candidatesPager.pageRows.map((c) => (
                       <tr key={c.asset_no} className="border-t border-[var(--input-border)]">
                         <td className="px-3 py-1.5 font-medium whitespace-nowrap">
-                          <Link to={`/assets/${encodeURIComponent(c.asset_no)}`} className="text-blue-400 hover:underline">
+                          <Link to={`/asset-management/${encodeURIComponent(c.asset_no)}`} className="text-blue-400 hover:underline">
                             {c.asset_no}
                           </Link>
                         </td>
@@ -995,7 +995,7 @@ function DisposalDetail({ row, baselines }) {
         <Badge meta={{ label: e.verdictLabel, tone: e.verdictTone }} />
         {!e.inRegister && <Badge meta={{ label: 'Not in the fleet register', tone: 'warning' }} />}
         {e.fleetStatus === 'Active' && <Badge meta={{ label: 'Still Active in the register', tone: 'danger' }} />}
-        <Link to={`/assets/${encodeURIComponent(row.asset_no)}`} className="ml-auto text-sm text-blue-400 hover:underline inline-flex items-center gap-1">
+        <Link to={`/asset-management/${encodeURIComponent(row.asset_no)}`} className="ml-auto text-sm text-blue-400 hover:underline inline-flex items-center gap-1">
           Open asset <ExternalLink size={13} />
         </Link>
       </div>

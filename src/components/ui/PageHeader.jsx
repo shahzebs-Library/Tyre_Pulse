@@ -82,7 +82,7 @@ export default function PageHeader({
         )}
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-white tracking-tight">{title}</h1>
+            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">{title}</h1>
             {badge && (
               <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-subtle text-brand-bright border border-[rgba(22,163,74,0.2)]">
                 {badge}
@@ -108,7 +108,7 @@ export default function PageHeader({
             disabled={refreshing}
             className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
           >
-            <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
+            <RefreshCw aria-hidden="true" className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
             {refreshing ? t('common.loading') : t('common.refresh')}
           </button>
         )}

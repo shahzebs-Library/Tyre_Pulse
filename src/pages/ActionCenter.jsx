@@ -153,7 +153,10 @@ export default function ActionCenter() {
 
   useEffect(() => { load() }, [load])
 
-  const allRows = rows
+  // The first render intentionally uses null to distinguish loading from an
+  // empty result. All derived collections must still receive an array; the
+  // production route previously crashed here before its request completed.
+  const allRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows])
   const summary = useMemo(() => summariseActions(allRows, nowMs), [allRows, nowMs])
   const categoryBreakdown = useMemo(() => byCategory(allRows), [allRows])
   const severityCounts = useMemo(() => bySeverity(allRows), [allRows])

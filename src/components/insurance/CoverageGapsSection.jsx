@@ -73,7 +73,7 @@ export default function CoverageGapsSection({ coverage, loading, error, onRetry,
       key: 'asset_no',
       header: 'Asset',
       render: (r) => (r.asset_no
-        ? <Link to={`/assets/${encodeURIComponent(r.asset_no)}`} className="font-mono text-xs text-emerald-400 hover:underline">{r.asset_no}</Link>
+        ? <Link to={`/asset-management/${encodeURIComponent(r.asset_no)}`} className="font-mono text-xs text-emerald-400 hover:underline">{r.asset_no}</Link>
         : <span className="text-[var(--text-muted)]">N/A</span>),
     },
     { key: 'vehicle_type', header: 'Type' },

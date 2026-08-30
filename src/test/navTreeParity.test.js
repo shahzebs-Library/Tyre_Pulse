@@ -40,7 +40,7 @@ const ROUTES_BEFORE_REGROUP = [
   '/approvals',
   '/asset-breakdowns',
   '/asset-disposals',
-  '/assets',
+  '/asset-management',
   '/audit',
   '/automation-rules',
   '/batteries',

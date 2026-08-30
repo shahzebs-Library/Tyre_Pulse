@@ -3,6 +3,15 @@ import { supabase } from './supabase'
 export const RECOVERY_GENERIC_MESSAGE =
   'If that verified recovery contact belongs to an eligible account, a 6-digit code is on its way.'
 
+// Email is the safe launch default. SMS becomes visible only after Twilio is
+// provisioned and the production operator explicitly enables the public flag.
+export const RECOVERY_SMS_ENABLED =
+  String(import.meta.env.VITE_RECOVERY_SMS_ENABLED || '').toLowerCase() === 'true'
+
+export function isRecoveryChannelEnabled(channel) {
+  return channel === 'email' || (channel === 'sms' && RECOVERY_SMS_ENABLED)
+}
+
 function functionError(error, fallback) {
   const context = error?.context
   const body = context?.body
@@ -30,6 +39,7 @@ export function recoveryDestinationIsValid(channel, value) {
 }
 
 export async function requestPasswordRecovery({ channel, destination }) {
+  if (!isRecoveryChannelEnabled(channel)) throw new Error('SMS recovery is not available yet. Use recovery email or contact support.')
   return invoke({ action: 'request_recovery', channel, destination: normalizeRecoveryDestination(channel, destination) })
 }
 

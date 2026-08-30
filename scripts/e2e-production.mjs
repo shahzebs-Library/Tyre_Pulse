@@ -48,12 +48,12 @@ try {
     await page.waitForURL(url => !url.pathname.startsWith('/login'), { timeout: 30_000 })
     console.log(`PASS approved test user authenticated (${page.url()})`)
 
-    await page.goto(`${baseURL}/assets`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.goto(`${baseURL}/asset-management`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForURL(url => !url.pathname.startsWith('/login'), { timeout: 20_000 })
     await expectVisible('main, [role="main"]', 'authenticated Assets route renders its application shell')
 
     if (assetNo) {
-      await page.goto(`${baseURL}/assets/${encodeURIComponent(assetNo)}`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.goto(`${baseURL}/asset-management/${encodeURIComponent(assetNo)}`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
       await page.getByRole('button', { name: /^Full history/ }).waitFor({ state: 'visible', timeout: 30_000 })
       await page.getByRole('button', { name: /^Full history/ }).click()
       await page.getByText('Recorded events', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 })

@@ -39,7 +39,7 @@
  * Beyond reaching the page, each destination was checked for a create
  * affordance that the arriving user can actually press:
  *
- *   New Asset goes to /fleet-master, NOT /assets. Asset Management renders its
+ *   New Asset goes to /fleet-master, NOT /asset-management. Asset Management renders its
  *   "Add Asset" button behind `profile?.role === 'Admin'`, so a Manager would
  *   arrive at a page with nothing to press. FleetMaster's "Add Vehicle" carries
  *   no such role gate, so the entry lands on a button for everyone it is
@@ -142,7 +142,7 @@ export const CREATE_ACTIONS = Object.freeze([
     labelKey: 'shell.newAsset',
     label: 'New Asset',
     icon: Truck,
-    // NOT /assets - see the header note: its Add button is Admin-only.
+    // NOT /asset-management - see the header note: its Add button is Admin-only.
     path: '/fleet-master',
     access: { path: '/fleet-master', moduleKey: 'fleet_master' },
   },

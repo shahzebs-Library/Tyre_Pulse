@@ -20,6 +20,7 @@ import { DEFAULT_PREFS, DIGEST_FREQUENCIES, PRIORITY_ORDER, summarisePrefs } fro
 import { toUserMessage } from '../lib/safeError'
 import {
   getRecoveryContacts,
+  RECOVERY_SMS_ENABLED,
   recoveryDestinationIsValid,
   removeRecoveryContact,
   requestRecoveryContactVerification,
@@ -573,6 +574,7 @@ export default function Settings() {
             <div>
               <label className="label">Display Name</label>
               <input
+                aria-label="Display Name"
                 className="input"
                 value={profileForm.full_name}
                 onChange={e => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
@@ -582,6 +584,7 @@ export default function Settings() {
             <div>
               <label className="label">Username</label>
               <input
+                aria-label="Username"
                 className="input"
                 value={profileForm.username}
                 onChange={e => setProfileForm(f => ({ ...f, username: e.target.value }))}
@@ -611,6 +614,7 @@ export default function Settings() {
             <div>
               <label className="label">New Password</label>
               <input
+                aria-label="New Password"
                 type="password"
                 className="input"
                 value={pwNew}
@@ -622,6 +626,7 @@ export default function Settings() {
             <div>
               <label className="label">Confirm Password</label>
               <input
+                aria-label="Confirm Password"
                 type="password"
                 className="input"
                 value={pwConfirm}
@@ -718,6 +723,7 @@ export default function Settings() {
             <div>
               <label className="label">Display Name</label>
               <input
+                aria-label="Display Name"
                 className="input"
                 value={profileForm.full_name}
                 onChange={e => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
@@ -727,6 +733,7 @@ export default function Settings() {
             <div>
               <label className="label">Username</label>
               <input
+                aria-label="Username"
                 className="input"
                 value={profileForm.username}
                 onChange={e => setProfileForm(f => ({ ...f, username: e.target.value }))}
@@ -735,7 +742,7 @@ export default function Settings() {
             </div>
             <div>
               <label className="label">Email</label>
-              <input className="input opacity-50 cursor-not-allowed" value={user?.email ?? ''} disabled />
+              <input aria-label="Email" className="input opacity-50 cursor-not-allowed" value={user?.email ?? ''} disabled />
             </div>
             <div className="flex items-center gap-3">
               <div>
@@ -803,6 +810,7 @@ export default function Settings() {
             <div>
               <label className="label">Company Name</label>
               <input
+                aria-label="Company Name"
                 className="input"
                 value={appSettings.company_name}
                 onChange={e => setAppSettings(s => ({ ...s, company_name: e.target.value }))}
@@ -811,6 +819,7 @@ export default function Settings() {
             <div>
               <label className="label">Default Currency</label>
               <select
+                aria-label="Default Currency"
                 className="input"
                 value={appSettings.currency}
                 onChange={e => setAppSettings(s => ({ ...s, currency: e.target.value }))}
@@ -824,6 +833,7 @@ export default function Settings() {
             <div>
               <label className="label">Active Country</label>
               <select
+                aria-label="Active Country"
                 className="input"
                 value={prefCountry}
                 onChange={e => savePrefCountry(e.target.value)}
@@ -835,6 +845,7 @@ export default function Settings() {
             <div>
               <label className="label">Date Format</label>
               <select
+                aria-label="Date Format"
                 className="input"
                 value={dateFormat}
                 onChange={e => saveDateFormat(e.target.value)}
@@ -845,6 +856,7 @@ export default function Settings() {
             <div>
               <label className="label">Default Cost per Tyre</label>
               <input
+                aria-label="Default Cost per Tyre"
                 type="number"
                 className="input"
                 value={appSettings.cost_per_tyre}
@@ -875,6 +887,7 @@ export default function Settings() {
               <div>
                 <label className="label">High Risk Threshold (%)</label>
                 <input
+                  aria-label="High Risk Threshold (%)"
                   type="number"
                   className="input"
                   value={highRiskPct}
@@ -888,6 +901,7 @@ export default function Settings() {
               <div>
                 <label className="label">Critical Cost Threshold</label>
                 <input
+                  aria-label="Critical Cost Threshold"
                   type="number"
                   className="input"
                   value={critCostThresh}
@@ -900,6 +914,7 @@ export default function Settings() {
               <div>
                 <label className="label">Low Tread Depth (mm)</label>
                 <input
+                  aria-label="Low Tread Depth (mm)"
                   type="number"
                   className="input"
                   value={lowTreadMm}
@@ -916,6 +931,7 @@ export default function Settings() {
                 <div key={f.key}>
                   <label className="label">{f.label}</label>
                   <input
+                    aria-label={f.label}
                     type="number"
                     className="input"
                     value={alertThresholds[f.key]}
@@ -1040,6 +1056,7 @@ export default function Settings() {
               <div>
                 <label className="label flex items-center gap-1.5"><Moon size={12} /> Quiet Hours Start</label>
                 <input
+                  aria-label="Quiet Hours Start"
                   type="time"
                   className="input"
                   value={(notifPrefs.quiet_start || '').slice(0, 5)}
@@ -1049,6 +1066,7 @@ export default function Settings() {
               <div>
                 <label className="label flex items-center gap-1.5"><Moon size={12} /> Quiet Hours End</label>
                 <input
+                  aria-label="Quiet Hours End"
                   type="time"
                   className="input"
                   value={(notifPrefs.quiet_end || '').slice(0, 5)}
@@ -1058,6 +1076,7 @@ export default function Settings() {
               <div>
                 <label className="label">Digest Frequency</label>
                 <select
+                  aria-label="Digest Frequency"
                   className="input"
                   value={notifPrefs.digest_frequency || 'none'}
                   onChange={e => setNotifPrefs(p => ({ ...p, digest_frequency: e.target.value }))}
@@ -1068,6 +1087,7 @@ export default function Settings() {
               <div>
                 <label className="label">Minimum Priority</label>
                 <select
+                  aria-label="Minimum Priority"
                   className="input"
                   value={notifPrefs.min_priority || 'low'}
                   onChange={e => setNotifPrefs(p => ({ ...p, min_priority: e.target.value }))}
@@ -1114,6 +1134,7 @@ export default function Settings() {
                 <div key={f.key}>
                   <label className="label">{f.label}</label>
                   <input
+                    aria-label={f.label}
                     type={f.type}
                     className="input"
                     value={draftKpiTargets[f.key]}
@@ -1232,14 +1253,14 @@ export default function Settings() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="label">Report Name</label>
-                <select className="input" value={newSchedule.reportName}
+                <select aria-label="Report Name" className="input" value={newSchedule.reportName}
                   onChange={e => setNewSchedule(s => ({ ...s, reportName: e.target.value }))}>
                   {REPORT_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Frequency</label>
-                <select className="input" value={newSchedule.frequency}
+                <select aria-label="Frequency" className="input" value={newSchedule.frequency}
                   onChange={e => setNewSchedule(s => ({ ...s, frequency: e.target.value }))}>
                   {SCHEDULE_FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
@@ -1247,7 +1268,7 @@ export default function Settings() {
               {newSchedule.frequency === 'Weekly' && (
                 <div>
                   <label className="label">Day of Week</label>
-                  <select className="input" value={newSchedule.dayOfWeek}
+                  <select aria-label="Day of Week" className="input" value={newSchedule.dayOfWeek}
                     onChange={e => setNewSchedule(s => ({ ...s, dayOfWeek: e.target.value }))}>
                     {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -1256,7 +1277,7 @@ export default function Settings() {
               {newSchedule.frequency === 'Monthly' && (
                 <div>
                   <label className="label">Day of Month</label>
-                  <select className="input" value={newSchedule.dayOfMonth}
+                  <select aria-label="Day of Month" className="input" value={newSchedule.dayOfMonth}
                     onChange={e => setNewSchedule(s => ({ ...s, dayOfMonth: Number(e.target.value) }))}>
                     {DAYS_OF_MONTH.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -1264,7 +1285,7 @@ export default function Settings() {
               )}
               <div>
                 <label className="label">Time</label>
-                <select className="input" value={newSchedule.time}
+                <select aria-label="Time" className="input" value={newSchedule.time}
                   onChange={e => setNewSchedule(s => ({ ...s, time: e.target.value }))}>
                   {HOUR_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -1276,6 +1297,7 @@ export default function Settings() {
               <div className={newSchedule.frequency === 'Daily' ? 'sm:col-span-2 lg:col-span-1' : ''}>
                 <label className="label flex items-center gap-1"><Mail size={12} /> Recipients</label>
                 <input
+                  aria-label="Recipients"
                   className="input"
                   placeholder="email1@co.com, email2@co.com"
                   value={newSchedule.recipients}
@@ -1508,7 +1530,7 @@ function RecoveryContactsCard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
           { channel: 'email', Icon: Mail, label: 'Recovery email', value: contacts.recovery_email, verified: contacts.recovery_email_verified_at, placeholder: 'you@company.com', type: 'email' },
-          { channel: 'sms', Icon: Phone, label: 'Recovery mobile', value: contacts.recovery_phone, verified: contacts.recovery_phone_verified_at, placeholder: '+966501234567', type: 'tel' },
+          ...(RECOVERY_SMS_ENABLED ? [{ channel: 'sms', Icon: Phone, label: 'Recovery mobile', value: contacts.recovery_phone, verified: contacts.recovery_phone_verified_at, placeholder: '+966501234567', type: 'tel' }] : []),
         ].map(({ channel, Icon, label, value, verified, placeholder, type }) => (
           <div key={channel} className="rounded-xl border border-[var(--border-dim)] p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -1546,7 +1568,7 @@ function RecoveryContactsCard() {
         ))}
       </div>
       {message && <p role="status" className={`text-sm ${/could not|invalid|failed|enter|use international/i.test(message) ? 'text-red-400' : 'text-green-400'}`}>{message}</p>}
-      <p className="text-xs text-amber-300 flex gap-2"><AlertTriangle size={14} className="shrink-0 mt-0.5"/>Keep two methods when possible. Mobile numbers can be recycled; enable two-factor authentication as an additional protection.</p>
+      <p className="text-xs text-amber-300 flex gap-2"><AlertTriangle size={14} className="shrink-0 mt-0.5"/>{RECOVERY_SMS_ENABLED ? 'Keep two methods when possible. Mobile numbers can be recycled; enable two-factor authentication as an additional protection.' : 'Email recovery is available. SMS recovery will appear after the messaging service is provisioned; enable two-factor authentication as additional protection.'}</p>
     </div>
   )
 }
@@ -1747,6 +1769,7 @@ function AccountDeletionCard({ userEmail }) {
         <div>
           <label className="label">Reason (optional)</label>
           <textarea
+            aria-label="Reason for account deletion"
             className="input min-h-[68px] resize-y"
             value={reason}
             onChange={e => setReason(e.target.value)}
@@ -1759,6 +1782,7 @@ function AccountDeletionCard({ userEmail }) {
             <AlertTriangle size={12} /> Type DELETE to confirm
           </label>
           <input
+            aria-label="Type DELETE to confirm account deletion"
             className="input"
             value={confirm}
             onChange={e => setConfirm(e.target.value)}

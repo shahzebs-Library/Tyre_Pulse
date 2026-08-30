@@ -1007,7 +1007,7 @@ export default function FleetHealthBoard() {
                 <div className="space-y-3 pt-1">
                   {/* Primary: open the dedicated full asset profile page. */}
                   <button
-                    onClick={() => navigate(`/assets/${encodeURIComponent(drawerVehicle.asset_no)}`)}
+                    onClick={() => navigate(`/asset-management/${encodeURIComponent(drawerVehicle.asset_no)}`)}
                     className="w-full btn-primary flex items-center justify-center gap-2 text-sm"
                   >
                     <Truck size={13} /> {t('assetmgmt.detail.openAssetProfile')}

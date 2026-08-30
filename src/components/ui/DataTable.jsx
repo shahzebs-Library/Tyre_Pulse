@@ -55,11 +55,11 @@ export default function DataTable({
               {columns.map(col => (
                 <th
                   key={col.key}
+                  style={col.width ? { width: col.width } : undefined}
                   className={cn(
                     'px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap',
                     col.align === 'right' && 'text-right',
                     col.align === 'center' && 'text-center',
-                    col.width && `w-[${col.width}]`
                   )}
                 >
                   {col.label}
@@ -109,6 +109,13 @@ export default function DataTable({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.018, duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       onClick={onRowClick ? () => onRowClick(row) : undefined}
+                      tabIndex={onRowClick ? 0 : undefined}
+                      onKeyDown={onRowClick ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          onRowClick(row)
+                        }
+                      } : undefined}
                       className={cn(
                         'border-b border-[var(--border-subtle)] transition-colors',
                         'bg-surface-0',
@@ -117,15 +124,21 @@ export default function DataTable({
                       )}
                     >
                       {selectable && (
-                        <td className="px-4 py-3 w-10" onClick={e => { e.stopPropagation(); onSelect?.(id) }}>
-                          <div className={cn(
-                            'w-4 h-4 rounded border transition-all flex items-center justify-center',
+                        <td className="px-4 py-3 w-10">
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={!!isSelected}
+                            aria-label={`${isSelected ? 'Deselect' : 'Select'} row ${id ?? i + 1}`}
+                            onClick={event => { event.stopPropagation(); onSelect?.(id) }}
+                            className={cn(
+                            'w-5 h-5 rounded border transition-all flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
                             isSelected
                               ? 'bg-brand border-brand'
                               : 'border-[var(--border-dim)] hover:border-brand/40'
                           )}>
                             {isSelected && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
-                          </div>
+                          </button>
                         </td>
                       )}
                       {columns.map(col => (
@@ -138,7 +151,7 @@ export default function DataTable({
                           )}
                         >
                           {col.render ? col.render(row[col.key], row) : (
-                            <span className="text-gray-300">{row[col.key] ?? '-'}</span>
+                            <span className="text-[var(--text-primary)]">{row[col.key] ?? '-'}</span>
                           )}
                         </td>
                       ))}
@@ -161,7 +174,8 @@ export default function DataTable({
             <button
               onClick={() => onPage?.(page - 1)}
               disabled={page === 0}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-3 disabled:opacity-30 transition-all"
+              aria-label="Previous page"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-surface-3 disabled:opacity-30 transition-all"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -171,7 +185,8 @@ export default function DataTable({
             <button
               onClick={() => onPage?.(page + 1)}
               disabled={page >= totalPages - 1}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-3 disabled:opacity-30 transition-all"
+              aria-label="Next page"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-[var(--text-primary)] hover:bg-surface-3 disabled:opacity-30 transition-all"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

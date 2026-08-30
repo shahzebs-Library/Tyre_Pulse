@@ -13,6 +13,7 @@ const FormSelect = forwardRef(function FormSelect(
   ref,
 ) {
   const fieldId = id || (name ? `field-${name}` : undefined)
+  const errorId = error && fieldId ? `${fieldId}-error` : undefined
   return (
     <div className={wrapperClassName}>
       <FieldLabel label={label} htmlFor={fieldId} required={required} />
@@ -20,7 +21,10 @@ const FormSelect = forwardRef(function FormSelect(
         id={fieldId}
         name={name}
         ref={ref}
+        required={required}
+        aria-required={required || undefined}
         aria-invalid={error ? 'true' : undefined}
+        aria-describedby={errorId}
         className={`${fieldInputClass(!!error)} ${className}`}
         {...rest}
       >
@@ -32,7 +36,7 @@ const FormSelect = forwardRef(function FormSelect(
         })}
         {children}
       </select>
-      <FieldError error={error} />
+      <FieldError error={error} id={errorId} />
     </div>
   )
 })

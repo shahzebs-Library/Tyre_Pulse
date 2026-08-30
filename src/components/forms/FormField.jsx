@@ -16,10 +16,10 @@ export const fieldInputClass = (hasError) =>
   `placeholder-[var(--text-dim)] focus:outline-none ` +
   (hasError ? 'border-red-500 focus:border-red-400' : 'border-[var(--input-border)] focus:border-blue-500')
 
-export function FieldError({ error }) {
+export function FieldError({ error, id }) {
   if (!error?.message) return null
   return (
-    <p role="alert" className="mt-1 flex items-center gap-1 text-xs text-red-400">
+    <p id={id} role="alert" className="mt-1 flex items-center gap-1 text-xs text-red-400">
       <AlertTriangle size={11} className="flex-shrink-0" /> {error.message}
     </p>
   )
@@ -40,13 +40,17 @@ const FormField = forwardRef(function FormField(
   ref,
 ) {
   const fieldId = id || (name ? `field-${name}` : undefined)
+  const errorId = error && fieldId ? `${fieldId}-error` : undefined
   const control = multiline ? (
     <textarea
       id={fieldId}
       name={name}
       ref={ref}
       rows={rows}
+      required={required}
+      aria-required={required || undefined}
       aria-invalid={error ? 'true' : undefined}
+      aria-describedby={errorId}
       className={`${fieldInputClass(!!error)} resize-none ${className}`}
       {...rest}
     />
@@ -56,7 +60,10 @@ const FormField = forwardRef(function FormField(
       name={name}
       ref={ref}
       list={list}
+      required={required}
+      aria-required={required || undefined}
       aria-invalid={error ? 'true' : undefined}
+      aria-describedby={errorId}
       className={`${fieldInputClass(!!error)} ${className}`}
       {...rest}
     />
@@ -66,7 +73,7 @@ const FormField = forwardRef(function FormField(
       <FieldLabel label={label} htmlFor={fieldId} required={required} />
       {control}
       {children}
-      <FieldError error={error} />
+      <FieldError error={error} id={errorId} />
     </div>
   )
 })

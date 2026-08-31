@@ -8,18 +8,27 @@ void main() {
     test('every zone id is unique across the whole catalog', () {
       final List<String> ids =
           kAccidentDamageZones.map((AccidentDamageZone z) => z.id).toList();
-      expect(ids.toSet().length, ids.length,
-          reason: 'duplicate zone id(s) found');
+      expect(
+        ids.toSet().length,
+        ids.length,
+        reason: 'duplicate zone id(s) found',
+      );
     });
 
     test('every zone stays within its own 0..1 canvas', () {
       for (final AccidentDamageZone zone in kAccidentDamageZones) {
         expect(zone.left, greaterThanOrEqualTo(0), reason: zone.id);
         expect(zone.top, greaterThanOrEqualTo(0), reason: zone.id);
-        expect(zone.left + zone.width, lessThanOrEqualTo(1.0001),
-            reason: zone.id);
-        expect(zone.top + zone.height, lessThanOrEqualTo(1.0001),
-            reason: zone.id);
+        expect(
+          zone.left + zone.width,
+          lessThanOrEqualTo(1.0001),
+          reason: zone.id,
+        );
+        expect(
+          zone.top + zone.height,
+          lessThanOrEqualTo(1.0001),
+          reason: zone.id,
+        );
       }
     });
 
@@ -117,19 +126,25 @@ void main() {
       expect(map.count, 1);
       expect(map.hasMark('front_bumper'), isTrue);
       expect(
-          map.markFor('front_bumper')?.severity, AccidentDamageSeverity.minor);
+        map.markFor('front_bumper')?.severity,
+        AccidentDamageSeverity.minor,
+      );
     });
 
     test(
         'withMark on an already-marked zone replaces it rather than duplicating',
         () {
-      final AccidentDamageMap map = const AccidentDamageMap.empty()
-          .withMark(frontBumperMinor)
-          .withMark(frontBumperMinor.copyWith(
-              severity: AccidentDamageSeverity.severe));
+      final AccidentDamageMap map =
+          const AccidentDamageMap.empty().withMark(frontBumperMinor).withMark(
+                frontBumperMinor.copyWith(
+                  severity: AccidentDamageSeverity.severe,
+                ),
+              );
       expect(map.count, 1);
       expect(
-          map.markFor('front_bumper')?.severity, AccidentDamageSeverity.severe);
+        map.markFor('front_bumper')?.severity,
+        AccidentDamageSeverity.severe,
+      );
     });
 
     test('withoutMark removes exactly the named zone and leaves the rest', () {
@@ -166,8 +181,10 @@ void main() {
         frontBumperMinor.copyWith(severity: AccidentDamageSeverity.moderate),
       ]);
       expect(map.count, 1);
-      expect(map.markFor('front_bumper')?.severity,
-          AccidentDamageSeverity.moderate);
+      expect(
+        map.markFor('front_bumper')?.severity,
+        AccidentDamageSeverity.moderate,
+      );
     });
 
     test('copyWith keeps every field not explicitly overridden', () {

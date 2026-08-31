@@ -474,18 +474,19 @@ class _ExactLoginHero extends StatelessWidget {
               const Positioned(
                 left: 0,
                 top: 0,
-                width: 250,
+                width: 300,
                 height: 176,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
                       colors: <Color>[
                         Color(0xFF030A29),
-                        Color(0xF2030A29),
+                        Color(0xFF030A29),
                         Color(0x00030A29),
                       ],
+                      stops: <double>[0, 0.55, 1],
                     ),
                   ),
                 ),

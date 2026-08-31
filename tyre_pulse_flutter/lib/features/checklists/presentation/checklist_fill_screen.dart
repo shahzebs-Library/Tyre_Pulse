@@ -45,9 +45,11 @@ class _ChecklistFillScreenState extends ConsumerState<ChecklistFillScreen> {
     // for this exact situation - see `ChecklistFillController`'s own
     // library comment.
     unawaited(
-      ref
-          .read(checklistFillControllerProvider.notifier)
-          .initialiseFromRoute(widget.route),
+      Future<void>.microtask(
+        () => ref
+            .read(checklistFillControllerProvider.notifier)
+            .initialiseFromRoute(widget.route),
+      ),
     );
   }
 
@@ -77,7 +79,7 @@ class _ChecklistFillScreenState extends ConsumerState<ChecklistFillScreen> {
         body: TpErrorState(
           error: AppError(
             kind: AppErrorKind.unknown,
-            message: state.errorMessage ?? l10n.stateErrorTitle,
+            message: _failureMessage(l10n, state.failure),
             isRetryable: true,
           ),
           onRetry: () => ref
@@ -169,12 +171,12 @@ class _FillFormView extends ConsumerWidget {
             progress: progress,
           ),
           const SizedBox(height: TpSpace.lg),
-          if (state.errorMessage != null)
+          if (state.failure != null)
             Padding(
               padding: const EdgeInsets.only(bottom: TpSpace.lg),
               child: _Banner(
                 tone: TpStatus.critical,
-                message: state.errorMessage!,
+                message: _failureMessage(l10n, state.failure),
               ),
             ),
           if (state.lastSubmissionWarning?.found ?? false)
@@ -331,6 +333,18 @@ class _FillFormView extends ConsumerWidget {
     );
   }
 }
+
+String _failureMessage(
+  AppLocalizations l10n,
+  ChecklistFillFailure? failure,
+) =>
+    switch (failure) {
+      ChecklistFillFailure.workspaceLoading =>
+        l10n.checklistWorkspaceLoadingMessage,
+      ChecklistFillFailure.notFound => l10n.checklistFillNotFoundMessage,
+      ChecklistFillFailure.saveFailed => l10n.checklistFillSaveFailedMessage,
+      null => l10n.stateErrorMessage,
+    };
 
 List<ChecklistLang> _availableLanguages(ChecklistTemplate template) {
   return <ChecklistLang>[

@@ -144,14 +144,17 @@ class InspectionDetailScreen extends ConsumerStatefulWidget {
 
 class _InspectionDetailScreenState
     extends ConsumerState<InspectionDetailScreen> {
+  bool _didStartInitialLoad = false;
   bool _loading = true;
   AppError? _error;
   _InspectionView? _view;
   bool _isRetrying = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didStartInitialLoad) return;
+    _didStartInitialLoad = true;
     unawaited(_load());
   }
 
@@ -179,11 +182,12 @@ class _InspectionDetailScreenState
         _loading = false;
       });
     } on Object {
+      if (!mounted) return;
+      final AppLocalizations l10n = AppLocalizations.of(context);
       setState(() {
-        _error = const AppError(
+        _error = AppError(
           kind: AppErrorKind.unknown,
-          message: 'This inspection could not be loaded. Check your connection '
-              'and try again.',
+          message: l10n.inspectionDetailLoadErrorMessage,
           technical: 'InspectionDetailScreen._load failed',
           isRetryable: true,
         );
@@ -376,7 +380,10 @@ class _DetailBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         if (view.signature != null && view.signature!.isNotEmpty)
-          InspectionSignaturePad(value: view.signature, onChanged: (_) {})
+          InspectionSignaturePad(
+            value: view.signature,
+            readOnly: true,
+          )
         else
           Text(
             l10n.inspectionSignatureMissing,

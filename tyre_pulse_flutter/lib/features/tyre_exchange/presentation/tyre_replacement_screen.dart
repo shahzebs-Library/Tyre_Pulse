@@ -106,6 +106,7 @@ import 'package:tyre_pulse/features/tyre_exchange/data/tyre_replacement_photo_ca
 import 'package:tyre_pulse/features/tyre_exchange/data/tyre_replacement_repository.dart';
 import 'package:tyre_pulse/features/tyre_exchange/domain/tyre_replacement_position.dart';
 import 'package:tyre_pulse/features/tyre_exchange/presentation/widgets/tyre_replacement_photo_gallery.dart';
+import 'package:tyre_pulse/features/tyre_exchange/presentation/widgets/tyre_replacement_position_picker.dart';
 import 'package:tyre_pulse/features/tyre_exchange/tyre_exchange_providers.dart';
 import 'package:uuid/uuid.dart';
 
@@ -492,19 +493,12 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
                       ?.copyWith(color: palette.textMuted),
                 ),
                 const SizedBox(height: TpSpace.sm),
-                Wrap(
-                  spacing: TpSpace.sm,
-                  runSpacing: TpSpace.sm,
-                  children: <Widget>[
-                    for (final TyreReplacementPositionOption option
-                        in positions)
-                      TpTyreChip(
-                        data: TpTyreChipData(position: option.code),
-                        isSelected: option.code.toUpperCase() ==
-                            selectedPosition.toUpperCase(),
-                        onTap: () => _selectPosition(option.code),
-                      ),
-                  ],
+                TyreReplacementPositionPicker(
+                  vehicleType: _master?.vehicleType ?? '',
+                  assetNo: assetForPositions.isEmpty ? null : assetForPositions,
+                  options: positions,
+                  selectedCode: selectedPosition,
+                  onSelected: _selectPosition,
                 ),
                 const SizedBox(height: TpSpace.md),
                 TpInput(

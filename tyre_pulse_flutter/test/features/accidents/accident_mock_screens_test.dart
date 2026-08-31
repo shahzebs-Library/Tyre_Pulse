@@ -4,12 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_repository.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_detail_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+
+const String _dataImage =
+    'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
 void main() {
   testWidgets('case overview matches the approved compact hierarchy', (
@@ -25,15 +30,26 @@ void main() {
     );
 
     expect(find.text('ACC-2026-0182'), findsOneWidget);
+    expect(find.text('Accident'), findsOneWidget);
     expect(find.text('Mixer 3208'), findsOneWidget);
+    expect(find.text('Reported on 11 May 2026'), findsOneWidget);
+    expect(find.text('PROGRESS'), findsOneWidget);
     expect(find.text('Register insurance claim'), findsOneWidget);
     expect(find.text('Insurance Team'), findsOneWidget);
     expect(find.text('2026-09-03'), findsOneWidget);
     expect(find.byKey(AccidentDetailScreenKeys.progress), findsOneWidget);
     expect(find.byType(AccidentProgressLadder), findsOneWidget);
+    expect(find.bySemanticsLabel('Insurance, In progress'), findsOneWidget);
     expect(find.byKey(AccidentDetailScreenKeys.nextAction), findsOneWidget);
     expect(find.byKey(AccidentDetailScreenKeys.responsible), findsOneWidget);
     expect(find.byKey(AccidentDetailScreenKeys.dueDate), findsOneWidget);
+    expect(find.text('View Case Details'), findsOneWidget);
+    expect(find.text('DESCRIPTION'), findsNothing);
+    expect(find.text('EVIDENCE (4)'), findsNothing);
+    await expectLater(
+      find.byType(AccidentDetailScreen),
+      matchesGoldenFile('goldens/accident_case_overview_light.png'),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -52,13 +68,22 @@ void main() {
 
     expect(find.byKey(AccidentCaseScreenKeys.tabs), findsOneWidget);
     expect(find.byKey(AccidentCaseScreenKeys.overview), findsOneWidget);
-    expect(find.byKey(AccidentCaseScreenKeys.header), findsOneWidget);
-    expect(find.text('ACC-2026-0182 • Mixer 3208'), findsOneWidget);
+    expect(find.text('Case Details'), findsOneWidget);
+    expect(find.text('CASE INFO'), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.header), findsNothing);
+    expect(find.byType(AccidentProgressLadder), findsNothing);
+    expect(find.text('ACC-2026-0182'), findsOneWidget);
+    expect(find.text('Mixer 3208'), findsOneWidget);
+    expect(find.text('11 May 2026 • 08:15'), findsOneWidget);
     expect(
       find.text('Vehicle collided with barrier while reversing.'),
       findsOneWidget,
     );
     expect(find.text('EVIDENCE (4)'), findsOneWidget);
+    await expectLater(
+      find.byType(AccidentCaseScreen),
+      matchesGoldenFile('goldens/accident_case_detail_light.png'),
+    );
 
     await tester.tap(find.widgetWithText(Tab, 'Evidence'));
     await tester.pumpAndSettle();
@@ -74,9 +99,9 @@ void main() {
     expect(find.byKey(AccidentCaseScreenKeys.repair), findsOneWidget);
     expect(find.text('Central Workshop'), findsOneWidget);
 
-    await tester.ensureVisible(find.widgetWithText(Tab, 'Closure controls'));
+    await tester.ensureVisible(find.widgetWithText(Tab, 'More'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(Tab, 'Closure controls'));
+    await tester.tap(find.widgetWithText(Tab, 'More'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.more), findsOneWidget);
 
@@ -121,6 +146,11 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         accidentRepositoryProvider.overrideWithValue(_FakeRepository()),
+        privateStorageReferenceResolverProvider.overrideWithValue(
+          PrivateStorageReferenceResolver(
+            (String bucket, String path, int expiresIn) async => _dataImage,
+          ),
+        ),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,

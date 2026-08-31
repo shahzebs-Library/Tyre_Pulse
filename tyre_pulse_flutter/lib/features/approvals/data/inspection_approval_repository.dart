@@ -154,6 +154,15 @@ abstract interface class InspectionApprovalRepository {
   /// live queue for a shift, never an unbounded fleet-wide read).
   Future<List<InspectionApprovalItem>> listPending({String? country});
 
+  /// Already-decided inspections carrying `approval_status = [status]`
+  /// ('approved' or 'rejected'), newest first, bounded to 100 - the same
+  /// shape and the same country convenience scope as [listPending], for the
+  /// approved mock's Approved/Rejected tabs alongside the live Pending one.
+  Future<List<InspectionApprovalItem>> listByStatus(
+    String status, {
+    String? country,
+  });
+
   /// One inspection in full, for the review screen. `null` when the id does
   /// not exist, or is not readable under RLS.
   Future<InspectionApprovalItem?> byId(String id);
@@ -196,6 +205,29 @@ final class SupabaseInspectionApprovalRepository
           .from(SupabaseTables.inspections)
           .select(inspectionApprovalListColumns)
           .eq('approval_status', 'pending_approval');
+      final String? filter = inspectionApprovalCountryFilter(country);
+      if (filter != null) {
+        query = query.or(filter);
+      }
+      return await query.order('created_at', ascending: false).limit(100);
+    });
+    return <InspectionApprovalItem>[
+      for (final Map<String, dynamic> row in rows)
+        InspectionApprovalItem.fromRow(row),
+    ];
+  }
+
+  @override
+  Future<List<InspectionApprovalItem>> listByStatus(
+    String status, {
+    String? country,
+  }) async {
+    final List<Map<String, dynamic>> rows =
+        await guard<List<Map<String, dynamic>>>(() async {
+      var query = _client
+          .from(SupabaseTables.inspections)
+          .select(inspectionApprovalListColumns)
+          .eq('approval_status', status);
       final String? filter = inspectionApprovalCountryFilter(country);
       if (filter != null) {
         query = query.or(filter);

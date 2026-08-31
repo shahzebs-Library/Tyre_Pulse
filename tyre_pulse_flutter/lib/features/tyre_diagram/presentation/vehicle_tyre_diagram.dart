@@ -420,8 +420,16 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final bool tall = layout.viewH >= 360;
     final double stageHeight = tall ? 430 : 324;
-    final double cardWidth = (width * 0.18).clamp(58, 70).toDouble();
-    final double photoWidth = width * (tall ? 0.41 : 0.43);
+    // A dual tyre is one physical axle assembly, so its Inner and Outer
+    // controls must stay together. Reserve enough side-gutter width for two
+    // independent 48dp targets rather than spreading every tyre into an
+    // unrelated full-height list.
+    final double cardWidth = (width * 0.15).clamp(48, 54).toDouble();
+    const double cardGap = 4;
+    final double groupWidth = (cardWidth * 2) + cardGap;
+    final double photoWidth = (width - (groupWidth * 2))
+        .clamp(width * 0.28, width * (tall ? 0.43 : 0.41))
+        .toDouble();
     final double photoLeft = (width - photoWidth) / 2;
     final String? photoAsset = tyreDiagramVehiclePhotoAsset(layout.bodyKey);
 
@@ -439,13 +447,26 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
         right.add(wheel);
       }
     }
-    left.sort(_compareWheelPosition);
-    right.sort(_compareWheelPosition);
-    final int maxCards =
-        left.length > right.length ? left.length : right.length;
-    final double cardHeight = maxCards <= 1
+    final List<_CaptureAxleGroup> leftAxles = _groupByPhysicalAxle(left);
+    final List<_CaptureAxleGroup> rightAxles = _groupByPhysicalAxle(right);
+    final int maxAxles = leftAxles.length > rightAxles.length
+        ? leftAxles.length
+        : rightAxles.length;
+    final double cardHeight = maxAxles <= 1
         ? 64
-        : ((stageHeight - 24) / maxCards - 6).clamp(48, 64).toDouble();
+        : ((stageHeight - 24) / maxAxles - 6).clamp(48, 58).toDouble();
+    final List<double> leftTops = _topsForPhysicalAxles(
+      leftAxles,
+      layoutHeight: layout.viewH,
+      stageHeight: stageHeight,
+      cardHeight: cardHeight,
+    );
+    final List<double> rightTops = _topsForPhysicalAxles(
+      rightAxles,
+      layoutHeight: layout.viewH,
+      stageHeight: stageHeight,
+      cardHeight: cardHeight,
+    );
 
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -483,47 +504,49 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
                         ),
                 ),
               ),
-              for (int i = 0; i < left.length; i++) ...<Widget>[
+              for (int i = 0; i < leftAxles.length; i++) ...<Widget>[
                 _connector(
-                  left: cardWidth,
-                  top: _topFor(i, left.length, stageHeight, cardHeight) +
-                      (cardHeight / 2),
-                  width: photoLeft - cardWidth,
+                  left: groupWidth,
+                  top: leftTops[i] + (cardHeight / 2),
+                  width: photoLeft - groupWidth,
                   color: palette.borderStrong,
                 ),
                 Positioned(
                   left: 0,
-                  top: _topFor(i, left.length, stageHeight, cardHeight),
-                  width: cardWidth,
+                  top: leftTops[i],
+                  width: groupWidth,
                   height: cardHeight,
-                  child: _FigmaTyreStatusCard(
-                    wheel: left[i],
-                    selected: _isSelected(left[i]),
-                    onTap: onPositionTap == null
-                        ? null
-                        : () => onPositionTap!(left[i].tyre.positionId),
+                  child: _CaptureAxleControls(
+                    key: ValueKey<String>('tyre.diagram.axle.left.$i'),
+                    group: leftAxles[i],
+                    cardWidth: cardWidth,
+                    cardGap: cardGap,
+                    alignTowardVehicle: true,
+                    selectedPosition: selectedPosition,
+                    onPositionTap: onPositionTap,
                   ),
                 ),
               ],
-              for (int i = 0; i < right.length; i++) ...<Widget>[
+              for (int i = 0; i < rightAxles.length; i++) ...<Widget>[
                 _connector(
                   left: photoLeft + photoWidth,
-                  top: _topFor(i, right.length, stageHeight, cardHeight) +
-                      (cardHeight / 2),
-                  width: width - photoLeft - photoWidth - cardWidth,
+                  top: rightTops[i] + (cardHeight / 2),
+                  width: width - photoLeft - photoWidth - groupWidth,
                   color: palette.borderStrong,
                 ),
                 Positioned(
                   right: 0,
-                  top: _topFor(i, right.length, stageHeight, cardHeight),
-                  width: cardWidth,
+                  top: rightTops[i],
+                  width: groupWidth,
                   height: cardHeight,
-                  child: _FigmaTyreStatusCard(
-                    wheel: right[i],
-                    selected: _isSelected(right[i]),
-                    onTap: onPositionTap == null
-                        ? null
-                        : () => onPositionTap!(right[i].tyre.positionId),
+                  child: _CaptureAxleControls(
+                    key: ValueKey<String>('tyre.diagram.axle.right.$i'),
+                    group: rightAxles[i],
+                    cardWidth: cardWidth,
+                    cardGap: cardGap,
+                    alignTowardVehicle: false,
+                    selectedPosition: selectedPosition,
+                    onPositionTap: onPositionTap,
                   ),
                 ),
               ],
@@ -534,26 +557,66 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
     );
   }
 
-  bool _isSelected(_ResolvedWheel wheel) =>
-      wheel.tyre.positionId == selectedPosition ||
-      wheel.tyre.id == selectedPosition;
-
   static int _compareWheelPosition(_ResolvedWheel a, _ResolvedWheel b) {
     final int y = a.tyre.y.compareTo(b.tyre.y);
     if (y != 0) return y;
     return a.tyre.x.compareTo(b.tyre.x);
   }
 
-  static double _topFor(
-    int index,
-    int count,
-    double stageHeight,
-    double cardHeight,
+  static List<_CaptureAxleGroup> _groupByPhysicalAxle(
+    List<_ResolvedWheel> wheels,
   ) {
-    if (count <= 1) return (stageHeight - cardHeight) / 2;
+    wheels.sort(_compareWheelPosition);
+    final List<_CaptureAxleGroup> groups = <_CaptureAxleGroup>[];
+    for (final _ResolvedWheel wheel in wheels) {
+      final double centerY = wheel.tyre.y + (wheel.tyre.h / 2);
+      if (groups.isEmpty || (groups.last.centerY - centerY).abs() > 1) {
+        groups.add(
+          _CaptureAxleGroup(centerY: centerY, wheels: <_ResolvedWheel>[wheel]),
+        );
+      } else {
+        groups.last.wheels.add(wheel);
+      }
+    }
+    for (final _CaptureAxleGroup group in groups) {
+      group.wheels.sort(
+        (_ResolvedWheel a, _ResolvedWheel b) => a.tyre.x.compareTo(b.tyre.x),
+      );
+    }
+    return groups;
+  }
+
+  static List<double> _topsForPhysicalAxles(
+    List<_CaptureAxleGroup> groups, {
+    required double layoutHeight,
+    required double stageHeight,
+    required double cardHeight,
+  }) {
+    if (groups.isEmpty) return const <double>[];
     const double inset = 12;
-    final double travel = stageHeight - (inset * 2) - cardHeight;
-    return inset + ((travel / (count - 1)) * index);
+    const double gap = 6;
+    final double maxTop = stageHeight - inset - cardHeight;
+    final List<double> tops = <double>[
+      for (final _CaptureAxleGroup group in groups)
+        ((group.centerY / layoutHeight) * stageHeight - (cardHeight / 2))
+            .clamp(inset, maxTop)
+            .toDouble(),
+    ];
+
+    // Keep each card target readable when authored axle centres are close,
+    // while retaining their physical front-to-rear order.
+    for (int i = 1; i < tops.length; i++) {
+      final double minimum = tops[i - 1] + cardHeight + gap;
+      if (tops[i] < minimum) tops[i] = minimum;
+    }
+    if (tops.last > maxTop) {
+      tops[tops.length - 1] = maxTop;
+      for (int i = tops.length - 2; i >= 0; i--) {
+        final double maximum = tops[i + 1] - cardHeight - gap;
+        if (tops[i] > maximum) tops[i] = maximum;
+      }
+    }
+    return tops;
   }
 
   static Widget _connector({
@@ -570,6 +633,60 @@ class _FigmaTyreCaptureStage extends StatelessWidget {
       child: ColoredBox(color: color),
     );
   }
+}
+
+class _CaptureAxleGroup {
+  _CaptureAxleGroup({required this.centerY, required this.wheels});
+
+  final double centerY;
+  final List<_ResolvedWheel> wheels;
+}
+
+class _CaptureAxleControls extends StatelessWidget {
+  const _CaptureAxleControls({
+    required this.group,
+    required this.cardWidth,
+    required this.cardGap,
+    required this.alignTowardVehicle,
+    required this.selectedPosition,
+    required this.onPositionTap,
+    super.key,
+  });
+
+  final _CaptureAxleGroup group;
+  final double cardWidth;
+  final double cardGap;
+  final bool alignTowardVehicle;
+  final String? selectedPosition;
+  final ValueChanged<String>? onPositionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> cards = <Widget>[
+      for (int i = 0; i < group.wheels.length; i++) ...<Widget>[
+        if (i > 0) SizedBox(width: cardGap),
+        SizedBox(
+          width: cardWidth,
+          child: _FigmaTyreStatusCard(
+            wheel: group.wheels[i],
+            selected: _isSelected(group.wheels[i]),
+            onTap: onPositionTap == null
+                ? null
+                : () => onPositionTap!(group.wheels[i].tyre.positionId),
+          ),
+        ),
+      ],
+    ];
+    return Align(
+      alignment:
+          alignTowardVehicle ? Alignment.centerRight : Alignment.centerLeft,
+      child: Row(mainAxisSize: MainAxisSize.min, children: cards),
+    );
+  }
+
+  bool _isSelected(_ResolvedWheel wheel) =>
+      wheel.tyre.positionId == selectedPosition ||
+      wheel.tyre.id == selectedPosition;
 }
 
 class _FigmaTyreStatusCard extends StatelessWidget {

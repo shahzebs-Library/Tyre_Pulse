@@ -2,6 +2,7 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -31,7 +32,7 @@ final class AccidentPhotoCapture {
       '${Platform.pathSeparator}${_safe(sessionKey)}',
     );
     await folder.create(recursive: true);
-    final String extension = _extension(picked.name);
+    final String extension = accidentEvidenceExtension(picked.name);
     final File destination = File(
       '${folder.path}${Platform.pathSeparator}accident_'
       '${DateTime.now().toUtc().millisecondsSinceEpoch}$extension',
@@ -42,13 +43,28 @@ final class AccidentPhotoCapture {
 
   static String _safe(String value) =>
       value.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+}
 
-  static String _extension(String name) {
-    final int dot = name.lastIndexOf('.');
-    if (dot < 0) return '.jpg';
-    final String extension = name.substring(dot).toLowerCase();
-    return const <String>{'.jpg', '.jpeg', '.png', '.heic'}.contains(extension)
-        ? extension
-        : '.jpg';
+/// Returns an extension accepted by the live private `accident-photos`
+/// bucket without ever relabelling unsupported bytes as JPEG.
+///
+/// HEIC/HEIF must be transcoded before they can be queued. This capture path
+/// has no trustworthy HEIC decoder, so it fails visibly instead of copying
+/// HEIC bytes into a `.jpg` file that Storage would accept but readers could
+/// not decode.
+@visibleForTesting
+String accidentEvidenceExtension(String name) {
+  final int dot = name.lastIndexOf('.');
+  if (dot < 0) {
+    throw UnsupportedError(
+      'This photo format is not supported for accident evidence.',
+    );
   }
+  final String extension = name.substring(dot).toLowerCase();
+  if (const <String>{'.jpg', '.jpeg', '.png', '.webp'}.contains(extension)) {
+    return extension;
+  }
+  throw UnsupportedError(
+    'This photo format is not supported for accident evidence.',
+  );
 }

@@ -62,17 +62,25 @@ class InspectionSignatureCapture {
 
 class InspectionSignaturePad extends StatefulWidget {
   const InspectionSignaturePad({
-    required this.onChanged,
+    this.onChanged,
     this.value,
     this.height = 180,
+    this.readOnly = false,
     super.key,
-  });
+  }) : assert(readOnly || onChanged != null);
 
   /// A previously-captured `data:` URL, if any. See the library comment.
   final String? value;
 
-  final ValueChanged<InspectionSignatureCapture?> onChanged;
+  final ValueChanged<InspectionSignatureCapture?>? onChanged;
   final double height;
+
+  /// Shows a recorded signature without offering redraw/clear controls.
+  ///
+  /// Detail and approval readers have no draft to persist an edit into, so
+  /// presenting an editable pad there would create controls whose changes are
+  /// discarded as soon as the screen closes.
+  final bool readOnly;
 
   @override
   State<InspectionSignaturePad> createState() => _InspectionSignaturePadState();
@@ -119,7 +127,7 @@ class _InspectionSignaturePadState extends State<InspectionSignaturePad> {
           )
           .toList(growable: false),
     );
-    widget.onChanged(
+    widget.onChanged?.call(
       InspectionSignatureCapture(dataUrl: dataUrl, strokesJson: strokesJson),
     );
   }
@@ -128,7 +136,7 @@ class _InspectionSignaturePadState extends State<InspectionSignaturePad> {
     // Emits null FIRST - "leaving it attached while the pad reads empty
     // is how a stale signature reaches a decision nobody meant to sign
     // with it" (the production `startRedraw` rule, ported verbatim).
-    widget.onChanged(null);
+    widget.onChanged?.call(null);
     _controller.clear();
     setState(() => _showingSavedPreview = false);
   }
@@ -160,12 +168,14 @@ class _InspectionSignaturePadState extends State<InspectionSignaturePad> {
               ),
             ),
           ),
-          const SizedBox(height: TpSpace.sm),
-          TpButton.text(
-            label: l10n.inspectionSignatureRedraw,
-            icon: Icons.edit_outlined,
-            onPressed: _startRedraw,
-          ),
+          if (!widget.readOnly) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            TpButton.text(
+              label: l10n.inspectionSignatureRedraw,
+              icon: Icons.edit_outlined,
+              onPressed: _startRedraw,
+            ),
+          ],
         ],
       );
     }
@@ -179,23 +189,28 @@ class _InspectionSignaturePadState extends State<InspectionSignaturePad> {
             borderRadius: BorderRadius.circular(TpRadius.md),
             border: Border.all(color: palette.border),
           ),
-          child: Signature(
-            controller: _controller,
-            height: widget.height,
-            backgroundColor: Colors.white,
+          child: AbsorbPointer(
+            absorbing: widget.readOnly,
+            child: Signature(
+              controller: _controller,
+              height: widget.height,
+              backgroundColor: Colors.white,
+            ),
           ),
         ),
-        const SizedBox(height: TpSpace.sm),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TpButton.text(
-            label: l10n.actionClear,
-            onPressed: () {
-              _controller.clear();
-              widget.onChanged(null);
-            },
+        if (!widget.readOnly) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TpButton.text(
+              label: l10n.actionClear,
+              onPressed: () {
+                _controller.clear();
+                widget.onChanged?.call(null);
+              },
+            ),
           ),
-        ),
+        ],
       ],
     );
   }

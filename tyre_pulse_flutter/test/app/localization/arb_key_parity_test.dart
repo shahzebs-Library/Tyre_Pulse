@@ -434,10 +434,24 @@ void main() {
     // locale-owned catalogs without introducing per-locale drift.
     // The screenshot-matched login security/help copy adds one shared catalog
     // key, keeping all three locales in lockstep.
-    test('en, ar and ur each carry exactly 780 translatable keys today', () {
-      expect(_translatableKeys(en).length, 780);
-      expect(_translatableKeys(ar).length, 780);
-      expect(_translatableKeys(ur).length, 780);
+    // 780 + 4 = 784. The approvals-queue mock-parity pass added
+    // `inspectionApprovalsApprovedTab`, `inspectionApprovalsReturnedTab`,
+    // `dateGroupToday` and `dateGroupYesterday` for the three-tab queue and
+    // its date-grouped sections. `caseId` and `incidentDateLabel` (the
+    // accident-case field-label fix from the same pass) do not change this
+    // count - they live inside the single `accidentCopyCatalog` string, not
+    // as their own ARB keys.
+    // 784 + 11 = 795. The approved accident overview/detail mocks need
+    // concise, locale-owned app-bar, action, section and field labels. These
+    // labels are individual ARB keys so EN, AR and UR remain fully matched.
+    // 795 + 3 = 798. The vehicle five-view board adds its title, ordered-view
+    // hint and zoom action as shared localized UI rather than embedded text.
+    // 798 + 8 = 806. Checklist, inspection, asset and serial-search fallback
+    // states now use locale-owned copy instead of hard-coded English.
+    test('en, ar and ur each carry exactly 806 translatable keys today', () {
+      expect(_translatableKeys(en).length, 806);
+      expect(_translatableKeys(ar).length, 806);
+      expect(_translatableKeys(ur).length, 806);
     });
   });
 

@@ -7,6 +7,7 @@ import 'dart:ui' show Tristate;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -387,7 +388,9 @@ void main() {
   );
 
   for (final MapEntry<String, String> vehicle in <String, String>{
+    'Skid loader': 'assets/vehicle_photos/skid_loader_top_down_v2.png',
     'Tri-mixer': 'assets/vehicle_photos/tri_mixer_top_down.webp',
+    'Line pump': 'assets/vehicle_photos/line_pump_top_down_v2.png',
     'Concrete pump': 'assets/vehicle_photos/concrete_pump_top_down.webp',
   }.entries) {
     testWidgets(
@@ -420,6 +423,52 @@ void main() {
       },
     );
   }
+
+  testWidgets(
+    'capture keeps concrete-pump rear Inner and Outer controls joined by axle',
+    (WidgetTester tester) async {
+      final DiagramLayout layout = kTyreDiagramLayouts['Concrete pump']!;
+      await _pump(
+        tester,
+        VehicleTyreDiagram(
+          vehicleType: 'Concrete pump',
+          positions: layout.tyres.map((TyreSlot tyre) => tyre.id).toList(),
+          tyreData: const <String, Map<String, Object?>>{},
+          width: 366,
+          compact: true,
+          captureMode: true,
+        ),
+      );
+
+      // Three single steer axle rows plus two joined rear-dual rows per side.
+      expect(
+        find.byKey(const ValueKey<String>('tyre.diagram.axle.left.4')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('tyre.diagram.axle.right.4')),
+        findsOneWidget,
+      );
+      Finder identifier(String value) => find.byWidgetPredicate(
+            (Widget widget) =>
+                widget is TpIdentifierText && widget.value == value,
+          );
+      expect(identifier('L1 O'), findsOneWidget);
+      expect(identifier('L1 I'), findsOneWidget);
+      expect(identifier('R1 I'), findsOneWidget);
+      expect(identifier('R1 O'), findsOneWidget);
+
+      final Rect leftOuter = tester.getRect(identifier('L1 O'));
+      final Rect leftInner = tester.getRect(identifier('L1 I'));
+      final Rect rightInner = tester.getRect(identifier('R1 I'));
+      final Rect rightOuter = tester.getRect(identifier('R1 O'));
+      expect((leftOuter.center.dy - leftInner.center.dy).abs(), lessThan(1));
+      expect((rightInner.center.dy - rightOuter.center.dy).abs(), lessThan(1));
+      expect(leftOuter.center.dx, lessThan(leftInner.center.dx));
+      expect(rightInner.center.dx, lessThan(rightOuter.center.dx));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final String vehicleClass in <String>[
     'Tri-mixer',

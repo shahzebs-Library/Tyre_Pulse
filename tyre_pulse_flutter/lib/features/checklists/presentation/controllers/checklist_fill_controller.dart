@@ -59,8 +59,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     if (workspace == null) {
       state = state.copyWith(
         phase: ChecklistFillPhase.error,
-        errorMessage: 'Your workspace is still loading. Try again in a '
-            'moment.',
+        failure: ChecklistFillFailure.workspaceLoading,
       );
       return;
     }
@@ -78,8 +77,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     if (templateRecord == null) {
       state = state.copyWith(
         phase: ChecklistFillPhase.error,
-        errorMessage: 'This checklist could not be found. It may have been '
-            'unpublished.',
+        failure: ChecklistFillFailure.notFound,
       );
       return;
     }
@@ -494,8 +492,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     } on Object {
       state = state.copyWith(
         phase: ChecklistFillPhase.ready,
-        errorMessage: 'This checklist could not be saved. It has not been '
-            'lost - try again.',
+        failure: ChecklistFillFailure.saveFailed,
       );
       return false;
     }

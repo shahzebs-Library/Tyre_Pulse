@@ -259,7 +259,11 @@ class _ResultArea extends StatelessWidget {
     }
     if (state.isError) {
       return TpErrorState(
-        error: state.lastError ?? _unknownError,
+        error: state.lastError ??
+            AppError(
+              kind: AppErrorKind.unknown,
+              message: l10n.stateErrorMessage,
+            ),
         onRetry: onRetrySearch,
       );
     }
@@ -285,15 +289,6 @@ class _ResultArea extends StatelessWidget {
     );
   }
 }
-
-/// Only reachable if [SerialSearchState.isError] is true without
-/// [SerialSearchState.lastError] set, which every controller code path
-/// avoids - kept as a last-resort fallback rather than a null assertion, so
-/// a future slip degrades to a generic message instead of a crash.
-const AppError _unknownError = AppError(
-  kind: AppErrorKind.unknown,
-  message: 'Something went wrong. Please try again.',
-);
 
 class _FoundResult extends StatelessWidget {
   const _FoundResult({

@@ -17,6 +17,17 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 
 enum _StatusFilter { all, open, closed }
 
+abstract final class AccidentDashboardScreenKeys {
+  static const Key reportAction = Key('accident.dashboard.reportAction');
+  static const Key reportFab = Key('accident.dashboard.reportFab');
+  static const Key search = Key('accident.dashboard.search');
+  static const Key allCases = Key('accident.dashboard.allCases');
+  static const Key reportedByMe = Key('accident.dashboard.reportedByMe');
+
+  static Key status(String value) => Key('accident.dashboard.status.$value');
+  static Key card(String id) => Key('accident.dashboard.card.$id');
+}
+
 class AccidentDashboardScreen extends ConsumerStatefulWidget {
   const AccidentDashboardScreen({required this.route, super.key});
   final AccidentDashboardRoute route;
@@ -100,6 +111,11 @@ class _AccidentDashboardScreenState
         item.referenceNo,
         item.location,
         item.accidentType,
+        humaniseAccidentToken(item.accidentType),
+        item.displayStatus,
+        humaniseAccidentToken(item.displayStatus),
+        item.severity,
+        humaniseAccidentToken(item.severity),
         item.reporterName,
       ].any((String? value) => value?.toLowerCase().contains(query) ?? false);
     }).toList(growable: false);
@@ -114,6 +130,7 @@ class _AccidentDashboardScreenState
         subtitle: copy('dashboardSubtitle'),
         actions: <Widget>[
           IconButton(
+            key: AccidentDashboardScreenKeys.reportAction,
             tooltip: copy('reportAction'),
             icon: const Icon(Icons.add_alert_outlined),
             onPressed: () => context.push(const AccidentReportRoute().location),
@@ -121,6 +138,7 @@ class _AccidentDashboardScreenState
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        key: AccidentDashboardScreenKeys.reportFab,
         onPressed: () => context.push(const AccidentReportRoute().location),
         icon: const Icon(Icons.add_a_photo_outlined),
         label: Text(copy('reportShort')),
@@ -151,6 +169,7 @@ class _AccidentDashboardScreenState
           ),
           const SizedBox(height: TpSpace.lg),
           TpSearchField(
+            key: AccidentDashboardScreenKeys.search,
             controller: _search,
             hint: copy('searchHint'),
             onChanged: (_) => setState(() {}),
@@ -161,6 +180,7 @@ class _AccidentDashboardScreenState
             runSpacing: TpSpace.sm,
             children: <Widget>[
               FilterChip(
+                key: AccidentDashboardScreenKeys.allCases,
                 label: Text(copy('allCases')),
                 selected: !_mine,
                 onSelected: (_) {
@@ -169,6 +189,7 @@ class _AccidentDashboardScreenState
                 },
               ),
               FilterChip(
+                key: AccidentDashboardScreenKeys.reportedByMe,
                 label: Text(copy('reportedByMe')),
                 selected: _mine,
                 onSelected: (_) {
@@ -178,6 +199,7 @@ class _AccidentDashboardScreenState
               ),
               for (final _StatusFilter status in _StatusFilter.values)
                 ChoiceChip(
+                  key: AccidentDashboardScreenKeys.status(status.name),
                   label: Text(
                     switch (status) {
                       _StatusFilter.all => copy('anyStatus'),
@@ -208,7 +230,10 @@ class _AccidentDashboardScreenState
           else
             for (final AccidentRecord item in shown) ...<Widget>[
               _AccidentCard(
+                key: AccidentDashboardScreenKeys.card(item.id),
                 item: item,
+                notRecordedLabel: copy('notRecorded'),
+                unrecordedAssetLabel: copy('unrecordedAsset'),
                 onTap: () => context.push(
                   AccidentDetailRoute(accidentId: AccidentId(item.id)).location,
                 ),
@@ -229,9 +254,17 @@ class _AccidentDashboardScreenState
 }
 
 class _AccidentCard extends StatelessWidget {
-  const _AccidentCard({required this.item, required this.onTap});
+  const _AccidentCard({
+    required this.item,
+    required this.onTap,
+    required this.notRecordedLabel,
+    required this.unrecordedAssetLabel,
+    super.key,
+  });
   final AccidentRecord item;
   final VoidCallback onTap;
+  final String notRecordedLabel;
+  final String unrecordedAssetLabel;
 
   @override
   Widget build(BuildContext context) => TpCard(
@@ -252,13 +285,18 @@ class _AccidentCard extends StatelessWidget {
                     children: <Widget>[
                       Expanded(
                         child: Text(
-                          item.assetNo,
+                          item.assetNo.trim().isEmpty
+                              ? unrecordedAssetLabel
+                              : item.assetNo,
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ),
                       TpStatusChip(
                         status: accidentTone(item.severity),
-                        label: humaniseAccidentToken(item.severity),
+                        label: _humanisedOr(
+                          item.severity,
+                          notRecordedLabel,
+                        ),
                         isCompact: true,
                       ),
                     ],
@@ -267,8 +305,9 @@ class _AccidentCard extends StatelessWidget {
                   Text('${item.reference} • ${item.site}'),
                   const SizedBox(height: TpSpace.xs),
                   Text(
-                    '${item.incidentDate} • ${humaniseAccidentToken(item.accidentType)}'
-                    '${item.location == null ? '' : ' • ${item.location}'}',
+                    '${formatAccidentIncidentDate(context, item.incidentDate)}'
+                    ' • ${_humanisedOr(item.accidentType, notRecordedLabel)}'
+                    '${_bullet(item.location)}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
@@ -276,7 +315,10 @@ class _AccidentCard extends StatelessWidget {
                   const SizedBox(height: TpSpace.sm),
                   TpStatusChip(
                     status: accidentTone(item.displayStatus),
-                    label: humaniseAccidentToken(item.displayStatus),
+                    label: _humanisedOr(
+                      item.displayStatus,
+                      notRecordedLabel,
+                    ),
                     isCompact: true,
                   ),
                 ],
@@ -287,4 +329,14 @@ class _AccidentCard extends StatelessWidget {
           ],
         ),
       );
+}
+
+String _humanisedOr(String? token, String fallback) {
+  final String label = humaniseAccidentToken(token);
+  return label.isEmpty ? fallback : label;
+}
+
+String _bullet(String? value) {
+  final String shown = value?.trim() ?? '';
+  return shown.isEmpty ? '' : ' • $shown';
 }

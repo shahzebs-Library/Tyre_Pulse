@@ -69,6 +69,9 @@ class VehiclesListScreen extends ConsumerStatefulWidget {
 @visibleForTesting
 abstract final class VehiclesListScreenKeys {
   static const Key search = Key('vehicles.search');
+  static const Key scanner = Key('vehicles.scanner');
+  static const Key filter = Key('vehicles.filter');
+  static const Key classFilters = Key('vehicles.class_filters');
   static Key asset(String id) => Key('vehicles.asset.$id');
 }
 
@@ -76,9 +79,10 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   late final TextEditingController _searchController;
   late String _searchTerm;
 
-  /// Null = every class. [tyreAssetClassFilter] = the default, tyre-carrying
-  /// classes only. Anything else = exactly that class code.
-  String? _classFilter = tyreAssetClassFilter;
+  /// Null = every class. [tyreAssetClassFilter] = tyre-carrying classes only.
+  /// Anything else = exactly that class code. The approved asset register
+  /// opens on All so stationary PMV assets remain visible beside vehicles.
+  String? _classFilter;
 
   @override
   void initState() {
@@ -96,11 +100,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
 
   void _selectClassChip(String? assetClass) {
     setState(() {
-      // Tapping the already-active specific class again returns to the
-      // default tyre-carrying filter, matching the production screen's own
-      // toggle behaviour.
+      // Tapping the active specific class widens the register back to All.
       _classFilter = (assetClass != null && assetClass == _classFilter)
-          ? tyreAssetClassFilter
+          ? null
           : assetClass;
     });
   }
@@ -124,13 +126,22 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
       backFallback: widget.backFallback,
       backgroundColor: TpPalette.of(context).surface,
       appBar: TpAppBar(
-        title: l10n.appTitle,
+        title: l10n.globalSearchSectionAssets,
         backFallback: widget.backFallback,
+        showBack: false,
         actions: <Widget>[
           IconButton(
-            tooltip: l10n.scannerTitle,
-            onPressed: () => context.push(const ScannerRoute().location),
-            icon: const Icon(Icons.qr_code_scanner_rounded),
+            key: VehiclesListScreenKeys.filter,
+            tooltip: l10n.vehiclesTyreAssetsFilter,
+            onPressed: () => _selectClassChip(
+              _classFilter == null ? tyreAssetClassFilter : null,
+            ),
+            icon: Icon(
+              _classFilter == null
+                  ? Icons.filter_alt_outlined
+                  : Icons.filter_alt_rounded,
+              color: TpPalette.of(context).primary,
+            ),
           ),
         ],
       ),
@@ -171,7 +182,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     return outcomeAsync.when(
       loading: () => const TpLoadingState(),
       error: (Object error, StackTrace stackTrace) => TpErrorState(
-        error: error is AppError ? error : _unexpectedError(),
+        error: error is AppError ? error : _unexpectedError(l10n),
         onRetry: () => ref.invalidate(vehicleFleetListProvider),
       ),
       data: (VehicleFleetListOutcome outcome) => switch (outcome) {
@@ -222,19 +233,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(
             TpSpace.lg,
-            TpSpace.lg,
-            TpSpace.lg,
-            TpSpace.sm,
-          ),
-          child: _FleetRegisterHeading(
-            title: l10n.loginScopeFleetAssets,
-            countLabel: l10n.vehiclesCount(assets.length),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            TpSpace.lg,
-            TpSpace.sm,
+            TpSpace.md,
             TpSpace.lg,
             TpSpace.xs,
           ),
@@ -252,19 +251,23 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                 ),
               ),
               const SizedBox(width: TpSpace.sm),
-              _SquareScannerButton(
-                tooltip: l10n.scannerTitle,
-                onTap: () => context.push(const ScannerRoute().location),
+              KeyedSubtree(
+                key: VehiclesListScreenKeys.scanner,
+                child: _SquareScannerButton(
+                  tooltip: l10n.scannerTitle,
+                  onTap: () => context.push(const ScannerRoute().location),
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: TpSpace.sm),
         _ClassChipsRow(
+          key: VehiclesListScreenKeys.classFilters,
           selected: _classFilter,
           classesPresent: classesPresent,
           tyreAssetsLabel: l10n.vehiclesTyreAssetsFilter,
-          allLabel: l10n.vehiclesAllFilter,
+          allLabel: '${l10n.vehiclesAllFilter} (${assets.length})',
           onSelect: _selectClassChip,
         ),
         Expanded(
@@ -278,7 +281,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
               : ListView.separated(
                   padding: const EdgeInsets.fromLTRB(
                     TpSpace.lg,
-                    TpSpace.sm,
+                    TpSpace.xs,
                     TpSpace.lg,
                     TpSpace.xxl,
                   ),
@@ -302,9 +305,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     );
   }
 
-  static AppError _unexpectedError() => const AppError(
+  static AppError _unexpectedError(AppLocalizations l10n) => AppError(
         kind: AppErrorKind.unknown,
-        message: 'Something went wrong. Please try again.',
+        message: l10n.stateErrorMessage,
         isRetryable: true,
       );
 
@@ -317,77 +320,6 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     final String mm = local.minute.toString().padLeft(2, '0');
     return '${local.year}-${local.month.toString().padLeft(2, '0')}-'
         '${local.day.toString().padLeft(2, '0')} $hh:$mm';
-  }
-}
-
-class _FleetRegisterHeading extends StatelessWidget {
-  const _FleetRegisterHeading({
-    required this.title,
-    required this.countLabel,
-  });
-
-  final String title;
-  final String countLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                style: text.headlineMedium?.copyWith(
-                  color: palette.text,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                countLabel,
-                style: text.bodyMedium?.copyWith(
-                  color: palette.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: palette.primarySoft,
-            borderRadius: BorderRadius.circular(TpRadius.pill),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(
-                  Icons.cloud_done_outlined,
-                  size: 17,
-                  color: palette.primaryDark,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  AppLocalizations.of(context).inspectionStatusSynced,
-                  style: text.labelSmall?.copyWith(
-                    color: palette.primaryDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -450,14 +382,11 @@ class _FleetAssetCard extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final String identity = asset.displayIdentity ?? unknownAssetLabel;
     final String? description = _joinNonEmpty(
-      <String?>[asset.make, asset.model, asset.vehicleType],
-      separator: ' · ',
-    );
-    final String? contextLine = _joinNonEmpty(
       <String?>[
-        asset.site,
-        if (asset.currentKm != null)
-          '${formatVehicleOdometer(asset.currentKm!)} km',
+        asset.fleetNumber,
+        asset.vehicleType,
+        if (asset.fleetNumber == null && asset.vehicleType == null) asset.make,
+        if (asset.fleetNumber == null && asset.vehicleType == null) asset.model,
       ],
       separator: ' · ',
     );
@@ -479,13 +408,16 @@ class _FleetAssetCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(TpSpace.md),
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.sm,
+              vertical: TpSpace.sm,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Container(
-                  width: 94,
-                  height: 82,
+                  width: 72,
+                  height: 56,
                   decoration: BoxDecoration(
                     color: palette.surfaceAlt,
                     borderRadius: BorderRadius.circular(TpRadius.md),
@@ -508,7 +440,7 @@ class _FleetAssetCard extends StatelessWidget {
                           semanticLabel: identity,
                         ),
                 ),
-                const SizedBox(width: TpSpace.md),
+                const SizedBox(width: TpSpace.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -532,37 +464,14 @@ class _FleetAssetCard extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 7),
-                      Row(
-                        children: <Widget>[
-                          if (asset.status?.trim().isNotEmpty == true)
-                            Text(
-                              asset.status!.trim(),
-                              style: text.labelSmall?.copyWith(
-                                color: statusColors.base,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          if (asset.status?.trim().isNotEmpty == true &&
-                              contextLine != null)
-                            Text(
-                              '  ·  ',
-                              style: text.labelSmall?.copyWith(
-                                color: palette.textMuted,
-                              ),
-                            ),
-                          if (contextLine != null)
-                            Expanded(
-                              child: Text(
-                                contextLine,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: text.labelSmall?.copyWith(
-                                  color: palette.textMuted,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                      if (asset.status?.trim().isNotEmpty == true)
+                        Text(
+                          asset.status!.trim(),
+                          style: text.labelSmall?.copyWith(
+                            color: statusColors.base,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -638,6 +547,7 @@ class _ClassChipsRow extends StatelessWidget {
     required this.tyreAssetsLabel,
     required this.allLabel,
     required this.onSelect,
+    super.key,
   });
 
   final String? selected;
@@ -655,15 +565,15 @@ class _ClassChipsRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
         children: <Widget>[
           _ClassChip(
-            label: tyreAssetsLabel,
-            isSelected: selected == tyreAssetClassFilter,
-            onTap: () => onSelect(tyreAssetClassFilter),
-          ),
-          const SizedBox(width: TpSpace.xs),
-          _ClassChip(
             label: allLabel,
             isSelected: selected == null,
             onTap: () => onSelect(null),
+          ),
+          const SizedBox(width: TpSpace.xs),
+          _ClassChip(
+            label: tyreAssetsLabel,
+            isSelected: selected == tyreAssetClassFilter,
+            onTap: () => onSelect(tyreAssetClassFilter),
           ),
           for (final AssetClassChip chip in classesPresent) ...<Widget>[
             const SizedBox(width: TpSpace.xs),
@@ -698,7 +608,7 @@ class _ClassChip extends StatelessWidget {
       selected: isSelected,
       onSelected: (bool _) => onTap(),
       showCheckmark: false,
-      backgroundColor: palette.surface,
+      backgroundColor: palette.surfaceAlt,
       selectedColor: palette.primary,
       labelStyle: Theme.of(context)
           .textTheme

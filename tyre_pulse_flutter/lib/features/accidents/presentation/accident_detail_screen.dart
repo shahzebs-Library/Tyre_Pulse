@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -19,6 +20,8 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 
 abstract final class AccidentDetailScreenKeys {
   static const Key content = Key('accident.detail.content');
+  static const Key boundaryAction = Key('accident.detail.boundaryAction');
+  static const Key caseDetailsAction = Key('accident.detail.caseDetailsAction');
   static const Key progress = Key('accident.detail.progress');
   static const Key nextAction = Key('accident.detail.nextAction');
   static const Key responsible = Key('accident.detail.responsible');
@@ -79,17 +82,19 @@ class _AccidentDetailScreenState extends ConsumerState<AccidentDetailScreen> {
   Widget build(BuildContext context) {
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     final AccidentCopy copy = AccidentCopy.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final AccidentRecord? record = _snapshot?.accident;
     return TpScaffold(
       backFallback: fallback,
       backgroundColor: TpPalette.of(context).surface,
       appBar: TpAppBar(
-        title: copy('detailTitle'),
+        title: l10n.accidentOverviewAppBarTitle,
         backFallback: fallback,
         actions: record == null
             ? null
             : <Widget>[
                 IconButton(
+                  key: AccidentDetailScreenKeys.boundaryAction,
                   tooltip: copy('boundary'),
                   onPressed: () => _showReadOnlyBoundary(copy),
                   icon: const Icon(Icons.more_vert_rounded),
@@ -100,7 +105,8 @@ class _AccidentDetailScreenState extends ConsumerState<AccidentDetailScreen> {
       bottomNavigationBar: record == null
           ? null
           : _BottomAction(
-              label: copy('openFlow'),
+              key: AccidentDetailScreenKeys.caseDetailsAction,
+              label: l10n.accidentViewCaseDetailsAction,
               onPressed: () => context.push(
                 AccidentCaseRoute(
                   accidentId: AccidentId(record.id),
@@ -111,6 +117,7 @@ class _AccidentDetailScreenState extends ConsumerState<AccidentDetailScreen> {
   }
 
   Widget _body(AccidentCopy copy) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     if (_loading) return TpLoadingState(message: copy('loadingFacts'));
     if (_error != null) return TpErrorState(error: _error!, onRetry: _load);
     final AccidentCaseSnapshot? snapshot = _snapshot;
@@ -186,13 +193,14 @@ class _AccidentDetailScreenState extends ConsumerState<AccidentDetailScreen> {
                   Text(
                     record.incidentDate.isEmpty
                         ? copy('notRecorded')
-                        : record.incidentDate,
+                        : '${l10n.accidentReportedOnLabel} '
+                            '${formatAccidentIncidentDate(context, record.incidentDate)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: TpPalette.of(context).textSecondary,
                         ),
                   ),
                   const SizedBox(height: TpSpace.xxl),
-                  _SectionLabel(copy('workflowStage')),
+                  _SectionLabel(l10n.accidentProgressSection),
                   const SizedBox(height: TpSpace.md),
                   AccidentProgressLadder(
                     key: AccidentDetailScreenKeys.progress,
@@ -213,7 +221,7 @@ class _AccidentDetailScreenState extends ConsumerState<AccidentDetailScreen> {
                   ),
                   _OverviewFact(
                     key: AccidentDetailScreenKeys.dueDate,
-                    label: copy('expectedRelease'),
+                    label: l10n.accidentDueDateLabel,
                     value: record.expectedReleaseDate,
                     missing: copy('notRecorded'),
                   ),
@@ -288,7 +296,7 @@ List<AccidentProgressStep> _progressSteps(
       state: _workstreamProgress(snapshot, 'insurance'),
     ),
     AccidentProgressStep(
-      label: _shortCopy(copy('wsRepair')),
+      label: _stepWord(copy('wsRepair')),
       state: _workstreamProgress(snapshot, 'repair'),
     ),
     AccidentProgressStep(
@@ -341,6 +349,14 @@ String _compactCopy(String value) =>
     value.replaceFirst(RegExp(r'^\s*\d+[.)]\s*'), '').trim();
 
 String _shortCopy(String value) => value.split('&').first.trim();
+
+/// The first word of [value], for the five-column progress ladder - see the
+/// identical helper and its doc comment in `accident_case_screen.dart`.
+String _stepWord(String value) {
+  final String trimmed = _shortCopy(value).trim();
+  final int space = trimmed.indexOf(' ');
+  return space < 0 ? trimmed : trimmed.substring(0, space);
+}
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.label);
@@ -400,7 +416,11 @@ class _OverviewFact extends StatelessWidget {
 }
 
 class _BottomAction extends StatelessWidget {
-  const _BottomAction({required this.label, required this.onPressed});
+  const _BottomAction({
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
 
   final String label;
   final VoidCallback onPressed;

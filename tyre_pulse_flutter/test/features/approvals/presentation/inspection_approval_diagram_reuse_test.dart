@@ -17,6 +17,7 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/inspection_approval_review_screen.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
@@ -126,6 +127,7 @@ void main() {
 
       expect(find.byType(TyreDiagramBoard), findsOneWidget);
       expect(find.byType(VehicleTyreDiagram), findsOneWidget);
+      expect(find.byType(VehicleMultiViewBoard), findsOneWidget);
 
       final TyreDiagramBoard board = tester.widget<TyreDiagramBoard>(
         find.byType(TyreDiagramBoard),
@@ -145,6 +147,29 @@ void main() {
         board.positions.sublist(6, 10),
         const <String>['R1Lo', 'R1Li', 'R1Ri', 'R1Ro'],
       );
+
+      final VehicleMultiViewBoard reference =
+          tester.widget<VehicleMultiViewBoard>(
+        find.byType(VehicleMultiViewBoard),
+      );
+      expect(reference.assetNo, 'MP083');
+      expect(reference.vehicleType, 'Concrete pump');
+      expect(reference.model, '5 axle');
+
+      final InkWell zoomAction = tester.widget<InkWell>(
+        find.descendant(
+          of: find.byKey(VehicleMultiViewBoardKeys.board),
+          matching: find.byType(InkWell),
+        ),
+      );
+      zoomAction.onTap!();
+      await tester.pump();
+      expect(find.byKey(VehicleMultiViewBoardKeys.zoomDialog), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      Navigator.of(
+        tester.element(find.byKey(VehicleMultiViewBoardKeys.zoomDialog)),
+      ).pop();
+      await tester.pump();
 
       // Decision controls remain part of the same review after replacing
       // the old, smaller nested rendering.
@@ -214,8 +239,10 @@ void main() {
 
     await _pumpScreen(tester);
 
-    expect(find.byType(TyreDiagramBoard), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/inspection_approval_compact_en.png'),
+    );
   });
 
   testWidgets('design QA capture: wide Arabic RTL approval', (
@@ -228,8 +255,10 @@ void main() {
 
     await _pumpScreen(tester, locale: const Locale('ar'));
 
-    expect(find.byType(TyreDiagramBoard), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/inspection_approval_wide_ar.png'),
+    );
   });
 }
 
@@ -252,4 +281,11 @@ final class _FakeInspectionApprovalRepository
   @override
   Future<List<InspectionApprovalItem>> listPending({String? country}) async =>
       <InspectionApprovalItem>[item];
+
+  @override
+  Future<List<InspectionApprovalItem>> listByStatus(
+    String status, {
+    String? country,
+  }) async =>
+      const <InspectionApprovalItem>[];
 }

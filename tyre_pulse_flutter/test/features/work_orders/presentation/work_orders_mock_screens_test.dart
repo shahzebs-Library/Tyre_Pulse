@@ -96,6 +96,17 @@ void main() {
 
     expect(find.byKey(WorkOrderDetailScreenKeys.header), findsOneWidget);
     expect(find.byKey(WorkOrderDetailScreenKeys.lifecycle), findsOneWidget);
+    expect(find.byKey(WorkOrderDetailScreenKeys.assetImage), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName ==
+                'assets/vehicle_photos/tri_mixer_perspective.webp',
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(WorkOrderDetailScreenKeys.tabs), findsNothing);
     expect(find.textContaining('WO-2025-0056'), findsOneWidget);
     expect(find.textContaining('Mixer 4271'), findsOneWidget);

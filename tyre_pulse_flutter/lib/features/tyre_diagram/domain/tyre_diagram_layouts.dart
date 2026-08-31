@@ -54,7 +54,7 @@ const Map<String, DiagramLayout> kTyreDiagramLayouts = {
   'Skid loader': DiagramLayout(
     key: 'Skid loader',
     viewH: 258,
-    bodyKey: TyreDiagramBodyKey.wheelLoader,
+    bodyKey: TyreDiagramBodyKey.skidLoader,
     tyres: <TyreSlot>[
       TyreSlot(id: 'FL', x: 24, y: 22, w: 32, h: 56),
       TyreSlot(id: 'FR', x: 144, y: 22, w: 32, h: 56),
@@ -192,7 +192,7 @@ const Map<String, DiagramLayout> kTyreDiagramLayouts = {
   'Line pump': DiagramLayout(
     key: 'Line pump',
     viewH: 375,
-    bodyKey: TyreDiagramBodyKey.concretePump,
+    bodyKey: TyreDiagramBodyKey.linePump,
     tyres: <TyreSlot>[
       TyreSlot(id: 'F1L', x: 29, y: 40, w: 22, h: 38),
       TyreSlot(id: 'F1R', x: 149, y: 40, w: 22, h: 38),

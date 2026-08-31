@@ -4,7 +4,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -420,13 +419,6 @@ class _TeamScreenState extends ConsumerState<TeamScreen> {
         title: copy('teamTitle'),
         subtitle: '${_members.length} ${copy('members')}',
         backFallback: fallback,
-        actions: <Widget>[
-          IconButton(
-            tooltip: copy('manage'),
-            onPressed: () => context.push(const AdminUsersRoute().location),
-            icon: const Icon(Icons.manage_accounts_outlined),
-          ),
-        ],
       ),
       body: _body(copy),
     );

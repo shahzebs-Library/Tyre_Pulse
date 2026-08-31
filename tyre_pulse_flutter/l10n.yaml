@@ -12,7 +12,6 @@ template-arb-file: app_en.arb
 output-localization-file: app_localizations.dart
 output-class: AppLocalizations
 output-dir: lib/l10n/generated
-synthetic-package: false
 
 # `AppLocalizations.of(context)` returns non-null. A screen that renders before
 # the delegate is installed is a wiring bug and should fail loudly in

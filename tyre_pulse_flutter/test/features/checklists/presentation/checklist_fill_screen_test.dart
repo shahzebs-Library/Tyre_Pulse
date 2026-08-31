@@ -454,8 +454,10 @@ void main() {
       size: const Size(390, 844),
     );
 
-    expect(find.byType(ChecklistFillScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/checklist_runner_compact_en.png'),
+    );
   });
 
   testWidgets('design QA capture: wide Urdu RTL', (
@@ -468,7 +470,9 @@ void main() {
       size: const Size(1024, 768),
     );
 
-    expect(find.byType(ChecklistFillScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/checklist_runner_wide_ur.png'),
+    );
   });
 }

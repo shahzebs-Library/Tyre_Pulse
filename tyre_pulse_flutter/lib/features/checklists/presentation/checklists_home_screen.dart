@@ -25,9 +25,11 @@ class ChecklistsHomeScreen extends ConsumerStatefulWidget {
       _ChecklistsHomeScreenState();
 }
 
+enum _ChecklistHomeFailure { workspaceLoading, loadFailed }
+
 class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
   bool _loading = true;
-  String? _errorMessage;
+  _ChecklistHomeFailure? _failure;
   List<ChecklistTemplateRecord> _templates = const <ChecklistTemplateRecord>[];
   List<ChecklistAssignmentRecord> _assignments =
       const <ChecklistAssignmentRecord>[];
@@ -42,14 +44,14 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _errorMessage = null;
+      _failure = null;
     });
 
     final workspace = ref.read(workspaceContextProvider);
     if (workspace == null) {
       setState(() {
         _loading = false;
-        _errorMessage = 'Your workspace is still loading.';
+        _failure = _ChecklistHomeFailure.workspaceLoading;
       });
       return;
     }
@@ -95,8 +97,7 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage = 'Checklists could not be loaded. Pull down to try '
-            'again.';
+        _failure = _ChecklistHomeFailure.loadFailed;
       });
     }
   }
@@ -173,12 +174,20 @@ class _ChecklistsHomeScreenState extends ConsumerState<ChecklistsHomeScreen> {
           TpSpace.xxl,
         ),
         children: <Widget>[
-          if (_errorMessage != null)
+          if (_failure != null)
             Padding(
               padding: const EdgeInsets.only(bottom: TpSpace.lg),
-              child: _InlineWarning(message: _errorMessage!, onRetry: _load),
+              child: _InlineWarning(
+                message: switch (_failure!) {
+                  _ChecklistHomeFailure.workspaceLoading =>
+                    l10n.checklistWorkspaceLoadingMessage,
+                  _ChecklistHomeFailure.loadFailed =>
+                    l10n.checklistsLoadErrorMessage,
+                },
+                onRetry: _load,
+              ),
             ),
-          if (nothingAtAll && _errorMessage == null)
+          if (nothingAtAll && _failure == null)
             SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.6,
               child: TpEmptyState(
@@ -306,20 +315,30 @@ class _InlineWarning extends StatelessWidget {
         borderRadius: BorderRadius.circular(TpRadius.md),
         border: Border.all(color: colors.base),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Icon(Icons.warning_amber_outlined, color: colors.onSoft),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: colors.onSoft),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(Icons.warning_amber_outlined, color: colors.onSoft),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: colors.onSoft),
+                ),
+              ),
+            ],
           ),
-          TpButton.text(label: l10n.actionRetry, onPressed: onRetry),
+          const SizedBox(height: TpSpace.xs),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TpButton.text(label: l10n.actionRetry, onPressed: onRetry),
+          ),
         ],
       ),
     );

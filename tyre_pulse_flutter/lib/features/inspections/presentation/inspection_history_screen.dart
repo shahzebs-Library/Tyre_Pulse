@@ -41,6 +41,7 @@ class InspectionHistoryScreen extends ConsumerStatefulWidget {
 
 class _InspectionHistoryScreenState
     extends ConsumerState<InspectionHistoryScreen> {
+  bool _didStartInitialLoad = false;
   bool _loading = true;
   AppError? _error;
   List<InspectionDraftSummary> _drafts = const <InspectionDraftSummary>[];
@@ -48,8 +49,10 @@ class _InspectionHistoryScreenState
   int _attentionCount = 0;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didStartInitialLoad) return;
+    _didStartInitialLoad = true;
     unawaited(_load(flushFirst: true));
   }
 
@@ -127,22 +130,23 @@ class _InspectionHistoryScreenState
         // caller must not act as though it is empty. Surfaced as a soft
         // warning banner rather than the hard error state, because the
         // draft and synced halves of the screen ARE still trustworthy.
+        final AppLocalizations l10n = AppLocalizations.of(context);
         setState(() {
-          _error = const AppError(
+          _error = AppError(
             kind: AppErrorKind.storage,
-            message: 'Some queued inspections could not be read from this '
-                'device. They have not been lost - try again shortly.',
+            message: l10n.inspectionHistoryQueueReadErrorMessage,
             technical: 'InspectionSubmissionQueue.list() unreadable',
             isRetryable: true,
           );
         });
       }
     } on Object {
+      if (!mounted) return;
+      final AppLocalizations l10n = AppLocalizations.of(context);
       setState(() {
-        _error = const AppError(
+        _error = AppError(
           kind: AppErrorKind.unknown,
-          message: 'Your inspections could not be loaded. Pull down to '
-              'try again.',
+          message: l10n.inspectionHistoryLoadErrorMessage,
           technical: 'InspectionHistoryScreen._load failed',
           isRetryable: true,
         );
@@ -203,6 +207,9 @@ class _InspectionHistoryScreenState
 
   Widget _body(AppLocalizations l10n) {
     if (_loading) return const TpLoadingState();
+    if (_error != null && _drafts.isEmpty && _entries.isEmpty) {
+      return TpErrorState(error: _error!, onRetry: _load);
+    }
     if (_drafts.isEmpty && _entries.isEmpty) {
       return RefreshIndicator(
         onRefresh: _load,

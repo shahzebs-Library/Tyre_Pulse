@@ -57,6 +57,9 @@ dependencies:
   image_picker: ^1.1.2
   geolocator: ^13.0.1
   signature: ^5.5.0
+  # Live QR/barcode camera scanning. Manual entry remains available and both
+  # paths resolve through the same ScannerController state machine.
+  mobile_scanner: ^7.4.0
 
   # --- Vehicle diagram body artwork (tyre diagram redesign). Renders the
   # real per-vehicle-class SVG bodies under assets/vehicle_diagram/ - see
@@ -65,7 +68,7 @@ dependencies:
   # `TpPalette.forStatus`, not a fixed hex palette baked into an asset). ---
   flutter_svg: ^2.3.0
 
-  # Packages for later phases (barcode scanner, PDF, sharing) are added at
+  # Packages for later phases (PDF and sharing) are added at
   # the phase that needs them. Spec section 64: do not add a package to
   # shorten five lines.
 
@@ -84,3 +87,5 @@ flutter:
     - assets/login/
     - assets/vehicle_diagram/
     - assets/vehicle_photos/
+    - assets/vehicle_multiview/
+    - assets/vehicle_multiview_views/

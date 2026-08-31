@@ -98,6 +98,11 @@ void main() {
   testWidgets('renders live inbox hierarchy and unread state', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final repository = _FakeNotificationsRepository(_rows);
     await _pump(tester, repository);
     await tester.pumpAndSettle();
@@ -112,6 +117,7 @@ void main() {
     );
     expect(find.byKey(const Key('notifications.unread.read')), findsNothing);
     expect(find.byKey(const Key('notifications.markAll')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('an unroutable row is still marked read on tap', (

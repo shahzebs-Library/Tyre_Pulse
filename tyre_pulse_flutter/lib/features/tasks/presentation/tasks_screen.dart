@@ -20,7 +20,7 @@ import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
 
 abstract final class TasksScreenKeys {
   static Key task(String id) => ValueKey<String>('tasks.task.$id');
-  static const Key stats = ValueKey<String>('tasks.stats');
+  static const Key board = ValueKey<String>('tasks.board');
   static const Key todayTab = ValueKey<String>('tasks.tab.today');
   static const Key inProgressTab = ValueKey<String>('tasks.tab.in-progress');
   static const Key completedTab = ValueKey<String>('tasks.tab.completed');
@@ -89,14 +89,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   Widget build(BuildContext context) {
     final TasksCopy copy = TasksCopy.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
-    final int activeCount =
-        _items.where((TaskItem item) => !isTaskCompleted(item)).length;
 
     return TpScaffold(
       backFallback: fallback,
       appBar: TpAppBar(
         title: copy('title'),
-        subtitle: _loading ? null : '$activeCount ${copy('open')}',
         backFallback: fallback,
         actions: <Widget>[
           PopupMenuButton<TaskBoardFilter>(
@@ -150,7 +147,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final List<TaskItem> shown = filterTasks(_items, _filter);
     return Column(
       children: <Widget>[
-        _TaskStats(items: _items, copy: copy),
         _TaskTabs(
           selected: _filter,
           todayCount: filterTasks(_items, TaskBoardFilter.today).length,
@@ -179,6 +175,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                   ),
                 )
               : _TaskBoard(
+                  key: TasksScreenKeys.board,
                   items: shown,
                   now: DateTime.now(),
                   copy: copy,
@@ -188,114 +185,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                 ),
         ),
       ],
-    );
-  }
-}
-
-class _TaskStats extends StatelessWidget {
-  const _TaskStats({required this.items, required this.copy});
-
-  final List<TaskItem> items;
-  final TasksCopy copy;
-
-  @override
-  Widget build(BuildContext context) {
-    final DateTime now = DateTime.now();
-    final int inProgress = items.where(isTaskInProgress).length;
-    final int completed = items.where(isTaskCompleted).length;
-    final int urgent = items.where((TaskItem item) {
-      return isTaskUrgent(item, now);
-    }).length;
-
-    return Padding(
-      key: TasksScreenKeys.stats,
-      padding: const EdgeInsets.fromLTRB(
-        TpSpace.lg,
-        TpSpace.md,
-        TpSpace.lg,
-        TpSpace.md,
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _TaskStatCard(
-              value: inProgress,
-              label: copy('inProgress'),
-              status: TpStatus.warning,
-            ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: _TaskStatCard(
-              value: completed,
-              label: copy('completed'),
-              status: TpStatus.ok,
-            ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: _TaskStatCard(
-              value: urgent,
-              label: copy('urgent'),
-              status: TpStatus.critical,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TaskStatCard extends StatelessWidget {
-  const _TaskStatCard({
-    required this.value,
-    required this.label,
-    required this.status,
-  });
-
-  final int value;
-  final String label;
-  final TpStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final TpStatusColors colors = palette.forStatus(status);
-    return SizedBox(
-      height: 96,
-      child: TpCard(
-        padding: const EdgeInsets.symmetric(
-          horizontal: TpSpace.md,
-          vertical: TpSpace.md,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              '$value',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: colors.onSoft,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 26,
-                    height: 32 / 26,
-                    letterSpacing: -0.3,
-                  ),
-            ),
-            const SizedBox(height: TpSpace.xs),
-            Text(
-              label.toUpperCase(),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: palette.textMuted,
-                    fontWeight: FontWeight.w600,
-                    height: 16 / 12,
-                    letterSpacing: 0.2,
-                  ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -405,12 +294,29 @@ class _TaskTab extends StatelessWidget {
                   ),
                   if (count > 0) ...<Widget>[
                     const SizedBox(width: TpSpace.xs),
-                    Text(
-                      '$count',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color:
-                                selected ? palette.primary : palette.textMuted,
-                          ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color:
+                            selected ? palette.primary : palette.surfaceSunken,
+                        borderRadius: BorderRadius.circular(TpRadius.pill),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
+                        child: Text(
+                          '$count',
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: selected
+                                        ? palette.onPrimary
+                                        : palette.textMuted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -431,6 +337,7 @@ class _TaskBoard extends StatelessWidget {
     required this.expandedIds,
     required this.onRefresh,
     required this.onToggleDetails,
+    super.key,
   });
 
   final List<TaskItem> items;
@@ -450,7 +357,7 @@ class _TaskBoard extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(
           TpSpace.lg,
-          TpSpace.md,
+          TpSpace.lg,
           TpSpace.lg,
           TpSpace.xxl,
         ),
@@ -527,7 +434,7 @@ class _TaskCard extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final Color accent = switch (section) {
       TaskBoardSection.urgent => palette.critical.base,
-      TaskBoardSection.inProgress => palette.primary,
+      TaskBoardSection.inProgress => palette.ok.base,
       TaskBoardSection.upcoming => palette.ok.base,
       TaskBoardSection.completed => palette.ok.base,
     };
@@ -561,10 +468,10 @@ class _TaskCard extends StatelessWidget {
       key: TasksScreenKeys.task(item.id),
       margin: const EdgeInsets.only(bottom: TpSpace.md),
       padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.lg,
+        horizontal: TpSpace.md,
         vertical: TpSpace.md,
       ),
-      borderColor: palette.border,
+      borderColor: accent.withValues(alpha: 0.58),
       onTap: hasDetails ? onToggleDetails : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -576,30 +483,29 @@ class _TaskCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    if (asset != null)
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: palette.text,
+                            fontWeight: FontWeight.w800,
+                            height: 18 / 14,
+                          ),
+                    ),
+                    if (asset != null) ...<Widget>[
+                      const SizedBox(height: 2),
                       Text(
                         asset,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style:
                             Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: palette.primary,
+                                  color: palette.text,
                                   fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                  height: 18 / 14,
-                                  letterSpacing: 0.4,
                                 ),
                       ),
-                    Text(
-                      item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: palette.text,
-                            fontWeight: FontWeight.w700,
-                            height: 22 / 16,
-                          ),
-                    ),
+                    ],
                   ],
                 ),
               ),

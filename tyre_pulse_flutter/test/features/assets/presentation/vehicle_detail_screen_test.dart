@@ -64,6 +64,14 @@ Future<void> _pump(
   );
 }
 
+/// The vehicle artwork includes a deliberately repeating turn-indicator
+/// animation, so a loaded tyre map never reaches pumpAndSettle. Two finite
+/// frames resolve the async provider and paint the stable comparison state.
+Future<void> _pumpLoadedFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
 /// The override every test that reaches `_DetailView` needs. See the
 /// library comment.
 Override _canStartInspection(bool value) =>
@@ -127,7 +135,7 @@ void main() {
       _resolved(const VehicleDetailLoaded(asset)),
       _canStartInspection(false),
     ]);
-    await tester.pumpAndSettle();
+    await _pumpLoadedFrame(tester);
 
     // The header identity goes through TpIdentifierText (bidi isolate
     // marks), so textContaining rather than an exact match - see
@@ -146,16 +154,21 @@ void main() {
     expect(find.text('NHC'), findsNWidgets(2));
     expect(find.text('Central'), findsOneWidget);
     expect(find.text('KSA'), findsOneWidget);
-    expect(find.text('315/80R22.5'), findsNWidgets(2));
+    expect(find.text('315/80R22.5'), findsOneWidget);
     expect(find.text('ABC-1234'), findsOneWidget);
     expect(find.text('TR-MIXER'), findsNWidgets(2));
+    expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
+    expect(
+      find.byKey(VehicleDetailScreenKeys.multiViewBoard),
+      findsOneWidget,
+    );
     expect(
       find.byKey(
         const ValueKey<String>(
           'assets/vehicle_photos/tri_mixer_perspective.webp',
         ),
       ),
-      findsOneWidget,
+      findsNothing,
     );
     _expectNoStateWidget();
   });
@@ -169,11 +182,17 @@ void main() {
         _resolved(const VehicleDetailLoaded(asset)),
         _canStartInspection(false),
       ]);
-      await tester.pumpAndSettle();
+      await _pumpLoadedFrame(tester);
 
-      // All twelve grid fields are unset, so all twelve render the
-      // placeholder - see the class comment for the full field list.
-      expect(find.text('-'), findsNWidgets(12));
+      // Scope to the master-data card: the two compact fact cards above it
+      // also honestly render a dash when their values are unavailable.
+      expect(
+        find.descendant(
+          of: find.byKey(VehicleDetailScreenKeys.details),
+          matching: find.text('-'),
+        ),
+        findsNWidgets(12),
+      );
     },
   );
 
@@ -186,21 +205,13 @@ void main() {
         _resolved(const VehicleDetailLoaded(asset)),
         _canStartInspection(true),
       ]);
-      await tester.pumpAndSettle();
+      await _pumpLoadedFrame(tester);
 
-      // "Start inspection" is the LAST item in the body's ListView, past
-      // the twelve field rows above it - beyond the default viewport plus
-      // cache extent in this 800x600 test window, a sliver list never
-      // builds an Element for it at all (not merely off-screen, genuinely
-      // absent from the tree), so a bare find.text finds nothing to match.
-      // scrollUntilVisible scrolls the list a little at a time, retrying
-      // the finder after each step, which is what lets the lazily-built
-      // item come into existence.
-      await tester.scrollUntilVisible(
-        find.text('Start inspection'),
-        200,
-      );
       expect(find.text('Start inspection'), findsOneWidget);
+      expect(
+        find.byKey(VehicleDetailScreenKeys.startInspection),
+        findsOneWidget,
+      );
     },
   );
 
@@ -213,9 +224,65 @@ void main() {
       _resolved(const VehicleDetailLoaded(asset)),
       _canStartInspection(false),
     ]);
-    await tester.pumpAndSettle();
+    await _pumpLoadedFrame(tester);
     expect(find.text('Start inspection'), findsNothing);
   });
+
+  testWidgets(
+    'light asset overview mock contract keeps facts, working tabs, class '
+    'tyre map and the primary action in the first phone composition',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const VehicleAsset asset = VehicleAsset(
+        id: 'v1',
+        assetNo: 'TM4271',
+        fleetNumber: 'MIX-4271',
+        vehicleType: 'TR-MIXER',
+        site: 'Qiddiya G2',
+        status: 'Active',
+        currentKm: 88421,
+      );
+      await _pump(tester, <Override>[
+        _resolved(const VehicleDetailLoaded(asset)),
+        _canStartInspection(true),
+      ]);
+      await _pumpLoadedFrame(tester);
+
+      expect(find.text('Vehicle details'), findsOneWidget);
+      expect(find.textContaining('TM4271'), findsWidgets);
+      expect(find.text('88,421 km'), findsWidgets);
+      expect(find.byKey(VehicleDetailScreenKeys.overviewTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.tyresTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.historyTab), findsOneWidget);
+      expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
+      expect(
+        find.byKey(VehicleDetailScreenKeys.startInspection),
+        findsOneWidget,
+      );
+      expect(
+        tester.getTopLeft(find.byKey(VehicleDetailScreenKeys.overviewTab)).dy,
+        inInclusiveRange(170, 300),
+      );
+      await expectLater(
+        find.byType(VehicleDetailScreen),
+        matchesGoldenFile('goldens/asset_overview_light.png'),
+      );
+
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.historyTab));
+      await tester.pumpAndSettle();
+      expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsNothing);
+      expect(find.text('Unavailable'), findsOneWidget);
+
+      await tester.tap(find.byKey(VehicleDetailScreenKeys.tyresTab));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
       'a failed live read with a usable cached copy renders '

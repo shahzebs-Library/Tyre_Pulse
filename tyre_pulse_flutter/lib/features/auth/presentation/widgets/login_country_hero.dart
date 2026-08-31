@@ -23,7 +23,7 @@ abstract final class LoginCountryKeys {
 }
 
 String _assetPath(LoginCountry country) => switch (country) {
-      LoginCountry.saudiArabia => 'assets/login/figma_city_background.png',
+      LoginCountry.saudiArabia => 'assets/login/saudi_arabia_hero.png',
       LoginCountry.unitedArabEmirates =>
         'assets/login/united_arab_emirates_pmv_hero.webp',
       LoginCountry.egypt => 'assets/login/egypt_hero.png',

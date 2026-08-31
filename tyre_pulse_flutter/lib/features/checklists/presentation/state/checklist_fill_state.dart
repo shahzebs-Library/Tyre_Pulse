@@ -9,6 +9,8 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_submit_gate.dart
 
 enum ChecklistFillPhase { loading, ready, error, submitting, submitted }
 
+enum ChecklistFillFailure { workspaceLoading, notFound, saveFailed }
+
 class ChecklistFillState {
   const ChecklistFillState({
     this.phase = ChecklistFillPhase.loading,
@@ -27,7 +29,7 @@ class ChecklistFillState {
     this.assetNo,
     this.readLang = 'en',
     this.lastSubmissionWarning,
-    this.errorMessage,
+    this.failure,
     this.submitGate,
     this.submissionId,
   });
@@ -73,7 +75,7 @@ class ChecklistFillState {
   final String readLang;
 
   final ChecklistLastSubmissionInfo? lastSubmissionWarning;
-  final String? errorMessage;
+  final ChecklistFillFailure? failure;
   final ChecklistSubmitGate? submitGate;
 
   /// Set once [phase] reaches [ChecklistFillPhase.submitted].
@@ -101,7 +103,7 @@ class ChecklistFillState {
     Object? assetNo = _unset,
     String? readLang,
     Object? lastSubmissionWarning = _unset,
-    Object? errorMessage = _unset,
+    Object? failure = _unset,
     Object? submitGate = _unset,
     Object? submissionId = _unset,
   }) {
@@ -127,9 +129,9 @@ class ChecklistFillState {
       lastSubmissionWarning: identical(lastSubmissionWarning, _unset)
           ? this.lastSubmissionWarning
           : lastSubmissionWarning as ChecklistLastSubmissionInfo?,
-      errorMessage: identical(errorMessage, _unset)
-          ? this.errorMessage
-          : errorMessage as String?,
+      failure: identical(failure, _unset)
+          ? this.failure
+          : failure as ChecklistFillFailure?,
       submitGate: identical(submitGate, _unset)
           ? this.submitGate
           : submitGate as ChecklistSubmitGate?,

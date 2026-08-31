@@ -69,6 +69,7 @@ Future<void> _pumpHome(
   required AccessState access,
   String? legacySite = 'NHC',
   Locale locale = const Locale('en'),
+  ThemeData? theme,
   int notificationCount = 0,
   List<Override> extraOverrides = const <Override>[],
 }) async {
@@ -105,7 +106,7 @@ Future<void> _pumpHome(
       overrides: overrides,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: TpTheme.light,
+        theme: theme ?? TpTheme.light,
         locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
@@ -197,14 +198,72 @@ void main() {
       expect(find.byIcon(Icons.schedule_rounded), findsNothing);
 
       expect(find.byType(HomeScreen), findsOneWidget);
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'assets/vehicle_photos/concrete_pump.png',
-          ),
+      expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.pmvHeroImage), findsOneWidget);
+      expect(find.byType(Image), findsOneWidget);
+      await expectLater(
+        find.byType(HomeScreen),
+        matchesGoldenFile(
+          'goldens/home_screen_full_data.png',
         ),
-        findsOneWidget,
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'dark theme uses the approved Dashboard hierarchy without changing the '
+    'light Home route',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final List<InspectionApprovalItem> approvals = List.generate(
+        12,
+        (int index) => InspectionApprovalItem(id: 'approval-$index'),
+      );
+      final List<TaskItem> tasks = List.generate(
+        8,
+        (int index) => TaskItem(
+          id: 'task-$index',
+          title: 'Fleet job ${index + 1}',
+          assetNo: 'Asset ${index + 1}',
+          status: 'open',
+          dueDate: DateTime.now().add(Duration(hours: index + 1)),
+        ),
+      );
+      const List<TyreAlert> alerts = <TyreAlert>[
+        TyreAlert(id: 'alert-1', riskLevel: 'critical'),
+        TyreAlert(id: 'alert-2', riskLevel: 'critical'),
+        TyreAlert(id: 'alert-3', riskLevel: 'critical'),
+        TyreAlert(id: 'alert-4', riskLevel: 'critical'),
+      ];
+
+      await _pumpHome(
+        tester,
+        access: _admin,
+        theme: TpTheme.dark,
+        notificationCount: 2,
+        extraOverrides: <Override>[
+          homePendingInspectionApprovalsProvider.overrideWith(
+            (Ref ref) async => approvals,
+          ),
+          homeTaskPreviewProvider.overrideWith((Ref ref) async => tasks),
+          tyreAlertsProvider.overrideWith((Ref ref) async => alerts),
+        ],
+      );
+
+      expect(find.byKey(HomeScreenKeys.darkDashboard), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.darkJobs), findsOneWidget);
+      expect(find.text('TYRE PULSE'), findsOneWidget);
+      expect(find.text('12'), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+      expect(find.text('8'), findsOneWidget);
+      expect(find.text('Fleet job 1'), findsOneWidget);
+      expect(find.text('Fleet job 3'), findsOneWidget);
+      expect(find.text('Fleet job 4'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -238,6 +297,8 @@ void main() {
       expect(find.byKey(HomeScreenKeys.action('inspect')), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('accidents')), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
       // The Admin break-glass allows every module, so there is never a
       // reason to fall back to the "nothing available" empty state.
@@ -260,6 +321,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Mohammed'), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
       expect(find.text('Inspect'), findsWidgets);
     },
@@ -288,6 +350,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('inspect')), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
@@ -330,6 +393,50 @@ void main() {
 
       expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'More exposes every implemented accident, workshop and management module',
+    (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+
+      await tester.tap(find.text('More').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Accident command centre'), findsWidgets);
+      expect(find.text('Report an accident'), findsWidgets);
+      await tester.drag(find.byType(ListView).last, const Offset(0, -850));
+      await tester.pumpAndSettle();
+      expect(find.text('Maintenance Control Center'), findsOneWidget);
+      expect(find.text('Maintenance & workshop'), findsWidgets);
+      await tester.drag(find.byType(ListView).last, const Offset(0, -850));
+      await tester.pumpAndSettle();
+      expect(find.text('Fleet Overview'), findsOneWidget);
+      expect(find.text('Financial report'), findsOneWidget);
+      expect(find.text('Fleet Analytics'), findsOneWidget);
+      expect(find.text('Team'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a healthy tyre state uses a verified health icon, not a repair icon',
+    (WidgetTester tester) async {
+      await _pumpHome(
+        tester,
+        access: _admin,
+        extraOverrides: <Override>[
+          tyreAlertsProvider.overrideWith(
+            (Ref ref) async => const <TyreAlert>[],
+          ),
+        ],
+      );
+
+      expect(find.byIcon(Icons.verified_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.tire_repair_outlined), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

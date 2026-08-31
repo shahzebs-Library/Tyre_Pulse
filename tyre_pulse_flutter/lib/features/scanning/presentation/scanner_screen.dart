@@ -1,18 +1,6 @@
-/// The scanner screen: a live camera surface where this build has one, and -
+/// The scanner screen: a live camera surface and -
 /// always, regardless - a manual-entry field that resolves through the
 /// identical chain a scan would.
-///
-/// # The dependency gap this screen is honest about
-///
-/// No barcode/QR/camera plugin is declared in `pubspec.yaml`. Per spec
-/// section 64 ("do not add a package to shorten five lines"), that decision
-/// belongs to whoever reviews the whole app's dependency footprint, not to
-/// this one screen - so this file does not add one. What it builds instead
-/// is the complete state machine and manual-entry surface a real camera
-/// preview would sit ALONGSIDE, plus the exact point -
-/// `camera_access.dart`'s `cameraAccessProvider` - where a real package's
-/// own permission handling plugs in later with no other change to this
-/// file.
 ///
 /// Manual entry is therefore not a fallback bolted on for today's gap; it is
 /// this feature's real, independent, always-available path. A scanned
@@ -26,6 +14,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
@@ -139,9 +128,12 @@ class _CameraArea extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final CameraAccess access = ref.watch(cameraAccessProvider);
+    final ScannerState scannerState = ref.watch(scannerControllerProvider);
 
     return switch (access) {
-      CameraAccessGranted() => const _CameraPreviewPending(),
+      CameraAccessGranted() when scannerState is ScannerIdle =>
+        const _LiveCameraScanner(),
+      CameraAccessGranted() => const _CameraPausedNotice(),
       CameraAccessDenied(reason: final String reason) => SizedBox(
           height: 240,
           child: TpPermissionDeniedState(reason: reason),
@@ -151,18 +143,68 @@ class _CameraArea extends ConsumerWidget {
   }
 }
 
-/// Where a real camera preview widget belongs once a scanning package is
-/// added.
-///
-/// Unreachable today - [cameraAccessProvider]'s only implementation never
-/// answers [CameraAccessGranted] - kept only because [CameraAccess] is
-/// sealed and every switch over it must be exhaustive. Its presence marks
-/// the exact insertion point rather than leaving it implied.
-class _CameraPreviewPending extends StatelessWidget {
-  const _CameraPreviewPending();
+class _LiveCameraScanner extends ConsumerStatefulWidget {
+  const _LiveCameraScanner();
 
   @override
-  Widget build(BuildContext context) => const SizedBox(height: 240);
+  ConsumerState<_LiveCameraScanner> createState() => _LiveCameraScannerState();
+}
+
+class _LiveCameraScannerState extends ConsumerState<_LiveCameraScanner> {
+  late final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    autoZoom: true,
+  );
+
+  bool _submitted = false;
+
+  @override
+  void dispose() {
+    unawaited(_controller.dispose());
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_submitted) return;
+    final String? code = firstScannedCode(capture);
+    if (code == null) return;
+    _submitted = true;
+    unawaited(ref.read(scannerControllerProvider.notifier).submit(code));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(TpRadius.lg),
+      child: SizedBox(
+        height: 240,
+        child: MobileScanner(
+          key: ScannerScreenKeys.cameraPreview,
+          controller: _controller,
+          onDetect: _onDetect,
+          errorBuilder: (BuildContext context, MobileScannerException error) {
+            if (error.errorCode == MobileScannerErrorCode.permissionDenied) {
+              return TpPermissionDeniedState(
+                reason: l10n.scannerCameraPermissionDeniedReason,
+              );
+            }
+            return const _CameraUnavailableNotice();
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraPausedNotice extends StatelessWidget {
+  const _CameraPausedNotice();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+        height: 240,
+        child: Center(child: Icon(Icons.qr_code_2, size: TpSizing.iconState)),
+      );
 }
 
 /// The honest "no scanning package in this build" notice.
@@ -433,4 +475,22 @@ String? _joinNonBlank(List<String?> parts) {
       .where((String value) => value.isNotEmpty)
       .toList();
   return clean.isEmpty ? null : clean.join(' - ');
+}
+
+/// Stable keys used by integration and accessibility tests.
+abstract final class ScannerScreenKeys {
+  static const ValueKey<String> cameraPreview =
+      ValueKey<String>('scanner.cameraPreview');
+}
+
+/// Returns the first non-blank decoded value in a camera capture.
+///
+/// Kept pure so barcode selection is testable without starting a camera.
+@visibleForTesting
+String? firstScannedCode(BarcodeCapture capture) {
+  for (final Barcode barcode in capture.barcodes) {
+    final String? value = barcode.rawValue?.trim();
+    if (value != null && value.isNotEmpty) return value;
+  }
+  return null;
 }

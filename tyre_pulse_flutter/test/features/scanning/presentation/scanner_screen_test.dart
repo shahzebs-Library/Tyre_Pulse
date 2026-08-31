@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
+import 'package:tyre_pulse/features/scanning/presentation/camera_access.dart';
 import 'package:tyre_pulse/features/scanning/presentation/scanner_controller.dart';
 import 'package:tyre_pulse/features/scanning/presentation/scanner_screen.dart';
 
@@ -61,6 +62,9 @@ Future<void> _pumpScanner(
     ProviderScope(
       overrides: [
         scanLookupRepositoryProvider.overrideWithValue(fake),
+        cameraAccessProvider.overrideWithValue(
+          const CameraUnavailableInThisBuild(),
+        ),
       ],
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
@@ -79,11 +83,17 @@ void main() {
   testWidgets(
     'idle: shows the camera-unavailable notice and the manual-entry field',
     (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       await _pumpScanner(tester, FakeScanLookupSource());
 
       expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Look up'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 

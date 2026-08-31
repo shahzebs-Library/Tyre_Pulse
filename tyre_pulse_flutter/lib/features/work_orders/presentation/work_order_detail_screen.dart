@@ -32,6 +32,7 @@ abstract final class WorkOrderDetailScreenKeys {
   static const Key header = Key('workOrder.detail.header');
   static const Key tabs = Key('workOrder.detail.tabs');
   static const Key lifecycle = Key('workOrder.detail.lifecycle');
+  static const Key assetImage = Key('workOrder.detail.assetImage');
   static const Key bottomAction = Key('workOrder.detail.bottomAction');
 }
 
@@ -177,7 +178,6 @@ class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
             label: next == kWorkOrderStatusInProgress
                 ? l10n.workOrderAdvanceToInProgress
                 : l10n.workOrderAdvanceToCompleted,
-            icon: Icons.play_arrow_rounded,
             isBusy: _advancing,
             isFullWidth: true,
             onPressed: _advancing ? null : _advance,
@@ -269,6 +269,8 @@ class _LightWorkOrderBody extends StatelessWidget {
               const SizedBox(height: TpSpace.md),
               Divider(height: 1, color: palette.border),
               const SizedBox(height: TpSpace.md),
+              _SectionLabel(l10n.workOrderDetailTitle),
+              const SizedBox(height: TpSpace.sm),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -324,8 +326,7 @@ class _LightWorkOrderBody extends StatelessWidget {
         ),
         TabBar(
           key: WorkOrderDetailScreenKeys.tabs,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
+          isScrollable: false,
           indicatorColor: palette.primary,
           labelColor: palette.primary,
           unselectedLabelColor: palette.textSecondary,
@@ -395,17 +396,7 @@ class _DarkJobBody extends StatelessWidget {
                 const SizedBox(height: TpSpace.md),
                 Row(
                   children: <Widget>[
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: TpPalette.of(context).surfaceAlt,
-                        borderRadius: BorderRadius.circular(TpRadius.sm),
-                      ),
-                      child: const SizedBox(
-                        width: 52,
-                        height: 44,
-                        child: Icon(Icons.local_shipping_outlined),
-                      ),
-                    ),
+                    _AssetThumbnail(assetNo: item.assetNo),
                     const SizedBox(width: TpSpace.sm),
                     Expanded(
                       child: Column(
@@ -448,8 +439,10 @@ class _DarkJobBody extends StatelessWidget {
                 const SizedBox(width: TpSpace.md),
                 Expanded(
                   child: _CompactFact(
-                    label: l10n.workOrderFieldCountry,
-                    child: Text(_display(item.country, l10n)),
+                    label: l10n.workOrderFieldOpened,
+                    child: Text(
+                      _formatTimestamp(item.openedAt) ?? l10n.valueNotMeasured,
+                    ),
                   ),
                 ),
               ],
@@ -532,6 +525,43 @@ class _NotConfiguredTab extends StatelessWidget {
       );
 }
 
+class _AssetThumbnail extends StatelessWidget {
+  const _AssetThumbnail({required this.assetNo});
+
+  final String? assetNo;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final String? path = _assetPhotoFor(assetNo);
+    final BorderRadius radius = BorderRadius.circular(TpRadius.sm);
+    return Container(
+      key: WorkOrderDetailScreenKeys.assetImage,
+      width: 60,
+      height: 48,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: radius,
+        border: Border.all(color: palette.border),
+      ),
+      child: path == null
+          ? Icon(Icons.local_shipping_outlined, color: palette.textMuted)
+          : Image.asset(
+              path,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (BuildContext context, Object _, StackTrace? __) {
+                return Icon(
+                  Icons.local_shipping_outlined,
+                  color: palette.textMuted,
+                );
+              },
+            ),
+    );
+  }
+}
+
 class _LifecycleCard extends StatelessWidget {
   const _LifecycleCard({required this.item, required this.l10n});
 
@@ -597,6 +627,26 @@ class _LifecycleCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _assetPhotoFor(String? assetNo) {
+  final String value = assetNo?.trim().toLowerCase() ?? '';
+  if (value.contains('mixer')) {
+    return 'assets/vehicle_photos/tri_mixer_perspective.webp';
+  }
+  if (value.contains('loader')) {
+    return 'assets/vehicle_photos/wheel_loader.png';
+  }
+  if (value.contains('pickup')) {
+    return 'assets/vehicle_photos/pickup.png';
+  }
+  if (value.contains('bus') || value.contains('hiace')) {
+    return 'assets/vehicle_photos/staff_bus.png';
+  }
+  if (value.contains('pump')) {
+    return 'assets/vehicle_photos/truck_mounted_pump.png';
+  }
+  return null;
 }
 
 class _CompactFact extends StatelessWidget {

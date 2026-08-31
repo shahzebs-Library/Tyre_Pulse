@@ -216,6 +216,11 @@ void main() {
   testWidgets('the mock hierarchy uses the night-shift palette in dark mode', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await _pump(
       tester,
       _FakeAlertsRepository(() async => _alerts),
@@ -230,5 +235,9 @@ void main() {
     expect(tabSurface.color, const Color(0xFFFFD400));
     expect(find.byKey(const Key('alerts.list')), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/alerts_compact_dark.png'),
+    );
   });
 }

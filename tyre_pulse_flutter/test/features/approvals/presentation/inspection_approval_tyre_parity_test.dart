@@ -401,4 +401,11 @@ final class _FakeInspectionApprovalRepository
   @override
   Future<List<InspectionApprovalItem>> listPending({String? country}) async =>
       <InspectionApprovalItem>[item];
+
+  @override
+  Future<List<InspectionApprovalItem>> listByStatus(
+    String status, {
+    String? country,
+  }) async =>
+      const <InspectionApprovalItem>[];
 }

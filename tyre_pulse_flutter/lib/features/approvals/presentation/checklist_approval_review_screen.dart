@@ -118,6 +118,7 @@ class ChecklistApprovalReviewScreen extends ConsumerStatefulWidget {
 
 class _ChecklistApprovalReviewScreenState
     extends ConsumerState<ChecklistApprovalReviewScreen> {
+  bool _didStartInitialLoad = false;
   bool _loading = true;
   AppError? _loadError;
   ChecklistApprovalItem? _item;
@@ -129,8 +130,10 @@ class _ChecklistApprovalReviewScreenState
   _DecisionBusy? _busy;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didStartInitialLoad) return;
+    _didStartInitialLoad = true;
     unawaited(_load());
     unawaited(_loadApproverName());
   }

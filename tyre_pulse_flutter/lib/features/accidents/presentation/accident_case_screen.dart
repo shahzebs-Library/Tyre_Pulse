@@ -20,6 +20,7 @@ import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
 
 abstract final class AccidentCaseScreenKeys {
   static const Key tabs = Key('accident.case.tabs');
+  static const Key boundaryAction = Key('accident.case.boundaryAction');
   static const Key header = Key('accident.case.header');
   static const Key overview = Key('accident.case.overview');
   static const Key evidence = Key('accident.case.evidence');
@@ -88,11 +89,12 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen> {
         backFallback: fallback,
         backgroundColor: TpPalette.of(context).surface,
         appBar: TpAppBar(
-          title: copy('caseTitle'),
+          title: l10n.accidentCaseAppBarTitle,
           backFallback: fallback,
           actions: hasRecord
               ? <Widget>[
                   IconButton(
+                    key: AccidentCaseScreenKeys.boundaryAction,
                     tooltip: copy('boundary'),
                     onPressed: () => _showReadOnlyBoundary(copy),
                     icon: const Icon(Icons.more_vert_rounded),
@@ -120,7 +122,7 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen> {
                         Tab(text: _compactCopy(copy('evidence'))),
                         Tab(text: _shortCopy(copy('insurance'))),
                         Tab(text: l10n.workOrderWorkTypeRepair),
-                        Tab(text: _shortCopy(copy('closure'))),
+                        Tab(text: l10n.homeMoreAction),
                       ],
                     ),
                   ),
@@ -131,7 +133,7 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen> {
         bottomNavigationBar: hasRecord
             ? _ReadOnlyFooter(
                 key: AccidentCaseScreenKeys.readOnlyAction,
-                label: copy('boundary'),
+                label: l10n.accidentUpdateCaseAction,
                 onPressed: () => _showReadOnlyBoundary(copy),
               )
             : null,
@@ -206,23 +208,33 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AccidentRecord record = snapshot.accident;
+    final AppLocalizations l10n = AppLocalizations.of(context);
     return _CaseScrollView(
       key: AccidentCaseScreenKeys.overview,
       onRefresh: onRefresh,
       children: <Widget>[
-        _CaseHeader(snapshot: snapshot, copy: copy),
         _CaseSection(
-          title: copy('incidentFacts'),
+          title: l10n.accidentCaseInfoSection,
           child: Column(
             children: <Widget>[
-              AccidentInfoRow(copy('caseTitle'), record.reference),
-              AccidentInfoRow(copy('assetNo'), record.assetNo),
+              AccidentInfoRow(copy('caseId'), record.reference),
+              AccidentInfoRow(l10n.accidentCaseAssetLabel, record.assetNo),
               AccidentInfoRow(
-                copy('exactLocation'),
+                l10n.accidentCaseLocationLabel,
                 record.location ?? record.site,
               ),
-              AccidentInfoRow(copy('incidentFactsHint'), record.incidentDate),
-              AccidentInfoRow(copy('reporter'), record.reporterName),
+              AccidentInfoRow(
+                copy('incidentDateLabel'),
+                formatAccidentIncidentDate(
+                  context,
+                  record.incidentDate,
+                  includeTime: true,
+                ),
+              ),
+              AccidentInfoRow(
+                l10n.accidentCaseReportedByLabel,
+                record.reporterName,
+              ),
             ],
           ),
         ),
@@ -241,14 +253,14 @@ class _OverviewTab extends StatelessWidget {
             evidenceLabel: copy('evidencePhoto'),
           ),
         ),
-        _WorkstreamSummary(
-          workstreams: _matching(snapshot.workstreams, const <String>{
-            'incident_evidence',
-            'fleet_validation',
-          }),
-          copy: copy,
-          provisioned: snapshot.provisioned,
-        ),
+        if (!snapshot.provisioned)
+          Padding(
+            padding: const EdgeInsets.only(top: TpSpace.md),
+            child: TpNotConfiguredState(
+              title: copy('notActivated'),
+              detail: copy('notActivatedMessage'),
+            ),
+          ),
       ],
     );
   }
@@ -897,7 +909,7 @@ List<AccidentProgressStep> _caseProgressSteps(
       state: AccidentProgressState.done,
     ),
     AccidentProgressStep(
-      label: _shortCopy(copy('wsFleet')),
+      label: _stepWord(copy('wsFleet')),
       state: _caseWorkstreamProgress(snapshot, 'fleet_validation'),
     ),
     AccidentProgressStep(
@@ -905,7 +917,7 @@ List<AccidentProgressStep> _caseProgressSteps(
       state: _caseWorkstreamProgress(snapshot, 'insurance'),
     ),
     AccidentProgressStep(
-      label: _shortCopy(copy('wsRepair')),
+      label: _stepWord(copy('wsRepair')),
       state: _caseWorkstreamProgress(snapshot, 'repair'),
     ),
     AccidentProgressStep(
@@ -946,3 +958,18 @@ String _compactCopy(String value) =>
     value.replaceFirst(RegExp(r'^\s*\d+[.)]\s*'), '').trim();
 
 String _shortCopy(String value) => value.split('&').first.trim();
+
+/// The first word of [value], for the five-column progress ladder.
+///
+/// The ladder gives each step a narrow, fixed-proportion column (see
+/// `AccidentProgressLadder`'s `_ProgressNode`), matching the approved mock's
+/// single short word per step (Report/Evidence/Insurance/Repair/Closed). A
+/// full descriptive label such as "Fleet validation" or "Repair execution"
+/// is correct as a section title elsewhere, but wraps across two lines in
+/// that column - this keeps the ladder's own copy short without touching the
+/// longer label used everywhere else that name is shown in full.
+String _stepWord(String value) {
+  final String trimmed = _shortCopy(value).trim();
+  final int space = trimmed.indexOf(' ');
+  return space < 0 ? trimmed : trimmed.substring(0, space);
+}

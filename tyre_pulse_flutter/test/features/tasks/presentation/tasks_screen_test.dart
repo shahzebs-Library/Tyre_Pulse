@@ -49,6 +49,7 @@ Future<void> _pump(
         ...extraOverrides,
       ],
       child: MaterialApp(
+        debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
         locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
@@ -61,9 +62,14 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('renders the three mock tabs and real open task sections', (
+  testWidgets('matches the compact My Work mock with tabs before the board', (
     WidgetTester tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final _FakeTasksRepository repository = _FakeTasksRepository(
       const <TaskItem>[
         TaskItem(
@@ -88,13 +94,26 @@ void main() {
     await _pump(tester, repository);
 
     expect(find.text('My Work'), findsOneWidget);
-    expect(find.byKey(TasksScreenKeys.stats), findsOneWidget);
+    expect(find.byKey(TasksScreenKeys.board), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.todayTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.inProgressTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.completedTab), findsOneWidget);
-    expect(find.text('URGENT'), findsNWidgets(2));
-    expect(find.text('IN PROGRESS'), findsNWidgets(3));
+    expect(find.text('URGENT'), findsOneWidget);
+    expect(find.text('IN PROGRESS'), findsNWidgets(2));
     expect(find.byKey(TasksScreenKeys.task('urgent')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(TasksScreenKeys.todayTab)).dy,
+      lessThan(tester.getTopLeft(find.byKey(TasksScreenKeys.board)).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Breakdown')).dy,
+      lessThan(tester.getTopLeft(find.text('Mixer 4271')).dy),
+    );
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/tasks_compact_en.png'),
+    );
     expect(repository.lastCountry, 'KSA');
   });
 

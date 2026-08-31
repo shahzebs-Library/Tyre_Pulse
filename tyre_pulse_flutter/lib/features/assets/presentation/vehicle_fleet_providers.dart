@@ -5,27 +5,8 @@
 /// widget watching one piece of this feature's state must not rebuild
 /// because an unrelated part of it changed.
 ///
-/// # A known, documented gap: no cache is wired in yet
-///
-/// [vehicleFleetCacheDaoProvider] defaults to null. This is not an oversight:
-/// `lib/core/database/` has no Riverpod provider for `AppDatabase` or
-/// `CacheDao` anywhere in this codebase today - verified by grep, and
-/// consistent with `main.dart` not overriding `workspaceDependenciesProvider`
-/// or `accessStateProvider` either, both of which also still throw
-/// `UnimplementedError` until a later phase wires the composition root.
-/// [VehicleFleetRepository] fully implements the offline-cache path and it is
-/// exercised in `test/features/assets/data/vehicle_fleet_repository_test.dart`
-/// against a real in-memory `CacheDao`; this provider is what a later phase
-/// overrides once `core/database` exposes a canonical instance, at which
-/// point the offline-cached fallback starts working on a real device with no
-/// change to this feature's own code.
-///
-/// Opening a SECOND `AppDatabase` connection from inside this feature - by
-/// constructing one directly here rather than leaving this null - would risk
-/// two independent SQLite connections to the same on-device file, which is
-/// exactly the kind of cross-feature hazard AGENTS.md's layering rules exist
-/// to prevent. Better to degrade honestly (no cache fallback available) than
-/// to reach around a database ownership question this feature does not own.
+/// The fleet cache uses the same canonical [AppDatabase] connection as every
+/// other offline feature. No feature opens a second SQLite connection.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // sanctioned escape hatch for naming it explicitly, which the family
 // provider's declared type below does.
 import 'package:flutter_riverpod/misc.dart' show FutureProviderFamily;
+import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -48,10 +30,9 @@ final Provider<VehicleFleetSource> vehicleFleetSourceProvider =
   (ref) => SupabaseVehicleFleetSource(ref.watch(supabaseClientProvider)),
 );
 
-/// See the library comment. Override this once `core/database` exposes a
-/// shared [CacheDao] instance.
+/// The shared fleet cache. [appDatabaseProvider] is supplied once by main.
 final Provider<CacheDao?> vehicleFleetCacheDaoProvider = Provider<CacheDao?>(
-  (ref) => null,
+  (ref) => ref.watch(appDatabaseProvider).cacheDao,
 );
 
 /// The fleet register repository.

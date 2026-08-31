@@ -284,6 +284,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vehiclesDetailSubtitle => 'تفاصيل المركبة';
 
   @override
+  String get vehiclesMultiViewTitle => 'مناظر المركبة';
+
+  @override
+  String get vehiclesMultiViewHint =>
+      'الأمام · الخلف · الأعلى · اليسار · اليمين';
+
+  @override
+  String get vehiclesMultiViewZoom => 'اضغط للتكبير';
+
+  @override
   String get vehiclesUnknownAsset => 'مركبة غير معروفة';
 
   @override
@@ -895,6 +905,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get inspectionDetailTitle => 'الفحص';
 
   @override
+  String get inspectionDetailLoadErrorMessage =>
+      'تعذر تحميل هذا الفحص. تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
   String get inspectionNotFoundTitle => 'الفحص غير موجود';
 
   @override
@@ -932,6 +946,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get inspectionHistoryTitle => 'فحوصاتي';
+
+  @override
+  String get inspectionHistoryQueueReadErrorMessage =>
+      'تعذر قراءة بعض الفحوصات الموجودة في قائمة الانتظار من هذا الجهاز. لم تُفقد—حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get inspectionHistoryLoadErrorMessage =>
+      'تعذر تحميل فحوصاتك. اسحب لأسفل للمحاولة مرة أخرى.';
 
   @override
   String get inspectionHistoryEmptyTitle => 'لا توجد فحوصات بعد';
@@ -975,6 +997,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get checklistsHomeTitle => 'قوائم التحقق';
+
+  @override
+  String get checklistWorkspaceLoadingMessage =>
+      'لا تزال مساحة العمل قيد التحميل. حاول مرة أخرى بعد قليل.';
+
+  @override
+  String get checklistsLoadErrorMessage =>
+      'تعذر تحميل قوائم الفحص. اسحب لأسفل للمحاولة مرة أخرى.';
 
   @override
   String get checklistsLibraryTitle => 'مكتبة الفحص';
@@ -1034,6 +1064,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checklistHistoryTitle => 'سجل قوائم التحقق';
 
   @override
+  String get checklistHistoryLoadErrorMessage =>
+      'تعذر تحميل سجل قوائم الفحص. اسحب لأسفل للمحاولة مرة أخرى.';
+
+  @override
   String get checklistHistorySearchHint =>
       'البحث حسب المستند أو النموذج أو الأصل أو الموقع';
 
@@ -1082,6 +1116,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get checklistFillLoadingTitle => 'قائمة التحقق';
+
+  @override
+  String get checklistFillNotFoundMessage =>
+      'تعذر العثور على قائمة الفحص هذه. ربما أُلغي نشرها.';
+
+  @override
+  String get checklistFillSaveFailedMessage =>
+      'تعذر حفظ قائمة الفحص هذه. لم تُفقد—حاول مرة أخرى.';
 
   @override
   String get checklistSubmittedTitle => 'تم إرسال قائمة التحقق';
@@ -1159,6 +1201,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get inspectionApprovalsPendingBadge => 'قيد الانتظار';
+
+  @override
+  String get inspectionApprovalsApprovedTab => 'تمت الموافقة';
+
+  @override
+  String get inspectionApprovalsReturnedTab => 'معاد';
+
+  @override
+  String get dateGroupToday => 'اليوم';
+
+  @override
+  String get dateGroupYesterday => 'أمس';
 
   @override
   String get inspectionApprovalFallbackTitle => 'الفحص';
@@ -2604,6 +2658,39 @@ class AppLocalizationsAr extends AppLocalizations {
       'الإرسال غير متاح حتى يضمن مسار المزامنة المحمي رفع كل صور الأدلة الخاصة قبل سجل الحادث. تبقى الصور الملتقطة على هذا الجهاز.';
 
   @override
+  String get accidentOverviewAppBarTitle => 'الحادث';
+
+  @override
+  String get accidentCaseAppBarTitle => 'تفاصيل الحالة';
+
+  @override
+  String get accidentViewCaseDetailsAction => 'عرض تفاصيل الحالة';
+
+  @override
+  String get accidentUpdateCaseAction => 'تحديث الحالة';
+
+  @override
+  String get accidentReportedOnLabel => 'تم الإبلاغ في';
+
+  @override
+  String get accidentProgressSection => 'التقدم';
+
+  @override
+  String get accidentDueDateLabel => 'تاريخ الاستحقاق';
+
+  @override
+  String get accidentCaseInfoSection => 'بيانات الحالة';
+
+  @override
+  String get accidentCaseAssetLabel => 'المعدة';
+
+  @override
+  String get accidentCaseLocationLabel => 'الموقع';
+
+  @override
+  String get accidentCaseReportedByLabel => 'أبلغ عنها';
+
+  @override
   String get tasksCopyCatalog =>
       'title=عملي~today=اليوم~inProgress=قيد التنفيذ~completed=مكتمل~urgent=عاجل~upcoming=قادم~open=مفتوحة~emptyTitle=لا توجد مهام~emptyMessage=لا توجد أعمال تطابق هذا العرض.~loadError=تعذر تحميل أعمالي الآن.~due=الاستحقاق~assigned=مُسند إلى~unassigned=غير مُسند~normal=عادي~overdue=متأخر~details=تفاصيل المهمة~description=الوصف~site=الموقع~asset=المعدة~priority=الأولوية~status=الحالة~retry=إعادة المحاولة';
 
@@ -2648,5 +2735,5 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get accidentCopyCatalog =>
-      'loadFailed=تعذر تحميل سجل الحادث. حاول مرة أخرى.~notRecorded=غير مسجل~dashboardTitle=مركز قيادة الحوادث~dashboardSubtitle=سجل مباشر حسب الصلاحيات~reportAction=الإبلاغ عن حادث~reportShort=إبلاغ~loadingRegister=جارٍ تحميل سجل الحوادث…~dashboardEyebrow=إدارة حوادث المعدات والمركبات~dashboardHeroTitle=كل حالة بمسار مسؤول واحد~dashboardHeroMessage=الأسطول والتأمين والورشة والفحص والتسليم والاسترداد ظاهرة دون مؤشرات مختلقة.~searchHint=ابحث بالمعدة أو المرجع أو الموقع~allCases=كل الحالات~reportedByMe=بلاغاتي~anyStatus=أي حالة~open=مفتوح~closed=مغلق~noMatches=لا توجد حالات مطابقة~noMatchesMessage=غيّر التصفية أو أنشئ بلاغًا جديدًا.~loadMore=تحميل حالات أخرى~loading=جارٍ التحميل…~detailTitle=تفاصيل الحادث~loadingFacts=جارٍ تحميل بيانات الحالة…~notFound=الحادث غير موجود~notFoundMessage=السجل خارج نطاق صلاحيتك أو لم يعد موجودًا.~openFlow=فتح مسار الحالة المسؤول~incidentFacts=بيانات الحادث~incidentFactsHint=أدلة المبلّغ وهوية المركبة~liability=المسؤولية والدفع~liabilityHint=المتسبب والمسؤول والجهة الدافعة~insurance=التأمين والاسترداد~insuranceHint=المطالبة والاسترداد منفصلان عن الإغلاق~workshopRelease=الورشة والتسليم~workshopReleaseHint=التقييم والإصلاح والفحص وإعادة المركبة~closure=ضوابط الإغلاق~closureHint=اعتماد الإغلاق وحالة القضية منفصلان~vehicleType=نوع المركبة~plate=اللوحة / رقم الأسطول~type=نوع الحادث~severity=الخطورة~reporter=المبلّغ~evidenceFiles=ملفات الأدلة~description=الوصف~damage=الضرر~fault=حالة الخطأ~responsible=الطرف المتسبب~liable=الطرف المسؤول~payer=الجهة الدافعة~insurer=شركة التأمين~policy=الوثيقة~claimNo=رقم المطالبة~claimStatus=حالة المطالبة~claimed=المبلغ المطالب به~approved=المبلغ المعتمد~recoveryStatus=حالة الاسترداد~recovered=المبلغ المسترد~repairType=نوع الإصلاح~workshop=الورشة~repairCost=تكلفة الإصلاح~expectedRelease=التسليم المتوقع~actualRelease=التسليم الفعلي~nextAction=الإجراء التالي~workflowStage=مرحلة سير العمل~caseStatus=حالة القضية~closureRequest=طلب الإغلاق~closureLevel=مستوى الإغلاق~caseTitle=مسؤولية القضية~loadingWorkstreams=جارٍ تحميل مسارات العمل…~caseNotFound=القضية غير موجودة~caseNotFoundMessage=الحادث خارج نطاق صلاحيتك أو لم يعد موجودًا.~endToEnd=مسار القضية من البداية للنهاية~notActivated=مسار القضية غير مفعّل~notActivatedMessage=الحادث موجود لكن نموذج مسارات العمل غير مهيأ. لم يتم افتراض أي تقدم.~noWorkstreams=لا توجد مسارات معيّنة~noWorkstreamsMessage=نموذج القضية متاح لكن لم تُوجّه لها مسارات بعد.~timeline=الخط الزمني للمسؤولية~timelineHint=بيانات للقراءة فقط من سجل مسارات القضية~boundary=حدود التحكم~boundaryHint=لا يتم اختلاق أي إجراءات~boundaryMessage=قرارات التأمين والتقييم والإصلاح والفحص والتسليم والإغلاق والاسترداد تتطلب إجراءات خادم موثقة. لا توجد تعديلات مباشرة غير آمنة.~done=مكتمل~inProgress=قيد التنفيذ~pending=معلق~notRequired=غير مطلوب~reason=السبب~wsIncident=الحادث والأدلة~wsFleet=تحقق الأسطول~wsLiability=المسؤولية والسلامة~wsInsurance=مطالبة التأمين~wsAssessment=تقييم الورشة~wsRepair=تنفيذ الإصلاح~wsQc=فحص الورشة~wsHandover=تسليم المركبة~wsFinance=الاسترداد والمالية~wsCorrective=الإجراءات التصحيحية~selectAsset=اختر معدة من الأسطول~changeAsset=تغيير المعدة~assetSearch=المعدة أو رقم الأسطول أو اللوحة أو الطراز~unrecordedAsset=معدة غير مسجلة~photoFailed=تعذر حفظ صورة الدليل. حاول مرة أخرى.~workspaceLoading=مساحة العمل ما زالت قيد التحميل. حاول مرة أخرى.~required=المعدة والموقع والوصف وصورة دليل واحدة على الأقل مطلوبة.~fieldsDropped=تعذر حفظ جميع الحقول. لم يتم عرض البلاغ كمقدم.~saveFailed=تعذر حفظ البلاغ على هذا الجهاز. حاول مرة أخرى.~saved=تم حفظ البلاغ~savedTitle=تم حفظ بلاغ الحادث بأمان~savedMessage=البلاغ والأدلة في قائمة مزامنة الجهاز وسيتم رفعهما ضمن مساحة العمل النشطة.~backRegister=العودة إلى سجل الحوادث~reportTitle=الإبلاغ عن حادث~reportSubtitle=التقاط أدلة يعمل دون اتصال~firstResponse=الاستجابة الأولى~captureFacts=سجّل الوقائع في الموقع~captureFactsMessage=اختر المعدة أولاً لتعبئة موقعها وهويتها من سجل الأسطول. صورة دليل واحدة على الأقل إلزامية.~assetLocation=1. المعدة والموقع~assetLocationHint=سجل الأسطول هو المرجع عند توفره~fleetUnavailable=البحث في الأسطول غير متاح. الإدخال اليدوي متاح.~assetNo=رقم المعدة~site=الموقع~exactLocation=المكان الدقيق للحادث~classification=2. التصنيف~classificationHint=يمكن مراجعة التصنيف الميداني لاحقًا~minor=بسيط~moderate=متوسط~severe=خطير~fatal=مميت~collision=تصادم~rollover=انقلاب~propertyDamage=ضرر ممتلكات~other=أخرى~whatHappened=ماذا حدث؟~notes=ملاحظات فورية~evidence=3. الأدلة~evidenceAttached=صور أدلة مرفقة • الحد الأدنى 1~camera=الكاميرا~gallery=المعرض~evidencePhoto=صورة دليل~removePhoto=إزالة الصورة~saveReport=حفظ بلاغ الحادث';
+      'loadFailed=تعذر تحميل سجل الحادث. حاول مرة أخرى.~notRecorded=غير مسجل~dashboardTitle=مركز قيادة الحوادث~dashboardSubtitle=سجل مباشر حسب الصلاحيات~reportAction=الإبلاغ عن حادث~reportShort=إبلاغ~loadingRegister=جارٍ تحميل سجل الحوادث…~dashboardEyebrow=إدارة حوادث المعدات والمركبات~dashboardHeroTitle=كل حالة بمسار مسؤول واحد~dashboardHeroMessage=الأسطول والتأمين والورشة والفحص والتسليم والاسترداد ظاهرة دون مؤشرات مختلقة.~searchHint=ابحث بالمعدة أو المرجع أو الموقع~allCases=كل الحالات~reportedByMe=بلاغاتي~anyStatus=أي حالة~open=مفتوح~closed=مغلق~noMatches=لا توجد حالات مطابقة~noMatchesMessage=غيّر التصفية أو أنشئ بلاغًا جديدًا.~loadMore=تحميل حالات أخرى~loading=جارٍ التحميل…~detailTitle=تفاصيل الحادث~loadingFacts=جارٍ تحميل بيانات الحالة…~notFound=الحادث غير موجود~notFoundMessage=السجل خارج نطاق صلاحيتك أو لم يعد موجودًا.~openFlow=فتح مسار الحالة المسؤول~incidentFacts=بيانات الحادث~incidentFactsHint=أدلة المبلّغ وهوية المركبة~liability=المسؤولية والدفع~liabilityHint=المتسبب والمسؤول والجهة الدافعة~insurance=التأمين والاسترداد~insuranceHint=المطالبة والاسترداد منفصلان عن الإغلاق~workshopRelease=الورشة والتسليم~workshopReleaseHint=التقييم والإصلاح والفحص وإعادة المركبة~closure=ضوابط الإغلاق~closureHint=اعتماد الإغلاق وحالة القضية منفصلان~vehicleType=نوع المركبة~plate=اللوحة / رقم الأسطول~type=نوع الحادث~severity=الخطورة~reporter=المبلّغ~evidenceFiles=ملفات الأدلة~description=الوصف~damage=الضرر~fault=حالة الخطأ~responsible=الطرف المتسبب~liable=الطرف المسؤول~payer=الجهة الدافعة~insurer=شركة التأمين~policy=الوثيقة~claimNo=رقم المطالبة~claimStatus=حالة المطالبة~claimed=المبلغ المطالب به~approved=المبلغ المعتمد~recoveryStatus=حالة الاسترداد~recovered=المبلغ المسترد~repairType=نوع الإصلاح~workshop=الورشة~repairCost=تكلفة الإصلاح~expectedRelease=التسليم المتوقع~actualRelease=التسليم الفعلي~nextAction=الإجراء التالي~workflowStage=مرحلة سير العمل~caseStatus=حالة القضية~closureRequest=طلب الإغلاق~closureLevel=مستوى الإغلاق~caseTitle=مسؤولية القضية~caseId=رقم الحالة~incidentDateLabel=تاريخ الحادث~damageMapTitle=خريطة الأضرار~damageMapHint=اضغط على منطقة لتحديد الضرر~damageMapZonesLabel=منطقة/مناطق محددة~damageMapNoneMarked=لم يتم تحديد أي ضرر بعد~damageViewFront=الأمام~damageViewRear=الخلف~damageViewLeft=الجانب الأيسر~damageViewRight=الجانب الأيمن~damageViewTop=من الأعلى~zoneFrontBumper=الصادم الأمامي~zoneHood=غطاء المحرك~zoneWindshield=الزجاج الأمامي~zoneLeftHeadlight=المصباح الأمامي الأيسر~zoneRightHeadlight=المصباح الأمامي الأيمن~zoneRearBumper=الصادم الخلفي~zoneTailgate=الباب الخلفي~zoneRearWindshield=الزجاج الخلفي~zoneLeftTailLight=المصباح الخلفي الأيسر~zoneRightTailLight=المصباح الخلفي الأيمن~zoneFrontFender=الرفراف الأمامي~zoneFrontDoor=الباب الأمامي~zoneRearDoor=الباب الخلفي~zoneRearFender=الرفراف الخلفي~zoneMirror=المرآة الجانبية~zoneRoof=السقف~damageMarkSeverityLabel=شدة الضرر~damageMarkNoteLabel=ملاحظة (اختياري)~damageMarkSave=حفظ العلامة~damageMarkRemove=إزالة العلامة~loadingWorkstreams=جارٍ تحميل مسارات العمل…~caseNotFound=القضية غير موجودة~caseNotFoundMessage=الحادث خارج نطاق صلاحيتك أو لم يعد موجودًا.~endToEnd=مسار القضية من البداية للنهاية~notActivated=مسار القضية غير مفعّل~notActivatedMessage=الحادث موجود لكن نموذج مسارات العمل غير مهيأ. لم يتم افتراض أي تقدم.~noWorkstreams=لا توجد مسارات معيّنة~noWorkstreamsMessage=نموذج القضية متاح لكن لم تُوجّه لها مسارات بعد.~timeline=الخط الزمني للمسؤولية~timelineHint=بيانات للقراءة فقط من سجل مسارات القضية~boundary=حدود التحكم~boundaryHint=لا يتم اختلاق أي إجراءات~boundaryMessage=قرارات التأمين والتقييم والإصلاح والفحص والتسليم والإغلاق والاسترداد تتطلب إجراءات خادم موثقة. لا توجد تعديلات مباشرة غير آمنة.~done=مكتمل~inProgress=قيد التنفيذ~pending=معلق~notRequired=غير مطلوب~reason=السبب~wsIncident=الحادث والأدلة~wsFleet=تحقق الأسطول~wsLiability=المسؤولية والسلامة~wsInsurance=مطالبة التأمين~wsAssessment=تقييم الورشة~wsRepair=تنفيذ الإصلاح~wsQc=فحص الورشة~wsHandover=تسليم المركبة~wsFinance=الاسترداد والمالية~wsCorrective=الإجراءات التصحيحية~selectAsset=اختر معدة من الأسطول~changeAsset=تغيير المعدة~assetSearch=المعدة أو رقم الأسطول أو اللوحة أو الطراز~unrecordedAsset=معدة غير مسجلة~photoFailed=تعذر حفظ صورة الدليل. حاول مرة أخرى.~workspaceLoading=مساحة العمل ما زالت قيد التحميل. حاول مرة أخرى.~required=المعدة والموقع والوصف وصورة دليل واحدة على الأقل مطلوبة.~fieldsDropped=تعذر حفظ جميع الحقول. لم يتم عرض البلاغ كمقدم.~saveFailed=تعذر حفظ البلاغ على هذا الجهاز. حاول مرة أخرى.~saved=تم حفظ البلاغ~savedTitle=تم حفظ بلاغ الحادث بأمان~savedMessage=البلاغ والأدلة في قائمة مزامنة الجهاز وسيتم رفعهما ضمن مساحة العمل النشطة.~backRegister=العودة إلى سجل الحوادث~reportTitle=الإبلاغ عن حادث~reportSubtitle=التقاط أدلة يعمل دون اتصال~firstResponse=الاستجابة الأولى~captureFacts=سجّل الوقائع في الموقع~captureFactsMessage=اختر المعدة أولاً لتعبئة موقعها وهويتها من سجل الأسطول. صورة دليل واحدة على الأقل إلزامية.~assetLocation=1. المعدة والموقع~assetLocationHint=سجل الأسطول هو المرجع عند توفره~fleetUnavailable=البحث في الأسطول غير متاح. الإدخال اليدوي متاح.~assetNo=رقم المعدة~site=الموقع~exactLocation=المكان الدقيق للحادث~classification=2. التصنيف~classificationHint=يمكن مراجعة التصنيف الميداني لاحقًا~minor=بسيط~moderate=متوسط~severe=خطير~fatal=مميت~collision=تصادم~rollover=انقلاب~propertyDamage=ضرر ممتلكات~other=أخرى~whatHappened=ماذا حدث؟~notes=ملاحظات فورية~evidence=3. الأدلة~evidenceAttached=صور أدلة مرفقة • الحد الأدنى 1~camera=الكاميرا~gallery=المعرض~evidencePhoto=صورة دليل~removePhoto=إزالة الصورة~saveReport=حفظ بلاغ الحادث';
 }

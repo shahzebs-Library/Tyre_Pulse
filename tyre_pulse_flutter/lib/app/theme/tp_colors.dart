@@ -10,8 +10,8 @@
 /// are different claims and they get different colours.
 ///
 /// The neutral/status scale remains aligned with the production field app.
-/// The interaction accents match the approved Tyre Pulse mobile system:
-/// fleet green on daylight surfaces and safety yellow on night-shift surfaces.
+/// The interaction accents match the approved mobile mock family: indigo on
+/// the daylight surfaces and safety yellow on the night-shift surfaces.
 library;
 
 import 'package:flutter/material.dart';
@@ -95,21 +95,21 @@ class TpPalette {
   /// Light is the primary theme. Spec section 53.
   static const TpPalette light = TpPalette(
     brightness: Brightness.light,
-    background: Color(0xFFFAFBFF),
+    background: Color(0xFFF7F8FC),
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF6F7F9),
-    surfaceSunken: Color(0xFFEFF3F7),
-    text: Color(0xFF07132E),
-    textSecondary: Color(0xFF33415A),
-    textMuted: Color(0xFF63708F),
+    surfaceAlt: Color(0xFFF3F4F8),
+    surfaceSunken: Color(0xFFE9ECF3),
+    text: Color(0xFF0A1120),
+    textSecondary: Color(0xFF334155),
+    textMuted: Color(0xFF647389),
     textInverse: Color(0xFFFFFFFF),
-    primary: Color(0xFF006E30),
-    primaryDark: Color(0xFF005326),
-    primarySoft: Color(0xFFE5FAED),
+    primary: Color(0xFF4338CA),
+    primaryDark: Color(0xFF312E81),
+    primarySoft: Color(0xFFEEF2FF),
     onPrimary: Color(0xFFFFFFFF),
-    border: Color(0xFFDBE3F0),
-    borderStrong: Color(0xFFC5D0E0),
-    focus: Color(0xFF006E30),
+    border: Color(0xFFE2E5EC),
+    borderStrong: Color(0xFFCBD1DC),
+    focus: Color(0xFF4338CA),
     overlay: Color(0x80080E18),
     ok: TpStatusColors(
       base: Color(0xFF15803D),

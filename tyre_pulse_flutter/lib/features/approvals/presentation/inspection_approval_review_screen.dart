@@ -57,6 +57,8 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
@@ -439,6 +441,16 @@ class _ReviewBody extends StatelessWidget {
       submitted: entries,
     );
     final _ApprovalEvidenceSummary evidence = _approvalEvidenceSummary(item);
+    final String? multiViewModelHint = _multiViewAxleHint(
+      vehicleType: item.vehicleType ?? '',
+      assetNo: item.assetNo,
+    );
+    final bool hasMultiViewReference = vehicleMultiViewAssetFor(
+          assetNo: item.assetNo,
+          vehicleType: item.vehicleType,
+          model: multiViewModelHint,
+        ) !=
+        null;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -472,6 +484,18 @@ class _ReviewBody extends StatelessWidget {
             positions: positions,
             tyreData: tyreData,
           ),
+        if (hasMultiViewReference) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          VehicleMultiViewBoard.reference(
+            assetNo: item.assetNo,
+            vehicleType: item.vehicleType,
+            model: multiViewModelHint,
+            title: l10n.vehiclesMultiViewTitle,
+            hint: l10n.vehiclesMultiViewHint,
+            zoomLabel: l10n.vehiclesMultiViewZoom,
+            closeLabel: l10n.actionClose,
+          ),
+        ],
         if (entries.any(_isImmediateTyreFinding)) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
           _ImmediateTyreFindings(
@@ -703,6 +727,28 @@ List<String> _approvalPositions({
     for (final TyreSlot slot in layout.tyres)
       submittedPositionBySlot[slot.id] ?? slot.id,
   ];
+}
+
+/// Supplies artwork selection with axle evidence that already exists in the
+/// canonical tyre layout. This is especially important for pump inspections:
+/// the class name alone cannot truthfully distinguish the incompatible
+/// four- and five-axle reference boards, while the inspected slot layout can.
+String? _multiViewAxleHint({
+  required String vehicleType,
+  required String? assetNo,
+}) {
+  if (isTyrelessEquipment(vehicleType)) return null;
+  final String resolvedKey = resolveVehicleType(vehicleType, assetNo);
+  final DiagramLayout? layout = kTyreDiagramLayouts[resolvedKey];
+  if (layout == null) return null;
+
+  final Set<String> axles = <String>{};
+  final RegExp axlePrefix = RegExp(r'^([FR]\d*)', caseSensitive: false);
+  for (final TyreSlot slot in layout.tyres) {
+    final String? axle = axlePrefix.firstMatch(slot.id)?.group(1);
+    if (axle != null && axle.isNotEmpty) axles.add(axle.toUpperCase());
+  }
+  return axles.isEmpty ? null : '${axles.length} axle';
 }
 
 bool _isImmediateTyreFinding(TyreEntryPair pair) {

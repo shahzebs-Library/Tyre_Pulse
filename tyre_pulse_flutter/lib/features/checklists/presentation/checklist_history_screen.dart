@@ -26,10 +26,12 @@ class ChecklistHistoryScreen extends ConsumerStatefulWidget {
       _ChecklistHistoryScreenState();
 }
 
+enum _ChecklistHistoryFailure { workspaceLoading, loadFailed }
+
 class _ChecklistHistoryScreenState
     extends ConsumerState<ChecklistHistoryScreen> {
   bool _loading = true;
-  String? _errorMessage;
+  _ChecklistHistoryFailure? _failure;
   ChecklistHistory _history = const ChecklistHistory(
     completed: <ChecklistHistoryRow>[],
     queued: <QueuedChecklistSubmission>[],
@@ -46,14 +48,14 @@ class _ChecklistHistoryScreenState
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _errorMessage = null;
+      _failure = null;
     });
 
     final workspace = ref.read(workspaceContextProvider);
     if (workspace == null) {
       setState(() {
         _loading = false;
-        _errorMessage = 'Your workspace is still loading.';
+        _failure = _ChecklistHistoryFailure.workspaceLoading;
       });
       return;
     }
@@ -80,8 +82,7 @@ class _ChecklistHistoryScreenState
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMessage = 'Your checklist history could not be loaded. Pull '
-            'down to try again.';
+        _failure = _ChecklistHistoryFailure.loadFailed;
       });
     }
   }
@@ -136,10 +137,18 @@ class _ChecklistHistoryScreenState
           TpSpace.xxl,
         ),
         children: <Widget>[
-          if (_errorMessage != null)
+          if (_failure != null)
             Padding(
               padding: const EdgeInsets.only(bottom: TpSpace.lg),
-              child: _InlineWarning(message: _errorMessage!, onRetry: _load),
+              child: _InlineWarning(
+                message: switch (_failure!) {
+                  _ChecklistHistoryFailure.workspaceLoading =>
+                    l10n.checklistWorkspaceLoadingMessage,
+                  _ChecklistHistoryFailure.loadFailed =>
+                    l10n.checklistHistoryLoadErrorMessage,
+                },
+                onRetry: _load,
+              ),
             ),
           TpSearchField(
             hint: l10n.checklistHistorySearchHint,
@@ -241,20 +250,30 @@ class _InlineWarning extends StatelessWidget {
         borderRadius: BorderRadius.circular(TpRadius.md),
         border: Border.all(color: colors.base),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Icon(Icons.warning_amber_outlined, color: colors.onSoft),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: colors.onSoft),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(Icons.warning_amber_outlined, color: colors.onSoft),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: colors.onSoft),
+                ),
+              ),
+            ],
           ),
-          TpButton.text(label: l10n.actionRetry, onPressed: onRetry),
+          const SizedBox(height: TpSpace.xs),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: TpButton.text(label: l10n.actionRetry, onPressed: onRetry),
+          ),
         ],
       ),
     );

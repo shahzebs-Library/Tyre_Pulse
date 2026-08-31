@@ -1,11 +1,18 @@
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart' show DateFormat;
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
+import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 
@@ -36,11 +43,29 @@ TpStatus accidentTone(String? token) {
   if (value.contains('wait') ||
       value.contains('pending') ||
       value.contains('hold') ||
+      value.contains('review') ||
       value.contains('progress') ||
       value.contains('moderate')) {
     return TpStatus.warning;
   }
   return value.isEmpty ? TpStatus.unknown : TpStatus.info;
+}
+
+/// Formats a persisted incident timestamp for the compact accident mocks.
+/// Unparseable production values remain visible verbatim rather than being
+/// replaced with a guessed date.
+String formatAccidentIncidentDate(
+  BuildContext context,
+  String raw, {
+  bool includeTime = false,
+}) {
+  final String source = raw.trim();
+  final DateTime? parsed = DateTime.tryParse(source);
+  if (parsed == null) return source;
+  final String locale = Localizations.localeOf(context).toLanguageTag();
+  final String date = DateFormat('d MMM y', locale).format(parsed);
+  if (!includeTime) return date;
+  return '$date • ${DateFormat.Hm(locale).format(parsed)}';
 }
 
 class AccidentHero extends StatelessWidget {
@@ -242,7 +267,15 @@ class AccidentProgressLadder extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           for (int index = 0; index < steps.length; index++) ...<Widget>[
+            // The label column carries the icon AND its wrapped text, so it
+            // needs far more of the row than the thin connecting line does.
+            // Giving both an equal `Expanded` (flex 1) - the previous shape -
+            // squeezed every label into 1/(2n-1) of the row width, which is
+            // why even single, short words such as "Insurance" wrapped
+            // mid-word instead of matching the approved mock's one-line
+            // labels.
             Expanded(
+              flex: 4,
               child: _ProgressNode(
                 step: steps[index],
                 palette: palette,
@@ -283,8 +316,16 @@ class _ProgressNode extends StatelessWidget {
         step.state == AccidentProgressState.current;
     final bool unknown = step.state == AccidentProgressState.unknown;
     final Color foreground = active ? palette.onPrimary : palette.textMuted;
+    final AccidentCopy copy = AccidentCopy.of(context);
+    final String stateLabel = switch (step.state) {
+      AccidentProgressState.done => copy('done'),
+      AccidentProgressState.current => copy('inProgress'),
+      AccidentProgressState.pending => copy('pending'),
+      AccidentProgressState.unknown => copy('notRecorded'),
+    };
     return Semantics(
-      label: step.label,
+      label: '${step.label}, $stateLabel',
+      excludeSemantics: true,
       selected: step.state == AccidentProgressState.current,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -367,6 +408,7 @@ class AccidentEvidenceStrip extends StatelessWidget {
         for (int index = 0; index < visible; index++) ...<Widget>[
           Expanded(
             child: _EvidenceTile(
+              index: index,
               reference: photos[index],
               label: '$evidenceLabel ${index + 1}',
             ),
@@ -399,16 +441,22 @@ class AccidentEvidenceStrip extends StatelessWidget {
   }
 }
 
-class _EvidenceTile extends StatelessWidget {
-  const _EvidenceTile({required this.reference, required this.label});
+class _EvidenceTile extends ConsumerWidget {
+  const _EvidenceTile({
+    required this.index,
+    required this.reference,
+    required this.label,
+  });
 
+  final int index;
   final String reference;
   final String label;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final Uri? uri = Uri.tryParse(reference);
-    final bool canRender = uri != null &&
+    final bool isHttpImage = uri != null &&
+        uri.host.isNotEmpty &&
         (uri.scheme.toLowerCase() == 'https' ||
             uri.scheme.toLowerCase() == 'http');
     final TpPalette palette = TpPalette.of(context);
@@ -424,17 +472,100 @@ class _EvidenceTile extends StatelessWidget {
               color: palette.surfaceAlt,
               border: Border.all(color: palette.border),
             ),
-            child: canRender
-                ? Image.network(
-                    reference,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _EvidenceReferenceIcon(
-                      color: palette.textMuted,
-                    ),
-                  )
-                : _EvidenceReferenceIcon(color: palette.textMuted),
+            child: PrivateStorageReference.tryParse(reference) != null
+                ? _privateImage(ref)
+                : isHttpImage
+                    ? Image.network(
+                        reference,
+                        key: Key('accident.evidence.image.$index'),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _EvidenceReferenceIcon(
+                          color: palette.textMuted,
+                        ),
+                      )
+                    : _EvidenceReferenceIcon(color: palette.textMuted),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _privateImage(WidgetRef ref) {
+    final AsyncValue<String> resolved =
+        ref.watch(accidentEvidenceUrlProvider(reference));
+    return resolved.when(
+      data: (String signedUrl) => _resolvedPrivateImage(
+        signedUrl,
+        ref,
+      ),
+      loading: () => _EvidenceReferenceState(
+        key: Key('accident.evidence.loading.$index'),
+        label: label,
+        loading: true,
+      ),
+      error: (Object error, StackTrace stackTrace) => _EvidenceReferenceState(
+        key: Key('accident.evidence.error.$index'),
+        label: label,
+        retryKey: Key('accident.evidence.retry.$index'),
+        onRetry: () => ref.invalidate(accidentEvidenceUrlProvider(reference)),
+      ),
+    );
+  }
+
+  Widget _resolvedPrivateImage(
+    String signedUrl,
+    WidgetRef ref,
+  ) {
+    // Supabase returns HTTPS in production. Accepting an image data URI keeps
+    // the resolver contract independently testable without bypassing it.
+    final Uint8List? bytes = _dataImageBytes(signedUrl);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        key: Key('accident.evidence.image.$index'),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _EvidenceReferenceState(
+          key: Key('accident.evidence.error.$index'),
+          label: label,
+          retryKey: Key('accident.evidence.retry.$index'),
+          onRetry: () => ref.invalidate(accidentEvidenceUrlProvider(reference)),
+        ),
+      );
+    }
+
+    final Uri? uri = Uri.tryParse(signedUrl);
+    if (uri == null ||
+        uri.host.isEmpty ||
+        (uri.scheme.toLowerCase() != 'https' &&
+            uri.scheme.toLowerCase() != 'http')) {
+      return _EvidenceReferenceState(
+        key: Key('accident.evidence.error.$index'),
+        label: label,
+        retryKey: Key('accident.evidence.retry.$index'),
+        onRetry: () => ref.invalidate(accidentEvidenceUrlProvider(reference)),
+      );
+    }
+    return Image.network(
+      signedUrl,
+      key: Key('accident.evidence.image.$index'),
+      fit: BoxFit.cover,
+      loadingBuilder: (
+        BuildContext context,
+        Widget child,
+        ImageChunkEvent? progress,
+      ) {
+        if (progress == null) return child;
+        return _EvidenceReferenceState(
+          key: Key('accident.evidence.loading.$index'),
+          label: label,
+          loading: true,
+        );
+      },
+      errorBuilder: (_, __, ___) => _EvidenceReferenceState(
+        key: Key('accident.evidence.error.$index'),
+        label: label,
+        retryKey: Key('accident.evidence.retry.$index'),
+        onRetry: () => ref.invalidate(accidentEvidenceUrlProvider(reference)),
       ),
     );
   }
@@ -449,4 +580,97 @@ class _EvidenceReferenceIcon extends StatelessWidget {
   Widget build(BuildContext context) => Center(
         child: Icon(Icons.image_outlined, color: color),
       );
+}
+
+class _EvidenceReferenceState extends StatelessWidget {
+  const _EvidenceReferenceState({
+    required this.label,
+    this.loading = false,
+    this.onRetry,
+    this.retryKey,
+    super.key,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback? onRetry;
+  final Key? retryKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(TpSpace.xs),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (loading)
+                  SizedBox.square(
+                    dimension: TpSizing.iconSm,
+                    child: CircularProgressIndicator(
+                      strokeWidth: TpBorderWidth.strong,
+                      color: palette.primary,
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.broken_image_outlined,
+                    color: palette.textMuted,
+                    size: TpSizing.iconSm,
+                  ),
+                const SizedBox(height: TpSpace.xs),
+                Text(
+                  loading
+                      ? AccidentCopy.of(context)('loading')
+                      : l10n.valueUnavailable,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.textMuted,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (onRetry != null)
+          PositionedDirectional(
+            end: 0,
+            bottom: 0,
+            child: SizedBox.square(
+              dimension: TpSizing.iconLg,
+              child: IconButton(
+                key: retryKey,
+                onPressed: onRetry,
+                tooltip: l10n.actionRetry,
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                iconSize: TpSizing.iconSm,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+Uint8List? _dataImageBytes(String reference) {
+  final Uri? uri = Uri.tryParse(reference);
+  if (uri == null || uri.scheme.toLowerCase() != 'data') return null;
+  try {
+    final UriData? data = uri.data;
+    if (data == null || !data.mimeType.toLowerCase().startsWith('image/')) {
+      return null;
+    }
+    return Uint8List.fromList(data.contentAsBytes());
+  } on FormatException {
+    return null;
+  }
 }

@@ -4,15 +4,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_report_repository.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
@@ -39,6 +45,8 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
   String _severity = 'minor';
   String _type = 'other';
   String? _error;
+  bool _submitting = false;
+  AccidentDamageMap _damageMap = const AccidentDamageMap.empty();
 
   @override
   void dispose() {
@@ -61,78 +69,19 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
 
   Future<void> _pickVehicle(List<VehicleAsset> assets) async {
     final AccidentCopy copy = AccidentCopy.of(context);
-    final TextEditingController search = TextEditingController();
     final VehicleAsset? selected = await showModalBottomSheet<VehicleAsset>(
       context: context,
       isScrollControlled: true,
-      builder: (BuildContext context) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setSheetState) {
-          final String query = search.text.trim().toLowerCase();
-          final List<VehicleAsset> shown = assets
-              .where(
-                (VehicleAsset asset) =>
-                    query.isEmpty || vehicleMatchesSearch(asset, query),
-              )
-              .take(40)
-              .toList(growable: false);
-          return SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: TpSpace.lg,
-                right: TpSpace.lg,
-                top: TpSpace.lg,
-                bottom: MediaQuery.viewInsetsOf(context).bottom + TpSpace.lg,
-              ),
-              child: SizedBox(
-                height: MediaQuery.sizeOf(context).height * .72,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      copy('selectAsset'),
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: TpSpace.md),
-                    TpSearchField(
-                      controller: search,
-                      hint: copy('assetSearch'),
-                      onChanged: (_) => setSheetState(() {}),
-                    ),
-                    const SizedBox(height: TpSpace.md),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: shown.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          final VehicleAsset asset = shown[index];
-                          return ListTile(
-                            leading: const Icon(Icons.local_shipping_outlined),
-                            title:
-                                Text(asset.assetNo ?? copy('unrecordedAsset')),
-                            subtitle: Text(
-                              <String?>[
-                                asset.fleetNumber,
-                                asset.registrationNo,
-                                asset.vehicleType,
-                                asset.site,
-                              ].whereType<String>().join(' • '),
-                            ),
-                            onTap: () => Navigator.of(context).pop(asset),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
+      builder: (BuildContext context) => _VehiclePickerSheet(
+        assets: assets,
+        copy: copy,
       ),
     );
-    search.dispose();
     if (selected == null || !mounted) return;
+    final bool assetChanged = _selectedVehicle?.id != selected.id;
     setState(() {
       _selectedVehicle = selected;
+      if (assetChanged) _damageMap = const AccidentDamageMap.empty();
       _asset.text = selected.assetNo ?? '';
       if ((selected.site ?? '').trim().isNotEmpty) _site.text = selected.site!;
     });
@@ -158,10 +107,64 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     }
   }
 
+  Future<void> _submit() async {
+    final AccidentCopy copy = AccidentCopy.of(context);
+    if (_asset.text.trim().isEmpty ||
+        _site.text.trim().isEmpty ||
+        _description.text.trim().isEmpty ||
+        _photos.isEmpty) {
+      setState(() => _error = copy('required'));
+      return;
+    }
+    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) {
+      setState(() => _error = copy('workspaceLoading'));
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      final Set<String> dropped =
+          await ref.read(accidentReportRepositoryProvider).submit(
+                workspace: workspace,
+                input: SubmitAccidentReportInput(
+                  assetNo: _asset.text,
+                  site: _site.text,
+                  location: _location.text,
+                  description: _description.text,
+                  notes: _notes.text,
+                  severity: _severity,
+                  accidentType: _type,
+                  photoLocalPaths: List<String>.of(_photos),
+                  damageMap: _damageMap,
+                  vehicleId: _selectedVehicle?.id,
+                  vehicleType: _selectedVehicle?.vehicleType,
+                ),
+              );
+      if (!mounted) return;
+      if (dropped.isNotEmpty) {
+        setState(() => _error = copy('fieldsDropped'));
+        return;
+      }
+      ref.invalidate(accidentRepositoryProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(copy('savedMessage'))),
+      );
+      context.go(const AccidentDashboardRoute().location);
+    } on Object {
+      if (mounted) setState(() => _error = copy('saveFailed'));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     final AccidentCopy copy = AccidentCopy.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<VehicleFleetListOutcome> fleet =
         ref.watch(vehicleFleetListProvider);
     final List<VehicleAsset> assets = fleet.value == null
@@ -172,7 +175,7 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
       resizeToAvoidBottomInset: true,
       appBar: TpAppBar(
         title: copy('reportTitle'),
-        subtitle: AppLocalizations.of(context).accidentReportCaptureSubtitle,
+        subtitle: l10n.accidentReportCaptureSubtitle,
         backFallback: fallback,
       ),
       body: ListView(
@@ -305,6 +308,17 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
           ),
           const SizedBox(height: TpSpace.md),
           AccidentSection(
+            title: copy('damageMapTitle'),
+            icon: Icons.directions_car_outlined,
+            child: AccidentDamageMapSection(
+              map: _damageMap,
+              vehicle: _selectedVehicle,
+              onChanged: (AccidentDamageMap next) =>
+                  setState(() => _damageMap = next),
+            ),
+          ),
+          const SizedBox(height: TpSpace.md),
+          AccidentSection(
             title: copy('evidence'),
             subtitle: '${_photos.length} ${copy('evidenceAttached')}',
             icon: Icons.photo_library_outlined,
@@ -350,16 +364,106 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
             ),
           ],
           const SizedBox(height: TpSpace.lg),
-          Text(AppLocalizations.of(context).accidentSubmitUnavailable),
-          const SizedBox(height: TpSpace.sm),
           TpButton.primary(
             label: copy('saveReport'),
             icon: Icons.shield_outlined,
             isFullWidth: true,
-            onPressed: null,
+            isBusy: _submitting,
+            onPressed: _submitting ? null : _submit,
           ),
           const SizedBox(height: TpSpace.xxxl),
         ],
+      ),
+    );
+  }
+}
+
+/// Owns the search controller for exactly as long as the bottom-sheet route
+/// is mounted. `showModalBottomSheet` completes before its reverse animation
+/// has fully unmounted focused text fields, so disposing a controller in the
+/// caller immediately after `await` can trigger a used-after-dispose cascade.
+class _VehiclePickerSheet extends StatefulWidget {
+  const _VehiclePickerSheet({required this.assets, required this.copy});
+
+  final List<VehicleAsset> assets;
+  final AccidentCopy copy;
+
+  @override
+  State<_VehiclePickerSheet> createState() => _VehiclePickerSheetState();
+}
+
+class _VehiclePickerSheetState extends State<_VehiclePickerSheet> {
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String query = _search.text.trim().toLowerCase();
+    final List<VehicleAsset> shown = widget.assets
+        .where(
+          (VehicleAsset asset) =>
+              query.isEmpty || vehicleMatchesSearch(asset, query),
+        )
+        .take(40)
+        .toList(growable: false);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: TpSpace.lg,
+          right: TpSpace.lg,
+          top: TpSpace.lg,
+          bottom: MediaQuery.viewInsetsOf(context).bottom + TpSpace.lg,
+        ),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .72,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                widget.copy('selectAsset'),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: TpSpace.md),
+              TpSearchField(
+                controller: _search,
+                hint: widget.copy('assetSearch'),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: TpSpace.md),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: shown.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final VehicleAsset asset = shown[index];
+                    return ListTile(
+                      leading: const Icon(Icons.local_shipping_outlined),
+                      title: Text(
+                        asset.assetNo ?? widget.copy('unrecordedAsset'),
+                      ),
+                      subtitle: Text(
+                        <String?>[
+                          asset.fleetNumber,
+                          asset.registrationNo,
+                          asset.vehicleType,
+                          asset.site,
+                        ].whereType<String>().join(' • '),
+                      ),
+                      onTap: () {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        Navigator.of(context).pop(asset);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

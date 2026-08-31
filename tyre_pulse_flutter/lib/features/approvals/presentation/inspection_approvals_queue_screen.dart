@@ -1,10 +1,13 @@
 /// Inspection approvals - the supervisor's queue.
 ///
-/// Lists inspections submitted from the field that are awaiting sign-off
-/// (`approval_status = 'pending_approval'`), newest first. Each row opens
+/// Lists inspections submitted from the field. Pending items
+/// (`approval_status = 'pending_approval'`) await sign-off; the Approved and
+/// Returned tabs read the same table already filtered to a decided status,
+/// matching the approved mock's three-tab queue. Each pending row opens
 /// [InspectionApprovalReviewScreen], where the supervisor inspects the
 /// recorded tyre conditions and the inspector's drawn signature and either
-/// approves (with their own signature) or returns it.
+/// approves (with their own signature) or returns it; a decided row still
+/// opens the same review screen, read-only, so its history remains visible.
 ///
 /// Ported from `mobile/app/(app)/inspection/approvals/index.tsx`
 /// (`mobile/` is READ-ONLY reference material). Access is gated by
@@ -31,6 +34,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
+import 'package:tyre_pulse/features/approvals/domain/approval_date_grouping.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 
 /// Stable finders for the responsive approvals queue presentation.
@@ -41,6 +45,20 @@ abstract final class InspectionApprovalsQueueKeys {
 
   static Key row(String id) => Key('inspection.approvals.row.$id');
   static Key heading(String id) => Key('inspection.approvals.heading.$id');
+}
+
+/// The three tabs the approved mock's queue shows, each a distinct real
+/// `inspections.approval_status` value - never a client-side re-labelling of
+/// the same rows.
+enum InspectionApprovalTab { pending, approved, returned }
+
+extension on InspectionApprovalTab {
+  /// The exact `approval_status` this tab reads.
+  String get statusValue => switch (this) {
+        InspectionApprovalTab.pending => 'pending_approval',
+        InspectionApprovalTab.approved => 'approved',
+        InspectionApprovalTab.returned => 'rejected',
+      };
 }
 
 class InspectionApprovalsQueueScreen extends ConsumerStatefulWidget {
@@ -59,6 +77,12 @@ class _InspectionApprovalsQueueScreenState
   AppError? _error;
   List<InspectionApprovalItem> _items = const <InspectionApprovalItem>[];
   String _query = '';
+  InspectionApprovalTab _tab = InspectionApprovalTab.pending;
+
+  /// The Pending count shown on the tab strip, tracked separately from
+  /// [_items] so switching to Approved/Returned does not make the Pending
+  /// badge read 0 - the approved mock keeps that count visible on every tab.
+  int? _pendingCount;
 
   @override
   void initState() {
@@ -72,15 +96,34 @@ class _InspectionApprovalsQueueScreenState
       _error = null;
     });
     final String? country = ref.read(activeCountryProvider);
+    final InspectionApprovalTab tab = _tab;
     try {
-      final List<InspectionApprovalItem> items = await ref
-          .read(inspectionApprovalRepositoryProvider)
-          .listPending(country: country);
+      final repository = ref.read(inspectionApprovalRepositoryProvider);
+      final List<InspectionApprovalItem> items =
+          tab == InspectionApprovalTab.pending
+              ? await repository.listPending(country: country)
+              : await repository.listByStatus(
+                  tab.statusValue,
+                  country: country,
+                );
       if (!mounted) return;
       setState(() {
         _items = items;
+        _pendingCount =
+            tab == InspectionApprovalTab.pending ? items.length : _pendingCount;
         _loading = false;
       });
+      if (tab == InspectionApprovalTab.pending) return;
+      // The Pending badge must stay accurate even while looking at a
+      // different tab. Best-effort and silent on failure: the badge simply
+      // keeps whatever count it last knew, never a fabricated number.
+      try {
+        final int pending =
+            (await repository.listPending(country: country)).length;
+        if (mounted) setState(() => _pendingCount = pending);
+      } on Object {
+        // Deliberately ignored - see the comment above.
+      }
     } on Object catch (error) {
       if (!mounted) return;
       setState(() {
@@ -91,6 +134,12 @@ class _InspectionApprovalsQueueScreenState
   }
 
   Future<void> _refresh() => _load();
+
+  void _changeTab(InspectionApprovalTab tab) {
+    if (tab == _tab) return;
+    setState(() => _tab = tab);
+    unawaited(_load());
+  }
 
   void _open(InspectionApprovalItem item) {
     context.push(
@@ -115,25 +164,41 @@ class _InspectionApprovalsQueueScreenState
   }
 
   Widget _body(AppLocalizations l10n) {
-    if (_loading) return const TpLoadingState();
-    if (_error != null) {
-      return TpErrorState(error: _error!, onRetry: _load);
-    }
-    if (_items.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          children: <Widget>[
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.6,
-              child: TpEmptyState(
-                icon: Icons.checklist_rtl_outlined,
-                title: l10n.inspectionApprovalsEmptyTitle,
-                message: l10n.inspectionApprovalsEmptyMessage,
-              ),
-            ),
-          ],
+    final Widget header = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900),
+        child: _QueueSummary(
+          tab: _tab,
+          pendingCount: _pendingCount ?? _items.length,
+          onTabChanged: _changeTab,
+          onSearchChanged: (String value) => setState(() => _query = value),
         ),
+      ),
+    );
+
+    if (_loading) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.lg,
+          TpSpace.lg,
+          TpSpace.xxl,
+        ),
+        children: <Widget>[header, const TpLoadingState()],
+      );
+    }
+    if (_error != null) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.lg,
+          TpSpace.lg,
+          TpSpace.xxl,
+        ),
+        children: <Widget>[
+          header,
+          TpErrorState(error: _error!, onRetry: _load),
+        ],
       );
     }
 
@@ -154,6 +219,23 @@ class _InspectionApprovalsQueueScreenState
             );
           }).toList(growable: false);
 
+    final List<ApprovalDateGroup> groups = groupApprovalsByDate(
+      visible,
+      now: DateTime.now(),
+      todayLabel: l10n.dateGroupToday,
+      yesterdayLabel: l10n.dateGroupYesterday,
+      unknownLabel: l10n.valueUnavailable,
+    );
+
+    // Flattened once so `ListView.builder` can mix section headers and rows
+    // by a single integer index without rebuilding this list per frame.
+    final List<Object> rows = <Object>[
+      for (final ApprovalDateGroup group in groups) ...<Object>[
+        group.label,
+        ...group.items,
+      ],
+    ];
+
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.builder(
@@ -164,40 +246,46 @@ class _InspectionApprovalsQueueScreenState
           TpSpace.lg,
           TpSpace.xxl,
         ),
-        itemCount: visible.isEmpty ? 2 : visible.length + 1,
+        itemCount: (rows.isEmpty ? 1 : rows.length) + 1,
         itemBuilder: (BuildContext context, int index) {
-          if (index == 0) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 900),
-                child: _QueueSummary(
-                  count: _items.length,
-                  onSearchChanged: (String value) {
-                    setState(() => _query = value);
-                  },
-                ),
-              ),
-            );
-          }
-          if (visible.isEmpty) {
+          if (index == 0) return header;
+          if (rows.isEmpty) {
             return SizedBox(
               height: MediaQuery.sizeOf(context).height * 0.42,
               child: TpEmptyState(
-                icon: Icons.search_off_outlined,
-                title: l10n.globalSearchEmptyTitle,
-                message: l10n.vehiclesEmptySearchMessage,
+                icon: _items.isEmpty
+                    ? Icons.checklist_rtl_outlined
+                    : Icons.search_off_outlined,
+                title: _items.isEmpty
+                    ? _emptyTitleFor(_tab, l10n)
+                    : l10n.globalSearchEmptyTitle,
+                message: _items.isEmpty
+                    ? _emptyMessageFor(_tab, l10n)
+                    : l10n.vehiclesEmptySearchMessage,
               ),
             );
           }
-          final InspectionApprovalItem item = visible[index - 1];
+          final Object row = rows[index - 1];
+          if (row is String) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 900),
+                child: _DateGroupHeading(label: row),
+              ),
+            );
+          }
+          final InspectionApprovalItem item = row as InspectionApprovalItem;
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 900),
               child: _QueueRow(
                 item: item,
+                tab: _tab,
                 fallbackTitle: l10n.inspectionApprovalFallbackTitle,
                 inspectorFallback: l10n.inspectionInspectorUnknown,
                 pendingLabel: l10n.inspectionApprovalsPendingBadge,
+                approvedLabel: l10n.inspectionApprovalsApprovedTab,
+                returnedLabel: l10n.inspectionApprovalsReturnedTab,
                 unavailableLabel: l10n.valueUnavailable,
                 onTap: () => _open(item),
               ),
@@ -207,21 +295,40 @@ class _InspectionApprovalsQueueScreenState
       ),
     );
   }
+
+  static String _emptyTitleFor(
+    InspectionApprovalTab tab,
+    AppLocalizations l10n,
+  ) =>
+      tab == InspectionApprovalTab.pending
+          ? l10n.inspectionApprovalsEmptyTitle
+          : l10n.globalSearchEmptyTitle;
+
+  static String _emptyMessageFor(
+    InspectionApprovalTab tab,
+    AppLocalizations l10n,
+  ) =>
+      tab == InspectionApprovalTab.pending
+          ? l10n.inspectionApprovalsEmptyMessage
+          : l10n.vehiclesEmptySearchMessage;
 }
 
 class _QueueSummary extends StatelessWidget {
   const _QueueSummary({
-    required this.count,
+    required this.tab,
+    required this.pendingCount,
+    required this.onTabChanged,
     required this.onSearchChanged,
   });
 
-  final int count;
+  final InspectionApprovalTab tab;
+  final int pendingCount;
+  final ValueChanged<InspectionApprovalTab> onTabChanged;
   final ValueChanged<String> onSearchChanged;
 
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final TpPalette palette = TpPalette.of(context);
     return TpCard(
       key: InspectionApprovalsQueueKeys.summary,
       margin: const EdgeInsets.only(bottom: TpSpace.lg),
@@ -229,41 +336,51 @@ class _QueueSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(
-                Icons.pending_actions_outlined,
-                color: palette.primary,
-                size: TpSizing.iconMd,
+          TpSegmented<InspectionApprovalTab>(
+            expanded: true,
+            value: tab,
+            onChanged: onTabChanged,
+            options: <TpSegmentedOption<InspectionApprovalTab>>[
+              TpSegmentedOption<InspectionApprovalTab>(
+                value: InspectionApprovalTab.pending,
+                label: '${l10n.inspectionApprovalsPendingBadge} '
+                    '$pendingCount',
               ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(
-                child: Text(
-                  l10n.inspectionApprovalsPendingBadge,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: palette.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
+              TpSegmentedOption<InspectionApprovalTab>(
+                value: InspectionApprovalTab.approved,
+                label: l10n.inspectionApprovalsApprovedTab,
               ),
-              TpStatusChip(
-                status: TpStatus.info,
-                label: count.toString(),
-                isCompact: true,
+              TpSegmentedOption<InspectionApprovalTab>(
+                value: InspectionApprovalTab.returned,
+                label: l10n.inspectionApprovalsReturnedTab,
               ),
             ],
-          ),
-          const SizedBox(height: TpSpace.sm),
-          Container(
-            height: 3,
-            decoration: BoxDecoration(
-              color: palette.primary,
-              borderRadius: BorderRadius.circular(TpRadius.pill),
-            ),
           ),
           const SizedBox(height: TpSpace.md),
           TpSearchField(onChanged: onSearchChanged),
         ],
+      ),
+    );
+  }
+}
+
+class _DateGroupHeading extends StatelessWidget {
+  const _DateGroupHeading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(TpSpace.xs, TpSpace.md, 0, TpSpace.sm),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: palette.textSecondary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
       ),
     );
   }
@@ -288,17 +405,23 @@ AppError _asAppError(BuildContext context, Object error) {
 class _QueueRow extends StatelessWidget {
   const _QueueRow({
     required this.item,
+    required this.tab,
     required this.fallbackTitle,
     required this.inspectorFallback,
     required this.pendingLabel,
+    required this.approvedLabel,
+    required this.returnedLabel,
     required this.unavailableLabel,
     required this.onTap,
   });
 
   final InspectionApprovalItem item;
+  final InspectionApprovalTab tab;
   final String fallbackTitle;
   final String inspectorFallback;
   final String pendingLabel;
+  final String approvedLabel;
+  final String returnedLabel;
   final String unavailableLabel;
   final VoidCallback onTap;
 
@@ -308,6 +431,11 @@ class _QueueRow extends StatelessWidget {
     final bool isRtl = TpDirection.isRtl(context);
     final String heading = _headingFor(item, fallbackTitle);
     final String when = _formatDate(item.createdAt) ?? unavailableLabel;
+    final (TpStatus status, String label) = switch (tab) {
+      InspectionApprovalTab.pending => (TpStatus.warning, pendingLabel),
+      InspectionApprovalTab.approved => (TpStatus.ok, approvedLabel),
+      InspectionApprovalTab.returned => (TpStatus.info, returnedLabel),
+    };
 
     return TpCard(
       key: InspectionApprovalsQueueKeys.row(item.id),
@@ -322,7 +450,7 @@ class _QueueRow extends StatelessWidget {
             children: <Widget>[
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: palette.forStatus(TpStatus.warning).soft,
+                  color: palette.forStatus(status).soft,
                   shape: BoxShape.circle,
                 ),
                 child: Padding(
@@ -330,7 +458,7 @@ class _QueueRow extends StatelessWidget {
                   child: Icon(
                     Icons.assignment_outlined,
                     size: TpSizing.iconMd,
-                    color: palette.forStatus(TpStatus.warning).onSoft,
+                    color: palette.forStatus(status).onSoft,
                   ),
                 ),
               ),
@@ -377,8 +505,8 @@ class _QueueRow extends StatelessWidget {
                   color: palette.forStatus(TpStatus.ok).base,
                 ),
               TpStatusChip(
-                status: TpStatus.warning,
-                label: pendingLabel,
+                status: status,
+                label: label,
                 isCompact: true,
               ),
             ],

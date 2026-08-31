@@ -63,7 +63,9 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
-import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
 
 class VehicleDetailScreen extends StatelessWidget {
   const VehicleDetailScreen({required this.assetNo, super.key});
@@ -97,7 +99,6 @@ class _VehicleDetailBody extends ConsumerWidget {
     return TpScaffold(
       appBar: TpAppBar(
         title: l10n.vehiclesDetailSubtitle,
-        subtitle: TpDirection.isolateLtr(assetNo),
         onBack: () => Navigator.of(context).maybePop(),
       ),
       body: _buildBody(context, ref, l10n, outcomeAsync),
@@ -123,7 +124,7 @@ class _VehicleDetailBody extends ConsumerWidget {
     return outcomeAsync.when(
       loading: () => const TpLoadingState(),
       error: (Object error, StackTrace stackTrace) => TpErrorState(
-        error: error is AppError ? error : _unexpectedError(),
+        error: error is AppError ? error : _unexpectedError(l10n),
         onRetry: () => ref.invalidate(vehicleDetailProvider(assetNo)),
       ),
       data: (VehicleDetailOutcome outcome) => switch (outcome) {
@@ -153,9 +154,9 @@ class _VehicleDetailBody extends ConsumerWidget {
     );
   }
 
-  static AppError _unexpectedError() => const AppError(
+  static AppError _unexpectedError(AppLocalizations l10n) => AppError(
         kind: AppErrorKind.unknown,
-        message: 'Something went wrong. Please try again.',
+        message: l10n.stateErrorMessage,
         isRetryable: true,
       );
 
@@ -171,235 +172,218 @@ class _VehicleDetailBody extends ConsumerWidget {
   }
 }
 
-/// The full record. Twelve fields, matching the production screen's own
-/// expandable detail grid field for field: fleet number, type, make/model,
-/// year, current odometer, operator, department, site, region, country,
-/// tyre size, registration.
-class _DetailView extends ConsumerWidget {
+@visibleForTesting
+abstract final class VehicleDetailScreenKeys {
+  static const Key overviewTab = Key('vehicle_detail.tab.overview');
+  static const Key tyresTab = Key('vehicle_detail.tab.tyres');
+  static const Key historyTab = Key('vehicle_detail.tab.history');
+  static const Key tyreMap = Key('vehicle_detail.tyre_map');
+  static const Key details = Key('vehicle_detail.details');
+  static const Key startInspection = Key('vehicle_detail.start_inspection');
+  static const Key multiViewBoard = Key('vehicle_detail.multi_view_board');
+}
+
+enum _AssetDetailTab { overview, tyres, history }
+
+/// The approved asset overview keeps the high-value identity, two compact
+/// facts, tabs, vehicle-specific tyre map and primary action in the first
+/// phone composition. The complete twelve-field master record remains below
+/// the fold, so visual parity never removes operational data.
+class _DetailView extends ConsumerStatefulWidget {
   const _DetailView({required this.asset, required this.l10n});
 
   final VehicleAsset asset;
   final AppLocalizations l10n;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DetailView> createState() => _DetailViewState();
+}
+
+class _DetailViewState extends ConsumerState<_DetailView> {
+  _AssetDetailTab _selectedTab = _AssetDetailTab.overview;
+
+  VehicleAsset get asset => widget.asset;
+  AppLocalizations get l10n => widget.l10n;
+
+  @override
+  Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
     final bool canStartInspection = ref.watch(
       canAccessModuleProvider(ModuleKey.inspect),
     );
-    final String? vehiclePhoto = vehiclePhotoAsset(asset);
-
-    final List<(String, String?)> fields = <(String, String?)>[
-      (l10n.vehiclesFieldFleetNo, asset.fleetNumber),
-      (l10n.vehiclesFieldType, asset.vehicleType),
-      (l10n.vehiclesFieldMakeModel, _join(<String?>[asset.make, asset.model])),
-      (l10n.vehiclesFieldYear, asset.year?.toString()),
+    final List<(String, String?)> fields = _assetFields();
+    final List<({String label, String value})> metrics = <({
+      String label,
+      String value,
+    })>[
       (
-        l10n.vehiclesFieldCurrentKm,
-        asset.currentKm != null
-            ? '${formatVehicleOdometer(asset.currentKm!)} km'
-            : null,
+        label: l10n.vehiclesFieldCurrentKm,
+        value: asset.currentKm == null
+            ? l10n.valueNotMeasured
+            : '${formatVehicleOdometer(asset.currentKm!)} km',
       ),
-      (l10n.vehiclesFieldOperator, asset.operatorName),
-      (l10n.vehiclesFieldDepartment, asset.department),
-      (l10n.vehiclesFieldSite, asset.site),
-      (l10n.vehiclesFieldRegion, asset.region),
-      (l10n.vehiclesFieldCountry, asset.country),
-      (l10n.vehiclesFieldTyreSize, asset.tyreSize),
-      (l10n.vehiclesFieldRegistration, asset.registrationNo),
-    ];
-
-    final List<({String label, String value, IconData icon})> metrics =
-        <({String label, String value, IconData icon})>[
-      if (asset.currentKm != null)
-        (
-          label: l10n.vehiclesFieldCurrentKm,
-          value: '${formatVehicleOdometer(asset.currentKm!)} km',
-          icon: Icons.speed_rounded,
-        ),
-      if (asset.fleetNumber?.trim().isNotEmpty == true)
-        (
-          label: l10n.vehiclesFieldFleetNo,
-          value: asset.fleetNumber!.trim(),
-          icon: Icons.tag_rounded,
-        ),
-      if (asset.tyreSize?.trim().isNotEmpty == true)
-        (
-          label: l10n.vehiclesFieldTyreSize,
-          value: asset.tyreSize!.trim(),
-          icon: Icons.tire_repair_outlined,
-        ),
+      (
+        label: l10n.vehiclesFieldFleetNo,
+        value: _present(asset.fleetNumber) ?? l10n.valueNotMeasured,
+      ),
     ];
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double horizontalPadding =
             constraints.maxWidth >= 720 ? TpSpace.xxl : TpSpace.lg;
-        return ListView(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            TpSpace.md,
-            horizontalPadding,
-            TpSpace.xxxl,
-          ),
+        return Stack(
           children: <Widget>[
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    TpCard(
-                      margin: const EdgeInsets.only(bottom: TpSpace.md),
-                      padding: const EdgeInsets.all(TpSpace.lg),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+            Positioned.fill(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  TpSpace.md,
+                  horizontalPadding,
+                  canStartInspection ? 92 : TpSpace.xxxl,
+                ),
+                children: <Widget>[
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          Container(
-                            width: 126,
-                            height: 92,
-                            decoration: BoxDecoration(
-                              color: palette.surfaceAlt,
-                              borderRadius: BorderRadius.circular(TpRadius.md),
-                              border: Border.all(color: palette.border),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            alignment: Alignment.center,
-                            child: vehiclePhoto == null
-                                ? Icon(
-                                    vehicleFallbackIcon(asset),
-                                    color: palette.primary,
-                                    size: 40,
-                                  )
-                                : Image.asset(
-                                    vehiclePhoto,
-                                    key: ValueKey<String>(vehiclePhoto),
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    fit: BoxFit.contain,
-                                    filterQuality: FilterQuality.high,
-                                    semanticLabel: asset.displayIdentity,
-                                  ),
-                          ),
-                          const SizedBox(width: TpSpace.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Row(
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Expanded(
-                                      child: TpIdentifierText(
-                                        asset.displayIdentity ??
-                                            l10n.vehiclesUnknownAsset,
-                                        style: text.headlineSmall,
-                                      ),
+                                    TpIdentifierText(
+                                      asset.displayIdentity ??
+                                          l10n.vehiclesUnknownAsset,
+                                      style: text.headlineSmall,
                                     ),
-                                    const SizedBox(width: TpSpace.sm),
-                                    TpStatusChip(
-                                      status: vehicleStatusTone(asset.status),
-                                      label: asset.status,
-                                      isCompact: true,
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: <Widget>[
+                                        if (_present(asset.vehicleType) != null)
+                                          Flexible(
+                                            child: Text(
+                                              asset.vehicleType!.trim(),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: text.bodyMedium,
+                                            ),
+                                          ),
+                                        if (_present(asset.vehicleType) !=
+                                                null &&
+                                            _present(asset.status) != null)
+                                          const SizedBox(width: TpSpace.sm),
+                                        if (_present(asset.status) != null)
+                                          TpStatusChip(
+                                            status:
+                                                vehicleStatusTone(asset.status),
+                                            label: asset.status!.trim(),
+                                            isCompact: true,
+                                          ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                if (asset.vehicleType?.trim().isNotEmpty ==
-                                    true) ...<Widget>[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    asset.vehicleType!.trim(),
-                                    style: text.bodyMedium,
-                                  ),
-                                ],
-                                if (asset.site?.trim().isNotEmpty ==
-                                    true) ...<Widget>[
-                                  const SizedBox(height: TpSpace.xs),
-                                  Row(
-                                    children: <Widget>[
-                                      Icon(
-                                        Icons.location_on_outlined,
-                                        size: TpSizing.iconSm,
-                                        color: palette.textMuted,
-                                      ),
-                                      const SizedBox(width: TpSpace.xs),
-                                      Expanded(
-                                        child: Text(
-                                          asset.site!.trim(),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: text.labelSmall,
+                                    if (_present(asset.site) !=
+                                        null) ...<Widget>[
+                                      const SizedBox(height: TpSpace.xs),
+                                      Text(
+                                        asset.site!.trim(),
+                                        style: text.labelMedium?.copyWith(
+                                          color: palette.textSecondary,
                                         ),
                                       ),
                                     ],
-                                  ),
-                                ],
-                              ],
-                            ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: TpSpace.md),
+                          _AssetMetricGrid(metrics: metrics),
+                          const SizedBox(height: TpSpace.md),
+                          _AssetTabs(
+                            selected: _selectedTab,
+                            overviewLabel: l10n.tyreDetailSectionOverview,
+                            tyresLabel: l10n.globalSearchSectionTyres,
+                            historyLabel: l10n.tabHistory,
+                            onSelect: (_AssetDetailTab tab) =>
+                                setState(() => _selectedTab = tab),
+                          ),
+                          const SizedBox(height: TpSpace.md),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 160),
+                            child: switch (_selectedTab) {
+                              _AssetDetailTab.overview => _OverviewPanel(
+                                  key: const ValueKey<String>('overview'),
+                                  asset: asset,
+                                  fields: fields,
+                                  l10n: l10n,
+                                ),
+                              _AssetDetailTab.tyres => _TyresPanel(
+                                  key: const ValueKey<String>('tyres'),
+                                  asset: asset,
+                                  l10n: l10n,
+                                ),
+                              _AssetDetailTab.history => _HistoryPanel(
+                                  key: const ValueKey<String>('history'),
+                                  l10n: l10n,
+                                ),
+                            },
                           ),
                         ],
                       ),
                     ),
-                    if (metrics.isNotEmpty) ...<Widget>[
-                      _AssetMetricGrid(metrics: metrics),
-                      const SizedBox(height: TpSpace.lg),
-                    ],
-                    _OverviewHeading(label: l10n.tyreDetailSectionOverview),
-                    const SizedBox(height: TpSpace.sm),
-                    TpCard(
-                      margin: const EdgeInsets.only(bottom: TpSpace.lg),
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: <Widget>[
-                          for (int i = 0; i < fields.length; i++)
-                            _FieldRow(
-                              label: fields[i].$1,
-                              value: fields[i].$2,
-                              showDivider: i < fields.length - 1,
-                              borderColor: palette.border,
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (canStartInspection)
-                      TpButton.primary(
-                        label: l10n.vehiclesStartInspection,
-                        icon: Icons.assignment_outlined,
-                        isFullWidth: true,
-                        onPressed: () => _startInspection(context),
-                      ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+            if (canStartInspection)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: _StickyInspectionAction(
+                  label: l10n.vehiclesStartInspection,
+                  onPressed: () => _startInspection(context),
+                ),
+              ),
           ],
         );
       },
     );
   }
 
-  /// Crosses from the Home branch (where the vehicles list and this screen
-  /// live) into the Inspect branch. `app_router.dart`'s own rule 2 - "a push
-  /// that continues a task stays in its branch; only a bar tap switches
-  /// branch" - is written about the SCANNER's flow, but the general
-  /// principle is the reason `context.go` is used here rather than
-  /// `context.push`: this is a genuine branch switch, exactly like a tab
-  /// tap, not a push that should stack on top of the vehicles branch's own
-  /// history.
+  List<(String, String?)> _assetFields() => <(String, String?)>[
+        (l10n.vehiclesFieldFleetNo, asset.fleetNumber),
+        (l10n.vehiclesFieldType, asset.vehicleType),
+        (
+          l10n.vehiclesFieldMakeModel,
+          _join(<String?>[asset.make, asset.model]),
+        ),
+        (l10n.vehiclesFieldYear, asset.year?.toString()),
+        (
+          l10n.vehiclesFieldCurrentKm,
+          asset.currentKm == null
+              ? null
+              : '${formatVehicleOdometer(asset.currentKm!)} km',
+        ),
+        (l10n.vehiclesFieldOperator, asset.operatorName),
+        (l10n.vehiclesFieldDepartment, asset.department),
+        (l10n.vehiclesFieldSite, asset.site),
+        (l10n.vehiclesFieldRegion, asset.region),
+        (l10n.vehiclesFieldCountry, asset.country),
+        (l10n.vehiclesFieldTyreSize, asset.tyreSize),
+        (l10n.vehiclesFieldRegistration, asset.registrationNo),
+      ];
+
   void _startInspection(BuildContext context) {
-    final String? site = asset.site;
     final String? code = asset.assetNo;
-    // Guaranteed non-null: this screen only ever loads a row that matched
-    // an exact asset_no lookup. Guarded anyway rather than force-unwrapped,
-    // so a future change to how this screen is reached cannot turn into a
-    // null-check crash.
-    if (code == null) {
-      return;
-    }
+    if (code == null) return;
     context.go(
       NewInspectionRoute(
-        siteName: site == null ? null : SiteName(site),
+        siteName: asset.site == null ? null : SiteName(asset.site!),
         assetNo: AssetNo(code),
       ).location,
     );
@@ -408,40 +392,32 @@ class _DetailView extends ConsumerWidget {
   static String? _join(List<String?> parts) {
     final List<String> present = parts
         .whereType<String>()
-        .map((String s) => s.trim())
-        .where((String s) => s.isNotEmpty)
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
         .toList(growable: false);
     return present.isEmpty ? null : present.join(' ');
+  }
+
+  static String? _present(String? value) {
+    final String trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? null : trimmed;
   }
 }
 
 class _AssetMetricGrid extends StatelessWidget {
   const _AssetMetricGrid({required this.metrics});
 
-  final List<({String label, String value, IconData icon})> metrics;
+  final List<({String label, String value})> metrics;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth >= 620
-            ? metrics.length
-            : metrics.length > 2
-                ? 2
-                : metrics.length;
-        final int safeColumns = columns < 1 ? 1 : columns;
-        final double width =
-            (constraints.maxWidth - TpSpace.sm * (safeColumns - 1)) /
-                safeColumns;
-        return Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.sm,
-          children: <Widget>[
-            for (final metric in metrics)
-              SizedBox(width: width, child: _AssetMetricCard(metric: metric)),
-          ],
-        );
-      },
+    return Row(
+      children: <Widget>[
+        for (int i = 0; i < metrics.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(width: TpSpace.sm),
+          Expanded(child: _AssetMetricCard(metric: metrics[i])),
+        ],
+      ],
     );
   }
 }
@@ -449,7 +425,7 @@ class _AssetMetricGrid extends StatelessWidget {
 class _AssetMetricCard extends StatelessWidget {
   const _AssetMetricCard({required this.metric});
 
-  final ({String label, String value, IconData icon}) metric;
+  final ({String label, String value}) metric;
 
   @override
   Widget build(BuildContext context) {
@@ -461,20 +437,7 @@ class _AssetMetricCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Icon(metric.icon, size: TpSizing.iconSm, color: palette.primary),
-              const SizedBox(width: TpSpace.xs),
-              Expanded(
-                child: Text(
-                  metric.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.labelSmall,
-                ),
-              ),
-            ],
-          ),
+          Text(metric.label, maxLines: 1, style: text.labelSmall),
           const SizedBox(height: TpSpace.sm),
           Text(
             metric.value,
@@ -488,25 +451,270 @@ class _AssetMetricCard extends StatelessWidget {
   }
 }
 
-class _OverviewHeading extends StatelessWidget {
-  const _OverviewHeading({required this.label});
+class _AssetTabs extends StatelessWidget {
+  const _AssetTabs({
+    required this.selected,
+    required this.overviewLabel,
+    required this.tyresLabel,
+    required this.historyLabel,
+    required this.onSelect,
+  });
+
+  final _AssetDetailTab selected;
+  final String overviewLabel;
+  final String tyresLabel;
+  final String historyLabel;
+  final ValueChanged<_AssetDetailTab> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          _AssetTabButton(
+            key: VehicleDetailScreenKeys.overviewTab,
+            label: overviewLabel,
+            selected: selected == _AssetDetailTab.overview,
+            onTap: () => onSelect(_AssetDetailTab.overview),
+          ),
+          _AssetTabButton(
+            key: VehicleDetailScreenKeys.tyresTab,
+            label: tyresLabel,
+            selected: selected == _AssetDetailTab.tyres,
+            onTap: () => onSelect(_AssetDetailTab.tyres),
+          ),
+          _AssetTabButton(
+            key: VehicleDetailScreenKeys.historyTab,
+            label: historyLabel,
+            selected: selected == _AssetDetailTab.history,
+            onTap: () => onSelect(_AssetDetailTab.history),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssetTabButton extends StatelessWidget {
+  const _AssetTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? palette.primary : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: selected ? palette.primary : palette.textSecondary,
+                ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewPanel extends StatelessWidget {
+  const _OverviewPanel({
+    required this.asset,
+    required this.fields,
+    required this.l10n,
+    super.key,
+  });
+
+  final VehicleAsset asset;
+  final List<(String, String?)> fields;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        KeyedSubtree(
+          key: VehicleDetailScreenKeys.multiViewBoard,
+          child: VehicleMultiViewBoard(
+            asset: asset,
+            title: l10n.vehiclesMultiViewTitle,
+            hint: l10n.vehiclesMultiViewHint,
+            zoomLabel: l10n.vehiclesMultiViewZoom,
+            closeLabel: l10n.actionClose,
+          ),
+        ),
+        const SizedBox(height: TpSpace.lg),
+        _SectionHeading(label: l10n.inspectionConditionLabel),
+        const SizedBox(height: TpSpace.sm),
+        _AssetTyreMap(asset: asset),
+        const SizedBox(height: TpSpace.md),
+        _SectionHeading(label: l10n.tabHistory),
+        const SizedBox(height: TpSpace.sm),
+        TpCard(
+          padding: const EdgeInsets.all(TpSpace.md),
+          child: Row(
+            children: <Widget>[
+              Icon(Icons.history_rounded, color: palette.textMuted),
+              const SizedBox(width: TpSpace.sm),
+              Text(l10n.valueUnavailable),
+            ],
+          ),
+        ),
+        const SizedBox(height: TpSpace.lg),
+        _SectionHeading(label: l10n.tyreDetailSectionOverview),
+        const SizedBox(height: TpSpace.sm),
+        TpCard(
+          key: VehicleDetailScreenKeys.details,
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: <Widget>[
+              for (int i = 0; i < fields.length; i++)
+                _FieldRow(
+                  label: fields[i].$1,
+                  value: fields[i].$2,
+                  showDivider: i < fields.length - 1,
+                  borderColor: palette.border,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TyresPanel extends StatelessWidget {
+  const _TyresPanel({required this.asset, required this.l10n, super.key});
+
+  final VehicleAsset asset;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _SectionHeading(label: l10n.inspectionConditionLabel),
+        const SizedBox(height: TpSpace.sm),
+        _AssetTyreMap(asset: asset),
+      ],
+    );
+  }
+}
+
+class _HistoryPanel extends StatelessWidget {
+  const _HistoryPanel({required this.l10n, super.key});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.lg),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.history_rounded, color: palette.textMuted),
+          const SizedBox(width: TpSpace.sm),
+          Text(l10n.valueUnavailable),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssetTyreMap extends StatelessWidget {
+  const _AssetTyreMap({required this.asset});
+
+  final VehicleAsset asset;
+
+  @override
+  Widget build(BuildContext context) {
+    final String vehicleType = asset.vehicleType?.trim() ?? '';
+    final List<String> positions = diagramPositions(vehicleType, asset.assetNo);
+    return KeyedSubtree(
+      key: VehicleDetailScreenKeys.tyreMap,
+      child: VehicleTyreDiagram(
+        vehicleType: vehicleType,
+        assetNo: asset.assetNo,
+        positions: positions,
+        tyreData: const <String, Map<String, Object?>>{},
+        width: 150,
+        compact: true,
+      ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.label});
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    return Text(
+      label.toUpperCase(),
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: TpPalette.of(context).text,
+            fontWeight: FontWeight.w800,
+          ),
+    );
+  }
+}
+
+class _StickyInspectionAction extends StatelessWidget {
+  const _StickyInspectionAction({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    return Row(
-      children: <Widget>[
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: palette.primary,
-              ),
-        ),
-        const SizedBox(width: TpSpace.sm),
-        Expanded(child: Divider(color: palette.border)),
-      ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        TpSpace.sm,
+        TpSpace.lg,
+        TpSpace.md,
+      ),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.border)),
+      ),
+      child: TpButton.primary(
+        key: VehicleDetailScreenKeys.startInspection,
+        label: label,
+        isFullWidth: true,
+        onPressed: onPressed,
+      ),
     );
   }
 }

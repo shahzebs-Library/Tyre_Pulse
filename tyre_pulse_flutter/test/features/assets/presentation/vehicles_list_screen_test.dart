@@ -30,6 +30,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -42,13 +43,14 @@ Future<void> _pump(
   WidgetTester tester,
   Override override, {
   String? initialSearchTerm,
+  bool dark = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[override],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: TpTheme.light,
+        theme: dark ? TpTheme.dark : TpTheme.light,
         locale: const Locale('en'),
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
@@ -136,8 +138,8 @@ void main() {
   );
 
   testWidgets(
-    'loaded tyre-carrying assets render one card each, with no full-screen '
-    'state widget in the way',
+    'loaded register opens on All so vehicles and stationary PMV assets '
+    'remain visible together',
     (WidgetTester tester) async {
       await _pump(
         tester,
@@ -166,7 +168,7 @@ void main() {
 
       expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
-      expect(find.byKey(VehiclesListScreenKeys.asset('v3')), findsNothing);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v3')), findsOneWidget);
       final Image vehiclePhoto = tester.widget<Image>(
         find.descendant(
           of: find.byKey(VehiclesListScreenKeys.asset('v1')),
@@ -177,11 +179,6 @@ void main() {
         (vehiclePhoto.image as AssetImage).assetName,
         'assets/vehicle_photos/concrete_pump.png',
       );
-
-      // BUS is not a tyre-carrying class, so the production default filter
-      // correctly keeps it hidden until the user asks to browse every asset.
-      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
-      await tester.pumpAndSettle();
 
       final Image busPhoto = tester.widget<Image>(
         find.descendant(
@@ -289,9 +286,8 @@ void main() {
   );
 
   testWidgets(
-    'typing a search term narrows the list to matches across the whole '
-    'set, ignoring the active class filter - a chip only shapes browsing '
-    'and must never hide a real match',
+    'typing a search term narrows the list across the whole set, ignoring '
+    'an active tyre-only browse filter',
     (WidgetTester tester) async {
       await _pump(
         tester,
@@ -309,6 +305,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Tyre assets'));
+      await tester.pumpAndSettle();
       expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsNothing);
 
       await tester.enterText(find.byType(TextField), 'GN101');
@@ -363,8 +363,8 @@ void main() {
   );
 
   testWidgets(
-      'the All chip lifts the default tyre-only filter, revealing a '
-      'non-tyre-carrying asset that was hidden', (WidgetTester tester) async {
+      'the tyre-only filter can narrow an All-assets register and All widens '
+      'it again', (WidgetTester tester) async {
     await _pump(
       tester,
       _resolved(
@@ -379,12 +379,108 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
+    expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Tyre assets'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
     expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsNothing);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All (2)'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
     expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
   });
+
+  testWidgets(
+    'dark assets mock contract keeps the compact header, search, QR, '
+    'All-first filters and dense image rows above the fold',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pump(
+        tester,
+        _resolved(
+          const VehicleFleetListLoaded(
+            assets: <VehicleAsset>[
+              VehicleAsset(
+                id: 'mixer',
+                assetNo: 'TM2841',
+                fleetNumber: 'MIX-2841',
+                make: 'Concrete Mixer',
+                vehicleType: 'Mixer Truck',
+                status: 'Active',
+              ),
+              VehicleAsset(
+                id: 'pump',
+                assetNo: 'MP112',
+                fleetNumber: 'PMP-112',
+                vehicleType: 'Pump Truck',
+                status: 'Active',
+              ),
+              VehicleAsset(
+                id: 'loader',
+                assetNo: 'WL509',
+                fleetNumber: 'WL-509',
+                vehicleType: 'Wheel Loader',
+                status: 'Active',
+              ),
+              VehicleAsset(
+                id: 'trailer',
+                assetNo: 'TR09',
+                fleetNumber: 'TR-09',
+                vehicleType: 'Trailer',
+                status: 'Active',
+              ),
+              VehicleAsset(
+                id: 'generator',
+                assetNo: 'GN66',
+                fleetNumber: 'GEN-66',
+                vehicleType: 'Generator',
+                status: 'Active',
+              ),
+            ],
+            truncated: false,
+          ),
+        ),
+        dark: true,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Assets'), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.filter), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.search), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
+      expect(find.text('All (5)'), findsOneWidget);
+      expect(
+        find.byKey(VehiclesListScreenKeys.asset('generator')),
+        findsOneWidget,
+      );
+
+      final ChoiceChip all = tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'All (5)'),
+      );
+      expect(all.selected, isTrue);
+      expect(all.selectedColor, TpPalette.dark.primary);
+
+      final RenderBox card = tester.renderObject<RenderBox>(
+        find.byKey(VehiclesListScreenKeys.asset('mixer')),
+      );
+      expect(card.size.height, lessThanOrEqualTo(84));
+
+      final BuildContext cardContext =
+          tester.element(find.byKey(VehiclesListScreenKeys.asset('mixer')));
+      expect(Theme.of(cardContext).brightness, Brightness.dark);
+      expect(TpPalette.of(cardContext).surface, TpPalette.dark.surface);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byType(VehiclesListScreen),
+        matchesGoldenFile('goldens/assets_list_dark.png'),
+      );
+    },
+  );
 }

@@ -198,6 +198,24 @@ Future<void> _fillValidCredentials(WidgetTester tester) async {
   await tester.pump();
 }
 
+Future<void> _precacheSaudiLoginArtwork(WidgetTester tester) async {
+  final BuildContext context = tester.element(find.byType(LoginScreen));
+  await tester.runAsync(() async {
+    for (final String asset in <String>[
+      'assets/login/figma_city_background.png',
+      'assets/login/figma_pump_truck.png',
+      'assets/login/figma_brand_pulse.png',
+      'assets/login/saudi_arabia_hero.png',
+      'assets/login/figma_user.png',
+      'assets/login/figma_lock.png',
+      'assets/login/figma_password_visibility.png',
+    ]) {
+      await precacheImage(AssetImage(asset), context);
+    }
+  });
+  await tester.pump();
+}
+
 void main() {
   testWidgets(
     'both fields blank: the required-field check blocks the call entirely '
@@ -447,7 +465,7 @@ void main() {
       expect(find.text('Saudi Arabia'), findsOneWidget);
       expect(
         find.byKey(
-          const ValueKey<String>('assets/login/figma_city_background.png'),
+          const ValueKey<String>('assets/login/saudi_arabia_hero.png'),
         ),
         findsOneWidget,
       );
@@ -719,7 +737,7 @@ void main() {
     },
   );
 
-  testWidgets('approved 390x844 mobile composition keeps the exact anchors', (
+  testWidgets('approved compact English login matches its visual golden', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -727,28 +745,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await _pump(tester, country: LoginCountry.unitedArabEmirates);
+    await _pump(tester);
+    await _precacheSaudiLoginArtwork(tester);
 
-    final Finder hero = find.byKey(const Key('login.brand.panel'));
-    final Finder form = find.byKey(const Key('login.form.card'));
-    expect(tester.getSize(hero), const Size(390, 354));
-    expect(tester.getTopLeft(form).dy, 328);
-    expect(tester.getSize(_identifierField()).height, 48);
-    expect(tester.getSize(_passwordField()).height, 48);
-    expect(tester.getSize(_submitButton()).height, 52);
-    expect(find.byIcon(Icons.fingerprint), findsOneWidget);
-    expect(find.byIcon(Icons.arrow_forward), findsOneWidget);
-    expect(find.text('Use device biometrics'), findsOneWidget);
-    expect(find.text('Version 2.0'), findsOneWidget);
-    expect(
-      find.byKey(
-        const ValueKey<String>(
-          'assets/login/united_arab_emirates_pmv_hero.webp',
-        ),
-      ),
-      findsOneWidget,
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/login_compact_en.png'),
     );
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -777,7 +780,7 @@ void main() {
     },
   );
 
-  testWidgets('wide Arabic remains responsive and keeps one functional form', (
+  testWidgets('approved wide Arabic RTL login matches its visual golden', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1024, 768);
@@ -786,11 +789,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await _pump(tester, locale: const Locale('ar'));
+    await _precacheSaudiLoginArtwork(tester);
 
-    expect(find.byKey(const Key('login.brand.panel')), findsOneWidget);
-    expect(find.byKey(const Key('login.form.card')), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2));
-    expect(_submitButton(), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/login_wide_ar.png'),
+    );
   });
 }

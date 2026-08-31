@@ -191,9 +191,13 @@ void main() {
 
           final Finder hero = find.byKey(const Key('login.brand.panel'));
           final Finder form = find.byKey(const Key('login.form.card'));
+          final String wideAssetPath =
+              countryCase.country == LoginCountry.saudiArabia
+                  ? 'assets/login/saudi_arabia_hero.png'
+                  : countryCase.assetPath;
           expect(hero, findsOneWidget);
           expect(form, findsOneWidget);
-          expect(_heroAsset(countryCase.assetPath), findsOneWidget);
+          expect(_heroAsset(wideAssetPath), findsOneWidget);
           expect(
             tester.getTopLeft(hero).dx,
             lessThan(tester.getTopLeft(form).dx),

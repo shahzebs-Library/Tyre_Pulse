@@ -18,6 +18,7 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
@@ -111,14 +112,70 @@ final class SupabaseMediaUploader extends SupabaseGateway
     required String fileName,
   }) {
     return guard(() async {
-      // `fileName` already carries its own uniqueness - a unique index on
-      // `pending_media_uploads.fileName` - so it is used directly as the
-      // storage object path, with no extra folder structure invented here.
-      await _client.storage.from(bucket).upload(fileName, File(localPath));
+      final String remotePath = storageObjectPath(
+        bucket: bucket,
+        fileName: fileName,
+        userId: _client.auth.currentUser?.id,
+      );
+      await _client.storage.from(bucket).upload(
+            remotePath,
+            File(localPath),
+            fileOptions: FileOptions(
+              upsert: false,
+              contentType: storageContentType(fileName),
+            ),
+          );
       return MediaUploadResult(
-        remotePath: fileName,
-        remoteRef: 'tp-storage://$bucket/$fileName',
+        remotePath: remotePath,
+        remoteRef: 'tp-storage://$bucket/$remotePath',
       );
     });
   }
+}
+
+/// Builds the private Storage object path used by queued media uploads.
+///
+/// Accident evidence follows the production application's canonical
+/// `accidents/<user>/<file>` namespace. Other established media buckets keep
+/// their existing flat object names, so this correction cannot move or break
+/// evidence written by the currently released application.
+@visibleForTesting
+String storageObjectPath({
+  required String bucket,
+  required String fileName,
+  required String? userId,
+}) {
+  final String name = fileName.trim();
+  if (name.isEmpty ||
+      name == '.' ||
+      name == '..' ||
+      name.contains('/') ||
+      name.contains('\\')) {
+    throw ArgumentError.value(
+      fileName,
+      'fileName',
+      'must be one safe basename',
+    );
+  }
+  if (bucket != 'accident-photos') return name;
+
+  final String owner = userId?.trim() ?? '';
+  if (owner.isEmpty) {
+    throw StateError(
+      'Accident evidence cannot be uploaded without an authenticated owner.',
+    );
+  }
+  final String ownerSegment = owner.length <= 8 ? owner : owner.substring(0, 8);
+  return 'accidents/$ownerSegment/$name';
+}
+
+/// Explicit MIME metadata for every image type accepted by the live private
+/// evidence buckets. Unknown extensions are left for Storage to infer.
+@visibleForTesting
+String? storageContentType(String fileName) {
+  final String lower = fileName.toLowerCase();
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return null;
 }

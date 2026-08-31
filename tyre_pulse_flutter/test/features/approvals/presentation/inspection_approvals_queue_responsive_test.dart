@@ -104,4 +104,11 @@ final class _FakeApprovalRepository implements InspectionApprovalRepository {
   @override
   Future<List<InspectionApprovalItem>> listPending({String? country}) async =>
       const <InspectionApprovalItem>[_pendingItem];
+
+  @override
+  Future<List<InspectionApprovalItem>> listByStatus(
+    String status, {
+    String? country,
+  }) async =>
+      const <InspectionApprovalItem>[];
 }

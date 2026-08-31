@@ -55,9 +55,11 @@ String tyreDiagramBodyAsset(TyreDiagramBodyKey bodyKey) {
     TyreDiagramBodyKey.pickup => 'assets/vehicle_diagram/pickup.svg',
     TyreDiagramBodyKey.canter => 'assets/vehicle_diagram/canter.svg',
     TyreDiagramBodyKey.triMixer => 'assets/vehicle_diagram/tri_mixer.svg',
+    TyreDiagramBodyKey.linePump => 'assets/vehicle_diagram/concrete_pump.svg',
     TyreDiagramBodyKey.concretePump =>
       'assets/vehicle_diagram/concrete_pump.svg',
     TyreDiagramBodyKey.wheelLoader => 'assets/vehicle_diagram/wheel_loader.svg',
+    TyreDiagramBodyKey.skidLoader => 'assets/vehicle_diagram/wheel_loader.svg',
     TyreDiagramBodyKey.bus => 'assets/vehicle_diagram/bus.svg',
     TyreDiagramBodyKey.tata => 'assets/vehicle_diagram/tata.svg',
     TyreDiagramBodyKey.ashokLeyland =>
@@ -77,8 +79,12 @@ String? tyreDiagramVehiclePhotoAsset(TyreDiagramBodyKey bodyKey) {
   return switch (bodyKey) {
     TyreDiagramBodyKey.pickup => 'assets/vehicle_photos/pickup.png',
     TyreDiagramBodyKey.wheelLoader => 'assets/vehicle_photos/wheel_loader.png',
+    TyreDiagramBodyKey.skidLoader =>
+      'assets/vehicle_photos/skid_loader_top_down_v2.png',
     TyreDiagramBodyKey.triMixer =>
       'assets/vehicle_photos/tri_mixer_top_down.webp',
+    TyreDiagramBodyKey.linePump =>
+      'assets/vehicle_photos/line_pump_top_down_v2.png',
     TyreDiagramBodyKey.concretePump =>
       'assets/vehicle_photos/concrete_pump_top_down.webp',
     TyreDiagramBodyKey.canter ||
@@ -120,27 +126,43 @@ class _TyreDiagramBodyState extends State<TyreDiagramBody>
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final String? photoAsset = tyreDiagramVehiclePhotoAsset(widget.bodyKey);
     return SizedBox(
       width: widget.viewport.width,
       height: widget.viewport.height,
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          SvgPicture.asset(
-            tyreDiagramBodyAsset(widget.bodyKey),
-            fit: BoxFit.fill,
-            // The composite Stack this sits in already paints the app's own
-            // surface underneath; a failed asset load should leave that
-            // surface visible rather than throwing out the whole diagram.
-            placeholderBuilder: (BuildContext context) =>
-                const SizedBox.shrink(),
-            errorBuilder: (
-              BuildContext context,
-              Object error,
-              StackTrace? stack,
-            ) =>
-                const SizedBox.shrink(),
-          ),
+          if (photoAsset != null)
+            Image.asset(
+              photoAsset,
+              key: ValueKey<String>('diagram.body.$photoAsset'),
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              excludeFromSemantics: true,
+              errorBuilder: (
+                BuildContext context,
+                Object error,
+                StackTrace? stack,
+              ) =>
+                  const SizedBox.shrink(),
+            )
+          else
+            SvgPicture.asset(
+              tyreDiagramBodyAsset(widget.bodyKey),
+              fit: BoxFit.fill,
+              // The composite Stack this sits in already paints the app's own
+              // surface underneath; a failed asset load should leave that
+              // surface visible rather than throwing out the whole diagram.
+              placeholderBuilder: (BuildContext context) =>
+                  const SizedBox.shrink(),
+              errorBuilder: (
+                BuildContext context,
+                Object error,
+                StackTrace? stack,
+              ) =>
+                  const SizedBox.shrink(),
+            ),
           IgnorePointer(
             child: AnimatedBuilder(
               animation: _indicatorController,

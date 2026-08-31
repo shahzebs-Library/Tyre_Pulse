@@ -96,9 +96,8 @@ void main() {
     });
 
     test(
-      'midnight boundary: 00:00 local today is Today, 23:59 local '
-      'yesterday is Yesterday',
-      () {
+        'midnight boundary: 00:00 local today is Today, 23:59 local '
+        'yesterday is Yesterday', () {
       final DateTime justAfterMidnightToday =
           DateTime(now.year, now.month, now.day, 0, 0, 1);
       final DateTime justBeforeMidnightYesterday = DateTime(

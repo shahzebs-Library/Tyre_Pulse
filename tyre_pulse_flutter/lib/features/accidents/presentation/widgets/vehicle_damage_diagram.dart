@@ -34,15 +34,13 @@ class VehicleDamageDiagram extends StatelessWidget {
         vehicle == null ? null : vehicleMultiViewAsset(vehicle!);
     final String? fallbackAsset =
         vehicle == null ? null : vehiclePhotoAsset(vehicle!);
+    final _DamageViewFraming framing = _DamageViewFraming.forView(
+      view,
+      hasExactViewAsset: multiViewAsset != null,
+    );
 
     return AspectRatio(
-      aspectRatio: multiViewAsset == null
-          ? (view == AccidentDamageView.top ||
-                  view == AccidentDamageView.left ||
-                  view == AccidentDamageView.right
-              ? 16 / 9
-              : 5 / 4)
-          : _exactViewAspectRatio(multiViewAsset, view),
+      aspectRatio: framing.aspectRatio,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           return DecoratedBox(
@@ -56,17 +54,15 @@ class VehicleDamageDiagram extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTapUp: (TapUpDetails details) {
-                  final double dx =
-                      (details.localPosition.dx / constraints.maxWidth)
-                          .clamp(0.0, 1.0);
-                  final double dy =
-                      (details.localPosition.dy / constraints.maxHeight)
-                          .clamp(0.0, 1.0);
+                  final Offset sourcePoint = framing.viewportToSource(
+                    details.localPosition,
+                    Size(constraints.maxWidth, constraints.maxHeight),
+                  );
                   onPointTap(
                     AccidentDamagePoint(
                       view: view,
-                      normalizedX: dx,
-                      normalizedY: dy,
+                      normalizedX: sourcePoint.dx,
+                      normalizedY: sourcePoint.dy,
                     ),
                   );
                 },
@@ -78,12 +74,14 @@ class VehicleDamageDiagram extends StatelessWidget {
                       view: view,
                       multiViewAsset: multiViewAsset,
                       fallbackAsset: fallbackAsset,
+                      framing: framing,
                     ),
                     CustomPaint(
                       painter: _DamageZoneOverlayPainter(
                         view: view,
                         map: map,
                         palette: palette,
+                        framing: framing,
                       ),
                     ),
                   ],
@@ -101,11 +99,32 @@ class VehicleDamageDiagram extends StatelessWidget {
 @visibleForTesting
 const double accidentDamageMarkerRadius = 12;
 
-double _exactViewAspectRatio(
-  String boardAssetPath,
-  AccidentDamageView view,
-) =>
-    1;
+/// Converts a stored source-image point to the pixel at which its marker is
+/// painted. Exposed so focused tests can protect crop/marker alignment.
+@visibleForTesting
+Offset accidentDamageMarkerViewportPoint({
+  required AccidentDamageView view,
+  required Offset sourcePoint,
+  required Size viewport,
+  required bool hasExactViewAsset,
+}) =>
+    _DamageViewFraming.forView(
+      view,
+      hasExactViewAsset: hasExactViewAsset,
+    ).sourceToViewport(sourcePoint, viewport);
+
+/// Inverse of [accidentDamageMarkerViewportPoint], used for exact taps.
+@visibleForTesting
+Offset accidentDamageTapSourcePoint({
+  required AccidentDamageView view,
+  required Offset viewportPoint,
+  required Size viewport,
+  required bool hasExactViewAsset,
+}) =>
+    _DamageViewFraming.forView(
+      view,
+      hasExactViewAsset: hasExactViewAsset,
+    ).viewportToSource(viewportPoint, viewport);
 
 class _VehicleArtwork extends StatelessWidget {
   const _VehicleArtwork({
@@ -113,12 +132,14 @@ class _VehicleArtwork extends StatelessWidget {
     required this.view,
     required this.multiViewAsset,
     required this.fallbackAsset,
+    required this.framing,
   });
 
   final VehicleAsset? vehicle;
   final AccidentDamageView view;
   final String? multiViewAsset;
   final String? fallbackAsset;
+  final _DamageViewFraming framing;
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +149,7 @@ class _VehicleArtwork extends StatelessWidget {
         boardAssetPath: multiViewAsset!,
         view: view,
         fallbackIcon: vehicleFallbackIcon(vehicle!),
+        fit: framing.imageFit,
       );
     }
     if (vehicle != null && fallbackAsset != null) {
@@ -161,11 +183,13 @@ class _ExactVehicleView extends StatelessWidget {
     required this.boardAssetPath,
     required this.view,
     required this.fallbackIcon,
+    required this.fit,
   });
 
   final String boardAssetPath;
   final AccidentDamageView view;
   final IconData fallbackIcon;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -174,15 +198,13 @@ class _ExactVehicleView extends StatelessWidget {
         .replaceFirst(RegExp(r'\.png$'), '');
     final String exactAsset =
         'assets/vehicle_multiview_views/${stem}_${view.name}.png';
-    return Padding(
-      padding: const EdgeInsets.all(2),
-      child: Image.asset(
-        exactAsset,
-        key: Key('accident.damage.multiview.${view.name}'),
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-        errorBuilder: (_, __, ___) => _FallbackArtwork(icon: fallbackIcon),
-      ),
+    return Image.asset(
+      exactAsset,
+      key: Key('accident.damage.multiview.${view.name}'),
+      fit: fit,
+      alignment: Alignment.center,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (_, __, ___) => _FallbackArtwork(icon: fallbackIcon),
     );
   }
 }
@@ -209,16 +231,19 @@ class _DamageZoneOverlayPainter extends CustomPainter {
     required this.view,
     required this.map,
     required this.palette,
+    required this.framing,
   });
 
   final AccidentDamageView view;
   final AccidentDamageMap map;
   final TpPalette palette;
+  final _DamageViewFraming framing;
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (int index = 0; index < map.marks.length; index++) {
-      final AccidentDamageMark mark = map.marks[index];
+    final List<AccidentDamageMark> marks = map.marks;
+    for (int index = 0; index < marks.length; index++) {
+      final AccidentDamageMark mark = marks[index];
       if (mark.effectiveView != view) continue;
       AccidentDamageZone? legacyZone;
       if (!mark.hasExactPoint) {
@@ -240,7 +265,8 @@ class _DamageZoneOverlayPainter extends CustomPainter {
         AccidentDamageSeverity.severe => TpStatus.critical,
       };
       final TpStatusColors colors = palette.forStatus(tone);
-      final Offset center = Offset(x * size.width, y * size.height);
+      final Offset center = framing.sourceToViewport(Offset(x, y), size);
+      if (!framing.isVisible(center, size)) continue;
       canvas.drawCircle(
         center,
         accidentDamageMarkerRadius + 2,
@@ -284,5 +310,85 @@ class _DamageZoneOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant _DamageZoneOverlayPainter oldDelegate) =>
       oldDelegate.view != view ||
       oldDelegate.map != map ||
-      oldDelegate.palette != palette;
+      oldDelegate.palette != palette ||
+      oldDelegate.framing != framing;
+}
+
+/// All exact view images are audited 768x768 source canvases. Side views use
+/// a 16:9 viewport with a centred `cover` crop so empty top/bottom board space
+/// is removed. Stored points remain normalized to that square source canvas;
+/// both hit testing and marker painting use this same transform.
+@immutable
+final class _DamageViewFraming {
+  const _DamageViewFraming({
+    required this.aspectRatio,
+    required this.imageFit,
+    required this.cropsSquareSource,
+  });
+
+  factory _DamageViewFraming.forView(
+    AccidentDamageView view, {
+    required bool hasExactViewAsset,
+  }) {
+    final bool isSide =
+        view == AccidentDamageView.left || view == AccidentDamageView.right;
+    if (hasExactViewAsset) {
+      return _DamageViewFraming(
+        aspectRatio: isSide ? 16 / 9 : 1,
+        imageFit: isSide ? BoxFit.cover : BoxFit.contain,
+        cropsSquareSource: isSide,
+      );
+    }
+    return _DamageViewFraming(
+      aspectRatio: view == AccidentDamageView.top || isSide ? 16 / 9 : 5 / 4,
+      imageFit: BoxFit.contain,
+      cropsSquareSource: false,
+    );
+  }
+
+  final double aspectRatio;
+  final BoxFit imageFit;
+  final bool cropsSquareSource;
+
+  Offset viewportToSource(Offset point, Size viewport) {
+    if (!cropsSquareSource) {
+      return Offset(
+        (point.dx / viewport.width).clamp(0.0, 1.0),
+        (point.dy / viewport.height).clamp(0.0, 1.0),
+      );
+    }
+    final double cropY = (viewport.width - viewport.height) / 2;
+    return Offset(
+      (point.dx / viewport.width).clamp(0.0, 1.0),
+      ((point.dy + cropY) / viewport.width).clamp(0.0, 1.0),
+    );
+  }
+
+  Offset sourceToViewport(Offset point, Size viewport) {
+    if (!cropsSquareSource) {
+      return Offset(point.dx * viewport.width, point.dy * viewport.height);
+    }
+    final double cropY = (viewport.width - viewport.height) / 2;
+    return Offset(
+      point.dx * viewport.width,
+      point.dy * viewport.width - cropY,
+    );
+  }
+
+  bool isVisible(Offset point, Size viewport) =>
+      point.dx >= 0 &&
+      point.dx <= viewport.width &&
+      point.dy >= 0 &&
+      point.dy <= viewport.height;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _DamageViewFraming &&
+          other.aspectRatio == aspectRatio &&
+          other.imageFit == imageFit &&
+          other.cropsSquareSource == cropsSquareSource;
+
+  @override
+  int get hashCode => Object.hash(aspectRatio, imageFit, cropsSquareSource);
 }

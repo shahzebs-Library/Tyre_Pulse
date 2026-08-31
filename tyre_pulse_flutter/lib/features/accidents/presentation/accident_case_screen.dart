@@ -17,6 +17,7 @@ import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_case_workflow_sections.dart';
 
 abstract final class AccidentCaseScreenKeys {
   static const Key tabs = Key('accident.case.tabs');
@@ -301,6 +302,9 @@ class _EvidenceTab extends StatelessWidget {
           title: copy('damage'),
           child: Text(_shown(record.damageDescription, copy)),
         ),
+        AccidentFleetValidationSection(snapshot: snapshot),
+        const SizedBox(height: TpSpace.md),
+        AccidentResponsibilityDocumentsSection(snapshot: snapshot),
         _WorkstreamSummary(
           workstreams: _matching(snapshot.workstreams, const <String>{
             'incident_evidence',
@@ -367,6 +371,8 @@ class _InsuranceTab extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: TpSpace.md),
+        AccidentInsuranceControlSection(snapshot: snapshot),
         _WorkstreamSummary(
           workstreams: _matching(
             snapshot.workstreams,
@@ -393,38 +399,12 @@ class _RepairTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AccidentRecord record = snapshot.accident;
     return _CaseScrollView(
       key: AccidentCaseScreenKeys.repair,
       onRefresh: onRefresh,
       children: <Widget>[
         _CaseHeader(snapshot: snapshot, copy: copy),
-        _CaseSection(
-          title: copy('workshopRelease'),
-          child: Column(
-            children: <Widget>[
-              AccidentInfoRow(copy('repairType'), record.repairType),
-              AccidentInfoRow(copy('workshop'), record.workshopName),
-              AccidentInfoRow(copy('repairCost'), record.repairCost),
-              AccidentInfoRow(
-                copy('expectedRelease'),
-                record.expectedReleaseDate,
-              ),
-              AccidentInfoRow(copy('actualRelease'), record.releaseDate),
-              AccidentInfoRow(copy('nextAction'), record.nextStep),
-            ],
-          ),
-        ),
-        _WorkstreamSummary(
-          workstreams: _matching(snapshot.workstreams, const <String>{
-            'assessment',
-            'repair',
-            'workshop_qc',
-            'handover',
-          }),
-          copy: copy,
-          provisioned: snapshot.provisioned,
-        ),
+        AccidentWorkshopWorkflowSection(snapshot: snapshot),
       ],
     );
   }
@@ -488,6 +468,8 @@ class _MoreTab extends StatelessWidget {
           copy: copy,
           provisioned: snapshot.provisioned,
         ),
+        const SizedBox(height: TpSpace.md),
+        AccidentCaseOperationsSection(snapshot: snapshot),
         _CaseSection(
           title: copy('boundary'),
           child: Text(copy('boundaryMessage')),

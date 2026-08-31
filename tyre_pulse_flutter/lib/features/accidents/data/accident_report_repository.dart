@@ -23,6 +23,44 @@ final class SubmitAccidentReportInput {
     this.vehicleType,
     this.location,
     this.notes,
+    this.incidentAt,
+    this.plateNumber,
+    this.driverName,
+    this.injuries,
+    this.injuryCount,
+    this.thirdPartyInvolved,
+    this.policeReportNo,
+    this.estimatedDamageCost,
+    this.currentStatus,
+    this.damageCondition,
+    this.faultStatus,
+    this.gccLiabilityRatio,
+    this.najmStatus,
+    this.najmFault,
+    this.taqdeerStatus,
+    this.taqdeerNo,
+    this.liableParty,
+    this.payer,
+    this.responsibleParty,
+    this.insurer,
+    this.policyNo,
+    this.insuranceClaimNo,
+    this.claimStatus,
+    this.claimAmount,
+    this.claimApprovedAmount,
+    this.deductible,
+    this.recoveredAmount,
+    this.recoveryStatus,
+    this.recoverySource,
+    this.recoveryDate,
+    this.recoveryReference,
+    this.amountTransfer,
+    this.repairType,
+    this.workshopName,
+    this.workshopLocation,
+    this.repairCost,
+    this.expectedReleaseDate,
+    this.releaseDate,
   });
 
   final String assetNo;
@@ -36,6 +74,44 @@ final class SubmitAccidentReportInput {
   final String? vehicleType;
   final String? location;
   final String? notes;
+  final DateTime? incidentAt;
+  final String? plateNumber;
+  final String? driverName;
+  final bool? injuries;
+  final int? injuryCount;
+  final bool? thirdPartyInvolved;
+  final String? policeReportNo;
+  final num? estimatedDamageCost;
+  final String? currentStatus;
+  final String? damageCondition;
+  final String? faultStatus;
+  final int? gccLiabilityRatio;
+  final String? najmStatus;
+  final String? najmFault;
+  final String? taqdeerStatus;
+  final String? taqdeerNo;
+  final String? liableParty;
+  final String? payer;
+  final String? responsibleParty;
+  final String? insurer;
+  final String? policyNo;
+  final String? insuranceClaimNo;
+  final String? claimStatus;
+  final num? claimAmount;
+  final num? claimApprovedAmount;
+  final num? deductible;
+  final num? recoveredAmount;
+  final String? recoveryStatus;
+  final String? recoverySource;
+  final DateTime? recoveryDate;
+  final String? recoveryReference;
+  final num? amountTransfer;
+  final String? repairType;
+  final String? workshopName;
+  final String? workshopLocation;
+  final num? repairCost;
+  final DateTime? expectedReleaseDate;
+  final DateTime? releaseDate;
 }
 
 abstract interface class AccidentReportRepository {
@@ -61,6 +137,7 @@ final class OfflineAccidentReportRepository
     required SubmitAccidentReportInput input,
   }) async {
     final DateTime now = DateTime.now();
+    final DateTime incidentAt = input.incidentAt ?? now;
     final List<String> photos = <String>[
       for (final String path in input.photoLocalPaths)
         if (path.trim().isNotEmpty) path.trim(),
@@ -73,35 +150,67 @@ final class OfflineAccidentReportRepository
         'vehicle_id': _text(input.vehicleId),
         'reported_by': workspace.userId,
         'reporter_name': _text(workspace.fullName),
-        'incident_date': _date(now),
-        'incident_time': _time(now),
+        'incident_date': _date(incidentAt),
+        'incident_time': _time(incidentAt),
         'location': _text(input.location),
         'accident_type': input.accidentType.trim(),
         'severity': input.severity.trim(),
         'description': input.description.trim(),
+        'injuries': input.injuries,
+        'injury_count': input.injuryCount,
+        'third_party_involved': input.thirdPartyInvolved,
+        'police_report_no': _text(input.policeReportNo),
         'damage_description': input.damageMap.isEmpty
             ? null
             : jsonEncode(<String, Object?>{
-                'version': 1,
+                'version': 2,
                 'marks': <Map<String, Object?>>[
                   for (final AccidentDamageMark mark in input.damageMap.marks)
-                    <String, Object?>{
-                      'zone_id': mark.zoneId,
-                      if (mark.view != null) 'view': mark.view!.name,
-                      if (mark.normalizedX != null) 'x': mark.normalizedX,
-                      if (mark.normalizedY != null) 'y': mark.normalizedY,
-                      if (_text(mark.areaLabel) != null)
-                        'area': mark.areaLabel!.trim(),
-                      'severity': mark.severity.name,
-                      if (_text(mark.note) != null) 'note': mark.note!.trim(),
-                    },
+                    mark.toJson(),
                 ],
               }),
         'photos': photos.isEmpty ? null : photos,
         'notes': _text(input.notes),
         'status': 'reported',
         'country': workspace.activeCountry,
+        'driver_name': _text(input.driverName),
+        'plate_number': _text(input.plateNumber),
         'vehicle_type': _text(input.vehicleType),
+        'estimated_damage_cost': input.estimatedDamageCost,
+        'current_status': _text(input.currentStatus),
+        'damage_condition': _text(input.damageCondition),
+        'fault_status': _text(input.faultStatus),
+        'gcc_liability_ratio': input.gccLiabilityRatio,
+        'najm_status': _text(input.najmStatus),
+        'najm_fault': _text(input.najmFault),
+        'taqdeer_status': _text(input.taqdeerStatus),
+        'taqdeer_no': _text(input.taqdeerNo),
+        'liable_party': _text(input.liableParty),
+        'payer': _text(input.payer),
+        'responsible_party': _text(input.responsibleParty),
+        'insurer': _text(input.insurer),
+        'policy_no': _text(input.policyNo),
+        'insurance_claim_no': _text(input.insuranceClaimNo),
+        'claim_status': _text(input.claimStatus),
+        'claim_amount': input.claimAmount,
+        'claim_approved_amount': input.claimApprovedAmount,
+        'deductible': input.deductible,
+        'recovered_amount': input.recoveredAmount,
+        'recovery_status': _text(input.recoveryStatus),
+        'recovery_source': _text(input.recoverySource),
+        'recovery_date':
+            input.recoveryDate == null ? null : _date(input.recoveryDate!),
+        'recovery_reference': _text(input.recoveryReference),
+        'amount_transfer': input.amountTransfer,
+        'repair_type': _text(input.repairType),
+        'workshop_name': _text(input.workshopName),
+        'workshop_location': _text(input.workshopLocation),
+        'repair_cost': input.repairCost,
+        'expected_release_date': input.expectedReleaseDate == null
+            ? null
+            : _date(input.expectedReleaseDate!),
+        'release_date':
+            input.releaseDate == null ? null : _date(input.releaseDate!),
       },
       workspace: workspace,
       now: now,

@@ -7,6 +7,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_zone_sheet.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/vehicle_damage_diagram.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_multiview_catalog.dart';
@@ -16,6 +17,9 @@ Future<void> _pump(
   required AccidentDamageMap map,
   required ValueChanged<AccidentDamageMap> onChanged,
   VehicleAsset? vehicle,
+  AccidentDamageSuggestionResolver? suggestionResolver,
+  AccidentDamagePhotoEditor? photoEditor,
+  String? reviewerId,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -34,6 +38,9 @@ Future<void> _pump(
             map: map,
             onChanged: onChanged,
             vehicle: vehicle,
+            suggestionResolver: suggestionResolver,
+            photoEditor: photoEditor,
+            reviewerId: reviewerId,
           ),
         ),
       ),
@@ -86,7 +93,7 @@ void main() {
   });
 
   testWidgets(
-    'loader left and right stay isolated under small numbered damage pins',
+    'side views use wide crops while tap and marker transforms stay aligned',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -144,10 +151,36 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await expectLater(
-        find.byType(MaterialApp),
-        matchesGoldenFile('goldens/loader_damage_left.png'),
+      final Rect leftViewport = tester.getRect(
+        find.byKey(AccidentDamageMapSectionKeys.diagram),
       );
+      final Image leftImage = tester.widget<Image>(
+        find.byKey(const Key('accident.damage.multiview.left')),
+      );
+      expect(leftViewport.width / leftViewport.height, closeTo(16 / 9, .01));
+      expect(leftImage.fit, BoxFit.cover);
+      expect(
+        (leftImage.image as AssetImage).assetName,
+        'assets/vehicle_multiview_views/'
+        'sany_wheel_loader_five_view_v1_left.png',
+      );
+      final Size viewportSize = leftViewport.size;
+      const Offset sourcePoint = Offset(.23, .62);
+      final Offset paintedPoint = accidentDamageMarkerViewportPoint(
+        view: AccidentDamageView.left,
+        sourcePoint: sourcePoint,
+        viewport: viewportSize,
+        hasExactViewAsset: true,
+      );
+      final Offset recoveredPoint = accidentDamageTapSourcePoint(
+        view: AccidentDamageView.left,
+        viewportPoint: paintedPoint,
+        viewport: viewportSize,
+        hasExactViewAsset: true,
+      );
+      expect(recoveredPoint.dx, closeTo(sourcePoint.dx, .0001));
+      expect(recoveredPoint.dy, closeTo(sourcePoint.dy, .0001));
+      expect(paintedPoint.dy, inInclusiveRange(0, viewportSize.height));
 
       await tester.drag(find.byType(ListView).first, const Offset(-120, 0));
       await tester.pumpAndSettle();
@@ -169,9 +202,18 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await expectLater(
-        find.byType(MaterialApp),
-        matchesGoldenFile('goldens/loader_damage_right.png'),
+      final Rect rightViewport = tester.getRect(
+        find.byKey(AccidentDamageMapSectionKeys.diagram),
+      );
+      final Image rightImage = tester.widget<Image>(
+        find.byKey(const Key('accident.damage.multiview.right')),
+      );
+      expect(rightViewport.width / rightViewport.height, closeTo(16 / 9, .01));
+      expect(rightImage.fit, BoxFit.cover);
+      expect(
+        (rightImage.image as AssetImage).assetName,
+        'assets/vehicle_multiview_views/'
+        'sany_wheel_loader_five_view_v1_right.png',
       );
       expect(tester.takeException(), isNull);
     },
@@ -247,6 +289,11 @@ void main() {
       'assets/vehicle_multiview_views/'
       'sany_concrete_pump_5axle_five_view_v1_front.png',
     );
+    expect(image.fit, BoxFit.contain);
+    final Rect viewport = tester.getRect(
+      find.byKey(AccidentDamageMapSectionKeys.diagram),
+    );
+    expect(viewport.width / viewport.height, closeTo(1, .01));
   });
 
   testWidgets('each selector loads its own exact vehicle-view image', (
@@ -415,6 +462,212 @@ void main() {
     expect(find.text('Save mark'), findsOneWidget);
     expect(find.textContaining('X 1% / Y 1%'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Finder suggestion requires explicit confirmation and is audited',
+      (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    await _pump(
+      tester,
+      map: const AccidentDamageMap.empty(),
+      onChanged: (AccidentDamageMap next) => reported = next,
+      reviewerId: 'fleet-user-7',
+      suggestionResolver: (_, __) => const AccidentDamageSuggestion(
+        source: 'finder-v2',
+        confidence: .91,
+        suggestedType: AccidentDamageType.scratch,
+        suggestedArea: 'Front bumper',
+      ),
+    );
+
+    await tester.tapAt(
+      tester
+          .getRect(
+            find.byKey(AccidentDamageMapSectionKeys.diagram),
+          )
+          .center,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(AccidentDamageZoneSheetKeys.selectedAreaPanel),
+      findsOneWidget,
+    );
+    expect(find.text('Finder suggestion'), findsOneWidget);
+    final FilledButton pendingSave = tester.widget<FilledButton>(
+      find.descendant(
+        of: find.byKey(AccidentDamageZoneSheetKeys.save),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(pendingSave.onPressed, isNull);
+
+    await tester.tap(
+      find.byKey(AccidentDamageZoneSheetKeys.confirmSuggestion),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.tap(find.text('Save mark'));
+    await tester.pumpAndSettle();
+
+    expect(reported, isNotNull);
+    final AccidentDamageMark mark = reported!.marks.single;
+    expect(mark.damageType, AccidentDamageType.scratch);
+    expect(mark.areaLabel, 'Front bumper');
+    expect(
+      mark.suggestion?.decision,
+      AccidentDamageSuggestionDecision.confirmed,
+    );
+    expect(mark.suggestion?.reviewedBy, 'fleet-user-7');
+    expect(mark.suggestion?.reviewedAt, isNotNull);
+  });
+
+  testWidgets('editing a Finder value records a correction without erasing it',
+      (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    await _pump(
+      tester,
+      map: const AccidentDamageMap.empty(),
+      onChanged: (AccidentDamageMap next) => reported = next,
+      suggestionResolver: (_, __) => const AccidentDamageSuggestion(
+        source: 'finder-local',
+        confidence: .64,
+        suggestedType: AccidentDamageType.dent,
+        suggestedArea: 'Cab',
+      ),
+    );
+
+    await tester.tapAt(
+      tester
+          .getRect(
+            find.byKey(AccidentDamageMapSectionKeys.diagram),
+          )
+          .center,
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Cargo bed');
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(AccidentDamageZoneSheetKeys.correctSuggestion),
+      findsNothing,
+    );
+    expect(find.text('Corrected by reporter'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.tap(find.text('Save mark'));
+    await tester.pumpAndSettle();
+
+    final AccidentDamageMark mark = reported!.marks.single;
+    expect(mark.areaLabel, 'Cargo bed');
+    expect(mark.suggestion?.suggestedArea, 'Cab');
+    expect(
+      mark.suggestion?.decision,
+      AccidentDamageSuggestionDecision.corrected,
+    );
+  });
+
+  testWidgets('close-up damage photo hook stores references and count', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    await _pump(
+      tester,
+      map: const AccidentDamageMap.empty(),
+      onChanged: (AccidentDamageMap next) => reported = next,
+      photoEditor: (_) async => <String>[
+        'photo_damage_closeup:local-1',
+        'photo_damage_closeup:local-2',
+      ],
+    );
+
+    await tester.tapAt(
+      tester
+          .getRect(
+            find.byKey(AccidentDamageMapSectionKeys.diagram),
+          )
+          .center,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Close-up damage photos'), findsOneWidget);
+    expect(find.text('0 attached'), findsOneWidget);
+
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.photoAction));
+    await tester.pumpAndSettle();
+    expect(find.text('2 attached'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.tap(find.text('Save mark'));
+    await tester.pumpAndSettle();
+
+    expect(reported!.marks.single.photoCount, 2);
+    expect(
+      reported!.marks.single.photoReferences.first,
+      'photo_damage_closeup:local-1',
+    );
+  });
+
+  testWidgets('marked-area list exposes direct edit and remove actions', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    const AccidentDamageMark mark = AccidentDamageMark(
+      zoneId: 'front_500_500',
+      view: AccidentDamageView.front,
+      normalizedX: .5,
+      normalizedY: .5,
+      areaLabel: 'Front panel',
+      damageType: AccidentDamageType.dent,
+      severity: AccidentDamageSeverity.minor,
+    );
+    await _pump(
+      tester,
+      map: AccidentDamageMap.fromMarks(const <AccidentDamageMark>[mark]),
+      onChanged: (AccidentDamageMap next) => reported = next,
+    );
+
+    expect(
+      find.byKey(AccidentDamageMapSectionKeys.markRow(mark.zoneId)),
+      findsOneWidget,
+    );
+    expect(find.text('1'), findsOneWidget);
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageMapSectionKeys.editMark(mark.zoneId)),
+    );
+    await tester.tap(
+      find.byKey(AccidentDamageMapSectionKeys.editMark(mark.zoneId)),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(AccidentDamageZoneSheetKeys.selectedAreaPanel),
+      findsOneWidget,
+    );
+    expect(find.text('Selected area 1'), findsOneWidget);
+    Navigator.of(
+      tester.element(
+        find.byKey(AccidentDamageZoneSheetKeys.selectedAreaPanel),
+      ),
+    ).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(AccidentDamageMapSectionKeys.removeMark(mark.zoneId)),
+    );
+    await tester.tap(
+      find.byKey(AccidentDamageMapSectionKeys.removeMark(mark.zoneId)),
+    );
+    await tester.pumpAndSettle();
+    expect(reported?.isEmpty, isTrue);
   });
 
   testWidgets('exact-point area identity stays truthful across asset classes', (

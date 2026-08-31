@@ -50,27 +50,230 @@ class AccidentDamageZone {
 /// deliberately reused rather than inventing a parallel scale for one zone.
 enum AccidentDamageSeverity { minor, moderate, severe }
 
-/// One recorded mark: which zone, how severe, and an optional free-text note
-/// (e.g. "cracked, not shattered").
+/// The visible form of damage at one marked point.
+///
+/// These tokens deliberately match the field vocabulary used by the accident
+/// evidence and technical-assessment specs. Keep the enum names stable: they
+/// are persisted as lowercase JSON strings by [AccidentDamageMark.toJson].
+enum AccidentDamageType { dent, scratch, cracked, broken, missing, other }
+
+/// The reporter's explicit disposition of an automated suggestion.
+enum AccidentDamageSuggestionDecision { pending, confirmed, corrected }
+
+/// Finder (or another automated source) metadata kept beside the final human
+/// decision rather than overwriting it.
+///
+/// [suggestedType] and [suggestedArea] are the machine proposal. The final
+/// values remain on [AccidentDamageMark], which makes a correction auditable.
+/// [reviewedBy], [reviewedAt], and [correctionNote] are additive hooks for a
+/// future authenticated Finder integration; this source-only mapper does not
+/// invent an operator identity.
 @immutable
-class AccidentDamageMark {
+final class AccidentDamageSuggestion {
+  const AccidentDamageSuggestion({
+    required this.source,
+    required this.confidence,
+    this.suggestedType,
+    this.suggestedArea,
+    this.decision = AccidentDamageSuggestionDecision.pending,
+    this.reviewedBy,
+    this.reviewedAt,
+    this.correctionNote,
+  })  : assert(confidence >= 0),
+        assert(confidence <= 1);
+
+  factory AccidentDamageSuggestion.fromJson(Map<String, Object?> json) {
+    final num rawConfidence =
+        json['confidence'] is num ? json['confidence']! as num : 0;
+    return AccidentDamageSuggestion(
+      source: _nonEmptyString(json['source']) ?? 'unknown',
+      confidence: rawConfidence.toDouble().clamp(0, 1),
+      suggestedType: _enumByName<AccidentDamageType>(
+        AccidentDamageType.values,
+        json['suggested_type'] ?? json['suggestedType'],
+      ),
+      suggestedArea: _nonEmptyString(
+        json['suggested_area'] ?? json['suggestedArea'],
+      ),
+      decision: _enumByName<AccidentDamageSuggestionDecision>(
+            AccidentDamageSuggestionDecision.values,
+            json['decision'],
+          ) ??
+          AccidentDamageSuggestionDecision.pending,
+      reviewedBy: _nonEmptyString(
+        json['reviewed_by'] ?? json['reviewedBy'],
+      ),
+      reviewedAt: _dateTimeValue(
+        json['reviewed_at'] ?? json['reviewedAt'],
+      ),
+      correctionNote: _nonEmptyString(
+        json['correction_note'] ?? json['correctionNote'],
+      ),
+    );
+  }
+
+  final String source;
+  final double confidence;
+  final AccidentDamageType? suggestedType;
+  final String? suggestedArea;
+  final AccidentDamageSuggestionDecision decision;
+  final String? reviewedBy;
+  final DateTime? reviewedAt;
+  final String? correctionNote;
+
+  bool get isReviewed => decision != AccidentDamageSuggestionDecision.pending;
+
+  bool matchesSelection({
+    required AccidentDamageType type,
+    required String area,
+  }) {
+    final String normalizedArea = area.trim().toLowerCase();
+    final String? normalizedSuggestion = suggestedArea?.trim().toLowerCase();
+    return (suggestedType == null || suggestedType == type) &&
+        (normalizedSuggestion == null ||
+            normalizedSuggestion == normalizedArea);
+  }
+
+  AccidentDamageSuggestion reviewed({
+    required AccidentDamageSuggestionDecision decision,
+    required DateTime reviewedAt,
+    String? reviewedBy,
+    String? correctionNote,
+  }) {
+    assert(decision != AccidentDamageSuggestionDecision.pending);
+    return AccidentDamageSuggestion(
+      source: source,
+      confidence: confidence,
+      suggestedType: suggestedType,
+      suggestedArea: suggestedArea,
+      decision: decision,
+      reviewedBy: _nonEmptyString(reviewedBy),
+      reviewedAt: reviewedAt,
+      correctionNote: _nonEmptyString(correctionNote),
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'source': source,
+        'confidence': confidence,
+        if (suggestedType != null) 'suggested_type': suggestedType!.name,
+        if (_nonEmptyString(suggestedArea) != null)
+          'suggested_area': suggestedArea!.trim(),
+        'decision': decision.name,
+        if (_nonEmptyString(reviewedBy) != null)
+          'reviewed_by': reviewedBy!.trim(),
+        if (reviewedAt != null)
+          'reviewed_at': reviewedAt!.toUtc().toIso8601String(),
+        if (_nonEmptyString(correctionNote) != null)
+          'correction_note': correctionNote!.trim(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AccidentDamageSuggestion &&
+          other.source == source &&
+          other.confidence == confidence &&
+          other.suggestedType == suggestedType &&
+          other.suggestedArea == suggestedArea &&
+          other.decision == decision &&
+          other.reviewedBy == reviewedBy &&
+          other.reviewedAt == reviewedAt &&
+          other.correctionNote == correctionNote;
+
+  @override
+  int get hashCode => Object.hash(
+        source,
+        confidence,
+        suggestedType,
+        suggestedArea,
+        decision,
+        reviewedBy,
+        reviewedAt,
+        correctionNote,
+      );
+}
+
+/// One recorded mark: exact point, human classification, optional evidence,
+/// and the original automated suggestion when one was offered.
+@immutable
+final class AccidentDamageMark {
   const AccidentDamageMark({
     required this.zoneId,
     required this.severity,
+    this.damageType = AccidentDamageType.other,
     this.note,
     this.view,
     this.normalizedX,
     this.normalizedY,
     this.areaLabel,
-  });
+    List<String> photoReferences = const <String>[],
+    this.suggestion,
+  }) : _photoReferences = photoReferences;
+
+  factory AccidentDamageMark.fromJson(Map<String, Object?> json) {
+    final String? zoneId = _nonEmptyString(
+      json['zone_id'] ?? json['zoneId'] ?? json['id'],
+    );
+    if (zoneId == null) {
+      throw const FormatException('Damage mark is missing zone_id.');
+    }
+
+    final Object? rawPhotos =
+        json['photo_references'] ?? json['photoReferences'] ?? json['photos'];
+    final List<String> photoReferences = <String>[
+      if (rawPhotos is Iterable<Object?>)
+        for (final Object? value in rawPhotos)
+          if (_nonEmptyString(value) case final String reference) reference,
+    ];
+    final Map<String, Object?>? suggestionJson = _jsonMap(json['suggestion']);
+
+    return AccidentDamageMark(
+      zoneId: zoneId,
+      severity: _enumByName<AccidentDamageSeverity>(
+            AccidentDamageSeverity.values,
+            json['severity'],
+          ) ??
+          AccidentDamageSeverity.minor,
+      damageType: _enumByName<AccidentDamageType>(
+            AccidentDamageType.values,
+            json['damage_type'] ?? json['damageType'],
+          ) ??
+          AccidentDamageType.other,
+      note: _nonEmptyString(json['note']),
+      view: _enumByName<AccidentDamageView>(
+        AccidentDamageView.values,
+        json['view'],
+      ),
+      normalizedX: _doubleValue(json['x'] ?? json['normalizedX']),
+      normalizedY: _doubleValue(json['y'] ?? json['normalizedY']),
+      areaLabel: _nonEmptyString(
+        json['area'] ?? json['area_label'] ?? json['areaLabel'],
+      ),
+      photoReferences: List<String>.unmodifiable(photoReferences),
+      suggestion: suggestionJson == null
+          ? null
+          : AccidentDamageSuggestion.fromJson(suggestionJson),
+    );
+  }
 
   final String zoneId;
   final AccidentDamageSeverity severity;
+  final AccidentDamageType damageType;
   final String? note;
   final AccidentDamageView? view;
   final double? normalizedX;
   final double? normalizedY;
   final String? areaLabel;
+  final List<String> _photoReferences;
+  final AccidentDamageSuggestion? suggestion;
+
+  /// References into the report's evidence checklist (for example a durable
+  /// local path or uploaded evidence id). The mapper never opens files itself.
+  List<String> get photoReferences =>
+      List<String>.unmodifiable(_photoReferences);
+
+  int get photoCount => _photoReferences.length;
 
   AccidentDamageView? get effectiveView =>
       view ?? accidentDamageViewOfZone(zoneId);
@@ -85,26 +288,79 @@ class AccidentDamageMark {
 
   AccidentDamageMark copyWith({
     AccidentDamageSeverity? severity,
+    AccidentDamageType? damageType,
     String? note,
+    bool clearNote = false,
     AccidentDamageView? view,
     double? normalizedX,
     double? normalizedY,
     String? areaLabel,
+    List<String>? photoReferences,
+    AccidentDamageSuggestion? suggestion,
+    bool clearSuggestion = false,
   }) =>
       AccidentDamageMark(
         zoneId: zoneId,
         severity: severity ?? this.severity,
-        note: note ?? this.note,
+        damageType: damageType ?? this.damageType,
+        note: clearNote ? null : note ?? this.note,
         view: view ?? this.view,
         normalizedX: normalizedX ?? this.normalizedX,
         normalizedY: normalizedY ?? this.normalizedY,
         areaLabel: areaLabel ?? this.areaLabel,
+        photoReferences: List<String>.unmodifiable(
+          photoReferences ?? _photoReferences,
+        ),
+        suggestion: clearSuggestion ? null : suggestion ?? this.suggestion,
+      );
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'zone_id': zoneId,
+        if (view != null) 'view': view!.name,
+        if (normalizedX != null) 'x': normalizedX,
+        if (normalizedY != null) 'y': normalizedY,
+        if (_nonEmptyString(areaLabel) != null) 'area': areaLabel!.trim(),
+        'damage_type': damageType.name,
+        'severity': severity.name,
+        if (_nonEmptyString(note) != null) 'note': note!.trim(),
+        if (_photoReferences.isNotEmpty)
+          'photo_references': List<String>.of(_photoReferences),
+        if (suggestion != null) 'suggestion': suggestion!.toJson(),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AccidentDamageMark &&
+          other.zoneId == zoneId &&
+          other.severity == severity &&
+          other.damageType == damageType &&
+          other.note == note &&
+          other.view == view &&
+          other.normalizedX == normalizedX &&
+          other.normalizedY == normalizedY &&
+          other.areaLabel == areaLabel &&
+          listEquals(other._photoReferences, _photoReferences) &&
+          other.suggestion == suggestion;
+
+  @override
+  int get hashCode => Object.hash(
+        zoneId,
+        severity,
+        damageType,
+        note,
+        view,
+        normalizedX,
+        normalizedY,
+        areaLabel,
+        Object.hashAll(_photoReferences),
+        suggestion,
       );
 }
 
 /// One exact tap on one truthful vehicle view.
 @immutable
-class AccidentDamagePoint {
+final class AccidentDamagePoint {
   const AccidentDamagePoint({
     required this.view,
     required this.normalizedX,
@@ -114,13 +370,24 @@ class AccidentDamagePoint {
   final AccidentDamageView view;
   final double normalizedX;
   final double normalizedY;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AccidentDamagePoint &&
+          other.view == view &&
+          other.normalizedX == normalizedX &&
+          other.normalizedY == normalizedY;
+
+  @override
+  int get hashCode => Object.hash(view, normalizedX, normalizedY);
 }
 
 /// The full set of marks for one accident report, keyed by zone id so a
 /// second tap on an already-marked zone edits it rather than creating a
 /// duplicate.
 @immutable
-class AccidentDamageMap {
+final class AccidentDamageMap {
   const AccidentDamageMap._(this._marks);
 
   const AccidentDamageMap.empty()
@@ -135,6 +402,18 @@ class AccidentDamageMap {
     );
   }
 
+  factory AccidentDamageMap.fromJson(Map<String, Object?> json) {
+    final Object? rawMarks = json['marks'] ?? json['damage_marks'];
+    if (rawMarks is! Iterable<Object?>) {
+      return const AccidentDamageMap.empty();
+    }
+    return AccidentDamageMap.fromMarks(<AccidentDamageMark>[
+      for (final Object? rawMark in rawMarks)
+        if (_jsonMap(rawMark) case final Map<String, Object?> markJson)
+          AccidentDamageMark.fromJson(markJson),
+    ]);
+  }
+
   final Map<String, AccidentDamageMark> _marks;
 
   AccidentDamageMark? markFor(String zoneId) => _marks[zoneId];
@@ -147,6 +426,22 @@ class AccidentDamageMap {
 
   List<AccidentDamageMark> get marks =>
       List<AccidentDamageMark>.unmodifiable(_marks.values);
+
+  List<AccidentDamageMark> marksForView(AccidentDamageView view) =>
+      List<AccidentDamageMark>.unmodifiable(
+        _marks.values.where(
+          (AccidentDamageMark mark) => mark.effectiveView == view,
+        ),
+      );
+
+  int? markerNumberFor(String zoneId) {
+    var number = 1;
+    for (final String id in _marks.keys) {
+      if (id == zoneId) return number;
+      number++;
+    }
+    return null;
+  }
 
   /// How many marked zones fall under [view] - used for the per-view badge
   /// on the view switcher, so a marked zone on the side the user is not
@@ -183,6 +478,57 @@ class AccidentDamageMap {
       Map<String, AccidentDamageMark>.unmodifiable(next),
     );
   }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'version': 2,
+        'marks': <Map<String, Object?>>[
+          for (final AccidentDamageMark mark in _marks.values) mark.toJson(),
+        ],
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AccidentDamageMap && mapEquals(other._marks, _marks);
+
+  @override
+  int get hashCode => Object.hashAllUnordered(
+        _marks.entries.map(
+          (MapEntry<String, AccidentDamageMark> entry) =>
+              Object.hash(entry.key, entry.value),
+        ),
+      );
+}
+
+String? _nonEmptyString(Object? value) {
+  if (value is! String) return null;
+  final String normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+double? _doubleValue(Object? value) => value is num ? value.toDouble() : null;
+
+DateTime? _dateTimeValue(Object? value) {
+  if (value is DateTime) return value;
+  if (value is! String) return null;
+  return DateTime.tryParse(value);
+}
+
+T? _enumByName<T extends Enum>(Iterable<T> values, Object? raw) {
+  if (raw is! String) return null;
+  final String normalized = raw.trim().toLowerCase();
+  for (final T value in values) {
+    if (value.name.toLowerCase() == normalized) return value;
+  }
+  return null;
+}
+
+Map<String, Object?>? _jsonMap(Object? value) {
+  if (value is! Map<Object?, Object?>) return null;
+  return <String, Object?>{
+    for (final MapEntry<Object?, Object?> entry in value.entries)
+      if (entry.key is String) entry.key! as String: entry.value,
+  };
 }
 
 /// Legacy fixed-zone catalog retained for backward-compatible draft reads.

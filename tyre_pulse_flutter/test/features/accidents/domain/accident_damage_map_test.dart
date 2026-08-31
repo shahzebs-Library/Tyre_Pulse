@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui' show Rect;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -192,6 +193,135 @@ void main() {
       expect(next.zoneId, leftDoorSevere.zoneId);
       expect(next.severity, leftDoorSevere.severity);
       expect(next.note, leftDoorSevere.note);
+    });
+
+    test('legacy version-one JSON remains readable with truthful defaults', () {
+      final AccidentDamageMap map = AccidentDamageMap.fromJson(
+        const <String, Object?>{
+          'version': 1,
+          'marks': <Map<String, Object?>>[
+            <String, Object?>{
+              'zone_id': 'front_bumper',
+              'severity': 'severe',
+              'note': 'Legacy draft',
+            },
+          ],
+        },
+      );
+
+      expect(map.count, 1);
+      expect(map.marks.single.damageType, AccidentDamageType.other);
+      expect(map.marks.single.effectiveView, AccidentDamageView.front);
+      expect(map.marks.single.suggestion, isNull);
+      expect(map.marks.single.photoCount, 0);
+    });
+
+    test('version-two fields make a stable JSON round trip', () {
+      final DateTime reviewedAt = DateTime.utc(2026, 8, 31, 9, 30);
+      final AccidentDamageMap original = AccidentDamageMap.fromMarks(
+        <AccidentDamageMark>[
+          AccidentDamageMark(
+            zoneId: 'left_410_520',
+            view: AccidentDamageView.left,
+            normalizedX: .41,
+            normalizedY: .52,
+            areaLabel: 'Cab door',
+            damageType: AccidentDamageType.cracked,
+            severity: AccidentDamageSeverity.moderate,
+            note: 'Runs to lower hinge',
+            photoReferences: const <String>[
+              'photo_damage_closeup:local-1',
+              'evidence:server-2',
+            ],
+            suggestion: AccidentDamageSuggestion(
+              source: 'finder-v2',
+              confidence: .87,
+              suggestedType: AccidentDamageType.scratch,
+              suggestedArea: 'Front door',
+              decision: AccidentDamageSuggestionDecision.corrected,
+              reviewedBy: 'operator-17',
+              reviewedAt: reviewedAt,
+              correctionNote: 'Crack visible under paint',
+            ),
+          ),
+        ],
+      );
+
+      final Object? decoded = jsonDecode(jsonEncode(original.toJson()));
+      final AccidentDamageMap restored = AccidentDamageMap.fromJson(
+        decoded! as Map<String, Object?>,
+      );
+
+      expect(original.toJson()['version'], 2);
+      expect(restored, original);
+      expect(restored.marks.single.photoCount, 2);
+      expect(
+        restored.marks.single.suggestion?.decision,
+        AccidentDamageSuggestionDecision.corrected,
+      );
+    });
+
+    test('suggestion review preserves the machine proposal for audit', () {
+      const AccidentDamageSuggestion proposal = AccidentDamageSuggestion(
+        source: 'finder-local',
+        confidence: .72,
+        suggestedType: AccidentDamageType.dent,
+        suggestedArea: 'Cab',
+      );
+      final AccidentDamageSuggestion reviewed = proposal.reviewed(
+        decision: AccidentDamageSuggestionDecision.corrected,
+        reviewedAt: DateTime.utc(2026, 8, 31),
+        reviewedBy: 'fleet-user',
+        correctionNote: 'Damage is on the cargo bed',
+      );
+
+      expect(reviewed.suggestedType, AccidentDamageType.dent);
+      expect(reviewed.suggestedArea, 'Cab');
+      expect(reviewed.decision, AccidentDamageSuggestionDecision.corrected);
+      expect(reviewed.reviewedBy, 'fleet-user');
+      expect(reviewed.isReviewed, isTrue);
+    });
+
+    test('photo reference view cannot be mutated by a consumer', () {
+      const AccidentDamageMark mark = AccidentDamageMark(
+        zoneId: 'rear_500_500',
+        severity: AccidentDamageSeverity.minor,
+        photoReferences: <String>['photo_damage_closeup:1'],
+      );
+
+      expect(
+        () => mark.photoReferences.add('photo_damage_closeup:2'),
+        throwsUnsupportedError,
+      );
+      expect(mark.photoCount, 1);
+    });
+
+    test('marker numbering remains stable when an existing mark is edited', () {
+      final AccidentDamageMap map = const AccidentDamageMap.empty()
+          .withMark(frontBumperMinor)
+          .withMark(leftDoorSevere)
+          .withMark(
+            frontBumperMinor.copyWith(
+              damageType: AccidentDamageType.dent,
+              severity: AccidentDamageSeverity.moderate,
+            ),
+          );
+
+      expect(map.markerNumberFor('front_bumper'), 1);
+      expect(map.markerNumberFor('left_front_door'), 2);
+      expect(map.markerNumberFor('unknown'), isNull);
+    });
+
+    test('value equality and hash code do not depend on insertion order', () {
+      final AccidentDamageMap first = AccidentDamageMap.fromMarks(
+        const <AccidentDamageMark>[frontBumperMinor, leftDoorSevere],
+      );
+      final AccidentDamageMap second = AccidentDamageMap.fromMarks(
+        const <AccidentDamageMark>[leftDoorSevere, frontBumperMinor],
+      );
+
+      expect(first, second);
+      expect(first.hashCode, second.hashCode);
     });
   });
 }

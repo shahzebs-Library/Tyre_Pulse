@@ -281,7 +281,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get vehiclesEmptySearchMessage => 'جرّب مصطلح بحث مختلف.';
 
   @override
-  String get vehiclesDetailSubtitle => 'تفاصيل المركبة';
+  String get vehiclesDetailSubtitle => 'المركبة 360°';
 
   @override
   String get vehiclesMultiViewTitle => 'مناظر المركبة';
@@ -1032,6 +1032,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get checklistStartAction => 'ابدأ';
+
+  @override
+  String get checklistResumeAction => 'استئناف';
 
   @override
   String get checklistsHistoryAction => 'سجل قوائم التحقق الخاص بي';
@@ -2692,7 +2695,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get tasksCopyCatalog =>
-      'title=عملي~today=اليوم~inProgress=قيد التنفيذ~completed=مكتمل~urgent=عاجل~upcoming=قادم~open=مفتوحة~emptyTitle=لا توجد مهام~emptyMessage=لا توجد أعمال تطابق هذا العرض.~loadError=تعذر تحميل أعمالي الآن.~due=الاستحقاق~assigned=مُسند إلى~unassigned=غير مُسند~normal=عادي~overdue=متأخر~details=تفاصيل المهمة~description=الوصف~site=الموقع~asset=المعدة~priority=الأولوية~status=الحالة~retry=إعادة المحاولة';
+      'title=عملي~today=اليوم~assignedTab=المسندة~dueToday=مستحقة اليوم~inProgress=قيد التنفيذ~completed=مكتمل~urgent=عاجل~upcoming=قادم~open=مفتوحة~emptyTitle=لا توجد مهام~emptyMessage=لا توجد أعمال تطابق هذا العرض.~loadError=تعذر تحميل أعمالي الآن.~due=الاستحقاق~assigned=مُسند إلى~unassigned=غير مُسند~normal=عادي~overdue=متأخر~details=تفاصيل المهمة~description=الوصف~site=الموقع~asset=المعدة~priority=الأولوية~status=الحالة~view=عرض~reportIssue=الإبلاغ عن مشكلة~retry=إعادة المحاولة';
 
   @override
   String get alertsCopyCatalog =>
@@ -2704,7 +2707,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get reportIssueCopyCatalog =>
-      'title=الإبلاغ عن مشكلة~problem=ما المشكلة؟~problemHint=صف المشكلة باختصار~priority=الأولوية~low=منخفضة~medium=متوسطة~high=عالية~critical=حرجة~site=الموقع~siteHint=مكان اكتشاف المشكلة~asset=المعدة~assetHint=رقم المعدة~due=الاستحقاق خلال~noDate=بدون تاريخ~threeDays=3 أيام~oneWeek=أسبوع~twoWeeks=أسبوعان~details=التفاصيل~detailsHint=أضف الأعراض والموقع وأي إجراء فوري تم اتخاذه~photos=الصور~optional=(اختياري)~addPhoto=إضافة صورة~camera=الكاميرا~gallery=المعرض~photoFailed=تعذرت إضافة الصورة.~submit=رفع المشكلة~titleRequired=أدخل عنوان المشكلة قبل الحفظ.~workspaceUnavailable=لا تزال مساحة العمل قيد التحميل. حاول بعد قليل.~savedTitle=تم حفظ المشكلة~savedBody=أضيفت المشكلة إلى عملي وستتم مزامنتها تلقائياً.~stay=البقاء هنا~viewTasks=عرض عملي~saveFailed=تعذر حفظ المشكلة. حاول مرة أخرى.';
+      'title=الإبلاغ عن مشكلة~problem=ما الخطأ؟~problemHint=صف المشكلة باختصار~priority=الأولوية~low=منخفضة~medium=متوسطة~high=عالية~critical=حرجة~site=الموقع~siteHint=مكان اكتشاف المشكلة~asset=المعدة~assetHint=رقم المعدة~due=الاستحقاق خلال~noDate=بدون تاريخ~threeDays=3 أيام~oneWeek=أسبوع~twoWeeks=أسبوعان~details=الوصف~detailsHint=أضف الأعراض والموقع الدقيق وأي إجراء فوري~photos=الأدلة~optional=(اختياري)~addPhoto=إضافة صورة~camera=الكاميرا~gallery=من المعرض~photoFailed=تعذرت إضافة الصورة.~submit=إرسال المشكلة~titleRequired=أدخل وصف الخطأ قبل الحفظ.~workspaceUnavailable=لا تزال مساحة العمل قيد التحميل. حاول بعد قليل.~savedTitle=تم حفظ المشكلة~savedBody=أضيفت المشكلة إلى عملي وستتم مزامنتها تلقائياً.~stay=البقاء هنا~viewTasks=عرض عملي~saveFailed=تعذر حفظ المشكلة. حاول مرة أخرى.~category=فئة المشكلة~mechanical=ميكانيكية~electrical=كهربائية~hydraulic=هيدروليك~tyre=إطار~body=الهيكل~washing=غسيل~safety=سلامة~other=أخرى~operation=هل يمكن تشغيل المعدة بأمان؟~yes=نعم~restricted=مقيد~no=لا~restriction=قيود التشغيل~saveDraft=حفظ المسودة~draftSaved=تم حفظ المسودة~createWorkOrder=إنشاء أمر عمل بعد مراجعة المشرف~notifyTeam=سيتم إخطار مشرف الأسطول وفريق الورشة';
 
   @override
   String get rcaCopyCatalog =>
@@ -2712,7 +2715,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=مركز التحكم بالصيانة~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.';
+      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.';
 
   @override
   String get stockCountCopyCatalog =>

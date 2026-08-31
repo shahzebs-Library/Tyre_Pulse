@@ -42,8 +42,8 @@ class _LanguageOption {
 }
 
 const List<_LanguageOption> _kLanguageOptions = <_LanguageOption>[
-  _LanguageOption(locale: Locale('en'), label: 'EN'),
-  _LanguageOption(locale: Locale('ar'), label: 'عربي'),
+  _LanguageOption(locale: Locale('en'), label: 'English'),
+  _LanguageOption(locale: Locale('ar'), label: 'العربية'),
   _LanguageOption(locale: Locale('ur'), label: 'اردو'),
 ];
 
@@ -651,9 +651,9 @@ class _ExactLoginForm extends StatelessWidget {
             return Stack(
               children: <Widget>[
                 Positioned(
-                  left: (constraints.maxWidth - 184) / 2,
+                  left: left,
                   top: 17,
-                  width: 184,
+                  width: fieldWidth,
                   height: 48,
                   child: _LanguageToggle(
                     active: activeLocale,

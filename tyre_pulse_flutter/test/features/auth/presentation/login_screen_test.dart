@@ -556,8 +556,8 @@ void main() {
         find.byKey(const Key('login.form.card')),
       );
       expect(Directionality.of(formContext), TextDirection.rtl);
-      expect(find.text('EN'), findsOneWidget);
-      expect(find.text('عربي'), findsOneWidget);
+      expect(find.text('English'), findsOneWidget);
+      expect(find.text('العربية'), findsOneWidget);
       expect(find.text('اردو'), findsOneWidget);
       final TpButton urChip = tester.widget<TpButton>(
         find.byKey(const Key('login.language.ur')),

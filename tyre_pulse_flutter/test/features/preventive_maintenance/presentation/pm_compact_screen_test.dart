@@ -4,10 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/permissions/access_resolver.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/data/pm_repository.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/pm_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/presentation/pm_screen.dart';
+import 'package:tyre_pulse/features/work_orders/presentation/widgets/create_work_order_sheet.dart';
 
 void main() {
   testWidgets('maintenance centre fits compact screens and filters real plans',
@@ -61,6 +65,18 @@ void main() {
     expect(repository.saved.single.outcome, PmServiceOutcome.partial);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('create work order action opens the real creation workflow', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _PmRepository());
+
+    await tester.tap(find.byKey(const Key('pm.createWorkOrder')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CreateWorkOrderSheet), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pump(WidgetTester tester, PmRepository repository) async {
@@ -68,7 +84,12 @@ Future<void> _pump(WidgetTester tester, PmRepository repository) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [pmRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        pmRepositoryProvider.overrideWithValue(repository),
+        accessStateProvider.overrideWithValue(
+          const AccessState(role: UserRole.known(RoleId.admin)),
+        ),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
@@ -82,6 +103,29 @@ Future<void> _pump(WidgetTester tester, PmRepository repository) async {
     ),
   );
   await tester.pumpAndSettle();
+
+  // Golden tests can reach a settled widget tree before the raster codecs
+  // finish their first decode. Warm the two truthful vehicle-class assets
+  // used by the fixture, then repaint so the priority queue is captured with
+  // the same equipment artwork users see on device.
+  final BuildContext context = tester.element(
+    find.byType(PreventiveMaintenanceScreen),
+  );
+  await tester.runAsync(() async {
+    await Future.wait(<Future<void>>[
+      precacheImage(
+        const AssetImage(
+          'assets/vehicle_photos/tri_mixer_perspective.webp',
+        ),
+        context,
+      ),
+      precacheImage(
+        const AssetImage('assets/vehicle_photos/concrete_pump.png'),
+        context,
+      ),
+    ]);
+  });
+  await tester.pump();
 }
 
 final class _PmRepository implements PmRepository {

@@ -448,10 +448,12 @@ void main() {
     // hint and zoom action as shared localized UI rather than embedded text.
     // 798 + 8 = 806. Checklist, inspection, asset and serial-search fallback
     // states now use locale-owned copy instead of hard-coded English.
-    test('en, ar and ur each carry exactly 806 translatable keys today', () {
-      expect(_translatableKeys(en).length, 806);
-      expect(_translatableKeys(ar).length, 806);
-      expect(_translatableKeys(ur).length, 806);
+    // 806 + 1 = 807. Checklist draft rows now use a locale-owned Resume
+    // action label across all three catalogs.
+    test('en, ar and ur each carry exactly 807 translatable keys today', () {
+      expect(_translatableKeys(en).length, 807);
+      expect(_translatableKeys(ar).length, 807);
+      expect(_translatableKeys(ur).length, 807);
     });
   });
 

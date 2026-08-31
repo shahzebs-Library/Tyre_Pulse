@@ -197,8 +197,10 @@ void main() {
       // or Urdu text - see tp_direction.dart. find.text does an exact
       // match against the rendered string and would find nothing;
       // textContaining matches the substring inside the isolate marks.
-      expect(find.textContaining('TM514'), findsOneWidget);
-      expect(find.textContaining('TM515'), findsOneWidget);
+      // When a serial is unavailable the asset number is the honest title,
+      // and it remains repeated in the asset metadata line below it.
+      expect(find.textContaining('TM514'), findsNWidgets(2));
+      expect(find.textContaining('TM515'), findsNWidgets(2));
     });
 
     testWidgets('tapping a row opens the detail sheet for that record', (

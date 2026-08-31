@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -21,6 +22,8 @@ import 'package:tyre_pulse/features/tasks/tasks_providers.dart';
 abstract final class TasksScreenKeys {
   static Key task(String id) => ValueKey<String>('tasks.task.$id');
   static const Key board = ValueKey<String>('tasks.board');
+  static const Key stats = ValueKey<String>('tasks.stats');
+  static const Key reportIssue = ValueKey<String>('tasks.report-issue');
   static const Key todayTab = ValueKey<String>('tasks.tab.today');
   static const Key inProgressTab = ValueKey<String>('tasks.tab.in-progress');
   static const Key completedTab = ValueKey<String>('tasks.tab.completed');
@@ -89,13 +92,22 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   Widget build(BuildContext context) {
     final TasksCopy copy = TasksCopy.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
+    final int activeCount =
+        _items.where((TaskItem item) => !isTaskCompleted(item)).length;
 
     return TpScaffold(
       backFallback: fallback,
       appBar: TpAppBar(
         title: copy('title'),
+        subtitle: _loading ? null : '$activeCount ${copy('open')}',
         backFallback: fallback,
         actions: <Widget>[
+          IconButton(
+            key: TasksScreenKeys.reportIssue,
+            icon: const Icon(Icons.report_problem_outlined),
+            tooltip: copy('reportIssue'),
+            onPressed: () => context.push(const ReportIssueRoute().location),
+          ),
           PopupMenuButton<TaskBoardFilter>(
             icon: const Icon(Icons.tune_rounded),
             tooltip: copy('status'),
@@ -147,6 +159,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final List<TaskItem> shown = filterTasks(_items, _filter);
     return Column(
       children: <Widget>[
+        _TaskStats(items: _items, copy: copy),
         _TaskTabs(
           selected: _filter,
           todayCount: filterTasks(_items, TaskBoardFilter.today).length,
@@ -189,6 +202,148 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 }
 
+class _TaskStats extends StatelessWidget {
+  const _TaskStats({required this.items, required this.copy});
+
+  final List<TaskItem> items;
+  final TasksCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime tomorrow = today.add(const Duration(days: 1));
+    final int assigned =
+        items.where((TaskItem item) => !isTaskCompleted(item)).length;
+    final int dueToday = items.where((TaskItem item) {
+      final DateTime? due = item.dueDate?.toLocal();
+      return !isTaskCompleted(item) &&
+          due != null &&
+          !due.isBefore(today) &&
+          due.isBefore(tomorrow);
+    }).length;
+    final int overdue = items.where((TaskItem item) {
+      final DateTime? due = item.dueDate?.toLocal();
+      return !isTaskCompleted(item) && due != null && due.isBefore(today);
+    }).length;
+
+    return Padding(
+      key: TasksScreenKeys.stats,
+      padding: const EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        TpSpace.md,
+        TpSpace.lg,
+        TpSpace.md,
+      ),
+      child: TpCard(
+        padding: const EdgeInsets.symmetric(vertical: TpSpace.md),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: _TaskStat(
+                icon: Icons.assignment_outlined,
+                value: assigned,
+                label: copy('assignedTab'),
+                status: TpStatus.ok,
+              ),
+            ),
+            const _TaskStatDivider(),
+            Expanded(
+              child: _TaskStat(
+                icon: Icons.schedule_outlined,
+                value: dueToday,
+                label: copy('dueToday'),
+                status: TpStatus.ok,
+              ),
+            ),
+            const _TaskStatDivider(),
+            Expanded(
+              child: _TaskStat(
+                icon: Icons.error_outline_rounded,
+                value: overdue,
+                label: copy('overdue'),
+                status: TpStatus.critical,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskStatDivider extends StatelessWidget {
+  const _TaskStatDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 56, color: TpPalette.of(context).border);
+  }
+}
+
+class _TaskStat extends StatelessWidget {
+  const _TaskStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.status,
+  });
+
+  final IconData icon;
+  final int value;
+  final String label;
+  final TpStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TpStatusColors colors = palette.forStatus(status);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration:
+                BoxDecoration(color: colors.soft, shape: BoxShape.circle),
+            child: Icon(icon, color: colors.base, size: TpSizing.iconLg),
+          ),
+          const SizedBox(width: TpSpace.sm),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  '$value',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: colors.onSoft,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: palette.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        height: 1.1,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TaskTabs extends StatelessWidget {
   const _TaskTabs({
     required this.selected,
@@ -218,7 +373,7 @@ class _TaskTabs extends StatelessWidget {
         children: <Widget>[
           _TaskTab(
             key: TasksScreenKeys.todayTab,
-            label: copy('today'),
+            label: copy('assignedTab'),
             count: todayCount,
             selected: selected == TaskBoardFilter.today,
             onTap: () => onSelected(TaskBoardFilter.today),
@@ -441,9 +596,6 @@ class _TaskCard extends StatelessWidget {
     final String? asset = item.assetNo;
     final String? site = item.site;
     final String priority = item.priority ?? copy('normal');
-    final List<String> meta = <String>[
-      if (site != null) site,
-    ];
     final bool hasDetails = item.description != null ||
         item.assignedTo != null ||
         item.dueDate != null;
@@ -454,7 +606,7 @@ class _TaskCard extends StatelessWidget {
       TaskBoardSection.completed => TpStatus.ok,
     };
     final TpStatusColors statusColors = palette.forStatus(tone);
-    final String badgeLabel = (item.status ?? priority).toUpperCase();
+    final String badgeLabel = item.status ?? priority;
     final String? dueLabel;
     if (item.dueDate == null) {
       dueLabel = null;
@@ -467,119 +619,184 @@ class _TaskCard extends StatelessWidget {
     return TpCard(
       key: TasksScreenKeys.task(item.id),
       margin: const EdgeInsets.only(bottom: TpSpace.md),
-      padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.md,
-        vertical: TpSpace.md,
-      ),
-      borderColor: accent.withValues(alpha: 0.58),
+      padding: EdgeInsets.zero,
+      borderColor: palette.border,
       onTap: hasDetails ? onToggleDetails : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      item.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: palette.text,
-                            fontWeight: FontWeight.w800,
-                            height: 18 / 14,
-                          ),
-                    ),
-                    if (asset != null) ...<Widget>[
-                      const SizedBox(height: 2),
+          Padding(
+            padding: const EdgeInsets.all(TpSpace.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                _TaskIcon(item: item, status: tone),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
                       Text(
-                        asset,
-                        maxLines: 1,
+                        item.title,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style:
-                            Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: palette.text,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: palette.text,
+                              fontWeight: FontWeight.w800,
+                              height: 1.25,
+                            ),
+                      ),
+                      if (asset != null) ...<Widget>[
+                        const SizedBox(height: 2),
+                        Text(
+                          asset,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(color: palette.primary),
+                        ),
+                      ],
+                      if (site != null) ...<Widget>[
+                        const SizedBox(height: TpSpace.xs),
+                        Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: TpSizing.iconSm,
+                              color: palette.primary,
+                            ),
+                            const SizedBox(width: TpSpace.xs),
+                            Expanded(
+                              child: Text(
+                                site,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(color: palette.textSecondary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    _CompactBadge(
+                      label: badgeLabel,
+                      color: statusColors.onSoft,
+                      background: statusColors.soft,
+                    ),
+                    if (dueLabel != null) ...<Widget>[
+                      const SizedBox(height: TpSpace.xs),
+                      Text(
+                        dueLabel,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                    if (hasDetails) ...<Widget>[
+                      const SizedBox(height: TpSpace.sm),
+                      TpButton(
+                        label: copy('view'),
+                        variant: section == TaskBoardSection.urgent
+                            ? TpButtonVariant.primary
+                            : TpButtonVariant.secondary,
+                        isCompact: true,
+                        onPressed: onToggleDetails,
                       ),
                     ],
                   ],
                 ),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              _CompactBadge(
-                label: badgeLabel,
-                color: statusColors.onSoft,
-                background: statusColors.soft,
-              ),
-            ],
-          ),
-          if (meta.isNotEmpty || item.dueDate != null) ...<Widget>[
-            const SizedBox(height: TpSpace.sm),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    <String>[
-                      ...meta,
-                      if (dueLabel != null) dueLabel,
-                    ].join('  •  '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: palette.textMuted,
-                          fontWeight: FontWeight.w600,
-                          height: 16 / 12,
-                          letterSpacing: 0.2,
-                        ),
-                  ),
+                const SizedBox(width: TpSpace.xs),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : (TpDirection.isRtl(context)
+                          ? Icons.arrow_back_ios_new_rounded
+                          : Icons.arrow_forward_ios_rounded),
+                  size: TpSizing.iconSm,
+                  color: palette.primaryDark,
                 ),
-                if (hasDetails)
-                  Icon(
-                    expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : (TpDirection.isRtl(context)
-                            ? Icons.arrow_back_ios_new_rounded
-                            : Icons.arrow_forward_ios_rounded),
-                    size: TpSizing.iconSm,
-                    color: accent,
-                  ),
               ],
             ),
-          ],
-          if (item.description != null) ...<Widget>[
-            const SizedBox(height: TpSpace.xs),
-            Text(
-              item.description!,
-              maxLines: expanded ? null : 2,
-              overflow: expanded ? null : TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: palette.textSecondary,
-                  ),
-            ),
-          ],
+          ),
           if (expanded) ...<Widget>[
-            const SizedBox(height: TpSpace.sm),
             Divider(height: 1, color: palette.border),
-            const SizedBox(height: TpSpace.sm),
-            if (item.assignedTo != null)
-              _DetailLine(
-                icon: Icons.person_outline_rounded,
-                label: copy('assigned'),
-                value: item.assignedTo!,
+            Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  if (item.description != null)
+                    Text(
+                      item.description!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                    ),
+                  if (item.description != null &&
+                      (item.assignedTo != null || item.status != null))
+                    const SizedBox(height: TpSpace.sm),
+                  if (item.assignedTo != null)
+                    _DetailLine(
+                      icon: Icons.person_outline_rounded,
+                      label: copy('assigned'),
+                      value: item.assignedTo!,
+                    ),
+                  if (item.status != null)
+                    _DetailLine(
+                      icon: Icons.flag_outlined,
+                      label: copy('status'),
+                      value: item.status!,
+                    ),
+                ],
               ),
-            if (item.status != null)
-              _DetailLine(
-                icon: Icons.flag_outlined,
-                label: copy('status'),
-                value: item.status!,
-              ),
+            ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _TaskIcon extends StatelessWidget {
+  const _TaskIcon({required this.item, required this.status});
+
+  final TaskItem item;
+  final TpStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final String value = item.title.toLowerCase();
+    final IconData icon = value.contains('tyre') || value.contains('tire')
+        ? Icons.tire_repair_outlined
+        : value.contains('wash')
+            ? Icons.local_car_wash_outlined
+            : value.contains('meter') || value.contains('odometer')
+                ? Icons.speed_outlined
+                : value.contains('check') || value.contains('inspect')
+                    ? Icons.assignment_turned_in_outlined
+                    : Icons.build_outlined;
+    final TpStatusColors colors = TpPalette.of(context).forStatus(status);
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: BoxDecoration(
+        color: colors.soft,
+        shape: BoxShape.circle,
+        border: Border.all(color: colors.base.withValues(alpha: 0.18)),
+      ),
+      child: Icon(icon, color: colors.base, size: 28),
     );
   }
 }

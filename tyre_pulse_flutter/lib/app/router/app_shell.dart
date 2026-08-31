@@ -105,25 +105,34 @@ class _TabBar extends StatelessWidget {
 
     final int selected = _selectedIndex();
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: palette.border, width: TpBorderWidth.hairline),
-        ),
-      ),
-      child: NavigationBar(
-        backgroundColor: palette.surface,
-        indicatorColor: palette.primarySoft,
-        selectedIndex: selected,
-        onDestinationSelected: _onSelected,
-        destinations: <Widget>[
-          for (final TpShellDestination destination in layout.visible)
-            NavigationDestination(
-              icon: Icon(destination.icon),
-              label: destination.label(l10n),
-              tooltip: destination.label(l10n),
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          border: Border(
+            top: BorderSide(
+              color: palette.border,
+              width: TpBorderWidth.hairline,
             ),
-        ],
+          ),
+        ),
+        child: SizedBox(
+          height: 72,
+          child: Row(
+            children: <Widget>[
+              for (int index = 0; index < layout.visible.length; index++)
+                Expanded(
+                  child: _TabDestination(
+                    destination: layout.visible[index],
+                    label: layout.visible[index].label(l10n),
+                    isSelected: index == selected,
+                    onTap: () => _onSelected(index),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -148,6 +157,62 @@ class _TabBar extends StatelessWidget {
     navigationShell.goBranch(
       destination.branchIndex,
       initialLocation: destination.branchIndex == navigationShell.currentIndex,
+    );
+  }
+}
+
+class _TabDestination extends StatelessWidget {
+  const _TabDestination({
+    required this.destination,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final TpShellDestination destination;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color color = isSelected ? palette.primary : palette.text;
+    return Semantics(
+      selected: isSelected,
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: isSelected ? palette.primary : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          padding: const EdgeInsets.only(top: 7, bottom: 5),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(destination.icon, color: color, size: 26),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontWeight:
+                          isSelected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

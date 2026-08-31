@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -11,12 +12,15 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/pm_providers.dart';
 import 'package:tyre_pulse/features/preventive_maintenance/presentation/pm_copy.dart';
+import 'package:tyre_pulse/features/work_orders/presentation/widgets/create_work_order_sheet.dart';
 
 class PreventiveMaintenanceScreen extends ConsumerStatefulWidget {
   const PreventiveMaintenanceScreen({required this.route, super.key});
@@ -38,9 +42,23 @@ class _PreventiveMaintenanceScreenState
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     return TpScaffold(
       backFallback: fallback,
-      appBar: TpAppBar(
-        title: copy('title'),
-        backFallback: fallback,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: TpPalette.of(context).surface,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: TpSpace.lg,
+        title: const TpBrandLockup(),
+        actions: <Widget>[
+          IconButton(
+            tooltip: MaterialLocalizations.of(context).showMenuTooltip,
+            onPressed: () => context.push(const NotificationsRoute().location),
+            icon: const Badge(
+              smallSize: 8,
+              child: Icon(Icons.notifications_none_rounded),
+            ),
+          ),
+          const SizedBox(width: TpSpace.sm),
+        ],
       ),
       body: state.when(
         loading: () => const TpLoadingState(),
@@ -80,6 +98,14 @@ class _PreventiveMaintenanceScreenState
             )
             .toList(growable: false)
         : plans;
+    final bool canWorkOrders =
+        ref.watch(canAccessModuleProvider(ModuleKey.workorders));
+    final bool canInspect =
+        ref.watch(canAccessModuleProvider(ModuleKey.inspect));
+    final bool canStock = ref.watch(canAccessModuleProvider(ModuleKey.stock));
+    final bool canTyres = ref.watch(canAccessModuleProvider(ModuleKey.records));
+    final TpPalette palette = TpPalette.of(context);
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(activePmPlansProvider);
@@ -96,40 +122,90 @@ class _PreventiveMaintenanceScreenState
         children: <Widget>[
           Text(
             copy('title'),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w900,
+                  letterSpacing: -0.6,
                 ),
           ),
           const SizedBox(height: TpSpace.xs),
           Text(
-            copy('active'),
+            copy('subtitle'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: TpPalette.of(context).textSecondary,
+                  color: palette.textSecondary,
                 ),
           ),
           const SizedBox(height: TpSpace.lg),
+          if (canWorkOrders) ...<Widget>[
+            SizedBox(
+              height: 72,
+              child: FilledButton(
+                key: const Key('pm.createWorkOrder'),
+                onPressed: () => unawaited(_createWorkOrder()),
+                style: FilledButton.styleFrom(
+                  backgroundColor: palette.primary,
+                  foregroundColor: palette.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    DecoratedBox(
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.add_rounded,
+                          color: palette.primary,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: TpSpace.md),
+                    Flexible(
+                      child: Text(
+                        copy('createWorkOrder'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: palette.onPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: TpSpace.xl),
+          ],
           TpCard(
             padding: const EdgeInsets.symmetric(
-              horizontal: TpSpace.sm,
+              horizontal: TpSpace.xs,
               vertical: TpSpace.lg,
             ),
             child: Row(
               children: <Widget>[
                 Expanded(
                   child: _PmMetric(
-                    value: overdue,
-                    label: copy('overdue'),
-                    icon: Icons.warning_amber_rounded,
-                    status: TpStatus.critical,
+                    value: overdue + soon,
+                    label: copy('pmDue'),
+                    icon: Icons.build_circle_outlined,
+                    status: TpStatus.warning,
                   ),
                 ),
                 const _PmMetricDivider(),
                 Expanded(
                   child: _PmMetric(
-                    value: soon,
-                    label: copy('dueSoon'),
-                    icon: Icons.schedule_rounded,
-                    status: TpStatus.warning,
+                    value: overdue,
+                    label: copy('overdue'),
+                    icon: Icons.warning_rounded,
+                    status: TpStatus.critical,
                   ),
                 ),
                 const _PmMetricDivider(),
@@ -137,15 +213,36 @@ class _PreventiveMaintenanceScreenState
                   child: _PmMetric(
                     value: plans.length,
                     label: copy('active'),
-                    icon: Icons.assignment_turned_in_outlined,
+                    icon: Icons.assignment_outlined,
+                    status: TpStatus.info,
+                  ),
+                ),
+                const _PmMetricDivider(),
+                Expanded(
+                  child: _PmMetric(
+                    value: soon,
+                    label: copy('dueSoon'),
+                    icon: Icons.verified_user_outlined,
                     status: TpStatus.ok,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: TpSpace.lg),
+          const SizedBox(height: TpSpace.xl),
+          _SectionHeading(
+            title: copy('priorityQueue'),
+            action: copy('viewAll'),
+            onAction: canWorkOrders
+                ? () => context.push(const WorkOrdersRoute().location)
+                : null,
+          ),
+          const SizedBox(height: TpSpace.sm),
           SegmentedButton<bool>(
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             segments: <ButtonSegment<bool>>[
               ButtonSegment<bool>(value: true, label: Text(copy('due'))),
               ButtonSegment<bool>(value: false, label: Text(copy('all'))),
@@ -154,36 +251,119 @@ class _PreventiveMaintenanceScreenState
             onSelectionChanged: (Set<bool> value) =>
                 setState(() => dueOnly = value.single),
           ),
+          const SizedBox(height: TpSpace.sm),
+          Container(
+            decoration: BoxDecoration(
+              color: palette.surface,
+              border: Border.all(color: palette.border),
+              borderRadius: BorderRadius.circular(TpRadius.md),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: visible.isEmpty
+                ? SizedBox(
+                    height: 220,
+                    child: TpEmptyState(
+                      icon: Icons.build_circle_outlined,
+                      title: copy('empty'),
+                      message: dueOnly ? copy('emptyDue') : copy('emptyAll'),
+                    ),
+                  )
+                : Column(
+                    children: <Widget>[
+                      for (int index = 0; index < visible.length; index++)
+                        _PmPlanCard(
+                          plan: visible[index],
+                          now: now,
+                          copy: copy,
+                          showDivider: index < visible.length - 1,
+                          onRecord: () =>
+                              unawaited(_record(visible[index], copy)),
+                        ),
+                    ],
+                  ),
+          ),
+          if (canWorkOrders)
+            TpButton.text(
+              label: copy('allWorkOrders'),
+              icon: Directionality.of(context) == TextDirection.rtl
+                  ? Icons.chevron_left_rounded
+                  : Icons.chevron_right_rounded,
+              onPressed: () => context.push(const WorkOrdersRoute().location),
+              isFullWidth: true,
+            ),
           const SizedBox(height: TpSpace.lg),
           Text(
-            dueOnly ? copy('due') : copy('all'),
+            copy('quickAccess'),
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w900,
                 ),
           ),
           const SizedBox(height: TpSpace.sm),
-          if (visible.isEmpty)
-            SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.45,
-              child: TpEmptyState(
-                icon: Icons.build_circle_outlined,
-                title: copy('empty'),
-                message: dueOnly ? copy('emptyDue') : copy('emptyAll'),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _QuickAccessTile(
+                  icon: Icons.assignment_rounded,
+                  label: copy('workOrders'),
+                  hint: copy('workOrdersHint'),
+                  onTap: canWorkOrders
+                      ? () => context.push(const WorkOrdersRoute().location)
+                      : null,
+                ),
               ),
-            )
-          else
-            for (final PmPlan plan in visible) ...<Widget>[
-              _PmPlanCard(
-                plan: plan,
-                now: now,
-                copy: copy,
-                onRecord: () => unawaited(_record(plan, copy)),
+              const SizedBox(width: TpSpace.xs),
+              Expanded(
+                child: _QuickAccessTile(
+                  icon: Icons.calendar_month_rounded,
+                  label: copy('pmSchedule'),
+                  hint: copy('pmScheduleHint'),
+                  onTap: () => setState(() => dueOnly = false),
+                ),
               ),
-              const SizedBox(height: TpSpace.sm),
+              const SizedBox(width: TpSpace.xs),
+              Expanded(
+                child: _QuickAccessTile(
+                  icon: Icons.verified_user_outlined,
+                  label: copy('inspections'),
+                  hint: copy('inspectionsHint'),
+                  onTap: canInspect
+                      ? () => context.push(const NewInspectionRoute().location)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: TpSpace.xs),
+              Expanded(
+                child: _QuickAccessTile(
+                  icon: Icons.inventory_2_outlined,
+                  label: copy('parts'),
+                  hint: copy('partsHint'),
+                  onTap: canStock
+                      ? () => context.push(const StockCountRoute().location)
+                      : null,
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          TpCard(
+            padding: EdgeInsets.zero,
+            child: TpActionRow(
+              icon: Icons.tire_repair_rounded,
+              label: copy('tyres'),
+              value: copy('tyresHint'),
+              showDivider: false,
+              onTap: canTyres
+                  ? () => context.push(const TyreRecordsRoute().location)
+                  : null,
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _createWorkOrder() async {
+    await showCreateWorkOrderSheet(context);
   }
 
   Future<void> _record(PmPlan plan, PmCopy copy) async {
@@ -235,10 +415,10 @@ class _PmMetric extends StatelessWidget {
         ),
         Text(
           label,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelMedium,
+          style: Theme.of(context).textTheme.labelSmall,
         ),
       ],
     );
@@ -251,9 +431,118 @@ class _PmMetricDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         width: 1,
-        height: 74,
+        height: 82,
         color: TpPalette.of(context).border,
       );
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({
+    required this.title,
+    required this.action,
+    required this.onAction,
+  });
+
+  final String title;
+  final String action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          ),
+          if (onAction != null)
+            TextButton.icon(
+              onPressed: onAction,
+              iconAlignment: IconAlignment.end,
+              icon: Icon(
+                Directionality.of(context) == TextDirection.rtl
+                    ? Icons.chevron_left_rounded
+                    : Icons.chevron_right_rounded,
+              ),
+              label: Text(action),
+            ),
+        ],
+      );
+}
+
+class _QuickAccessTile extends StatelessWidget {
+  const _QuickAccessTile({
+    required this.icon,
+    required this.label,
+    required this.hint,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String hint;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      child: Material(
+        color: palette.surface,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: palette.border),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 116,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TpSpace.xs,
+                vertical: TpSpace.sm,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(icon, color: palette.primary, size: 28),
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color:
+                              onTap == null ? palette.textMuted : palette.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    hint,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: palette.textMuted,
+                          height: 1.1,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PmPlanCard extends StatelessWidget {
@@ -261,11 +550,13 @@ class _PmPlanCard extends StatelessWidget {
     required this.plan,
     required this.now,
     required this.copy,
+    required this.showDivider,
     required this.onRecord,
   });
   final PmPlan plan;
   final DateTime now;
   final PmCopy copy;
+  final bool showDivider;
   final VoidCallback onRecord;
 
   @override
@@ -384,7 +675,9 @@ class _PmPlanCard extends StatelessWidget {
             icon: Icons.check_circle_outline_rounded,
             onPressed: onRecord,
             isFullWidth: true,
+            isCompact: true,
           ),
+          if (showDivider) const SizedBox(height: TpSpace.xs),
         ],
       ),
     );

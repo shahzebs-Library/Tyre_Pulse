@@ -94,12 +94,16 @@ void main() {
     await _pump(tester, repository);
 
     expect(find.text('My Work'), findsOneWidget);
+    expect(find.byKey(TasksScreenKeys.stats), findsOneWidget);
+    expect(find.byKey(TasksScreenKeys.reportIssue), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.board), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.todayTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.inProgressTab), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.completedTab), findsOneWidget);
     expect(find.text('URGENT'), findsOneWidget);
-    expect(find.text('IN PROGRESS'), findsNWidgets(2));
+    expect(find.text('IN PROGRESS'), findsOneWidget);
+    expect(find.text('Assigned'), findsNWidgets(2));
+    expect(find.widgetWithText(TpButton, 'View'), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.task('urgent')), findsOneWidget);
     expect(
       tester.getTopLeft(find.byKey(TasksScreenKeys.todayTab)).dy,
@@ -133,6 +137,34 @@ void main() {
 
     expect(find.byKey(TasksScreenKeys.task('closed')), findsOneWidget);
     expect(find.byKey(TasksScreenKeys.task('open')), findsNothing);
+  });
+
+  testWidgets('View action reveals the selected task details', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _FakeTasksRepository(
+        const <TaskItem>[
+          TaskItem(
+            id: 'detail',
+            title: 'Inspect front tyre',
+            status: 'Open',
+            description: 'Check pressure and sidewall condition',
+            assignedTo: 'Fleet team',
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Check pressure and sidewall condition'), findsNothing);
+
+    await tester.tap(find.widgetWithText(TpButton, 'View'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Check pressure and sidewall condition'), findsOneWidget);
+    expect(find.text('Fleet team'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('empty data renders the design-system empty state', (

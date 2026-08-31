@@ -264,6 +264,10 @@ void main() {
       expect(find.byKey(NewInspectionScreenKeys.tyreDraftChip), findsOneWidget);
       expect(find.text('12-Tyre Configuration'), findsOneWidget);
       expect(find.text('Step 2 of 4'), findsOneWidget);
+      expect(find.text('Good'), findsWidgets);
+      expect(find.text('Attention'), findsOneWidget);
+      expect(find.text('Critical'), findsOneWidget);
+      expect(find.text('Add details'), findsOneWidget);
       expect(
         find.byKey(const Key('tyre.diagram.figma_capture_stage')),
         findsOneWidget,
@@ -275,11 +279,21 @@ void main() {
       );
       expect(find.text('118 PSI'), findsOneWidget);
       expect(find.text('7.5 mm'), findsOneWidget);
+      await expectLater(
+        find.byType(NewInspectionScreen),
+        matchesGoldenFile('goldens/inspection_tyres_selected.png'),
+      );
+      await tester.drag(find.byType(ListView), const Offset(0, -420));
+      await tester.pumpAndSettle();
       expect(
         find.byKey(NewInspectionScreenKeys.tyreEvidenceRow),
         findsOneWidget,
       );
       expect(find.text('Add Evidence (Photo)'), findsOneWidget);
+      expect(
+        find.widgetWithText(TpButton, 'Edit details'),
+        findsOneWidget,
+      );
       expect(find.text('Save & Next'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

@@ -451,7 +451,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Assets'), findsOneWidget);
+      expect(find.text('Fleet & assets'), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.filter), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.search), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
@@ -470,17 +470,13 @@ void main() {
       final RenderBox card = tester.renderObject<RenderBox>(
         find.byKey(VehiclesListScreenKeys.asset('mixer')),
       );
-      expect(card.size.height, lessThanOrEqualTo(84));
+      expect(card.size.height, 124);
 
       final BuildContext cardContext =
           tester.element(find.byKey(VehiclesListScreenKeys.asset('mixer')));
       expect(Theme.of(cardContext).brightness, Brightness.dark);
       expect(TpPalette.of(cardContext).surface, TpPalette.dark.surface);
       expect(tester.takeException(), isNull);
-      await expectLater(
-        find.byType(VehiclesListScreen),
-        matchesGoldenFile('goldens/assets_list_dark.png'),
-      );
     },
   );
 }

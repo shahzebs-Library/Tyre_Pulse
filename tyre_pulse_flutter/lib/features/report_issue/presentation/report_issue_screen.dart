@@ -13,6 +13,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/report_issue/data/report_issue_draft_store.dart';
 import 'package:tyre_pulse/features/report_issue/data/report_issue_photo_capture.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
 import 'package:tyre_pulse/features/report_issue/report_issue_providers.dart';
@@ -33,10 +34,16 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   late final TextEditingController _site;
   late final TextEditingController _asset;
   late final TextEditingController _details;
+  late final TextEditingController _restriction;
   final List<String> _photos = <String>[];
   final String _sessionKey = DateTime.now().microsecondsSinceEpoch.toString();
   String _priority = CorrectiveActionPriority.medium;
-  int? _dueDays = 7;
+  String _category = 'mechanical';
+  String _operation = 'restricted';
+  bool _requestWorkOrder = true;
+  bool _draftSaved = false;
+  bool _savingDraft = false;
+  bool _restoringDraft = false;
   bool _saving = false;
 
   @override
@@ -49,6 +56,19 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     );
     _asset = TextEditingController(text: widget.route.assetNo?.value ?? '');
     _details = TextEditingController();
+    _restriction = TextEditingController();
+    for (final TextEditingController controller in <TextEditingController>[
+      _title,
+      _site,
+      _asset,
+      _details,
+      _restriction,
+    ]) {
+      controller.addListener(_markDraftDirty);
+    }
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_restoreDraft()),
+    );
   }
 
   @override
@@ -57,6 +77,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     _site.dispose();
     _asset.dispose();
     _details.dispose();
+    _restriction.dispose();
     super.dispose();
   }
 
@@ -69,6 +90,24 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
       appBar: TpAppBar(
         title: copy('title'),
         backFallback: fallback,
+        actions: <Widget>[
+          if (_draftSaved)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: TpSpace.md),
+              child: TpSyncLabel(label: copy('draftSaved')),
+            ),
+        ],
+      ),
+      bottomNavigationBar: TpBottomActionRail(
+        secondaryLabel: copy('saveDraft'),
+        primaryLabel: copy('submit'),
+        onSecondary:
+            _savingDraft || _saving ? null : () => unawaited(_saveDraft(copy)),
+        onPrimary:
+            _savingDraft || _saving ? null : () => unawaited(_submit(copy)),
+        primaryBusy: _saving,
+        secondaryKey: const Key('reportIssue.saveDraft'),
+        primaryKey: const Key('reportIssue.submit'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(
@@ -99,6 +138,14 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                     );
                   },
                 ),
+                _FieldLabel(copy('category')),
+                _IssueCategoryGrid(
+                  selected: _category,
+                  copy: copy,
+                  onSelected: (String value) =>
+                      _change(() => _category = value),
+                ),
+                const SizedBox(height: TpSpace.lg),
                 _FieldLabel(copy('problem')),
                 TextField(
                   key: const Key('reportIssue.title'),
@@ -108,19 +155,29 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                 ),
                 const SizedBox(height: TpSpace.lg),
                 _FieldLabel(copy('priority')),
-                Wrap(
-                  spacing: TpSpace.sm,
-                  runSpacing: TpSpace.sm,
-                  children: <Widget>[
-                    for (final String priority in CorrectiveActionPriority.all)
-                      ChoiceChip(
-                        key: Key('reportIssue.priority.$priority'),
-                        label: Text(copy(priority.toLowerCase())),
-                        selected: _priority == priority,
-                        onSelected: (_) => setState(() => _priority = priority),
-                      ),
-                  ],
+                _PriorityChoice(
+                  value: _priority,
+                  copy: copy,
+                  onChanged: (String priority) =>
+                      _change(() => _priority = priority),
                 ),
+                const SizedBox(height: TpSpace.lg),
+                _FieldLabel(copy('operation')),
+                _OperationChoice(
+                  value: _operation,
+                  copy: copy,
+                  onChanged: (String value) =>
+                      _change(() => _operation = value),
+                ),
+                if (_operation == 'restricted') ...<Widget>[
+                  const SizedBox(height: TpSpace.md),
+                  _LabeledInput(
+                    label: copy('restriction'),
+                    hint: copy('restriction'),
+                    controller: _restriction,
+                    keyName: 'restriction',
+                  ),
+                ],
                 const SizedBox(height: TpSpace.lg),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
@@ -173,28 +230,6 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                   },
                 ),
                 const SizedBox(height: TpSpace.lg),
-                _FieldLabel(copy('due')),
-                Wrap(
-                  spacing: TpSpace.sm,
-                  runSpacing: TpSpace.sm,
-                  children: <Widget>[
-                    for (final ({int? days, String key}) option
-                        in const <({int? days, String key})>[
-                      (days: null, key: 'noDate'),
-                      (days: 3, key: 'threeDays'),
-                      (days: 7, key: 'oneWeek'),
-                      (days: 14, key: 'twoWeeks'),
-                    ])
-                      ChoiceChip(
-                        key: Key('reportIssue.due.${option.days}'),
-                        label: Text(copy(option.key)),
-                        selected: _dueDays == option.days,
-                        onSelected: (_) =>
-                            setState(() => _dueDays = option.days),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: TpSpace.lg),
                 _FieldLabel('${copy('details')} ${copy('optional')}'),
                 TextField(
                   key: const Key('reportIssue.details'),
@@ -213,16 +248,26 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                       ? null
                       : () => unawaited(_choosePhotoSource(copy)),
                   onRemove: (int index) =>
-                      setState(() => _photos.removeAt(index)),
+                      _change(() => _photos.removeAt(index)),
+                ),
+                const SizedBox(height: TpSpace.lg),
+                SwitchListTile.adaptive(
+                  key: const Key('reportIssue.createWorkOrder'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(copy('createWorkOrder')),
+                  value: _requestWorkOrder,
+                  onChanged: (bool value) =>
+                      _change(() => _requestWorkOrder = value),
+                ),
+                TpCard(
+                  padding: EdgeInsets.zero,
+                  child: TpActionRow(
+                    icon: Icons.groups_2_outlined,
+                    label: copy('notifyTeam'),
+                    showDivider: false,
+                  ),
                 ),
                 const SizedBox(height: TpSpace.xxl),
-                TpButton.primary(
-                  key: const Key('reportIssue.submit'),
-                  label: copy('submit'),
-                  onPressed: _saving ? null : () => unawaited(_submit(copy)),
-                  isBusy: _saving,
-                  isFullWidth: true,
-                ),
               ],
             ),
           ),
@@ -264,7 +309,9 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                 orderIndex: _photos.length,
                 source: source,
               );
-      if (path != null && mounted) setState(() => _photos.add(path));
+      if (path != null && mounted) {
+        _change(() => _photos.add(path));
+      }
     } on Object {
       if (mounted) _message(copy('photoFailed'));
     }
@@ -286,19 +333,27 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
             workspace: workspace,
             input: SubmitTyreDefectReportInput(
               title: _title.text,
-              description: _details.text,
+              description: _submissionDescription(copy),
               assetNo: _asset.text,
               tyreSerial: widget.route.tyreSerial?.value,
               site: _site.text,
               priority: _priority,
+              rootCause: _category,
               country: workspace.activeCountry,
               assignedTo: workspace.fullName,
-              dueDate: _dueDays == null
-                  ? null
-                  : DateTime.now().add(Duration(days: _dueDays!)),
+              dueDate: null,
               photoLocalPaths: List<String>.unmodifiable(_photos),
             ),
           );
+      final String? scope = _draftScope(workspace);
+      if (scope != null) {
+        try {
+          await ref.read(reportIssueDraftStoreProvider).clear(scope);
+        } on Object {
+          // Submission is already safely queued. A stale local draft must not
+          // misreport that successful operational write as a failed submit.
+        }
+      }
       if (!mounted) return;
       setState(() => _saving = false);
       await showDialog<void>(
@@ -328,6 +383,125 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     }
   }
 
+  String _submissionDescription(ReportIssueCopy copy) {
+    final List<String> lines = <String>[
+      _details.text.trim(),
+      '${copy('operation')}: ${copy(_operation)}',
+      if (_operation == 'restricted' && _restriction.text.trim().isNotEmpty)
+        '${copy('restriction')}: ${_restriction.text.trim()}',
+      if (_requestWorkOrder) copy('createWorkOrder'),
+    ].where((String value) => value.isNotEmpty).toList(growable: false);
+    return lines.join('\n');
+  }
+
+  void _markDraftDirty() {
+    if (_restoringDraft || !mounted || !_draftSaved) return;
+    setState(() => _draftSaved = false);
+  }
+
+  void _change(VoidCallback change) {
+    setState(() {
+      change();
+      _draftSaved = false;
+    });
+  }
+
+  String? _draftScope(WorkspaceContext? workspace) {
+    if (workspace == null) return null;
+    final String organisation =
+        (workspace.tenantId ?? workspace.companyId ?? '').trim();
+    if (organisation.isEmpty) return null;
+    return <String>[
+      organisation,
+      workspace.activeCountry?.trim() ?? '',
+      workspace.userId.trim(),
+    ].join('|');
+  }
+
+  Future<void> _restoreDraft() async {
+    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    final String? scope = _draftScope(workspace);
+    if (scope == null) return;
+    try {
+      final ReportIssueDraft? draft =
+          await ref.read(reportIssueDraftStoreProvider).load(scope);
+      if (draft == null || !mounted) return;
+      _restoringDraft = true;
+      _title.text = draft.title;
+      if (_site.text.trim().isEmpty) _site.text = draft.site;
+      if (_asset.text.trim().isEmpty) _asset.text = draft.assetNo;
+      _details.text = draft.description;
+      _restriction.text = draft.restriction;
+      _photos
+        ..clear()
+        ..addAll(
+          draft.photoLocalPaths.where((String path) => File(path).existsSync()),
+        );
+      setState(() {
+        _priority = CorrectiveActionPriority.all.contains(draft.priority)
+            ? draft.priority
+            : CorrectiveActionPriority.medium;
+        _category = <String>{
+          'mechanical',
+          'electrical',
+          'hydraulic',
+          'tyre',
+          'body',
+          'washing',
+          'safety',
+          'other',
+        }.contains(draft.category)
+            ? draft.category
+            : 'mechanical';
+        _operation =
+            <String>{'yes', 'restricted', 'no'}.contains(draft.operation)
+                ? draft.operation
+                : 'restricted';
+        _requestWorkOrder = draft.requestWorkOrder;
+        _draftSaved = true;
+      });
+    } on Object {
+      // A damaged or unavailable device draft never blocks a new report.
+    } finally {
+      _restoringDraft = false;
+    }
+  }
+
+  Future<void> _saveDraft(ReportIssueCopy copy) async {
+    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    final String? scope = _draftScope(workspace);
+    if (scope == null) {
+      _message(copy('workspaceUnavailable'));
+      return;
+    }
+    setState(() => _savingDraft = true);
+    try {
+      await ref.read(reportIssueDraftStoreProvider).save(
+            scope,
+            ReportIssueDraft(
+              title: _title.text,
+              site: _site.text,
+              assetNo: _asset.text,
+              description: _details.text,
+              restriction: _restriction.text,
+              priority: _priority,
+              category: _category,
+              operation: _operation,
+              requestWorkOrder: _requestWorkOrder,
+              photoLocalPaths: List<String>.unmodifiable(_photos),
+              savedAt: DateTime.now(),
+            ),
+          );
+      if (!mounted) return;
+      setState(() => _draftSaved = true);
+      _message(copy('draftSaved'));
+    } on Object {
+      if (mounted) _message(copy('saveFailed'));
+    } finally {
+      if (mounted) setState(() => _savingDraft = false);
+    }
+  }
+
   void _message(String value) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -352,6 +526,251 @@ class _FieldLabel extends StatelessWidget {
               ),
         ),
       );
+}
+
+class _IssueCategoryGrid extends StatelessWidget {
+  const _IssueCategoryGrid({
+    required this.selected,
+    required this.copy,
+    required this.onSelected,
+  });
+
+  final String selected;
+  final ReportIssueCopy copy;
+  final ValueChanged<String> onSelected;
+
+  static const List<(String, IconData)> _items = <(String, IconData)>[
+    ('mechanical', Icons.build_outlined),
+    ('electrical', Icons.bolt_outlined),
+    ('hydraulic', Icons.water_drop_outlined),
+    ('tyre', Icons.tire_repair_outlined),
+    ('body', Icons.directions_car_outlined),
+    ('washing', Icons.water_outlined),
+    ('safety', Icons.shield_outlined),
+    ('other', Icons.more_horiz_rounded),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int columns = constraints.maxWidth >= 360 ? 4 : 2;
+        final double width =
+            (constraints.maxWidth - TpSpace.sm * (columns - 1)) / columns;
+        return Wrap(
+          spacing: TpSpace.sm,
+          runSpacing: TpSpace.sm,
+          children: <Widget>[
+            for (final (String key, IconData icon) in _items)
+              SizedBox(
+                width: width,
+                child: Semantics(
+                  selected: selected == key,
+                  button: true,
+                  child: InkWell(
+                    onTap: () => onSelected(key),
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      constraints: const BoxConstraints(minHeight: 64),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: TpSpace.sm,
+                        vertical: TpSpace.md,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected == key
+                            ? palette.primarySoft
+                            : palette.surface,
+                        border: Border.all(
+                          color: selected == key
+                              ? palette.primary
+                              : palette.borderStrong,
+                          width: selected == key ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(TpRadius.md),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Icon(icon, color: palette.primary, size: 25),
+                          const SizedBox(height: 5),
+                          Flexible(
+                            child: Text(
+                              copy(key),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(color: palette.text),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PriorityChoice extends StatelessWidget {
+  const _PriorityChoice({
+    required this.value,
+    required this.copy,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ReportIssueCopy copy;
+  final ValueChanged<String> onChanged;
+
+  static const List<(String, IconData, TpStatus)> _items =
+      <(String, IconData, TpStatus)>[
+    (CorrectiveActionPriority.low, Icons.arrow_downward_rounded, TpStatus.ok),
+    (CorrectiveActionPriority.medium, Icons.remove_rounded, TpStatus.warning),
+    (
+      CorrectiveActionPriority.high,
+      Icons.priority_high_rounded,
+      TpStatus.warning
+    ),
+    (
+      CorrectiveActionPriority.critical,
+      Icons.priority_high_rounded,
+      TpStatus.critical
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Row(
+      children: <Widget>[
+        for (int index = 0; index < _items.length; index++) ...<Widget>[
+          if (index > 0) const SizedBox(width: 2),
+          Expanded(
+            child: InkWell(
+              key: Key('reportIssue.priority.${_items[index].$1}'),
+              onTap: () => onChanged(_items[index].$1),
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 58),
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: value == _items[index].$1
+                      ? palette.forStatus(_items[index].$3).soft
+                      : palette.surface,
+                  border: Border.all(
+                    color: value == _items[index].$1
+                        ? palette.forStatus(_items[index].$3).base
+                        : palette.borderStrong,
+                  ),
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(
+                      _items[index].$2,
+                      size: 21,
+                      color: palette.forStatus(_items[index].$3).base,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      copy(_items[index].$1.toLowerCase()),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: palette.forStatus(_items[index].$3).base,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _OperationChoice extends StatelessWidget {
+  const _OperationChoice({
+    required this.value,
+    required this.copy,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ReportIssueCopy copy;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    const List<(String, IconData, TpStatus)> options =
+        <(String, IconData, TpStatus)>[
+      ('yes', Icons.check_circle_outline, TpStatus.ok),
+      ('restricted', Icons.remove_circle_outline, TpStatus.warning),
+      ('no', Icons.cancel_outlined, TpStatus.critical),
+    ];
+    return Row(
+      children: <Widget>[
+        for (int index = 0; index < options.length; index++) ...<Widget>[
+          if (index > 0) const SizedBox(width: TpSpace.xs),
+          Expanded(
+            child: InkWell(
+              onTap: () => onChanged(options[index].$1),
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 58),
+                padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+                decoration: BoxDecoration(
+                  color: value == options[index].$1
+                      ? palette.forStatus(options[index].$3).soft
+                      : palette.surface,
+                  border: Border.all(
+                    color: value == options[index].$1
+                        ? palette.forStatus(options[index].$3).base
+                        : palette.borderStrong,
+                  ),
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(
+                      options[index].$2,
+                      size: 20,
+                      color: palette.forStatus(options[index].$3).base,
+                    ),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        copy(options[index].$1),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _SelectedAssetSummary extends StatelessWidget {

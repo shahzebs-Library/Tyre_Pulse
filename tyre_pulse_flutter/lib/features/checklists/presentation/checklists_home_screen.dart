@@ -363,6 +363,8 @@ class _DraftRow extends StatelessWidget {
       ),
       onTap: onTap,
       child: _ChecklistRowLayout(
+        icon: Icons.edit_document,
+        status: TpStatus.info,
         title: draft.templateName,
         subtitle:
             draft.assetNo.isEmpty ? l10n.checklistNoAssetLabel : draft.assetNo,
@@ -371,8 +373,10 @@ class _DraftRow extends StatelessWidget {
           label: '${draft.filled}/${draft.total}',
           status: TpStatus.info,
         ),
-        actionLabel: l10n.checklistStartAction,
+        actionLabel: l10n.checklistResumeAction,
         actionColor: palette.primary,
+        actionFilled: false,
+        onPressed: onTap,
       ),
     );
   }
@@ -401,6 +405,10 @@ class _AssignmentRow extends StatelessWidget {
       ),
       onTap: onTap,
       child: _ChecklistRowLayout(
+        icon: overdue
+            ? Icons.notification_important_outlined
+            : Icons.assignment_turned_in_outlined,
+        status: overdue ? TpStatus.critical : TpStatus.ok,
         title: assignment.templateName ?? '',
         subtitle: subtitleParts.join('  •  '),
         footer: assignment.dueDate,
@@ -410,6 +418,8 @@ class _AssignmentRow extends StatelessWidget {
         ),
         actionLabel: l10n.checklistStartAction,
         actionColor: overdue ? palette.critical.base : palette.primary,
+        actionFilled: true,
+        onPressed: onTap,
       ),
     );
   }
@@ -459,6 +469,12 @@ class _TemplateRow extends StatelessWidget {
       ),
       onTap: onTap,
       child: _ChecklistRowLayout(
+        icon: tyreWorkflow
+            ? Icons.tire_repair_outlined
+            : usesPhotos
+                ? Icons.photo_camera_outlined
+                : Icons.fact_check_outlined,
+        status: chipStatus,
         title: record.template.name ?? '',
         subtitle: subtitle,
         footer: footer,
@@ -471,6 +487,8 @@ class _TemplateRow extends StatelessWidget {
         ),
         actionLabel: l10n.checklistStartAction,
         actionColor: palette.primary,
+        actionFilled: true,
+        onPressed: onTap,
       ),
     );
   }
@@ -478,30 +496,52 @@ class _TemplateRow extends StatelessWidget {
 
 class _ChecklistRowLayout extends StatelessWidget {
   const _ChecklistRowLayout({
+    required this.icon,
+    required this.status,
     required this.title,
     required this.subtitle,
     required this.footer,
     required this.chip,
     required this.actionLabel,
     required this.actionColor,
+    required this.actionFilled,
+    required this.onPressed,
   });
 
+  final IconData icon;
+  final TpStatus status;
   final String title;
   final String subtitle;
   final String? footer;
   final Widget chip;
   final String actionLabel;
   final Color actionColor;
+  final bool actionFilled;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final TpStatusColors iconColors = palette.forStatus(status);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: iconColors.soft,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: iconColors.base.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Icon(icon, color: iconColors.base, size: 28),
+            ),
+            const SizedBox(width: TpSpace.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,15 +594,20 @@ class _ChecklistRowLayout extends StatelessWidget {
               ),
             ),
             const SizedBox(width: TpSpace.sm),
-            Text(
-              actionLabel.toUpperCase(),
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: actionColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                    height: 17 / 13,
-                    letterSpacing: 0.2,
-                  ),
+            Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                      primary: actionColor,
+                    ),
+              ),
+              child: TpButton(
+                label: actionLabel,
+                variant: actionFilled
+                    ? TpButtonVariant.primary
+                    : TpButtonVariant.secondary,
+                isCompact: true,
+                onPressed: onPressed,
+              ),
             ),
             const SizedBox(width: TpSpace.xs),
             Icon(

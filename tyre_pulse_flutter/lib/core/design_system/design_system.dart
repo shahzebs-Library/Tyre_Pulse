@@ -13,6 +13,7 @@ export 'package:tyre_pulse/core/design_system/tp_button.dart';
 export 'package:tyre_pulse/core/design_system/tp_card.dart';
 export 'package:tyre_pulse/core/design_system/tp_dropdown.dart';
 export 'package:tyre_pulse/core/design_system/tp_input.dart';
+export 'package:tyre_pulse/core/design_system/tp_mobile_chrome.dart';
 export 'package:tyre_pulse/core/design_system/tp_scaffold.dart';
 export 'package:tyre_pulse/core/design_system/tp_search_field.dart';
 export 'package:tyre_pulse/core/design_system/tp_segmented.dart';

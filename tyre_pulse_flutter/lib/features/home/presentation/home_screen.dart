@@ -312,22 +312,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 28),
-                  _HomeSectionHeader(
-                    title: l10n.homeAttentionRequired,
-                    action: l10n.homeViewAll,
-                    onAction: _attentionDestination(
-                      canSeeAlerts: canSeeAlerts,
-                      canSeeApprovals: canSeeApprovals,
-                      canSeeTasks: canSeeTasks,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 20),
                   _AttentionRow(
                     l10n: l10n,
                     approvals: approvals,
                     tasks: tasks,
                     alerts: alerts,
+                    onViewAll: _attentionDestination(
+                      canSeeAlerts: canSeeAlerts,
+                      canSeeApprovals: canSeeApprovals,
+                      canSeeTasks: canSeeTasks,
+                    ),
                     onApprovals: canSeeApprovals
                         ? () => context.go(
                               const InspectionApprovalsRoute().location,
@@ -1349,142 +1344,191 @@ class _PmvOperationsHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final BorderRadius radius = BorderRadius.circular(22);
+    final BorderRadius radius = BorderRadius.circular(TpRadius.lg);
     return Semantics(
       button: onTap != null,
-      label: l10n.loginOperationsTitle,
+      label: l10n.inspectionNewInspection,
       child: Material(
         key: HomeScreenKeys.pmvHero,
-        color: Colors.transparent,
+        color: const Color(0xFFF4F8F6),
         borderRadius: radius,
         clipBehavior: Clip.antiAlias,
-        child: Ink(
+        child: SizedBox(
           height: 154,
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            gradient: LinearGradient(
-              begin: AlignmentDirectional.topStart,
-              end: AlignmentDirectional.bottomEnd,
-              colors: <Color>[palette.primaryDark, palette.primary],
-            ),
-          ),
-          child: InkWell(
-            onTap: onTap,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                PositionedDirectional(
-                  end: -8,
-                  top: 5,
-                  bottom: 0,
-                  width: 215,
-                  child: Image.asset(
-                    'assets/vehicle_photos/concrete_pump.png',
-                    key: HomeScreenKeys.pmvHeroImage,
-                    alignment: AlignmentDirectional.bottomEnd,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
-                    excludeFromSemantics: true,
-                  ),
-                ),
-                PositionedDirectional(
-                  start: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 235,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: AlignmentDirectional.centerStart,
-                        end: AlignmentDirectional.centerEnd,
-                        colors: <Color>[
-                          palette.primaryDark,
-                          palette.primaryDark.withValues(alpha: 0.98),
-                          palette.primaryDark.withValues(alpha: 0.78),
-                          palette.primaryDark.withValues(alpha: 0),
-                        ],
-                        stops: const <double>[0, 0.58, 0.82, 1],
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double cardWidth = constraints.maxWidth * 0.59;
+              final BorderRadius tapRadius =
+                  Directionality.of(context) == TextDirection.rtl
+                      ? const BorderRadius.only(
+                          topLeft: Radius.circular(TpRadius.xl),
+                          bottomLeft: Radius.circular(TpRadius.xl),
+                        )
+                      : const BorderRadius.only(
+                          topRight: Radius.circular(TpRadius.xl),
+                          bottomRight: Radius.circular(TpRadius.xl),
+                        );
+              return Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  PositionedDirectional(
+                    top: 0,
+                    bottom: 0,
+                    start: 0,
+                    width: cardWidth,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadiusDirectional.only(
+                          topEnd: Radius.circular(TpRadius.xl),
+                          bottomEnd: Radius.circular(TpRadius.xl),
+                        ),
+                        gradient: LinearGradient(
+                          begin: AlignmentDirectional.topStart,
+                          end: AlignmentDirectional.bottomEnd,
+                          colors: <Color>[
+                            Color.lerp(
+                              palette.primary,
+                              const Color(0xFF006B36),
+                              0.25,
+                            )!,
+                            Color.lerp(
+                              palette.primary,
+                              palette.ok.base,
+                              0.34,
+                            )!,
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                PositionedDirectional(
-                  start: 18,
-                  top: 16,
-                  bottom: 14,
-                  width: 185,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Container(
+                  PositionedDirectional(
+                    top: 12,
+                    bottom: 5,
+                    end: -12,
+                    width: constraints.maxWidth * 0.57,
+                    child: IgnorePointer(
+                      child: Image.asset(
+                        'assets/vehicle_photos/concrete_pump.png',
+                        key: HomeScreenKeys.pmvHeroImage,
+                        fit: BoxFit.contain,
+                        alignment: AlignmentDirectional.bottomEnd,
+                        filterQuality: FilterQuality.high,
+                        excludeFromSemantics: true,
+                      ),
+                    ),
+                  ),
+                  PositionedDirectional(
+                    top: 0,
+                    bottom: 0,
+                    start: 0,
+                    width: cardWidth,
+                    child: InkWell(
+                      onTap: onTap,
+                      borderRadius: tapRadius,
+                      child: Padding(
                         padding: const EdgeInsetsDirectional.fromSTEB(
-                          9,
-                          4,
-                          9,
-                          4,
+                          18,
+                          18,
+                          28,
+                          16,
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.28),
-                          ),
-                        ),
-                        child: Text(
-                          'PMV 360',
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.7,
-                                  ),
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        l10n.loginOperationsTitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.white,
-                                  height: 1.12,
-                                  fontWeight: FontWeight.w900,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(
+                                  TpRadius.sm,
                                 ),
-                      ),
-                      const SizedBox(height: 5),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              l10n.loginScopeMaintenanceWorkshop,
-                              maxLines: 1,
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: <Widget>[
+                                  Center(
+                                    child: Icon(
+                                      Icons.description_outlined,
+                                      color: palette.primary,
+                                      size: 23,
+                                    ),
+                                  ),
+                                  PositionedDirectional(
+                                    end: -4,
+                                    bottom: -4,
+                                    child: Container(
+                                      width: 17,
+                                      height: 17,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: palette.primary,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        Icons.add_rounded,
+                                        color: palette.primary,
+                                        size: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              l10n.inspectionNewInspection,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
                                   .textTheme
-                                  .labelSmall
+                                  .titleMedium
                                   ?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
                                   ),
                             ),
-                          ),
-                          const SizedBox(width: 3),
-                          Icon(
-                            Directionality.of(context) == TextDirection.rtl
-                                ? Icons.arrow_back_rounded
-                                : Icons.arrow_forward_rounded,
-                            color: Colors.white,
-                            size: 15,
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    l10n.vehiclesStartInspection,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.86,
+                                          ),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Icon(
+                                  Directionality.of(context) ==
+                                          TextDirection.rtl
+                                      ? Icons.arrow_back_rounded
+                                      : Icons.arrow_forward_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -1652,6 +1696,7 @@ class _AttentionRow extends StatelessWidget {
     required this.approvals,
     required this.tasks,
     required this.alerts,
+    required this.onViewAll,
     required this.onApprovals,
     required this.onTasks,
     required this.onAlerts,
@@ -1661,57 +1706,114 @@ class _AttentionRow extends StatelessWidget {
   final AsyncValue<List<InspectionApprovalItem>>? approvals;
   final AsyncValue<List<TaskItem>>? tasks;
   final AsyncValue<List<TyreAlert>>? alerts;
+  final VoidCallback? onViewAll;
   final VoidCallback? onApprovals;
   final VoidCallback? onTasks;
   final VoidCallback? onAlerts;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
       key: HomeScreenKeys.stats,
-      children: <Widget>[
-        Expanded(
-          child: _AttentionMetric(
-            value: _countText<InspectionApprovalItem>(
-              approvals,
-              cap: 100,
-              where: (_) => true,
-            ),
-            label: l10n.homeApprovalsMetric,
-            background: const Color(0xFFFFF0DC),
-            foreground: const Color(0xFFEA580C),
-            onTap: onApprovals,
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: palette.border),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: palette.text.withValues(alpha: 0.045),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _AttentionMetric(
-            value: _countText<TaskItem>(
-              tasks,
-              cap: 100,
-              where: _isOverdueTask,
+        ],
+      ),
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(13, 10, 8, 9),
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.monitor_heart_outlined, color: palette.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.homeAttentionRequired.toUpperCase(),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.15,
+                        ),
+                  ),
+                ),
+                if (onViewAll != null)
+                  TextButton.icon(
+                    onPressed: onViewAll,
+                    iconAlignment: IconAlignment.end,
+                    icon: Icon(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                      size: 17,
+                    ),
+                    label: Text(l10n.homeViewAll),
+                  ),
+              ],
             ),
-            label: l10n.homeOverdueMetric,
-            background: const Color(0xFFFFF7D6),
-            foreground: const Color(0xFFD97706),
-            onTap: onTasks,
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _AttentionMetric(
-            value: _countText<TyreAlert>(
-              alerts,
-              cap: 300,
-              where: (TyreAlert alert) => alert.isCritical,
+          Divider(height: 1, color: palette.border),
+          IntrinsicHeight(
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: _AttentionMetric(
+                    value: _countText<InspectionApprovalItem>(
+                      approvals,
+                      cap: 100,
+                      where: (_) => true,
+                    ),
+                    label: l10n.homeApprovalsMetric,
+                    icon: Icons.assignment_turned_in_outlined,
+                    background: const Color(0xFFFFF0DC),
+                    foreground: const Color(0xFFEA580C),
+                    onTap: onApprovals,
+                  ),
+                ),
+                VerticalDivider(width: 1, color: palette.border),
+                Expanded(
+                  child: _AttentionMetric(
+                    value: _countText<TaskItem>(
+                      tasks,
+                      cap: 100,
+                      where: _isOverdueTask,
+                    ),
+                    label: l10n.homeOverdueMetric,
+                    icon: Icons.timer_outlined,
+                    background: const Color(0xFFFFF7D6),
+                    foreground: const Color(0xFFD97706),
+                    onTap: onTasks,
+                  ),
+                ),
+                VerticalDivider(width: 1, color: palette.border),
+                Expanded(
+                  child: _AttentionMetric(
+                    value: _countText<TyreAlert>(
+                      alerts,
+                      cap: 300,
+                      where: (TyreAlert alert) => alert.isCritical,
+                    ),
+                    label: l10n.homeCriticalMetric,
+                    icon: Icons.warning_rounded,
+                    background: const Color(0xFFFDE6E8),
+                    foreground: const Color(0xFFDC2626),
+                    onTap: onAlerts,
+                  ),
+                ),
+              ],
             ),
-            label: l10n.homeCriticalMetric,
-            background: const Color(0xFFFDE6E8),
-            foreground: const Color(0xFFDC2626),
-            onTap: onAlerts,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -1720,6 +1822,7 @@ class _AttentionMetric extends StatelessWidget {
   const _AttentionMetric({
     required this.value,
     required this.label,
+    required this.icon,
     required this.background,
     required this.foreground,
     required this.onTap,
@@ -1727,6 +1830,7 @@ class _AttentionMetric extends StatelessWidget {
 
   final String value;
   final String label;
+  final IconData icon;
   final Color background;
   final Color foreground;
   final VoidCallback? onTap;
@@ -1734,38 +1838,56 @@ class _AttentionMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(TpRadius.sm),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(TpRadius.sm),
         child: SizedBox(
-          height: 74,
+          height: 110,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Text(
-                  value,
-                  maxLines: 1,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: foreground,
-                        fontSize: 22,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                      ),
+                Container(
+                  width: 29,
+                  height: 29,
+                  decoration: BoxDecoration(
+                    color: background,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: foreground, size: 18),
                 ),
-                const SizedBox(height: 7),
+                const SizedBox(height: 5),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: foreground,
+                              fontSize: 22,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
                 Text(
                   label,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: const Color(0xFF111827),
-                        fontSize: 10,
-                        height: 1,
+                        fontSize: 9.5,
+                        height: 1.05,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -2211,7 +2333,11 @@ class _DashboardQuickActions extends StatelessWidget {
     if (actions.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = actions.length == 1 ? 1 : 2;
+        final int columns = actions.length == 1
+            ? 1
+            : constraints.maxWidth >= 280
+                ? actions.length
+                : 2;
         final double width =
             (constraints.maxWidth - (columns - 1) * 8) / columns;
         return Wrap(
@@ -2257,25 +2383,46 @@ class _DashboardActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(TpRadius.sm),
         child: Container(
-          height: 80,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          height: 104,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
           decoration: BoxDecoration(
             border: Border.all(color: palette.border),
             borderRadius: BorderRadius.circular(TpRadius.sm),
           ),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(icon, color: palette.primary, size: 21),
-              const SizedBox(height: 5),
+              Container(
+                width: 31,
+                height: 31,
+                decoration: BoxDecoration(
+                  color: palette.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: palette.primary, size: 18),
+              ),
+              const Spacer(),
               Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: palette.text,
+                      fontSize: 9.5,
+                      height: 1.05,
                       fontWeight: FontWeight.w800,
                     ),
+              ),
+              const SizedBox(height: 3),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: Icon(
+                  Directionality.of(context) == TextDirection.rtl
+                      ? Icons.chevron_left_rounded
+                      : Icons.chevron_right_rounded,
+                  color: palette.primary,
+                  size: 16,
+                ),
               ),
             ],
           ),

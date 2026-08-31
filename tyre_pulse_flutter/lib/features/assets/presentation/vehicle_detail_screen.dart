@@ -46,6 +46,8 @@
 ///   for exactly a screen that needs to run Back itself.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,9 +65,12 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
+import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
+import 'package:tyre_pulse/features/work_orders/presentation/widgets/create_work_order_sheet.dart';
 
 class VehicleDetailScreen extends StatelessWidget {
   const VehicleDetailScreen({required this.assetNo, super.key});
@@ -179,7 +184,8 @@ abstract final class VehicleDetailScreenKeys {
   static const Key historyTab = Key('vehicle_detail.tab.history');
   static const Key tyreMap = Key('vehicle_detail.tyre_map');
   static const Key details = Key('vehicle_detail.details');
-  static const Key startInspection = Key('vehicle_detail.start_inspection');
+  static const Key reportIssue = Key('vehicle_detail.report_issue');
+  static const Key createWorkOrder = Key('vehicle_detail.create_work_order');
   static const Key multiViewBoard = Key('vehicle_detail.multi_view_board');
 }
 
@@ -209,8 +215,13 @@ class _DetailViewState extends ConsumerState<_DetailView> {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    final bool canStartInspection = ref.watch(
-      canAccessModuleProvider(ModuleKey.inspect),
+    final String? photo = vehiclePhotoAsset(asset);
+    final String? assetCode = _present(asset.assetNo);
+    final bool canReportIssue = ref.watch(
+      canAccessModuleProvider(ModuleKey.reportIssue),
+    );
+    final bool canCreateWorkOrder = ref.watch(
+      canAccessModuleProvider(ModuleKey.workorders),
     );
     final List<(String, String?)> fields = _assetFields();
     final List<({String label, String value})> metrics = <({
@@ -241,7 +252,7 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                   horizontalPadding,
                   TpSpace.md,
                   horizontalPadding,
-                  canStartInspection ? 92 : TpSpace.xxxl,
+                  assetCode == null ? TpSpace.xxxl : 92,
                 ),
                 children: <Widget>[
                   Center(
@@ -253,6 +264,32 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: <Widget>[
+                              Container(
+                                width: 146,
+                                height: 104,
+                                clipBehavior: Clip.antiAlias,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: palette.surfaceAlt,
+                                  borderRadius:
+                                      BorderRadius.circular(TpRadius.lg),
+                                ),
+                                child: photo == null
+                                    ? Icon(
+                                        vehicleFallbackIcon(asset),
+                                        size: 58,
+                                        color: palette.primary,
+                                      )
+                                    : Image.asset(
+                                        photo,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        fit: BoxFit.cover,
+                                        filterQuality: FilterQuality.high,
+                                        semanticLabel: asset.displayIdentity,
+                                      ),
+                              ),
+                              const SizedBox(width: TpSpace.lg),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,12 +378,22 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                 ],
               ),
             ),
-            if (canStartInspection)
+            if (assetCode != null)
               Align(
                 alignment: Alignment.bottomCenter,
-                child: _StickyInspectionAction(
-                  label: l10n.vehiclesStartInspection,
-                  onPressed: () => _startInspection(context),
+                child: _StickyAssetActions(
+                  reportLabel: ReportIssueCopy.of(context)('title'),
+                  workOrderLabel: l10n.workOrderNewTitle,
+                  onReportIssue:
+                      canReportIssue ? () => _reportIssue(context) : null,
+                  onCreateWorkOrder: canCreateWorkOrder
+                      ? () => unawaited(
+                            showCreateWorkOrderSheet(
+                              context,
+                              initialAssetNo: assetCode,
+                            ),
+                          )
+                      : null,
                 ),
               ),
           ],
@@ -378,13 +425,15 @@ class _DetailViewState extends ConsumerState<_DetailView> {
         (l10n.vehiclesFieldRegistration, asset.registrationNo),
       ];
 
-  void _startInspection(BuildContext context) {
+  void _reportIssue(BuildContext context) {
     final String? code = asset.assetNo;
-    if (code == null) return;
-    context.go(
-      NewInspectionRoute(
-        siteName: asset.site == null ? null : SiteName(asset.site!),
+    if (code == null || code.trim().isEmpty) return;
+    context.push(
+      ReportIssueRoute(
         assetNo: AssetNo(code),
+        siteName: asset.site?.trim().isEmpty == false
+            ? SiteName(asset.site!.trim())
+            : null,
       ).location,
     );
   }
@@ -688,11 +737,18 @@ class _SectionHeading extends StatelessWidget {
   }
 }
 
-class _StickyInspectionAction extends StatelessWidget {
-  const _StickyInspectionAction({required this.label, required this.onPressed});
+class _StickyAssetActions extends StatelessWidget {
+  const _StickyAssetActions({
+    required this.reportLabel,
+    required this.workOrderLabel,
+    required this.onReportIssue,
+    required this.onCreateWorkOrder,
+  });
 
-  final String label;
-  final VoidCallback onPressed;
+  final String reportLabel;
+  final String workOrderLabel;
+  final VoidCallback? onReportIssue;
+  final VoidCallback? onCreateWorkOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -709,11 +765,26 @@ class _StickyInspectionAction extends StatelessWidget {
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.border)),
       ),
-      child: TpButton.primary(
-        key: VehicleDetailScreenKeys.startInspection,
-        label: label,
-        isFullWidth: true,
-        onPressed: onPressed,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: TpButton.secondary(
+              key: VehicleDetailScreenKeys.reportIssue,
+              label: reportLabel,
+              icon: Icons.warning_amber_rounded,
+              onPressed: onReportIssue,
+            ),
+          ),
+          const SizedBox(width: TpSpace.md),
+          Expanded(
+            child: TpButton.primary(
+              key: VehicleDetailScreenKeys.createWorkOrder,
+              label: workOrderLabel,
+              icon: Icons.add_box_outlined,
+              onPressed: onCreateWorkOrder,
+            ),
+          ),
+        ],
       ),
     );
   }

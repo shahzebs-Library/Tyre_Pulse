@@ -12,6 +12,7 @@ import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_detail_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_case_workflow_sections.dart';
 
 const String _dataImage =
     'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -97,7 +98,13 @@ void main() {
     await tester.tap(find.widgetWithText(Tab, 'Repair'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.repair), findsOneWidget);
-    expect(find.text('Central Workshop'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(AccidentCaseWorkflowKeys.repairPlanning),
+        matching: find.text('Central Workshop'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.ensureVisible(find.widgetWithText(Tab, 'More'));
     await tester.pumpAndSettle();

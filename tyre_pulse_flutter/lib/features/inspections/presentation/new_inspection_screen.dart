@@ -864,6 +864,8 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
             resolvedClass: resolvedClass,
             controller: controller,
           ),
+          const SizedBox(height: TpSpace.sm),
+          const _InspectionConditionLegend(),
           const SizedBox(height: TpSpace.lg),
           TyreDiagramBoard(
             key: NewInspectionScreenKeys.tyreDiagramBoard,
@@ -1015,98 +1017,195 @@ class _TyreInspectionContextCard extends StatelessWidget {
       _InspectionWorkflowStage.readyForReview =>
         l10n.inspectionWorkflowAllChecked,
     };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  TpIdentifierText(
-                    state.selectedAssetNo,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.inspectionTyreConfiguration(total),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    resolvedClass,
-                    key: NewInspectionScreenKeys.tyreContextVehicleClass,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: palette.textSecondary,
-                        ),
-                  ),
-                ],
+    return TpCard(
+      padding: const EdgeInsets.all(TpSpace.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    TpIdentifierText(
+                      state.selectedAssetNo,
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.inspectionTyreConfiguration(total),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      resolvedClass,
+                      key: NewInspectionScreenKeys.tyreContextVehicleClass,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            TpStatusChip(
-              key: NewInspectionScreenKeys.tyreWorkflowStatus,
-              status: _workflowTone(workflow),
-              label: _workflowLabel(l10n, workflow),
-              isCompact: true,
-            ),
-            const SizedBox(width: TpSpace.xs),
-            _GpsChip(state: state, controller: controller),
-          ],
-        ),
-        const SizedBox(height: TpSpace.lg),
-        Text(
-          l10n.inspectionStepOfTotal(2, 4),
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: palette.textSecondary,
-                fontWeight: FontWeight.w700,
+              TpStatusChip(
+                key: NewInspectionScreenKeys.tyreWorkflowStatus,
+                status: _workflowTone(workflow),
+                label: _workflowLabel(l10n, workflow),
+                isCompact: true,
               ),
-        ),
-        const SizedBox(height: TpSpace.sm),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(TpRadius.pill),
-          child: LinearProgressIndicator(
-            minHeight: 5,
-            value: 0.5,
-            backgroundColor: palette.surfaceSunken,
-            color: palette.primary,
+              const SizedBox(width: TpSpace.xs),
+              _GpsChip(state: state, controller: controller),
+            ],
           ),
-        ),
-        const SizedBox(height: TpSpace.sm),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                helper,
-                key: NewInspectionScreenKeys.tyreWorkflowHelper,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+          const SizedBox(height: TpSpace.lg),
+          Text(
+            l10n.inspectionStepOfTotal(2, 4),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: palette.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Row(
+            children: <Widget>[
+              for (int index = 0;
+                  index < (total == 0 ? 1 : total);
+                  index++) ...<Widget>[
+                Expanded(
+                  child: Container(
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: index < checked
+                          ? palette.primary
+                          : palette.surfaceSunken,
+                      borderRadius: BorderRadius.circular(TpRadius.pill),
+                    ),
+                  ),
+                ),
+                if (index < (total == 0 ? 0 : total - 1))
+                  const SizedBox(width: 4),
+              ],
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  helper,
+                  key: NewInspectionScreenKeys.tyreWorkflowHelper,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color:
+                            workflow == _InspectionWorkflowStage.readyForReview
+                                ? palette.ok.onSoft
+                                : palette.textSecondary,
+                      ),
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Text(
+                l10n.inspectionResumeProgress(checked, total),
+                key: NewInspectionScreenKeys.tyreWorkflowProgress,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: workflow == _InspectionWorkflowStage.readyForReview
-                          ? palette.ok.onSoft
-                          : palette.textSecondary,
+                      color: palette.textSecondary,
+                      fontWeight: FontWeight.w700,
                     ),
               ),
-            ),
-            const SizedBox(width: TpSpace.sm),
-            Text(
-              l10n.inspectionResumeProgress(checked, total),
-              key: NewInspectionScreenKeys.tyreWorkflowProgress,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: palette.textSecondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _InspectionConditionLegend extends StatelessWidget {
+  const _InspectionConditionLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.sm,
+        vertical: TpSpace.sm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _ConditionLegendItem(
+              icon: Icons.check_circle_rounded,
+              color: palette.ok.base,
+              label: l10n.tyreConditionGood,
+            ),
+          ),
+          Expanded(
+            child: _ConditionLegendItem(
+              icon: Icons.error_rounded,
+              color: palette.warning.base,
+              label: l10n.statusWarning,
+            ),
+          ),
+          Expanded(
+            child: _ConditionLegendItem(
+              icon: Icons.warning_rounded,
+              color: palette.critical.base,
+              label: l10n.statusCritical,
+            ),
+          ),
+          Expanded(
+            child: _ConditionLegendItem(
+              icon: Icons.remove_circle_rounded,
+              color: palette.unknown.base,
+              label: l10n.tyreDetailAddDetailsButton,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConditionLegendItem extends StatelessWidget {
+  const _ConditionLegendItem({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: color, size: TpSizing.iconMd),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: TpPalette.of(context).textSecondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ],
+      );
 }
 
 class _InspectionDraftChip extends StatelessWidget {
@@ -1296,6 +1395,13 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                     color: palette.textSecondary,
                   ),
                 ],
+              ),
+              const SizedBox(height: TpSpace.md),
+              TpButton.primary(
+                label: l10n.tyreDetailEditDetailsButton,
+                icon: Icons.edit_outlined,
+                isFullWidth: true,
+                onPressed: onTap,
               ),
             ],
           ),

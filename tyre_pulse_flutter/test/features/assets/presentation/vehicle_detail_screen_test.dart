@@ -4,7 +4,7 @@
 ///
 /// [canAccessModuleProvider] must be overridden in EVERY test that reaches
 /// `_DetailView`: it is watched unconditionally by that widget to decide
-/// whether "Start inspection" shows, and its real dependency chain -
+/// whether the report-issue and work-order actions are enabled, and its real dependency chain -
 /// `moduleAccessProvider` -> `accessStateProvider` - throws
 /// `UnimplementedError` by default (`permission_providers.dart`'s own doc:
 /// "Override it at the composition root ... It throws rather than
@@ -14,10 +14,9 @@
 ///
 /// Like `vehicles_list_screen_test.dart`, a plain [MaterialApp] is enough:
 /// this screen's [TpScaffold] carries no `backFallback` at all (see the
-/// screen's own library comment for why), and "Start inspection" is
-/// asserted only for PRESENCE, never tapped - tapping it calls
-/// `context.go(NewInspectionRoute(...).location)`, and proving that route
-/// resolves belongs to whichever feature owns it, not this one.
+/// screen's own library comment for why). The action buttons are asserted for
+/// presence but not tapped; their route and sheet behavior are tested by the
+/// features that own those flows.
 library;
 
 import 'dart:async';
@@ -51,7 +50,13 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: <Override>[
+        canAccessModuleProvider(ModuleKey.reportIssue)
+            .overrideWith((Ref ref) => true),
+        canAccessModuleProvider(ModuleKey.workorders)
+            .overrideWith((Ref ref) => true),
+        ...overrides,
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: TpTheme.light,
@@ -197,7 +202,7 @@ void main() {
   );
 
   testWidgets(
-    'Start inspection shows only when the inspect module is reachable',
+    'asset actions show report issue and create work order',
     (WidgetTester tester) async {
       const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
 
@@ -207,26 +212,16 @@ void main() {
       ]);
       await _pumpLoadedFrame(tester);
 
-      expect(find.text('Start inspection'), findsOneWidget);
       expect(
-        find.byKey(VehicleDetailScreenKeys.startInspection),
+        find.byKey(VehicleDetailScreenKeys.reportIssue),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
         findsOneWidget,
       );
     },
   );
-
-  testWidgets(
-      'Start inspection is withheld when the inspect module is not '
-      'reachable, rather than shown disabled', (WidgetTester tester) async {
-    const VehicleAsset asset = VehicleAsset(id: 'v1', assetNo: _assetNo);
-
-    await _pump(tester, <Override>[
-      _resolved(const VehicleDetailLoaded(asset)),
-      _canStartInspection(false),
-    ]);
-    await _pumpLoadedFrame(tester);
-    expect(find.text('Start inspection'), findsNothing);
-  });
 
   testWidgets(
     'light asset overview mock contract keeps facts, working tabs, class '
@@ -252,7 +247,7 @@ void main() {
       ]);
       await _pumpLoadedFrame(tester);
 
-      expect(find.text('Vehicle details'), findsOneWidget);
+      expect(find.text('Vehicle 360°'), findsOneWidget);
       expect(find.textContaining('TM4271'), findsWidgets);
       expect(find.text('88,421 km'), findsWidgets);
       expect(find.byKey(VehicleDetailScreenKeys.overviewTab), findsOneWidget);
@@ -260,7 +255,11 @@ void main() {
       expect(find.byKey(VehicleDetailScreenKeys.historyTab), findsOneWidget);
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
       expect(
-        find.byKey(VehicleDetailScreenKeys.startInspection),
+        find.byKey(VehicleDetailScreenKeys.reportIssue),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(VehicleDetailScreenKeys.createWorkOrder),
         findsOneWidget,
       );
       expect(
@@ -271,7 +270,6 @@ void main() {
         find.byType(VehicleDetailScreen),
         matchesGoldenFile('goldens/asset_overview_light.png'),
       );
-
       await tester.tap(find.byKey(VehicleDetailScreenKeys.historyTab));
       await tester.pumpAndSettle();
       expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsNothing);

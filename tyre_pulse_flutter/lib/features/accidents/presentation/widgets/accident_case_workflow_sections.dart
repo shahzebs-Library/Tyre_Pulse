@@ -918,28 +918,55 @@ class _SlaOwnerPanel extends StatelessWidget {
           _SlaRow(item: item, copy: workflowCopy),
         const SizedBox(height: TpSpace.sm),
         _Subheading(workflowCopy('recipientGroups')),
-        Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.sm,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            TpStatusChip(
-              status: TpStatus.neutral,
+            _RecipientGroupChip(
               label: workflowCopy('fleetAndHseRecipients'),
-              isCompact: true,
             ),
-            TpStatusChip(
-              status: TpStatus.neutral,
+            const SizedBox(height: TpSpace.xs),
+            _RecipientGroupChip(
               label: workflowCopy('insuranceRecipients'),
-              isCompact: true,
             ),
-            TpStatusChip(
-              status: TpStatus.neutral,
+            const SizedBox(height: TpSpace.xs),
+            _RecipientGroupChip(
               label: workflowCopy('repairApprovalRecipients'),
-              isCompact: true,
             ),
           ],
         ),
       ],
+    );
+  }
+}
+
+class _RecipientGroupChip extends StatelessWidget {
+  const _RecipientGroupChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpStatusColors colors =
+        TpPalette.of(context).forStatus(TpStatus.neutral);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.soft,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: colors.base),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: TpSpace.xs,
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context)
+              .textTheme
+              .labelMedium
+              ?.copyWith(color: colors.onSoft),
+        ),
+      ),
     );
   }
 }

@@ -63,6 +63,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -71,6 +72,7 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/features/notifications/presentation/notifications_copy.dart';
 
 /// Stable finders for Profile's responsive visual regions.
 @visibleForTesting
@@ -134,7 +136,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     final AuthState authState = ref.watch(authControllerProvider);
     final WorkspaceProfile? profile = authState.profile;
 
@@ -143,7 +144,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       // exactly like Home - see `home_screen.dart`'s identical choice and
       // `tp_scaffold.dart`'s own library comment on what a null
       // `backFallback` means.
-      appBar: TpAppBar(title: l10n.profileNavTitle, showBack: false),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        titleSpacing: TpSpace.lg,
+        title: const TpBrandLockup(),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.notifications_none_rounded),
+            tooltip: NotificationsCopy.of(context)('title'),
+            onPressed: () => context.push(const NotificationsRoute().location),
+          ),
+          const SizedBox(width: TpSpace.sm),
+        ],
+      ),
       body: profile == null
           // Reachable only outside the normal shell flow (see the library
           // comment: `TpAppShell` never renders this branch's content until

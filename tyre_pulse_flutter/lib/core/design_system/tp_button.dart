@@ -198,13 +198,13 @@ class TpButton extends StatelessWidget {
         return OutlinedButton(
           onPressed: handler,
           style: OutlinedButton.styleFrom(
-            foregroundColor: palette.text,
+            foregroundColor: palette.primary,
             minimumSize: minimumSize,
             padding: padding,
             shape: shape,
             textStyle: textStyle,
             side: BorderSide(
-              color: palette.borderStrong,
+              color: palette.primary,
               width: TpBorderWidth.hairline,
             ),
           ),
@@ -232,7 +232,7 @@ class TpButton extends StatelessWidget {
     return switch (variant) {
       TpButtonVariant.primary => palette.onPrimary,
       TpButtonVariant.danger => palette.critical.onBase,
-      TpButtonVariant.secondary => palette.text,
+      TpButtonVariant.secondary => palette.primary,
       TpButtonVariant.text => palette.primary,
     };
   }

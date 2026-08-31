@@ -57,8 +57,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
@@ -131,6 +133,11 @@ class _TyreRecordsListBody extends ConsumerWidget {
         subtitle: _subtitle(l10n, state),
         backFallback: backFallback,
         actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.document_scanner_outlined),
+            tooltip: l10n.serialSearchTitle,
+            onPressed: () => context.push(const SerialSearchRoute().location),
+          ),
           _FilterButton(
             activeCount: state.query.activeFilterCount,
             onPressed: () => _openFilterSheet(context),
@@ -386,11 +393,52 @@ class _TyreRecordCard extends StatelessWidget {
 
     return TpCard(
       onTap: onTap,
-      borderColor:
-          record.riskLevel == null ? null : palette.forStatus(status).base,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
+          Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Container(
+                width: 78,
+                height: 78,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: palette.surfaceAlt,
+                  border: Border.all(color: palette.borderStrong),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.tire_repair_outlined,
+                  size: 44,
+                  color: palette.text,
+                ),
+              ),
+              if (record.riskLevel != null)
+                PositionedDirectional(
+                  end: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: palette.forStatus(status).base,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: palette.surface, width: 2),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      status == TpStatus.ok
+                          ? Icons.check_rounded
+                          : Icons.priority_high_rounded,
+                      size: 15,
+                      color: palette.forStatus(status).onBase,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: TpSpace.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,7 +448,9 @@ class _TyreRecordCard extends StatelessWidget {
                   children: <Widget>[
                     Expanded(
                       child: TpIdentifierText(
-                        record.assetNo ?? l10n.recordsDetailFallbackTitle,
+                        record.serialNo ??
+                            record.assetNo ??
+                            l10n.recordsDetailFallbackTitle,
                         style: Theme.of(context).textTheme.titleMedium,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -418,7 +468,7 @@ class _TyreRecordCard extends StatelessWidget {
                 ),
                 const SizedBox(height: TpSpace.xs),
                 Text(
-                  _brandAndSerial(record),
+                  _brandAndCategory(record),
                   style: Theme.of(context).textTheme.bodyMedium,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -428,9 +478,19 @@ class _TyreRecordCard extends StatelessWidget {
                   spacing: TpSpace.md,
                   runSpacing: TpSpace.xs,
                   children: <Widget>[
-                    if (record.site != null)
+                    if (record.assetNo != null)
+                      _MetaItem(
+                        icon: Icons.local_shipping_outlined,
+                        text: record.assetNo!,
+                      ),
+                    if (record.bestPosition != null)
                       _MetaItem(
                         icon: Icons.location_on_outlined,
+                        text: record.bestPosition!,
+                      ),
+                    if (record.site != null)
+                      _MetaItem(
+                        icon: Icons.business_outlined,
                         text: record.site!,
                       ),
                     if (record.issueDate != null)
@@ -450,10 +510,10 @@ class _TyreRecordCard extends StatelessWidget {
     );
   }
 
-  String _brandAndSerial(TyreRecord record) {
+  String _brandAndCategory(TyreRecord record) {
     final List<String> parts = <String>[
       if (record.brand != null) record.brand!,
-      if (record.serialNo != null) record.serialNo!,
+      if (record.category != null) record.category!,
     ];
     return parts.isEmpty ? '-' : parts.join(' · ');
   }

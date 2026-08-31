@@ -99,9 +99,10 @@ void main() {
       find.byKey(const Key('reportIssue.details')),
       'Pressure drops while extending the boom.',
     );
-    await tester.tap(
-      find.byKey(const Key('reportIssue.priority.Critical')),
-    );
+    final Finder criticalPriority =
+        find.byKey(const Key('reportIssue.priority.Critical'));
+    await tester.ensureVisible(criticalPriority);
+    await tester.tap(criticalPriority);
     await tester.ensureVisible(find.byKey(const Key('reportIssue.submit')));
     await tester.tap(find.byKey(const Key('reportIssue.submit')));
     await tester.pumpAndSettle();
@@ -114,7 +115,9 @@ void main() {
     expect(input.priority, CorrectiveActionPriority.critical);
     expect(input.assignedTo, 'Eng Vinay');
     expect(input.country, 'KSA');
-    expect(input.dueDate, isNotNull);
+    expect(input.dueDate, isNull);
+    expect(input.rootCause, 'mechanical');
+    expect(input.description, contains('Can the asset operate safely?'));
     expect(find.text('Issue saved'), findsOneWidget);
   });
 
@@ -129,7 +132,7 @@ void main() {
 
     expect(repository.submitted, isNull);
     expect(
-      find.text('Enter a problem title before saving.'),
+      find.text('Enter what is wrong before saving.'),
       findsOneWidget,
     );
   });

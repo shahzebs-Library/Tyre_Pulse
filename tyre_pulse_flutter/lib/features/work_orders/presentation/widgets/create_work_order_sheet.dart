@@ -55,17 +55,24 @@ const Duration _kLookupDebounce = Duration(milliseconds: 350);
 /// Shows the sheet. Resolves to `true` when a work order was queued,
 /// `false`/`null` when the sheet was dismissed without saving - the caller
 /// (`WorkOrdersListScreen`) reloads the list only on `true`.
-Future<bool?> showCreateWorkOrderSheet(BuildContext context) {
+Future<bool?> showCreateWorkOrderSheet(
+  BuildContext context, {
+  String? initialAssetNo,
+}) {
   final AppLocalizations l10n = AppLocalizations.of(context);
   return TpBottomSheet.show<bool>(
     context: context,
     title: l10n.workOrderNewTitle,
-    builder: (BuildContext sheetContext) => const CreateWorkOrderSheet(),
+    builder: (BuildContext sheetContext) => CreateWorkOrderSheet(
+      initialAssetNo: initialAssetNo,
+    ),
   );
 }
 
 class CreateWorkOrderSheet extends ConsumerStatefulWidget {
-  const CreateWorkOrderSheet({super.key});
+  const CreateWorkOrderSheet({this.initialAssetNo, super.key});
+
+  final String? initialAssetNo;
 
   @override
   ConsumerState<CreateWorkOrderSheet> createState() =>
@@ -87,7 +94,14 @@ class _CreateWorkOrderSheetState extends ConsumerState<CreateWorkOrderSheet> {
   @override
   void initState() {
     super.initState();
+    final String initialAssetNo = widget.initialAssetNo?.trim() ?? '';
+    if (initialAssetNo.isNotEmpty) {
+      _assetController.text = initialAssetNo;
+    }
     _assetController.addListener(_onAssetChanged);
+    if (initialAssetNo.isNotEmpty) {
+      _onAssetChanged();
+    }
   }
 
   @override

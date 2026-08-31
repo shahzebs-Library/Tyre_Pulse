@@ -121,6 +121,12 @@ Future<void> _pumpHome(
   // is enough for the fleet `FutureProvider` to resolve and the stat cards
   // to settle into their final state.
   await tester.pump();
+  await tester.runAsync(
+    () => precacheImage(
+      const AssetImage('assets/vehicle_photos/concrete_pump.png'),
+      tester.element(find.byType(HomeScreen)),
+    ),
+  );
   await tester.pump(const Duration(milliseconds: 50));
 }
 
@@ -200,7 +206,14 @@ void main() {
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.pmvHeroImage), findsOneWidget);
-      expect(find.byType(Image), findsOneWidget);
+      expect(find.text('New inspection'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(HomeScreenKeys.pmvHero),
+          matching: find.byIcon(Icons.add_rounded),
+        ),
+        findsOneWidget,
+      );
       await expectLater(
         find.byType(HomeScreen),
         matchesGoldenFile(

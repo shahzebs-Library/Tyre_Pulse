@@ -83,6 +83,8 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   /// Anything else = exactly that class code. The approved asset register
   /// opens on All so stationary PMV assets remain visible beside vehicles.
   String? _classFilter;
+  String? _siteFilter;
+  String? _statusFilter;
 
   @override
   void initState() {
@@ -125,11 +127,23 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     return TpScaffold(
       backFallback: widget.backFallback,
       backgroundColor: TpPalette.of(context).surface,
-      appBar: TpAppBar(
-        title: l10n.globalSearchSectionAssets,
-        backFallback: widget.backFallback,
-        showBack: false,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: TpPalette.of(context).surface,
+        foregroundColor: TpPalette.of(context).text,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleSpacing: TpSpace.lg,
+        title: const TpBrandLockup(),
         actions: <Widget>[
+          IconButton(
+            tooltip: l10n.scannerTitle,
+            onPressed: () => context.push(const ScannerRoute().location),
+            icon: Icon(
+              Icons.document_scanner_outlined,
+              color: TpPalette.of(context).primary,
+            ),
+          ),
           IconButton(
             key: VehiclesListScreenKeys.filter,
             tooltip: l10n.vehiclesTyreAssetsFilter,
@@ -141,6 +155,15 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                   ? Icons.filter_alt_outlined
                   : Icons.filter_alt_rounded,
               color: TpPalette.of(context).primary,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: TpSpace.lg),
+            child: Center(
+              child: Icon(
+                Icons.cloud_done_outlined,
+                color: TpPalette.of(context).ok.base,
+              ),
             ),
           ),
         ],
@@ -219,17 +242,67 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
       assets,
       assetClassFilter: _classFilter,
       searchTerm: _searchTerm,
-    );
+    ).where((VehicleAsset asset) {
+      final bool matchesSite = _siteFilter == null ||
+          asset.site?.trim().toLowerCase() == _siteFilter!.toLowerCase();
+      final bool matchesStatus = _statusFilter == null ||
+          asset.status?.trim().toLowerCase() == _statusFilter!.toLowerCase();
+      return matchesSite && matchesStatus;
+    }).toList(growable: false);
     // Chips are built from the WHOLE loaded set, never the already-filtered
     // one - narrowing by class must not narrow the chips that let you widen
     // it again.
     final List<AssetClassChip> classesPresent = classChips(
       assets.map((VehicleAsset a) => a.assetNo),
     );
+    final List<String> sites = assets
+        .map((VehicleAsset asset) => asset.site?.trim())
+        .whereType<String>()
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false)
+      ..sort();
+    final List<String> statuses = assets
+        .map((VehicleAsset asset) => asset.status?.trim())
+        .whereType<String>()
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false)
+      ..sort();
 
     return Column(
       children: <Widget>[
         if (truncated) _TruncatedNotice(message: l10n.vehiclesTruncatedNotice),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.md,
+            TpSpace.lg,
+            TpSpace.xs,
+          ),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  l10n.loginScopeFleetAssets,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.vehiclesCount(assets.length),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: TpPalette.of(context).textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
             TpSpace.lg,
@@ -269,6 +342,43 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
           tyreAssetsLabel: l10n.vehiclesTyreAssetsFilter,
           allLabel: '${l10n.vehiclesAllFilter} (${assets.length})',
           onSelect: _selectClassChip,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            TpSpace.lg,
+            TpSpace.sm,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _FleetFilterMenu(
+                  icon: Icons.location_on_outlined,
+                  label: _siteFilter == null
+                      ? '${l10n.vehiclesFieldSite}: ${l10n.vehiclesAllFilter}'
+                      : _siteFilter!,
+                  values: sites,
+                  allLabel: l10n.vehiclesAllFilter,
+                  onSelect: (String? value) =>
+                      setState(() => _siteFilter = value),
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: _FleetFilterMenu(
+                  icon: Icons.tune_rounded,
+                  label: _statusFilter == null
+                      ? '${l10n.washStatusLabel}: ${l10n.vehiclesAllFilter}'
+                      : _statusFilter!,
+                  values: statuses,
+                  allLabel: l10n.vehiclesAllFilter,
+                  onSelect: (String? value) =>
+                      setState(() => _statusFilter = value),
+                ),
+              ),
+            ],
+          ),
         ),
         Expanded(
           child: filtered.isEmpty
@@ -358,6 +468,59 @@ class _SquareScannerButton extends StatelessWidget {
   }
 }
 
+class _FleetFilterMenu extends StatelessWidget {
+  const _FleetFilterMenu({
+    required this.icon,
+    required this.label,
+    required this.values,
+    required this.allLabel,
+    required this.onSelect,
+  });
+
+  final IconData icon;
+  final String label;
+  final List<String> values;
+  final String allLabel;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return PopupMenuButton<String?>(
+      onSelected: onSelect,
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String?>>[
+        PopupMenuItem<String?>(value: null, child: Text(allLabel)),
+        for (final String value in values)
+          PopupMenuItem<String?>(value: value, child: Text(value)),
+      ],
+      child: Container(
+        height: TpSizing.minTouchTarget,
+        padding: const EdgeInsets.symmetric(horizontal: TpSpace.md),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          border: Border.all(color: palette.borderStrong),
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, size: 18, color: palette.text),
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
+            Icon(Icons.keyboard_arrow_down_rounded, color: palette.text),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// The production fleet row rendered in the approved light register style.
 ///
 /// The leading artwork is one of the exact vehicle assets supplied with the
@@ -382,12 +545,7 @@ class _FleetAssetCard extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final String identity = asset.displayIdentity ?? unknownAssetLabel;
     final String? description = _joinNonEmpty(
-      <String?>[
-        asset.fleetNumber,
-        asset.vehicleType,
-        if (asset.fleetNumber == null && asset.vehicleType == null) asset.make,
-        if (asset.fleetNumber == null && asset.vehicleType == null) asset.model,
-      ],
+      <String?>[asset.make, asset.model, asset.vehicleType],
       separator: ' · ',
     );
     final TpStatusColors statusColors = palette.forStatus(
@@ -407,49 +565,48 @@ class _FleetAssetCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TpSpace.sm,
-              vertical: TpSpace.sm,
-            ),
+          child: SizedBox(
+            height: 124,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
                 Container(
-                  width: 72,
-                  height: 56,
+                  width: 120,
+                  height: double.infinity,
                   decoration: BoxDecoration(
                     color: palette.surfaceAlt,
-                    borderRadius: BorderRadius.circular(TpRadius.md),
-                    border: Border.all(color: palette.border),
+                    border: BorderDirectional(
+                      end: BorderSide(color: palette.border),
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   alignment: Alignment.center,
                   child: photo == null
                       ? Icon(
                           vehicleFallbackIcon(asset),
-                          size: 38,
+                          size: 54,
                           color: palette.primary,
                         )
                       : Image.asset(
                           photo,
                           width: double.infinity,
                           height: double.infinity,
-                          fit: BoxFit.contain,
+                          fit: BoxFit.cover,
                           filterQuality: FilterQuality.high,
                           semanticLabel: identity,
                         ),
                 ),
-                const SizedBox(width: TpSpace.sm),
+                const SizedBox(width: TpSpace.md),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       TpIdentifierText(
                         identity,
                         style: text.titleMedium?.copyWith(
                           color: palette.text,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                       if (description != null) ...<Widget>[
@@ -463,26 +620,86 @@ class _FleetAssetCard extends StatelessWidget {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 7),
-                      if (asset.status?.trim().isNotEmpty == true)
-                        Text(
-                          asset.status!.trim(),
-                          style: text.labelSmall?.copyWith(
-                            color: statusColors.base,
-                            fontWeight: FontWeight.w800,
-                          ),
+                      if (asset.site?.trim().isNotEmpty == true) ...<Widget>[
+                        const SizedBox(height: 5),
+                        Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 16,
+                              color: palette.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                asset.site!.trim(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelSmall?.copyWith(
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ],
+                      if (asset.currentKm != null) ...<Widget>[
+                        const SizedBox(height: 5),
+                        Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.speed_rounded,
+                              size: 16,
+                              color: palette.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${formatVehicleOdometer(asset.currentKm!)} km',
+                              style: text.labelSmall?.copyWith(
+                                color: palette.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: TpSpace.sm),
-                Icon(
-                  Directionality.of(context) == TextDirection.rtl
-                      ? Icons.chevron_left_rounded
-                      : Icons.chevron_right_rounded,
-                  color: palette.textMuted,
-                  size: TpSizing.iconMd,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: <Widget>[
+                    if (asset.status?.trim().isNotEmpty == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: TpSpace.sm,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColors.soft,
+                          borderRadius: BorderRadius.circular(TpRadius.md),
+                          border: Border.all(color: statusColors.base),
+                        ),
+                        child: Text(
+                          asset.status!.trim(),
+                          style: text.labelSmall?.copyWith(
+                            color: statusColors.onSoft,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: TpSpace.md),
+                    Icon(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                      color: palette.text,
+                      size: TpSizing.iconLg,
+                    ),
+                  ],
                 ),
+                const SizedBox(width: TpSpace.sm),
               ],
             ),
           ),

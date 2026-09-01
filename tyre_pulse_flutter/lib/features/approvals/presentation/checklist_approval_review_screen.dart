@@ -72,8 +72,6 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,6 +92,7 @@ import 'package:tyre_pulse/features/approvals/data/checklist_approval_sync_engin
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/domain/approval_decision_requirements.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_status_chip.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
@@ -545,12 +544,6 @@ String _submissionTitle(ChecklistApprovalItem item, String fallback) {
   if (title.isNotEmpty) return title;
   final String templateName = item.templateName?.trim() ?? '';
   return templateName.isNotEmpty ? templateName : fallback;
-}
-
-Uint8List _decodeSignatureDataUrl(String dataUrl) {
-  final int comma = dataUrl.indexOf(',');
-  final String b64 = comma < 0 ? dataUrl : dataUrl.substring(comma + 1);
-  return base64Decode(b64);
 }
 
 class _ApprovalSummaryCard extends StatelessWidget {
@@ -1309,11 +1302,11 @@ class _RungRow extends StatelessWidget {
             children: <Widget>[
               SizedBox(
                 height: 190,
-                child: Image.memory(
-                  _decodeSignatureDataUrl(dataUrl),
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stack) =>
-                      Text(l10n.checklistApprovalSignatureSavedLabel),
+                child: ApprovalSignaturePreview(
+                  value: dataUrl,
+                  fallback: Text(
+                    l10n.checklistApprovalSignatureSavedLabel,
+                  ),
                 ),
               ),
               if (name != null && name.trim().isNotEmpty) ...<Widget>[
@@ -1461,10 +1454,9 @@ class _ReadOnlySignature extends StatelessWidget {
         borderRadius: BorderRadius.circular(TpRadius.md),
         border: Border.all(color: palette.border),
       ),
-      child: Image.memory(
-        _decodeSignatureDataUrl(dataUrl!),
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stack) => Center(
+      child: ApprovalSignaturePreview(
+        value: dataUrl,
+        fallback: Center(
           child: Text(
             l10n.checklistApprovalSignatureSavedLabel,
             style: Theme.of(context).textTheme.bodySmall,

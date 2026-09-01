@@ -31,18 +31,22 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_repositor
 
 void main() {
   group('inspection approval projections', () {
-    test('full review query requests every verified evidence column', () {
+    test('full review query requests only live inspection evidence columns',
+        () {
       final Set<String> columns =
           inspectionApprovalFullColumns.split(',').toSet();
       expect(
         columns,
         containsAll(<String>{
           'tyre_conditions',
-          'photos',
           'photo_data',
           'custom_data',
         }),
       );
+      // Verified against the live schema on 2026-09-01. `photos` exists on
+      // checklist_submissions, not inspections; selecting it makes every
+      // approval detail read fail before the screen can render.
+      expect(columns, isNot(contains('photos')));
     });
 
     test('lean queue query does not download heavy evidence blobs', () {

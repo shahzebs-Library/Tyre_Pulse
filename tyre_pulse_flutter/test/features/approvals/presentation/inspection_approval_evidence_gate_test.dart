@@ -113,6 +113,19 @@ void main() {
       findsWidgets,
     );
     expect(
+      find.byKey(const Key('inspection-approval-missing-positions')),
+      findsOneWidget,
+    );
+    // The exact canonical wheel codes are visible, not only a generic count.
+    final String layoutKey = resolveVehicleType('Tri-mixer', _assetNo);
+    final List<String> expectedMissing = diagramPositions('Tri-mixer', _assetNo)
+        .skip(1)
+        .map((String slot) => legacyPositionCode(layoutKey, slot))
+        .toList(growable: false);
+    for (final String position in expectedMissing) {
+      expect(find.text(position), findsWidgets);
+    }
+    expect(
       _button(tester, InspectionApprovalReviewKeys.approve).onPressed,
       isNull,
     );

@@ -44,7 +44,7 @@ const String inspectionApprovalListColumns =
 const String inspectionApprovalFullColumns =
     'id,title,site,asset_no,vehicle_type,inspector,inspection_date,'
     'created_at,status,approval_status,notes,findings,odometer_km,'
-    'hour_meter,tyre_conditions,photos,photo_data,custom_data,'
+    'hour_meter,tyre_conditions,photo_data,custom_data,'
     'inspector_signature,approver_signature,approver_email,approved_at';
 
 String? _asString(Object? raw) {

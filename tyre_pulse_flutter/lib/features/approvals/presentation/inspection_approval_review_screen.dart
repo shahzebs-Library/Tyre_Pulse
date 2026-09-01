@@ -35,7 +35,6 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -56,6 +55,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
@@ -276,10 +276,10 @@ class _InspectionApprovalReviewScreenState
               canApprove: evidence!.canApprove,
               blockedReason: evidence.canApprove
                   ? null
-                  : l10n.inspectionTyresIncompleteLead(
+                  : '${l10n.inspectionTyresIncompleteLead(
                       evidence.blockingCount,
                       evidence.expected!,
-                    ),
+                    )} ${evidence.blockingCodes.join(', ')}',
               onApprove: () => _decide(true),
               onReturn: () => _decide(false),
             )
@@ -529,21 +529,14 @@ class _ReviewBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         TpCard(
-          child: item.inspectorSignature != null &&
-                  item.inspectorSignature!.isNotEmpty
-              ? Image.memory(
-                  _decodeSignatureDataUrl(item.inspectorSignature!),
-                  height: 110,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stack) => Text(
-                    l10n.inspectionSignatureMissing,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                )
-              : Text(
-                  l10n.inspectionSignatureMissing,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+          child: ApprovalSignaturePreview(
+            value: item.inspectorSignature,
+            height: 110,
+            fallback: Text(
+              l10n.inspectionSignatureMissing,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         ),
         const SizedBox(height: TpSpace.lg),
         if (!item.isPending)
@@ -581,6 +574,13 @@ class _ApprovalEvidenceSummary {
       !result.applicable || !result.known || !result.matched || result.ok;
 
   int get blockingCount => result.blocked.length;
+
+  /// Canonical spoken position codes, in vehicle-layout order. Showing these
+  /// beside a disabled Approve action tells the reviewer exactly which wheels
+  /// must be returned for correction instead of only saying "form invalid".
+  List<String> get blockingCodes => <String>[
+        for (final TyreSlotStatus slot in result.blocked) slot.code,
+      ];
 }
 
 _ApprovalEvidenceSummary _approvalEvidenceSummary(
@@ -687,6 +687,20 @@ class _ApprovalEvidenceProgress extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colors.onSoft,
                   ),
+            ),
+            const SizedBox(height: TpSpace.sm),
+            Wrap(
+              key: const Key('inspection-approval-missing-positions'),
+              spacing: TpSpace.xs,
+              runSpacing: TpSpace.xs,
+              children: <Widget>[
+                for (final String code in summary.blockingCodes)
+                  TpStatusChip(
+                    status: TpStatus.warning,
+                    label: code,
+                    isCompact: true,
+                  ),
+              ],
             ),
           ],
         ],
@@ -813,20 +827,6 @@ class _ImmediateTyreFindings extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Decodes a `data:image/png;base64,...` signature payload. Shared by every
-/// READ-ONLY signature display in this screen - the inspector's own mark and
-/// a signature already carried by a DECIDED item are both shown as a plain
-/// static image, never through [InspectionApprovalSignaturePad], because
-/// that pad's "Draw a new signature" action would invite redrawing a
-/// signature that already belongs to a finished decision. The pad is used
-/// ONLY where a NEW signature is actually being captured - see
-/// [_DecisionForm].
-Uint8List _decodeSignatureDataUrl(String dataUrl) {
-  final int comma = dataUrl.indexOf(',');
-  final String b64 = comma < 0 ? dataUrl : dataUrl.substring(comma + 1);
-  return base64Decode(b64);
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -1481,22 +1481,14 @@ class _DecidedSection extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelLarge,
               ),
               const SizedBox(height: TpSpace.sm),
-              if (item.approverSignature != null &&
-                  item.approverSignature!.isNotEmpty)
-                Image.memory(
-                  _decodeSignatureDataUrl(item.approverSignature!),
-                  height: 110,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stack) => Text(
-                    l10n.inspectionSignatureMissing,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                )
-              else
-                Text(
+              ApprovalSignaturePreview(
+                value: item.approverSignature,
+                height: 110,
+                fallback: Text(
                   l10n.inspectionSignatureMissing,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+              ),
             ],
           ),
         ),

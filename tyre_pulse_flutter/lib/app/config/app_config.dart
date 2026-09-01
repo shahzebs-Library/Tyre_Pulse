@@ -1,6 +1,9 @@
 /// Compile-time application configuration.
 ///
 /// Supabase credentials arrive through `--dart-define` and are never committed.
+/// Existing shared build files may use the web-compatible `VITE_` names; those
+/// are accepted only as a fallback so one environment file can build both
+/// clients without copying credentials.
 /// The anon key is publishable by design (RLS is the real boundary), but the
 /// service-role key must never reach a mobile binary.
 ///
@@ -59,6 +62,8 @@ class AppConfig {
 
   static const String _urlKey = 'SUPABASE_URL';
   static const String _anonKey = 'SUPABASE_ANON_KEY';
+  static const String _webUrlKey = 'VITE_SUPABASE_URL';
+  static const String _webAnonKey = 'VITE_SUPABASE_ANON_KEY';
 
   /// Reads the compile-time environment and validates it.
   ///
@@ -66,8 +71,14 @@ class AppConfig {
   /// before any UI exists and produces a blank screen, which is precisely the
   /// failure this method is written to avoid.
   static AppConfigResult resolve() {
-    const url = String.fromEnvironment(_urlKey);
-    const anonKey = String.fromEnvironment(_anonKey);
+    const url = String.fromEnvironment(
+      _urlKey,
+      defaultValue: String.fromEnvironment(_webUrlKey),
+    );
+    const anonKey = String.fromEnvironment(
+      _anonKey,
+      defaultValue: String.fromEnvironment(_webAnonKey),
+    );
     const environment = String.fromEnvironment(
       'APP_ENV',
       defaultValue: 'development',

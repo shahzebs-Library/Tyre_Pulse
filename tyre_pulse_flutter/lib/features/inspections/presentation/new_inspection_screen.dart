@@ -30,7 +30,6 @@ import 'package:tyre_pulse/features/inspections/presentation/controllers/inspect
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
-import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
@@ -876,16 +875,18 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
             positions: state.positions,
             tyreData: <String, Map<String, Object?>>{
               for (final String position in state.positions)
-                position: <String, Object?>{
-                  ...?state.tyreConditions[position]?.toEntry(),
-                  if (state.installedTyres[position]?.serialNo != null)
-                    'installed_serial':
-                        state.installedTyres[position]!.serialNo,
-                  if (state.installedTyres[position]?.brand != null)
-                    'installed_brand': state.installedTyres[position]!.brand,
-                  if (state.installedTyres[position]?.size != null)
-                    'installed_size': state.installedTyres[position]!.size,
-                },
+                if ((state.tyreConditions[position]?.isTouched ?? false) ||
+                    state.installedTyres.containsKey(position))
+                  position: <String, Object?>{
+                    ...?state.tyreConditions[position]?.toEntry(),
+                    if (state.installedTyres[position]?.serialNo != null)
+                      'installed_serial':
+                          state.installedTyres[position]!.serialNo,
+                    if (state.installedTyres[position]?.brand != null)
+                      'installed_brand': state.installedTyres[position]!.brand,
+                    if (state.installedTyres[position]?.size != null)
+                      'installed_size': state.installedTyres[position]!.size,
+                  },
             },
             selectedPosition: selectedPosition,
             onPositionTap: (String position) {
@@ -1136,21 +1137,6 @@ class _TyreInspectionContextCard extends StatelessWidget {
               ),
             ],
           ),
-          if (state.completeness.blocked.isNotEmpty) ...<Widget>[
-            const SizedBox(height: TpSpace.sm),
-            Wrap(
-              spacing: TpSpace.xs,
-              runSpacing: TpSpace.xs,
-              children: <Widget>[
-                for (final TyreSlotStatus slot in state.completeness.blocked)
-                  TpStatusChip(
-                    status: TpStatus.warning,
-                    label: '${slot.code} · ${l10n.inspectionNotRecordedYet}',
-                    isCompact: true,
-                  ),
-              ],
-            ),
-          ],
         ],
       ),
     );

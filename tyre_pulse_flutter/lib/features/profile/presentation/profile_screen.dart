@@ -78,6 +78,7 @@ import 'package:tyre_pulse/features/notifications/presentation/notifications_cop
 @visibleForTesting
 abstract final class ProfileScreenKeys {
   static const Key hero = Key('profile.hero');
+  static const Key status = Key('profile.status');
   static const Key access = Key('profile.access');
   static const Key account = Key('profile.account');
 }
@@ -186,7 +187,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
                             _IdentityHero(profile: profile),
-                            const SizedBox(height: TpSpace.lg),
+                            const SizedBox(height: TpSpace.md),
+                            _ProfileStatusStrip(
+                              profile: profile,
+                              profileStale: authState.profileStale,
+                            ),
+                            const SizedBox(height: TpSpace.md),
                             _ProfileGroups(
                               profile: profile,
                               isSigningOut: _isSigningOut,
@@ -221,8 +227,6 @@ class _IdentityHero extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
 
     final String? name = profile.fullName;
-    final String? site = profile.legacySite;
-
     return TpCard(
       key: ProfileScreenKeys.hero,
       background: palette.surface,
@@ -291,13 +295,13 @@ class _IdentityHero extends StatelessWidget {
                   icon: Icons.badge_outlined,
                   value: profile.role.displayName,
                 ),
-                const SizedBox(height: 3),
-                _IdentityLine(
-                  icon: Icons.location_on_outlined,
-                  value: (site == null || site.trim().isEmpty)
-                      ? l10n.homeSiteStatUnavailable
-                      : site,
-                ),
+                if (profile.employeeId != null) ...<Widget>[
+                  const SizedBox(height: 3),
+                  _IdentityLine(
+                    icon: Icons.contact_page_outlined,
+                    value: profile.employeeId!,
+                  ),
+                ],
                 const SizedBox(height: 5),
                 _IdentityLine(
                   icon: profile.isApproved && !profile.isLocked
@@ -326,6 +330,122 @@ class _IdentityHero extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ProfileStatusStrip extends StatelessWidget {
+  const _ProfileStatusStrip({
+    required this.profile,
+    required this.profileStale,
+  });
+
+  final WorkspaceProfile profile;
+  final bool profileStale;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      key: ProfileScreenKeys.status,
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.sm,
+        vertical: TpSpace.md,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _ProfileStatusItem(
+              icon: Icons.assignment_ind_outlined,
+              label: l10n.profileRoleLabel,
+              value: profile.role.displayName,
+              color: palette.primary,
+            ),
+          ),
+          _ProfileStatusDivider(color: palette.border),
+          Expanded(
+            child: _ProfileStatusItem(
+              icon: Icons.location_on_outlined,
+              label: l10n.vehiclesFieldSite,
+              value: (profile.legacySite?.trim().isNotEmpty ?? false)
+                  ? profile.legacySite!.trim()
+                  : l10n.homeSiteStatUnavailable,
+              color: palette.info.base,
+            ),
+          ),
+          _ProfileStatusDivider(color: palette.border),
+          Expanded(
+            child: _ProfileStatusItem(
+              icon: profileStale
+                  ? Icons.cloud_off_outlined
+                  : Icons.cloud_done_outlined,
+              label: l10n.homeSyncStatLabel,
+              value: profileStale
+                  ? l10n.syncStatusUnknown
+                  : l10n.inspectionStatusSynced,
+              color: profileStale ? palette.warning.base : palette.ok.base,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileStatusDivider extends StatelessWidget {
+  const _ProfileStatusDivider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 48,
+        color: color,
+      );
+}
+
+class _ProfileStatusItem extends StatelessWidget {
+  const _ProfileStatusItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: TpSizing.iconMd, color: color),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: TpPalette.of(context).textMuted,
+                  ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _IdentityLine extends StatelessWidget {

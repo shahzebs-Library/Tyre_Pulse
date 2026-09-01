@@ -59,6 +59,7 @@ final class WorkspaceProfile {
     this.isLocked = false,
     this.legacySite,
     this.fullName,
+    this.employeeId,
   });
 
   /// Decodes a `profiles` row.
@@ -95,6 +96,7 @@ final class WorkspaceProfile {
       isLocked: row['locked'] == true,
       legacySite: _stringOrNull(row['site']),
       fullName: _stringOrNull(row['full_name']),
+      employeeId: _stringOrNull(row['employee_id']),
     );
   }
 
@@ -122,6 +124,11 @@ final class WorkspaceProfile {
   final String? legacySite;
 
   final String? fullName;
+
+  /// Human-facing employee number from `profiles.employee_id`.
+  /// This is presentation metadata only; authorization continues to use
+  /// [userId] and the resolved permission state.
+  final String? employeeId;
 
   /// True when both organisation columns are populated and DISAGREE.
   ///
@@ -172,6 +179,7 @@ final class WorkspaceContext {
     this.currency,
     this.legacySite,
     this.fullName,
+    this.employeeId,
   });
 
   /// Builds the context for a freshly loaded profile.
@@ -202,6 +210,7 @@ final class WorkspaceContext {
         currency: currency,
         legacySite: profile.legacySite,
         fullName: profile.fullName,
+        employeeId: profile.employeeId,
       );
 
   final String userId;
@@ -243,6 +252,9 @@ final class WorkspaceContext {
   /// Presentation surfaces use it for personalisation only; it is never an
   /// identity key or an authorization input.
   final String? fullName;
+
+  /// Verified human-facing staff number from `profiles.employee_id`.
+  final String? employeeId;
 
   /// Spec section 8's `siteIds`.
   List<String> get siteIds => activeSites;
@@ -287,6 +299,7 @@ final class WorkspaceContext {
     bool clearCurrency = false,
     String? legacySite,
     String? fullName,
+    String? employeeId,
   }) =>
       WorkspaceContext(
         userId: userId,
@@ -304,6 +317,7 @@ final class WorkspaceContext {
         currency: clearCurrency ? null : (currency ?? this.currency),
         legacySite: legacySite ?? this.legacySite,
         fullName: fullName ?? this.fullName,
+        employeeId: employeeId ?? this.employeeId,
       );
 
   @override
@@ -321,6 +335,7 @@ final class WorkspaceContext {
           other.currency == currency &&
           other.legacySite == legacySite &&
           other.fullName == fullName &&
+          other.employeeId == employeeId &&
           _sameStrings(other.activeSites, activeSites);
 
   @override
@@ -336,6 +351,7 @@ final class WorkspaceContext {
         currency,
         legacySite,
         fullName,
+        employeeId,
         Object.hashAll(activeSites),
       );
 

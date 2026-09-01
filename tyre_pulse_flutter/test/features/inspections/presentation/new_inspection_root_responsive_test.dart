@@ -331,7 +331,7 @@ void main() {
       expect(find.text('14-Tyre Configuration'), findsOneWidget);
       expect(
         visibleIdentifiers,
-        containsAll(<String>['L1 I', 'L1 O', 'R1 I', 'R1 O']),
+        containsAll(<String>['LHR1-I', 'LHR1-O', 'RHR1-I', 'RHR1-O']),
       );
       expect(tester.takeException(), isNull);
     },

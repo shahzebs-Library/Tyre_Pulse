@@ -98,7 +98,6 @@ const List<HomeSectionSpec> _kHomeSections = <HomeSectionSpec>[
   HomeSectionSpec(
     id: 'field',
     tiles: <HomeTileSpec>[
-      HomeTileSpec(id: 'inspection', module: ModuleKey.inspect),
       HomeTileSpec(id: 'scanner', module: ModuleKey.scan),
       HomeTileSpec(id: 'serial', module: ModuleKey.serial),
       HomeTileSpec(id: 'meter', module: ModuleKey.meter),
@@ -176,6 +175,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final bool canInspect = ref.watch(
       canAccessModuleProvider(ModuleKey.inspect),
     );
+    final bool canScan = ref.watch(
+      canAccessModuleProvider(ModuleKey.scan),
+    );
+    final bool canWash = ref.watch(
+      canAccessModuleProvider(ModuleKey.washing),
+    );
     final bool canSeeVehicles = ref.watch(
       canAccessModuleProvider(ModuleKey.vehicles),
     );
@@ -242,6 +247,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onInspect: canInspect
             ? () => context.go(const NewInspectionRoute().location)
             : null,
+        onScanner:
+            canScan ? () => context.push(const ScannerRoute().location) : null,
         onHome: _scrollToTop,
         onMore: () => _showServices(sections, l10n),
       );
@@ -285,15 +292,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const SizedBox(height: 14),
                   _PmvOperationsHero(
                     l10n: l10n,
-                    onTap: canInspect
-                        ? () => context.go(
-                              const NewInspectionRoute().location,
-                            )
-                        : canSeeVehicles
-                            ? () => context.push(
-                                  const VehiclesRoute().location,
-                                )
-                            : null,
+                    onTap: canScan
+                        ? () => context.push(const ScannerRoute().location)
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -360,12 +361,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const SizedBox(height: 10),
                   _DashboardQuickActions(
                     l10n: l10n,
-                    canInspect: canInspect,
+                    canWash: canWash,
                     canSeeVehicles: canSeeVehicles,
                     canReportIssue: canReportIssue,
                     canReportAccident: canReportAccident,
-                    onInspect: () =>
-                        context.go(const NewInspectionRoute().location),
+                    onWashing: () => context.go(const WashingRoute().location),
                     onAsset: () => context.push(const VehiclesRoute().location),
                     onReportIssue: () =>
                         context.push(const ReportIssueRoute().location),
@@ -548,6 +548,7 @@ class _DarkHomeDashboard extends StatelessWidget {
     required this.onTasks,
     required this.onAssets,
     required this.onInspect,
+    required this.onScanner,
     required this.onHome,
     required this.onMore,
   });
@@ -568,6 +569,7 @@ class _DarkHomeDashboard extends StatelessWidget {
   final VoidCallback? onTasks;
   final VoidCallback? onAssets;
   final VoidCallback? onInspect;
+  final VoidCallback? onScanner;
   final VoidCallback onHome;
   final VoidCallback onMore;
 
@@ -603,7 +605,7 @@ class _DarkHomeDashboard extends StatelessWidget {
             const SizedBox(height: 14),
             _PmvOperationsHero(
               l10n: l10n,
-              onTap: onInspect ?? onAssets,
+              onTap: onScanner,
             ),
             const SizedBox(height: 16),
             _DarkMetricsGrid(
@@ -1347,7 +1349,7 @@ class _PmvOperationsHero extends StatelessWidget {
     final BorderRadius radius = BorderRadius.circular(TpRadius.lg);
     return Semantics(
       button: onTap != null,
-      label: l10n.inspectionNewInspection,
+      label: '${l10n.scannerTitle}: ${l10n.homeAssetAction}',
       child: Material(
         key: HomeScreenKeys.pmvHero,
         color: const Color(0xFFF4F8F6),
@@ -1402,18 +1404,30 @@ class _PmvOperationsHero extends StatelessWidget {
                     ),
                   ),
                   PositionedDirectional(
-                    top: 12,
-                    bottom: 5,
-                    end: -12,
-                    width: constraints.maxWidth * 0.57,
+                    top: 20,
+                    bottom: 20,
+                    end: 20,
+                    width: constraints.maxWidth * 0.34,
                     child: IgnorePointer(
-                      child: Image.asset(
-                        'assets/vehicle_photos/concrete_pump.png',
+                      child: DecoratedBox(
                         key: HomeScreenKeys.pmvHeroImage,
-                        fit: BoxFit.contain,
-                        alignment: AlignmentDirectional.bottomEnd,
-                        filterQuality: FilterQuality.high,
-                        excludeFromSemantics: true,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          borderRadius: BorderRadius.circular(TpRadius.lg),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color:
+                                  palette.primaryDark.withValues(alpha: 0.12),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.qr_code_scanner_rounded,
+                          color: palette.primary,
+                          size: 62,
+                        ),
                       ),
                     ),
                   ),
@@ -1449,7 +1463,7 @@ class _PmvOperationsHero extends StatelessWidget {
                                 children: <Widget>[
                                   Center(
                                     child: Icon(
-                                      Icons.description_outlined,
+                                      Icons.document_scanner_outlined,
                                       color: palette.primary,
                                       size: 23,
                                     ),
@@ -1469,7 +1483,7 @@ class _PmvOperationsHero extends StatelessWidget {
                                         ),
                                       ),
                                       child: Icon(
-                                        Icons.add_rounded,
+                                        Icons.center_focus_strong_rounded,
                                         color: palette.primary,
                                         size: 13,
                                       ),
@@ -1480,7 +1494,7 @@ class _PmvOperationsHero extends StatelessWidget {
                             ),
                             const Spacer(),
                             Text(
-                              l10n.inspectionNewInspection,
+                              l10n.scannerTitle,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context)
@@ -1496,7 +1510,7 @@ class _PmvOperationsHero extends StatelessWidget {
                               children: <Widget>[
                                 Expanded(
                                   child: Text(
-                                    l10n.vehiclesStartInspection,
+                                    l10n.homeSearchAssetsHint,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context)
@@ -2276,22 +2290,22 @@ class _MyWorkPreview extends StatelessWidget {
 class _DashboardQuickActions extends StatelessWidget {
   const _DashboardQuickActions({
     required this.l10n,
-    required this.canInspect,
+    required this.canWash,
     required this.canSeeVehicles,
     required this.canReportIssue,
     required this.canReportAccident,
-    required this.onInspect,
+    required this.onWashing,
     required this.onAsset,
     required this.onReportIssue,
     required this.onAccident,
   });
 
   final AppLocalizations l10n;
-  final bool canInspect;
+  final bool canWash;
   final bool canSeeVehicles;
   final bool canReportIssue;
   final bool canReportAccident;
-  final VoidCallback onInspect;
+  final VoidCallback onWashing;
   final VoidCallback onAsset;
   final VoidCallback onReportIssue;
   final VoidCallback onAccident;
@@ -2300,12 +2314,12 @@ class _DashboardQuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions =
         <({String id, String label, IconData icon, VoidCallback onTap})>[
-      if (canInspect)
+      if (canWash)
         (
-          id: 'inspect',
-          label: l10n.homeInspectAction,
-          icon: Icons.search_rounded,
-          onTap: onInspect,
+          id: 'washing',
+          label: l10n.tabWashing,
+          icon: Icons.local_car_wash_rounded,
+          onTap: onWashing,
         ),
       if (canSeeVehicles)
         (
@@ -3070,8 +3084,8 @@ class _QuickActionTile extends StatelessWidget {
       );
     case 'history':
       return (
-        label: l10n.tabHistory,
-        icon: Icons.history_rounded,
+        label: l10n.inspectionHistoryTitle,
+        icon: Icons.manage_search_rounded,
         approve: false,
       );
     case 'alerts':

@@ -61,6 +61,7 @@ Future<_Pumped> _pumpSignedIn(
       'locked': false,
       'site': site,
       'full_name': fullName,
+      'employee_id': 'EMP-1048',
     }),
   );
 
@@ -121,11 +122,14 @@ void main() {
 
       expect(find.text('Amina Yusuf'), findsOneWidget);
       expect(find.text('AY'), findsOneWidget);
+      expect(find.text('EMP-1048'), findsOneWidget);
       expect(find.text('Manager'), findsWidgets);
       expect(find.text('NHC'), findsWidgets);
       expect(find.text('One platform for every PMV asset'), findsOneWidget);
       expect(find.text('All'), findsNWidgets(2));
       expect(find.text('Platform administrator'), findsNothing);
+      expect(find.byKey(ProfileScreenKeys.status), findsOneWidget);
+      expect(find.text('Synced'), findsWidgets);
     },
   );
 

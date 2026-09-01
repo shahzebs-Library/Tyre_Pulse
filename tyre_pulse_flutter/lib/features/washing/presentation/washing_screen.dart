@@ -9,10 +9,9 @@
 /// vehicle's details from `vehicle_fleet`, they choose the wash type, add
 /// photos, and save. The wash is ALWAYS dated today (same-day, read-only).
 /// The write is offline-safe via the offline command queue, so a wash
-/// logged with no signal is never lost. A "Due for wash" section lists
-/// vehicles past their wash interval, derived on-device from
-/// `WashRepository.listRecentWashes` via `wash_schedule.dart`'s
-/// [washDueList].
+/// logged with no signal is never lost. This entry surface is intentionally
+/// focused on recording the wash; scheduling remains in the washing history/
+/// planning surfaces rather than appearing as a second task above the form.
 ///
 /// # No local reminder notification
 ///
@@ -22,14 +21,10 @@
 /// why that is a deliberate, separate decision not folded into this phase -
 /// the due list is surfaced here as a plain in-app panel only.
 ///
-/// # Asset scanning is a plain typed field, not a camera scanner
+/// # Asset scanning stays inside the form
 ///
-/// Same disclosed simplification, for the same reasons, as
-/// `features/meter_logs/presentation/meter_log_screen.dart`'s own library
-/// comment: a debounced text field reaches `VehicleFleetRepository
-/// .byAssetNo` 350ms after typing stops, matching the reference's own
-/// debounce window, rather than embedding a second copy of the full-screen
-/// camera scanner mid-form.
+/// The QR action uses the shared focused scanner and returns the decoded
+/// asset code without navigating away from any work already entered.
 ///
 /// # `cost` / `water_liters` / `duration_min` are never captured here
 ///
@@ -57,17 +52,16 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
-import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
+import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
-import 'package:tyre_pulse/features/washing/domain/wash_schedule.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_photo_gallery.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_recent_sheet.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
@@ -109,10 +103,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   bool _capturingPhoto = false;
   bool _submitting = false;
 
-  bool _loadingDue = true;
-  AppError? _dueError;
-  List<WashDueEntry> _due = const <WashDueEntry>[];
-
   late String _sessionKey;
 
   @override
@@ -128,7 +118,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     }
 
     _assetController.addListener(_onAssetChanged);
-    unawaited(_loadDue());
     unawaited(_fillOperatorFromProfile(workspace));
   }
 
@@ -154,49 +143,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     if (_operatorController.text.trim().isEmpty) {
       _operatorController.text = name.trim();
     }
-  }
-
-  Future<void> _loadDue() async {
-    setState(() {
-      _loadingDue = true;
-      _dueError = null;
-    });
-    try {
-      final List<WashRecord> recent =
-          await ref.read(washRepositoryProvider).listRecentWashes();
-      final List<WashDueEntry> due = washDueList(<WashHistoryRecord>[
-        for (final WashRecord w in recent)
-          WashHistoryRecord(
-            assetNo: w.assetNo,
-            washDate: w.washDate,
-            site: w.site,
-            vehicleType: w.vehicleType,
-          ),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _due = due;
-        _loadingDue = false;
-      });
-    } on Object catch (error) {
-      if (!mounted) return;
-      final AppLocalizations l10n = AppLocalizations.of(context);
-      setState(() {
-        _dueError = _asAppError(error, l10n.washDueLoadErrorMessage);
-        _loadingDue = false;
-      });
-    }
-  }
-
-  static AppError _asAppError(Object error, String fallbackMessage) {
-    if (error is AppError) return error;
-    return AppError(
-      kind: AppErrorKind.unknown,
-      message: fallbackMessage,
-      technical: error.toString(),
-      cause: error,
-      isRetryable: true,
-    );
   }
 
   void _onAssetChanged() {
@@ -248,13 +194,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
         !_siteTouched &&
         _siteController.text.trim().isEmpty) {
       _siteController.text = masterSite;
-    }
-  }
-
-  void _selectDueAsset(WashDueEntry entry) {
-    _assetController.text = entry.assetNo;
-    if (entry.site != null && !_siteTouched) {
-      _siteController.text = entry.site!;
     }
   }
 
@@ -339,7 +278,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       if (!mounted) return;
       _showSnack(l10n.washSavedMessage);
       _resetForm();
-      unawaited(_loadDue());
     } on Object {
       if (!mounted) return;
       await _showInfoDialog(
@@ -384,6 +322,13 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       title: l10n.washRecentTitle,
       builder: (BuildContext sheetContext) => const WashRecentSheet(),
     );
+  }
+
+  Future<void> _scanAsset() async {
+    final String? code = await showAssetCameraScanner(context);
+    if (!mounted || code == null || code.trim().isEmpty) return;
+    _assetController.text = code.trim();
+    await _performLookup(code.trim());
   }
 
   Future<void> _showInfoDialog({
@@ -439,14 +384,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
           TpSpace.xxl,
         ),
         children: <Widget>[
-          _DueForWashCard(
-            loading: _loadingDue,
-            error: _dueError,
-            due: _due,
-            onRetry: _loadDue,
-            onSelect: _selectDueAsset,
-          ),
-          const SizedBox(height: TpSpace.md),
           if (_master == null)
             TpCard(
               child: TpInput(
@@ -455,7 +392,13 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                 hint: l10n.washAssetHint,
                 textCapitalization: TextCapitalization.characters,
                 isRequired: true,
-                prefixIcon: Icons.qr_code_scanner_rounded,
+                prefixIcon: Icons.local_shipping_outlined,
+                suffix: IconButton(
+                  key: WashingScreenKeys.scanAsset,
+                  tooltip: l10n.scannerTitle,
+                  onPressed: _scanAsset,
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                ),
               ),
             )
           else
@@ -497,39 +440,9 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
             ),
           ),
           const SizedBox(height: TpSpace.md),
-          TpCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  l10n.washDateLabel,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                const SizedBox(height: TpSpace.sm),
-                Row(
-                  children: <Widget>[
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      color: TpPalette.of(context).textSecondary,
-                      size: TpSizing.iconSm,
-                    ),
-                    const SizedBox(width: TpSpace.sm),
-                    Expanded(
-                      child: Text(
-                        l10n.washDateTodayLine(_todayLabel()),
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ),
-                    Icon(
-                      Icons.lock_outline,
-                      color: TpPalette.of(context).textMuted,
-                      size: TpSizing.iconSm,
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          _WashAuditContext(
+            operatorName: _operatorController.text,
+            dateLabel: _nowLabel(),
           ),
           const SizedBox(height: TpSpace.md),
           _WashTypeSelector(
@@ -593,6 +506,11 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   label: l10n.washOperatorLabel,
                   controller: _operatorController,
                   hint: l10n.washOperatorHint,
+                  enabled: false,
+                  suffix: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: TpSpace.md),
+                    child: Icon(Icons.lock_outline_rounded),
+                  ),
                 ),
                 const SizedBox(height: TpSpace.md),
                 Row(
@@ -652,6 +570,13 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     return '$y-$m-$d';
   }
 
+  static String _nowLabel() {
+    final DateTime now = DateTime.now();
+    final String h = now.hour.toString().padLeft(2, '0');
+    final String m = now.minute.toString().padLeft(2, '0');
+    return '${_todayLabel()}  $h:$m';
+  }
+
   static String _washTypeLabel(AppLocalizations l10n, String type) {
     switch (type) {
       case 'Exterior':
@@ -685,6 +610,49 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   }
 }
 
+abstract final class WashingScreenKeys {
+  static const ValueKey<String> scanAsset =
+      ValueKey<String>('washing.scanAsset');
+}
+
+class _WashAuditContext extends StatelessWidget {
+  const _WashAuditContext({
+    required this.operatorName,
+    required this.dateLabel,
+  });
+
+  final String operatorName;
+  final String dateLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final String operator = operatorName.trim().isEmpty
+        ? l10n.valueUnavailable
+        : operatorName.trim();
+    return TpCard(
+      background: palette.surfaceAlt,
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.verified_user_outlined, color: palette.primary),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(operator, style: Theme.of(context).textTheme.titleSmall),
+                Text(dateLabel, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Icon(Icons.lock_outline_rounded, color: palette.textMuted),
+        ],
+      ),
+    );
+  }
+}
+
 /// See `meter_log_screen.dart`'s own `_parseNum` - the same contract, kept
 /// as this feature's own copy.
 num? _parseNum(String raw) {
@@ -714,71 +682,81 @@ class _WashTypeSelector extends StatelessWidget {
       children: <Widget>[
         Text(label, style: Theme.of(context).textTheme.labelMedium),
         const SizedBox(height: TpSpace.xs),
-        SizedBox(
-          height: 112,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: labels.length,
-            separatorBuilder: (_, __) => const SizedBox(width: TpSpace.sm),
-            itemBuilder: (BuildContext context, int index) {
-              final MapEntry<String, String> entry = labels.entries.elementAt(
-                index,
-              );
-              final bool isSelected = selected == entry.key;
-              return SizedBox(
-                width: 104,
-                child: Material(
-                  color: isSelected ? palette.info.soft : palette.surface,
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                      color: isSelected ? palette.primary : palette.border,
-                    ),
-                    borderRadius: BorderRadius.circular(TpRadius.md),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => onSelected(entry.key),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: TpSpace.sm,
-                        vertical: TpSpace.md,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          Icon(
-                            _washTypeIcon(entry.key),
-                            color: isSelected
-                                ? palette.primary
-                                : palette.textSecondary,
-                            size: TpSizing.iconLg,
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final int columns = constraints.maxWidth >= 520 ? 4 : 3;
+            final double tileWidth =
+                (constraints.maxWidth - (columns - 1) * TpSpace.sm) / columns;
+            return Wrap(
+              spacing: TpSpace.sm,
+              runSpacing: TpSpace.sm,
+              children: <Widget>[
+                for (int index = 0; index < labels.length; index++)
+                  Builder(
+                    builder: (BuildContext context) {
+                      final MapEntry<String, String> entry =
+                          labels.entries.elementAt(index);
+                      final bool isSelected = selected == entry.key;
+                      return SizedBox(
+                        width: tileWidth,
+                        height: 100,
+                        child: Material(
+                          color:
+                              isSelected ? palette.info.soft : palette.surface,
+                          shape: RoundedRectangleBorder(
+                            side: BorderSide(
+                              color:
+                                  isSelected ? palette.primary : palette.border,
+                            ),
+                            borderRadius: BorderRadius.circular(TpRadius.md),
                           ),
-                          const SizedBox(height: TpSpace.sm),
-                          Text(
-                            entry.value,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelMedium
-                                ?.copyWith(
-                                  color: isSelected
-                                      ? palette.primary
-                                      : palette.text,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w800
-                                      : FontWeight.w600,
-                                ),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => onSelected(entry.key),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: TpSpace.sm,
+                                vertical: TpSpace.md,
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: <Widget>[
+                                  Icon(
+                                    _washTypeIcon(entry.key),
+                                    color: isSelected
+                                        ? palette.primary
+                                        : palette.textSecondary,
+                                    size: TpSizing.iconLg,
+                                  ),
+                                  const SizedBox(height: TpSpace.sm),
+                                  Text(
+                                    entry.value,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: isSelected
+                                              ? palette.primary
+                                              : palette.text,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w800
+                                              : FontWeight.w600,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
-                ),
-              );
-            },
-          ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -804,6 +782,7 @@ class _WashTypeSelector extends StatelessWidget {
   }
 }
 
+/* Scheduling belongs to the history/planning surface, not this entry form.
 class _DueForWashCard extends StatelessWidget {
   const _DueForWashCard({
     required this.loading,
@@ -945,3 +924,4 @@ class _DueRow extends StatelessWidget {
     );
   }
 }
+*/

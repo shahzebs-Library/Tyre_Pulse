@@ -206,11 +206,11 @@ void main() {
       expect(find.byType(HomeScreen), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.pmvHeroImage), findsOneWidget);
-      expect(find.text('New inspection'), findsOneWidget);
+      expect(find.text('Scan'), findsWidgets);
       expect(
         find.descendant(
           of: find.byKey(HomeScreenKeys.pmvHero),
-          matching: find.byIcon(Icons.add_rounded),
+          matching: find.byIcon(Icons.qr_code_scanner_rounded),
         ),
         findsOneWidget,
       );
@@ -307,7 +307,8 @@ void main() {
       expect(find.text('Report issue'), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('inspect')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('inspect')), findsNothing);
+      expect(find.byKey(HomeScreenKeys.action('washing')), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
@@ -365,7 +366,8 @@ void main() {
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.pmvHero), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.stats), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('inspect')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.action('inspect')), findsNothing);
+      expect(find.byKey(HomeScreenKeys.action('washing')), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
     },
   );
@@ -419,6 +421,13 @@ void main() {
       await tester.tap(find.text('More').last);
       await tester.pumpAndSettle();
 
+      expect(find.text('New inspection'), findsNothing);
+      await tester.scrollUntilVisible(
+        find.text('My Inspections'),
+        220,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text('My Inspections'), findsOneWidget);
       expect(find.text('Accident command centre'), findsWidgets);
       expect(find.text('Report an accident'), findsWidgets);
       await tester.drag(find.byType(ListView).last, const Offset(0, -850));

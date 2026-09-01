@@ -20,27 +20,11 @@
 /// photo is captured there, not on this screen, mirroring the reference's
 /// own `handleContinue` / review `Modal` split exactly.
 ///
-/// # Asset scanning is a plain typed field, not a camera scanner - a
-/// # disclosed, deliberate simplification
+/// # Asset scanning stays inside the form
 ///
-/// The reference screen embeds its own `expo-camera` barcode scanner
-/// (`CameraView` inside a full-screen `Modal`) as an alternative way to
-/// fill the asset field. This port does not reuse
-/// `features/scanning/presentation/scanner_screen.dart` here: that screen
-/// is a full ROUTE with its own navigation/result-return plumbing designed
-/// around the scan-then-push-to-inspection flow (`scan_route_resolver
-/// .dart`), and wiring it into a bottom-sheet-driven form would mean either
-/// pushing a second route mid-form (crossing branches, which
-/// `app_router.dart`'s own library comment names as the one rule this
-/// application's router exists to prevent - "pushing into the inspect
-/// branch instead would cross branches") or duplicating its camera/
-/// permission machinery here. Given the task's own explicit authorisation
-/// for exactly this trade-off, this screen instead offers a plain, debounced
-/// asset text field with the SAME auto-fill-on-lookup behaviour the
-/// reference achieves via scanning - `VehicleFleetRepository.byAssetNo` is
-/// queried 350ms after the user stops typing, matching the reference's own
-/// debounce window exactly. Typing a full asset number already works
-/// identically either way; only the barcode CAMERA shortcut is not ported.
+/// The QR action opens the shared focused camera dialog and returns the
+/// decoded asset code to this form. It does not push another navigation
+/// branch, so any reading already typed remains intact.
 ///
 /// # Site auto-fill: only when not already set by the user
 ///
@@ -73,7 +57,7 @@ import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
 import 'package:tyre_pulse/features/meter_logs/meter_logs_providers.dart';
 import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_recent_sheet.dart';
 import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_review_sheet.dart';
-import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_signature_pad.dart';
+import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
 import 'package:uuid/uuid.dart';
 
 /// A same-day jump beyond this many km is almost certainly a typo, not a
@@ -106,7 +90,6 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
   LastOdometerReading? _last;
   VehicleAsset? _master;
   bool _loadingLast = false;
-  MeterLogSignatureCapture? _signature;
   bool _isProcessingContinue = false;
 
   late String _sessionKey;
@@ -307,7 +290,6 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
         odometerKm: odometerKm,
         engineHours: hours,
         notes: notes.isEmpty ? null : notes,
-        signature: _signature,
         sessionKey: _sessionKey,
         flaggedForReview: flaggedForReview,
       ),
@@ -337,7 +319,6 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     _engineHoursController.clear();
     _notesController.clear();
     setState(() {
-      _signature = null;
       _last = null;
       _master = null;
       _loadingLast = false;
@@ -352,6 +333,13 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
       title: l10n.meterLogRecentTitle,
       builder: (BuildContext sheetContext) => const MeterLogRecentSheet(),
     );
+  }
+
+  Future<void> _scanAsset() async {
+    final String? code = await showAssetCameraScanner(context);
+    if (!mounted || code == null || code.trim().isEmpty) return;
+    _assetController.text = code.trim();
+    await _performLookup(code.trim());
   }
 
   Future<void> _showInfoDialog({
@@ -416,7 +404,13 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                 hint: l10n.meterLogAssetHint,
                 textCapitalization: TextCapitalization.characters,
                 isRequired: true,
-                prefixIcon: Icons.qr_code_scanner_rounded,
+                prefixIcon: Icons.local_shipping_outlined,
+                suffix: IconButton(
+                  key: MeterLogScreenKeys.scanAsset,
+                  tooltip: l10n.scannerTitle,
+                  onPressed: _scanAsset,
+                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                ),
               ),
             )
           else
@@ -434,6 +428,8 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                 setState(() => _master = null);
               },
             ),
+          const SizedBox(height: TpSpace.md),
+          _LockedAuditContext(workspace: ref.watch(workspaceContextProvider)),
           const SizedBox(height: TpSpace.md),
           Container(
             padding: const EdgeInsets.symmetric(
@@ -575,26 +571,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
             ),
           ),
           const SizedBox(height: TpSpace.md),
-          TpCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  l10n.meterLogSignatureLabel,
-                  style: Theme.of(context).textTheme.labelMedium,
-                ),
-                const SizedBox(height: TpSpace.sm),
-                MeterLogSignaturePad(
-                  value: _signature?.dataUrl,
-                  onChanged: (MeterLogSignatureCapture? capture) {
-                    setState(() => _signature = capture);
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: TpSpace.xl),
+          const SizedBox(height: TpSpace.md),
           TpButton.primary(
             label: l10n.meterLogContinueAction,
             icon: Icons.arrow_forward,
@@ -613,6 +590,48 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     final String m = now.month.toString().padLeft(2, '0');
     final String d = now.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
+  }
+}
+
+abstract final class MeterLogScreenKeys {
+  static const ValueKey<String> scanAsset =
+      ValueKey<String>('meterLog.scanAsset');
+}
+
+class _LockedAuditContext extends StatelessWidget {
+  const _LockedAuditContext({required this.workspace});
+
+  final WorkspaceContext? workspace;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final String name = workspace?.fullName?.trim().isNotEmpty == true
+        ? workspace!.fullName!.trim()
+        : l10n.valueUnavailable;
+    return TpCard(
+      background: palette.surfaceAlt,
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.badge_outlined, color: palette.primary),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(name, style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  _MeterLogScreenState._todayLabel(),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.lock_outline_rounded, color: palette.textMuted),
+        ],
+      ),
+    );
   }
 }
 

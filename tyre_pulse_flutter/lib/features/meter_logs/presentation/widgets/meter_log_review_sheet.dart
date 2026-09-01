@@ -25,7 +25,6 @@ import 'package:tyre_pulse/features/meter_logs/data/meter_log_photo_capture.dart
 import 'package:tyre_pulse/features/meter_logs/data/meter_log_repository.dart';
 import 'package:tyre_pulse/features/meter_logs/meter_logs_providers.dart';
 import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_photo_slot.dart';
-import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_signature_pad.dart';
 
 /// What the parent screen does once the sheet has actually saved something.
 final class MeterLogReviewSaved {
@@ -47,7 +46,6 @@ class MeterLogReviewSheet extends ConsumerStatefulWidget {
     required this.odometerKm,
     required this.engineHours,
     required this.notes,
-    required this.signature,
     required this.sessionKey,
     required this.flaggedForReview,
     super.key,
@@ -60,7 +58,6 @@ class MeterLogReviewSheet extends ConsumerStatefulWidget {
   final num odometerKm;
   final num? engineHours;
   final String? notes;
-  final MeterLogSignatureCapture? signature;
 
   /// Keys the durable photo folder for this fill session - see
   /// `meter_log_photo_capture.dart`'s own library comment for why this is a
@@ -150,7 +147,6 @@ class _MeterLogReviewSheetState extends ConsumerState<MeterLogReviewSheet> {
               engineHours: widget.engineHours,
               hoursPhotoLocalPath: _hoursPhotoPath,
               notes: widget.notes,
-              signatureDataUrl: widget.signature?.dataUrl,
             ),
           );
       if (!mounted) return;

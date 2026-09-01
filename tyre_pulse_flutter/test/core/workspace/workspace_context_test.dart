@@ -17,6 +17,7 @@ Map<String, Object?> row({
   Object? approved = true,
   Object? locked,
   Object? site = 'NHC',
+  Object? employeeId = 'EMP-1048',
 }) =>
     <String, Object?>{
       'id': id,
@@ -30,6 +31,7 @@ Map<String, Object?> row({
       'locked': locked,
       'site': site,
       'full_name': 'A Person',
+      'employee_id': employeeId,
     };
 
 void main() {
@@ -84,6 +86,14 @@ void main() {
       );
       expect(profile.legacySite, 'NHC');
       expect(profile.siteScope.values, <String>['DIRIYAH']);
+    });
+
+    test('employee id is decoded only from the verified profile field', () {
+      expect(WorkspaceProfile.fromRow(row()).employeeId, 'EMP-1048');
+      expect(
+        WorkspaceProfile.fromRow(row(employeeId: '  ')).employeeId,
+        isNull,
+      );
     });
 
     test('the two organisation columns are read separately', () {

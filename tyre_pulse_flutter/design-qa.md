@@ -463,6 +463,10 @@ conversation.
   `5605950A2422B5353364C06933E0FB537D86C1FFD44D7E81D3423E39E74AA5CF`.
 - `MIGRATIONS_V611_ACCIDENT_MOBILE_EVIDENCE_DOCUMENTS.sql` aligns configured
   evidence/document gates without deleting historical files or case records.
+- The migration was applied to the linked Supabase project and verified:
+  zero retired evidence/document requirements remain active, zero route or
+  country profiles retain the retired required keys, the scene overview stays
+  mandatory, and all five corrected KSA document slots are active/optional.
 
 ## Remaining physical gate
 

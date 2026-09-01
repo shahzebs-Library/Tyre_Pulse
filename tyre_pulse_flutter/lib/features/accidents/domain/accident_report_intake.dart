@@ -11,12 +11,10 @@ import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 
 enum AccidentReportStep {
-  identify,
   incident,
-  peopleSafety,
-  authorityThirdParty,
+  peopleAuthority,
   damage,
-  evidence,
+  evidenceDocuments,
   review,
 }
 
@@ -27,116 +25,45 @@ final class AccidentEvidenceRequirement {
     required this.label,
     required this.category,
     this.mandatory = true,
+    this.damageZoneId,
   });
 
   final String key;
   final String label;
   final String category;
   final bool mandatory;
+  final String? damageZoneId;
 }
 
-/// The 13 globally mandatory rows in `07_SEED_CONFIG.md`, in configured sort
-/// order. They are an offline baseline, not a replacement for server config:
-/// route/type-specific additions are derived separately below and the screen
-/// calls this out as its saved-on-device checklist.
+/// A single scene overview anchors the report. Close-up evidence is derived
+/// from the damage marks the reporter actually selects instead of asking for
+/// a fixed 13-photo vehicle checklist that is unrelated to the incident.
 const List<AccidentEvidenceRequirement> accidentBaselinePhotoRequirements =
     <AccidentEvidenceRequirement>[
   AccidentEvidenceRequirement(
-    key: 'photo_full_front',
-    label: 'Full front view',
-    category: 'Exterior',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_full_rear',
-    label: 'Full rear view',
-    category: 'Exterior',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_left_side',
-    label: 'Left side',
-    category: 'Exterior',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_right_side',
-    label: 'Right side',
-    category: 'Exterior',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_front_left_corner',
-    label: 'Front-left corner',
-    category: 'Corner',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_front_right_corner',
-    label: 'Front-right corner',
-    category: 'Corner',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_rear_left_corner',
-    label: 'Rear-left corner',
-    category: 'Corner',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_rear_right_corner',
-    label: 'Rear-right corner',
-    category: 'Corner',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_damage_closeup',
-    label: 'Close-up damage',
-    category: 'Damage',
-  ),
-  AccidentEvidenceRequirement(
     key: 'photo_scene',
-    label: 'Accident scene',
+    label: 'Scene overview',
     category: 'Scene',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_plate',
-    label: 'Vehicle plate',
-    category: 'Identity',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_odometer',
-    label: 'Odometer / hour meter',
-    category: 'Identity',
-  ),
-  AccidentEvidenceRequirement(
-    key: 'photo_dashboard_lights',
-    label: 'Dashboard warning lights',
-    category: 'Condition',
   ),
 ];
 
 const List<AccidentEvidenceRequirement> accidentOptionalDocuments =
     <AccidentEvidenceRequirement>[
   AccidentEvidenceRequirement(
-    key: 'doc_driver_license',
+    key: 'doc_driving_licence',
     label: 'Driving licence',
     category: 'Document',
     mandatory: false,
   ),
   AccidentEvidenceRequirement(
-    key: 'doc_resident_id',
-    label: 'Resident ID',
+    key: 'doc_iqama',
+    label: 'Iqama',
     category: 'Document',
     mandatory: false,
   ),
   AccidentEvidenceRequirement(
-    key: 'doc_vehicle_registration',
-    label: 'Vehicle registration',
-    category: 'Document',
-    mandatory: false,
-  ),
-  AccidentEvidenceRequirement(
-    key: 'doc_authority_report',
-    label: 'Authority / police report',
-    category: 'Document',
-    mandatory: false,
-  ),
-  AccidentEvidenceRequirement(
-    key: 'doc_driver_statement',
-    label: 'Driver statement',
+    key: 'doc_istimara',
+    label: 'Istimara',
     category: 'Document',
     mandatory: false,
   ),
@@ -146,12 +73,17 @@ const List<AccidentEvidenceRequirement> accidentOptionalDocuments =
     category: 'Document',
     mandatory: false,
   ),
+  AccidentEvidenceRequirement(
+    key: 'doc_taqdeer_report',
+    label: 'Taqdeer report',
+    category: 'Document',
+    mandatory: false,
+  ),
 ];
 
-/// Returns the global checklist plus the scoped rows whose recorded facts
-/// activate them. The server's route profile remains authoritative at sync;
-/// these additions make an offline report at least as complete as the facts
-/// already captured on the device imply.
+/// Returns only evidence relevant to the recorded incident: one overview,
+/// one close-up for each exact marked side/component, and other-party photos
+/// when another party is involved.
 List<AccidentEvidenceRequirement> evidenceRequirementsFor(
   AccidentReportIntakeDraft draft,
 ) {
@@ -167,38 +99,34 @@ List<AccidentEvidenceRequirement> evidenceRequirementsFor(
     );
   }
 
+  for (final AccidentDamageMark mark in draft.damageMap.marks) {
+    result.add(damageEvidenceRequirementFor(mark));
+  }
+
   if (draft.thirdPartyInvolved == true) {
     add('photo_other_party_vehicle', 'Other-party vehicle', 'Third party');
     add('photo_other_party_plate', 'Other-party plate', 'Third party');
   }
-  if (draft.injuries == true ||
-      draft.accidentType == 'injury' ||
-      draft.accidentType == 'fatal') {
-    add('photo_road_condition', 'Road / site condition', 'Scene');
-  }
-  if (draft.accidentType == 'tyre_failure' ||
-      draft.accidentType == 'tyre_wheel') {
-    add('photo_tyres_wheels', 'Tyres and wheels', 'Damage');
-  }
-  if (draft.accidentType == 'total_loss') {
-    add('photo_chassis_vin', 'Chassis / VIN', 'Identity');
-  }
-  if (draft.accidentType == 'property_damage' ||
-      draft.accidentType == 'third_party_property' ||
-      draft.accidentType == 'customer_property') {
-    add('photo_property_damage', 'Property damage', 'Damage');
-  }
-  if (draft.accidentType == 'equipment_to_vehicle') {
-    add(
-      'photo_equipment_attachment',
-      'Equipment attachment',
-      'Damage',
-    );
-  }
-  if (draft.accidentType == 'theft') {
-    add('photo_chassis_vin_theft', 'Chassis / VIN', 'Identity');
-  }
   return List<AccidentEvidenceRequirement>.unmodifiable(result);
+}
+
+/// Builds the stable close-up requirement for one exact damage mark.
+///
+/// This is also used while a newly selected component is still open in the
+/// editor and has not yet been committed to the parent map.
+AccidentEvidenceRequirement damageEvidenceRequirementFor(
+  AccidentDamageMark mark,
+) {
+  final String side = mark.effectiveView?.name ?? 'unspecified';
+  final String component =
+      _text(mark.areaLabel) ?? _humanizeDamageZone(mark.zoneId);
+  return AccidentEvidenceRequirement(
+    key: 'photo_damage_${_evidenceKeyPart(side)}_'
+        '${_damageComponentKey(side, mark.zoneId)}',
+    label: '${_titleCase(side)} - $component',
+    category: 'Damage',
+    damageZoneId: mark.zoneId,
+  );
 }
 
 @immutable
@@ -238,6 +166,8 @@ final class AccidentReportIntakeDraft {
     this.thirdPartyPlate = '',
     this.thirdPartyContact = '',
     this.thirdPartyInsurer = '',
+    this.thirdPartyInvoiceAvailable,
+    this.thirdPartyInvoiceNumber = '',
     this.policeNotified,
     this.policeReportNo = '',
     this.najmNotified,
@@ -285,6 +215,8 @@ final class AccidentReportIntakeDraft {
   final String thirdPartyPlate;
   final String thirdPartyContact;
   final String thirdPartyInsurer;
+  final bool? thirdPartyInvoiceAvailable;
+  final String thirdPartyInvoiceNumber;
   final bool? policeNotified;
   final String policeReportNo;
   final bool? najmNotified;
@@ -305,11 +237,10 @@ final class AccidentReportIntakeDraft {
   List<String> validationMessagesFor(AccidentReportStep step) {
     final List<String> messages = <String>[];
     switch (step) {
-      case AccidentReportStep.identify:
+      case AccidentReportStep.incident:
         if (effectiveAssetNo.isEmpty) {
           messages.add('Select a fleet asset or enter an asset number.');
         }
-      case AccidentReportStep.incident:
         if (incidentSite.trim().isEmpty) {
           messages.add('Incident site is required.');
         }
@@ -323,7 +254,7 @@ final class AccidentReportIntakeDraft {
             .isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
           messages.add('Incident date and time cannot be in the future.');
         }
-      case AccidentReportStep.peopleSafety:
+      case AccidentReportStep.peopleAuthority:
         if (driverName.trim().isEmpty) {
           messages.add('Driver name is required.');
         }
@@ -345,29 +276,8 @@ final class AccidentReportIntakeDraft {
         if (emergencyServices == true && emergencyDetails.trim().isEmpty) {
           messages.add('Record the emergency response details.');
         }
-      case AccidentReportStep.authorityThirdParty:
-        if (authorityInvolved == null ||
-            thirdPartyInvolved == null ||
-            policeNotified == null ||
-            najmNotified == null) {
-          messages.add('Answer every authority and third-party question.');
-        }
-        if (authorityInvolved == true) {
-          if (authorityType.trim().isEmpty ||
-              authorityReportStatus.trim().isEmpty) {
-            messages.add('Record the authority type and report status.');
-          }
-          if (authorityReportStatus == 'available' &&
-              authorityReportNo.trim().isEmpty) {
-            messages.add('Record the available authority report number.');
-          }
-          if (authorityReportStatus == 'none' &&
-              noReportReason.trim().isEmpty) {
-            messages.add('Explain why no authority report exists.');
-          }
-          if (liabilityAvailable == null) {
-            messages.add('Record whether an authority decision is available.');
-          }
+        if (thirdPartyInvolved == null || najmNotified == null) {
+          messages.add('Answer the third-party and Najm questions.');
         }
         if (thirdPartyInvolved == true &&
             (thirdPartyName.trim().isEmpty ||
@@ -378,30 +288,31 @@ final class AccidentReportIntakeDraft {
             'Record the third party, contact, and vehicle or plate.',
           );
         }
-        if (policeNotified == true && policeReportNo.trim().isEmpty) {
-          messages.add('Record the police report number.');
+        if (thirdPartyInvolved == true &&
+            thirdPartyInvoiceAvailable == true &&
+            thirdPartyInvoiceNumber.trim().isEmpty) {
+          messages.add('Record the third-party invoice number.');
         }
         if (najmNotified == true && najmReference.trim().isEmpty) {
           messages.add('Record the Najm reference.');
         }
       case AccidentReportStep.damage:
       // A near miss or no-damage event legitimately has no damage mark.
-      case AccidentReportStep.evidence:
+      case AccidentReportStep.evidenceDocuments:
         final List<AccidentEvidenceRequirement> requirements =
             evidenceRequirementsFor(this);
         final int missing = requirements
             .where(
               (AccidentEvidenceRequirement item) =>
-                  _text(evidencePaths[item.key]) == null,
+                  item.mandatory && !_hasEvidence(item),
             )
             .length;
         if (missing > 0) {
           messages.add('$missing required photograph(s) are still missing.');
         }
       case AccidentReportStep.review:
-        if (driverStatement.trim().isEmpty) {
-          messages.add('Driver statement is required.');
-        }
+      // Review confirms the captured facts. Supporting documents and the
+      // legacy driver-statement field are deliberately non-blocking.
     }
     return messages;
   }
@@ -416,10 +327,20 @@ final class AccidentReportIntakeDraft {
   int completedEvidenceCount(List<AccidentEvidenceRequirement> requirements) =>
       requirements
           .where(
-            (AccidentEvidenceRequirement item) =>
-                _text(evidencePaths[item.key]) != null,
+            (AccidentEvidenceRequirement item) => _hasEvidence(item),
           )
           .length;
+
+  bool _hasEvidence(AccidentEvidenceRequirement requirement) {
+    if (_text(evidencePaths[requirement.key]) != null) return true;
+    final String? zoneId = requirement.damageZoneId;
+    if (zoneId == null) return false;
+    return damageMap
+            .markFor(zoneId)
+            ?.photoReferences
+            .any((String reference) => _text(reference) != null) ??
+        false;
+  }
 
   /// Preserves the fields that the current narrow queue DTO cannot represent
   /// in its native columns. This is intentionally readable text, not an
@@ -448,15 +369,6 @@ final class AccidentReportIntakeDraft {
       'Vehicle movable: ${_yesNo(vehicleMovable)}',
       'Recovery required: ${_yesNo(recoveryRequired)}',
       'Safe to operate: ${_yesNo(safeToOperate)}',
-      'Authority involved: ${_yesNo(authorityInvolved)}',
-      if (authorityType.trim().isNotEmpty) 'Authority: ${authorityType.trim()}',
-      if (authorityReportStatus.trim().isNotEmpty)
-        'Authority report status: ${authorityReportStatus.trim()}',
-      if (authorityReportNo.trim().isNotEmpty)
-        'Authority report: ${authorityReportNo.trim()}',
-      if (noReportReason.trim().isNotEmpty)
-        'No-report reason: ${noReportReason.trim()}',
-      'Liability available: ${_yesNo(liabilityAvailable)}',
       'Third party involved: ${_yesNo(thirdPartyInvolved)}',
       if (thirdPartyName.trim().isNotEmpty)
         'Third party: ${thirdPartyName.trim()}',
@@ -468,13 +380,16 @@ final class AccidentReportIntakeDraft {
         'Third-party contact: ${thirdPartyContact.trim()}',
       if (thirdPartyInsurer.trim().isNotEmpty)
         'Third-party insurer: ${thirdPartyInsurer.trim()}',
-      'Police notified: ${_yesNo(policeNotified)}',
-      if (policeReportNo.trim().isNotEmpty)
-        'Police report: ${policeReportNo.trim()}',
+      if (thirdPartyInvolved == true)
+        'Third-party invoice available: '
+            '${_yesNo(thirdPartyInvoiceAvailable)}',
+      if (thirdPartyInvolved == true &&
+          thirdPartyInvoiceAvailable == true &&
+          thirdPartyInvoiceNumber.trim().isNotEmpty)
+        'Third-party invoice number: ${thirdPartyInvoiceNumber.trim()}',
       'Najm notified: ${_yesNo(najmNotified)}',
       if (najmReference.trim().isNotEmpty)
         'Najm reference: ${najmReference.trim()}',
-      'Driver statement: ${driverStatement.trim()}',
       if (witnessDetails.trim().isNotEmpty)
         'Witnesses: ${witnessDetails.trim()}',
       if (immediateAction.trim().isNotEmpty)
@@ -520,6 +435,8 @@ final class AccidentReportIntakeDraft {
         'thirdPartyPlate': thirdPartyPlate,
         'thirdPartyContact': thirdPartyContact,
         'thirdPartyInsurer': thirdPartyInsurer,
+        'thirdPartyInvoiceAvailable': thirdPartyInvoiceAvailable,
+        'thirdPartyInvoiceNumber': thirdPartyInvoiceNumber,
         'policeNotified': policeNotified,
         'policeReportNo': policeReportNo,
         'najmNotified': najmNotified,
@@ -544,6 +461,17 @@ final class AccidentReportIntakeDraft {
       for (final MapEntry<String, dynamic> entry in rawEvidence.entries) {
         final String value = _string(entry.value).trim();
         if (value.isNotEmpty) evidence[entry.key] = value;
+      }
+      const Map<String, String> legacyDocumentKeys = <String, String>{
+        'doc_driver_license': 'doc_driving_licence',
+        'doc_resident_id': 'doc_iqama',
+        'doc_vehicle_registration': 'doc_istimara',
+      };
+      for (final MapEntry<String, String> alias in legacyDocumentKeys.entries) {
+        final String? legacyPath = evidence[alias.key];
+        if (legacyPath != null) {
+          evidence.putIfAbsent(alias.value, () => legacyPath);
+        }
       }
     }
     final List<AccidentDamageMark> marks = <AccidentDamageMark>[];
@@ -598,6 +526,8 @@ final class AccidentReportIntakeDraft {
       thirdPartyPlate: _string(json['thirdPartyPlate']),
       thirdPartyContact: _string(json['thirdPartyContact']),
       thirdPartyInsurer: _string(json['thirdPartyInsurer']),
+      thirdPartyInvoiceAvailable: _bool(json['thirdPartyInvoiceAvailable']),
+      thirdPartyInvoiceNumber: _string(json['thirdPartyInvoiceNumber']),
       policeNotified: _bool(json['policeNotified']),
       policeReportNo: _string(json['policeReportNo']),
       najmNotified: _bool(json['najmNotified']),
@@ -618,6 +548,38 @@ String _yesNo(bool? value) => switch (value) {
       false => 'No',
       null => 'Not recorded',
     };
+
+String _evidenceKeyPart(String raw) {
+  final String normalized = raw
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp('[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return normalized.isEmpty ? 'area' : normalized;
+}
+
+String _damageComponentKey(String side, String zoneId) {
+  final String normalizedSide = _evidenceKeyPart(side);
+  final String normalizedZone = _evidenceKeyPart(zoneId);
+  final String sidePrefix = '${normalizedSide}_';
+  return normalizedZone.startsWith(sidePrefix)
+      ? normalizedZone.substring(sidePrefix.length)
+      : normalizedZone;
+}
+
+String _humanizeDamageZone(String raw) {
+  final String value = raw
+      .trim()
+      .replaceAll(RegExp('[_:]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+  return value.isEmpty ? 'Selected area' : _titleCase(value);
+}
+
+String _titleCase(String raw) {
+  final String value = raw.trim();
+  if (value.isEmpty) return value;
+  return '${value[0].toUpperCase()}${value.substring(1)}';
+}
 
 String? _text(String? raw) {
   final String value = raw?.trim() ?? '';

@@ -131,8 +131,6 @@ void main() {
       );
 
       expect(accidentDamageMarkerRadius * 2, 24);
-      await tester.drag(find.byType(ListView).first, const Offset(-180, 0));
-      await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(
           AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.left),
@@ -182,8 +180,6 @@ void main() {
       expect(recoveredPoint.dy, closeTo(sourcePoint.dy, .0001));
       expect(paintedPoint.dy, inInclusiveRange(0, viewportSize.height));
 
-      await tester.drag(find.byType(ListView).first, const Offset(-120, 0));
-      await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(
           AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.right),
@@ -219,7 +215,7 @@ void main() {
     },
   );
 
-  testWidgets('front is the default view and its chip reads selected', (
+  testWidgets('left is the default view and its balanced tab reads selected', (
     WidgetTester tester,
   ) async {
     await _pump(
@@ -228,15 +224,15 @@ void main() {
       onChanged: (_) {},
     );
 
-    final ChoiceChip front = tester.widget<ChoiceChip>(
+    final Material left = tester.widget<Material>(
       find.descendant(
         of: find.byKey(
-          AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+          AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.left),
         ),
-        matching: find.byType(ChoiceChip),
+        matching: find.byType(Material),
       ),
     );
-    expect(front.selected, isTrue);
+    expect(left.color, isNot(Colors.transparent));
     expect(tester.takeException(), isNull);
   });
 
@@ -250,23 +246,25 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.left)),
+      find.byKey(
+        AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+      ),
     );
     await tester.pumpAndSettle();
 
-    final ChoiceChip left = tester.widget<ChoiceChip>(
+    final Material front = tester.widget<Material>(
       find.descendant(
         of: find.byKey(
-          AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.left),
+          AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
         ),
-        matching: find.byType(ChoiceChip),
+        matching: find.byType(Material),
       ),
     );
-    expect(left.selected, isTrue);
+    expect(front.color, isNot(Colors.transparent));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('selected fleet class uses the exact front multiview asset', (
+  testWidgets('selected fleet class uses the exact default-side asset', (
     WidgetTester tester,
   ) async {
     await _pump(
@@ -282,18 +280,18 @@ void main() {
     );
 
     final Image image = tester.widget<Image>(
-      find.byKey(const Key('accident.damage.multiview.front')),
+      find.byKey(const Key('accident.damage.multiview.left')),
     );
     expect(
       (image.image as AssetImage).assetName,
       'assets/vehicle_multiview_views/'
-      'sany_concrete_pump_5axle_five_view_v1_front.png',
+      'sany_concrete_pump_5axle_five_view_v1_left.png',
     );
-    expect(image.fit, BoxFit.contain);
+    expect(image.fit, BoxFit.cover);
     final Rect viewport = tester.getRect(
       find.byKey(AccidentDamageMapSectionKeys.diagram),
     );
-    expect(viewport.width / viewport.height, closeTo(1, .01));
+    expect(viewport.width / viewport.height, closeTo(16 / 9, .01));
   });
 
   testWidgets('each selector loads its own exact vehicle-view image', (
@@ -340,10 +338,16 @@ void main() {
       final AccidentDamageZone bumper = accidentDamageZonesFor(
         AccidentDamageView.front,
       ).firstWhere((AccidentDamageZone z) => z.id == 'front_bumper');
+      await tester.tap(
+        find.byKey(
+          AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+        ),
+      );
+      await tester.pumpAndSettle();
       await _tapZoneCentre(tester, bumper);
 
       expect(find.text('X 50% / Y 79%'), findsOneWidget);
-      expect(find.text('Vehicle body'), findsOneWidget);
+      expect(find.text('Front bumper'), findsOneWidget);
 
       await tester.tap(find.text('Save mark'));
       await tester.pumpAndSettle();
@@ -355,6 +359,8 @@ void main() {
         AccidentDamageSeverity.minor,
       );
       expect(reported!.marks.single.view, AccidentDamageView.front);
+      expect(reported!.marks.single.zoneId, 'front_bumper');
+      expect(reported!.marks.single.areaLabel, 'Front bumper');
       expect(reported!.marks.single.normalizedX, closeTo(.5, .01));
       expect(reported!.marks.single.normalizedY, closeTo(.79, .01));
       expect(tester.takeException(), isNull);
@@ -384,6 +390,12 @@ void main() {
     final AccidentDamageZone bumper = accidentDamageZonesFor(
       AccidentDamageView.front,
     ).firstWhere((AccidentDamageZone z) => z.id == 'front_bumper');
+    await tester.tap(
+      find.byKey(
+        AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+      ),
+    );
+    await tester.pumpAndSettle();
     await _tapZoneCentre(tester, bumper);
 
     expect(find.text('Remove mark'), findsOneWidget);
@@ -424,6 +436,12 @@ void main() {
     final AccidentDamageZone bumper = accidentDamageZonesFor(
       AccidentDamageView.front,
     ).firstWhere((AccidentDamageZone zone) => zone.id == 'front_bumper');
+    await tester.tap(
+      find.byKey(
+        AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+      ),
+    );
+    await tester.pumpAndSettle();
     await _tapZoneCentre(tester, bumper);
     await tester.tap(find.text('Severe'));
     await tester.enterText(find.byType(TextField).last, 'Cracked mounting');
@@ -439,13 +457,13 @@ void main() {
       find.byKey(AccidentDamageMapSectionKeys.marksSummary),
       findsOneWidget,
     );
-    expect(find.text('Front • Vehicle body'), findsOneWidget);
+    expect(find.text('Front • Front bumper'), findsOneWidget);
     expect(find.text('Cracked mounting'), findsOneWidget);
     expect(find.text('Severe'), findsOneWidget);
     expect(map.marks.single.severity, AccidentDamageSeverity.severe);
   });
 
-  testWidgets('any exact point on the real view can be marked', (
+  testWidgets('background taps are rejected instead of inventing a component', (
     WidgetTester tester,
   ) async {
     await _pump(
@@ -459,8 +477,11 @@ void main() {
     await tester.tapAt(Offset(rect.left + 4, rect.top + 4));
     await tester.pumpAndSettle();
 
-    expect(find.text('Save mark'), findsOneWidget);
-    expect(find.textContaining('X 1% / Y 1%'), findsOneWidget);
+    expect(find.text('Save mark'), findsNothing);
+    expect(
+      find.byKey(AccidentDamageZoneSheetKeys.selectedAreaPanel),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -517,6 +538,7 @@ void main() {
     expect(reported, isNotNull);
     final AccidentDamageMark mark = reported!.marks.single;
     expect(mark.damageType, AccidentDamageType.scratch);
+    expect(mark.zoneId, 'left_rear_door');
     expect(mark.areaLabel, 'Front bumper');
     expect(
       mark.suggestion?.decision,
@@ -615,6 +637,71 @@ void main() {
     );
   });
 
+  testWidgets('an adjacent component cannot hijack a nearby mark or its photos',
+      (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    AccidentDamageMap? reported;
+    final AccidentDamageMap initial = AccidentDamageMap.fromMarks(
+      const <AccidentDamageMark>[
+        AccidentDamageMark(
+          zoneId: 'left_rear_door',
+          view: AccidentDamageView.left,
+          normalizedX: .619,
+          normalizedY: .5,
+          areaLabel: 'Rear door',
+          damageType: AccidentDamageType.dent,
+          severity: AccidentDamageSeverity.moderate,
+          photoReferences: <String>['photo_damage_closeup:rear-door'],
+        ),
+      ],
+    );
+    await _pump(
+      tester,
+      map: initial,
+      onChanged: (AccidentDamageMap next) => reported = next,
+      photoEditor: (AccidentDamageMark draft) async {
+        expect(draft.zoneId, 'left_front_fender');
+        expect(draft.photoReferences, isEmpty);
+        return <String>['photo_damage_closeup:front-fender'];
+      },
+    );
+
+    final Rect diagram = tester.getRect(
+      find.byKey(AccidentDamageMapSectionKeys.diagram),
+    );
+    await tester.tapAt(
+      Offset(
+        diagram.left + diagram.width * .65,
+        diagram.top + diagram.height * .5,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Front fender'), findsOneWidget);
+    expect(find.text('0 attached'), findsOneWidget);
+    expect(find.text('Remove mark'), findsNothing);
+
+    await tester.tap(find.byKey(AccidentDamageZoneSheetKeys.photoAction));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(AccidentDamageZoneSheetKeys.save));
+    await tester.tap(find.text('Save mark'));
+    await tester.pumpAndSettle();
+
+    expect(reported, isNotNull);
+    expect(reported!.count, 2);
+    expect(
+      reported!.markFor('left_rear_door')!.photoReferences,
+      <String>['photo_damage_closeup:rear-door'],
+    );
+    expect(
+      reported!.markFor('left_front_fender')!.photoReferences,
+      <String>['photo_damage_closeup:front-fender'],
+    );
+  });
+
   testWidgets('marked-area list exposes direct edit and remove actions', (
     WidgetTester tester,
   ) async {
@@ -670,7 +757,7 @@ void main() {
     expect(reported?.isEmpty, isTrue);
   });
 
-  testWidgets('exact-point area identity stays truthful across asset classes', (
+  testWidgets('zone identity stays catalog-backed across asset classes', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 1000));
@@ -692,11 +779,6 @@ void main() {
         vehicleType: 'Snowkey Chiller',
       ),
     ];
-    const List<String> expectedAreas = <String>[
-      'Boom',
-      'Bucket / running gear',
-      'Equipment body',
-    ];
     for (int i = 0; i < assets.length; i++) {
       final VehicleAsset asset = assets[i];
       await _pump(
@@ -710,10 +792,7 @@ void main() {
       );
       await tester.tapAt(diagram.center);
       await tester.pumpAndSettle();
-      expect(
-        find.text(expectedAreas[i]),
-        findsOneWidget,
-      );
+      expect(find.text('Rear door'), findsOneWidget);
       Navigator.of(tester.element(find.byType(TextField).last)).pop();
       await tester.pumpAndSettle();
     }

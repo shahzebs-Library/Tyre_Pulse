@@ -138,21 +138,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('case update and overflow actions both explain read-only state', (
+  testWidgets('case shows read-only status and overflow explains boundary', (
     WidgetTester tester,
   ) async {
     final GoRouter router = await _pumpFlow(tester);
     router.go('/accidents/acc-1/case');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(AccidentCaseScreenKeys.readOnlyAction));
-    await tester.pumpAndSettle();
-    expect(find.text('Control boundary'), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.readOnlyAction), findsOneWidget);
     expect(
       find.textContaining('offers no unsafe direct edits'),
       findsOneWidget,
     );
-    await _dismissBoundary(tester);
 
     await tester.tap(find.byKey(AccidentCaseScreenKeys.boundaryAction));
     await tester.pumpAndSettle();

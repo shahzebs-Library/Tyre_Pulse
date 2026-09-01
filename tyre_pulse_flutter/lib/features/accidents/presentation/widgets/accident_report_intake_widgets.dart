@@ -33,12 +33,10 @@ class AccidentReportProgress extends StatelessWidget {
 
   static const Map<AccidentReportStep, String> labels =
       <AccidentReportStep, String>{
-    AccidentReportStep.identify: 'Asset',
     AccidentReportStep.incident: 'Incident',
-    AccidentReportStep.peopleSafety: 'People',
-    AccidentReportStep.authorityThirdParty: 'Authority',
+    AccidentReportStep.peopleAuthority: 'People',
     AccidentReportStep.damage: 'Damage',
-    AccidentReportStep.evidence: 'Evidence',
+    AccidentReportStep.evidenceDocuments: 'Evidence',
     AccidentReportStep.review: 'Review',
   };
 

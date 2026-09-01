@@ -38,11 +38,11 @@ typedef AccidentDamageSuggestionResolver = FutureOr<AccidentDamageSuggestion?>
 );
 
 const List<AccidentDamageView> _viewOrder = <AccidentDamageView>[
+  AccidentDamageView.left,
+  AccidentDamageView.right,
   AccidentDamageView.front,
   AccidentDamageView.rear,
   AccidentDamageView.top,
-  AccidentDamageView.left,
-  AccidentDamageView.right,
 ];
 
 class AccidentDamageMapSection extends StatefulWidget {
@@ -72,19 +72,23 @@ class AccidentDamageMapSection extends StatefulWidget {
 }
 
 class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
-  AccidentDamageView _view = AccidentDamageView.front;
+  AccidentDamageView _view = AccidentDamageView.left;
 
   Future<void> _tapPoint(AccidentDamagePoint point) async {
-    AccidentDamageMark? existing;
-    for (final AccidentDamageMark mark in widget.map.marks) {
-      if (mark.effectiveView != point.view || !mark.hasExactPoint) continue;
-      final double dx = mark.normalizedX! - point.normalizedX;
-      final double dy = mark.normalizedY! - point.normalizedY;
-      if (dx * dx + dy * dy <= .0036) {
-        existing = mark;
-        break;
-      }
-    }
+    final AccidentCopy copy = AccidentCopy.of(context);
+    final AccidentDamageZone? zone = accidentDamageZoneAt(
+      point.view,
+      point.normalizedX,
+      point.normalizedY,
+    );
+
+    // The artwork includes whitespace, shadows and background. Those pixels
+    // are not vehicle components and must never create a generic damage mark.
+    // A registered zone is the identity boundary: tapping another component,
+    // even one beside an existing pin, always opens that other component.
+    if (zone == null) return;
+
+    final AccidentDamageMark? existing = widget.map.markFor(zone.id);
 
     AccidentDamageSuggestion? suggestion = existing?.suggestion;
     final AccidentDamageSuggestionResolver? resolver =
@@ -94,17 +98,16 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
       if (!mounted) return;
     }
 
-    final String zoneId = existing?.zoneId ??
-        '${point.view.name}_${(point.normalizedX * 1000).round()}_'
-            '${(point.normalizedY * 1000).round()}';
     final AccidentDamageMark draft = AccidentDamageMark(
-      zoneId: zoneId,
-      view: point.view,
+      zoneId: zone.id,
+      view: zone.view,
       normalizedX: existing?.normalizedX ?? point.normalizedX,
       normalizedY: existing?.normalizedY ?? point.normalizedY,
-      areaLabel: existing?.areaLabel ??
-          suggestion?.suggestedArea ??
-          _suggestedArea(point),
+      // Component identity comes from the audited zone catalog, not from a
+      // fleet-class guess or a nearby automated suggestion. The reporter can
+      // still edit the label in the review sheet when the selected asset has
+      // a more specific configured component name.
+      areaLabel: existing?.areaLabel ?? accidentDamageZoneLabel(copy, zone.id),
       damageType: existing?.damageType ??
           suggestion?.suggestedType ??
           AccidentDamageType.other,
@@ -161,28 +164,11 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
       children: <Widget>[
         Text(copy('damageMapHint')),
         const SizedBox(height: TpSpace.md),
-        SizedBox(
-          height: 40,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: <Widget>[
-              for (final AccidentDamageView view in _viewOrder)
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(end: TpSpace.xs),
-                  child: KeyedSubtree(
-                    key: AccidentDamageMapSectionKeys.viewTab(view),
-                    child: ChoiceChip(
-                      label: Text(_viewChipLabel(copy, view)),
-                      selected: _view == view,
-                      onSelected: (bool _) => setState(() => _view = view),
-                      showCheckmark: false,
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ),
-            ],
-          ),
+        _DamageViewSelector(
+          selected: _view,
+          copy: copy,
+          map: widget.map,
+          onSelected: (AccidentDamageView view) => setState(() => _view = view),
         ),
         const SizedBox(height: TpSpace.sm),
         KeyedSubtree(
@@ -222,50 +208,135 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
       ],
     );
   }
+}
 
-  String _viewChipLabel(AccidentCopy copy, AccidentDamageView view) {
-    final String label = accidentDamageViewLabel(copy, view);
-    final int count = widget.map.exactCountForView(view);
-    return count == 0 ? label : '$label ($count)';
-  }
+class _DamageViewSelector extends StatelessWidget {
+  const _DamageViewSelector({
+    required this.selected,
+    required this.copy,
+    required this.map,
+    required this.onSelected,
+  });
 
-  String _suggestedArea(AccidentDamagePoint point) {
-    final VehicleAsset? vehicle = widget.vehicle;
-    final String description = <String?>[
-      vehicle?.vehicleType,
-      vehicle?.model,
-      vehicle?.make,
-      vehicle?.assetNo,
-    ].whereType<String>().join(' ').toLowerCase();
-    if (description.contains('concrete pump') ||
-        description.contains('line pump')) {
-      return point.normalizedY < .56 ? 'Boom' : 'Chassis';
-    }
-    if (description.contains('mixer')) {
-      return point.normalizedY < .58 ? 'Mixer drum' : 'Chassis';
-    }
-    if (description.contains('wheel loader') ||
-        description.contains('skid loader')) {
-      return point.normalizedY > .48 ? 'Bucket / running gear' : 'Loader body';
-    }
-    if (description.contains('pickup') ||
-        description.contains('double cab') ||
-        description.contains('xenon')) {
-      return point.normalizedX > .58 ? 'Cargo bed' : 'Cab';
-    }
-    if (description.contains('bus') || description.contains('hiace')) {
-      return 'Bus body';
-    }
-    if (description.contains('chiller') ||
-        description.contains('generator') ||
-        description.contains('plant') ||
-        description.contains('stationary') ||
-        description.contains('placing boom')) {
-      return 'Equipment body';
-    }
-    return 'Vehicle body';
+  final AccidentDamageView selected;
+  final AccidentCopy copy;
+  final AccidentDamageMap map;
+  final ValueChanged<AccidentDamageView> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: palette.border),
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(TpRadius.md - 1),
+        child: Row(
+          children: <Widget>[
+            for (int index = 0; index < _viewOrder.length; index++) ...<Widget>[
+              if (index > 0)
+                SizedBox(
+                  width: 1,
+                  height: 48,
+                  child: ColoredBox(color: palette.border),
+                ),
+              Expanded(
+                child: _DamageViewButton(
+                  key: AccidentDamageMapSectionKeys.viewTab(
+                    _viewOrder[index],
+                  ),
+                  view: _viewOrder[index],
+                  selected: selected == _viewOrder[index],
+                  label: accidentDamageViewLabel(copy, _viewOrder[index]),
+                  count: map.exactCountForView(_viewOrder[index]),
+                  onTap: () => onSelected(_viewOrder[index]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
+
+class _DamageViewButton extends StatelessWidget {
+  const _DamageViewButton({
+    required this.view,
+    required this.selected,
+    required this.label,
+    required this.count,
+    required this.onTap,
+    super.key,
+  });
+
+  final AccidentDamageView view;
+  final bool selected;
+  final String label;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Material(
+      color: selected ? palette.primarySoft : Colors.transparent,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: count == 0 ? label : '$label, $count',
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 2,
+                vertical: TpSpace.xs,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(
+                    _viewIcon(view),
+                    size: TpSizing.iconSm,
+                    color: selected ? palette.primary : palette.textMuted,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    count == 0 ? label : '$label $count',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: selected
+                              ? palette.primary
+                              : palette.textSecondary,
+                          fontWeight:
+                              selected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+IconData _viewIcon(AccidentDamageView view) => switch (view) {
+      AccidentDamageView.left ||
+      AccidentDamageView.right =>
+        Icons.airport_shuttle_outlined,
+      AccidentDamageView.front ||
+      AccidentDamageView.rear =>
+        Icons.directions_car_outlined,
+      AccidentDamageView.top => Icons.crop_portrait_outlined,
+    };
 
 class _DamageMarkSummary extends StatelessWidget {
   const _DamageMarkSummary({

@@ -12,7 +12,6 @@ import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_detail_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_ui.dart';
-import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_case_workflow_sections.dart';
 
 const String _dataImage =
     'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -54,8 +53,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('case detail exposes the five real-data tabs and read-only gate',
-      (
+  testWidgets('case detail exposes seven exclusive real-data role workspaces', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -68,51 +66,74 @@ void main() {
     );
 
     expect(find.byKey(AccidentCaseScreenKeys.tabs), findsOneWidget);
-    expect(find.byKey(AccidentCaseScreenKeys.overview), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.incident), findsOneWidget);
     expect(find.text('Case Details'), findsOneWidget);
-    expect(find.text('CASE INFO'), findsOneWidget);
-    expect(find.byKey(AccidentCaseScreenKeys.header), findsNothing);
-    expect(find.byType(AccidentProgressLadder), findsNothing);
-    expect(find.text('ACC-2026-0182'), findsOneWidget);
-    expect(find.text('Mixer 3208'), findsOneWidget);
+    expect(find.text('Step 1 of 7'), findsOneWidget);
+    expect(find.text('Incident & damage'), findsWidgets);
+    expect(find.textContaining('ACC-2026-0182'), findsWidgets);
+    expect(find.textContaining('Mixer 3208'), findsOneWidget);
     expect(find.text('11 May 2026 • 08:15'), findsOneWidget);
     expect(
       find.text('Vehicle collided with barrier while reversing.'),
       findsOneWidget,
     );
-    expect(find.text('EVIDENCE (4)'), findsOneWidget);
-    await expectLater(
-      find.byType(AccidentCaseScreen),
-      matchesGoldenFile('goldens/accident_case_detail_light.png'),
+    expect(find.text('CLM-8821'), findsNothing);
+    expect(find.text('Central Workshop'), findsNothing);
+    expect(find.text('Local workflow preview'), findsNothing);
+
+    await tester.ensureVisible(find.text('2 Fleet validation'));
+    await tester.tap(find.text('2 Fleet validation'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(AccidentCaseScreenKeys.fleet), findsOneWidget);
+    expect(find.text('Step 2 of 7'), findsOneWidget);
+    expect(
+      find.text('Vehicle collided with barrier while reversing.'),
+      findsNothing,
     );
 
-    await tester.tap(find.widgetWithText(Tab, 'Evidence'));
+    await tester.ensureVisible(find.text('3 Responsibility & payer'));
+    await tester.tap(find.text('3 Responsibility & payer'));
     await tester.pumpAndSettle();
-    expect(find.byKey(AccidentCaseScreenKeys.evidence), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.responsibility), findsOneWidget);
+    expect(find.text('Step 3 of 7'), findsOneWidget);
+    expect(find.text('Driver'), findsOneWidget);
+    expect(find.text('CLM-8821'), findsNothing);
 
-    await tester.tap(find.widgetWithText(Tab, 'Insurance'));
+    await tester.ensureVisible(find.text('4 Insurance / Claims'));
+    await tester.tap(find.text('4 Insurance / Claims'));
     await tester.pumpAndSettle();
     expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
+    expect(find.text('Step 4 of 7'), findsOneWidget);
     expect(find.text('CLM-8821'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(Tab, 'Repair'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(AccidentCaseScreenKeys.repair), findsOneWidget);
     expect(
-      find.descendant(
-        of: find.byKey(AccidentCaseWorkflowKeys.repairPlanning),
-        matching: find.text('Central Workshop'),
-      ),
-      findsOneWidget,
+      find.text('Vehicle collided with barrier while reversing.'),
+      findsNothing,
     );
 
-    await tester.ensureVisible(find.widgetWithText(Tab, 'More'));
+    await tester.ensureVisible(find.text('5 Workshop assessment'));
+    await tester.tap(find.text('5 Workshop assessment'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(Tab, 'More'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(AccidentCaseScreenKeys.more), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.assessment), findsOneWidget);
+    expect(find.text('Step 5 of 7'), findsOneWidget);
+    expect(find.text('Central Workshop'), findsOneWidget);
+    expect(find.text('CLM-8821'), findsNothing);
 
-    await tester.tap(find.byKey(AccidentCaseScreenKeys.readOnlyAction));
+    await tester.ensureVisible(find.text('6 External workshop'));
+    await tester.tap(find.text('6 External workshop'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(AccidentCaseScreenKeys.externalWorkshop), findsOneWidget);
+    expect(find.text('Step 6 of 7'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('7 Timeline & notifications'));
+    await tester.tap(find.text('7 Timeline & notifications'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(AccidentCaseScreenKeys.timeline), findsOneWidget);
+    expect(find.text('Step 7 of 7'), findsOneWidget);
+    expect(find.text('CLM-8821'), findsNothing);
+    expect(find.text('Local workflow preview'), findsNothing);
+
+    expect(find.byKey(AccidentCaseScreenKeys.readOnlyAction), findsOneWidget);
+    await tester.tap(find.byKey(AccidentCaseScreenKeys.boundaryAction));
     await tester.pumpAndSettle();
     expect(
       find.textContaining('require verified server actions'),

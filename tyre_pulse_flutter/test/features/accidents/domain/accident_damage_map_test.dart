@@ -90,6 +90,17 @@ void main() {
         isNot('front_bumper'),
       );
     });
+
+    test('left and right component identities remain distinct', () {
+      expect(
+        accidentDamageZoneAt(AccidentDamageView.left, .84, .47)?.id,
+        'left_front_door',
+      );
+      expect(
+        accidentDamageZoneAt(AccidentDamageView.right, .157, .47)?.id,
+        'right_front_door',
+      );
+    });
   });
 
   group('accidentDamageViewOfZone', () {

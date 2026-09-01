@@ -16,53 +16,305 @@ const VehicleAsset _vehicle = VehicleAsset(
   registrationNo: 'ABC 1234',
 );
 
+AccidentReportIntakeDraft _validDraft({
+  AccidentDamageMap damageMap = const AccidentDamageMap.empty(),
+  Map<String, String> evidencePaths = const <String, String>{
+    'photo_scene': 'scene.jpg',
+  },
+  String driverStatement = '',
+  bool? policeNotified,
+  String policeReportNo = '',
+  bool thirdPartyInvolved = false,
+  bool? thirdPartyInvoiceAvailable,
+  String thirdPartyInvoiceNumber = '',
+}) =>
+    AccidentReportIntakeDraft(
+      vehicle: _vehicle,
+      incidentAt: DateTime(2026, 8, 30, 9, 15),
+      incidentSite: 'Diriyah',
+      accidentType: 'collision',
+      narrative: 'Vehicle contacted a barrier.',
+      driverName: 'Driver One',
+      passengersInvolved: false,
+      injuries: false,
+      emergencyServices: false,
+      vehicleMovable: true,
+      recoveryRequired: false,
+      safeToOperate: false,
+      authorityInvolved: false,
+      thirdPartyInvolved: thirdPartyInvolved,
+      thirdPartyName: thirdPartyInvolved ? 'Other Driver' : '',
+      thirdPartyPlate: thirdPartyInvolved ? 'XYZ 9087' : '',
+      thirdPartyContact: thirdPartyInvolved ? '+966500000000' : '',
+      thirdPartyInvoiceAvailable: thirdPartyInvoiceAvailable,
+      thirdPartyInvoiceNumber: thirdPartyInvoiceNumber,
+      policeNotified: policeNotified,
+      policeReportNo: policeReportNo,
+      najmNotified: false,
+      driverStatement: driverStatement,
+      damageMap: damageMap,
+      evidencePaths: evidencePaths,
+    );
+
 void main() {
-  test('required evidence follows captured route facts', () {
+  test('reporter intake has five distinct steps', () {
+    expect(
+      AccidentReportStep.values,
+      <AccidentReportStep>[
+        AccidentReportStep.incident,
+        AccidentReportStep.peopleAuthority,
+        AccidentReportStep.damage,
+        AccidentReportStep.evidenceDocuments,
+        AccidentReportStep.review,
+      ],
+    );
+  });
+
+  test('incident step validates asset and incident facts together', () {
     final AccidentReportIntakeDraft draft = AccidentReportIntakeDraft(
       incidentAt: DateTime(2026, 8, 30, 9, 15),
-      thirdPartyInvolved: true,
+    );
+
+    expect(
+      draft.validationMessagesFor(AccidentReportStep.incident),
+      <String>[
+        'Select a fleet asset or enter an asset number.',
+        'Incident site is required.',
+        'Select an event type.',
+        'Describe what happened.',
+      ],
+    );
+  });
+
+  test('evidence is one overview plus one exact selected damage area', () {
+    final AccidentDamageMap damage = AccidentDamageMap.fromMarks(
+      const <AccidentDamageMark>[
+        AccidentDamageMark(
+          zoneId: 'left_rear_door',
+          view: AccidentDamageView.left,
+          normalizedX: .48,
+          normalizedY: .54,
+          areaLabel: 'Left rear door',
+          severity: AccidentDamageSeverity.moderate,
+          damageType: AccidentDamageType.dent,
+        ),
+        AccidentDamageMark(
+          zoneId: 'front_bumper',
+          view: AccidentDamageView.front,
+          normalizedX: .40,
+          normalizedY: .78,
+          areaLabel: 'Front bumper',
+          severity: AccidentDamageSeverity.severe,
+          damageType: AccidentDamageType.broken,
+        ),
+      ],
+    );
+    final AccidentReportIntakeDraft draft = AccidentReportIntakeDraft(
+      incidentAt: DateTime(2026, 8, 30, 9, 15),
+      accidentType: 'total_loss',
       injuries: true,
-      accidentType: 'third_party_property',
+      damageMap: damage,
     );
 
     final List<AccidentEvidenceRequirement> requirements =
         evidenceRequirementsFor(draft);
-    expect(requirements, hasLength(17));
+    expect(requirements, hasLength(3));
     expect(
       requirements.map((AccidentEvidenceRequirement item) => item.key),
-      containsAll(<String>[
-        'photo_full_front',
+      <String>[
+        'photo_scene',
+        'photo_damage_left_rear_door',
+        'photo_damage_front_bumper',
+      ],
+    );
+    expect(
+      requirements.map((AccidentEvidenceRequirement item) => item.label),
+      <String>[
+        'Scene overview',
+        'Left - Left rear door',
+        'Front - Front bumper',
+      ],
+    );
+    expect(requirements[1].damageZoneId, 'left_rear_door');
+    expect(requirements[2].damageZoneId, 'front_bumper');
+  });
+
+  test('other-party photos are conditional and no route photos are added', () {
+    final AccidentReportIntakeDraft noThirdParty = AccidentReportIntakeDraft(
+      incidentAt: DateTime(2026, 8, 30, 9, 15),
+      accidentType: 'tyre_wheel',
+      thirdPartyInvolved: false,
+    );
+    final AccidentReportIntakeDraft thirdParty = AccidentReportIntakeDraft(
+      incidentAt: DateTime(2026, 8, 30, 9, 15),
+      accidentType: 'third_party_property',
+      thirdPartyInvolved: true,
+    );
+
+    expect(
+      evidenceRequirementsFor(noThirdParty)
+          .map((AccidentEvidenceRequirement item) => item.key),
+      <String>['photo_scene'],
+    );
+    expect(
+      evidenceRequirementsFor(thirdParty)
+          .map((AccidentEvidenceRequirement item) => item.key),
+      <String>[
+        'photo_scene',
         'photo_other_party_vehicle',
         'photo_other_party_plate',
-        'photo_road_condition',
-        'photo_property_damage',
-      ]),
+      ],
     );
   });
 
-  test('seed-scoped event types add their configured evidence slot', () {
-    const Map<String, String> expectedByType = <String, String>{
-      'tyre_wheel': 'photo_tyres_wheels',
-      'total_loss': 'photo_chassis_vin',
-      'equipment_to_vehicle': 'photo_equipment_attachment',
-      'theft': 'photo_chassis_vin_theft',
-    };
+  test('a photo attached to its damage mark satisfies that requirement', () {
+    final AccidentDamageMap damage = AccidentDamageMap.fromMarks(
+      const <AccidentDamageMark>[
+        AccidentDamageMark(
+          zoneId: 'right_front_door',
+          view: AccidentDamageView.right,
+          normalizedX: .24,
+          normalizedY: .46,
+          areaLabel: 'Right front door',
+          severity: AccidentDamageSeverity.moderate,
+          damageType: AccidentDamageType.scratch,
+          photoReferences: <String>['right-door.jpg'],
+        ),
+      ],
+    );
+    final AccidentReportIntakeDraft draft = _validDraft(damageMap: damage);
+    final List<AccidentEvidenceRequirement> requirements =
+        evidenceRequirementsFor(draft);
 
-    for (final MapEntry<String, String> entry in expectedByType.entries) {
-      final AccidentReportIntakeDraft draft = AccidentReportIntakeDraft(
-        incidentAt: DateTime(2026, 8, 30, 9, 15),
-        accidentType: entry.key,
-      );
-      expect(
-        evidenceRequirementsFor(draft)
-            .map((AccidentEvidenceRequirement item) => item.key),
-        contains(entry.value),
-        reason: entry.key,
-      );
-    }
+    expect(draft.completedEvidenceCount(requirements), 2);
+    expect(
+      draft.validationMessagesFor(AccidentReportStep.evidenceDocuments),
+      isEmpty,
+    );
   });
 
-  test('draft round trip preserves asset, evidence and Finder audit metadata',
+  test('missing selected-area photo blocks evidence, optional docs do not', () {
+    final AccidentDamageMap damage = AccidentDamageMap.fromMarks(
+      const <AccidentDamageMark>[
+        AccidentDamageMark(
+          zoneId: 'top_boom_section_3',
+          view: AccidentDamageView.top,
+          normalizedX: .50,
+          normalizedY: .45,
+          areaLabel: 'Boom section 3',
+          severity: AccidentDamageSeverity.severe,
+          damageType: AccidentDamageType.cracked,
+        ),
+      ],
+    );
+    final AccidentReportIntakeDraft missingDamagePhoto =
+        _validDraft(damageMap: damage);
+
+    expect(
+      missingDamagePhoto.validationMessagesFor(
+        AccidentReportStep.evidenceDocuments,
+      ),
+      <String>['1 required photograph(s) are still missing.'],
+    );
+    expect(_validDraft().isReadyToSubmit, isTrue);
+  });
+
+  test('optional document list uses only the corrected Saudi documents', () {
+    expect(
+      accidentOptionalDocuments
+          .map((AccidentEvidenceRequirement item) => (item.key, item.label)),
+      <(String, String)>[
+        ('doc_driving_licence', 'Driving licence'),
+        ('doc_iqama', 'Iqama'),
+        ('doc_istimara', 'Istimara'),
+        ('doc_najm_report', 'Najm report'),
+        ('doc_taqdeer_report', 'Taqdeer report'),
+      ],
+    );
+    expect(
+      accidentOptionalDocuments
+          .every((AccidentEvidenceRequirement item) => !item.mandatory),
+      isTrue,
+    );
+  });
+
+  test('police and driver-statement legacy fields do not gate submission', () {
+    final AccidentReportIntakeDraft draft = _validDraft(
+      driverStatement: '',
+      policeNotified: null,
+      policeReportNo: '',
+    );
+
+    expect(
+      draft.validationMessagesFor(AccidentReportStep.peopleAuthority),
+      isEmpty,
+    );
+    expect(draft.validationMessagesFor(AccidentReportStep.review), isEmpty);
+    expect(draft.isReadyToSubmit, isTrue);
+  });
+
+  test('third-party invoice is optional but its number is required when yes',
+      () {
+    final AccidentReportIntakeDraft notAnswered = _validDraft(
+      thirdPartyInvolved: true,
+    );
+    final AccidentReportIntakeDraft yesWithoutNumber = _validDraft(
+      thirdPartyInvolved: true,
+      thirdPartyInvoiceAvailable: true,
+    );
+    final AccidentReportIntakeDraft yesWithNumber = _validDraft(
+      thirdPartyInvolved: true,
+      thirdPartyInvoiceAvailable: true,
+      thirdPartyInvoiceNumber: 'INV-4482',
+    );
+
+    expect(
+      notAnswered.validationMessagesFor(AccidentReportStep.peopleAuthority),
+      isEmpty,
+    );
+    expect(
+      yesWithoutNumber.validationMessagesFor(
+        AccidentReportStep.peopleAuthority,
+      ),
+      contains('Record the third-party invoice number.'),
+    );
+    expect(
+      yesWithNumber.validationMessagesFor(AccidentReportStep.peopleAuthority),
+      isEmpty,
+    );
+  });
+
+  test('legacy JSON reads old fields and aliases supported document paths', () {
+    final AccidentReportIntakeDraft restored =
+        AccidentReportIntakeDraft.fromJson(<String, dynamic>{
+      'incidentAt': '2026-08-30T09:15:00.000',
+      'policeNotified': true,
+      'policeReportNo': 'POL-99',
+      'driverStatement': 'Legacy statement',
+      'thirdPartyInvoiceAvailable': true,
+      'thirdPartyInvoiceNumber': 'INV-99',
+      'evidencePaths': <String, dynamic>{
+        'doc_driver_license': 'licence.jpg',
+        'doc_resident_id': 'iqama.jpg',
+        'doc_vehicle_registration': 'istimara.jpg',
+        'doc_driver_statement': 'statement.pdf',
+        'doc_authority_report': 'police.pdf',
+      },
+    });
+
+    expect(restored.policeNotified, isTrue);
+    expect(restored.policeReportNo, 'POL-99');
+    expect(restored.driverStatement, 'Legacy statement');
+    expect(restored.thirdPartyInvoiceAvailable, isTrue);
+    expect(restored.thirdPartyInvoiceNumber, 'INV-99');
+    expect(restored.evidencePaths['doc_driving_licence'], 'licence.jpg');
+    expect(restored.evidencePaths['doc_iqama'], 'iqama.jpg');
+    expect(restored.evidencePaths['doc_istimara'], 'istimara.jpg');
+    expect(restored.evidencePaths['doc_driver_statement'], 'statement.pdf');
+    expect(restored.evidencePaths['doc_authority_report'], 'police.pdf');
+  });
+
+  test('round trip preserves exact damage evidence and Finder audit metadata',
       () {
     final DateTime reviewedAt = DateTime.utc(2026, 8, 30, 9, 22);
     final AccidentDamageMark mark = AccidentDamageMark(
@@ -86,31 +338,12 @@ void main() {
         correctionNote: 'Scratch, not dent',
       ),
     );
-    final AccidentReportIntakeDraft original = AccidentReportIntakeDraft(
-      vehicle: _vehicle,
-      incidentAt: DateTime(2026, 8, 30, 9, 15),
-      incidentSite: 'Gate 3',
-      incidentLocation: 'North access road',
-      accidentType: 'collision',
-      severity: 'moderate',
-      narrative: 'Vehicle contacted a barrier.',
-      driverName: 'Driver One',
-      passengersInvolved: false,
-      injuries: false,
-      emergencyServices: false,
-      vehicleMovable: true,
-      recoveryRequired: false,
-      safeToOperate: false,
-      authorityInvolved: false,
-      thirdPartyInvolved: false,
-      policeNotified: false,
-      najmNotified: false,
-      driverStatement: 'Barrier was not visible in the mirror.',
+    final AccidentReportIntakeDraft original = _validDraft(
       damageMap: AccidentDamageMap.fromMarks(<AccidentDamageMark>[mark]),
       evidencePaths: const <String, String>{
-        'photo_full_front': 'front.jpg',
+        'photo_scene': 'scene.jpg',
+        'doc_iqama': 'iqama.jpg',
       },
-      savedAt: DateTime.utc(2026, 8, 30, 9, 30),
     );
 
     final AccidentReportIntakeDraft restored =
@@ -122,60 +355,27 @@ void main() {
       'draft-photo-1.jpg',
     ]);
     expect(restored.damageMap.marks.single.suggestion?.reviewedAt, reviewedAt);
-    expect(restored.evidencePaths, <String, String>{
-      'photo_full_front': 'front.jpg',
-    });
-    expect(restored.savedAt, original.savedAt);
+    expect(restored.evidencePaths['photo_scene'], 'scene.jpg');
+    expect(restored.evidencePaths['doc_iqama'], 'iqama.jpg');
   });
 
-  test('conditional answers and every required photo gate submission', () {
-    final Map<String, String> photos = <String, String>{
-      for (final AccidentEvidenceRequirement item
-          in accidentBaselinePhotoRequirements)
-        item.key: '${item.key}.jpg',
-    };
-    final AccidentReportIntakeDraft valid = AccidentReportIntakeDraft(
-      vehicle: _vehicle,
-      incidentAt: DateTime(2026, 8, 30, 9, 15),
-      incidentSite: 'Diriyah',
-      accidentType: 'collision',
-      narrative: 'Vehicle contacted a barrier.',
-      driverName: 'Driver One',
-      passengersInvolved: false,
-      injuries: false,
-      emergencyServices: false,
-      vehicleMovable: true,
-      recoveryRequired: false,
-      safeToOperate: false,
-      authorityInvolved: false,
-      thirdPartyInvolved: false,
-      policeNotified: false,
-      najmNotified: false,
-      driverStatement: 'Barrier was not visible in the mirror.',
-      evidencePaths: photos,
-    );
-
-    expect(valid.allValidationMessages, isEmpty);
-    expect(valid.isReadyToSubmit, isTrue);
-
-    final AccidentReportIntakeDraft incomplete = AccidentReportIntakeDraft(
-      incidentAt: DateTime(2026, 8, 30, 9, 15),
-      thirdPartyInvolved: true,
-      injuries: true,
-      authorityInvolved: true,
-      authorityReportStatus: 'none',
+  test('submission notes omit police and driver statement but include invoice',
+      () {
+    final AccidentReportIntakeDraft draft = _validDraft(
+      driverStatement: 'Legacy statement must not be submitted.',
       policeNotified: true,
-      najmNotified: true,
+      policeReportNo: 'POL-99',
+      thirdPartyInvolved: true,
+      thirdPartyInvoiceAvailable: true,
+      thirdPartyInvoiceNumber: 'INV-4482',
     );
-    expect(
-      incomplete.allValidationMessages,
-      containsAll(<String>[
-        'Select a fleet asset or enter an asset number.',
-        'Record the injury count and details.',
-        'Explain why no authority report exists.',
-        'Record the police report number.',
-        'Record the Najm reference.',
-      ]),
-    );
+
+    final String notes = draft.composeSubmissionNotes();
+    expect(notes, isNot(contains('Police notified:')));
+    expect(notes, isNot(contains('Police report:')));
+    expect(notes, isNot(contains('Driver statement:')));
+    expect(notes, contains('Third-party invoice available: Yes'));
+    expect(notes, contains('Third-party invoice number: INV-4482'));
+    expect(notes, contains('Najm notified: No'));
   });
 }

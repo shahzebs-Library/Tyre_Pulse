@@ -48,7 +48,7 @@ const VehicleAsset _pump = VehicleAsset(
 );
 
 void main() {
-  testWidgets('seven-step intake selects a real fleet master and saves draft',
+  testWidgets('five-step intake selects a real fleet master and saves draft',
       (WidgetTester tester) async {
     final _MemorySecureStore store = _MemorySecureStore();
     final _FakeReportRepository reports = _FakeReportRepository();
@@ -60,7 +60,7 @@ void main() {
         findsOneWidget,
       );
     }
-    expect(find.text('Step 1 of 7'), findsOneWidget);
+    expect(find.text('Step 1 of 5'), findsOneWidget);
     expect(find.text('Scan QR / barcode'), findsOneWidget);
 
     await tester.tap(find.text('Select fleet asset'));
@@ -114,12 +114,30 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, 'CP3012'));
     await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Collision').last);
+    await tester.pumpAndSettle();
+    final Finder narrative = find.byWidgetPredicate(
+      (Widget widget) =>
+          widget is TextField &&
+          widget.decoration?.hintText ==
+              'Describe the sequence of events and immediate conditions',
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      narrative,
+      'Vehicle contacted a fixed barrier while reversing.',
+    );
     await tester.tap(find.text('Save & Continue'));
     await tester.pumpAndSettle();
 
-    // Advancing scrolls the lazy list to the next section; its editable site
-    // field is a more robust assertion than the now off-screen progress card.
-    expect(find.text('Incident site'), findsOneWidget);
+    expect(find.text('Step 2 of 5'), findsOneWidget);
+    expect(find.text('Driver name'), findsOneWidget);
+    expect(find.text('Incident site'), findsNothing);
     expect(reports.submitCalls, 0);
     expect(tester.takeException(), isNull);
   });

@@ -5,8 +5,10 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
+import 'package:tyre_pulse/features/accidents/domain/accident_report_intake.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_report_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
+import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_report_intake_widgets.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
@@ -66,21 +68,19 @@ void main() {
   ) async {
     await _pumpReport(tester);
     await _selectPump(tester);
-    await tester.scrollUntilVisible(
-      find.byType(AccidentDamageMapSection),
-      300,
-      scrollable: find.byType(Scrollable).first,
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.damage)),
     );
     await tester.pumpAndSettle();
 
     expect(find.byType(AccidentDamageMapSection), findsOneWidget);
-    final Image front = tester.widget<Image>(
-      find.byKey(const Key('accident.damage.multiview.front')),
+    final Image left = tester.widget<Image>(
+      find.byKey(const Key('accident.damage.multiview.left')),
     );
     expect(
-      (front.image as AssetImage).assetName,
+      (left.image as AssetImage).assetName,
       'assets/vehicle_multiview_views/'
-      'sany_concrete_pump_5axle_five_view_v1_front.png',
+      'sany_concrete_pump_5axle_five_view_v1_left.png',
     );
 
     await tester.tap(
@@ -138,19 +138,18 @@ void main() {
   ) async {
     await _pumpReport(tester);
     await _selectPump(tester);
-    await tester.scrollUntilVisible(
-      find.byType(AccidentDamageMapSection),
-      300,
-      scrollable: find.byType(Scrollable).first,
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.damage)),
     );
     await tester.pumpAndSettle();
 
+    final Rect diagram =
+        tester.getRect(find.byKey(AccidentDamageMapSectionKeys.diagram));
     await tester.tapAt(
-      tester
-          .getRect(
-            find.byKey(AccidentDamageMapSectionKeys.diagram),
-          )
-          .center,
+      Offset(
+        diagram.left + diagram.width * .80,
+        diagram.top + diagram.height * .45,
+      ),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save mark'));
@@ -160,10 +159,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.scrollUntilVisible(
-      find.text('Change fleet asset'),
-      -300,
-      scrollable: find.byType(Scrollable).first,
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.incident)),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change fleet asset'));
@@ -171,23 +168,21 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'WL509'));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.byType(AccidentDamageMapSection),
-      300,
-      scrollable: find.byType(Scrollable).first,
+    await tester.tap(
+      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.damage)),
     );
     await tester.pumpAndSettle();
     expect(
       find.byKey(AccidentDamageMapSectionKeys.marksSummary),
       findsNothing,
     );
-    final Image loaderFront = tester.widget<Image>(
-      find.byKey(const Key('accident.damage.multiview.front')),
+    final Image loaderLeft = tester.widget<Image>(
+      find.byKey(const Key('accident.damage.multiview.left')),
     );
     expect(
-      (loaderFront.image as AssetImage).assetName,
+      (loaderLeft.image as AssetImage).assetName,
       'assets/vehicle_multiview_views/'
-      'sany_wheel_loader_five_view_v1_front.png',
+      'sany_wheel_loader_five_view_v1_left.png',
     );
     expect(tester.takeException(), isNull);
   });

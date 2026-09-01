@@ -416,6 +416,66 @@ final result: passed
 
 ---
 
+# Accident intake and seven-workspace correction QA
+
+Run: 2026-09-01. Scope covers the compact reporter intake, exact damage
+component selection, focused evidence, Saudi supporting-document vocabulary,
+and the seven post-report operational workspaces supplied in the current
+conversation.
+
+## Implemented behavior
+
+- Reporter intake is five exclusive screens: Asset & incident; People, safety
+  & third party; Damage; Evidence & optional documents; Review & submit.
+- Advancing changes the rendered body and returns the page to the top. It no
+  longer keeps one long form mounted beneath a changing step number.
+- Damage taps resolve only to the audited component zone on the selected
+  Left/Right/Front/Rear/Top view. Background taps do nothing; adjacent zones,
+  left/right identities and per-component photo references remain isolated.
+- Evidence is one scene overview, one close-up for each exact selected damage
+  component, plus conditional other-party vehicle/plate photos. The former
+  fixed 13-photo baseline is not presented.
+- Optional documents are Driving licence, Iqama, Istimara, Najm report and
+  Taqdeer report. Police report and Driver statement are absent from the active
+  intake. A third-party invoice is Yes/No and asks only for its number when Yes.
+- Review shows the entered narrative, exact incident date/time, damage count,
+  focused-photo progress, optional-document count, explicit missing items and
+  a green Submit accident action.
+- The post-report case view has seven exclusive real-data workspaces: Incident
+  & damage, Fleet validation, Responsibility & payer, Insurance/Claims,
+  Workshop assessment, External workshop dispatch/receipt, and Timeline &
+  notifications. Every workspace identifies its recorded owner and next
+  recorded handoff. Unavailable backend values display Not recorded; no local
+  preview values, sample claim numbers, costs, people or SLAs are fabricated.
+
+## Verification
+
+- Whole-project `flutter analyze --fatal-infos`: zero issues.
+- Complete accident module suite: 89/89 passed.
+- The broader repository suite was stopped after 1,332 passing checks and no
+  failure because its full Windows run exceeded 89 minutes. The prior main
+  baseline had already passed the complete suite; the changed accident scope
+  is covered by the complete focused run above.
+- `git diff --check`: clean.
+- Protected router and offline-sync files: unchanged.
+- Production-configured arm64 debug APK built successfully:
+  `build/app/outputs/flutter-apk/app-debug.apk` (209,603,510 bytes), SHA-256
+  `5605950A2422B5353364C06933E0FB537D86C1FFD44D7E81D3423E39E74AA5CF`.
+- `MIGRATIONS_V611_ACCIDENT_MOBILE_EVIDENCE_DOCUMENTS.sql` aligns configured
+  evidence/document gates without deleting historical files or case records.
+
+## Remaining physical gate
+
+`adb devices -l` currently returns no connected Android device. The fresh APK
+therefore cannot be installed without losing or inventing a device target, and
+same-state physical screenshots are still pending. Reconnecting the authorised
+Samsung device is the only remaining installation/physical-rendering step.
+
+Final result: passed for implementation, analysis, focused tests and APK build;
+physical-device installation is blocked only by the disconnected device.
+
+---
+
 # Asset Detail five-view integration QA
 
 Run: 2026-08-31. Scope is the Asset Detail overview only.

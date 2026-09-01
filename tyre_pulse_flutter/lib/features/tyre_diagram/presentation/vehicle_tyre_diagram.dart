@@ -328,7 +328,7 @@ class VehicleTyreDiagram extends StatelessWidget {
             if (showPositionLabels)
               for (final _ResolvedWheel wheel in wheels)
                 _CapturePositionLabel(
-                  label: _capturePositionLabel(wheel.tyre),
+                  label: wheel.code,
                   position: parsePositionStruct(wheel.tyre.id),
                   wheelRect: hitRects[wheel.tyre.id]!,
                   diagramLeft: gutter,
@@ -369,10 +369,20 @@ class VehicleTyreDiagram extends StatelessWidget {
     final bool isOutstanding = pendingKeys.contains(keyOf(tyre.positionId)) ||
         pendingKeys.contains(keyOf(tyre.id));
     final String code = legacyPositionCode(layout.key, tyre.id);
+    final String? serial = _entryText(
+      entry,
+      const <String>[
+        'serial_number',
+        'serial_no',
+        'serial',
+        'installed_serial',
+      ],
+    );
 
     return _ResolvedWheel(
       tyre: tyre,
       code: code,
+      serial: serial,
       condition: condition,
       status: status,
       isRecorded: isRecorded,
@@ -382,22 +392,12 @@ class VehicleTyreDiagram extends StatelessWidget {
   }
 }
 
-String _capturePositionLabel(MatchedTyreSlot tyre) {
-  final PositionStruct position = parsePositionStruct(tyre.id);
-  final String side = switch (position.side) {
-    PositionSide.left => 'L',
-    PositionSide.right => 'R',
-    null => '',
-  };
-  return switch (position.kind) {
-    PositionKind.steer => tyre.id.toUpperCase(),
-    PositionKind.drive when position.role == PositionRole.inner =>
-      '$side${position.axle} I',
-    PositionKind.drive when position.role == PositionRole.outer =>
-      '$side${position.axle} O',
-    PositionKind.drive => tyre.id.toUpperCase(),
-    _ => tyre.id.toUpperCase(),
-  };
+String? _entryText(Map<String, Object?>? entry, List<String> keys) {
+  for (final String key in keys) {
+    final String value = entry?[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return null;
 }
 
 class _FigmaTyreCaptureStage extends StatelessWidget {
@@ -744,7 +744,7 @@ class _FigmaTyreStatusCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 TpIdentifierText(
-                  _capturePositionLabel(wheel.tyre),
+                  wheel.code,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -754,6 +754,19 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 1),
+                if (wheel.serial != null) ...<Widget>[
+                  TpIdentifierText(
+                    wheel.serial!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: palette.textSecondary,
+                          fontSize: 7,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 1),
+                ],
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: colors.base,
@@ -765,18 +778,20 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                     child: Icon(statusIcon, color: colors.onBase, size: 12),
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  statusLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: palette.text,
-                        fontSize: 7,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
+                if (wheel.serial == null) ...<Widget>[
+                  const SizedBox(height: 1),
+                  Text(
+                    statusLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: palette.text,
+                          fontSize: 7,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -842,6 +857,7 @@ class _ResolvedWheel {
   const _ResolvedWheel({
     required this.tyre,
     required this.code,
+    required this.serial,
     required this.condition,
     required this.status,
     required this.isRecorded,
@@ -851,6 +867,7 @@ class _ResolvedWheel {
 
   final MatchedTyreSlot tyre;
   final String code;
+  final String? serial;
   final TyreCondition? condition;
   final TpStatus status;
   final bool isRecorded;

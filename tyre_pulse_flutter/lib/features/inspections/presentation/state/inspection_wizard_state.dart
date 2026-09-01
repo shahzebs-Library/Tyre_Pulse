@@ -12,6 +12,7 @@ import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 
 enum InspectionWizardStep { header, tyres, review, submitted }
 
@@ -23,12 +24,14 @@ class InspectionWizardState {
     this.selectedSite = '',
     this.selectedAssetNo = '',
     this.selectedVehicleType = '',
+    this.inspectorName = '',
     this.useManualEntry = false,
     this.odometerText = '',
     this.hourMeterText = '',
     this.headerNotes = '',
     this.positions = const <String>[],
     this.tyreConditions = const <String, TyrePositionReading>{},
+    this.installedTyres = const <String, TyreFitment>{},
     this.activePosition,
     this.inspectorSignature,
     this.gpsStatus = InspectionGpsStatus.idle,
@@ -54,6 +57,7 @@ class InspectionWizardState {
   final String selectedSite;
   final String selectedAssetNo;
   final String selectedVehicleType;
+  final String inspectorName;
   final bool useManualEntry;
 
   final String odometerText;
@@ -62,6 +66,7 @@ class InspectionWizardState {
 
   final List<String> positions;
   final Map<String, TyrePositionReading> tyreConditions;
+  final Map<String, TyreFitment> installedTyres;
   final String? activePosition;
 
   final String? inspectorSignature;
@@ -109,7 +114,7 @@ class InspectionWizardState {
       site: selectedSite,
       assetNo: selectedAssetNo,
       vehicleType: selectedVehicleType,
-      inspector: '',
+      inspector: inspectorName,
       inspectionDate: DateTime.now(),
       scheduledDate: DateTime.now(),
       tyreConditions: tyreConditions,
@@ -127,12 +132,14 @@ class InspectionWizardState {
     String? selectedSite,
     String? selectedAssetNo,
     String? selectedVehicleType,
+    String? inspectorName,
     bool? useManualEntry,
     String? odometerText,
     String? hourMeterText,
     String? headerNotes,
     List<String>? positions,
     Map<String, TyrePositionReading>? tyreConditions,
+    Map<String, TyreFitment>? installedTyres,
     String? activePosition,
     bool clearActivePosition = false,
     String? inspectorSignature,
@@ -158,12 +165,14 @@ class InspectionWizardState {
       selectedSite: selectedSite ?? this.selectedSite,
       selectedAssetNo: selectedAssetNo ?? this.selectedAssetNo,
       selectedVehicleType: selectedVehicleType ?? this.selectedVehicleType,
+      inspectorName: inspectorName ?? this.inspectorName,
       useManualEntry: useManualEntry ?? this.useManualEntry,
       odometerText: odometerText ?? this.odometerText,
       hourMeterText: hourMeterText ?? this.hourMeterText,
       headerNotes: headerNotes ?? this.headerNotes,
       positions: positions ?? this.positions,
       tyreConditions: tyreConditions ?? this.tyreConditions,
+      installedTyres: installedTyres ?? this.installedTyres,
       activePosition:
           clearActivePosition ? null : (activePosition ?? this.activePosition),
       inspectorSignature: clearInspectorSignature

@@ -34,6 +34,7 @@ enum InspectionSubmitIssue {
   missingSite,
   missingVehicle,
   missingInspectorName,
+  missingGps,
   noTyreTouched,
   tyresIncomplete,
   missingSignature,
@@ -236,6 +237,9 @@ List<InspectionSubmitIssue> validateInspectionForSubmit(
   }
   if (payload.inspector.trim().isEmpty) {
     issues.add(InspectionSubmitIssue.missingInspectorName);
+  }
+  if (payload.gpsFix == null) {
+    issues.add(InspectionSubmitIssue.missingGps);
   }
 
   // The three checks above are structural prerequisites for the two below

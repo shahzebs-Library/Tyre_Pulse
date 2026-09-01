@@ -30,6 +30,7 @@ import 'package:tyre_pulse/features/inspections/presentation/controllers/inspect
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
@@ -37,6 +38,7 @@ import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_lab
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_pending.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 
 /// Stable finders for the responsive root step of the inspection wizard.
 @visibleForTesting
@@ -873,8 +875,17 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
             assetNo: state.selectedAssetNo,
             positions: state.positions,
             tyreData: <String, Map<String, Object?>>{
-              for (final entry in state.tyreConditions.entries)
-                if (entry.value.isTouched) entry.key: entry.value.toEntry(),
+              for (final String position in state.positions)
+                position: <String, Object?>{
+                  ...?state.tyreConditions[position]?.toEntry(),
+                  if (state.installedTyres[position]?.serialNo != null)
+                    'installed_serial':
+                        state.installedTyres[position]!.serialNo,
+                  if (state.installedTyres[position]?.brand != null)
+                    'installed_brand': state.installedTyres[position]!.brand,
+                  if (state.installedTyres[position]?.size != null)
+                    'installed_size': state.installedTyres[position]!.size,
+                },
             },
             selectedPosition: selectedPosition,
             onPositionTap: (String position) {
@@ -899,7 +910,9 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
           else
             _SelectedInspectionTyreCard(
               position: selectedPosition,
+              vehicleType: resolvedClass,
               reading: selectedReading,
+              installedTyre: state.installedTyres[selectedPosition],
               onTap: () => _openEditor(context, ref, selectedPosition),
             ),
           const SizedBox(height: TpSpace.sm),
@@ -973,6 +986,7 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
                   TyrePositionReading.seed(position);
           return TyrePositionEditorSheet(
             reading: reading,
+            installedTyre: liveState.installedTyres[position],
             isCapturingPhoto: liveState.isCapturingPhoto,
             onChanged: (updated) => sheetRef
                 .read(inspectionWizardControllerProvider.notifier)
@@ -1122,6 +1136,21 @@ class _TyreInspectionContextCard extends StatelessWidget {
               ),
             ],
           ),
+          if (state.completeness.blocked.isNotEmpty) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Wrap(
+              spacing: TpSpace.xs,
+              runSpacing: TpSpace.xs,
+              children: <Widget>[
+                for (final TyreSlotStatus slot in state.completeness.blocked)
+                  TpStatusChip(
+                    status: TpStatus.warning,
+                    label: '${slot.code} · ${l10n.inspectionNotRecordedYet}',
+                    isCompact: true,
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1279,12 +1308,16 @@ class _TyreSelectionPrompt extends StatelessWidget {
 class _SelectedInspectionTyreCard extends StatelessWidget {
   const _SelectedInspectionTyreCard({
     required this.position,
+    required this.vehicleType,
     required this.reading,
+    required this.installedTyre,
     required this.onTap,
   });
 
   final String position;
+  final String vehicleType;
   final TyrePositionReading reading;
+  final TyreFitment? installedTyre;
   final VoidCallback onTap;
 
   @override
@@ -1302,6 +1335,10 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
       l10n,
       position,
     );
+    final String canonicalCode = legacyPositionCode(vehicleType, position);
+    final String serial = reading.serialNumber?.trim().isNotEmpty == true
+        ? reading.serialNumber!.trim()
+        : (installedTyre?.serialNo ?? l10n.tyreDiagramListNotRecorded);
 
     return TpCard(
       key: NewInspectionScreenKeys.tyreSelectedCard,
@@ -1325,7 +1362,7 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
               Row(
                 children: <Widget>[
                   TpIdentifierText(
-                    position,
+                    canonicalCode,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -1346,6 +1383,38 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                     label: conditionLabel,
                     isCompact: true,
                   ),
+                ],
+              ),
+              const SizedBox(height: TpSpace.md),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.qr_code_2_rounded,
+                    size: TpSizing.iconSm,
+                    color: palette.primary,
+                  ),
+                  const SizedBox(width: TpSpace.xs),
+                  Expanded(
+                    child: TpIdentifierText(
+                      serial,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  if (installedTyre?.brand != null ||
+                      installedTyre?.size != null)
+                    Text(
+                      <String?>[installedTyre?.brand, installedTyre?.size]
+                          .whereType<String>()
+                          .join(' · '),
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(color: palette.textSecondary),
+                    ),
                 ],
               ),
               const SizedBox(height: TpSpace.md),

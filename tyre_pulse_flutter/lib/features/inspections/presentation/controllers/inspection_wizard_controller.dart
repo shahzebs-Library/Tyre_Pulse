@@ -13,6 +13,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_draft_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
@@ -26,6 +27,8 @@ import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dar
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
+import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
 import 'package:uuid/uuid.dart';
 
 final NotifierProvider<InspectionWizardController, InspectionWizardState>
@@ -65,15 +68,12 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       '';
   String? get _country => ref.read(activeCountryProvider);
 
-  /// `WorkspaceContext` does not carry a display name today (only
-  /// `WorkspaceProfile.fullName` does, and that is not propagated onto
-  /// the context this feature is given - `workspace_context.dart` is
-  /// outside this phase's directory boundary, so this is recorded as a
-  /// known gap rather than patched by widening that type here). The
-  /// signed-in user's id is used as the inspector identity until a later
-  /// pass either exposes a display name on `WorkspaceContext` or this
-  /// feature is handed one through another seam.
-  String get _inspectorName => _userId;
+  /// Prefer the signed-in operator's display name for the audit record. The
+  /// stable user id remains a truthful fallback for older cached profiles.
+  String get _inspectorName {
+    final String? name = ref.read(workspaceContextProvider)?.fullName?.trim();
+    return (name == null || name.isEmpty) ? _userId : name;
+  }
 
   // -- Entry ------------------------------------------------------------
 
@@ -131,6 +131,28 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
         p: existingReadings[p] ?? TyrePositionReading.seed(p),
     };
 
+    Map<String, TyreFitment> installedTyres = const <String, TyreFitment>{};
+    AppError? fitmentError;
+    try {
+      final List<TyreFitment> fitments = await ref
+          .read(tyreFitmentRepositoryProvider)
+          .activeForAsset(assetNo: assetNo, country: _country);
+      installedTyres = fitmentsByInspectionSlot(
+        vehicleType: resolvedType,
+        assetNo: assetNo,
+        fitments: fitments,
+      );
+    } on AppError catch (error) {
+      fitmentError = error;
+    } on Object catch (error) {
+      fitmentError = AppError(
+        kind: AppErrorKind.unknown,
+        message: 'The currently fitted tyre serials could not be loaded.',
+        technical: 'activeForAsset($assetNo) failed: $error',
+        isRetryable: true,
+      );
+    }
+
     String? seededActivePosition;
     if (prefillSerial != null && prefillSerial.trim().isNotEmpty) {
       final String wanted = (prefillPosition ?? '').trim().toLowerCase();
@@ -152,9 +174,12 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       draftKey: draftKey,
       selectedAssetNo: assetNo,
       selectedVehicleType: resolvedType,
+      inspectorName: _inspectorName,
       selectedSite: site ?? state.selectedSite,
       positions: positions,
       tyreConditions: seeded,
+      installedTyres: installedTyres,
+      loadError: fitmentError,
       inspectorSignature: existingSignature?.payload,
       activePosition: seededActivePosition,
       step: seededActivePosition != null

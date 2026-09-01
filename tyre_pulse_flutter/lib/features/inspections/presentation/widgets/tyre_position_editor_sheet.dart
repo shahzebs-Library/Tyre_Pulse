@@ -12,6 +12,7 @@ library;
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -22,12 +23,16 @@ import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.da
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_lookup_record.dart';
+import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
 
-class TyrePositionEditorSheet extends StatefulWidget {
+class TyrePositionEditorSheet extends ConsumerStatefulWidget {
   const TyrePositionEditorSheet({
     required this.reading,
     required this.onChanged,
     required this.onCapturePhoto,
+    this.installedTyre,
     this.isCapturingPhoto = false,
     super.key,
   });
@@ -36,9 +41,10 @@ class TyrePositionEditorSheet extends StatefulWidget {
   final ValueChanged<TyrePositionReading> onChanged;
   final ValueChanged<PhotoCaptureSource> onCapturePhoto;
   final bool isCapturingPhoto;
+  final TyreFitment? installedTyre;
 
   @override
-  State<TyrePositionEditorSheet> createState() =>
+  ConsumerState<TyrePositionEditorSheet> createState() =>
       _TyrePositionEditorSheetState();
 }
 
@@ -50,11 +56,15 @@ abstract final class TyrePositionEditorSheetKeys {
       ValueKey<String>('tyre-position-editor-close-action');
 }
 
-class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
+class _TyrePositionEditorSheetState
+    extends ConsumerState<TyrePositionEditorSheet> {
   late final TextEditingController _pressureController;
   late final TextEditingController _treadController;
   late final TextEditingController _serialController;
   late final TextEditingController _notesController;
+  TyreLookupRecord? _serialLookup;
+  bool _isLookingUpSerial = false;
+  bool _serialNotFound = false;
 
   @override
   void initState() {
@@ -66,7 +76,7 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
       text: widget.reading.treadDepthMm?.toString() ?? '',
     );
     _serialController = TextEditingController(
-      text: widget.reading.serialNumber ?? '',
+      text: widget.reading.serialNumber ?? widget.installedTyre?.serialNo ?? '',
     );
     _notesController = TextEditingController(text: widget.reading.notes ?? '');
   }
@@ -81,6 +91,31 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
   }
 
   void _emit(TyrePositionReading next) => widget.onChanged(next);
+
+  Future<void> _lookupSerial() async {
+    final String serial = _serialController.text.trim();
+    if (serial.isEmpty || _isLookingUpSerial) return;
+    setState(() {
+      _isLookingUpSerial = true;
+      _serialNotFound = false;
+    });
+    try {
+      final TyreLookupRecord? record =
+          await ref.read(tyreLookupRepositoryProvider).lookupBySerial(serial);
+      if (!mounted) return;
+      setState(() {
+        _serialLookup = record;
+        _serialNotFound = record == null;
+      });
+      if (record != null) {
+        _emit(widget.reading.copyWith(serialNumber: serial));
+      }
+    } on Object {
+      if (mounted) setState(() => _serialNotFound = true);
+    } finally {
+      if (mounted) setState(() => _isLookingUpSerial = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +288,16 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
                   label: l10n.inspectionSerialLabel,
                   controller: _serialController,
                   textCapitalization: TextCapitalization.characters,
+                  suffix: IconButton(
+                    tooltip: l10n.serialSearchTitle,
+                    onPressed: _isLookingUpSerial ? null : _lookupSerial,
+                    icon: _isLookingUpSerial
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.manage_search_rounded),
+                  ),
                   onChanged: (String v) => _emit(
                     r.copyWith(
                       serialNumber: v,
@@ -260,6 +305,18 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
                     ),
                   ),
                 ),
+                if (_serialLookup != null) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  _SerialLookupCard(record: _serialLookup!),
+                ] else if (_serialNotFound) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    l10n.serialSearchEmptyMessage,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: palette.warning.onSoft,
+                        ),
+                  ),
+                ],
                 const SizedBox(height: TpSpace.lg),
                 Text(
                   l10n.inspectionPhotoLabel,
@@ -373,6 +430,46 @@ class _TyrePositionEditorSheetState extends State<TyrePositionEditorSheet> {
         TpStatus.neutral => l10n.statusNeutral,
         TpStatus.unknown => l10n.statusUnknown,
       };
+}
+
+class _SerialLookupCard extends StatelessWidget {
+  const _SerialLookupCard({required this.record});
+
+  final TyreLookupRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final List<String> details = <String>[
+      if (record.brand != null) '${l10n.serialSearchBrand}: ${record.brand}',
+      if (record.size != null) '${l10n.serialSearchSize}: ${record.size}',
+      if (record.assetNo != null)
+        '${l10n.serialSearchAsset}: ${record.assetNo}',
+      if (record.bestPosition != null)
+        '${l10n.serialSearchPosition}: ${record.bestPosition}',
+    ];
+    return TpCard(
+      background: palette.ok.soft,
+      borderColor: palette.ok.base,
+      padding: const EdgeInsets.all(TpSpace.sm),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.verified_rounded, color: palette.ok.onSoft),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Text(
+              details.isEmpty ? l10n.serialSearchFound : details.join(' · '),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: palette.ok.onSoft),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _StickyEditorAction extends StatelessWidget {

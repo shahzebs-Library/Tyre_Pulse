@@ -18,6 +18,7 @@ InspectionPayload _basePayload({
   Map<String, TyrePositionReading> tyreConditions =
       const <String, TyrePositionReading>{},
   String? signature,
+  bool includeGps = true,
 }) {
   final DateTime now = DateTime.utc(2026, 8, 20, 9);
   return InspectionPayload(
@@ -30,6 +31,14 @@ InspectionPayload _basePayload({
     scheduledDate: now,
     tyreConditions: tyreConditions,
     inspectorSignature: signature,
+    gpsFix: includeGps
+        ? InspectionGpsFix(
+            latitude: 24.7,
+            longitude: 46.7,
+            accuracyMeters: 8,
+            capturedAt: now,
+          )
+        : null,
   );
 }
 
@@ -199,9 +208,25 @@ void main() {
     });
   });
 
-  group('gps is carried through toRow but never gates submission', () {
+  group('gps is required and carried through toRow', () {
+    test('a missing automatic location blocks submission explicitly', () {
+      final List<InspectionSubmitIssue> issues = validateInspectionForSubmit(
+        _basePayload(
+          vehicleType: 'unrecognised-type-xyz',
+          assetNo: 'ZZ999',
+          tyreConditions: const <String, TyrePositionReading>{
+            'LHF1': TyrePositionReading(position: 'LHF1', checked: true),
+          },
+          signature: 'data:image/png;base64,abc',
+          includeGps: false,
+        ),
+      );
+
+      expect(issues, <InspectionSubmitIssue>[InspectionSubmitIssue.missingGps]);
+    });
+
     test('toRow spreads four null gps columns when no fix was captured', () {
-      final InspectionPayload payload = _basePayload();
+      final InspectionPayload payload = _basePayload(includeGps: false);
       final Map<String, Object?> row = payload.toRow();
       expect(row['gps_lat'], isNull);
       expect(row['gps_lng'], isNull);

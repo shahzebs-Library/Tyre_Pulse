@@ -266,7 +266,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get vehiclesSearchHint => 'ابحث بالأصل أو النوع أو الموقع';
+  String get vehiclesSearchHint =>
+      'ابحث بالأصل أو الرقم التسلسلي أو الصنع أو النوع أو الموقع';
 
   @override
   String get vehiclesTyreAssetsFilter => 'أصول الإطارات';
@@ -331,6 +332,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get vehiclesFieldRegistration => 'التسجيل';
+
+  @override
+  String get vehiclesFieldSerialNo => 'الرقم التسلسلي للمعدة';
+
+  @override
+  String get vehiclesFieldEngineNo => 'رقم المحرك';
+
+  @override
+  String get vehiclesFieldCapacity => 'السعة';
+
+  @override
+  String get vehiclesFieldOperationalStatus => 'الحالة التشغيلية';
 
   @override
   String get vehiclesStartInspection => 'بدء الفحص';

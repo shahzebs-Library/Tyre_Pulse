@@ -511,7 +511,7 @@ abstract class AppLocalizations {
   /// No description provided for @vehiclesSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Search asset, make, type or site'**
+  /// **'Search asset, serial, make, type or site'**
   String get vehiclesSearchHint;
 
   /// The default class-filter chip: equipment classes that carry tyres.
@@ -639,6 +639,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Registration'**
   String get vehiclesFieldRegistration;
+
+  /// No description provided for @vehiclesFieldSerialNo.
+  ///
+  /// In en, this message translates to:
+  /// **'Equipment serial'**
+  String get vehiclesFieldSerialNo;
+
+  /// No description provided for @vehiclesFieldEngineNo.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine number'**
+  String get vehiclesFieldEngineNo;
+
+  /// No description provided for @vehiclesFieldCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Capacity'**
+  String get vehiclesFieldCapacity;
+
+  /// No description provided for @vehiclesFieldOperationalStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Operational status'**
+  String get vehiclesFieldOperationalStatus;
 
   /// No description provided for @vehiclesStartInspection.
   ///

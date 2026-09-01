@@ -137,7 +137,8 @@ Future<PagedRows<T>> fetchAllPages<T>(
 /// `_profileColumns`.
 const String vehicleFleetColumns = 'id, asset_no, fleet_number, make, '
     'model, vehicle_type, site, status, operator_name, tyre_size, '
-    'current_km, country, department, region, registration_no, year';
+    'current_km, country, department, region, registration_no, year, '
+    'serial_no, engine_no, capacity, ops_status';
 
 /// The narrow surface [VehicleFleetRepository] needs from the remote fleet
 /// register. See the library comment for why this exists as an interface
@@ -256,7 +257,8 @@ const String tyreAssetClassFilter = 'TYRES';
 ///
 /// Ported field-for-field from `mobile/app/(app)/vehicles.tsx`'s `shown`
 /// filter: asset number, fleet number, make, model, vehicle type, operator,
-/// registration and site - eight fields, case-insensitive substring match.
+/// registration, equipment serial and site - nine fields, case-insensitive
+/// substring match.
 /// An empty or whitespace-only [term] matches every asset, matching the
 /// production behaviour of falling back to `classed` when nothing was typed.
 bool vehicleMatchesSearch(VehicleAsset asset, String term) {
@@ -273,6 +275,7 @@ bool vehicleMatchesSearch(VehicleAsset asset, String term) {
       has(asset.vehicleType) ||
       has(asset.operatorName) ||
       has(asset.registrationNo) ||
+      has(asset.serialNo) ||
       has(asset.site);
 }
 
@@ -286,6 +289,7 @@ bool vehicleMatchesSearch(VehicleAsset asset, String term) {
 List<VehicleAsset> applyVehicleFilters(
   List<VehicleAsset> assets, {
   String? assetClassFilter,
+  String? vehicleTypeFilter,
   String searchTerm = '',
 }) {
   final String term = searchTerm.trim();
@@ -295,20 +299,28 @@ List<VehicleAsset> applyVehicleFilters(
         .toList(growable: false);
   }
 
+  Iterable<VehicleAsset> filtered = assets;
+  if (vehicleTypeFilter?.trim().isNotEmpty == true) {
+    final String type = vehicleTypeFilter!.trim().toLowerCase();
+    filtered = filtered.where(
+      (VehicleAsset asset) => asset.vehicleType?.trim().toLowerCase() == type,
+    );
+  }
+
   if (assetClassFilter == tyreAssetClassFilter) {
-    return assets
+    return filtered
         .where((VehicleAsset asset) => isTyreAsset(asset.assetNo))
         .toList(growable: false);
   }
   if (assetClassFilter != null) {
-    return assets
+    return filtered
         .where(
           (VehicleAsset asset) =>
               assetClassOf(asset.assetNo) == assetClassFilter,
         )
         .toList(growable: false);
   }
-  return assets;
+  return filtered.toList(growable: false);
 }
 
 // ---------------------------------------------------------------------------

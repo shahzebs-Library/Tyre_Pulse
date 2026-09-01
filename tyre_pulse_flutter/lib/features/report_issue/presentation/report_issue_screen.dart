@@ -132,6 +132,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: TpSpace.lg),
                       child: _SelectedAssetSummary(
+                        label: copy('asset'),
                         assetNo: _asset.text.trim(),
                         site: _site.text.trim(),
                       ),
@@ -189,6 +190,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                           hint: copy('siteHint'),
                           controller: _site,
                           keyName: 'site',
+                          readOnly: widget.route.siteName != null,
                         ),
                       ),
                       Expanded(
@@ -197,6 +199,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                           hint: copy('assetHint'),
                           controller: _asset,
                           keyName: 'asset',
+                          readOnly: widget.route.assetNo != null,
                         ),
                       ),
                     ];
@@ -217,6 +220,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                           hint: copy('siteHint'),
                           controller: _site,
                           keyName: 'site',
+                          readOnly: widget.route.siteName != null,
                         ),
                         const SizedBox(height: TpSpace.lg),
                         _LabeledInput(
@@ -224,6 +228,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                           hint: copy('assetHint'),
                           controller: _asset,
                           keyName: 'asset',
+                          readOnly: widget.route.assetNo != null,
                         ),
                       ],
                     );
@@ -774,8 +779,13 @@ class _OperationChoice extends StatelessWidget {
 }
 
 class _SelectedAssetSummary extends StatelessWidget {
-  const _SelectedAssetSummary({required this.assetNo, required this.site});
+  const _SelectedAssetSummary({
+    required this.label,
+    required this.assetNo,
+    required this.site,
+  });
 
+  final String label;
   final String assetNo;
   final String site;
 
@@ -790,6 +800,30 @@ class _SelectedAssetSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(
+                Icons.directions_car_filled_outlined,
+                size: 20,
+                color: palette.primary,
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: palette.textMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 17,
+                color: palette.textMuted,
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
           if (assetNo.isNotEmpty)
             Text(
               assetNo,
@@ -827,12 +861,14 @@ class _LabeledInput extends StatelessWidget {
     required this.hint,
     required this.controller,
     required this.keyName,
+    this.readOnly = false,
   });
 
   final String label;
   final String hint;
   final TextEditingController controller;
   final String keyName;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -842,7 +878,13 @@ class _LabeledInput extends StatelessWidget {
           TextField(
             key: Key('reportIssue.$keyName'),
             controller: controller,
-            decoration: InputDecoration(hintText: hint),
+            readOnly: readOnly,
+            decoration: InputDecoration(
+              hintText: hint,
+              suffixIcon: readOnly
+                  ? const Icon(Icons.lock_outline_rounded, size: 18)
+                  : null,
+            ),
           ),
         ],
       );

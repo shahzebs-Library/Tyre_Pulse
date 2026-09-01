@@ -258,7 +258,7 @@ class AppLocalizationsUr extends AppLocalizations {
   }
 
   @override
-  String get vehiclesSearchHint => 'اثاثہ نمبر، ساخت، قسم یا سائٹ تلاش کریں';
+  String get vehiclesSearchHint => 'اثاثہ، سیریل، ساخت، قسم یا سائٹ تلاش کریں';
 
   @override
   String get vehiclesTyreAssetsFilter => 'ٹائر والے اثاثے';
@@ -322,6 +322,18 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get vehiclesFieldRegistration => 'رجسٹریشن';
+
+  @override
+  String get vehiclesFieldSerialNo => 'آلات کا سیریل نمبر';
+
+  @override
+  String get vehiclesFieldEngineNo => 'انجن نمبر';
+
+  @override
+  String get vehiclesFieldCapacity => 'گنجائش';
+
+  @override
+  String get vehiclesFieldOperationalStatus => 'آپریشنل حالت';
 
   @override
   String get vehiclesStartInspection => 'معائنہ شروع کریں';

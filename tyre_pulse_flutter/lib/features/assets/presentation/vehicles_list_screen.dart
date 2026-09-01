@@ -39,7 +39,6 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
-import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
@@ -79,10 +78,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   late final TextEditingController _searchController;
   late String _searchTerm;
 
-  /// Null = every class. [tyreAssetClassFilter] = tyre-carrying classes only.
-  /// Anything else = exactly that class code. The approved asset register
-  /// opens on All so stationary PMV assets remain visible beside vehicles.
-  String? _classFilter;
+  /// Exact `vehicle_fleet.vehicle_type` selected from values that really
+  /// exist in the loaded register. Null keeps every vehicle type visible.
+  String? _vehicleTypeFilter;
   String? _siteFilter;
   String? _statusFilter;
 
@@ -100,12 +98,13 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     super.dispose();
   }
 
-  void _selectClassChip(String? assetClass) {
+  void _selectVehicleType(String? vehicleType) {
     setState(() {
-      // Tapping the active specific class widens the register back to All.
-      _classFilter = (assetClass != null && assetClass == _classFilter)
-          ? null
-          : assetClass;
+      // Tapping the active type widens the register back to All.
+      _vehicleTypeFilter =
+          (vehicleType != null && vehicleType == _vehicleTypeFilter)
+              ? null
+              : vehicleType;
     });
   }
 
@@ -141,19 +140,6 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
             onPressed: () => context.push(const ScannerRoute().location),
             icon: Icon(
               Icons.document_scanner_outlined,
-              color: TpPalette.of(context).primary,
-            ),
-          ),
-          IconButton(
-            key: VehiclesListScreenKeys.filter,
-            tooltip: l10n.vehiclesTyreAssetsFilter,
-            onPressed: () => _selectClassChip(
-              _classFilter == null ? tyreAssetClassFilter : null,
-            ),
-            icon: Icon(
-              _classFilter == null
-                  ? Icons.filter_alt_outlined
-                  : Icons.filter_alt_rounded,
               color: TpPalette.of(context).primary,
             ),
           ),
@@ -240,7 +226,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   }) {
     final List<VehicleAsset> filtered = applyVehicleFilters(
       assets,
-      assetClassFilter: _classFilter,
+      vehicleTypeFilter: _vehicleTypeFilter,
       searchTerm: _searchTerm,
     ).where((VehicleAsset asset) {
       final bool matchesSite = _siteFilter == null ||
@@ -249,12 +235,24 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
           asset.status?.trim().toLowerCase() == _statusFilter!.toLowerCase();
       return matchesSite && matchesStatus;
     }).toList(growable: false);
-    // Chips are built from the WHOLE loaded set, never the already-filtered
-    // one - narrowing by class must not narrow the chips that let you widen
-    // it again.
-    final List<AssetClassChip> classesPresent = classChips(
-      assets.map((VehicleAsset a) => a.assetNo),
-    );
+    // Filters come from the authoritative vehicle_type values on the loaded
+    // fleet rows, not from an inferred asset-number prefix.
+    final Map<String, int> vehicleTypeCounts = <String, int>{};
+    for (final VehicleAsset asset in assets) {
+      final String? type = asset.vehicleType?.trim();
+      if (type == null || type.isEmpty) continue;
+      vehicleTypeCounts.update(
+        type,
+        (int count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final List<MapEntry<String, int>> vehicleTypes =
+        vehicleTypeCounts.entries.toList(growable: false)
+          ..sort(
+            (MapEntry<String, int> a, MapEntry<String, int> b) =>
+                a.key.toLowerCase().compareTo(b.key.toLowerCase()),
+          );
     final List<String> sites = assets
         .map((VehicleAsset asset) => asset.site?.trim())
         .whereType<String>()
@@ -335,13 +333,12 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
           ),
         ),
         const SizedBox(height: TpSpace.sm),
-        _ClassChipsRow(
+        _VehicleTypeChipsRow(
           key: VehiclesListScreenKeys.classFilters,
-          selected: _classFilter,
-          classesPresent: classesPresent,
-          tyreAssetsLabel: l10n.vehiclesTyreAssetsFilter,
+          selected: _vehicleTypeFilter,
+          vehicleTypes: vehicleTypes,
           allLabel: '${l10n.vehiclesAllFilter} (${assets.length})',
-          onSelect: _selectClassChip,
+          onSelect: _selectVehicleType,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -548,8 +545,11 @@ class _FleetAssetCard extends StatelessWidget {
       <String?>[asset.make, asset.model, asset.vehicleType],
       separator: ' · ',
     );
+    final String? displayStatus = asset.opsStatus?.trim().isNotEmpty == true
+        ? asset.opsStatus!.trim()
+        : asset.status?.trim();
     final TpStatusColors statusColors = palette.forStatus(
-      vehicleStatusTone(asset.status),
+      vehicleStatusTone(displayStatus),
     );
     final String? photo = vehiclePhotoAsset(asset);
 
@@ -570,31 +570,34 @@ class _FleetAssetCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
-                Container(
-                  width: 120,
-                  height: double.infinity,
-                  decoration: BoxDecoration(
-                    color: palette.surfaceAlt,
-                    border: BorderDirectional(
-                      end: BorderSide(color: palette.border),
+                Padding(
+                  padding: const EdgeInsets.all(TpSpace.xs),
+                  child: Container(
+                    width: 120,
+                    height: 112,
+                    decoration: BoxDecoration(
+                      color: palette.surfaceAlt,
+                      border: BorderDirectional(
+                        end: BorderSide(color: palette.border),
+                      ),
                     ),
+                    clipBehavior: Clip.antiAlias,
+                    alignment: Alignment.center,
+                    child: photo == null
+                        ? Icon(
+                            vehicleFallbackIcon(asset),
+                            size: 54,
+                            color: palette.primary,
+                          )
+                        : Image.asset(
+                            photo,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                            semanticLabel: identity,
+                          ),
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  alignment: Alignment.center,
-                  child: photo == null
-                      ? Icon(
-                          vehicleFallbackIcon(asset),
-                          size: 54,
-                          color: palette.primary,
-                        )
-                      : Image.asset(
-                          photo,
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                          filterQuality: FilterQuality.high,
-                          semanticLabel: identity,
-                        ),
                 ),
                 const SizedBox(width: TpSpace.md),
                 Expanded(
@@ -670,7 +673,7 @@ class _FleetAssetCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
-                    if (asset.status?.trim().isNotEmpty == true)
+                    if (displayStatus?.isNotEmpty == true)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: TpSpace.sm,
@@ -682,7 +685,7 @@ class _FleetAssetCard extends StatelessWidget {
                           border: Border.all(color: statusColors.base),
                         ),
                         child: Text(
-                          asset.status!.trim(),
+                          displayStatus!,
                           style: text.labelSmall?.copyWith(
                             color: statusColors.onSoft,
                             fontWeight: FontWeight.w800,
@@ -752,24 +755,18 @@ class _TruncatedNotice extends StatelessWidget {
   }
 }
 
-/// The horizontal row of class-filter chips.
-///
-/// Two fixed chips (tyre-carrying default, then All) followed by one chip
-/// per class actually present in the loaded set, in [classChips]'s own
-/// priority order.
-class _ClassChipsRow extends StatelessWidget {
-  const _ClassChipsRow({
+/// Exact vehicle-type values from the live fleet register.
+class _VehicleTypeChipsRow extends StatelessWidget {
+  const _VehicleTypeChipsRow({
     required this.selected,
-    required this.classesPresent,
-    required this.tyreAssetsLabel,
+    required this.vehicleTypes,
     required this.allLabel,
     required this.onSelect,
     super.key,
   });
 
   final String? selected;
-  final List<AssetClassChip> classesPresent;
-  final String tyreAssetsLabel;
+  final List<MapEntry<String, int>> vehicleTypes;
   final String allLabel;
   final ValueChanged<String?> onSelect;
 
@@ -781,23 +778,17 @@ class _ClassChipsRow extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: TpSpace.lg),
         children: <Widget>[
-          _ClassChip(
+          _VehicleTypeChip(
             label: allLabel,
             isSelected: selected == null,
             onTap: () => onSelect(null),
           ),
-          const SizedBox(width: TpSpace.xs),
-          _ClassChip(
-            label: tyreAssetsLabel,
-            isSelected: selected == tyreAssetClassFilter,
-            onTap: () => onSelect(tyreAssetClassFilter),
-          ),
-          for (final AssetClassChip chip in classesPresent) ...<Widget>[
+          for (final MapEntry<String, int> type in vehicleTypes) ...<Widget>[
             const SizedBox(width: TpSpace.xs),
-            _ClassChip(
-              label: '${chip.assetClass} ${chip.count}',
-              isSelected: selected == chip.assetClass,
-              onTap: () => onSelect(chip.assetClass),
+            _VehicleTypeChip(
+              label: '${type.key} (${type.value})',
+              isSelected: selected == type.key,
+              onTap: () => onSelect(type.key),
             ),
           ],
         ],
@@ -806,8 +797,8 @@ class _ClassChipsRow extends StatelessWidget {
   }
 }
 
-class _ClassChip extends StatelessWidget {
-  const _ClassChip({
+class _VehicleTypeChip extends StatelessWidget {
+  const _VehicleTypeChip({
     required this.label,
     required this.isSelected,
     required this.onTap,

@@ -218,10 +218,11 @@ void main() {
       'vehicle_type': 'TR-MIXER',
       'operator_name': 'A. Rahman',
       'registration_no': 'ABC-1234',
+      'serial_no': 'EQ-SN-5521',
       'site': 'NHC',
     });
 
-    test('matches each of the eight searched fields, case-insensitively', () {
+    test('matches each searched field, including equipment serial', () {
       expect(vehicleMatchesSearch(asset, 'tm514'), isTrue);
       expect(vehicleMatchesSearch(asset, 'FN-88'), isTrue);
       expect(vehicleMatchesSearch(asset, 'sinotruk'), isTrue);
@@ -229,6 +230,7 @@ void main() {
       expect(vehicleMatchesSearch(asset, 'tr-mixer'), isTrue);
       expect(vehicleMatchesSearch(asset, 'rahman'), isTrue);
       expect(vehicleMatchesSearch(asset, 'abc-1234'), isTrue);
+      expect(vehicleMatchesSearch(asset, 'eq-sn-5521'), isTrue);
       expect(vehicleMatchesSearch(asset, 'nhc'), isTrue);
     });
 
@@ -279,6 +281,26 @@ void main() {
         assetClassFilter: 'GN',
       );
       expect(result.map((VehicleAsset a) => a.assetNo), <String>['GN001']);
+    });
+
+    test('an exact vehicle type narrows by the live vehicle_type value', () {
+      final List<VehicleAsset> typed = <VehicleAsset>[
+        const VehicleAsset(
+          id: '1',
+          assetNo: 'TM001',
+          vehicleType: 'TR-MIXER',
+        ),
+        const VehicleAsset(
+          id: '2',
+          assetNo: 'GN001',
+          vehicleType: 'GENERATOR',
+        ),
+      ];
+      final List<VehicleAsset> result = applyVehicleFilters(
+        typed,
+        vehicleTypeFilter: 'tr-mixer',
+      );
+      expect(result.map((VehicleAsset a) => a.assetNo), <String>['TM001']);
     });
 
     test('no filter and no search returns every asset, unmodified order', () {

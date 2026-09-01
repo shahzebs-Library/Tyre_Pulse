@@ -90,6 +90,18 @@ void main() {
           .text,
       'Qiddiya G2',
     );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('reportIssue.asset')))
+          .readOnly,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('reportIssue.site')))
+          .readOnly,
+      isTrue,
+    );
 
     await tester.enterText(
       find.byKey(const Key('reportIssue.title')),

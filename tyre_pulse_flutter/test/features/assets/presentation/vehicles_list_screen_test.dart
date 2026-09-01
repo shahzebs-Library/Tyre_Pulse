@@ -179,6 +179,7 @@ void main() {
         (vehiclePhoto.image as AssetImage).assetName,
         'assets/vehicle_photos/concrete_pump.png',
       );
+      expect(vehiclePhoto.fit, BoxFit.contain);
 
       final Image busPhoto = tester.widget<Image>(
         find.descendant(
@@ -287,17 +288,25 @@ void main() {
 
   testWidgets(
     'typing a search term narrows the list across the whole set, ignoring '
-    'an active tyre-only browse filter',
+    'an active vehicle-type browse filter',
     (WidgetTester tester) async {
       await _pump(
         tester,
         _resolved(
           const VehicleFleetListLoaded(
             assets: <VehicleAsset>[
-              VehicleAsset(id: 'v1', assetNo: 'TM514', make: 'Sinotruk'),
-              // Not in a tyre-carrying class, so it is hidden by the
-              // screen's default filter until the search matches it.
-              VehicleAsset(id: 'v2', assetNo: 'GN101', make: 'Cummins'),
+              VehicleAsset(
+                id: 'v1',
+                assetNo: 'TM514',
+                make: 'Sinotruk',
+                vehicleType: 'TR-MIXER',
+              ),
+              VehicleAsset(
+                id: 'v2',
+                assetNo: 'GN101',
+                make: 'Cummins',
+                vehicleType: 'GENERATOR',
+              ),
             ],
             truncated: false,
           ),
@@ -307,7 +316,7 @@ void main() {
       expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(ChoiceChip, 'Tyre assets'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'TR-MIXER (1)'));
       await tester.pumpAndSettle();
       expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsNothing);
 
@@ -363,15 +372,23 @@ void main() {
   );
 
   testWidgets(
-      'the tyre-only filter can narrow an All-assets register and All widens '
+      'a vehicle-type filter can narrow an All-assets register and All widens '
       'it again', (WidgetTester tester) async {
     await _pump(
       tester,
       _resolved(
         const VehicleFleetListLoaded(
           assets: <VehicleAsset>[
-            VehicleAsset(id: 'v1', assetNo: 'TM514'),
-            VehicleAsset(id: 'v2', assetNo: 'GN101'),
+            VehicleAsset(
+              id: 'v1',
+              assetNo: 'TM514',
+              vehicleType: 'TR-MIXER',
+            ),
+            VehicleAsset(
+              id: 'v2',
+              assetNo: 'GN101',
+              vehicleType: 'GENERATOR',
+            ),
           ],
           truncated: false,
         ),
@@ -381,7 +398,7 @@ void main() {
     expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
     expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Tyre assets'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'TR-MIXER (1)'));
     await tester.pumpAndSettle();
     expect(find.byKey(VehiclesListScreenKeys.asset('v1')), findsOneWidget);
     expect(find.byKey(VehiclesListScreenKeys.asset('v2')), findsNothing);
@@ -452,7 +469,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Fleet & assets'), findsOneWidget);
-      expect(find.byKey(VehiclesListScreenKeys.filter), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.classFilters), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.search), findsOneWidget);
       expect(find.byKey(VehiclesListScreenKeys.scanner), findsOneWidget);
       expect(find.text('All (5)'), findsOneWidget);

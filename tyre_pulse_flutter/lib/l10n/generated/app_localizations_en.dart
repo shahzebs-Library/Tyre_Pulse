@@ -259,7 +259,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get vehiclesSearchHint => 'Search asset, make, type or site';
+  String get vehiclesSearchHint => 'Search asset, serial, make, type or site';
 
   @override
   String get vehiclesTyreAssetsFilter => 'Tyre assets';
@@ -323,6 +323,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vehiclesFieldRegistration => 'Registration';
+
+  @override
+  String get vehiclesFieldSerialNo => 'Equipment serial';
+
+  @override
+  String get vehiclesFieldEngineNo => 'Engine number';
+
+  @override
+  String get vehiclesFieldCapacity => 'Capacity';
+
+  @override
+  String get vehiclesFieldOperationalStatus => 'Operational status';
 
   @override
   String get vehiclesStartInspection => 'Start inspection';

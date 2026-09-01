@@ -217,6 +217,8 @@ class _DetailViewState extends ConsumerState<_DetailView> {
     final TextTheme text = Theme.of(context).textTheme;
     final String? photo = vehiclePhotoAsset(asset);
     final String? assetCode = _present(asset.assetNo);
+    final String? displayStatus =
+        _present(asset.opsStatus) ?? _present(asset.status);
     final bool canReportIssue = ref.watch(
       canAccessModuleProvider(ModuleKey.reportIssue),
     );
@@ -282,9 +284,9 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                                       )
                                     : Image.asset(
                                         photo,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                        fit: BoxFit.cover,
+                                        width: 136,
+                                        height: 94,
+                                        fit: BoxFit.contain,
                                         filterQuality: FilterQuality.high,
                                         semanticLabel: asset.displayIdentity,
                                       ),
@@ -315,11 +317,12 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                                                 null &&
                                             _present(asset.status) != null)
                                           const SizedBox(width: TpSpace.sm),
-                                        if (_present(asset.status) != null)
+                                        if (displayStatus != null)
                                           TpStatusChip(
-                                            status:
-                                                vehicleStatusTone(asset.status),
-                                            label: asset.status!.trim(),
+                                            status: vehicleStatusTone(
+                                              displayStatus,
+                                            ),
+                                            label: displayStatus,
                                             isCompact: true,
                                           ),
                                       ],
@@ -423,6 +426,14 @@ class _DetailViewState extends ConsumerState<_DetailView> {
         (l10n.vehiclesFieldCountry, asset.country),
         (l10n.vehiclesFieldTyreSize, asset.tyreSize),
         (l10n.vehiclesFieldRegistration, asset.registrationNo),
+        if (_present(asset.serialNo) != null)
+          (l10n.vehiclesFieldSerialNo, asset.serialNo),
+        if (_present(asset.engineNo) != null)
+          (l10n.vehiclesFieldEngineNo, asset.engineNo),
+        if (_present(asset.capacity) != null)
+          (l10n.vehiclesFieldCapacity, asset.capacity),
+        if (_present(asset.opsStatus) != null)
+          (l10n.vehiclesFieldOperationalStatus, asset.opsStatus),
       ];
 
   void _reportIssue(BuildContext context) {

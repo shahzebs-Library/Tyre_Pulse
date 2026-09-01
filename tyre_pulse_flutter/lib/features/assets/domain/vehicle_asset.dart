@@ -43,6 +43,10 @@ final class VehicleAsset {
     this.region,
     this.registrationNo,
     this.year,
+    this.serialNo,
+    this.engineNo,
+    this.capacity,
+    this.opsStatus,
   });
 
   /// Decodes a raw PostgREST row, whether it came from the live
@@ -84,6 +88,10 @@ final class VehicleAsset {
       region: _stringOrNull(row['region']),
       registrationNo: _stringOrNull(row['registration_no']),
       year: _intOrNull(row['year']),
+      serialNo: _stringOrNull(row['serial_no']),
+      engineNo: _stringOrNull(row['engine_no']),
+      capacity: _stringOrNull(row['capacity']),
+      opsStatus: _stringOrNull(row['ops_status']),
     );
   }
 
@@ -118,6 +126,17 @@ final class VehicleAsset {
   final String? registrationNo;
 
   final int? year;
+
+  /// Manufacturer / equipment serial stored by the fleet master. This is
+  /// intentionally distinct from a tyre serial number.
+  final String? serialNo;
+
+  final String? engineNo;
+  final String? capacity;
+
+  /// Operational availability recorded by fleet operations. This is not the
+  /// same field as [status], which represents the master-record lifecycle.
+  final String? opsStatus;
 
   /// The identifier to show and to navigate with: [assetNo] when present,
   /// falling back to [fleetNumber]. Null when the row carries neither -
@@ -175,7 +194,11 @@ final class VehicleAsset {
           other.department == department &&
           other.region == region &&
           other.registrationNo == registrationNo &&
-          other.year == year);
+          other.year == year &&
+          other.serialNo == serialNo &&
+          other.engineNo == engineNo &&
+          other.capacity == capacity &&
+          other.opsStatus == opsStatus);
 
   @override
   int get hashCode => Object.hash(
@@ -195,6 +218,10 @@ final class VehicleAsset {
         region,
         registrationNo,
         year,
+        serialNo,
+        engineNo,
+        capacity,
+        opsStatus,
       );
 
   @override
@@ -219,14 +246,19 @@ TpStatus vehicleStatusTone(String? status) {
   switch (normalised) {
     case 'active':
     case 'operational':
+    case 'running':
       return TpStatus.ok;
     case 'maintenance':
+    case 'idle':
+    case 'reallocation':
       return TpStatus.warning;
     case 'repair':
+    case 'breakdown':
       return TpStatus.critical;
     case 'inactive':
     case 'retired':
     case 'sold':
+    case 'planned_scrap':
       return TpStatus.neutral;
     default:
       return TpStatus.unknown;

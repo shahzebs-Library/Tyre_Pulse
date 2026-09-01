@@ -213,7 +213,7 @@
       }
     }
   },
-  "vehiclesSearchHint": "Search asset, make, type or site",
+  "vehiclesSearchHint": "Search asset, serial, make, type or site",
   "@vehiclesSearchHint": {},
   "vehiclesTyreAssetsFilter": "Tyre assets",
   "@vehiclesTyreAssetsFilter": {
@@ -269,6 +269,14 @@
   "@vehiclesFieldTyreSize": {},
   "vehiclesFieldRegistration": "Registration",
   "@vehiclesFieldRegistration": {},
+  "vehiclesFieldSerialNo": "Equipment serial",
+  "@vehiclesFieldSerialNo": {},
+  "vehiclesFieldEngineNo": "Engine number",
+  "@vehiclesFieldEngineNo": {},
+  "vehiclesFieldCapacity": "Capacity",
+  "@vehiclesFieldCapacity": {},
+  "vehiclesFieldOperationalStatus": "Operational status",
+  "@vehiclesFieldOperationalStatus": {},
   "vehiclesStartInspection": "Start inspection",
   "@vehiclesStartInspection": {},
   "vehiclesNotFoundTitle": "Vehicle not found",

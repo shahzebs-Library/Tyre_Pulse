@@ -271,3 +271,59 @@ jobs:
         # exists so an iOS-breaking change is caught on the commit that causes
         # it, long before anyone has signing set up.
         run: flutter build ios --no-codesign
+
+  update_goldens:
+    name: Regenerate goldens (Linux)
+    # On-demand refresh of the golden (pixel-snapshot) reference images.
+    # Goldens are host- AND Flutter-version-sensitive: a floating toolchain or
+    # a developer's non-Linux machine re-renders text at sub-pixel differences,
+    # so the ONLY way an image matches what `analyze_test` checks is to
+    # generate it on this same ubuntu runner at the same pinned Flutter version.
+    # This job never runs on an ordinary push - it fires only when the tip
+    # commit message carries `[update-goldens]`, or when dispatched by hand
+    # from the Actions tab - regenerates every golden, verifies the suite is
+    # green against the refreshed images, and commits ONLY the changed PNGs
+    # back to the same branch for review.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[update-goldens]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Generate sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Regenerate goldens
+        run: flutter test --update-goldens
+
+      - name: Verify the suite is green against the refreshed goldens
+        # A refreshed golden is only committed if the whole suite passes
+        # against it, so this job can never bless a real visual regression.
+        run: flutter test
+
+      - name: Commit refreshed goldens
+        working-directory: ${{ github.workspace }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*.png'
+          if git diff --cached --quiet; then
+            echo "Goldens already match this environment - nothing to commit."
+            exit 0
+          fi
+          git commit -m "test(flutter): regenerate goldens on CI Linux at Flutter 3.47.2"
+          git push origin HEAD:${{ github.ref_name }}

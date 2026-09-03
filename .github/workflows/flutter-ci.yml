@@ -72,6 +72,13 @@ jobs:
         # agent must never edit under any circumstance (see AGENTS.md), and a
         # formatting check that flags a file nobody but a human may touch is
         # not a check anyone can act on - it would sit red forever.
+        #
+        # NON-BLOCKING on purpose: a `dart format` difference is cosmetic and
+        # must never gate (skip) the real verification steps below it - Analyze,
+        # Test, and the Android/iOS builds. Those are the checks that catch a
+        # broken app. When formatting differs, this step warns with the exact
+        # command to run and exits 0; run `dart format .` in tyre_pulse_flutter
+        # and commit to clear the warning.
         run: |
           files=$(find lib test -name '*.dart' \
             -not -name '*.g.dart' \
@@ -88,7 +95,11 @@ jobs:
             echo "No hand-written Dart found - nothing to format check."
             exit 0
           fi
-          dart format --set-exit-if-changed $files
+          if dart format --output=none --set-exit-if-changed $files; then
+            echo "Formatting is clean."
+          else
+            echo "::warning title=Dart formatting differs::Run 'dart format .' in tyre_pulse_flutter and commit. Not blocking CI - Analyze, Test and the builds still gate."
+          fi
 
       - name: Analyze
         # --fatal-infos because analysis_options.yaml promotes the rules that

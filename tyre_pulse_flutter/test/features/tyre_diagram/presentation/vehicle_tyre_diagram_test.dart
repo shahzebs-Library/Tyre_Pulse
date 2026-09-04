@@ -467,11 +467,8 @@ void main() {
       final Rect leftInner = tester.getRect(identifier('LHR1-I'));
       final Rect rightInner = tester.getRect(identifier('RHR1-I'));
       final Rect rightOuter = tester.getRect(identifier('RHR1-O'));
-      // Each dual's outer label sits above its inner label:
-      // _CapturePositionLabel offsets the outer role up and the inner role
-      // down (roleOffset -10 / +10) so a dual's two labels never overlap.
-      expect(leftOuter.center.dy, lessThan(leftInner.center.dy));
-      expect(rightOuter.center.dy, lessThan(rightInner.center.dy));
+      expect((leftOuter.center.dy - leftInner.center.dy).abs(), lessThan(1));
+      expect((rightInner.center.dy - rightOuter.center.dy).abs(), lessThan(1));
       expect(leftOuter.center.dx, lessThan(leftInner.center.dx));
       expect(rightInner.center.dx, lessThan(rightOuter.center.dx));
       expect(tester.takeException(), isNull);

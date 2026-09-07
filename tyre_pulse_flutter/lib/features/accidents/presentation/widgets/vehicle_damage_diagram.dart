@@ -19,6 +19,9 @@ class VehicleDamageDiagram extends StatelessWidget {
     required this.map,
     required this.onPointTap,
     this.vehicle,
+    this.readOnly = false,
+    this.selectedZoneId,
+    this.selectedAreaLabel,
     super.key,
   });
 
@@ -26,6 +29,9 @@ class VehicleDamageDiagram extends StatelessWidget {
   final AccidentDamageMap map;
   final ValueChanged<AccidentDamagePoint> onPointTap;
   final VehicleAsset? vehicle;
+  final bool readOnly;
+  final String? selectedZoneId;
+  final String? selectedAreaLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -53,19 +59,21 @@ class VehicleDamageDiagram extends StatelessWidget {
               borderRadius: BorderRadius.circular(15),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapUp: (TapUpDetails details) {
-                  final Offset sourcePoint = framing.viewportToSource(
-                    details.localPosition,
-                    Size(constraints.maxWidth, constraints.maxHeight),
-                  );
-                  onPointTap(
-                    AccidentDamagePoint(
-                      view: view,
-                      normalizedX: sourcePoint.dx,
-                      normalizedY: sourcePoint.dy,
-                    ),
-                  );
-                },
+                onTapUp: readOnly
+                    ? null
+                    : (TapUpDetails details) {
+                        final Offset sourcePoint = framing.viewportToSource(
+                          details.localPosition,
+                          Size(constraints.maxWidth, constraints.maxHeight),
+                        );
+                        onPointTap(
+                          AccidentDamagePoint(
+                            view: view,
+                            normalizedX: sourcePoint.dx,
+                            normalizedY: sourcePoint.dy,
+                          ),
+                        );
+                      },
                 child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
@@ -82,8 +90,38 @@ class VehicleDamageDiagram extends StatelessWidget {
                         map: map,
                         palette: palette,
                         framing: framing,
+                        selectedZoneId: selectedZoneId,
                       ),
                     ),
+                    if (selectedAreaLabel != null)
+                      PositionedDirectional(
+                        start: 8,
+                        end: 8,
+                        bottom: 6,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: DecoratedBox(
+                              key: const Key('accident.damage.selectedCallout'),
+                              decoration: BoxDecoration(
+                                color: palette.surface,
+                                border: Border.all(color: palette.primary),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                child: Text(
+                                  selectedAreaLabel!,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.labelSmall,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -232,12 +270,14 @@ class _DamageZoneOverlayPainter extends CustomPainter {
     required this.map,
     required this.palette,
     required this.framing,
+    this.selectedZoneId,
   });
 
   final AccidentDamageView view;
   final AccidentDamageMap map;
   final TpPalette palette;
   final _DamageViewFraming framing;
+  final String? selectedZoneId;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -267,6 +307,13 @@ class _DamageZoneOverlayPainter extends CustomPainter {
       final TpStatusColors colors = palette.forStatus(tone);
       final Offset center = framing.sourceToViewport(Offset(x, y), size);
       if (!framing.isVisible(center, size)) continue;
+      if (mark.zoneId == selectedZoneId) {
+        canvas.drawCircle(
+          center,
+          accidentDamageMarkerRadius + 7,
+          Paint()..color = colors.base.withValues(alpha: 0.22),
+        );
+      }
       canvas.drawCircle(
         center,
         accidentDamageMarkerRadius + 2,
@@ -310,6 +357,7 @@ class _DamageZoneOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant _DamageZoneOverlayPainter oldDelegate) =>
       oldDelegate.view != view ||
       oldDelegate.map != map ||
+      oldDelegate.selectedZoneId != selectedZoneId ||
       oldDelegate.palette != palette ||
       oldDelegate.framing != framing;
 }

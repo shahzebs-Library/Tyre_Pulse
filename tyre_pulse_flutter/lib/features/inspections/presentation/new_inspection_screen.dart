@@ -20,6 +20,7 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
     show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -52,6 +53,9 @@ abstract final class NewInspectionScreenKeys {
       Key('inspection.header.selected_vehicle_class');
   static const Key vehicleSectionIcon =
       Key('inspection.header.vehicle_section_icon');
+  static const Key vehicleScanner = Key('inspection.header.vehicle_scanner');
+  static const Key selectedVehicleImage =
+      Key('inspection.header.selected_vehicle_image');
   static const Key tyreContextVehicleClass =
       Key('inspection.tyres.context_vehicle_class');
   static const Key tyreWorkflowStatus = Key('inspection.tyres.workflow_status');
@@ -513,27 +517,70 @@ class _ResumeDraftRow extends StatelessWidget {
   }
 }
 
-class _SelectedVehicle extends StatelessWidget {
+class _SelectedVehicle extends ConsumerWidget {
   const _SelectedVehicle({required this.state, required this.onChange});
 
   final InspectionWizardState state;
   final VoidCallback onChange;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
-    final String resolvedClass = resolveVehicleType(
-      state.selectedVehicleType,
+    final VehicleAsset? asset = _findFleetAsset(
+      ref.watch(vehicleFleetListProvider),
       state.selectedAssetNo,
     );
+    final String resolvedClass = resolveVehicleTypeFor(
+      vehicleType: asset?.vehicleType ?? state.selectedVehicleType,
+      assetNo: state.selectedAssetNo,
+      make: asset?.make,
+      model: asset?.model,
+    );
+    final String? photo = asset == null ? null : vehiclePhotoAsset(asset);
+    final String description = <String?>[
+      asset?.make,
+      asset?.model,
+      resolvedClass,
+    ]
+        .whereType<String>()
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .join(' · ');
     return TpCard(
       background: palette.primarySoft,
       borderColor: palette.primary.withValues(alpha: 0.42),
       padding: const EdgeInsets.all(TpSpace.md),
       child: Row(
         children: <Widget>[
-          Icon(_vehicleClassIcon(resolvedClass), color: palette.primary),
+          Container(
+            key: NewInspectionScreenKeys.selectedVehicleImage,
+            width: 72,
+            height: 58,
+            alignment: Alignment.center,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: palette.surface,
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              border: Border.all(color: palette.border),
+            ),
+            child: photo == null
+                ? Icon(
+                    asset == null
+                        ? _vehicleClassIcon(resolvedClass)
+                        : vehicleFallbackIcon(asset),
+                    color: palette.primary,
+                  )
+                : Image.asset(
+                    photo,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.high,
+                    semanticLabel: asset?.displayIdentity,
+                  ),
+          ),
           const SizedBox(width: TpSpace.md),
           Expanded(
             child: Column(
@@ -544,10 +591,17 @@ class _SelectedVehicle extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 Text(
-                  resolvedClass,
+                  description.isEmpty ? resolvedClass : description,
                   key: NewInspectionScreenKeys.selectedVehicleClass,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                if (asset?.registrationNo?.trim().isNotEmpty == true)
+                  Text(
+                    asset!.registrationNo!.trim(),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: palette.textSecondary,
+                        ),
+                  ),
               ],
             ),
           ),
@@ -618,6 +672,23 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
     super.dispose();
   }
 
+  Future<void> _scanAsset() async {
+    final String? scanned = await context.push<String>(
+      const ScannerRoute().location,
+    );
+    if (!mounted || scanned == null || scanned.trim().isEmpty) return;
+    final String assetNo = scanned.trim();
+    final VehicleAsset? asset = _findFleetAsset(
+      ref.read(vehicleFleetListProvider),
+      assetNo,
+    );
+    widget.onPicked(
+      assetNo: asset?.assetNo?.trim() ?? assetNo,
+      vehicleType: asset?.vehicleType,
+      site: asset?.site,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -657,10 +728,28 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        TpSearchField(
-          controller: _search,
-          hint: l10n.inspectionVehicleSearchPlaceholder,
-          onChanged: (_) => setState(() {}),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: TpSearchField(
+                controller: _search,
+                hint: l10n.inspectionVehicleSearchPlaceholder,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(width: TpSpace.sm),
+            Semantics(
+              button: true,
+              label: l10n.scannerTitle,
+              child: IconButton.filledTonal(
+                key: NewInspectionScreenKeys.vehicleScanner,
+                tooltip: l10n.scannerTitle,
+                onPressed: _scanAsset,
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: TpSpace.sm),
         if (query.isEmpty)
@@ -689,10 +778,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
                   <String, VehicleAsset>{};
               for (final VehicleAsset asset in assets) {
                 if (!asset.hasNavigableAssetNo) continue;
-                final bool matchesQuery = asset.assetNo!
-                        .toLowerCase()
-                        .contains(query) ||
-                    (asset.vehicleType?.toLowerCase().contains(query) ?? false);
+                final bool matchesQuery = vehicleMatchesSearch(asset, query);
                 if (!matchesQuery) continue;
                 final String key = asset.assetNo!.trim().toUpperCase();
                 uniqueMatches.putIfAbsent(key, () => asset);
@@ -706,19 +792,26 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
                   style: Theme.of(context).textTheme.bodySmall,
                 );
               }
-              return Wrap(
-                spacing: TpSpace.sm,
-                runSpacing: TpSpace.sm,
+              return Column(
                 children: <Widget>[
-                  for (final VehicleAsset v in matches)
+                  for (int index = 0;
+                      index < matches.length;
+                      index++) ...<Widget>[
+                    if (index > 0) const SizedBox(height: TpSpace.sm),
                     _VehicleChip(
-                      asset: v,
+                      asset: matches[index],
                       onTap: () => widget.onPicked(
-                        assetNo: v.assetNo!,
-                        vehicleType: v.vehicleType,
-                        site: v.site,
+                        assetNo: matches[index].assetNo!,
+                        vehicleType: resolveVehicleTypeFor(
+                          vehicleType: matches[index].vehicleType,
+                          assetNo: matches[index].assetNo,
+                          make: matches[index].make,
+                          model: matches[index].model,
+                        ),
+                        site: matches[index].site,
                       ),
                     ),
+                  ],
                 ],
               );
             },
@@ -743,10 +836,24 @@ class _VehicleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final String resolvedClass = resolveVehicleType(
-      asset.vehicleType,
-      asset.assetNo,
+    final String resolvedClass = resolveVehicleTypeFor(
+      vehicleType: asset.vehicleType,
+      assetNo: asset.assetNo,
+      make: asset.make,
+      model: asset.model,
     );
+    final String? photo = vehiclePhotoAsset(asset);
+    final String details = <String?>[
+      asset.make,
+      asset.model,
+      resolvedClass,
+      asset.registrationNo,
+    ]
+        .whereType<String>()
+        .map((String value) => value.trim())
+        .where((String value) => value.isNotEmpty)
+        .toSet()
+        .join(' · ');
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(TpRadius.md),
@@ -762,30 +869,50 @@ class _VehicleChip extends StatelessWidget {
             vertical: TpSpace.sm,
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(
-                _vehicleClassIcon(resolvedClass),
-                color: palette.primary,
-                size: TpSizing.iconSm,
+              SizedBox(
+                width: 64,
+                height: 48,
+                child: photo == null
+                    ? Icon(
+                        vehicleFallbackIcon(asset),
+                        color: palette.primary,
+                        size: TpSizing.iconMd,
+                      )
+                    : Image.asset(
+                        photo,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.medium,
+                        semanticLabel: asset.displayIdentity,
+                      ),
               ),
               const SizedBox(width: TpSpace.sm),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  TpIdentifierText(
-                    asset.assetNo ?? '',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  Text(
-                    resolvedClass,
-                    key: NewInspectionScreenKeys.pickerVehicleClass(
-                      asset.assetNo!,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TpIdentifierText(
+                      asset.assetNo ?? '',
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
+                    Text(
+                      details.isEmpty ? resolvedClass : details,
+                      key: NewInspectionScreenKeys.pickerVehicleClass(
+                        asset.assetNo!,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                TpDirection.isRtl(context)
+                    ? Icons.chevron_left_rounded
+                    : Icons.chevron_right_rounded,
+                color: palette.textSecondary,
               ),
             ],
           ),
@@ -793,6 +920,26 @@ class _VehicleChip extends StatelessWidget {
       ),
     );
   }
+}
+
+VehicleAsset? _findFleetAsset(
+  AsyncValue<VehicleFleetListOutcome> fleet,
+  String assetNo,
+) {
+  final String wanted = assetNo.trim().toUpperCase();
+  if (wanted.isEmpty) return null;
+  final List<VehicleAsset> assets = fleet.maybeWhen(
+    data: (VehicleFleetListOutcome outcome) => switch (outcome) {
+      VehicleFleetListLoaded(:final assets) => assets,
+      VehicleFleetListFromCache(:final assets) => assets,
+      VehicleFleetListFailed() => const <VehicleAsset>[],
+    },
+    orElse: () => const <VehicleAsset>[],
+  );
+  for (final VehicleAsset asset in assets) {
+    if (asset.assetNo?.trim().toUpperCase() == wanted) return asset;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

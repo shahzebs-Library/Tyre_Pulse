@@ -61,6 +61,52 @@ void main() {
     });
   });
 
+  group('asset-class component catalog integrity', () {
+    for (final AccidentDamageAssetClass assetClass
+        in AccidentDamageAssetClass.values) {
+      test('$assetClass stays bounded, unique and non-overlapping', () {
+        final List<AccidentDamageZone> all = <AccidentDamageZone>[
+          for (final AccidentDamageView view in AccidentDamageView.values)
+            ...accidentDamageZonesFor(view, assetClass: assetClass),
+        ];
+        expect(all, isNotEmpty);
+        expect(
+          all.map((AccidentDamageZone zone) => zone.id).toSet().length,
+          all.length,
+          reason: 'duplicate component id in $assetClass',
+        );
+        for (final AccidentDamageZone zone in all) {
+          expect(zone.left, greaterThanOrEqualTo(0), reason: zone.id);
+          expect(zone.top, greaterThanOrEqualTo(0), reason: zone.id);
+          expect(zone.left + zone.width, lessThanOrEqualTo(1), reason: zone.id);
+          expect(zone.top + zone.height, lessThanOrEqualTo(1), reason: zone.id);
+        }
+        for (final AccidentDamageView view in AccidentDamageView.values) {
+          final List<AccidentDamageZone> zones = accidentDamageZonesFor(
+            view,
+            assetClass: assetClass,
+          );
+          for (var i = 0; i < zones.length; i++) {
+            for (var j = i + 1; j < zones.length; j++) {
+              final Rect a = zones[i].toRect();
+              final Rect b = zones[j].toRect();
+              final bool overlap = a.left < b.right &&
+                  b.left < a.right &&
+                  a.top < b.bottom &&
+                  b.top < a.bottom;
+              expect(
+                overlap,
+                isFalse,
+                reason:
+                    'on $assetClass/$view, ${zones[i].id} overlaps ${zones[j].id}',
+              );
+            }
+          }
+        }
+      });
+    }
+  });
+
   group('accidentDamageZoneAt', () {
     test('a tap inside a registered zone resolves to it', () {
       final AccidentDamageZone bumper = kAccidentDamageZones.firstWhere(
@@ -99,6 +145,100 @@ void main() {
       expect(
         accidentDamageZoneAt(AccidentDamageView.right, .157, .47)?.id,
         'right_front_door',
+      );
+    });
+
+    test('a bus headlamp tap cannot resolve to the cab panel or hood', () {
+      expect(
+        accidentDamageZoneAt(
+          AccidentDamageView.front,
+          .30,
+          .56,
+          assetClass: AccidentDamageAssetClass.bus,
+        )?.id,
+        'front_left_light',
+      );
+    });
+
+    test('equipment classes resolve the same point to their own component', () {
+      expect(
+        accidentDamageZoneAt(
+          AccidentDamageView.left,
+          .50,
+          .50,
+          assetClass: AccidentDamageAssetClass.heavyTruck,
+        )?.id,
+        'left_equipment_body',
+      );
+      expect(
+        accidentDamageZoneAt(
+          AccidentDamageView.left,
+          .50,
+          .50,
+          assetClass: AccidentDamageAssetClass.loader,
+        )?.id,
+        'left_cab',
+      );
+      expect(
+        accidentDamageZoneAt(
+          AccidentDamageView.left,
+          .50,
+          .50,
+          assetClass: AccidentDamageAssetClass.fixedEquipment,
+        )?.id,
+        'left_equipment_panel',
+      );
+    });
+  });
+
+  group('accidentDamageAssetClassFor', () {
+    test('uses asset master type and make without borrowing another class', () {
+      expect(
+        accidentDamageAssetClassFor(
+          vehicleType: '32-seater bus',
+          make: 'Ashok Leyland',
+        ),
+        AccidentDamageAssetClass.bus,
+      );
+      expect(
+        accidentDamageAssetClassFor(
+          vehicleType: 'Concrete Pump 5 axle',
+          make: 'SANY',
+        ),
+        AccidentDamageAssetClass.heavyTruck,
+      );
+      expect(
+        accidentDamageAssetClassFor(
+          vehicleType: 'Chiller',
+          make: 'Snowkey',
+        ),
+        AccidentDamageAssetClass.fixedEquipment,
+      );
+      expect(
+        accidentDamageAssetClassFor(
+          assetNo: 'WL-027',
+          vehicleType: 'Wheel Loader',
+          make: 'SANY',
+        ),
+        AccidentDamageAssetClass.loader,
+      );
+      expect(
+        accidentDamageAssetClassFor(
+          assetNo: 'PU-118',
+          vehicleType: 'Double-Cab Pickup',
+          make: 'Mitsubishi',
+        ),
+        AccidentDamageAssetClass.roadVehicle,
+      );
+    });
+
+    test('unknown assets stay on legacy geometry', () {
+      expect(
+        accidentDamageAssetClassFor(
+          assetNo: 'UNKNOWN-1',
+          vehicleType: 'Special asset',
+        ),
+        AccidentDamageAssetClass.legacy,
       );
     });
   });

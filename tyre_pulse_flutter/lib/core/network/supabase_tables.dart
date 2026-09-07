@@ -102,6 +102,9 @@ abstract final class SupabaseTables {
   static const String accidentParts = 'accident_parts';
   static const String accidentCaseWorkstreams = 'accident_case_workstreams';
 
+  /// Live schema/RLS verified; docs/accident-module/02_DATA_MODEL.sql and 14_INSURANCE.sql.
+  static const String accidentInsuranceClaims = 'accident_insurance_claims';
+
   /// VERIFIED real (artifact 02 section 1: referenced by 20 migrations) and
   /// carried by the `ENGINE_HOURS_LOG` offline command in artifact 06 section
   /// 2. Listed apart from the block above only because artifact 02's call-site
@@ -144,6 +147,7 @@ abstract final class SupabaseTables {
     accidentRemarks,
     accidentParts,
     accidentCaseWorkstreams,
+    accidentInsuranceClaims,
     engineHoursLogs,
   };
 

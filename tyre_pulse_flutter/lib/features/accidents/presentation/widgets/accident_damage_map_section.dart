@@ -73,13 +73,80 @@ class AccidentDamageMapSection extends StatefulWidget {
 
 class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
   AccidentDamageView _view = AccidentDamageView.left;
+  String? _selectedMarkId;
+
+  AccidentDamageAssetClass get _assetClass => widget.vehicle == null
+      ? AccidentDamageAssetClass.legacy
+      : accidentDamageAssetClassFor(
+          assetNo: widget.vehicle!.assetNo,
+          vehicleType: widget.vehicle!.vehicleType,
+          make: widget.vehicle!.make,
+          model: widget.vehicle!.model,
+        );
+
+  Future<void> _addArea() async {
+    final AccidentCopy copy = AccidentCopy.of(context);
+    final List<AccidentDamageZone> zones = accidentDamageZonesFor(
+      _view,
+      assetClass: _assetClass,
+    ).where((zone) => widget.map.markFor(zone.id) == null).toList();
+    final AccidentDamageZone? zone =
+        await showModalBottomSheet<AccidentDamageZone>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(TpSpace.md),
+              child: Text(
+                'Add another area',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (zones.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(TpSpace.md),
+                child: Text(
+                  'All areas in this view are marked. Choose another view.',
+                ),
+              ),
+            for (final AccidentDamageZone zone in zones)
+              ListTile(
+                title: Text(accidentDamageZoneLabel(copy, zone.id)),
+                onTap: () => Navigator.of(context).pop(zone),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || zone == null) return;
+    await _tapPoint(
+      AccidentDamagePoint(
+        view: zone.view,
+        normalizedX: zone.left + zone.width / 2,
+        normalizedY: zone.top + zone.height / 2,
+      ),
+    );
+  }
 
   Future<void> _tapPoint(AccidentDamagePoint point) async {
     final AccidentCopy copy = AccidentCopy.of(context);
+    final VehicleAsset? vehicle = widget.vehicle;
+    final AccidentDamageAssetClass assetClass = vehicle == null
+        ? AccidentDamageAssetClass.legacy
+        : accidentDamageAssetClassFor(
+            assetNo: vehicle.assetNo,
+            vehicleType: vehicle.vehicleType,
+            make: vehicle.make,
+            model: vehicle.model,
+          );
     final AccidentDamageZone? zone = accidentDamageZoneAt(
       point.view,
       point.normalizedX,
       point.normalizedY,
+      assetClass: assetClass,
     );
 
     // The artwork includes whitespace, shadows and background. Those pixels
@@ -142,6 +209,7 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
     if (!mounted || result == null) return;
     switch (result) {
       case AccidentDamageZoneSheetSaved(mark: final AccidentDamageMark mark):
+        setState(() => _selectedMarkId = mark.zoneId);
         widget.onChanged(widget.map.withMark(mark));
       case AccidentDamageZoneSheetRemoved():
         widget.onChanged(widget.map.withoutMark(draft.zoneId));
@@ -158,12 +226,16 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
   Widget build(BuildContext context) {
     final AccidentCopy copy = AccidentCopy.of(context);
     final List<AccidentDamageMark> marks = widget.map.marks;
+    final List<AccidentDamageMark> visibleMarks =
+        marks.where((mark) => mark.effectiveView == _view).toList();
+    final AccidentDamageMark? selected = visibleMarks
+            .where((mark) => mark.zoneId == _selectedMarkId)
+            .firstOrNull ??
+        visibleMarks.firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(copy('damageMapHint')),
-        const SizedBox(height: TpSpace.md),
         _DamageViewSelector(
           selected: _view,
           copy: copy,
@@ -178,14 +250,60 @@ class _AccidentDamageMapSectionState extends State<AccidentDamageMapSection> {
             map: widget.map,
             vehicle: widget.vehicle,
             onPointTap: _tapPoint,
+            selectedZoneId: selected?.zoneId,
+            selectedAreaLabel: selected == null
+                ? null
+                : selected.areaLabel ??
+                    accidentDamageZoneLabel(copy, selected.zoneId),
           ),
+        ),
+        if (selected != null) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          TpCard(
+            key: const Key('accident.damage.selectedSummary'),
+            padding: const EdgeInsets.all(TpSpace.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Selected area · ${selected.areaLabel ?? accidentDamageZoneLabel(copy, selected.zoneId)}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: TpSpace.sm),
+                Text(
+                    '${accidentDamageTypeLabel(context, selected.damageType)} · '
+                    '${accidentDamageSeverityLabel(copy, selected.severity)} · '
+                    '${selected.photoCount} photos'),
+                const SizedBox(height: TpSpace.sm),
+                TpButton.secondary(
+                  label: 'Edit damage',
+                  icon: Icons.edit_outlined,
+                  onPressed: () => unawaited(_editMark(selected)),
+                  isFullWidth: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: TpSpace.sm),
+        TpButton.secondary(
+          key: const Key('accident.damage.addArea'),
+          label: 'Add another area',
+          icon: Icons.add_circle_outline,
+          onPressed: () => unawaited(_addArea()),
+          isFullWidth: true,
+        ),
+        const SizedBox(height: TpSpace.xs),
+        Text(
+          copy('damageMapHint'),
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: TpSpace.md),
         Text(
           widget.map.isEmpty
               ? copy('damageMapNoneMarked')
               : '${widget.map.count} ${copy('damageMapZonesLabel')}',
-          style: Theme.of(context).textTheme.bodySmall,
+          style: Theme.of(context).textTheme.titleSmall,
         ),
         if (marks.isNotEmpty) ...<Widget>[
           const SizedBox(height: TpSpace.sm),

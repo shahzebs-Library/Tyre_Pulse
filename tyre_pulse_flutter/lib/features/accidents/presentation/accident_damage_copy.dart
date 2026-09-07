@@ -31,6 +31,48 @@ String accidentDamageZoneLabelKey(String zoneId) => switch (zoneId) {
       'left_rear_fender' || 'right_rear_fender' => 'zoneRearFender',
       'left_mirror' || 'right_mirror' => 'zoneMirror',
       'left_roof' || 'right_roof' || 'top_roof' => 'zoneRoof',
+      'front_cab_panel' => 'zoneCabPanel',
+      'left_cab' || 'right_cab' || 'top_cab' || 'front_cab' => 'zoneCab',
+      'rear_body_panel' => 'zoneBodyPanel',
+      'left_driver_door' || 'right_driver_door' => 'zoneDriverDoor',
+      'left_passenger_door' || 'right_passenger_door' => 'zonePassengerDoor',
+      'left_side_panel' || 'right_side_panel' => 'zoneSidePanel',
+      'left_body_panel' || 'right_body_panel' => 'zoneBodyPanel',
+      'left_equipment_body' ||
+      'right_equipment_body' ||
+      'top_equipment_body' ||
+      'rear_equipment' ||
+      'top_rear_equipment' =>
+        'zoneEquipmentBody',
+      'left_boom' || 'right_boom' || 'top_boom' || 'front_boom' => 'zoneBoom',
+      'left_outrigger' || 'right_outrigger' => 'zoneOutrigger',
+      'front_bucket' ||
+      'left_bucket' ||
+      'right_bucket' ||
+      'top_bucket' =>
+        'zoneBucket',
+      'left_lift_arm' || 'right_lift_arm' || 'top_lift_arm' => 'zoneLiftArm',
+      'left_front_wheel' || 'right_front_wheel' => 'zoneFrontWheel',
+      'left_rear_wheel' || 'right_rear_wheel' => 'zoneRearWheel',
+      'left_engine_cover' ||
+      'right_engine_cover' ||
+      'top_engine_cover' =>
+        'zoneEngineCover',
+      'rear_counterweight' => 'zoneCounterweight',
+      'front_equipment_panel' ||
+      'rear_equipment_panel' ||
+      'left_equipment_panel' ||
+      'right_equipment_panel' =>
+        'zoneEquipmentPanel',
+      'left_control_panel' || 'right_control_panel' => 'zoneControlPanel',
+      'front_pipework' || 'rear_pipework' || 'top_pipework' => 'zonePipework',
+      'front_base_frame' ||
+      'rear_base_frame' ||
+      'left_base_frame' ||
+      'right_base_frame' =>
+        'zoneBaseFrame',
+      'top_front_cab' => 'zoneCab',
+      'top_passenger_body' => 'zonePassengerBody',
       _ => zoneId,
     };
 
@@ -63,3 +105,18 @@ String accidentDamageSeverityLabel(
   AccidentDamageSeverity severity,
 ) =>
     copy(accidentDamageSeverityLabelKey(severity));
+
+String accidentDamageTypeCopyLabel(
+  AccidentCopy copy,
+  AccidentDamageType type,
+) =>
+    copy(
+      switch (type) {
+        AccidentDamageType.dent => 'damageDent',
+        AccidentDamageType.scratch => 'damageScratch',
+        AccidentDamageType.cracked => 'damageCracked',
+        AccidentDamageType.broken => 'damageBroken',
+        AccidentDamageType.missing => 'damageMissing',
+        AccidentDamageType.other => 'damageOther',
+      },
+    );

@@ -28,6 +28,17 @@ final class AccidentDto {
         vehicleType: _text('vehicle_type'),
         plateNumber: _text('plate_number'),
         damageDescription: _text('damage_description'),
+        damageCondition: _text('damage_condition'),
+        estimatedDamageCost: _number('estimated_damage_cost'),
+        driverName: _text('driver_name'),
+        injuries: _bool('injuries'),
+        injuryCount: _number('injury_count'),
+        thirdPartyInvolved: _bool('third_party_involved'),
+        policeReportNo: _text('police_report_no'),
+        najmStatus: _text('najm_status'),
+        najmFault: _text('najm_fault'),
+        taqdeerStatus: _text('taqdeer_status'),
+        taqdeerNo: _text('taqdeer_no'),
         faultStatus: _text('fault_status'),
         responsibleParty: _text('responsible_party'),
         liableParty: _text('liable_party'),
@@ -39,12 +50,15 @@ final class AccidentDto {
         recoveryStatus: _text('recovery_status'),
         repairType: _text('repair_type'),
         workshopName: _text('workshop_name'),
+        workshopLocation: _text('workshop_location'),
         nextStep: _text('next_step'),
         releaseDate: _text('release_date'),
         expectedReleaseDate: _text('expected_release_date'),
         claimAmount: _number('claim_amount'),
         claimApprovedAmount: _number('claim_approved_amount'),
         recoveredAmount: _number('recovered_amount'),
+        deductible: _number('deductible'),
+        amountTransfer: _number('amount_transfer'),
         repairCost: _number('repair_cost'),
         completionOverall: _number('completion_overall'),
         photos: switch (row['photos']) {
@@ -66,6 +80,13 @@ final class AccidentDto {
   num? _number(String key) => row[key] is num
       ? row[key] as num
       : num.tryParse(row[key]?.toString() ?? '');
+
+  bool? _bool(String key) => switch (row[key]) {
+        final bool value => value,
+        final String value when value.toLowerCase() == 'true' => true,
+        final String value when value.toLowerCase() == 'false' => false,
+        _ => null,
+      };
 }
 
 final class AccidentWorkstreamDto {

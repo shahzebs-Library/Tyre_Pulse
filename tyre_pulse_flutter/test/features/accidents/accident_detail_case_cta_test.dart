@@ -145,15 +145,13 @@ void main() {
     router.go('/accidents/acc-1/case');
     await tester.pumpAndSettle();
 
-    expect(find.byKey(AccidentCaseScreenKeys.readOnlyAction), findsOneWidget);
-    expect(
-      find.textContaining('offers no unsafe direct edits'),
-      findsOneWidget,
-    );
-
     await tester.tap(find.byKey(AccidentCaseScreenKeys.boundaryAction));
     await tester.pumpAndSettle();
     expect(find.text('Control boundary'), findsOneWidget);
+    expect(
+      find.textContaining('require verified server actions'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }

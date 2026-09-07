@@ -34,7 +34,39 @@ enum _VehicleVisualKind {
 }
 
 String? vehiclePhotoAsset(VehicleAsset asset) {
-  switch (_vehicleVisualKind(asset)) {
+  return vehiclePhotoAssetFor(
+    assetNo: asset.assetNo,
+    vehicleType: asset.vehicleType,
+    make: asset.make,
+    model: asset.model,
+  );
+}
+
+/// Resolves front/three-quarter fleet artwork from verified master fields.
+///
+/// Make and model are intentionally considered before a broad imported type.
+/// This matters for real rows such as `TOYOTA HIACE / PICKUP`: the known Hiace
+/// identity is stronger than the legacy generic type and must never show a
+/// different pickup body. Branded artwork is returned only when the stored
+/// make/model positively identifies that brand.
+String? vehiclePhotoAssetFor({
+  String? assetNo,
+  String? vehicleType,
+  String? make,
+  String? model,
+}) {
+  final String description = _searchableVehicleDescriptionFor(
+    vehicleType: vehicleType,
+    make: make,
+    model: model,
+  );
+
+  switch (_vehicleVisualKindFor(
+    assetNo: assetNo,
+    vehicleType: vehicleType,
+    make: make,
+    model: model,
+  )) {
     case _VehicleVisualKind.mixer:
       return 'assets/vehicle_photos/tri_mixer_perspective.webp';
     case _VehicleVisualKind.concretePump:
@@ -42,26 +74,31 @@ String? vehiclePhotoAsset(VehicleAsset asset) {
     case _VehicleVisualKind.linePump:
       return 'assets/vehicle_photos/truck_mounted_pump.png';
     case _VehicleVisualKind.wheelLoader:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['sany'])) {
+      if (!_matchesIdentity(description, const <String>['sany']) &&
+          !_isGenericWheelLoaderIdentity(make: make, model: model)) {
         return null;
       }
       return 'assets/vehicle_photos/wheel_loader.png';
     case _VehicleVisualKind.skidLoader:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['cat'])) {
+      if (!_matchesIdentity(
+        description,
+        const <String>['cat', 'caterpillar', 'caterpiller', 'catapiller'],
+      )) {
         return null;
       }
       return 'assets/vehicle_photos/skid_loader_fleet.jpeg';
     case _VehicleVisualKind.pickup:
-      final String description = _searchableVehicleDescription(asset);
       if (description.contains('mitsubishi')) {
         return 'assets/vehicle_photos/mitsubishi_double_cab_front.jpeg';
       }
       if (description.contains('tata') || description.contains('xenon')) {
         return 'assets/vehicle_photos/tata_xenon_double_cab.jpeg';
       }
-      return 'assets/vehicle_photos/pickup.png';
+      // The legacy generic pickup asset is a top-down body and cannot prove a
+      // make/model. A truthful class icon is better than showing it as a Nissan,
+      // Toyota, Maxus or another known fleet brand.
+      return null;
     case _VehicleVisualKind.bus:
-      final String description = _searchableVehicleDescription(asset);
       if (description.contains('hiace') || description.contains('hi ace')) {
         return 'assets/vehicle_photos/hiace_fleet.jpeg';
       }
@@ -71,43 +108,44 @@ String? vehiclePhotoAsset(VehicleAsset asset) {
       if (description.contains('tata')) {
         return 'assets/vehicle_photos/tata_bus_fleet.jpeg';
       }
-      return 'assets/vehicle_photos/staff_bus.png';
+      return _brandIsMissing(make)
+          ? 'assets/vehicle_photos/staff_bus.png'
+          : null;
     case _VehicleVisualKind.generator:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['sany'])) {
+      if (!_matchesIdentity(description, const <String>['sany'])) {
         return null;
       }
       return 'assets/vehicle_photos/generator_fleet.jpeg';
     case _VehicleVisualKind.chiller:
-      final String description = _searchableVehicleDescription(asset);
       if (description.contains('industrial') ||
           description.contains('water chiller') ||
           description.contains('lg')) {
-        if (!_makeMatchesOrIsMissing(asset.make, const <String>['lg'])) {
+        if (!_matchesIdentity(description, const <String>['lg'])) {
           return null;
         }
         return 'assets/vehicle_photos/industrial_chiller_fleet.jpeg';
       }
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['snowkey'])) {
+      if (!_matchesIdentity(description, const <String>['snowkey'])) {
         return null;
       }
       return 'assets/vehicle_photos/chiller_fleet.jpeg';
     case _VehicleVisualKind.batchingPlant:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['sany'])) {
+      if (!_matchesIdentity(description, const <String>['sany'])) {
         return null;
       }
       return 'assets/vehicle_photos/batching_plant_fleet.jpeg';
     case _VehicleVisualKind.placingBoom:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['hamac'])) {
+      if (!_matchesIdentity(description, const <String>['hamac'])) {
         return null;
       }
       return 'assets/vehicle_photos/placing_boom_vertical.jpeg';
     case _VehicleVisualKind.stationaryPump:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['sany'])) {
+      if (!_matchesIdentity(description, const <String>['sany'])) {
         return null;
       }
       return 'assets/vehicle_photos/stationary_pump_fleet.jpeg';
     case _VehicleVisualKind.towablePump:
-      if (!_makeMatchesOrIsMissing(asset.make, const <String>['sany'])) {
+      if (!_matchesIdentity(description, const <String>['sany'])) {
         return null;
       }
       return 'assets/vehicle_photos/towable_pump_fleet.jpeg';
@@ -168,7 +206,7 @@ String? vehicleMultiViewAssetFor({
         return _multiViewCatalogPath('white-concrete-pump-4axle');
       }
       if (_mentionsAxleCount(description, 5) || description.contains('sany')) {
-        if (!_makeMatchesOrIsMissing(make, const <String>['sany'])) {
+        if (!_matchesIdentity(description, const <String>['sany'])) {
           return null;
         }
         return _multiViewCatalogPath('sany-concrete-pump-5axle');
@@ -180,10 +218,18 @@ String? vehicleMultiViewAssetFor({
     case _VehicleVisualKind.linePump:
       return _multiViewCatalogPath('line-pump-4axle');
     case _VehicleVisualKind.wheelLoader:
-      if (!_makeMatchesOrIsMissing(make, const <String>['sany'])) return null;
+      if (!_matchesIdentity(description, const <String>['sany']) &&
+          !_isGenericWheelLoaderIdentity(make: make, model: model)) {
+        return null;
+      }
       return _multiViewCatalogPath('sany-wheel-loader');
     case _VehicleVisualKind.skidLoader:
-      if (!_makeMatchesOrIsMissing(make, const <String>['cat'])) return null;
+      if (!_matchesIdentity(
+        description,
+        const <String>['cat', 'caterpillar', 'caterpiller', 'catapiller'],
+      )) {
+        return null;
+      }
       return _multiViewCatalogPath('cat-skid-loader');
     case _VehicleVisualKind.pickup:
       if (description.contains('mitsubishi')) {
@@ -192,7 +238,9 @@ String? vehicleMultiViewAssetFor({
       if (description.contains('tata') || description.contains('xenon')) {
         return _multiViewCatalogPath('tata-xenon-double-cab');
       }
-      return _multiViewCatalogPath('generic-double-cab');
+      return _brandIsMissing(make)
+          ? _multiViewCatalogPath('generic-double-cab')
+          : null;
     case _VehicleVisualKind.bus:
       if (description.contains('hiace') || description.contains('hi ace')) {
         return _multiViewCatalogPath('toyota-hiace');
@@ -203,32 +251,46 @@ String? vehicleMultiViewAssetFor({
       if (description.contains('tata')) {
         return _multiViewCatalogPath('tata-staff-bus');
       }
-      return _multiViewCatalogPath('generic-staff-bus');
+      return _brandIsMissing(make)
+          ? _multiViewCatalogPath('generic-staff-bus')
+          : null;
     case _VehicleVisualKind.generator:
-      if (!_makeMatchesOrIsMissing(make, const <String>['sany'])) return null;
+      if (!_matchesIdentity(description, const <String>['sany'])) {
+        return null;
+      }
       return _multiViewCatalogPath('sany-generator');
     case _VehicleVisualKind.chiller:
       if (description.contains('industrial') ||
           description.contains('water chiller') ||
           description.contains('lg')) {
-        if (!_makeMatchesOrIsMissing(make, const <String>['lg'])) return null;
+        if (!_matchesIdentity(description, const <String>['lg'])) {
+          return null;
+        }
         return _multiViewCatalogPath('industrial-chiller');
       }
-      if (!_makeMatchesOrIsMissing(make, const <String>['snowkey'])) {
+      if (!_matchesIdentity(description, const <String>['snowkey'])) {
         return null;
       }
       return _multiViewCatalogPath('snowkey-chiller');
     case _VehicleVisualKind.batchingPlant:
-      if (!_makeMatchesOrIsMissing(make, const <String>['sany'])) return null;
+      if (!_matchesIdentity(description, const <String>['sany'])) {
+        return null;
+      }
       return _multiViewCatalogPath('sany-batching-plant');
     case _VehicleVisualKind.placingBoom:
-      if (!_makeMatchesOrIsMissing(make, const <String>['hamac'])) return null;
+      if (!_matchesIdentity(description, const <String>['hamac'])) {
+        return null;
+      }
       return _multiViewCatalogPath('placing-boom');
     case _VehicleVisualKind.stationaryPump:
-      if (!_makeMatchesOrIsMissing(make, const <String>['sany'])) return null;
+      if (!_matchesIdentity(description, const <String>['sany'])) {
+        return null;
+      }
       return _multiViewCatalogPath('sany-stationary-pump');
     case _VehicleVisualKind.towablePump:
-      if (!_makeMatchesOrIsMissing(make, const <String>['sany'])) return null;
+      if (!_matchesIdentity(description, const <String>['sany'])) {
+        return null;
+      }
       return _multiViewCatalogPath('sany-towable-pump');
     case _VehicleVisualKind.trailer:
     case _VehicleVisualKind.genericRoadVehicle:
@@ -286,17 +348,11 @@ IconData vehicleFallbackIconFor({
   }
 }
 
-/// Resolves descriptive fields first and consults the asset-number class only
-/// when those fields do not identify a known class. Imported fleet rows can
-/// retain a historical number after their registered class changes, so a
-/// truthful explicit type must always win (for example Concrete Pump/TM514).
-_VehicleVisualKind _vehicleVisualKind(VehicleAsset asset) {
-  return _vehicleVisualKindFor(
-    assetNo: asset.assetNo,
-    vehicleType: asset.vehicleType,
-    make: asset.make,
-    model: asset.model,
+bool _isGenericWheelLoaderIdentity({String? make, String? model}) {
+  final String identity = _normalise(
+    <String?>[make, model].whereType<String>().join(' '),
   );
+  return identity.isEmpty || identity == 'wheel loader' || identity == 'loader';
 }
 
 _VehicleVisualKind _vehicleVisualKindFor({
@@ -305,6 +361,13 @@ _VehicleVisualKind _vehicleVisualKindFor({
   String? make,
   String? model,
 }) {
+  final String makeAndModel = _normalise(
+    <String?>[make, model].whereType<String>().join(' '),
+  );
+  final _VehicleVisualKind? identifiedModel =
+      _kindFromKnownMakeOrModel(makeAndModel);
+  if (identifiedModel != null) return identifiedModel;
+
   final String description = _searchableVehicleDescriptionFor(
     vehicleType: vehicleType,
     make: make,
@@ -348,6 +411,23 @@ _VehicleVisualKind _vehicleVisualKindFor({
   }
 }
 
+/// Model identities are stronger than broad legacy types imported from old
+/// spreadsheets. This is deliberately a short allow-list of models that are
+/// present in the verified fleet data, not a heuristic vehicle classifier.
+_VehicleVisualKind? _kindFromKnownMakeOrModel(String value) {
+  if (value.contains('hiace') || value.contains('hi ace')) {
+    return _VehicleVisualKind.bus;
+  }
+  if (value.contains('xenon') ||
+      value.contains('l200') ||
+      value.contains('triton') ||
+      value.contains('maxus t 60') ||
+      value.contains('maxus t60')) {
+    return _VehicleVisualKind.pickup;
+  }
+  return null;
+}
+
 _VehicleVisualKind? _kindFromDescription(
   String value, {
   required String explicitVehicleType,
@@ -383,11 +463,11 @@ _VehicleVisualKind? _kindFromDescription(
     return _VehicleVisualKind.mixer;
   }
   if (value.contains('line pump') ||
-      (value.contains('truck mounted') && value.contains('pump')) ||
-      value.contains('boom pump')) {
+      (value.contains('truck mounted') && value.contains('pump'))) {
     return _VehicleVisualKind.linePump;
   }
-  if (value.contains('concrete pump') ||
+  if (value.contains('boom pump') ||
+      value.contains('concrete pump') ||
       value.contains('pump truck') ||
       value.contains('mobile pump')) {
     return _VehicleVisualKind.concretePump;
@@ -430,14 +510,6 @@ _VehicleVisualKind? _kindFromDescription(
   return null;
 }
 
-String _searchableVehicleDescription(VehicleAsset asset) => _normalise(
-      <String?>[
-        asset.vehicleType,
-        asset.make,
-        asset.model,
-      ].whereType<String>().join(' '),
-    );
-
 String _searchableVehicleDescriptionFor({
   String? vehicleType,
   String? make,
@@ -471,10 +543,13 @@ bool _mentionsAxleCount(String description, int count) {
       description.contains('$word axle');
 }
 
-/// A branded board may illustrate a record with no make stored, but it must
-/// never overwrite a different explicit make from `vehicle_fleet`.
-bool _makeMatchesOrIsMissing(String? make, List<String> acceptedMakes) {
+bool _matchesIdentity(String description, List<String> acceptedIdentities) =>
+    description.isNotEmpty && acceptedIdentities.any(description.contains);
+
+bool _brandIsMissing(String? make) {
   final String normalised = _normalise(make);
-  if (normalised.isEmpty) return true;
-  return acceptedMakes.any(normalised.contains);
+  return normalised.isEmpty ||
+      normalised == 'n a' ||
+      normalised == 'na' ||
+      normalised == 'unknown';
 }

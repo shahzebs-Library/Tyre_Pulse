@@ -66,6 +66,44 @@ Future<void> _tapZoneCentre(
 }
 
 void main() {
+  testWidgets('selected area persists and adding uses an actual component',
+      (WidgetTester tester) async {
+    const AccidentDamageMark mark = AccidentDamageMark(
+      zoneId: 'left_front_door',
+      view: AccidentDamageView.left,
+      normalizedX: .5,
+      normalizedY: .5,
+      areaLabel: 'Selected door',
+      damageType: AccidentDamageType.dent,
+      severity: AccidentDamageSeverity.moderate,
+    );
+    await _pump(
+      tester,
+      map: AccidentDamageMap.fromMarks(const <AccidentDamageMark>[mark]),
+      onChanged: (_) {},
+    );
+    expect(
+      find.byKey(const Key('accident.damage.selectedSummary')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('accident.damage.selectedCallout')),
+      findsOneWidget,
+    );
+    final Finder add = find.byKey(const Key('accident.damage.addArea'));
+    await tester.ensureVisible(add);
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+    final Finder component = find.byType(ListTile).first;
+    await tester.tap(component);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(AccidentDamageZoneSheetKeys.selectedAreaPanel),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   test('all 100 audited per-view files use isolated normalized canvases',
       () async {
     Future<(int, int)> dimensions(String asset) async {
@@ -366,6 +404,37 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('Ashok bus headlight tap opens headlight, never hood or panel', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      map: const AccidentDamageMap.empty(),
+      onChanged: (_) {},
+      vehicle: const VehicleAsset(
+        id: 'bus-207',
+        assetNo: 'BUS-207',
+        make: 'Ashok Leyland',
+        vehicleType: '32-seater bus',
+      ),
+    );
+    await tester.tap(
+      find.byKey(
+        AccidentDamageMapSectionKeys.viewTab(AccidentDamageView.front),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final AccidentDamageZone light = accidentDamageZonesFor(
+      AccidentDamageView.front,
+      assetClass: AccidentDamageAssetClass.bus,
+    ).firstWhere((AccidentDamageZone zone) => zone.id == 'front_left_light');
+    await _tapZoneCentre(tester, light);
+
+    expect(find.text('Left headlight'), findsOneWidget);
+    expect(find.text('Hood'), findsNothing);
+    expect(find.text('Cab front panel'), findsNothing);
+  });
 
   testWidgets(
       'an already-marked zone offers Remove mark, and it clears the mark', (
@@ -757,7 +826,7 @@ void main() {
     expect(reported?.isEmpty, isTrue);
   });
 
-  testWidgets('zone identity stays catalog-backed across asset classes', (
+  testWidgets('zone identity follows the selected asset component catalog', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 1000));
@@ -779,6 +848,11 @@ void main() {
         vehicleType: 'Snowkey Chiller',
       ),
     ];
+    const List<String> expectedComponents = <String>[
+      'Equipment body',
+      'Cab',
+      'Equipment panel',
+    ];
     for (int i = 0; i < assets.length; i++) {
       final VehicleAsset asset = assets[i];
       await _pump(
@@ -792,7 +866,7 @@ void main() {
       );
       await tester.tapAt(diagram.center);
       await tester.pumpAndSettle();
-      expect(find.text('Rear door'), findsOneWidget);
+      expect(find.text(expectedComponents[i]), findsOneWidget);
       Navigator.of(tester.element(find.byType(TextField).last)).pop();
       await tester.pumpAndSettle();
     }

@@ -5,7 +5,6 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
-import 'package:tyre_pulse/features/accidents/domain/accident_report_intake.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_report_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_damage_map_section.dart';
 import 'package:tyre_pulse/features/accidents/presentation/widgets/accident_report_intake_widgets.dart';
@@ -56,9 +55,16 @@ Future<void> _pumpReport(WidgetTester tester) async {
 }
 
 Future<void> _selectPump(WidgetTester tester) async {
+  await tester.ensureVisible(find.text('Select fleet asset'));
+  await tester.pumpAndSettle();
   await tester.tap(find.text('Select fleet asset'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('CP3012'));
+  await tester.tap(find.text('CP3012').last);
+  await tester.pumpAndSettle();
+  tester
+      .state<ScrollableState>(find.byType(Scrollable).first)
+      .position
+      .jumpTo(0);
   await tester.pumpAndSettle();
 }
 
@@ -69,7 +75,7 @@ void main() {
     await _pumpReport(tester);
     await _selectPump(tester);
     await tester.tap(
-      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.damage)),
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.damage)),
     );
     await tester.pumpAndSettle();
 
@@ -102,13 +108,15 @@ void main() {
     'focused asset search can select and leave during reverse animation safely',
     (WidgetTester tester) async {
       await _pumpReport(tester);
+      await tester.ensureVisible(find.text('Select fleet asset'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Select fleet asset'));
       await tester.pumpAndSettle();
 
       final Finder search = find.byType(TextField).first;
       await tester.enterText(search, 'CP3012');
       await tester.pump();
-      await tester.tap(find.widgetWithText(ListTile, 'CP3012'));
+      await tester.tap(find.widgetWithText(ListTile, 'CP3012').last);
       await tester.pump(const Duration(milliseconds: 20));
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
       await tester.pumpAndSettle();
@@ -121,6 +129,8 @@ void main() {
     WidgetTester tester,
   ) async {
     await _pumpReport(tester);
+    await tester.ensureVisible(find.text('Select fleet asset'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Select fleet asset'));
     await tester.pumpAndSettle();
     final Finder search = find.byType(TextField).first;
@@ -139,10 +149,13 @@ void main() {
     await _pumpReport(tester);
     await _selectPump(tester);
     await tester.tap(
-      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.damage)),
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.damage)),
     );
     await tester.pumpAndSettle();
 
+    await tester
+        .ensureVisible(find.byKey(AccidentDamageMapSectionKeys.diagram));
+    await tester.pumpAndSettle();
     final Rect diagram =
         tester.getRect(find.byKey(AccidentDamageMapSectionKeys.diagram));
     await tester.tapAt(
@@ -159,17 +172,31 @@ void main() {
       findsOneWidget,
     );
 
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.incident)),
+      find.byKey(
+        AccidentReportIntakeKeys.step(AccidentIntakePage.identifyAsset),
+      ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Change fleet asset'));
+    await tester.ensureVisible(find.text('Change fleet asset').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'WL509'));
+    await tester.tap(find.text('Change fleet asset').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'WL509').last);
+    await tester.pumpAndSettle();
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(0);
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.byKey(AccidentReportIntakeKeys.step(AccidentReportStep.damage)),
+      find.byKey(AccidentReportIntakeKeys.step(AccidentIntakePage.damage)),
     );
     await tester.pumpAndSettle();
     expect(

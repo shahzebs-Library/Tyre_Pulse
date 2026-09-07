@@ -17,6 +17,81 @@ import 'package:flutter/foundation.dart';
 /// One side the vehicle is viewed from.
 enum AccidentDamageView { front, rear, left, right, top }
 
+/// Component geometry used to hit-test the selected asset's own artwork.
+///
+/// A road vehicle, a concrete pump and a wheel loader do not share body
+/// parts. Keeping that distinction in the pure domain layer prevents a tap on
+/// a visible lamp, bucket or equipment panel from being interpreted through
+/// the old generic truck rectangles.
+enum AccidentDamageAssetClass {
+  roadVehicle,
+  bus,
+  heavyTruck,
+  loader,
+  fixedEquipment,
+  legacy,
+}
+
+/// Resolves damage geometry from verified asset master fields only.
+///
+/// Unknown records deliberately use [AccidentDamageAssetClass.legacy] so an
+/// older draft remains editable without pretending the asset is another
+/// class.
+AccidentDamageAssetClass accidentDamageAssetClassFor({
+  String? assetNo,
+  String? vehicleType,
+  String? make,
+  String? model,
+}) {
+  final String value = <String?>[assetNo, vehicleType, make, model]
+      .whereType<String>()
+      .join(' ')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-_/]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (value.contains('wheel loader') ||
+      value.contains('skid loader') ||
+      value.contains('skid steer') ||
+      RegExp(r'(^|\s)(wl|sl)\s*\d').hasMatch(value)) {
+    return AccidentDamageAssetClass.loader;
+  }
+  if (value.contains('chiller') ||
+      value.contains('generator') ||
+      value.contains('genset') ||
+      value.contains('batching plant') ||
+      value.contains('placing boom') ||
+      value.contains('stationary pump')) {
+    return AccidentDamageAssetClass.fixedEquipment;
+  }
+  if (value.contains('concrete pump') ||
+      value.contains('line pump') ||
+      value.contains('transit mixer') ||
+      value.contains('concrete mixer') ||
+      value.contains('pump truck') ||
+      RegExp(r'(^|\s)(cp|mp|lp|tm)\s*\d').hasMatch(value)) {
+    return AccidentDamageAssetClass.heavyTruck;
+  }
+  if (value.contains('bus') ||
+      value.contains('coach') ||
+      value.contains('hiace') ||
+      value.contains('hi ace') ||
+      value.contains('coaster') ||
+      value.contains('seater')) {
+    return AccidentDamageAssetClass.bus;
+  }
+  if (value.contains('pickup') ||
+      value.contains('pick up') ||
+      value.contains('double cab') ||
+      value.contains('double cabin') ||
+      value.contains('xenon') ||
+      value.contains('l200') ||
+      value.contains('triton')) {
+    return AccidentDamageAssetClass.roadVehicle;
+  }
+  return AccidentDamageAssetClass.legacy;
+}
+
 /// One tappable body region on a given [AccidentDamageView].
 ///
 /// [rect] is in the view's own 0..1 normalised canvas space - the same
@@ -531,6 +606,894 @@ Map<String, Object?>? _jsonMap(Object? value) {
   };
 }
 
+const List<AccidentDamageZone> _roadVehicleDamageZones = <AccidentDamageZone>[
+  AccidentDamageZone(
+    id: 'front_windshield',
+    view: AccidentDamageView.front,
+    left: .27,
+    top: .27,
+    width: .46,
+    height: .20,
+  ),
+  AccidentDamageZone(
+    id: 'front_hood',
+    view: AccidentDamageView.front,
+    left: .38,
+    top: .49,
+    width: .24,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'front_left_light',
+    view: AccidentDamageView.front,
+    left: .25,
+    top: .51,
+    width: .12,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'front_right_light',
+    view: AccidentDamageView.front,
+    left: .63,
+    top: .51,
+    width: .12,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'front_bumper',
+    view: AccidentDamageView.front,
+    left: .26,
+    top: .65,
+    width: .48,
+    height: .11,
+  ),
+  AccidentDamageZone(
+    id: 'rear_windshield',
+    view: AccidentDamageView.rear,
+    left: .28,
+    top: .27,
+    width: .44,
+    height: .20,
+  ),
+  AccidentDamageZone(
+    id: 'rear_tailgate',
+    view: AccidentDamageView.rear,
+    left: .36,
+    top: .49,
+    width: .28,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'rear_left_light',
+    view: AccidentDamageView.rear,
+    left: .25,
+    top: .50,
+    width: .10,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'rear_right_light',
+    view: AccidentDamageView.rear,
+    left: .65,
+    top: .50,
+    width: .10,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'rear_bumper',
+    view: AccidentDamageView.rear,
+    left: .27,
+    top: .67,
+    width: .46,
+    height: .09,
+  ),
+  AccidentDamageZone(
+    id: 'left_front_door',
+    view: AccidentDamageView.left,
+    left: .56,
+    top: .36,
+    width: .15,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'left_rear_door',
+    view: AccidentDamageView.left,
+    left: .40,
+    top: .36,
+    width: .15,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'left_front_fender',
+    view: AccidentDamageView.left,
+    left: .72,
+    top: .50,
+    width: .12,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'left_rear_fender',
+    view: AccidentDamageView.left,
+    left: .24,
+    top: .50,
+    width: .15,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'left_side_panel',
+    view: AccidentDamageView.left,
+    left: .12,
+    top: .36,
+    width: .27,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'left_mirror',
+    view: AccidentDamageView.left,
+    left: .72,
+    top: .34,
+    width: .08,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'left_roof',
+    view: AccidentDamageView.left,
+    left: .28,
+    top: .27,
+    width: .43,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'right_front_door',
+    view: AccidentDamageView.right,
+    left: .29,
+    top: .36,
+    width: .15,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'right_rear_door',
+    view: AccidentDamageView.right,
+    left: .45,
+    top: .36,
+    width: .15,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'right_front_fender',
+    view: AccidentDamageView.right,
+    left: .16,
+    top: .50,
+    width: .12,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'right_rear_fender',
+    view: AccidentDamageView.right,
+    left: .61,
+    top: .50,
+    width: .15,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'right_side_panel',
+    view: AccidentDamageView.right,
+    left: .61,
+    top: .36,
+    width: .27,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'right_mirror',
+    view: AccidentDamageView.right,
+    left: .20,
+    top: .34,
+    width: .08,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'right_roof',
+    view: AccidentDamageView.right,
+    left: .29,
+    top: .27,
+    width: .43,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'top_hood',
+    view: AccidentDamageView.top,
+    left: .35,
+    top: .16,
+    width: .30,
+    height: .18,
+  ),
+  AccidentDamageZone(
+    id: 'top_roof',
+    view: AccidentDamageView.top,
+    left: .31,
+    top: .35,
+    width: .38,
+    height: .34,
+  ),
+  AccidentDamageZone(
+    id: 'top_tailgate',
+    view: AccidentDamageView.top,
+    left: .35,
+    top: .70,
+    width: .30,
+    height: .16,
+  ),
+];
+
+const List<AccidentDamageZone> _busDamageZones = <AccidentDamageZone>[
+  AccidentDamageZone(
+    id: 'front_windshield',
+    view: AccidentDamageView.front,
+    left: .27,
+    top: .27,
+    width: .46,
+    height: .20,
+  ),
+  AccidentDamageZone(
+    id: 'front_cab_panel',
+    view: AccidentDamageView.front,
+    left: .38,
+    top: .49,
+    width: .24,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'front_left_light',
+    view: AccidentDamageView.front,
+    left: .25,
+    top: .51,
+    width: .12,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'front_right_light',
+    view: AccidentDamageView.front,
+    left: .63,
+    top: .51,
+    width: .12,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'front_bumper',
+    view: AccidentDamageView.front,
+    left: .26,
+    top: .65,
+    width: .48,
+    height: .11,
+  ),
+  AccidentDamageZone(
+    id: 'rear_windshield',
+    view: AccidentDamageView.rear,
+    left: .28,
+    top: .27,
+    width: .44,
+    height: .20,
+  ),
+  AccidentDamageZone(
+    id: 'rear_body_panel',
+    view: AccidentDamageView.rear,
+    left: .36,
+    top: .49,
+    width: .28,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'rear_left_light',
+    view: AccidentDamageView.rear,
+    left: .25,
+    top: .50,
+    width: .10,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'rear_right_light',
+    view: AccidentDamageView.rear,
+    left: .65,
+    top: .50,
+    width: .10,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'rear_bumper',
+    view: AccidentDamageView.rear,
+    left: .27,
+    top: .67,
+    width: .46,
+    height: .09,
+  ),
+  AccidentDamageZone(
+    id: 'left_driver_door',
+    view: AccidentDamageView.left,
+    left: .70,
+    top: .37,
+    width: .13,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'left_passenger_door',
+    view: AccidentDamageView.left,
+    left: .56,
+    top: .37,
+    width: .13,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'left_body_panel',
+    view: AccidentDamageView.left,
+    left: .18,
+    top: .36,
+    width: .37,
+    height: .24,
+  ),
+  AccidentDamageZone(
+    id: 'left_front_fender',
+    view: AccidentDamageView.left,
+    left: .72,
+    top: .61,
+    width: .12,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'left_rear_fender',
+    view: AccidentDamageView.left,
+    left: .24,
+    top: .61,
+    width: .15,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'left_mirror',
+    view: AccidentDamageView.left,
+    left: .84,
+    top: .35,
+    width: .07,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'left_roof',
+    view: AccidentDamageView.left,
+    left: .22,
+    top: .27,
+    width: .61,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'right_driver_door',
+    view: AccidentDamageView.right,
+    left: .17,
+    top: .37,
+    width: .13,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'right_passenger_door',
+    view: AccidentDamageView.right,
+    left: .31,
+    top: .37,
+    width: .13,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'right_body_panel',
+    view: AccidentDamageView.right,
+    left: .45,
+    top: .36,
+    width: .37,
+    height: .24,
+  ),
+  AccidentDamageZone(
+    id: 'right_front_fender',
+    view: AccidentDamageView.right,
+    left: .16,
+    top: .61,
+    width: .12,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'right_rear_fender',
+    view: AccidentDamageView.right,
+    left: .61,
+    top: .61,
+    width: .15,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'right_mirror',
+    view: AccidentDamageView.right,
+    left: .09,
+    top: .35,
+    width: .07,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'right_roof',
+    view: AccidentDamageView.right,
+    left: .17,
+    top: .27,
+    width: .61,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'top_front_cab',
+    view: AccidentDamageView.top,
+    left: .31,
+    top: .12,
+    width: .38,
+    height: .20,
+  ),
+  AccidentDamageZone(
+    id: 'top_passenger_body',
+    view: AccidentDamageView.top,
+    left: .31,
+    top: .33,
+    width: .38,
+    height: .54,
+  ),
+];
+
+const List<AccidentDamageZone> _heavyTruckDamageZones = <AccidentDamageZone>[
+  AccidentDamageZone(
+    id: 'front_windshield',
+    view: AccidentDamageView.front,
+    left: .31,
+    top: .29,
+    width: .38,
+    height: .18,
+  ),
+  AccidentDamageZone(
+    id: 'front_cab_panel',
+    view: AccidentDamageView.front,
+    left: .39,
+    top: .49,
+    width: .22,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'front_left_light',
+    view: AccidentDamageView.front,
+    left: .29,
+    top: .50,
+    width: .09,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'front_right_light',
+    view: AccidentDamageView.front,
+    left: .62,
+    top: .50,
+    width: .09,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'front_bumper',
+    view: AccidentDamageView.front,
+    left: .29,
+    top: .65,
+    width: .42,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'rear_equipment',
+    view: AccidentDamageView.rear,
+    left: .35,
+    top: .31,
+    width: .30,
+    height: .30,
+  ),
+  AccidentDamageZone(
+    id: 'rear_left_light',
+    view: AccidentDamageView.rear,
+    left: .24,
+    top: .55,
+    width: .10,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'rear_right_light',
+    view: AccidentDamageView.rear,
+    left: .66,
+    top: .55,
+    width: .10,
+    height: .12,
+  ),
+  AccidentDamageZone(
+    id: 'rear_bumper',
+    view: AccidentDamageView.rear,
+    left: .29,
+    top: .68,
+    width: .42,
+    height: .09,
+  ),
+  AccidentDamageZone(
+    id: 'left_cab',
+    view: AccidentDamageView.left,
+    left: .04,
+    top: .37,
+    width: .20,
+    height: .21,
+  ),
+  AccidentDamageZone(
+    id: 'left_boom',
+    view: AccidentDamageView.left,
+    left: .25,
+    top: .30,
+    width: .68,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'left_equipment_body',
+    view: AccidentDamageView.left,
+    left: .26,
+    top: .44,
+    width: .66,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'left_outrigger',
+    view: AccidentDamageView.left,
+    left: .23,
+    top: .58,
+    width: .10,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'right_cab',
+    view: AccidentDamageView.right,
+    left: .76,
+    top: .37,
+    width: .20,
+    height: .21,
+  ),
+  AccidentDamageZone(
+    id: 'right_boom',
+    view: AccidentDamageView.right,
+    left: .07,
+    top: .30,
+    width: .68,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'right_equipment_body',
+    view: AccidentDamageView.right,
+    left: .08,
+    top: .44,
+    width: .66,
+    height: .13,
+  ),
+  AccidentDamageZone(
+    id: 'right_outrigger',
+    view: AccidentDamageView.right,
+    left: .67,
+    top: .58,
+    width: .10,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'top_cab',
+    view: AccidentDamageView.top,
+    left: .08,
+    top: .35,
+    width: .18,
+    height: .30,
+  ),
+  AccidentDamageZone(
+    id: 'top_boom',
+    view: AccidentDamageView.top,
+    left: .28,
+    top: .35,
+    width: .58,
+    height: .30,
+  ),
+  AccidentDamageZone(
+    id: 'top_rear_equipment',
+    view: AccidentDamageView.top,
+    left: .87,
+    top: .38,
+    width: .08,
+    height: .24,
+  ),
+];
+
+const List<AccidentDamageZone> _loaderDamageZones = <AccidentDamageZone>[
+  AccidentDamageZone(
+    id: 'front_bucket',
+    view: AccidentDamageView.front,
+    left: .20,
+    top: .57,
+    width: .60,
+    height: .18,
+  ),
+  AccidentDamageZone(
+    id: 'front_boom',
+    view: AccidentDamageView.front,
+    left: .25,
+    top: .40,
+    width: .50,
+    height: .15,
+  ),
+  AccidentDamageZone(
+    id: 'front_cab',
+    view: AccidentDamageView.front,
+    left: .36,
+    top: .23,
+    width: .28,
+    height: .16,
+  ),
+  AccidentDamageZone(
+    id: 'rear_counterweight',
+    view: AccidentDamageView.rear,
+    left: .25,
+    top: .48,
+    width: .50,
+    height: .18,
+  ),
+  AccidentDamageZone(
+    id: 'rear_left_light',
+    view: AccidentDamageView.rear,
+    left: .24,
+    top: .37,
+    width: .10,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'rear_right_light',
+    view: AccidentDamageView.rear,
+    left: .66,
+    top: .37,
+    width: .10,
+    height: .10,
+  ),
+  AccidentDamageZone(
+    id: 'left_bucket',
+    view: AccidentDamageView.left,
+    left: .02,
+    top: .49,
+    width: .20,
+    height: .18,
+  ),
+  AccidentDamageZone(
+    id: 'left_lift_arm',
+    view: AccidentDamageView.left,
+    left: .22,
+    top: .39,
+    width: .20,
+    height: .11,
+  ),
+  AccidentDamageZone(
+    id: 'left_front_wheel',
+    view: AccidentDamageView.left,
+    left: .25,
+    top: .51,
+    width: .18,
+    height: .17,
+  ),
+  AccidentDamageZone(
+    id: 'left_cab',
+    view: AccidentDamageView.left,
+    left: .43,
+    top: .31,
+    width: .18,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'left_engine_cover',
+    view: AccidentDamageView.left,
+    left: .62,
+    top: .37,
+    width: .25,
+    height: .14,
+  ),
+  AccidentDamageZone(
+    id: 'left_rear_wheel',
+    view: AccidentDamageView.left,
+    left: .64,
+    top: .52,
+    width: .18,
+    height: .17,
+  ),
+  AccidentDamageZone(
+    id: 'right_bucket',
+    view: AccidentDamageView.right,
+    left: .78,
+    top: .49,
+    width: .20,
+    height: .18,
+  ),
+  AccidentDamageZone(
+    id: 'right_lift_arm',
+    view: AccidentDamageView.right,
+    left: .58,
+    top: .39,
+    width: .20,
+    height: .11,
+  ),
+  AccidentDamageZone(
+    id: 'right_front_wheel',
+    view: AccidentDamageView.right,
+    left: .57,
+    top: .51,
+    width: .18,
+    height: .17,
+  ),
+  AccidentDamageZone(
+    id: 'right_cab',
+    view: AccidentDamageView.right,
+    left: .39,
+    top: .31,
+    width: .17,
+    height: .23,
+  ),
+  AccidentDamageZone(
+    id: 'right_engine_cover',
+    view: AccidentDamageView.right,
+    left: .13,
+    top: .37,
+    width: .25,
+    height: .14,
+  ),
+  AccidentDamageZone(
+    id: 'right_rear_wheel',
+    view: AccidentDamageView.right,
+    left: .18,
+    top: .52,
+    width: .18,
+    height: .17,
+  ),
+  AccidentDamageZone(
+    id: 'top_bucket',
+    view: AccidentDamageView.top,
+    left: .05,
+    top: .30,
+    width: .20,
+    height: .40,
+  ),
+  AccidentDamageZone(
+    id: 'top_lift_arm',
+    view: AccidentDamageView.top,
+    left: .27,
+    top: .34,
+    width: .20,
+    height: .32,
+  ),
+  AccidentDamageZone(
+    id: 'top_cab',
+    view: AccidentDamageView.top,
+    left: .49,
+    top: .30,
+    width: .20,
+    height: .40,
+  ),
+  AccidentDamageZone(
+    id: 'top_engine_cover',
+    view: AccidentDamageView.top,
+    left: .71,
+    top: .32,
+    width: .23,
+    height: .36,
+  ),
+];
+
+const List<AccidentDamageZone> _fixedEquipmentDamageZones =
+    <AccidentDamageZone>[
+  AccidentDamageZone(
+    id: 'front_equipment_panel',
+    view: AccidentDamageView.front,
+    left: .22,
+    top: .28,
+    width: .52,
+    height: .42,
+  ),
+  AccidentDamageZone(
+    id: 'front_pipework',
+    view: AccidentDamageView.front,
+    left: .75,
+    top: .34,
+    width: .10,
+    height: .30,
+  ),
+  AccidentDamageZone(
+    id: 'front_base_frame',
+    view: AccidentDamageView.front,
+    left: .22,
+    top: .71,
+    width: .63,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'rear_equipment_panel',
+    view: AccidentDamageView.rear,
+    left: .26,
+    top: .28,
+    width: .48,
+    height: .42,
+  ),
+  AccidentDamageZone(
+    id: 'rear_pipework',
+    view: AccidentDamageView.rear,
+    left: .15,
+    top: .34,
+    width: .10,
+    height: .30,
+  ),
+  AccidentDamageZone(
+    id: 'rear_base_frame',
+    view: AccidentDamageView.rear,
+    left: .15,
+    top: .71,
+    width: .63,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'left_equipment_panel',
+    view: AccidentDamageView.left,
+    left: .20,
+    top: .31,
+    width: .55,
+    height: .36,
+  ),
+  AccidentDamageZone(
+    id: 'left_control_panel',
+    view: AccidentDamageView.left,
+    left: .76,
+    top: .35,
+    width: .10,
+    height: .24,
+  ),
+  AccidentDamageZone(
+    id: 'left_base_frame',
+    view: AccidentDamageView.left,
+    left: .20,
+    top: .68,
+    width: .66,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'right_equipment_panel',
+    view: AccidentDamageView.right,
+    left: .25,
+    top: .31,
+    width: .55,
+    height: .36,
+  ),
+  AccidentDamageZone(
+    id: 'right_control_panel',
+    view: AccidentDamageView.right,
+    left: .14,
+    top: .35,
+    width: .10,
+    height: .24,
+  ),
+  AccidentDamageZone(
+    id: 'right_base_frame',
+    view: AccidentDamageView.right,
+    left: .14,
+    top: .68,
+    width: .66,
+    height: .08,
+  ),
+  AccidentDamageZone(
+    id: 'top_equipment_body',
+    view: AccidentDamageView.top,
+    left: .22,
+    top: .20,
+    width: .56,
+    height: .60,
+  ),
+  AccidentDamageZone(
+    id: 'top_pipework',
+    view: AccidentDamageView.top,
+    left: .79,
+    top: .28,
+    width: .10,
+    height: .44,
+  ),
+];
+
 /// Legacy fixed-zone catalog retained for backward-compatible draft reads.
 ///
 /// Coordinates are hand-placed against the exact shapes
@@ -759,9 +1722,24 @@ const List<AccidentDamageZone> kAccidentDamageZones = <AccidentDamageZone>[
   ),
 ];
 
+List<AccidentDamageZone> _damageCatalogFor(
+  AccidentDamageAssetClass assetClass,
+) =>
+    switch (assetClass) {
+      AccidentDamageAssetClass.roadVehicle => _roadVehicleDamageZones,
+      AccidentDamageAssetClass.bus => _busDamageZones,
+      AccidentDamageAssetClass.heavyTruck => _heavyTruckDamageZones,
+      AccidentDamageAssetClass.loader => _loaderDamageZones,
+      AccidentDamageAssetClass.fixedEquipment => _fixedEquipmentDamageZones,
+      AccidentDamageAssetClass.legacy => kAccidentDamageZones,
+    };
+
 /// The zones registered for [view], in catalog order.
-List<AccidentDamageZone> accidentDamageZonesFor(AccidentDamageView view) =>
-    kAccidentDamageZones
+List<AccidentDamageZone> accidentDamageZonesFor(
+  AccidentDamageView view, {
+  AccidentDamageAssetClass assetClass = AccidentDamageAssetClass.legacy,
+}) =>
+    _damageCatalogFor(assetClass)
         .where((AccidentDamageZone z) => z.view == view)
         .toList(growable: false);
 
@@ -770,8 +1748,11 @@ List<AccidentDamageZone> accidentDamageZonesFor(AccidentDamageView view) =>
 /// Used to badge the view switcher with a per-view mark count without the
 /// caller needing to know the catalog's own shape.
 AccidentDamageView? accidentDamageViewOfZone(String zoneId) {
-  for (final AccidentDamageZone zone in kAccidentDamageZones) {
-    if (zone.id == zoneId) return zone.view;
+  for (final AccidentDamageAssetClass assetClass
+      in AccidentDamageAssetClass.values) {
+    for (final AccidentDamageZone zone in _damageCatalogFor(assetClass)) {
+      if (zone.id == zoneId) return zone.view;
+    }
   }
   return null;
 }
@@ -787,9 +1768,10 @@ AccidentDamageView? accidentDamageViewOfZone(String zoneId) {
 AccidentDamageZone? accidentDamageZoneAt(
   AccidentDamageView view,
   double dx,
-  double dy,
-) {
-  for (final AccidentDamageZone zone in kAccidentDamageZones) {
+  double dy, {
+  AccidentDamageAssetClass assetClass = AccidentDamageAssetClass.legacy,
+}) {
+  for (final AccidentDamageZone zone in _damageCatalogFor(assetClass)) {
     if (zone.view != view) continue;
     final bool insideX = dx >= zone.left && dx <= zone.left + zone.width;
     final bool insideY = dy >= zone.top && dy <= zone.top + zone.height;

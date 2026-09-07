@@ -26,6 +26,17 @@ final class AccidentRecord {
     this.vehicleType,
     this.plateNumber,
     this.damageDescription,
+    this.damageCondition,
+    this.estimatedDamageCost,
+    this.driverName,
+    this.injuries,
+    this.injuryCount,
+    this.thirdPartyInvolved,
+    this.policeReportNo,
+    this.najmStatus,
+    this.najmFault,
+    this.taqdeerStatus,
+    this.taqdeerNo,
     this.faultStatus,
     this.responsibleParty,
     this.liableParty,
@@ -37,12 +48,15 @@ final class AccidentRecord {
     this.recoveryStatus,
     this.repairType,
     this.workshopName,
+    this.workshopLocation,
     this.nextStep,
     this.releaseDate,
     this.expectedReleaseDate,
     this.claimAmount,
     this.claimApprovedAmount,
     this.recoveredAmount,
+    this.deductible,
+    this.amountTransfer,
     this.repairCost,
     this.completionOverall,
     this.photos = const <String>[],
@@ -70,6 +84,17 @@ final class AccidentRecord {
   final String? vehicleType;
   final String? plateNumber;
   final String? damageDescription;
+  final String? damageCondition;
+  final num? estimatedDamageCost;
+  final String? driverName;
+  final bool? injuries;
+  final num? injuryCount;
+  final bool? thirdPartyInvolved;
+  final String? policeReportNo;
+  final String? najmStatus;
+  final String? najmFault;
+  final String? taqdeerStatus;
+  final String? taqdeerNo;
   final String? faultStatus;
   final String? responsibleParty;
   final String? liableParty;
@@ -81,12 +106,15 @@ final class AccidentRecord {
   final String? recoveryStatus;
   final String? repairType;
   final String? workshopName;
+  final String? workshopLocation;
   final String? nextStep;
   final String? releaseDate;
   final String? expectedReleaseDate;
   final num? claimAmount;
   final num? claimApprovedAmount;
   final num? recoveredAmount;
+  final num? deductible;
+  final num? amountTransfer;
   final num? repairCost;
   final num? completionOverall;
   final List<String> photos;

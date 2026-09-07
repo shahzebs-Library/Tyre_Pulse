@@ -17,6 +17,75 @@ const String _dataImage =
     'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
 void main() {
+  testWidgets(
+      'persistent workspace navigation reaches all seven screens on phone',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 760));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pump(
+      tester,
+      const AccidentCaseScreen(
+        route: AccidentCaseRoute(accidentId: AccidentId('acc-1')),
+      ),
+    );
+    final navigation = find.byKey(AccidentCaseScreenKeys.workspaceNavigation);
+    expect(navigation, findsOneWidget);
+    expect(
+      find.descendant(
+        of: navigation,
+        matching: find.text('Insurance / Claims'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: navigation,
+        matching: find.byIcon(Icons.policy_outlined),
+      ),
+      findsOneWidget,
+    );
+    for (int index = 3; index > 0; index--) {
+      await tester.tap(find.byKey(AccidentCaseScreenKeys.previousWorkspace));
+      await tester.pumpAndSettle();
+    }
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(AccidentCaseScreenKeys.previousWorkspace),
+          )
+          .onPressed,
+      isNull,
+    );
+    for (int step = 1; step <= 7; step++) {
+      expect(
+        find.descendant(
+          of: navigation,
+          matching: find.text('Step $step of 7'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(AccidentCaseScreenKeys.workspaceSelector).hitTestable(),
+        findsOneWidget,
+      );
+      if (step < 7) {
+        await tester.tap(find.byKey(AccidentCaseScreenKeys.nextWorkspace));
+        await tester.pumpAndSettle();
+      }
+    }
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byKey(AccidentCaseScreenKeys.nextWorkspace),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.byKey(AccidentCaseScreenKeys.workspaceSelector));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Fleet validation'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('case overview matches the approved compact hierarchy', (
     WidgetTester tester,
   ) async {
@@ -66,10 +135,15 @@ void main() {
     );
 
     expect(find.byKey(AccidentCaseScreenKeys.tabs), findsOneWidget);
-    expect(find.byKey(AccidentCaseScreenKeys.incident), findsOneWidget);
+    expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
+    expect(find.text('Step 4 of 7'), findsWidgets);
+
+    await _selectCaseWorkspace(tester, 'Damage mapping');
+    expect(find.byKey(AccidentCaseScreenKeys.damageMapping), findsOneWidget);
     expect(find.text('Case Details'), findsOneWidget);
-    expect(find.text('Step 1 of 7'), findsOneWidget);
-    expect(find.text('Incident & damage'), findsWidgets);
+    expect(find.text('Step 1 of 7'), findsWidgets);
+    expect(find.text('Damage mapping'), findsWidgets);
+    expect(find.text('Boom section 3'), findsOneWidget);
     expect(find.textContaining('ACC-2026-0182'), findsWidgets);
     expect(find.textContaining('Mixer 3208'), findsOneWidget);
     expect(find.text('11 May 2026 • 08:15'), findsOneWidget);
@@ -81,58 +155,52 @@ void main() {
     expect(find.text('Central Workshop'), findsNothing);
     expect(find.text('Local workflow preview'), findsNothing);
 
-    await tester.ensureVisible(find.text('2 Fleet validation'));
-    await tester.tap(find.text('2 Fleet validation'));
-    await tester.pumpAndSettle();
+    await _selectCaseWorkspace(tester, 'Fleet validation');
     expect(find.byKey(AccidentCaseScreenKeys.fleet), findsOneWidget);
-    expect(find.text('Step 2 of 7'), findsOneWidget);
+    expect(find.text('Step 2 of 7'), findsWidgets);
+    expect(find.text('Salim R.'), findsWidgets);
     expect(
       find.text('Vehicle collided with barrier while reversing.'),
-      findsNothing,
+      findsOneWidget,
     );
 
-    await tester.ensureVisible(find.text('3 Responsibility & payer'));
-    await tester.tap(find.text('3 Responsibility & payer'));
-    await tester.pumpAndSettle();
+    await _selectCaseWorkspace(tester, 'Responsibility & payer');
     expect(find.byKey(AccidentCaseScreenKeys.responsibility), findsOneWidget);
-    expect(find.text('Step 3 of 7'), findsOneWidget);
-    expect(find.text('Driver'), findsOneWidget);
+    expect(find.text('Step 3 of 7'), findsWidgets);
+    expect(find.text('Our driver / GCC'), findsOneWidget);
+    expect(find.text('DUB-2026-88142'), findsOneWidget);
+    expect(find.text('TQD-994'), findsOneWidget);
     expect(find.text('CLM-8821'), findsNothing);
 
-    await tester.ensureVisible(find.text('4 Insurance / Claims'));
-    await tester.tap(find.text('4 Insurance / Claims'));
-    await tester.pumpAndSettle();
+    await _selectCaseWorkspace(tester, 'Insurance / Claims');
     expect(find.byKey(AccidentCaseScreenKeys.insurance), findsOneWidget);
-    expect(find.text('Step 4 of 7'), findsOneWidget);
+    expect(find.text('Step 4 of 7'), findsWidgets);
     expect(find.text('CLM-8821'), findsOneWidget);
+    expect(find.text('1500'), findsOneWidget);
     expect(
       find.text('Vehicle collided with barrier while reversing.'),
       findsNothing,
     );
 
-    await tester.ensureVisible(find.text('5 Workshop assessment'));
-    await tester.tap(find.text('5 Workshop assessment'));
-    await tester.pumpAndSettle();
+    await _selectCaseWorkspace(tester, 'Workshop assessment');
     expect(find.byKey(AccidentCaseScreenKeys.assessment), findsOneWidget);
-    expect(find.text('Step 5 of 7'), findsOneWidget);
+    expect(find.text('Step 5 of 7'), findsWidgets);
     expect(find.text('Central Workshop'), findsOneWidget);
+    expect(find.text('Major Body Damage'), findsOneWidget);
+    expect(find.text('46900'), findsOneWidget);
     expect(find.text('CLM-8821'), findsNothing);
 
-    await tester.ensureVisible(find.text('6 External workshop'));
-    await tester.tap(find.text('6 External workshop'));
-    await tester.pumpAndSettle();
+    await _selectCaseWorkspace(tester, 'External workshop');
     expect(find.byKey(AccidentCaseScreenKeys.externalWorkshop), findsOneWidget);
-    expect(find.text('Step 6 of 7'), findsOneWidget);
+    expect(find.text('Step 6 of 7'), findsWidgets);
+    expect(find.text('Dubai Industrial City'), findsWidgets);
 
-    await tester.ensureVisible(find.text('7 Timeline & notifications'));
-    await tester.tap(find.text('7 Timeline & notifications'));
-    await tester.pumpAndSettle();
+    await _selectCaseWorkspace(tester, 'Timeline & notifications');
     expect(find.byKey(AccidentCaseScreenKeys.timeline), findsOneWidget);
-    expect(find.text('Step 7 of 7'), findsOneWidget);
+    expect(find.text('Step 7 of 7'), findsWidgets);
     expect(find.text('CLM-8821'), findsNothing);
     expect(find.text('Local workflow preview'), findsNothing);
 
-    expect(find.byKey(AccidentCaseScreenKeys.readOnlyAction), findsOneWidget);
     await tester.tap(find.byKey(AccidentCaseScreenKeys.boundaryAction));
     await tester.pumpAndSettle();
     expect(
@@ -157,12 +225,19 @@ void main() {
 
     expect(
       Directionality.of(
-        tester.element(find.byKey(AccidentCaseScreenKeys.overview)),
+        tester.element(find.byKey(AccidentCaseScreenKeys.insurance)),
       ),
       TextDirection.rtl,
     );
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _selectCaseWorkspace(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(AccidentCaseScreenKeys.tabs));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(ListTile, label));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pump(
@@ -204,6 +279,8 @@ final class _FakeRepository implements AccidentRepository {
     caseStatus: 'under_insurance_review',
     workflowStage: 'insurance',
     description: 'Vehicle collided with barrier while reversing.',
+    damageDescription:
+        '{"version":2,"marks":[{"zone_id":"left_boom","view":"left","x":0.5,"y":0.5,"area":"Boom section 3","damage_type":"cracked","severity":"severe","photo_references":["tp-storage://accident-photos/damage-1.jpg"]}]}',
     reporterName: 'Ahmed K.',
     photos: <String>[
       'tp-storage://accident-photos/evidence-1.jpg',
@@ -222,6 +299,20 @@ final class _FakeRepository implements AccidentRepository {
     responsibleParty: 'driver',
     liableParty: 'pending',
     payer: 'pending',
+    driverName: 'Salim R.',
+    injuries: false,
+    injuryCount: 0,
+    thirdPartyInvolved: true,
+    policeReportNo: 'DUB-2026-88142',
+    najmStatus: 'received',
+    najmFault: 'other_party',
+    taqdeerStatus: 'pending',
+    taqdeerNo: 'TQD-994',
+    damageCondition: 'major_body_damage',
+    estimatedDamageCost: 46900,
+    workshopLocation: 'Dubai Industrial City',
+    deductible: 1500,
+    amountTransfer: 24000,
   );
 
   static const AccidentCaseSnapshot snapshot = AccidentCaseSnapshot(

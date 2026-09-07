@@ -1,4 +1,4 @@
-/// Localised copy used only by the extended source-only accident-case preview.
+/// Localised copy for accident-case workspaces and workflow controls.
 ///
 /// The existing accident ARB catalog predates the end-to-end case workflow.
 /// This small feature-local catalog keeps the new surface translated in all
@@ -34,6 +34,7 @@ final class AccidentCaseWorkflowCopy {
       <String, Map<String, String>>{
     'en': <String, String>{
       'workspaceIncident': 'Incident & damage',
+      'workspaceDamage': 'Damage mapping',
       'workspaceFleet': 'Fleet validation',
       'workspaceResponsibility': 'Responsibility & payer',
       'workspaceInsurance': 'Insurance / Claims',
@@ -95,7 +96,7 @@ final class AccidentCaseWorkflowCopy {
       'timelineTitle': 'Workstream updates',
       'timelineHint': 'Latest dated update from each workstream',
       'timelineEmpty': 'No dated workstream updates are recorded.',
-      'notificationsTitle': 'Notifications & email',
+      'notificationsTitle': 'Notifications',
       'notificationsHint': 'Case-linked in-app notifications for your account',
       'notificationsNoWorkspace':
           'Sign-in context is unavailable, so notifications were not queried.',
@@ -135,6 +136,12 @@ final class AccidentCaseWorkflowCopy {
       'responsibleCompany': 'Responsible company',
       'failedParty': 'Failed / responsible company',
       'documentRegister': 'Case document register',
+      'recordedDetailsHint':
+          'Details reflect the case record. Missing information is shown as not recorded.',
+      'najmStatus': 'Najm status',
+      'najmFault': 'Najm fault finding',
+      'taqdeerStatus': 'Taqdeer status',
+      'taqdeerNumber': 'Taqdeer number',
       'document': 'Document',
       'reference': 'Reference',
       'updated': 'Updated',
@@ -299,6 +306,7 @@ final class AccidentCaseWorkflowCopy {
     },
     'ar': <String, String>{
       'workspaceIncident': 'الحادث والأضرار',
+      'workspaceDamage': 'تحديد مواقع الأضرار',
       'workspaceFleet': 'تحقق الأسطول',
       'workspaceResponsibility': 'المسؤولية والجهة الدافعة',
       'workspaceInsurance': 'التأمين / المطالبات',
@@ -357,7 +365,7 @@ final class AccidentCaseWorkflowCopy {
       'timelineTitle': 'تحديثات مسارات العمل',
       'timelineHint': 'آخر تحديث مؤرخ لكل مسار عمل',
       'timelineEmpty': 'لا توجد تحديثات مؤرخة لمسارات العمل.',
-      'notificationsTitle': 'الإشعارات والبريد الإلكتروني',
+      'notificationsTitle': 'الإشعارات',
       'notificationsHint': 'إشعارات داخل التطبيق مرتبطة بالقضية لحسابك',
       'notificationsNoWorkspace':
           'سياق تسجيل الدخول غير متاح، لذلك لم يتم الاستعلام عن الإشعارات.',
@@ -397,6 +405,12 @@ final class AccidentCaseWorkflowCopy {
       'responsibleCompany': 'الشركة المسؤولة',
       'failedParty': 'الشركة المتسببة / المسؤولة',
       'documentRegister': 'سجل مستندات القضية',
+      'recordedDetailsHint':
+          'تعكس التفاصيل سجل القضية. تظهر المعلومات الناقصة على أنها غير مسجلة.',
+      'najmStatus': 'حالة نجم',
+      'najmFault': 'نتيجة تحديد المسؤولية في نجم',
+      'taqdeerStatus': 'حالة تقدير',
+      'taqdeerNumber': 'رقم تقدير',
       'document': 'المستند',
       'reference': 'المرجع',
       'updated': 'آخر تحديث',
@@ -561,6 +575,7 @@ final class AccidentCaseWorkflowCopy {
     },
     'ur': <String, String>{
       'workspaceIncident': 'حادثہ اور نقصان',
+      'workspaceDamage': 'نقصان کی جگہ کی نشاندہی',
       'workspaceFleet': 'فلیٹ تصدیق',
       'workspaceResponsibility': 'ذمہ داری اور ادائیگی',
       'workspaceInsurance': 'انشورنس / کلیمز',
@@ -620,7 +635,7 @@ final class AccidentCaseWorkflowCopy {
       'timelineTitle': 'ورک اسٹریم تازہ کاریاں',
       'timelineHint': 'ہر ورک اسٹریم کی تازہ ترین تاریخ والی تبدیلی',
       'timelineEmpty': 'کوئی تاریخ والی ورک اسٹریم تازہ کاری درج نہیں۔',
-      'notificationsTitle': 'اطلاعات اور ای میل',
+      'notificationsTitle': 'اطلاعات',
       'notificationsHint': 'آپ کے اکاؤنٹ کی کیس سے منسلک اندرونی اطلاعات',
       'notificationsNoWorkspace':
           'سائن اِن سیاق دستیاب نہیں، اس لیے اطلاعات حاصل نہیں کی گئیں۔',
@@ -660,6 +675,12 @@ final class AccidentCaseWorkflowCopy {
       'responsibleCompany': 'ذمہ دار کمپنی',
       'failedParty': 'ناکام / ذمہ دار کمپنی',
       'documentRegister': 'کیس دستاویز رجسٹر',
+      'recordedDetailsHint':
+          'تفصیلات کیس کے ریکارڈ کے مطابق ہیں۔ ناموجود معلومات غیر درج شدہ دکھائی جاتی ہیں۔',
+      'najmStatus': 'نجم کی حالت',
+      'najmFault': 'نجم کا ذمہ داری کا نتیجہ',
+      'taqdeerStatus': 'تقدیر کی حالت',
+      'taqdeerNumber': 'تقدیر نمبر',
       'document': 'دستاویز',
       'reference': 'حوالہ',
       'updated': 'تازہ کاری',

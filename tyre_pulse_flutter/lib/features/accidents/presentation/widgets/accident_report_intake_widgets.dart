@@ -8,12 +8,53 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_report_intake.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
-import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+
+/// Presentation steps only; the persisted draft and submission groups stay
+/// unchanged so existing device drafts continue to restore.
+enum AccidentIntakePage {
+  identifyAsset,
+  incident,
+  peopleAuthority,
+  damage,
+  evidence,
+  documents,
+  review,
+}
+
+/// Wide capture canvas for the two image-led intake pages.
+class AccidentIntakeCanvas extends StatelessWidget {
+  const AccidentIntakeCanvas({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.subtitle,
+    super.key,
+  });
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(title, style: Theme.of(context).textTheme.headlineSmall),
+          if (subtitle?.isNotEmpty == true) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+          const SizedBox(height: TpSpace.md),
+          child,
+        ],
+      );
+}
 
 abstract final class AccidentReportIntakeKeys {
   static const ValueKey<String> progress =
       ValueKey<String>('accident.report.progress');
-  static ValueKey<String> step(AccidentReportStep step) =>
+  static ValueKey<String> step(AccidentIntakePage step) =>
       ValueKey<String>('accident.report.step.${step.name}');
   static ValueKey<String> evidence(String key) =>
       ValueKey<String>('accident.report.evidence.$key');
@@ -28,16 +69,18 @@ class AccidentReportProgress extends StatelessWidget {
     super.key,
   });
 
-  final AccidentReportStep current;
-  final ValueChanged<AccidentReportStep> onSelect;
+  final AccidentIntakePage current;
+  final ValueChanged<AccidentIntakePage> onSelect;
 
-  static const Map<AccidentReportStep, String> labels =
-      <AccidentReportStep, String>{
-    AccidentReportStep.incident: 'Incident',
-    AccidentReportStep.peopleAuthority: 'People',
-    AccidentReportStep.damage: 'Damage',
-    AccidentReportStep.evidenceDocuments: 'Evidence',
-    AccidentReportStep.review: 'Review',
+  static const Map<AccidentIntakePage, String> labels =
+      <AccidentIntakePage, String>{
+    AccidentIntakePage.identifyAsset: 'Identify asset',
+    AccidentIntakePage.incident: 'Incident',
+    AccidentIntakePage.peopleAuthority: 'People & authority',
+    AccidentIntakePage.damage: 'Damage mapping',
+    AccidentIntakePage.evidence: 'Evidence photos',
+    AccidentIntakePage.documents: 'Documents',
+    AccidentIntakePage.review: 'Review',
   };
 
   @override
@@ -47,7 +90,7 @@ class AccidentReportProgress extends StatelessWidget {
     return Semantics(
       key: AccidentReportIntakeKeys.progress,
       container: true,
-      label: 'Step ${currentIndex + 1} of ${AccidentReportStep.values.length}: '
+      label: 'Step ${currentIndex + 1} of ${AccidentIntakePage.values.length}: '
           '${labels[current]}',
       child: TpCard(
         padding: const EdgeInsets.all(TpSpace.md),
@@ -59,48 +102,37 @@ class AccidentReportProgress extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Step ${currentIndex + 1} of '
-                    '${AccidentReportStep.values.length}',
+                    '${AccidentIntakePage.values.length}',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: palette.primary,
                           fontWeight: FontWeight.w800,
                         ),
                   ),
                 ),
-                Text(
-                  labels[current]!,
-                  style: Theme.of(context).textTheme.labelMedium,
+                Flexible(
+                  child: Text(
+                    labels[current]!,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: TpSpace.sm),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(TpRadius.pill),
-              child: LinearProgressIndicator(
-                minHeight: 7,
-                value: (currentIndex + 1) / AccidentReportStep.values.length,
-                backgroundColor: palette.surfaceSunken,
-                color: palette.primary,
-              ),
-            ),
-            const SizedBox(height: TpSpace.sm),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: <Widget>[
-                  for (final AccidentReportStep step
-                      in AccidentReportStep.values) ...<Widget>[
-                    _StepDot(
-                      step: step,
-                      label: labels[step]!,
-                      selected: step == current,
-                      completed: step.index < currentIndex,
-                      onTap: () => onSelect(step),
-                    ),
-                    if (step != AccidentReportStep.values.last)
-                      const SizedBox(width: TpSpace.xs),
-                  ],
+            Wrap(
+              spacing: TpSpace.xs,
+              runSpacing: TpSpace.xs,
+              children: <Widget>[
+                for (final AccidentIntakePage step
+                    in AccidentIntakePage.values) ...<Widget>[
+                  _StepDot(
+                    step: step,
+                    label: labels[step]!,
+                    selected: step == current,
+                    completed: false,
+                    onTap: () => onSelect(step),
+                  ),
                 ],
-              ),
+              ],
             ),
           ],
         ),
@@ -118,7 +150,7 @@ class _StepDot extends StatelessWidget {
     required this.onTap,
   });
 
-  final AccidentReportStep step;
+  final AccidentIntakePage step;
   final String label;
   final bool selected;
   final bool completed;
@@ -146,6 +178,7 @@ class _StepDot extends StatelessWidget {
               vertical: TpSpace.xs,
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Icon(
                   completed ? Icons.check_rounded : Icons.circle,
@@ -257,6 +290,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String? photo = vehiclePhotoAsset(asset);
     final String meter = asset.currentKm == null
         ? unavailableLabel
         : '${formatVehicleOdometer(asset.currentKm!)} km';
@@ -275,7 +309,7 @@ class AccidentFleetMasterCard extends StatelessWidget {
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(
-                'Fleet master match',
+                'Asset loaded from fleet master',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
@@ -287,14 +321,49 @@ class AccidentFleetMasterCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: TpSpace.sm),
-        SelectedVehicleCard(
-          asset: asset,
-          changeLabel: changeLabel,
-          unavailableLabel: unavailableLabel,
-          onChange: onChange,
-          meterValue: meter,
+        TpCard(
+          padding: const EdgeInsets.all(TpSpace.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(
+                key: const ValueKey<String>('accident.report.assetPhoto'),
+                height: 164,
+                child: photo != null
+                    ? Image.asset(
+                        photo,
+                        fit: BoxFit.contain,
+                        semanticLabel:
+                            asset.displayIdentity ?? unavailableLabel,
+                      )
+                    : Icon(vehicleFallbackIcon(asset), size: 72),
+              ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        TpIdentifierText(
+                          asset.displayIdentity ?? unavailableLabel,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        Text(_shown(asset.vehicleType, unavailableLabel)),
+                      ],
+                    ),
+                  ),
+                  TextButton(onPressed: onChange, child: Text(changeLabel)),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: TpSpace.md),
+        Text(
+          'Auto-filled from fleet master · Read-only',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: TpSpace.sm),
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final bool compact = constraints.maxWidth < 560;
@@ -332,6 +401,10 @@ class AccidentFleetMasterCard extends StatelessWidget {
               ReadOnlyAssetValue(
                 label: 'Assigned driver',
                 value: _shown(asset.operatorName, unavailableLabel),
+              ),
+              ReadOnlyAssetValue(
+                label: 'Country',
+                value: _shown(asset.country, unavailableLabel),
               ),
             ];
             if (compact) {

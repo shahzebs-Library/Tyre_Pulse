@@ -1,14 +1,16 @@
 import { spawnSync } from 'node:child_process'
 
 // Node 26 exposes an experimental global localStorage unless explicitly
-// disabled. jsdom supplies the correct per-window implementation; passing the
-// flag through NODE_OPTIONS ensures Vitest's worker processes disable Node's
-// shadowing global too (a flag on only the parent process is insufficient).
+// disabled. jsdom supplies the correct per-window implementation. Older Node
+// releases reject this flag in NODE_OPTIONS, so add it only when supported.
 const disableNodeWebStorage = '--no-experimental-webstorage'
+const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10)
 const inheritedOptions = process.env.NODE_OPTIONS?.trim() || ''
-const nodeOptions = inheritedOptions.includes(disableNodeWebStorage)
-  ? inheritedOptions
-  : `${inheritedOptions} ${disableNodeWebStorage}`.trim()
+const shouldDisableNodeWebStorage = nodeMajor >= 26
+const nodeOptions =
+  shouldDisableNodeWebStorage && !inheritedOptions.includes(disableNodeWebStorage)
+    ? `${inheritedOptions} ${disableNodeWebStorage}`.trim()
+    : inheritedOptions
 
 const result = spawnSync(
   process.execPath,

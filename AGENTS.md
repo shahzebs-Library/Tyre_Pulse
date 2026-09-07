@@ -43,7 +43,12 @@ Never combine implementations merely because similarly named files exist. Confir
 
 - Prefer one focused search and one focused edit pass.
 - Use existing tests as the behavioral contract.
-- Run the smallest relevant test first, then the required package gate.
+- Match verification to risk, not line count alone. For a tiny isolated change, run only the directly affected test, lint rule, parser, or syntax check.
+- Do not run a full repository test suite for a one-file or few-line change unless it affects shared infrastructure, dependencies, configuration, authentication, permissions, routing, database behavior, build tooling, or release output.
+- During implementation, run the smallest relevant test only. Run a broader package gate once, after the change is stable and only when its risk requires it.
+- Never rerun an unchanged failing suite. Inspect the existing failure, make a relevant change, then rerun only the failed target first.
+- Reuse a recent CI result for the same commit. Do not trigger, poll, or repeat CI merely to restate an already known result.
+- Documentation-only, comment-only, copy-only, formatting-only, and agent-rule changes require content/path validation only. Do not run application tests or builds for them.
 - Do not repeatedly run full suites while iterating.
 - Do not install or upgrade dependencies unless the task needs it.
 - Do not refactor unrelated code while fixing a bug.
@@ -52,8 +57,8 @@ Never combine implementations merely because similarly named files exist. Confir
 
 ## Verification by area
 
-- Root web: `npm run lint`, relevant Vitest target, then `npm run build`.
-- Flutter: follow `tyre_pulse_flutter/AGENTS.md`; CI must run analyze, tests, Android build, and unsigned iOS build.
+- Root web: run the relevant Vitest file or focused test first. Run full lint/build only when shared web behavior, build configuration, dependencies, or release readiness is affected.
+- Flutter: follow `tyre_pulse_flutter/AGENTS.md`. Run the affected test during iteration. Full analyze, test, Android, and iOS gates are required once for release, merge of meaningful Flutter code, shared Flutter infrastructure, dependencies, or platform configuration.
 - React Native legacy: verify only if explicitly changed.
 - Supabase: validate migrations and affected tests; never run destructive resets against shared or production data.
 - Documentation-only changes: check links, paths, and commands. Do not run application suites unless CI policy requires them.

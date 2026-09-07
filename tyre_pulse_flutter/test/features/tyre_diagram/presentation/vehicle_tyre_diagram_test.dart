@@ -453,15 +453,20 @@ void main() {
             (Widget widget) =>
                 widget is TpIdentifierText && widget.value == value,
           );
-      expect(identifier('L1 O'), findsOneWidget);
-      expect(identifier('L1 I'), findsOneWidget);
-      expect(identifier('R1 I'), findsOneWidget);
-      expect(identifier('R1 O'), findsOneWidget);
+      // The capture labels are the canonical GCC position codes -
+      // legacyPositionCode('Concrete pump', 'R1Lo') resolves through
+      // _kLegacyBase to 'LHR1-O' (Left-Hand Rear-axle-1 Outer), and the
+      // three siblings likewise: R1Li -> LHR1-I, R1Ri -> RHR1-I,
+      // R1Ro -> RHR1-O.
+      expect(identifier('LHR1-O'), findsOneWidget);
+      expect(identifier('LHR1-I'), findsOneWidget);
+      expect(identifier('RHR1-I'), findsOneWidget);
+      expect(identifier('RHR1-O'), findsOneWidget);
 
-      final Rect leftOuter = tester.getRect(identifier('L1 O'));
-      final Rect leftInner = tester.getRect(identifier('L1 I'));
-      final Rect rightInner = tester.getRect(identifier('R1 I'));
-      final Rect rightOuter = tester.getRect(identifier('R1 O'));
+      final Rect leftOuter = tester.getRect(identifier('LHR1-O'));
+      final Rect leftInner = tester.getRect(identifier('LHR1-I'));
+      final Rect rightInner = tester.getRect(identifier('RHR1-I'));
+      final Rect rightOuter = tester.getRect(identifier('RHR1-O'));
       expect((leftOuter.center.dy - leftInner.center.dy).abs(), lessThan(1));
       expect((rightInner.center.dy - rightOuter.center.dy).abs(), lessThan(1));
       expect(leftOuter.center.dx, lessThan(leftInner.center.dx));

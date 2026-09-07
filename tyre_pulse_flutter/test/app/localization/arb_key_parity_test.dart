@@ -450,10 +450,15 @@ void main() {
     // states now use locale-owned copy instead of hard-coded English.
     // 806 + 1 = 807. Checklist draft rows now use a locale-owned Resume
     // action label across all three catalogs.
-    test('en, ar and ur each carry exactly 807 translatable keys today', () {
-      expect(_translatableKeys(en).length, 807);
-      expect(_translatableKeys(ar).length, 807);
-      expect(_translatableKeys(ur).length, 807);
+    // 807 + 4 = 811. The vehicles list/detail screens added four field
+    // labels - vehiclesFieldCapacity, vehiclesFieldEngineNo,
+    // vehiclesFieldOperationalStatus, vehiclesFieldSerialNo - to all three
+    // catalogs in parity (verified directly against the committed files:
+    // en = ar = ur = 811).
+    test('en, ar and ur each carry exactly 811 translatable keys today', () {
+      expect(_translatableKeys(en).length, 811);
+      expect(_translatableKeys(ar).length, 811);
+      expect(_translatableKeys(ur).length, 811);
     });
   });
 

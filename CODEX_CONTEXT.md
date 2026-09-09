@@ -34,6 +34,7 @@ Do not treat a proposal, mock value, old branch, or stale handoff as production 
 ## Active repository state
 
 - Default branch: `main`.
+- Security remediation (2026-09-09): client/report safeguards and reproducible test gates are implemented. Supabase is Git-linked to main, so deployable functions and migrations remain unchanged to protect installed mobile clients. Reviewed backend replacements and migrations live in `supabase/security-rollout/`; its tests exercise pending code, not production. Anonymous login RPC abuse still needs a coordinated client rollout; image-size/pptxgenjs advisories and historical native signing-key rotation remain open.
 - Flutter UI, biometric login, real vehicle artwork, tyre layouts, field workflows, reports, maintenance, accidents, and approval presentation have already received substantial implementation.
 - Open PR #347 contains an asset-first Flutter checklist hub but is behind `main` and needs conflict resolution plus fresh CI.
 - Open PR #348 changes Flutter CI behavior and test artifacts; it requires GitHub Actions approval before it can be trusted or merged.

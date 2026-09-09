@@ -20,6 +20,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The web checklist icon contract uses the locked mobile Ionicons map.
+      - run: npm ci --prefix mobile --ignore-scripts
       # Lint gates the build: no-undef + react/jsx-no-undef are the two rules
       # that catch a ReferenceError a clean vite build and a green suite both
       # miss ("StudioBoundary is not defined" shipped exactly this way -
@@ -43,9 +45,6 @@ jobs:
           cache: npm
           cache-dependency-path: services/report-engine/package-lock.json
       - run: npm ci
-      # The web checklist icon contract validates against the actual mobile
-      # Ionicons glyph map, supplied by the locked mobile dependency tree.
-      - run: npm ci --prefix mobile --ignore-scripts
       - run: npm test
 
   marketing:

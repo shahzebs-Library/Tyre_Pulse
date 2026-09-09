@@ -56,14 +56,24 @@ vi.mock('../contexts/SettingsContext', () => ({
 }))
 
 // framer-motion pulls in animation timing that is irrelevant here; render plain.
-vi.mock('framer-motion', () => ({
-  motion: new Proxy({}, { get: () => (props) => {
-    const { children, ...rest } = props
-    delete rest.initial; delete rest.animate; delete rest.exit; delete rest.transition
-    return <div {...rest}>{children}</div>
-  } }),
-  AnimatePresence: ({ children }) => <>{children}</>,
-}))
+vi.mock('framer-motion', () => {
+  // Match real motion components' stable identity: a parent re-render must not
+  // remount the drawer and restart its saved-signature lookup.
+  const components = new Map()
+  return {
+    motion: new Proxy({}, { get: (_target, tag) => {
+      if (!components.has(tag)) {
+        components.set(tag, (props) => {
+          const { children, ...rest } = props
+          delete rest.initial; delete rest.animate; delete rest.exit; delete rest.transition
+          return <div {...rest}>{children}</div>
+        })
+      }
+      return components.get(tag)
+    } }),
+    AnimatePresence: ({ children }) => <>{children}</>,
+  }
+})
 
 import * as workflows from '../lib/api/workflows'
 import * as queue from '../lib/api/approvalsQueue'
@@ -122,11 +132,10 @@ const INSPECTION = {
  * Draw on the signature pad. A sign-off IS a signature, and the server refuses an
  * approval without one, so every approve path here has to go through this.
  */
-function sign() {
-  // Queried from `screen`, not from a captured dialog: the framer-motion stub
-  // returns a fresh component identity on every access, so the drawer's whole
-  // subtree is replaced on each re-render and a node captured earlier is stale.
-  const pad = screen.getByTestId('signature-capture')
+async function sign() {
+  // The dialog appears before SignatureField finishes getMySignature(). Draw
+  // only once its real pad is ready, as a user would.
+  const pad = await screen.findByTestId('signature-capture')
 
   fireEvent.mouseDown(pad, { clientX: 10, clientY: 12 })
   fireEvent.mouseMove(pad, { clientX: 60, clientY: 40 })
@@ -243,7 +252,7 @@ describe('Unified approval dashboard', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
     expect(queue.decideChecklist).not.toHaveBeenCalled()
 
-    sign()
+    await sign()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).not.toBeDisabled())
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
 
@@ -268,7 +277,7 @@ describe('Unified approval dashboard', () => {
     await screen.findByRole('dialog')
     expect(screen.getByText(/passes this sheet to the area manager/i)).toBeInTheDocument()
 
-    sign()
+    await sign()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Sign off' })).not.toBeDisabled())
     fireEvent.click(screen.getByRole('button', { name: 'Sign off' }))
     await waitFor(() => expect(screen.getByText(/goes to the area manager for final approval/i)).toBeInTheDocument())

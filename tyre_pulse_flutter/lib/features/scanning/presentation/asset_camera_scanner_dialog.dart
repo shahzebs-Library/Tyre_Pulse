@@ -119,8 +119,7 @@ class _AssetCameraScannerDialogState
                           if (error.errorCode ==
                               MobileScannerErrorCode.permissionDenied) {
                             return TpPermissionDeniedState(
-                              reason:
-                                  l10n.scannerCameraPermissionDeniedReason,
+                              reason: l10n.scannerCameraPermissionDeniedReason,
                             );
                           }
                           return TpStateView(

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'security/verify-*']
   pull_request:
 
 concurrency:
@@ -43,6 +43,9 @@ jobs:
           cache: npm
           cache-dependency-path: services/report-engine/package-lock.json
       - run: npm ci
+      # The web checklist icon contract validates against the actual mobile
+      # Ionicons glyph map, supplied by the locked mobile dependency tree.
+      - run: npm ci --prefix mobile --ignore-scripts
       - run: npm test
 
   marketing:

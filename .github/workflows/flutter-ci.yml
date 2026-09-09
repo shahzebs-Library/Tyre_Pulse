@@ -33,6 +33,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: tyre_pulse_flutter
     steps:
       - uses: actions/checkout@v4
 

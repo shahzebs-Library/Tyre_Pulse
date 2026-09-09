@@ -178,6 +178,9 @@ void main() {
         notificationCount: 3,
         settleForGolden: true,
         extraOverrides: <Override>[
+          homeHeaderClockProvider.overrideWithValue(
+            () => DateTime(2026, 8, 28, 14),
+          ),
           homePendingInspectionApprovalsProvider.overrideWith(
             (Ref ref) async => approvals,
           ),

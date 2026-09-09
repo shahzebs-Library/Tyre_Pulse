@@ -52,11 +52,13 @@ Map<String, Object?> _reading(
       'tread_depth_mm': 12,
     };
 
-InspectionApprovalItem _pendingPumpInspection() {
+InspectionApprovalItem _pendingPumpInspection({
+  String vehicleType = 'Concrete pump',
+}) {
   return InspectionApprovalItem(
     id: 'inspection-pump-1',
     assetNo: 'MP083',
-    vehicleType: 'Concrete pump',
+    vehicleType: vehicleType,
     site: 'Site A',
     inspector: 'Inspector',
     createdAt: '2026-08-28T09:00:00.000Z',
@@ -84,9 +86,12 @@ InspectionApprovalItem _pendingPumpInspection() {
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
+  String vehicleType = 'Concrete pump',
 }) async {
   final _FakeInspectionApprovalRepository repository =
-      _FakeInspectionApprovalRepository(_pendingPumpInspection());
+      _FakeInspectionApprovalRepository(
+    _pendingPumpInspection(vehicleType: vehicleType),
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -147,6 +152,32 @@ void main() {
         const <String>['R1Lo', 'R1Li', 'R1Ri', 'R1Ro'],
       );
 
+      // Axle count alone cannot identify the actual pump body. The submitted
+      // row has no make, so approval must not invent a Sany reference image.
+      expect(find.byType(VehicleMultiViewBoard), findsNothing);
+
+      // Decision controls remain part of the same review after replacing
+      // the old, smaller nested rendering.
+      await tester.scrollUntilVisible(
+        find.text('Approve'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Approve'), findsOneWidget);
+      expect(find.text('Return'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'approval shows a zoomable reference when the submitted pump identity is known',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(900, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpScreen(tester, vehicleType: 'Sany concrete pump');
+
       // The reference follows the tyre board in a lazy ListView. Reveal it
       // before asserting its presence, just as a reviewer scrolls to it.
       await tester.scrollUntilVisible(
@@ -161,7 +192,7 @@ void main() {
         find.byType(VehicleMultiViewBoard),
       );
       expect(reference.assetNo, 'MP083');
-      expect(reference.vehicleType, 'Concrete pump');
+      expect(reference.vehicleType, 'Sany concrete pump');
       expect(reference.model, '5 axle');
 
       final InkWell zoomAction = tester.widget<InkWell>(
@@ -179,15 +210,7 @@ void main() {
       ).pop();
       await tester.pump();
 
-      // Decision controls remain part of the same review after replacing
-      // the old, smaller nested rendering.
-      await tester.scrollUntilVisible(
-        find.text('Approve'),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.text('Approve'), findsOneWidget);
-      expect(find.text('Return'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 

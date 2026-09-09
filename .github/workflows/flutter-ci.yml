@@ -27,7 +27,12 @@ defaults:
 jobs:
   analyze_test:
     name: Analyze and test
-    runs-on: ubuntu-latest
+    # Golden images were authored on Windows. Keep exact pixel assertions on
+    # that renderer; Linux and macOS still compile the Android/iOS applications.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 

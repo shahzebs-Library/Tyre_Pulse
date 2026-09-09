@@ -16,7 +16,12 @@ export async function fetchCostCenterRecords({ country, dateFrom, dateTo } = {})
       q = q.eq('country', country)
     }
     if (dateFrom) q = q.gte('created_at', dateFrom)
-    if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
+    if (dateTo) {
+      // The selected end day includes subsecond timestamps up to midnight.
+      const exclusiveEnd = new Date(dateTo + 'T00:00:00Z')
+      exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1)
+      q = q.lt('created_at', exclusiveEnd.toISOString())
+    }
 
     return q.order('created_at', { ascending: false }).range(from, to)
   }, { max: TYRE_ROW_CEILING })

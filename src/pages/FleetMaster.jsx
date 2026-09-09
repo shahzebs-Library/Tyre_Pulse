@@ -8,7 +8,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
-import { sanitizeSearchTerm } from '../lib/searchFilter'
 import { canAddResource } from '../lib/api/billing'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
@@ -110,10 +109,20 @@ export default function FleetMaster() {
     search: '', site: '', status: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
   })
   const search = filters.search
-  const siteFilter = filters.site
+  const [filterCountry, setFilterCountry] = useState(activeCountry)
+  const countryChanged = filterCountry !== activeCountry
+  const siteFilter = countryChanged ? '' : filters.site
   const statusFilter = filters.status
   // The URL carries a human-readable 1-based page; the query is 0-based.
-  const page = Math.max(0, (Number(filters.page) || 1) - 1)
+  const requestedPage = Number(filters.page)
+  const page = !countryChanged && Number.isSafeInteger(requestedPage) && requestedPage > 0
+    ? requestedPage - 1
+    : 0
+  useEffect(() => {
+    if (!countryChanged) return
+    setFilters({ site: '', page: '1' })
+    setFilterCountry(activeCountry)
+  }, [activeCountry, countryChanged, setFilters])
   // Clamped to the sizes the table itself offers. The value now comes from the
   // URL, and an arbitrary one would widen the server range this read is bounded
   // by - a hand-typed `?size=100000` must not become a bigger query.
@@ -156,16 +165,23 @@ export default function FleetMaster() {
 
   // ── tab ──────────────────────────────────────────────────────────────────────
   // ── load ─────────────────────────────────────────────────────────────────────
+  const sitesRequestRef = useRef(0)
   const loadSites = useCallback(async () => {
+    const requestId = ++sitesRequestRef.current
+    setSites([])
     try {
       const siteList = await assets.listSites({ country: activeCountry })
-      setSites(siteList)
+      if (requestId === sitesRequestRef.current) setSites(siteList)
     } catch (e) {
       console.error(e)
     }
   }, [activeCountry])
 
-  useEffect(() => { loadSites() }, [loadSites])
+  const invalidateSiteRequests = useCallback(() => { sitesRequestRef.current++ }, [])
+  useEffect(() => {
+    loadSites()
+    return invalidateSiteRequests
+  }, [loadSites, invalidateSiteRequests])
   // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
   // The page reset only fires when the term actually changed, so arriving on a
   // restored URL (`?search=TM&page=3`) keeps its page instead of snapping to 1.
@@ -177,6 +193,7 @@ export default function FleetMaster() {
   const loadRecords = useCallback(async () => {
     const myReq = ++reqIdRef.current
     setLoading(true)
+    if (search !== debouncedSearch) return
     try {
       const { data, count } = await assets.listFleetRecords({
         page,
@@ -198,16 +215,25 @@ export default function FleetMaster() {
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
-  }, [page, pageSize, debouncedSearch, siteFilter, statusFilter, activeCountry])
+  }, [page, pageSize, search, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
-  useEffect(() => { loadRecords() }, [loadRecords])
+  const invalidateRecordRequests = useCallback(() => { reqIdRef.current++ }, [])
+  useEffect(() => {
+    loadRecords()
+    return invalidateRecordRequests
+  }, [loadRecords, invalidateRecordRequests])
 
   const totalPages = Math.ceil(total / pageSize)
 
   // ── summary cards ─────────────────────────────────────────────────────────────
-  const [summary, setSummary] = useState({ total: 0, active: 0, missingSpecs: 0, noPolicy: 0 })
+  const [summary, setSummary] = useState(null)
+  const summaryPending = countryChanged || search !== debouncedSearch || !summary
 
   useEffect(() => {
+    let cancelled = false
+    setSummary(null)
+    setSummaryCapped(false)
+    if (search !== debouncedSearch) return () => { cancelled = true }
     async function loadSummary() {
       try {
         const sumData = await assets.getFleetSummary({
@@ -215,6 +241,7 @@ export default function FleetMaster() {
           search: debouncedSearch,
           site: siteFilter
         })
+        if (cancelled) return
         setSummaryCapped(sumData.truncated)
         setSummary({
           total:        sumData.total,
@@ -227,7 +254,8 @@ export default function FleetMaster() {
       }
     }
     loadSummary()
-  }, [activeCountry, debouncedSearch, siteFilter, records])
+    return () => { cancelled = true }
+  }, [activeCountry, search, debouncedSearch, siteFilter, records])
 
   // ── add / edit ────────────────────────────────────────────────────────────────
   async function openAdd() {
@@ -523,18 +551,18 @@ export default function FleetMaster() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: t('fleetmaster.summary.totalVehicles'), value: summary.total,        color: 'text-blue-400' },
-          { label: t('fleetmaster.summary.active'),        value: summary.active,       color: 'text-green-400' },
-          { label: t('fleetmaster.summary.missingSpecs'),  value: summary.missingSpecs, color: 'text-yellow-400' },
-          { label: t('fleetmaster.summary.noPolicySet'),   value: summary.noPolicy,     color: 'text-orange-400' },
+          { label: t('fleetmaster.summary.totalVehicles'), value: summary?.total,        color: 'text-blue-400' },
+          { label: t('fleetmaster.summary.active'),        value: summary?.active,       color: 'text-green-400' },
+          { label: t('fleetmaster.summary.missingSpecs'),  value: summary?.missingSpecs, color: 'text-yellow-400' },
+          { label: t('fleetmaster.summary.noPolicySet'),   value: summary?.noPolicy,     color: 'text-orange-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card text-center">
-            <p className={`text-2xl font-bold ${color}`}>{value.toLocaleString()}</p>
+            <p className={`text-2xl font-bold ${color}`}>{summaryPending ? '—' : value.toLocaleString()}</p>
             <p className="text-gray-400 text-sm mt-1">{label}</p>
           </div>
         ))}
       </div>
-      {(debouncedSearch || siteFilter || statusFilter) && (
+      {!summaryPending && (debouncedSearch || siteFilter || statusFilter) && (
         <p className="text-xs text-gray-400">
           These figures cover the {summary.total.toLocaleString()} vehicle{summary.total === 1 ? '' : 's'} matching your search and site filters. The status filter is held out, so Active stays comparable against the total.
         </p>
@@ -600,7 +628,7 @@ export default function FleetMaster() {
           <EnterpriseTable
             reportMeta={reportMeta}
             columns={tableColumns}
-            data={records}
+            data={loading ? [] : records}
             getRowId={r => String(r.id)}
             loading={loading}
             emptyMessage={t('fleetmaster.table.noVehicles')}

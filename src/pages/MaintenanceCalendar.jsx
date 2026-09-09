@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { calendarDateKey as toDateStr, adjacentCalendarDate } from '../lib/calendarDate'
 import { toUserMessage } from '../lib/safeError'
 import { listPmPrograms } from '../lib/api/pmPrograms'
 import { pmDueStatus } from '../lib/pmPrograms'
@@ -53,13 +54,6 @@ const PRIORITY_BADGE = {
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
-function toDateStr(d) {
-  if (!d) return null
-  const dt = new Date(d)
-  if (isNaN(dt.getTime())) return null
-  return dt.toISOString().slice(0, 10)
-}
-
 function addDays(date, n) {
   const d = new Date(date)
   d.setDate(d.getDate() + n)
@@ -385,23 +379,13 @@ export default function MaintenanceCalendar() {
 
   // ── Navigation ───────────────────────────────────────────────────────────────
   function navPrev() {
-    setCurrentDate(prev => {
-      const d = new Date(prev)
-      if (view === 'month') d.setMonth(d.getMonth() - 1)
-      else if (view === 'week') d.setDate(d.getDate() - 7)
-      else d.setDate(d.getDate() - 1)
-      return d
-    })
+    setCurrentDate(prev => adjacentCalendarDate(prev, selectedDay, view, -1))
+    setSelectedDay(null)
   }
 
   function navNext() {
-    setCurrentDate(prev => {
-      const d = new Date(prev)
-      if (view === 'month') d.setMonth(d.getMonth() + 1)
-      else if (view === 'week') d.setDate(d.getDate() + 7)
-      else d.setDate(d.getDate() + 1)
-      return d
-    })
+    setCurrentDate(prev => adjacentCalendarDate(prev, selectedDay, view, 1))
+    setSelectedDay(null)
   }
 
   function goToday() {

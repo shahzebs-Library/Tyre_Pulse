@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useFilterState } from '../hooks/useFilterState'
+import useInspectionRegister from '../hooks/useInspectionRegister'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
@@ -818,18 +819,31 @@ export default function Inspections() {
     || APPROVER_ROLES.includes(profile?.role)
     || hasCapability?.('inspections', 'approve'),
   )
-  const [rows, setRows]         = useState([])
+  const { rows: inspectionRows, loading, error: loadError, reload: load } = useInspectionRegister({
+    country: activeCountry,
+    actorId: profile?.id,
+    role: profile?.role,
+    createdBy: profile?.role === 'Tyre Man' && profile?.id ? profile.id : undefined,
+    enabled: !authLoading,
+  })
+  const rows = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    return inspectionRows.map(r => ({
+      ...r,
+      inspection_type: resolveRecordType(r),
+      status: r.status !== 'Done' && r.status !== 'Cancelled' && r.scheduled_date < today
+        ? 'Overdue' : r.status,
+    }))
+  }, [inspectionRows])
   // Multi-select bulk delete (Admin only)
   const [selectedIds, setSelectedIds]     = useState(() => new Set())
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
   const [summaryOpen, setSummaryOpen]     = useState(false)
   const [bulkError, setBulkError]         = useState('')
   const [bulkBusy, setBulkBusy]           = useState(false)
-  const [loading, setLoading]   = useState(true)
   // A read that FAILED and a register that is genuinely empty are opposite facts.
   // fetchAllPages' error used to be discarded, so a permission or network failure
   // rendered as 0 inspections with every tile confidently reading 0.
-  const [loadError, setLoadError] = useState(null)
   const [form, setForm]         = useState(null)
   // Approval-engine lock for the record open in the edit modal. Set from
   // <EntityApprovalPanel/> onStateChange; while true the record is mid-approval
@@ -1157,33 +1171,6 @@ export default function Inspections() {
     if (name) setClInspector(current => current || name)
   }, [profile])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setLoadError(null)
-    // Paginate past the 1000-row cap so the list AND its exports are complete.
-    const { data, error } = await fetchAllPages((from, to) =>
-      inspectionsApi.listInspectionsForPage({
-        from,
-        to,
-        country: activeCountry,
-        createdBy: profile?.role === 'Tyre Man' && profile?.id ? profile.id : undefined,
-      }), { max: 100000 })
-    const today = new Date().toISOString().split('T')[0]
-    const enriched = (data || []).map(r => ({
-      ...r,
-      // Restore the display type (observation/training) stored alongside the
-      // CHECK-valid inspection_type. Legacy rows fall back to inspection_type.
-      inspection_type: resolveRecordType(r),
-      status: r.status !== 'Done' && r.status !== 'Cancelled' && r.scheduled_date < today
-        ? 'Overdue' : r.status,
-    }))
-    setRows(enriched)
-    // Partial data is still shown - it is real - but the page must say the count
-    // is not the whole picture rather than presenting a short read as a measurement.
-    setLoadError(error ? toUserMessage(error, 'Could not load every inspection.') : null)
-    setLoading(false)
-  }, [activeCountry, profile?.id, profile?.role])
-
   // Best-effort: the register must still open when the site list cannot be
   // read. With no sites the region control simply does not render, rather than
   // offering a filter that can never match anything.
@@ -1195,11 +1182,6 @@ export default function Inspections() {
       .catch(() => { if (!cancelled) setSiteRows([]) })
     return () => { cancelled = true }
   }, [activeCountry, authLoading])
-
-  useEffect(() => {
-    if (authLoading) return
-    load()
-  }, [authLoading, load])
 
   // Best-effort running-life fetch (never blocks the page): builds the
   // per-asset tyre-due flag map used by the slides, row chips and banners.

@@ -166,7 +166,10 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     // narrowed by the same filters as the register - so the assertion follows
     // the query to where it actually lives instead of pinning a shape that was
     // refactored. Asserting on the page ALONE would have gone quietly vacuous.
-    const summary = s.slice(s.indexOf('async function loadSummary()'), s.indexOf('loadSummary() }, ['))
+    const summaryStart = s.indexOf('async function loadSummary()')
+    const summaryEnd = s.indexOf('}, [activeCountry, search, debouncedSearch, siteFilter, records])', summaryStart)
+    expect(summaryEnd).toBeGreaterThan(summaryStart)
+    const summary = s.slice(summaryStart, summaryEnd)
     must(summary, 'assets.getFleetSummary(', 'The summary read must go through the fleet summary service')
     must(summary, 'country: activeCountry', 'The summary read is the one that used to apply the country alone')
     must(summary, 'search: debouncedSearch', 'The summary must be narrowed by the search box, not just the country')
@@ -187,7 +190,7 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     mustNot(fleetSummary, "q.eq('status'", 'dimension, so applying it would make Total equal Active')
 
     // The effect re-runs when those filters move.
-    must(s, '}, [activeCountry, debouncedSearch, siteFilter, records])', 'The effect re-runs when those filters move')
+    must(s, '}, [activeCountry, search, debouncedSearch, siteFilter, records])', 'The effect re-runs when those filters move')
 
     // RULE 2.
     must(s, 'These figures cover the {summary.total.toLocaleString()} vehicle', 'RULE 2')

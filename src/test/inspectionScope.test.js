@@ -70,6 +70,11 @@ describe('inspectionMatchesFilters', () => {
     expect(out.map(r => r.id)).toEqual([1, 5])
   })
 
+  it('matches a pasted asset number with surrounding whitespace', () => {
+    expect(scopeInspections(rows, { search: '  tm001  ' }).map(r => r.id)).toEqual([1])
+    expect(scopeInspections(rows, { search: '   ' })).toHaveLength(rows.length)
+  })
+
   it('EXCLUDES a site the register cannot place, rather than sweeping it into the chosen region', () => {
     const out = scopeInspections(rows, { ...ALL, region: 'CENTRAL' }, { regionOf })
     expect(out.map(r => r.id)).toEqual([1, 2, 4, 5])
@@ -257,7 +262,7 @@ describe('Inspections.jsx wires the tiles to the filtered rows', () => {
     // "We could not look" and "there is nothing" are opposite facts.
     expect(src).toMatch(/const unreadable = !!loadError/)
     expect(src).toMatch(/const num = \(v\) => \(unreadable \? null : v\)/)
-    expect(src).toMatch(/setLoadError/)
+    expect(src).toMatch(/error: loadError, reload: load } = useInspectionRegister/)
   })
 })
 

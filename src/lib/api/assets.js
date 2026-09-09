@@ -142,20 +142,30 @@ export async function getAssetByNo(assetNo, country) {
   return row
 }
 
+// Quoted, literal case-insensitive substring search. imatch avoids PostgREST's
+// special '*' alias for LIKE wildcards; escaping regex metacharacters keeps
+// typed asset numbers and make/model punctuation literal too.
+function applyFleetSearch(query, search) {
+  const term = String(search ?? '').trim()
+  if (!term) return query
+  const pattern = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const quoted = JSON.stringify(pattern)
+  return query.or(['asset_no', 'fleet_number', 'make', 'model']
+    .map(column => `${column}.imatch.${quoted}`).join(','))
+}
+
 export async function listFleetRecords({ page, pageSize, search, site, status, country } = {}) {
   let q = supabase
     .from('vehicle_fleet')
     .select('*', { count: 'exact' })
     .order('asset_no', { ascending: true })
+    .order('id', { ascending: true })
 
   if (page != null && pageSize != null) {
     q = q.range(page * pageSize, (page + 1) * pageSize - 1)
   }
 
-  if (search) {
-    const s = String(search).trim().replace(/[%_]/g, '\\$&')
-    q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`)
-  }
+  if (search) q = applyFleetSearch(q, search)
   if (site) q = q.eq('site', site)
   if (status) q = q.eq('status', status)
   q = applyCountry(q, country)
@@ -188,10 +198,7 @@ export async function getFleetSummary({ country, search, site } = {}) {
       .order('asset_no')
       .order('id')
       .range(from, to)
-    if (search) {
-      const s = String(search).trim().replace(/[%_]/g, '\\$&')
-      q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`)
-    }
+    if (search) q = applyFleetSearch(q, search)
     if (site) q = q.eq('site', site)
     q = applyCountry(q, country)
     return q
@@ -255,10 +262,7 @@ export async function fetchAllFleetRecords({ search, site, status, country } = {
       .order('asset_no')
       .order('id')
       .range(from, to)
-    if (search) {
-      const s = String(search).trim().replace(/[%_]/g, '\\$&')
-      q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`)
-    }
+    if (search) q = applyFleetSearch(q, search)
     if (site) q = q.eq('site', site)
     if (status) q = q.eq('status', status)
     q = applyCountry(q, country)

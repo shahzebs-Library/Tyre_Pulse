@@ -476,8 +476,8 @@ export function inspectionMatchesFilters(row, filters = {}, { regionOf = null } 
     if (from && d < from) return false
     if (to && d > to) return false
   }
-  if (search) {
-    const q = String(search).toLowerCase()
+  const q = String(search || '').trim().toLowerCase()
+  if (q) {
     const hit = SEARCH_FIELDS.some((f) => {
       const v = row[f]
       return typeof v === 'string' && v.toLowerCase().includes(q)

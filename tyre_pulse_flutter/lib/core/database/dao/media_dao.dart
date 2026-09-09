@@ -64,13 +64,24 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
   /// it is reported instead of retried into the same crash loop.
   Future<List<PendingMediaUpload>> claimNextUploads({
     int limit = uploadConcurrency,
+    String? workspaceId,
+    String? createdBy,
   }) async {
     return transaction(() async {
+      final commands = attachedDatabase.pendingCommands;
+      final owners = selectOnly(commands)..addColumns([commands.id]);
+      if (workspaceId != null) {
+        owners.where(commands.workspaceId.equals(workspaceId));
+      }
+      if (createdBy != null) {
+        owners.where(commands.createdBy.equals(createdBy));
+      }
       final due = await (select(pendingMediaUploads)
             ..where(
               (t) =>
                   t.state.equals(MediaUploadState.queued) &
-                  t.attempts.isSmallerThanValue(maxUploadAttempts),
+                  t.attempts.isSmallerThanValue(maxUploadAttempts) &
+                  t.commandId.isInQuery(owners),
             )
             ..orderBy([
               (t) => OrderingTerm.asc(t.capturedAt),

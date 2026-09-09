@@ -5,16 +5,26 @@ import { PageFrame } from "@/components/PageFrame";
 
 export default function ContactPage() {
   const [status, setStatus] = useState<string>("");
+  const [sending, setSending] = useState(false);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (sending) return;
+    const formElement = e.currentTarget;
+    setSending(true);
     setStatus("Sending…");
-    const form = new FormData(e.currentTarget);
+    const form = new FormData(formElement);
     const payload = Object.fromEntries(form.entries());
-    const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await res.json();
-    setStatus(data.message || (res.ok ? "Request received." : "Unable to send the request."));
-    if (res.ok) e.currentTarget.reset();
+    try {
+      const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      setStatus(data.message || (res.ok ? "Request received." : "Unable to send the request."));
+      if (res.ok) formElement.reset();
+    } catch {
+      setStatus("Unable to send the request. Please try again.");
+    } finally {
+      setSending(false);
+    }
   }
 
   return <PageFrame>
@@ -29,7 +39,7 @@ export default function ContactPage() {
         <div className="field"><label htmlFor="industry">Industry</label><select id="industry" name="industry" defaultValue=""><option value="" disabled>Select industry</option><option>Construction</option><option>Transport & Logistics</option><option>Ready-Mix Concrete</option><option>Heavy Equipment Rental</option><option>Workshop / Service Centre</option><option>Other</option></select></div>
         <div className="field full"><label htmlFor="message">What do you want to improve?</label><textarea id="message" name="message" placeholder="Tyre cost, inspections, workshops, approvals, reports, multi-country control…" /></div>
         <div className="field full" aria-hidden="true" style={{ position: "absolute", left: -10000 }}><label htmlFor="website">Website</label><input id="website" name="website" tabIndex={-1} autoComplete="off" /></div>
-        <div className="field full"><button className="btn btn-primary" type="submit">Request a tailored demo</button><p className="form-note">Your information is used only to respond to this request.</p><p aria-live="polite">{status}</p></div>
+        <div className="field full"><button className="btn btn-primary" type="submit" disabled={sending}>Request a tailored demo</button><p className="form-note">Your information is used only to respond to this request.</p><p aria-live="polite">{status}</p></div>
       </form>
     </div></div></section>
   </PageFrame>;

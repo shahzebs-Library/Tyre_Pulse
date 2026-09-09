@@ -1185,7 +1185,7 @@ class _SubmittedEvidencePreview extends ConsumerWidget {
     }
 
     final Uri? uri = Uri.tryParse(reference);
-    if (PrivateStorageReference.tryParse(reference) != null) {
+    if (needsPrivateStorageResolution(reference)) {
       final AsyncValue<String> resolved =
           ref.watch(inspectionApprovalEvidenceUrlProvider(reference));
       return resolved.when(

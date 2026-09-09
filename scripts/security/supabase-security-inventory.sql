@@ -36,7 +36,11 @@ from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 where c.relkind = 'v'
   and n.nspname in ('public', 'storage', 'graphql_public')
-  and not coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=true']
+  and not exists (
+    select 1 from pg_options_to_table(c.reloptions) as options
+    where options.option_name = 'security_invoker'
+      and options.option_value::boolean
+  )
 order by 1, 2;
 
 -- 5. SECURITY DEFINER functions, pinned search_path, owner, and effective

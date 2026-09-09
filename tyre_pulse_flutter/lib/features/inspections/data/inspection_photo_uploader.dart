@@ -1,5 +1,5 @@
 /// Uploads a locally captured tyre-position photo to Supabase Storage and
-/// returns its permanent public URL.
+/// returns its durable private-storage reference.
 ///
 /// Path convention and bucket name (`tyre-photos`,
 /// `inspections/<id>/<position>_<timestamp>.<ext>`) are transcribed
@@ -24,7 +24,7 @@ const String inspectionPhotoBucket = 'tyre-photos';
 
 abstract interface class InspectionPhotoUploader {
   /// Uploads the file at [localPath], for inspection [inspectionId] and
-  /// tyre [position], and returns the permanent public URL. Throws
+  /// tyre [position], and returns a durable private-storage reference. Throws
   /// [SupabaseFailure] on any failure.
   Future<String> upload({
     required String localPath,
@@ -60,7 +60,7 @@ final class SupabaseInspectionPhotoUploader
           .from(inspectionPhotoBucket)
           .upload(path, file, fileOptions: const FileOptions(upsert: true));
 
-      return _client.storage.from(inspectionPhotoBucket).getPublicUrl(path);
+      return 'tp-storage://$inspectionPhotoBucket/$path';
     });
   }
 

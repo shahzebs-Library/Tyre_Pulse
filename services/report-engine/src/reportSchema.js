@@ -33,7 +33,7 @@ export const reportBranding = z.object({
   primary_color: z.string().optional(),
   accent_color: z.string().optional(),
   logo_url: z.string().url().optional(),
-  logo_data: z.string().optional(), // data URL alternative to a fetchable URL
+  logo_data: z.string().regex(/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/, 'logo_data must be a raster image data URL').optional(),
   footer_text: z.string().optional(),
 }).partial()
 

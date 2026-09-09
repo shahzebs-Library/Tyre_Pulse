@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useSyncExternalStore } from 'react'
 
 // Core namespaces are imported statically (never lazily) because every module
 // in the app's synchronous startup graph can render before any lazy chunk
@@ -93,7 +93,10 @@ const isLoaded = (lang, ns) => Boolean(DICTS[lang] && Object.prototype.hasOwnPro
 // Mounted providers re-render when a namespace lands. A module-level listener
 // set is used because translate() is also callable outside a provider.
 const listeners = new Set()
-const notify = () => { for (const fn of listeners) fn() }
+let dictionaryVersion = 0
+const notify = () => { dictionaryVersion++; for (const fn of listeners) fn() }
+const subscribeDictionaries = (fn) => { listeners.add(fn); return () => listeners.delete(fn) }
+const getDictionaryVersion = () => dictionaryVersion
 
 const inFlight = new Map()
 
@@ -194,17 +197,14 @@ export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(detectInitial)
   // Bumped when a lazily-loaded namespace arrives, so `t` is recreated and the
   // tree re-renders with the real strings instead of the fallback.
-  const [dictVersion, setDictVersion] = useState(0)
+  const dictVersion = useSyncExternalStore(subscribeDictionaries, getDictionaryVersion, getDictionaryVersion)
 
   const isRTL = RTL_LANGS.has(language)
 
   // Re-render this provider whenever any namespace resolves, including ones
   // requested from inside translate() during a child's render.
-  useEffect(() => {
-    const onLoad = () => setDictVersion((v) => v + 1)
-    listeners.add(onLoad)
-    return () => { listeners.delete(onLoad) }
-  }, [])
+  // useSyncExternalStore also rechecks changes between render and subscription;
+  // a fast lazy import cannot leave a newly mounted provider on its fallback.
 
   // Warm the rest of the dictionary after mount. English is deferred to idle
   // time because nothing on screen is waiting for it; a non-English language is

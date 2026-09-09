@@ -55,20 +55,24 @@ typedef PrivateStorageUrlSigner = Future<String> Function(
 /// uses [PrivateStorageReferenceResolver.supabase], which delegates to the
 /// application's one authenticated [SupabaseClient].
 final class PrivateStorageReferenceResolver with SupabaseGateway {
-  const PrivateStorageReferenceResolver(this._sign);
+  const PrivateStorageReferenceResolver(this._sign, {this.storageOrigin});
 
   factory PrivateStorageReferenceResolver.supabase(SupabaseClient client) {
     return PrivateStorageReferenceResolver(
       (String bucket, String path, int expiresIn) =>
           client.storage.from(bucket).createSignedUrl(path, expiresIn),
+      storageOrigin:
+          Uri.parse(client.storage.from('tyre-photos').getPublicUrl('')),
     );
   }
 
   final PrivateStorageUrlSigner _sign;
+  final Uri? storageOrigin;
 
   Future<String> resolve(String value) async {
     final PrivateStorageReference? reference =
-        PrivateStorageReference.tryParse(value);
+        PrivateStorageReference.tryParse(value) ??
+            _legacyInspectionReference(value);
     if (reference == null) {
       throw const FormatException('Invalid private storage reference.');
     }
@@ -80,4 +84,31 @@ final class PrivateStorageReferenceResolver with SupabaseGateway {
       ),
     );
   }
+
+  PrivateStorageReference? _legacyInspectionReference(String value) {
+    final uri = Uri.tryParse(value);
+    final origin = storageOrigin;
+    const prefix = '/storage/v1/object/public/tyre-photos/';
+    if (uri == null ||
+        origin == null ||
+        (uri.scheme != 'https' && uri.scheme != 'http') ||
+        !uri.hasAuthority ||
+        uri.origin != origin.origin ||
+        !uri.path.startsWith(prefix) ||
+        uri.path.length == prefix.length) {
+      return null;
+    }
+    return PrivateStorageReference.tryParse(
+      'tp-storage://tyre-photos/${Uri.decodeComponent(uri.path.substring(prefix.length))}',
+    );
+  }
 }
+
+/// Old clients persisted public URLs for this now-private bucket. Only the
+/// configured backend's origin will actually be accepted by the resolver.
+bool needsPrivateStorageResolution(String value) =>
+    value.startsWith(privateStorageReferencePrefix) ||
+    (Uri.tryParse(value)?.path.startsWith(
+              '/storage/v1/object/public/tyre-photos/',
+            ) ??
+        false);

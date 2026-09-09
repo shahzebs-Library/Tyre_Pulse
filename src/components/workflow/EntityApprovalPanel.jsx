@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { ShieldCheck, Play, Loader2, Lock } from 'lucide-react'
 import { useEntityWorkflow } from '../../hooks/useEntityWorkflow'
 import ApprovalStatusBadge from './ApprovalStatusBadge'
@@ -36,8 +36,10 @@ export default function EntityApprovalPanel({
   // Surface state to the parent so it can lock its form — in an effect (never
   // during render). A ref keeps an inline onStateChange out of the deps.
   const onStateChangeRef = useRef(onStateChange)
-  useEffect(() => { onStateChangeRef.current = onStateChange })
-  useEffect(() => {
+  useLayoutEffect(() => { onStateChangeRef.current = onStateChange })
+  // Propagate the edit lock before paint, including when data resolves during
+  // a busy render. A passive effect can briefly expose an enabled mutation.
+  useLayoutEffect(() => {
     onStateChangeRef.current?.({ isActive: wf.isActive, isLocked: wf.isLocked, status: wf.status })
   }, [wf.isActive, wf.isLocked, wf.status])
 

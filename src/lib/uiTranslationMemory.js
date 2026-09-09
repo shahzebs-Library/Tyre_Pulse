@@ -55,12 +55,23 @@ export function translateLegacyText(value) {
 
 function localiseTextNode(node, enabled) {
   let saved = originals.get(node)
-  if (!saved || (enabled && node.nodeValue !== saved.last)) {
-    saved = { original: node.nodeValue, last: node.nodeValue }
-    originals.set(node, saved)
+  if (!enabled) {
+    // React may already have committed a new value. Only undo a value this
+    // bridge still owns; restoring an older render would clobber t().
+    if (saved && node.nodeValue === saved.last) node.nodeValue = saved.original
+    originals.delete(node)
+    return
   }
-  const next = enabled ? translateLegacyText(saved.original) : saved.original
+  if (!saved || node.nodeValue !== saved.last) {
+    saved = { original: node.nodeValue, last: node.nodeValue }
+  }
+  const next = translateLegacyText(saved.original)
+  if (next === saved.original) {
+    originals.delete(node)
+    return
+  }
   saved.last = next
+  originals.set(node, saved)
   if (node.nodeValue !== next) node.nodeValue = next
 }
 
@@ -74,12 +85,21 @@ function localiseElement(element, enabled) {
     }
     const current = element.getAttribute(attr)
     let saved = records[attr]
-    if (!saved || (enabled && current !== saved.last)) {
-      saved = { original: current, last: current }
-      records[attr] = saved
+    if (!enabled) {
+      if (saved && current === saved.last) element.setAttribute(attr, saved.original)
+      delete records[attr]
+      continue
     }
-    const next = enabled ? translateLegacyText(saved.original) : saved.original
+    if (!saved || current !== saved.last) {
+      saved = { original: current, last: current }
+    }
+    const next = translateLegacyText(saved.original)
+    if (next === saved.original) {
+      delete records[attr]
+      continue
+    }
     saved.last = next
+    records[attr] = saved
     if (element.getAttribute(attr) !== next) element.setAttribute(attr, next)
   }
 }

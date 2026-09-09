@@ -18,6 +18,8 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart'
     show PhotoCaptureSource;
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
@@ -583,17 +585,40 @@ class _ConditionChip extends StatelessWidget {
   }
 }
 
-class _PhotoPreview extends StatelessWidget {
+class _PhotoPreview extends ConsumerWidget {
   const _PhotoPreview({required this.reading, required this.onRemove});
 
   final TyrePositionReading reading;
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final TpPalette palette = TpPalette.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? url = reading.photoUrl;
+    String? url = reading.photoUrl;
+    if (url != null && needsPrivateStorageResolution(url)) {
+      final String reference = url;
+      final resolved = ref.watch(privateStorageImageUrlProvider(reference));
+      if (resolved.isLoading) return const CircularProgressIndicator();
+      if (resolved.hasError) {
+        return Row(
+          children: <Widget>[
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: l10n.actionRetry,
+              onPressed: () =>
+                  ref.invalidate(privateStorageImageUrlProvider(reference)),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: l10n.actionCancel,
+              onPressed: onRemove,
+            ),
+          ],
+        );
+      }
+      url = resolved.value;
+    }
     final String? local = reading.photoLocalPath;
     final ImageProvider? provider = url != null
         ? NetworkImage(url)

@@ -400,8 +400,8 @@ void main() {
     );
 
     test(
-        'a photo that fails to upload keeps its local path and does not '
-        'block the rest of the submission from delivering', () async {
+        'a failed photo upload retains the draft and queue until retry '
+        'confirms evidence delivery', () async {
       uploader.shouldFail = true;
       draftRepo.readingsByDraft['draft-1'] = <String, TyrePositionReading>{
         'LHF1': const TyrePositionReading(
@@ -425,10 +425,15 @@ void main() {
         clientUuid: 'c-1',
       );
 
-      // The row still reaches the server even though its one photo could
-      // not upload - the observation is not discarded for want of a
-      // picture.
-      expect(result.outcome, InspectionSubmitOutcome.deliveredNow);
+      expect(result.outcome, isNot(InspectionSubmitOutcome.deliveredNow));
+      expect(draftRepo.discardCalls, isEmpty);
+      expect(await queue.byId('c-1'), isNotNull);
+      expect(remote.upsertedClientUuids, isEmpty);
+
+      uploader.shouldFail = false;
+      await engine.flushQueue();
+      expect(draftRepo.discardCalls, <String>['draft-1']);
+      expect(await queue.byId('c-1'), isNull);
     });
 
     test('a position that already has photoUrl is never re-uploaded', () async {

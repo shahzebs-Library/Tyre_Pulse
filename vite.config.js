@@ -1,12 +1,15 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { assertPublicEnv } from './src/lib/publicEnvSecurity.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  assertPublicEnv(loadEnv(mode, process.cwd(), 'VITE_'))
+  return {
   plugins: [
     react(),
     VitePWA({
@@ -265,7 +268,7 @@ export default defineConfig({
     // mobile tests use jest.mock to stub react-native at the module boundary,
     // which vitest does not honour, so collecting them here fails on parsing
     // react-native itself. They are NOT skipped: the mobile CI job runs them.
-    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**', '**/mobile/**'],
+    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**', '**/services/**', '**/mobile/**', '**/marketing/**', '**/supabase/tests/**'],
     // Hermetic test env: modules that construct the Supabase client at import
     // time (src/lib/supabase.js) need the two public vars present. These are
     // dummy placeholders — no real project is contacted in unit tests. Only
@@ -284,4 +287,5 @@ export default defineConfig({
       { find: /.*\/agent-toolset\/skills\.mjs$/,  replacement: path.resolve(__dirname, 'src/stubs/empty.js') },
     ],
   },
+  }
 })

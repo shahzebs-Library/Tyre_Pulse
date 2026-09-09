@@ -98,7 +98,32 @@ jobs:
         run: flutter analyze --fatal-infos
 
       - name: Test
-        run: flutter test --coverage
+        # Focused recovery gate while inspecting the failed visual contracts.
+        # Restore the full suite after the retained image diffs are reviewed.
+        run: >-
+          flutter test --coverage
+          test/app/localization/arb_key_parity_test.dart
+          test/features/home/presentation/home_screen_test.dart
+          test/features/workshop/workshop_compact_screen_test.dart
+          test/features/inspections/presentation/new_inspection_root_responsive_test.dart
+          test/features/preventive_maintenance/presentation/pm_compact_screen_test.dart
+          test/features/alerts/presentation/alerts_screen_test.dart
+          test/features/checklists/presentation/checklist_fill_screen_test.dart
+          test/features/tasks/presentation/tasks_screen_test.dart
+          test/features/auth/presentation/login_screen_test.dart
+          test/features/approvals/presentation/inspection_approval_diagram_reuse_test.dart
+          test/features/management/presentation/management_compact_screen_test.dart
+          test/features/assets/presentation/vehicle_detail_screen_test.dart
+          test/features/accidents/accident_mock_screens_test.dart
+          test/features/accidents/accident_dashboard_screen_test.dart
+
+      - name: Upload visual failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-visual-failures
+          path: tyre_pulse_flutter/test/**/failures/**
+          if-no-files-found: ignore
 
       - name: Upload coverage
         if: always()

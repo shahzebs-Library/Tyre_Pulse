@@ -71,6 +71,7 @@ Future<void> _pumpHome(
   Locale locale = const Locale('en'),
   ThemeData? theme,
   int notificationCount = 0,
+  bool settleForGolden = false,
   List<Override> extraOverrides = const <Override>[],
 }) async {
   final WorkspaceContext workspace = WorkspaceContext(
@@ -114,12 +115,8 @@ Future<void> _pumpHome(
       ),
     ),
   );
-  // Deliberately not `pumpAndSettle`: the app bar's `NavigationBar`-style
-  // ripple/scale animations elsewhere in this app never fully quiesce on
-  // their own within a bounded pump, matching the reasoning
-  // `profile_screen_test.dart` gives for the same choice. Two bounded pumps
-  // is enough for the fleet `FutureProvider` to resolve and the stat cards
-  // to settle into their final state.
+  // Loading-state tests use bounded pumps. The full-data golden opts into
+  // settling after image decoding so capture waits for scheduled frames.
   await tester.pump();
   await tester.runAsync(
     () => precacheImage(
@@ -127,7 +124,11 @@ Future<void> _pumpHome(
       tester.element(find.byType(HomeScreen)),
     ),
   );
-  await tester.pump(const Duration(milliseconds: 50));
+  if (settleForGolden) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }
 
 void main() {
@@ -175,6 +176,7 @@ void main() {
         access: _admin,
         legacySite: 'Qiddiya G2',
         notificationCount: 3,
+        settleForGolden: true,
         extraOverrides: <Override>[
           homePendingInspectionApprovalsProvider.overrideWith(
             (Ref ref) async => approvals,

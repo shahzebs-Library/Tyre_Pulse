@@ -127,7 +127,6 @@ void main() {
 
       expect(find.byType(TyreDiagramBoard), findsOneWidget);
       expect(find.byType(VehicleTyreDiagram), findsOneWidget);
-      expect(find.byType(VehicleMultiViewBoard), findsOneWidget);
 
       final TyreDiagramBoard board = tester.widget<TyreDiagramBoard>(
         find.byType(TyreDiagramBoard),
@@ -147,6 +146,15 @@ void main() {
         board.positions.sublist(6, 10),
         const <String>['R1Lo', 'R1Li', 'R1Ri', 'R1Ro'],
       );
+
+      // The reference follows the tyre board in a lazy ListView. Reveal it
+      // before asserting its presence, just as a reviewer scrolls to it.
+      await tester.scrollUntilVisible(
+        find.byType(VehicleMultiViewBoard),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.byType(VehicleMultiViewBoard), findsOneWidget);
 
       final VehicleMultiViewBoard reference =
           tester.widget<VehicleMultiViewBoard>(

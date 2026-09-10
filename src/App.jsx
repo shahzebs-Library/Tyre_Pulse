@@ -1,3 +1,4 @@
+import { executiveHomeAllowed, moduleAvailable } from './lib/workspaceAccess'
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { isChecklistOnlyRole, isChecklistPathAllowed, CHECKLIST_AUTHOR_ROLES } from './lib/checklistAccess'
@@ -105,24 +106,8 @@ const Login                  = lazy(() => import('./pages/Login'))
 const loadDashboard          = () => import('./pages/Dashboard')
 const Dashboard              = lazy(loadDashboard)
 
-// Warm the Dashboard chunk during the auth round trip.
-//
-// ProtectedRoute renders a spinner while `loading`, which only clears once
-// AuthContext has finished fetching the profile. The Dashboard chunk is the
-// heaviest first screen in the app and its download did not START until after
-// that request came back, so the two costs were paid one after the other
-// instead of together. Kicked off at module scope (the same pattern main.jsx
-// uses for chart.js) so the bytes are in flight while the profile is fetched;
-// React.lazy then resolves against the module registry rather than re-fetching.
-//
-// Gated on the path so it is genuinely free for anyone who is not heading to
-// the dashboard: a deep link, /login, /console, or a public /report token
-// evaluates this module and downloads nothing extra. Failure is swallowed -
-// this is a prefetch, and React.lazy still does its own import when the route
-// actually renders.
-if (typeof window !== 'undefined' && (window.location?.pathname ?? '/') === '/') {
-  loadDashboard().catch(() => { /* prefetch only; lazy() retries on render */ })
-}
+// Load dashboard code only after access is resolved.
+const MyWorkspace = lazy(() => import('./pages/MyWorkspace'))
 const TyreRecords            = lazy(() => import('./pages/TyreRecords'))
 const StockManagement        = lazy(() => import('./pages/StockManagement'))
 const Budgets                = lazy(() => import('./pages/Budgets'))
@@ -394,12 +379,13 @@ function FlagRoute({ flag, children }) {
 
 // ── Main app home redirect based on role ─────────────────────────────────
 function HomeRoute() {
-  const { profile, loading } = useAuth()
+  const auth = useAuth()
+  const { profile, loading } = auth
   if (loading) return <LoadingSpinner />
-  if (isChecklistOnlyRole(profile?.role)) return <Navigate to="/checklists" replace />
-  if (profile?.role === 'Tyre Man') return <Navigate to="/inspections" replace />
-  if (profile?.role === 'Data Monitor Officer') return <Navigate to="/accidents" replace />
-  return <Dashboard />
+  if (isChecklistOnlyRole(profile?.role) && moduleAvailable(auth, 'checklists')) return <Navigate to="/checklists" replace />
+  if (profile?.role === 'Tyre Man' && moduleAvailable(auth, 'inspections')) return <Navigate to="/inspections" replace />
+  if (profile?.role === 'Data Monitor Officer' && moduleAvailable(auth, 'accidents')) return <Navigate to="/accidents" replace />
+  return executiveHomeAllowed(auth) ? <Dashboard key={profile?.id} /> : <MyWorkspace />
 }
 
 // ── Checklist-only access gate ────────────────────────────────────────────────

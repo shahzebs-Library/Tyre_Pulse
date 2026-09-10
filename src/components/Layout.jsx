@@ -1,3 +1,5 @@
+import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
+import { moduleAvailable } from '../lib/workspaceAccess'
 import { Fragment, useState, useEffect, useCallback, useMemo } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -793,7 +795,10 @@ export default function Layout({ children }) {
   // DO NOT re-add a global subscribe-to-everything hook. If a page needs live data,
   // subscribe in that page to that table and consume the payload.
 
-  const { profile, hasPermission, grantedModules, isSuperAdmin } = useAuth()
+  const auth = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin } = auth
+  const canLoadAlerts = moduleAvailable(auth, 'alerts')
+  const alertModules = ['stock', 'corrective_actions', 'tyre_records', 'inspections'].filter(key => moduleAvailable(auth, key)).join(',')
   const { t }                               = useLanguage()
   const { branding }                        = useTenant()
   // Org-assigned app icon (V120); falls back to the built-in mark so an
@@ -874,11 +879,11 @@ export default function Layout({ children }) {
       const heading = groupHeadingFor(t, group)
       for (const item of group.items || []) {
         if (!item?.to || map.has(item.to)) continue
-        map.set(item.to, { item, group: heading, label: navLabelFor(t, item.to, item.label) })
+        map.set(item.to, { item, groupAllowed: shouldShowGroup(group, profile), group: heading, label: navLabelFor(t, item.to, item.label) })
       }
     }
     return map
-  }, [effectiveGroups, t])
+  }, [effectiveGroups, t, profile])
 
   // Shape navFavorites expects: { '/route': { label, group } }.
   const navIndex = useMemo(() => {
@@ -899,6 +904,10 @@ export default function Layout({ children }) {
       shouldShowNavItem(entry.item, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry),
     )
   }, [navByRoute, profile, isFlagEnabled, hasPermission, grantedModules, isSuperAdmin, activeCountry])
+
+  const workspaceNavigation = useMemo(() => [...navByRoute.values()]
+    .filter(entry => entry.groupAllowed && canSeeRoute(entry.item.to))
+    .map(entry => ({ ...entry.item, label: entry.label })), [navByRoute, canSeeRoute])
 
   const favoriteItems = useMemo(
     () => visibleFavorites(favorites, navIndex, canSeeRoute)
@@ -990,6 +999,8 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let cancelled = false
+    setAlertCount(0)
+    if (!canLoadAlerts || !alertModules) return
     async function fetchAlertCount() {
       // A hidden tab is a TV left on or a background window; refreshing a badge
       // nobody can see is pure cost. The visibility listener below catches up the
@@ -1001,7 +1012,7 @@ export default function Layout({ children }) {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
         })()
-        const count = await detectAlertBadgeCount(supabase, country, dismissed)
+        const count = await detectAlertBadgeCount(supabase, country, dismissed, alertModules.split(','))
         if (!cancelled) setAlertCount(count)
       } catch { /* ignore */ }
     }
@@ -1017,7 +1028,7 @@ export default function Layout({ children }) {
       clearInterval(iv)
       document.removeEventListener('visibilitychange', fetchAlertCount)
     }
-  }, [activeCountry])
+  }, [activeCountry, canLoadAlerts, alertModules, profile?.id, profile?.site, profile?.sites])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -1030,7 +1041,7 @@ export default function Layout({ children }) {
 
 
   if (profile?.role === 'Tyre Man') {
-    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}>{children}</TyreManShell>
+    return <TyreManShell alertCount={alertCount} appIcon={appIcon} customAppIcon={hasCustomIcon ? appIcon : null}><WorkspaceNavigationContext.Provider value={workspaceNavigation}>{children}</WorkspaceNavigationContext.Provider></TyreManShell>
   }
 
   const navItemVariants = {
@@ -1405,7 +1416,7 @@ export default function Layout({ children }) {
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
           >
-            {children}
+            <WorkspaceNavigationContext.Provider value={workspaceNavigation}>{children}</WorkspaceNavigationContext.Provider>
           </motion.div>
         </main>
       </div>

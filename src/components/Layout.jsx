@@ -436,16 +436,12 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // widening it to the slug would make permissive built-in roles (Manager,
   // Director) SEE admin-only items they would then be denied at the route.
   const routeGrantKey = governingModuleKey(item.to)
-  if (routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
+  if (profile?.role !== 'Data Monitor Officer' && routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
   }
-  // Data Monitor Officer — accident monitoring + own settings only.
-  if (profile?.role === 'Data Monitor Officer') {
-    return item.to === '/accidents' || item.to === '/settings'
-  }
   // Admin-defined custom roles: sidebar derived from granted module access.
-  if (isCustomNavRole(profile?.role)) {
+  if (profile?.role === 'Data Monitor Officer' || isCustomNavRole(profile?.role)) {
     return navItemAllowedForCustomRole(item.to, hasPermission)
   }
   // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.

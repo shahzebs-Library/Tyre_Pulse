@@ -298,7 +298,6 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
 
   // Restricted single-purpose roles (same as the sidebar).
   if (role === 'Inspector') return path === '/inspections' || path === '/settings'
-  if (role === 'Data Monitor Officer') return path === '/accidents' || path === '/settings'
   if (isChecklistOnlyRole(role)) return isChecklistPathAllowed(path)
 
   // Report builders are Admin-only, and deliberately checked BEFORE the per-user
@@ -306,6 +305,13 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   // grant must not be able to open one. The builder components refuse to render
   // for a non-Admin anyway, so showing the entry would only lead to a dead page.
   if (REPORT_BUILDER_ROUTES.includes(path) && !canUseReportBuilder(profile, isSuperAdmin)) return false
+
+  // DMO is restrictive by default, but saved module grants extend its workspace.
+  // Resolve through hasPermission so a revoke beats an older explicit grant.
+  if (role === 'Data Monitor Officer') {
+    if (ALWAYS_ALLOWED_PATHS.has(path)) return true
+    return perm ? perm(cmd.moduleKey || governingModuleKey(path)) === true : false
+  }
 
   // Per-user GRANT opens visibility for the exact key the route guard resolves.
   const routeKey = cmd.moduleKey || governingModuleKey(path)

@@ -384,7 +384,6 @@ function HomeRoute() {
   if (loading) return <LoadingSpinner />
   if (isChecklistOnlyRole(profile?.role) && moduleAvailable(auth, 'checklists')) return <Navigate to="/checklists" replace />
   if (profile?.role === 'Tyre Man' && moduleAvailable(auth, 'inspections')) return <Navigate to="/inspections" replace />
-  if (profile?.role === 'Data Monitor Officer' && moduleAvailable(auth, 'accidents')) return <Navigate to="/accidents" replace />
   return executiveHomeAllowed(auth) ? <Dashboard key={profile?.id} /> : <MyWorkspace />
 }
 

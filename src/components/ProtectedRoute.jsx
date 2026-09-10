@@ -1,3 +1,4 @@
+import { REPORT_BUILDER_ROUTES, canUseReportBuilder } from '../lib/reportBuilderAccess'
 import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -152,6 +153,12 @@ export function RoleRoute({ allowed, moduleKey, children }) {
   // Super admins are never locked out of a role-gated route (break-glass).
   if (isSuperAdmin) return children
   if (!profile) return <AccessDenied role={undefined} allowed={allowed} />
+
+  if (profile.role === 'Data Monitor Officer') {
+    const key = moduleKey || governingModuleKey(location.pathname)
+    if (REPORT_BUILDER_ROUTES.includes(location.pathname) && !canUseReportBuilder(profile, isSuperAdmin)) return <AccessDenied role={profile.role} allowed={allowed} />
+    return <ModuleRoute moduleKey={key}>{children}</ModuleRoute>
+  }
 
   // Primary path: the account's built-in role is on the allow list.
   if (allowed.includes(profile.role)) return children

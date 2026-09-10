@@ -11,8 +11,16 @@ import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationConte
 import { executiveHomeAllowed } from '../lib/workspaceAccess'
 const items = [{ to: '/vehicle-washing', label: 'Vehicle Washing' }, { to: '/fleet-master', label: 'Fleet Master' }, { to: '/inspections', label: 'Inspections' }]
 const view = () => <MemoryRouter><WorkspaceNavigationContext.Provider value={items}><MyWorkspace /></WorkspaceNavigationContext.Provider></MemoryRouter>
-beforeEach(() => { h.grants = new Set(['vehicle_washing']); h.status = {}; h.country = 'KSA'; h.count.mockReset().mockResolvedValue(4) })
+beforeEach(() => { h.profile = { id: 'supervisor', role: 'Fleet Supervisor', site: 'JEDDAH' }; h.grants = new Set(['vehicle_washing']); h.status = {}; h.country = 'KSA'; h.count.mockReset().mockResolvedValue(4) })
 describe('permission-scoped home', () => {
+  it('shows Data Monitor permitted modules without loading revoked dashboard summaries', () => {
+    h.profile = { id: 'monitor', role: 'Data Monitor Officer' }
+    h.grants = new Set(['inspections', 'work_orders', 'serial_tracker', 'accidents'])
+    render(view())
+    expect(screen.getByRole('link', { name: 'Inspections' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Fleet Master' })).toBeNull()
+    expect(h.count).not.toHaveBeenCalled()
+  })
   it('provides permitted shortcuts without any summary reads when Dashboard is off', () => {
     render(view())
     expect(screen.getByRole('link', { name: 'Vehicle Washing' })).toBeTruthy()

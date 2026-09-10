@@ -67,7 +67,7 @@ function HistoryRow({ row, editing, setEditing, onSaved }) {
   const edited = row.updated_at && row.created_at && row.updated_at !== row.created_at
   return <>
     <tr className="border-b border-[var(--input-border)]">
-      <td className="px-4 py-3 font-medium">{row.asset_no}<div className="text-xs text-[var(--text-muted)]">{row.country || 'Unspecified country'}</div></td>
+      <td className="px-4 py-3 font-medium">{row.asset_no}<div className="text-xs text-[var(--text-muted)]">{row.registration_no || row.vehicle_type || 'Registration not recorded'}</div></td>
       <td className="px-4 py-3">{row.region || 'Not recorded'}<div className="text-xs text-[var(--text-muted)]">{row.site || 'Site not recorded'}</div></td>
       <td className="px-4 py-3 whitespace-nowrap font-semibold">{row.value == null ? 'Not recorded' : Number(row.value).toLocaleString()} {row.kind}{row.flagged && <div className="text-xs text-amber-600" title={row.flag_reason}>Flagged for review</div>}</td>
       <td className="px-4 py-3 whitespace-nowrap">{readingDate(row.reading_date)}</td>

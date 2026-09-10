@@ -44,6 +44,7 @@ describe('vehicle meter identity and entry', () => {
   })
   it('never attributes an unknown source to Mobile or Telematics', () => {
     expect(meterSource(null)).toBe('Unknown')
+    expect(meterSource('tyre_change_hm_v432')).toBe('Tyre change records')
     expect(meterSource('Mobile')).toBe('Mobile')
     expect(meterSource('Web Manual')).toBe('Web Manual')
     expect(meterSource('ksa_kms_upload')).toBe('Import')

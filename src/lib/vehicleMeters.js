@@ -1,8 +1,8 @@
+import { JUMP_MIN_KM } from './odometerAnalytics'
 export const meterKey = row => JSON.stringify([row.organisation_id ?? null, row.country ?? null, String(row.asset_no || '').trim().toUpperCase()])
 export const finiteMeter = value => value === '' || value == null || !Number.isFinite(Number(value)) ? null : Number(value)
 export function newMeterDraft(vehicle) {
   return { km: '', hours: '', date: meterToday(vehicle.country), notes: '', confirmed: false,
-    mode: vehicle.supportsKm && vehicle.supportsHours ? 'both' : vehicle.supportsKm ? 'km' : vehicle.supportsHours ? 'hours' : '',
     requestId: crypto.randomUUID() }
 }
 export function meterTimezone(country) {
@@ -26,6 +26,8 @@ export function meterSource(value) {
   if (/^mobile$/i.test(source)) return 'Mobile'
   if (/^telematics$/i.test(source)) return 'Telematics'
   if (/^(web manual|web)$/i.test(source)) return 'Web Manual'
+  if (/^tyre_change(?:_|$)/i.test(source)) return 'Tyre change records'
+  if (/^manual$/i.test(source)) return 'Manual entry'
   if (/import|upload|erp/i.test(source)) return 'Import'
   return source
 }
@@ -64,4 +66,9 @@ export function validateMeterDraft(draft, vehicle) {
   if (!draft.date || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) || draft.date > meterToday(vehicle.country)) return 'Choose a reading date no later than today.'
   if (vehicle.duplicate) return 'This asset has duplicate fleet records. Resolve its identity before saving.'
   return ''
+}
+
+export function meterNeedsConfirmation(draft, vehicle) {
+  return (draft.km !== '' && vehicle.km != null && (Number(draft.km) < vehicle.km || Number(draft.km) - vehicle.km >= JUMP_MIN_KM)) ||
+    (draft.hours !== '' && vehicle.engineHours != null && Number(draft.hours) < vehicle.engineHours)
 }

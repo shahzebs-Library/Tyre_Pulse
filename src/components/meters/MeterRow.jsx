@@ -1,14 +1,12 @@
-import { JUMP_MIN_KM } from '../../lib/odometerAnalytics'
 import { meterToday, meterSource, readingDate, receivedDate } from '../../lib/vehicleMeters'
 
 const number = value => value == null ? 'No reading' : Number(value).toLocaleString()
 
 export default function MeterRow({ vehicle, draft, status, onChange, onSave, onHistory }) {
   const row = vehicle
-  const mode = draft?.mode ?? (row.supportsKm && row.supportsHours ? 'both' : row.supportsKm ? 'km' : row.supportsHours ? 'hours' : '')
+  const mode = row.supportsKm && row.supportsHours ? 'both' : row.supportsKm ? 'km' : row.supportsHours ? 'hours' : ''
   const value = draft || { km: '', hours: '', date: meterToday(row.country), notes: '', confirmed: false }
-  const warning = (value.km !== '' && row.km != null && (Number(value.km) < row.km || Number(value.km) - row.km >= JUMP_MIN_KM)) ||
-    (value.hours !== '' && row.engineHours != null && Number(value.hours) < row.engineHours)
+  const warning = status?.needsConfirmation
   const saving = status?.saving
   const change = (field, input) => onChange(row, field, input)
   function meterCell(kind, label, current, last) {
@@ -20,7 +18,7 @@ export default function MeterRow({ vehicle, draft, status, onChange, onSave, onH
       {matchesCurrent && <div className="text-xs text-[var(--text-muted)]" title={`Received ${receivedDate(last.created_at, row.country)}`}>{meterSource(last.source)}</div>}
       {enabled ? <input className="input w-full mt-2" aria-label={`${row.asset_no} new ${label}`} type="number" min="0" step={kind === 'km' ? '1' : '0.1'} inputMode="decimal"
         placeholder={`New ${label}`} value={value[kind]} disabled={saving} onChange={e => change(kind, e.target.value)} />
-        : <div className="text-xs text-[var(--text-muted)] mt-3">Not selected</div>}
+        : <div className="text-xs text-[var(--text-muted)] mt-3">Not applicable</div>}
     </td>
   }
   return <>
@@ -28,13 +26,9 @@ export default function MeterRow({ vehicle, draft, status, onChange, onSave, onH
       <td className="px-4 py-3 align-top min-w-[190px]">
         <button className="font-semibold text-[var(--text-primary)] underline decoration-dotted underline-offset-4" onClick={() => onHistory(row)}>{row.asset_no}</button>
         <div className="text-xs text-[var(--text-muted)] mt-1">{row.registration_no || row.fleet_number || 'No registration'} · {row.vehicle_type || 'Type not recorded'}</div>
-        <label className="block text-xs text-[var(--text-muted)] mt-2">Applicable meters
-          <select className="input w-full mt-1 text-xs" aria-label={`${row.asset_no} applicable meters`} value={mode} disabled={saving} onChange={e => change('mode', e.target.value)}>
-            <option value="">Choose meters</option><option value="km">Kilometres</option><option value="hours">Engine hours</option><option value="both">Kilometres + hours</option>
-          </select>
-        </label>
+        <div className="text-xs text-[var(--text-muted)] mt-2">{mode === 'both' ? 'Kilometres + hours' : mode === 'km' ? 'Kilometres' : mode === 'hours' ? 'Engine hours' : 'Vehicle meter type not established'}</div>
       </td>
-      <td className="px-4 py-3 align-top text-sm"><div>{row.region || 'Region not recorded'}</div><div className="text-xs text-[var(--text-muted)] mt-1">{row.site || 'Site not recorded'} · {row.country || 'Country not recorded'}</div></td>
+      <td className="px-4 py-3 align-top text-sm"><div>{row.region || 'Region not recorded'}</div><div className="text-xs text-[var(--text-muted)] mt-1">{row.site || 'Site not recorded'}</div></td>
       {meterCell('km', 'km', row.km, row.kmLog)}
       {meterCell('hours', 'hours', row.engineHours, row.hoursLog)}
       <td className="px-4 py-3 align-top min-w-[180px]">
@@ -46,7 +40,7 @@ export default function MeterRow({ vehicle, draft, status, onChange, onSave, onH
         </label>}
       </td>
       <td className="px-4 py-3 align-top min-w-[155px]">
-        <button className="btn-primary w-full disabled:opacity-50" aria-label={`Save ${row.asset_no}`} disabled={saving || !mode || row.duplicate || (value.km === '' && value.hours === '') || (warning && !value.confirmed)} onClick={() => onSave(row)}>{saving ? 'Saving…' : 'Save'}</button>
+        <button className="btn-primary w-full disabled:opacity-50" aria-label={`Save ${row.asset_no}`} disabled={saving || !mode || row.duplicate || (value.km === '' && value.hours === '')} onClick={() => onSave(row)}>{saving ? 'Saving…' : 'Save'}</button>
         <button className="btn-secondary w-full mt-2 text-xs" onClick={() => onHistory(row)}>History</button>
         {row.duplicate && <p className="text-xs text-amber-600 mt-2">Duplicate fleet identity; saving disabled.</p>}
         {status?.message && <p role={status.error ? 'alert' : 'status'} className={`text-xs mt-2 ${status.error ? 'text-red-600 dark:text-red-300' : 'text-[var(--text-secondary)]'}`}>{status.message}</p>}

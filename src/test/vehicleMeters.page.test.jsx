@@ -12,7 +12,7 @@ import OdometerLogs from '../pages/OdometerLogs'
 const fleet = { id: 'v1', organisation_id: 'org', country: 'KSA', asset_no: 'TM651', fleet_number: '6633 GXA', region: 'Western', site: 'JEDDAH', vehicle_type: 'TR-MIXER', current_km: 111316 }
 const bundle = () => ({ fleet: [fleet], odometer: [], hours: [] })
 const view = () => <MemoryRouter><OdometerLogs /></MemoryRouter>
-beforeEach(() => { h.country = 'KSA'; h.load.mockReset().mockResolvedValue(bundle()); h.save.mockReset(); h.audit.mockReset().mockResolvedValue([]) })
+beforeEach(() => { sessionStorage.clear(); h.country = 'KSA'; h.load.mockReset().mockResolvedValue(bundle()); h.save.mockReset(); h.audit.mockReset().mockResolvedValue([]) })
 describe('vehicle row meter workflow', () => {
   it('combines vehicle type and meter applicability, preserves drafts, and clears all filters', async () => {
     h.load.mockResolvedValue({ fleet: [fleet,
@@ -20,6 +20,7 @@ describe('vehicle row meter workflow', () => {
       { ...fleet, id: 't1', asset_no: 'TR1', vehicle_type: 'TRAILER' }], odometer: [], hours: [] })
     render(view()); await screen.findByLabelText('TM651 new km')
     fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '111400' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Filters', exact: true }))
     fireEvent.change(screen.getByRole('combobox', { name: 'Applicable meters', exact: true }), { target: { value: 'hours' } })
     expect(screen.getByRole('button', { name: 'Save TM651' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Save GEN1' })).toBeTruthy()
@@ -43,6 +44,7 @@ describe('vehicle row meter workflow', () => {
       odometer: [{ ...fleet, id: 'o1', odometer_km: 111316, reading_date: '2026-09-10' }],
       hours: [{ ...fleet, id: 'h1', engine_hours: 700, reading_date: '2026-09-10' }] })
     render(view()); await screen.findByLabelText('TM651 new km')
+    fireEvent.click(screen.getByRole('button', { name: 'Filters', exact: true }))
     fireEvent.change(screen.getByLabelText('Vehicle type'), { target: { value: 'TR-MIXER' } })
     fireEvent.change(screen.getByLabelText('Reading unit'), { target: { value: 'hours' } })
     expect(screen.getByLabelText('TM651 new km')).toBeTruthy()
@@ -83,7 +85,12 @@ describe('vehicle row meter workflow', () => {
   it('keeps drafts while filtering and prevents unconfirmed lower readings', async () => {
     render(view()); await screen.findByLabelText('TM651 new km')
     fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '100' } })
-    expect(screen.getByRole('button', { name: 'Save TM651' }).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Save TM651' }).disabled).toBe(false)
+    expect(screen.queryByText(/I checked this lower reading/)).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'TM651 applicable meters' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Save TM651' }))
+    expect(screen.getByText(/I checked this lower reading/)).toBeTruthy()
+    expect(h.save).not.toHaveBeenCalled()
     const search = screen.getByRole('textbox', { name: 'Search vehicles and readings' })
     fireEvent.change(search, { target: { value: 'no-match' } })
     fireEvent.change(search, { target: { value: 'TM651' } })

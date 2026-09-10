@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Gauge, Search } from 'lucide-react'
+import { Gauge, Search, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { TablePagination, usePagedRows } from '../components/ui/TablePagination'
 import MeterRow from '../components/meters/MeterRow'
 import MeterHistory from '../components/meters/MeterHistory'
 import { useSettings } from '../contexts/SettingsContext'
 import { loadVehicleMeters, saveVehicleMeters } from '../lib/api/vehicleMeters'
-import { buildVehicleMeters, meterKey, meterSource, meterToday, validateMeterDraft, receivedDate, newMeterDraft } from '../lib/vehicleMeters'
+import { buildVehicleMeters, meterKey, meterSource, meterToday, validateMeterDraft, receivedDate, newMeterDraft, meterNeedsConfirmation } from '../lib/vehicleMeters'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import '../components/meters/meters.css'
@@ -27,7 +27,14 @@ function MeterWorkspace({ country }) {
   const [error, setError] = useState('')
   const [loadedAt, setLoadedAt] = useState(null)
   const [tab, setTab] = useState('vehicles')
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [filters, setFilters] = useState(() => {
+    try { return { ...EMPTY_FILTERS, ...JSON.parse(sessionStorage.getItem(`meter-filters:${country}`) || '{}') } } catch { return EMPTY_FILTERS }
+  })
+  const [showFilters, setShowFilters] = useState(false)
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && key !== 'assetId' && Boolean(value)).length
+  useEffect(() => {
+    try { sessionStorage.setItem(`meter-filters:${country}`, JSON.stringify(filters)) } catch { /* Storage is optional. */ }
+  }, [filters, country])
   const [drafts, setDrafts] = useState({})
   const [statuses, setStatuses] = useState({})
   const [notice, setNotice] = useState('')
@@ -92,10 +99,9 @@ function MeterWorkspace({ country }) {
     setDrafts(old => {
       const draft = { ...(old[vehicle.id] || newMeterDraft(vehicle)), [field]: value }
       if (field !== 'confirmed') { draft.requestId = crypto.randomUUID(); draft.confirmed = false }
-      if (field === 'mode') { if (!['km', 'both'].includes(value)) draft.km = ''; if (!['hours', 'both'].includes(value)) draft.hours = '' }
       return { ...old, [vehicle.id]: draft }
     })
-    setStatuses(old => ({ ...old, [vehicle.id]: null }))
+    if (field !== 'confirmed') setStatuses(old => ({ ...old, [vehicle.id]: null }))
   }
   function applySaved(result) {
     setData(old => ({
@@ -110,6 +116,9 @@ function MeterWorkspace({ country }) {
     if (!draft) return
     const invalid = validateMeterDraft(draft, vehicle)
     if (invalid) { setStatuses(old => ({ ...old, [vehicle.id]: { error: true, message: invalid } })); return }
+    if (meterNeedsConfirmation(draft, vehicle) && !draft.confirmed) {
+      setStatuses(old => ({ ...old, [vehicle.id]: { needsConfirmation: true } })); return
+    }
     savingIds.current.add(vehicle.id)
     generation.current++; setLoading(false)
     setStatuses(old => ({ ...old, [vehicle.id]: { saving: true } }))
@@ -153,6 +162,11 @@ function MeterWorkspace({ country }) {
     <div className="card space-y-3">
       <div className="flex flex-wrap gap-3">
         <label className="relative flex-1 min-w-[240px]"><span className="sr-only">Search vehicles and readings</span><Search size={17} className="absolute start-3 top-3 text-[var(--text-muted)]" /><input className="input w-full ps-10" placeholder="Search asset, plate, region, site…" value={filters.search} onChange={e => changeFilter('search', e.target.value)} /></label>
+        <button className="btn-secondary flex items-center gap-2" aria-expanded={showFilters} aria-controls="meter-filters" onClick={() => setShowFilters(open => !open)}><SlidersHorizontal size={16} />Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}<ChevronDown size={14} className={showFilters ? 'rotate-180' : ''} /></button>
+        {(activeFilterCount > 0 || filters.search || filters.assetId) && <button className="btn-secondary" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</button>}
+      </div>
+      {showFilters && <div id="meter-filters" className="space-y-3 border-t border-[var(--input-border)] pt-3">
+      <div className="flex flex-wrap gap-3">
         {[['region', 'Region', regions], ['site', 'Site', sites], ['source', 'Source', sources]].map(([key, label, items]) => <label key={key}><span className="sr-only">{label}</span><select className="input" value={filters[key]} onChange={e => changeFilter(key, e.target.value)}><option value="">All {label.toLowerCase()}s</option>{items.map(item => <option key={item}>{item}</option>)}</select></label>)}
       </div>
       <div className="flex flex-wrap gap-3 text-sm">
@@ -165,9 +179,9 @@ function MeterWorkspace({ country }) {
         <label>To<input className="input block" type="date" value={filters.to} min={filters.from || undefined} onChange={e => changeFilter('to', e.target.value)} /></label>
         <button className="btn-secondary" onClick={() => preset(1)}>Today</button><button className="btn-secondary" onClick={() => preset(7)}>Last 7 days</button><button className="btn-secondary" onClick={() => preset('month')}>This month</button>
         <label className="flex gap-2 items-center px-2 py-2"><input type="checkbox" checked={filters.flagged} onChange={e => changeFilter('flagged', e.target.checked)} /> Flagged only</label>
-        <button className="btn-secondary" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</button>
       </div>
       <p className="text-xs text-[var(--text-muted)]">Region is the vehicle’s current fleet region. History retains the recorded site. Received times use each record’s country timezone; measurement dates do not imply a recorded time.</p>
+      </div>}
       {filters.assetId && <p className="text-sm">History for <strong>{vehicles.find(v => v.id === filters.assetId)?.asset_no}</strong> <button className="underline ms-2" onClick={() => changeFilter('assetId', '')}>Show all vehicles</button></p>}
     </div>
     <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex gap-1 rounded-lg bg-[var(--input-bg)] p-1" role="group" aria-label="Meter views">{[['vehicles', 'Latest per vehicle'], ['history', 'All readings'], ['analytics', 'Analytics']].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)} className={tab === key ? 'btn-primary' : 'btn-secondary'}>{label}</button>)}</div><span className="text-sm text-[var(--text-muted)]">{filteredVehicles.length} vehicles · {filteredHistory.length} readings</span></div>

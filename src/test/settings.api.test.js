@@ -31,6 +31,7 @@ const h = vi.hoisted(() => {
   }
   const supabase = {
     from,
+    rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(name.startsWith('save_') ? {data:{saved:args.p_values.length},error:state.result.error} : state.result) },
     auth: {
       updateUser(args) { state.authCalls.updateUser = args; return Promise.resolve(state.auth.updateUser) },
       mfa: {
@@ -57,8 +58,7 @@ describe('service layer - settings', () => {
   it('listSettings reads key/value from settings', async () => {
     h.state.result = { data: [{ key: 'currency', value: '"USD"' }], error: null }
     const res = await settings.listSettings()
-    expect(h.state.last._table).toBe('settings')
-    expect(h.state.last._calls.select).toBe('key, value')
+    expect(h.state.lastRpc).toEqual({name:'get_organisation_configuration',args:{p_namespace:'settings',p_key:null}})
     expect(res.data).toEqual([{ key: 'currency', value: '"USD"' }])
   })
 
@@ -77,23 +77,19 @@ describe('service layer - settings', () => {
 
   it('getAlertThresholds reads the single alert_thresholds app_settings row', async () => {
     await settings.getAlertThresholds()
-    expect(h.state.last._table).toBe('app_settings')
-    expect(h.state.last._calls.eq).toContainEqual(['key', 'alert_thresholds'])
+    expect(h.state.lastRpc.args).toEqual({p_namespace:'app_settings',p_key:'alert_thresholds'})
   })
 
   it('upsertSetting upserts into settings on key', async () => {
     const row = { key: 'currency', value: '"USD"', updated_by: 'u1' }
     await settings.upsertSetting(row)
-    expect(h.state.last._table).toBe('settings')
-    expect(h.state.last._calls.upsert).toEqual(row)
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'key' })
+    expect(h.state.lastRpc).toEqual({name:'save_organisation_configuration',args:{p_namespace:'settings',p_values:[{key:row.key,value:row.value}]}})
   })
 
   it('upsertAppSetting upserts into app_settings on key', async () => {
     const row = { key: 'alert_thresholds', value: '{}', updated_by: 'u1' }
     await settings.upsertAppSetting(row)
-    expect(h.state.last._table).toBe('app_settings')
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'key' })
+    expect(h.state.lastRpc.args).toEqual({p_namespace:'app_settings',p_values:[{key:row.key,value:row.value}]})
   })
 
   it('updateProfile updates profiles by id', async () => {

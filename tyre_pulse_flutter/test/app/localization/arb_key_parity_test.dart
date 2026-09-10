@@ -451,11 +451,17 @@ void main() {
     // 806 + 1 = 807. Checklist draft rows now use a locale-owned Resume
     // action label across all three catalogs.
     // 807 + 4 = 811. Vehicle details add equipment serial, engine number,
-    // capacity and operational status (commit 56b0107f).
-    test('en, ar and ur each carry exactly 811 translatable keys today', () {
-      expect(_translatableKeys(en).length, 811);
-      expect(_translatableKeys(ar).length, 811);
-      expect(_translatableKeys(ur).length, 811);
+    // capacity and operational status.
+    // 811 + 25 = 836. Inspection PDF reporting and fitment availability add
+    // 14 keys; asset scanning adds one; checklist asset/operator selection
+    // and profile activity/workspace sections each add five.
+    // 836 + 9 = 845. The asset-first checklist hub adds its search, selection,
+    // start and history vocabulary consistently across all three catalogs.
+    // Profile display preferences add six labels: 845 + 6 = 851.
+    test('en, ar and ur each carry exactly 851 translatable keys today', () {
+      expect(_translatableKeys(en).length, 851);
+      expect(_translatableKeys(ar).length, 851);
+      expect(_translatableKeys(ur).length, 851);
     });
   });
 

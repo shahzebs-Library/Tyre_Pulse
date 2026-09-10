@@ -100,6 +100,126 @@ abstract class AppLocalizations {
     Locale('ur')
   ];
 
+  /// No description provided for @profileDisplayPreferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Display preferences'**
+  String get profileDisplayPreferences;
+
+  /// No description provided for @profileLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get profileLanguage;
+
+  /// No description provided for @profileTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get profileTheme;
+
+  /// No description provided for @profileThemeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get profileThemeLight;
+
+  /// No description provided for @profileThemeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get profileThemeDark;
+
+  /// No description provided for @profileDeviceSetting.
+  ///
+  /// In en, this message translates to:
+  /// **'Use device setting'**
+  String get profileDeviceSetting;
+
+  /// No description provided for @inspectionReportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection report'**
+  String get inspectionReportTitle;
+
+  /// No description provided for @inspectionReportShareAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Share inspection PDF'**
+  String get inspectionReportShareAction;
+
+  /// No description provided for @inspectionReportShareFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create report'**
+  String get inspectionReportShareFailedTitle;
+
+  /// No description provided for @inspectionReportShareFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The inspection PDF could not be created or shared. Try again.'**
+  String get inspectionReportShareFailedMessage;
+
+  /// No description provided for @inspectionReportSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition summary'**
+  String get inspectionReportSummaryTitle;
+
+  /// No description provided for @inspectionReportLayoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle tyre layout'**
+  String get inspectionReportLayoutTitle;
+
+  /// No description provided for @inspectionReportReadingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre readings'**
+  String get inspectionReportReadingsTitle;
+
+  /// No description provided for @inspectionReportCurrentFitment.
+  ///
+  /// In en, this message translates to:
+  /// **'Current fitted tyre'**
+  String get inspectionReportCurrentFitment;
+
+  /// No description provided for @inspectionReportNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available'**
+  String get inspectionReportNotAvailable;
+
+  /// No description provided for @inspectionReportGenerated.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated'**
+  String get inspectionReportGenerated;
+
+  /// No description provided for @inspectionReportStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get inspectionReportStatus;
+
+  /// No description provided for @inspectionReportDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection date'**
+  String get inspectionReportDate;
+
+  /// No description provided for @inspectionReportInspector.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspector'**
+  String get inspectionReportInspector;
+
+  /// No description provided for @inspectionApprovalFitmentsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Current fitted tyre details are temporarily unavailable. The submitted readings are still shown.'**
+  String get inspectionApprovalFitmentsUnavailable;
+
   /// Application name. Shown in the task switcher.
   ///
   /// In en, this message translates to:
@@ -934,6 +1054,12 @@ abstract class AppLocalizations {
   /// **'View asset'**
   String get scannerViewAssetAction;
 
+  /// No description provided for @scannerUseAssetAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Use this asset'**
+  String get scannerUseAssetAction;
+
   /// No description provided for @scannerStartInspectionAction.
   ///
   /// In en, this message translates to:
@@ -1297,7 +1423,7 @@ abstract class AppLocalizations {
   /// No description provided for @inspectionVehicleSearchPlaceholder.
   ///
   /// In en, this message translates to:
-  /// **'Search by asset number or type'**
+  /// **'Search asset, make, model, plate or type'**
   String get inspectionVehicleSearchPlaceholder;
 
   /// No description provided for @inspectionSearchToBeginHint.
@@ -1923,6 +2049,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No asset picked yet'**
   String get checklistNoAssetLabel;
+
+  /// No description provided for @checklistSelectAssetAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Select asset'**
+  String get checklistSelectAssetAction;
+
+  /// No description provided for @checklistScanAssetAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR'**
+  String get checklistScanAssetAction;
+
+  /// No description provided for @checklistSearchAssetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search asset, plate, make or model'**
+  String get checklistSearchAssetHint;
+
+  /// No description provided for @checklistVerifiedOperatorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified operator'**
+  String get checklistVerifiedOperatorLabel;
+
+  /// No description provided for @checklistEmployeeIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee ID'**
+  String get checklistEmployeeIdLabel;
 
   /// Progress line on a resumable checklist draft row.
   ///
@@ -4804,6 +4960,36 @@ abstract class AppLocalizations {
   /// **'Profile'**
   String get profileNavTitle;
 
+  /// No description provided for @profileMyActivityAction.
+  ///
+  /// In en, this message translates to:
+  /// **'My activity'**
+  String get profileMyActivityAction;
+
+  /// No description provided for @profileNotificationsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get profileNotificationsAction;
+
+  /// No description provided for @profileWorkspaceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get profileWorkspaceTitle;
+
+  /// No description provided for @profileOfflineDataTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline & data'**
+  String get profileOfflineDataTitle;
+
+  /// No description provided for @profileProfileDataLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile data'**
+  String get profileProfileDataLabel;
+
   /// No description provided for @profileRoleLabel.
   ///
   /// In en, this message translates to:
@@ -4915,7 +5101,7 @@ abstract class AppLocalizations {
   /// No description provided for @reportIssueCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Report an issue~problem=What is wrong?~problemHint=Briefly describe the issue~priority=Priority~low=Low~medium=Medium~high=High~critical=Critical~site=Site~siteHint=Where the issue was found~asset=Asset~assetHint=Asset number~due=Due in~noDate=No date~threeDays=3 days~oneWeek=1 week~twoWeeks=2 weeks~details=Description~detailsHint=Add symptoms, exact location and any immediate action taken~photos=Evidence~optional=(optional)~addPhoto=Add photo~camera=Camera~gallery=From gallery~photoFailed=The photo could not be added.~submit=Submit issue~titleRequired=Enter what is wrong before saving.~workspaceUnavailable=Your workspace is still loading. Try again in a moment.~savedTitle=Issue saved~savedBody=The issue is in My Work and will sync automatically.~stay=Stay here~viewTasks=View My Work~saveFailed=The issue could not be saved. Try again.~category=Issue category~mechanical=Mechanical~electrical=Electrical~hydraulic=Hydraulic~tyre=Tyre~body=Body~washing=Washing~safety=Safety~other=Other~operation=Can the asset operate safely?~yes=Yes~restricted=Restricted~no=No~restriction=Operating restriction~saveDraft=Save draft~draftSaved=Draft saved~createWorkOrder=Create work order after supervisor review~notifyTeam=Will notify Fleet Supervisor and Workshop team'**
+  /// **'title=Report an issue~problem=What is wrong?~problemHint=Briefly describe the issue~priority=Priority~low=Low~medium=Medium~high=High~critical=Critical~site=Site~siteHint=Where the issue was found~asset=Asset~assetHint=Asset number~due=Due in~noDate=No date~threeDays=3 days~oneWeek=1 week~twoWeeks=2 weeks~details=Description~detailsHint=Add symptoms, exact location and any immediate action taken~photos=Evidence~optional=(optional)~addPhoto=Add photo~camera=Camera~gallery=From gallery~photoFailed=The photo could not be added.~submit=Submit issue~titleRequired=Enter what is wrong before saving.~workspaceUnavailable=Your workspace is still loading. Try again in a moment.~savedTitle=Issue saved~savedBody=The issue is in My Work and will sync automatically.~stay=Stay here~viewTasks=View My Work~saveFailed=The issue could not be saved. Try again.~category=Issue category~mechanical=Mechanical~electrical=Electrical~hydraulic=Hydraulic~tyre=Tyre~body=Body~washing=Washing~safety=Safety~other=Other~operation=Can the asset operate safely?~yes=Yes~restricted=Restricted~no=No~restriction=Operating restriction~saveDraft=Save draft~draftSaved=Draft saved~createWorkOrder=Create work order after supervisor review~notifyTeam=Will notify Fleet Supervisor and Workshop team~incidentAt=Incident date and time~chooseDateTime=Choose date and time~assetLoadFailed=Vehicle details could not be verified. Retry when connected.'**
   String get reportIssueCopyCatalog;
 
   /// No description provided for @rcaCopyCatalog.
@@ -4965,6 +5151,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'loadFailed=The accident record could not be loaded. Try again.~notRecorded=Not recorded~dashboardTitle=Accident command centre~dashboardSubtitle=Live register • permission-scoped~reportAction=Report accident~reportShort=Report~loadingRegister=Loading accident register…~dashboardEyebrow=PMV incident control~dashboardHeroTitle=Every case, one accountable trail~dashboardHeroMessage=Fleet, insurance, workshop, QC, handover and recovery remain visible without invented KPIs.~searchHint=Search asset, reference, site or location~allCases=All cases~reportedByMe=Reported by me~anyStatus=Any status~open=Open~closed=Closed~noMatches=No matching cases~noMatchesMessage=Change the filters or create a new accident report.~loadMore=Load more cases~loading=Loading…~detailTitle=Accident detail~loadingFacts=Loading case facts…~notFound=Accident not found~notFoundMessage=This record is outside your access scope or no longer exists.~openFlow=Open accountable case flow~incidentFacts=Incident facts~incidentFactsHint=Reporter evidence and vehicle identity~liability=Liability & payment~liabilityHint=Who was at fault, liable and expected to pay~insurance=Insurance & recovery~insuranceHint=Claim and recovery remain distinct from closure~workshopRelease=Workshop & release~workshopReleaseHint=Assessment, repair, QC and vehicle return~closure=Closure controls~closureHint=Legacy approval and modern case status remain separate~vehicleType=Vehicle type~plate=Plate / fleet number~type=Accident type~severity=Severity~reporter=Reporter~evidenceFiles=Evidence files~description=Description~damage=Damage~fault=Fault status~responsible=Responsible party~liable=Liable party~payer=Payer~insurer=Insurer~policy=Policy~claimNo=Claim number~claimStatus=Claim status~claimed=Claimed amount~approved=Approved amount~recoveryStatus=Recovery status~recovered=Recovered amount~repairType=Repair type~workshop=Workshop~repairCost=Repair cost~expectedRelease=Expected release~actualRelease=Actual release~nextAction=Next action~workflowStage=Workflow stage~caseStatus=Case status~closureRequest=Closure request~closureLevel=Closure level~caseTitle=Case accountability~caseId=Case ID~incidentDateLabel=Incident date~damageMapTitle=Damage map~damageMapHint=Tap a zone to mark damage~damageMapZonesLabel=zone(s) marked~damageMapNoneMarked=No zones marked yet~damageViewFront=Front~damageViewRear=Rear~damageViewLeft=Left side~damageViewRight=Right side~damageViewTop=Top~zoneFrontBumper=Front bumper~zoneHood=Hood~zoneWindshield=Windshield~zoneLeftHeadlight=Left headlight~zoneRightHeadlight=Right headlight~zoneRearBumper=Rear bumper~zoneTailgate=Tailgate~zoneRearWindshield=Rear glass~zoneLeftTailLight=Left tail light~zoneRightTailLight=Right tail light~zoneFrontFender=Front fender~zoneFrontDoor=Front door~zoneRearDoor=Rear door~zoneRearFender=Rear fender~zoneMirror=Side mirror~zoneRoof=Roof~damageMarkSeverityLabel=Severity~damageMarkNoteLabel=Note (optional)~damageMarkSave=Save mark~damageMarkRemove=Remove mark~loadingWorkstreams=Loading case workstreams…~caseNotFound=Case not found~caseNotFoundMessage=This accident is outside your permission scope or no longer exists.~endToEnd=End-to-end case flow~notActivated=Case workflow not activated~notActivatedMessage=The incident exists, but the workstream model is not provisioned. No progress was inferred.~noWorkstreams=No workstreams assigned~noWorkstreamsMessage=The case model is available, but this accident has no routed workstreams yet.~timeline=Accountable timeline~timelineHint=Read-only truth from the case workstream ledger~boundary=Control boundary~boundaryHint=Actions are intentionally not fabricated~boundaryMessage=Insurance, assessment, repair, QC, handover, closure and recovery decisions require verified server actions. This view offers no unsafe direct edits.~done=Done~inProgress=In progress~pending=Pending~notRequired=Not required~reason=Reason~wsIncident=Incident & evidence~wsFleet=Fleet validation~wsLiability=Liability & safety~wsInsurance=Insurance claim~wsAssessment=Workshop assessment~wsRepair=Repair execution~wsQc=Workshop QC~wsHandover=Vehicle handover~wsFinance=Recovery & finance~wsCorrective=Corrective actions~selectAsset=Select fleet asset~changeAsset=Change fleet asset~assetSearch=Asset, fleet number, plate or model~unrecordedAsset=Unrecorded asset~photoFailed=The evidence photo could not be saved. Try again.~workspaceLoading=Your workspace is still loading. Try again.~required=Asset, site, description and at least one evidence photo are required.~fieldsDropped=The report could not preserve every field. Nothing was presented as submitted.~saveFailed=The report could not be saved on this device. Try again.~saved=Report saved~savedTitle=Accident report saved safely~savedMessage=The report and evidence are in the device sync queue and will upload under the active workspace.~backRegister=Back to accident register~reportTitle=Report an accident~reportSubtitle=Offline-safe evidence capture~firstResponse=First response~captureFacts=Capture facts at the scene~captureFactsMessage=Select the asset first so PMV master data can fill its site and identity. At least one evidence photo is mandatory.~assetLocation=1. Asset & location~assetLocationHint=Fleet master is authoritative when available~fleetUnavailable=Fleet lookup is unavailable. Manual entry remains available.~assetNo=Asset number~site=Site~exactLocation=Exact incident location~classification=2. Classification~classificationHint=Initial field classification can be reviewed later~minor=Minor~moderate=Moderate~severe=Severe~fatal=Fatal~collision=Collision~rollover=Rollover~propertyDamage=Property damage~other=Other~whatHappened=What happened?~notes=Immediate notes~evidence=3. Evidence~evidenceAttached=evidence photo(s) attached • minimum 1~camera=Camera~gallery=Gallery~evidencePhoto=Evidence photo~removePhoto=Remove photo~saveReport=Save accident report'**
   String get accidentCopyCatalog;
+
+  /// No description provided for @checklistsAssetSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR or enter asset number'**
+  String get checklistsAssetSearchHint;
+
+  /// No description provided for @checklistsLanguageStorageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Answers are stored consistently across languages'**
+  String get checklistsLanguageStorageHint;
+
+  /// No description provided for @checklistsRequiredForAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for this asset'**
+  String get checklistsRequiredForAsset;
+
+  /// No description provided for @checklistsGeneralLibraryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'General checklist library'**
+  String get checklistsGeneralLibraryTitle;
+
+  /// No description provided for @checklistsGeneralLibrarySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Safety, shift, equipment and washing checklists'**
+  String get checklistsGeneralLibrarySubtitle;
+
+  /// No description provided for @checklistsTyreInspectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre inspection'**
+  String get checklistsTyreInspectionTitle;
+
+  /// No description provided for @checklistsTyreInspectionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Dedicated axle/inner/outer tyre workflow'**
+  String get checklistsTyreInspectionSubtitle;
+
+  /// No description provided for @checklistsAssetHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist history for {assetNo}'**
+  String checklistsAssetHistoryTitle(String assetNo);
+
+  /// No description provided for @checklistsMasterDataVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Master data verified'**
+  String get checklistsMasterDataVerified;
 }
 
 class _AppLocalizationsDelegate

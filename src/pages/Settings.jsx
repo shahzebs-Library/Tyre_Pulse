@@ -151,8 +151,9 @@ export default function Settings() {
   const isTyreMan  = profile?.role === 'Tyre Man'
   const currentYear = new Date().getFullYear()
 
-  const [appSettings, setAppSettings] = useState({ cost_per_tyre: 1200, company_name: '', currency: 'SAR' })
+  const [appSettings, setAppSettings] = useState({ cost_per_tyre: '', company_name: '', currency: '' })
   const [profileForm, setProfileForm]  = useState({ full_name: '', username: '' })
+  const [appLoadFailed, setAppLoadFailed] = useState(true)
   const [savingApp, setSavingApp]      = useState(false)
   const [savingProfile, setSavingProfile] = useState(false)
   const [appMsg, setAppMsg]            = useState('')
@@ -218,20 +219,21 @@ export default function Settings() {
   }, [profile])
 
   async function loadSettings() {
-    const { data } = await settingsApi.listSettings()
-    if (data) {
+    setAppLoadFailed(true)
+    try {
+      const { data, error } = await settingsApi.listSettings()
+      if (error) throw error
       const map = {}
-      data.forEach(({ key, value }) => {
-        // `settings.value` is text and has drifted: some rows are JSON-encoded
-        // ("SAR", 1200), others are bare strings (KSA, EGP). Parse defensively so
-        // one un-encoded value can never abort the whole load.
+      for (const { key, value } of data ?? []) {
         if (typeof value === 'string') {
           try { map[key] = JSON.parse(value) } catch { map[key] = value }
-        } else {
-          map[key] = value
-        }
-      })
-      setAppSettings(s => ({ ...s, ...map }))
+        } else map[key] = value
+      }
+      setAppSettings({ cost_per_tyre: '', company_name: '', currency: '', ...map })
+      setAppLoadFailed(false)
+      setAppMsg(data?.length ? '' : 'Organisation settings have not been configured. Enter verified values before saving.')
+    } catch (error) {
+      setAppMsg(toUserMessage(error, 'Could not load settings. Retry before saving.'))
     }
   }
 
@@ -315,17 +317,27 @@ export default function Settings() {
 
   async function saveAppSettings(e) {
     e.preventDefault()
+    if (appLoadFailed) return
+    if (!appSettings.company_name.trim() || !['SAR', 'AED', 'EGP', 'USD'].includes(appSettings.currency) || appSettings.cost_per_tyre === '' || !Number.isFinite(Number(appSettings.cost_per_tyre)) || Number(appSettings.cost_per_tyre) < 0) {
+      setAppMsg('Enter a company name, currency and valid tyre cost before saving.')
+      return
+    }
     setSavingApp(true)
     setAppMsg('')
-    await Promise.all([
-      settingsApi.upsertSetting({ key: 'cost_per_tyre', value: String(appSettings.cost_per_tyre), updated_by: profile?.id }),
-      settingsApi.upsertSetting({ key: 'company_name', value: JSON.stringify(appSettings.company_name), updated_by: profile?.id }),
-      settingsApi.upsertSetting({ key: 'currency', value: JSON.stringify(appSettings.currency), updated_by: profile?.id }),
-    ])
-    await refreshSettings()
-    setAppMsg('Settings saved')
-    setSavingApp(false)
-    setTimeout(() => setAppMsg(''), 3000)
+    try {
+      const result = await settingsApi.saveAppSettings([
+        { key: 'cost_per_tyre', value: String(appSettings.cost_per_tyre) },
+        { key: 'company_name', value: JSON.stringify(appSettings.company_name) },
+        { key: 'currency', value: JSON.stringify(appSettings.currency) },
+      ])
+      if (result.error) throw result.error
+      await refreshSettings()
+      setAppMsg('Settings saved')
+    } catch (error) {
+      setAppMsg(toUserMessage(error, 'Could not save settings. Reload before retrying.'))
+    } finally {
+      setSavingApp(false)
+    }
   }
 
   async function saveProfile(e) {
@@ -829,6 +841,7 @@ export default function Settings() {
                 value={appSettings.currency}
                 onChange={e => setAppSettings(s => ({ ...s, currency: e.target.value }))}
               >
+                <option value="" disabled>Select currency</option>
                 <option value="SAR">SAR · Saudi Riyal</option>
                 <option value="AED">AED · UAE Dirham</option>
                 <option value="EGP">EGP · Egyptian Pound</option>
@@ -871,10 +884,11 @@ export default function Settings() {
               />
             </div>
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={savingApp} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
+              {appLoadFailed && <button type="button" className="btn-secondary text-sm" onClick={loadSettings}>Retry loading settings</button>}
+              <button type="submit" disabled={savingApp || appLoadFailed} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
                 <Save size={14} /> {savingApp ? 'Saving...' : 'Save App Settings'}
               </button>
-              {appMsg && <span className="text-green-400 text-sm">{appMsg}</span>}
+              {appMsg && <span role="status" className={`text-sm ${appMsg === 'Settings saved' ? 'text-green-400' : 'text-red-400'}`}>{appMsg}</span>}
             </div>
           </form>
         </div>

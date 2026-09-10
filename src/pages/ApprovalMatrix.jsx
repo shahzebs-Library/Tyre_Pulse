@@ -1,359 +1,152 @@
-/**
- * Approval Matrix - who approves what, set by an admin.
- *
- * Three routing styles coexist and the NARROWEST matching rule wins:
- *   named person > site > role
- * A blank match field means "any", so one broad fallback plus a few narrow
- * exceptions covers a whole fleet without a row per person.
- *
- * The preview asks the SERVER (resolve_approvers) rather than recomputing in the
- * browser, so what an admin is shown is what the database will actually do.
- */
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { ShieldCheck, Plus, Trash2, RefreshCcw, Play, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { ShieldCheck } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import {
-  listApprovalRules, createApprovalRule, updateApprovalRule,
-  deleteApprovalRule, previewApprovers,
-} from '../lib/api/approvalMatrix'
+import { useLanguage } from '../contexts/LanguageContext'
+import { useAuth } from '../contexts/AuthContext'
+import { listApprovalPolicies, listApprovalPeople, listApprovalRoles, saveApprovalPolicy, publishApprovalPolicy, retireApprovalPolicy, simulateApprovalPolicy, listApprovalPolicyEvents } from '../lib/api/approvalMatrix'
 import { listSites } from '../lib/api/sites'
-import { listAssignableRoles, ASSIGNABLE_BUILTIN_ROLES } from '../lib/api/customRoles'
-import { ENTITY_TYPES, entityLabel, scopeLabel, approverLabel, validateRule, specificity } from '../lib/approvalMatrix'
+import { approvalPolicyCopy } from '../lib/approvalPolicyCopy'
 import { toUserMessage } from '../lib/safeError'
 
-/**
- * Roles come from the database, not a list typed here. The hardcoded seven left
- * out every custom job title this company created - Tyre Data Collector, Tire
- * Planning Engineer, Workshop Maintenance Area Manager and four more - so an
- * approval could not be routed to roles a third of the staff actually hold,
- * which is why this page looked like it could not set anything.
- */
-const FALLBACK_ROLES = ASSIGNABLE_BUILTIN_ROLES
-
-const BLANK = {
-  entity_type: 'inspection', match_country: '', match_site: '', match_role: '',
-  approver_role: 'Manager', approver_user_id: '', level: 1, escalate_after_days: '', note: '',
-}
-
+const inputCls = 'min-h-11 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--text-primary)] w-full'
+const buttonCls = 'min-h-11 rounded-lg border border-[var(--input-border)] px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40'
+const newStage = () => ({ name: '', approver_role: '', approver_user_id: null, require_signature: true, prevent_self_approval: true, distinct_reviewer: true, sla_hours: null })
+const blankPolicy = (country = '') => ({ name: '', entity_type: 'inspection', priority: 0, match_country: country, match_site: '', match_role: '', match_user_id: null, change_reason: '', stages: [newStage()] })
 function Field({ label, hint, children }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
-      {children}
-      {hint && <span className="text-[11px] text-[var(--text-tertiary)]">{hint}</span>}
-    </label>
-  )
+  return <label className="flex flex-col gap-1 text-sm"><span className="font-semibold text-[var(--text-secondary)]">{label}</span>{children}{hint && <span className="text-xs text-[var(--text-muted)]">{hint}</span>}</label>
 }
-
-const inputCls = 'rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1.5 text-sm text-[var(--text-primary)]'
-
+function PersonPicker({ label, value, onChange, people, copy, blank }) {
+  const [query, setQuery] = useState('')
+  const filtered = people.filter(p => p.id === value || [p.full_name, p.role, ...(p.sites || [])].join(' ').toLowerCase().includes(query.toLowerCase()))
+  return <div className="space-y-1"><Field label={`${copy.peopleSearch}: ${label}`}><input className={inputCls} value={query} onChange={e => setQuery(e.target.value)} /></Field><Field label={label}><select className={inputCls} value={value || ''} onChange={e => onChange(e.target.value || null)}><option value="">{blank || copy.none}</option>{filtered.map(p => <option key={p.id} value={p.id}>{p.full_name} — {p.role}{p.sites?.length ? ` — ${p.sites.join(', ')}` : ''}</option>)}</select></Field>{!filtered.length && <p className="text-xs">{copy.noPeople}</p>}</div>
+}
 export default function ApprovalMatrix() {
   const { activeCountry } = useSettings()
-  const [rules, setRules] = useState([])
+  const { language, isRTL } = useLanguage()
+  const { profile } = useAuth()
+  const c = approvalPolicyCopy[language] || approvalPolicyCopy.en
+  const scope = activeCountry && activeCountry !== 'All' ? activeCountry : ''
+  const [policies, setPolicies] = useState([])
+  const [people, setPeople] = useState([])
   const [sites, setSites] = useState([])
-  const [roles, setRoles] = useState(FALLBACK_ROLES)
+  const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [form, setForm] = useState(BLANK)
-
-  // Preview state
-  // Seed the preview with the country the admin is already looking at, so the
-  // first run answers for their own scope instead of every country at once.
-  // 'All' is a scope, not a country, so it seeds blank (= any).
-  const [test, setTest] = useState({
-    entity_type: 'inspection',
-    country: activeCountry && activeCountry !== 'All' ? activeCountry : '',
-    site: '',
-    role: 'Tyre Man',
-  })
+  const [error, setError] = useState('')
+  const [partial, setPartial] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [search, setSearch] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
+  const [form, setForm] = useState(null)
+  const [dirty, setDirty] = useState(false)
+  const [review, setReview] = useState(null)
+  const [reason, setReason] = useState('')
+  const [effectiveAt, setEffectiveAt] = useState('')
+  const [history, setHistory] = useState(null)
+  const [test, setTest] = useState({ entity_type: 'inspection', country: scope, site: '', role: '', user_id: null })
+  const [includeDraft, setIncludeDraft] = useState(false)
   const [preview, setPreview] = useState(null)
-
+  const generation = useRef(0)
+  const previewGeneration = useRef(0)
+  const mutationLock = useRef(false)
+  const editorRef = useRef(null)
   const load = useCallback(async () => {
-    setLoading(true); setError(null)
-    try {
-      const [r, s, ro] = await Promise.all([
-        listApprovalRules(),
-        listSites().catch(() => []),
-        // Never let an unreadable role list blank the pickers - the built-ins
-        // alone are still a usable page, an empty dropdown is not.
-        listAssignableRoles().catch(() => FALLBACK_ROLES),
-      ])
-      setRules(r)
-      setSites(Array.isArray(s) ? s : [])
-      setRoles(Array.isArray(ro) && ro.length ? ro : FALLBACK_ROLES)
-    } catch (e) {
-      setError(toUserMessage(e, 'Could not load the approval matrix.'))
-    } finally { setLoading(false) }
+    const token = ++generation.current
+    ++previewGeneration.current
+    setLoading(true); setError(''); setPreview(null)
+    const results = await Promise.allSettled([listApprovalPolicies(), listApprovalPeople(), listSites({ activeOnly: true }), listApprovalRoles()])
+    if (token !== generation.current) return
+    if (results[0].status === 'fulfilled') setPolicies(results[0].value)
+    else { setPolicies([]); setError('unavailable') }
+    setPartial(results.slice(1).some(r => r.status === 'rejected'))
+    setPeople(results[1].status === 'fulfilled' ? results[1].value : [])
+    setSites(results[2].status === 'fulfilled' ? results[2].value : [])
+    setRoles(results[3].status === 'fulfilled' ? results[3].value : [])
+    setLoading(false)
   }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const siteNames = useMemo(
-    () => [...new Set(sites.map((s) => s.name || s.site_name).filter(Boolean))].sort(),
-    [sites],
-  )
-
-  const set = (patch) => setForm((f) => ({ ...f, ...patch }))
-
-  async function addRule() {
-    const errs = validateRule(form)
-    if (errs.length) { setMsg(errs[0]); return }
-    setSaving(true); setMsg('')
-    try {
-      await createApprovalRule(form)
-      setForm(BLANK)
-      setMsg('Rule added.')
-      await load()
-    } catch (e) { setMsg(toUserMessage(e, 'Could not save the rule.')) }
-    finally { setSaving(false) }
+  useEffect(() => {
+    setForm(null); setReview(null); setHistory(null); setMessage(''); setTest({ entity_type: 'inspection', country: scope, site: '', role: '', user_id: null })
+    load()
+    const requests = generation
+    const previews = previewGeneration
+    return () => { ++requests.current; ++previews.current }
+  }, [load, scope, profile?.org_id, profile?.id, profile?.role, profile?.locked, profile?.approved])
+  const scopedPolicies = useMemo(() => policies.filter(p => (!scope || !p.match_country || p.match_country === scope) && (!stateFilter || p.state === stateFilter) && [p.name, p.entity_type, p.match_site, p.match_country].join(' ').toLowerCase().includes(search.toLowerCase())), [policies, scope, stateFilter, search])
+  const pager = usePagedRows(scopedPolicies)
+  const users = useMemo(() => Object.fromEntries(people.map(p => [p.id, p])), [people])
+  const disabled = busy || loading || !!error || partial
+  const siteOptions = country => sites.filter(s => country && s.country === country && s.active !== false)
+  const patch = change => { ++previewGeneration.current; setPreview(null); setDirty(true); setForm(f => ({ ...f, ...change })) }
+  const changeTest = change => { ++previewGeneration.current; setPreview(null); setTest(t => ({ ...t, ...change })) }
+  const openEditor = p => { setForm(p); setDirty(!p.id); setIncludeDraft(false); setPreview(null); setMessage(''); requestAnimationFrame(() => editorRef.current?.focus()) }
+  async function mutate(action) {
+    if (mutationLock.current) return
+    mutationLock.current = true; setBusy(true); setMessage('')
+    const token = generation.current
+    try { await action(token) } catch (e) { if (token === generation.current) setMessage(toUserMessage(e, c.failed)) }
+    finally { mutationLock.current = false; setBusy(false) }
   }
-
-  async function toggle(rule) {
-    try { await updateApprovalRule(rule.id, { active: !rule.active }); await load() }
-    catch (e) { setMsg(toUserMessage(e, 'Could not update the rule.')) }
+  async function save() {
+    if (!form.name.trim() || !form.change_reason.trim() || !Number.isInteger(Number(form.priority)) || !form.stages.length || form.stages.length > 5 || form.stages.some(s => !s.name.trim() || Boolean(s.approver_role) === Boolean(s.approver_user_id) || (s.sla_hours != null && !(Number(s.sla_hours) > 0)))) { setMessage(c.validation); return }
+    await mutate(async token => {
+      const saved = await saveApprovalPolicy(form, form.updated_at || null)
+      if (token !== generation.current) return
+      setForm(saved); setDirty(false); setMessage(c.saved); await load()
+    })
   }
-
-  async function remove(rule) {
-    if (!window.confirm(`Delete this rule? ${entityLabel(rule.entity_type)} - ${scopeLabel(rule)}`)) return
-    try { await deleteApprovalRule(rule.id); await load() }
-    catch (e) { setMsg(toUserMessage(e, 'Could not delete the rule.')) }
+  async function commitReview() {
+    if (!reason.trim()) return
+    await mutate(async token => {
+      const fn = review.action === 'publish' ? publishApprovalPolicy : retireApprovalPolicy
+      if (review.action === 'publish') await fn(review.policy, reason.trim(), effectiveAt ? new Date(effectiveAt).toISOString() : null)
+      else await fn(review.policy, reason.trim())
+      if (token !== generation.current) return
+      setReview(null); setForm(null); setMessage(c.committed); await load()
+    })
   }
-
-  async function runPreview() {
-    setPreview(null)
-    try {
-      const out = await previewApprovers({
-        entityType: test.entity_type,
-        country: test.country,
-        site: test.site,
-        role: test.role,
-      })
-      setPreview(out)
-    } catch (e) { setMsg(toUserMessage(e, 'Could not run the preview.')) }
+  async function showHistory(policy) {
+    await mutate(async token => {
+      const events = await listApprovalPolicyEvents(policy.id)
+      if (token === generation.current) setHistory({ policy, events })
+    })
   }
-
-  const rulesPager = usePagedRows(rules)
-  const grouped = useMemo(() => {
-    const by = {}
-    for (const r of rulesPager.pageRows) (by[r.entity_type] ||= []).push(r)
-    for (const k of Object.keys(by)) {
-      by[k].sort((a, b) => (a.level || 1) - (b.level || 1) || specificity(b) - specificity(a))
-    }
-    return by
-  }, [rulesPager.pageRows])
-
-  // A rule with nothing pinned catches everything; without one, a submission
-  // that matches no rule has no approver at all - worth saying out loud.
-  const missingFallback = useMemo(() => {
-    const covered = new Set(rules.filter((r) => r.active !== false && specificity(r) === 0).map((r) => r.entity_type))
-    return ENTITY_TYPES.filter((e) => rules.some((r) => r.entity_type === e.key) && !covered.has(e.key))
-  }, [rules])
-
-  return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Approval Matrix"
-        subtitle="Who signs what. The most specific rule wins: a named person beats a site rule, which beats a role rule."
-        icon={ShieldCheck}
-        actions={(
-          <button type="button" onClick={load}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-hover)]">
-            <RefreshCcw size={14} /> Refresh
-          </button>
-        )}
-      />
-
-      {error && (
-        <div className="card border-red-500/40 text-sm text-red-400">
-          {error} <button type="button" className="underline ml-2" onClick={load}>Retry</button>
-        </div>
-      )}
-
-      {/* ── Add a rule ─────────────────────────────────────────────────────── */}
-      <div className="card space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">Add a rule</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Field label="What needs approving">
-            <select className={inputCls} value={form.entity_type} onChange={(e) => set({ entity_type: e.target.value })}>
-              {ENTITY_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Country" hint="Blank = any">
-            <select className={inputCls} value={form.match_country} onChange={(e) => set({ match_country: e.target.value })}>
-              <option value="">Any country</option>
-              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="Site" hint="Blank = any">
-            <select className={inputCls} value={form.match_site} onChange={(e) => set({ match_site: e.target.value })}>
-              <option value="">Any site</option>
-              {siteNames.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Submitted by role" hint="Blank = any">
-            <select className={inputCls} value={form.match_role} onChange={(e) => set({ match_role: e.target.value })}>
-              <option value="">Any role</option>
-              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Approved by role" hint="Leave blank if naming a person">
-            <select className={inputCls} value={form.approver_role}
-              onChange={(e) => set({ approver_role: e.target.value, approver_user_id: '' })}>
-              <option value="">-- none --</option>
-              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Level" hint="1 = first signer">
-            <select className={inputCls} value={form.level} onChange={(e) => set({ level: Number(e.target.value) })}>
-              {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </Field>
-          <Field label="Escalate after (days)" hint="Blank = never escalate">
-            <input className={inputCls} type="number" min="1" value={form.escalate_after_days}
-              onChange={(e) => set({ escalate_after_days: e.target.value })} placeholder="e.g. 3" />
-          </Field>
-          <Field label="Note">
-            <input className={inputCls} value={form.note} onChange={(e) => set({ note: e.target.value })}
-              placeholder="why this rule exists" />
-          </Field>
-        </div>
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={addRule} disabled={saving}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">
-            <Plus size={14} /> {saving ? 'Saving...' : 'Add rule'}
-          </button>
-          {msg && <span className="text-xs text-[var(--text-tertiary)]">{msg}</span>}
-        </div>
-      </div>
-
-      {missingFallback.length > 0 && (
-        <div className="card border-amber-500/40 flex items-start gap-2 text-sm text-amber-300">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <div>
-            <b>No catch-all rule</b> for {missingFallback.map((e) => e.label).join(', ')}. A submission that
-            matches no rule has nobody to approve it. Add a rule with every match field left blank as the fallback.
-          </div>
-        </div>
-      )}
-
-      {/* ── Existing rules ─────────────────────────────────────────────────── */}
-      <div className="card">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Rules</h2>
-        {loading ? (
-          <p className="text-sm text-[var(--text-muted)]">Loading...</p>
-        ) : rules.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">
-            No rules yet. Until one exists, approvals follow whatever the app did before.
-          </p>
-        ) : <>
-          {Object.entries(grouped).map(([type, list]) => (
-          <div key={type} className="mb-5 last:mb-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] mb-2">{entityLabel(type)}</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                    <th className="py-1.5 pr-3 font-semibold">Applies to</th>
-                    <th className="py-1.5 px-3 font-semibold">Approved by</th>
-                    <th className="py-1.5 px-3 font-semibold text-center">Level</th>
-                    <th className="py-1.5 px-3 font-semibold text-center">Escalate</th>
-                    <th className="py-1.5 px-3 font-semibold text-center">Priority</th>
-                    <th className="py-1.5 px-3 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((r) => (
-                    <tr key={r.id} className={`border-b border-[var(--hairline)]/40 ${r.active === false ? 'opacity-45' : ''}`}>
-                      <td className="py-1.5 pr-3 text-[var(--text-primary)]">
-                        {scopeLabel(r)}
-                        {r.note && <span className="block text-[11px] text-[var(--text-tertiary)]">{r.note}</span>}
-                      </td>
-                      <td className="py-1.5 px-3 text-[var(--text-secondary)]">{approverLabel(r)}</td>
-                      <td className="py-1.5 px-3 text-center tabular-nums">{r.level}</td>
-                      <td className="py-1.5 px-3 text-center text-[var(--text-secondary)]">
-                        {r.escalate_after_days ? `${r.escalate_after_days}d` : 'N/A'}
-                      </td>
-                      <td className="py-1.5 px-3 text-center tabular-nums text-[var(--text-tertiary)]">{specificity(r)}</td>
-                      <td className="py-1.5 px-3 text-right whitespace-nowrap">
-                        <button type="button" onClick={() => toggle(r)}
-                          className="text-xs underline text-[var(--text-secondary)] mr-3">
-                          {r.active === false ? 'Enable' : 'Disable'}
-                        </button>
-                        <button type="button" onClick={() => remove(r)} className="text-red-400" title="Delete">
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          ))}
-          <TablePagination {...rulesPager} />
-        </>}
-      </div>
-
-      {/* ── Preview: ask the server who would sign ─────────────────────────── */}
-      <div className="card space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-          Test it: who would approve this?
-        </h2>
-        <p className="text-xs text-[var(--text-tertiary)]">
-          Runs against the database, not a copy of the rules in this page, so the answer is what will really happen.
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Type">
-            <select className={inputCls} value={test.entity_type} onChange={(e) => setTest({ ...test, entity_type: e.target.value })}>
-              {ENTITY_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Country">
-            <select className={inputCls} value={test.country} onChange={(e) => setTest({ ...test, country: e.target.value })}>
-              <option value="">(none)</option>
-              {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
-          <Field label="Site">
-            <select className={inputCls} value={test.site} onChange={(e) => setTest({ ...test, site: e.target.value })}>
-              <option value="">(none)</option>
-              {siteNames.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </Field>
-          <Field label="Submitted by">
-            <select className={inputCls} value={test.role} onChange={(e) => setTest({ ...test, role: e.target.value })}>
-              {roles.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <button type="button" onClick={runPreview}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--input-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-hover)]">
-            <Play size={14} /> Check
-          </button>
-        </div>
-
-        {preview && (
-          preview.length === 0 ? (
-            <p className="text-sm text-amber-300">
-              No rule matches. This submission would have no approver - add a catch-all rule.
-            </p>
-          ) : (
-            <ol className="text-sm space-y-1">
-              {preview.map((p, i) => (
-                <li key={p.rule_id || i} className="text-[var(--text-secondary)]">
-                  <span className="font-semibold text-[var(--text-primary)]">Level {p.level}:</span>{' '}
-                  {p.approver_role ? `any ${p.approver_role}` : 'a named person'}
-                  {p.escalate_after_days ? ` (escalates after ${p.escalate_after_days} days)` : ''}
-                  <span className="text-[var(--text-tertiary)]"> - match strength {p.specificity}</span>
-                </li>
-              ))}
-            </ol>
-          )
-        )}
-      </div>
-    </div>
-  )
+  async function simulate() {
+    const token = ++previewGeneration.current
+    await mutate(async () => {
+      const out = await simulateApprovalPolicy(test, includeDraft && !dirty ? form?.id : null)
+      if (token === previewGeneration.current) setPreview(out)
+    })
+  }
+  const labelReviewer = stage => stage.approver_role || users[stage.approver_user_id]?.full_name || c.userUnknown
+  const renderStages = stages => <ol className="space-y-2">{(stages || []).map((s, i) => <li key={i} className="rounded-lg border border-[var(--hairline)] p-3"><b>{i + 1}. {s.name}</b><p>{labelReviewer(s)}</p><p className="text-xs text-[var(--text-muted)]">{s.require_signature && c.signature} · {s.prevent_self_approval && c.self} · {s.distinct_reviewer && c.distinct}{s.sla_hours ? ` · ${c.sla}: ${s.sla_hours}` : ''}</p></li>)}</ol>
+  return <div dir={isRTL ? 'rtl' : 'ltr'} className="space-y-5">
+    <PageHeader title={c.title} subtitle={c.subtitle} icon={ShieldCheck} actions={<button className={buttonCls} disabled={busy || loading} onClick={load}>{c.refresh}</button>} />
+    <p className="text-sm text-[var(--text-muted)]">{c.unsupported}</p>
+    {error && <div role="alert" className="card text-red-500">{c.unavailable} <button className={buttonCls} onClick={load}>{c.retry}</button></div>}
+    {partial && <p role="alert" className="card text-amber-600">{c.partial}</p>}
+    {message && <p role="status" className="card">{message}</p>}
+    <section className="card space-y-4" aria-label={c.policies}>
+      <div className="flex flex-wrap gap-3 items-end"><Field label={c.search}><input className={inputCls} value={search} onChange={e => setSearch(e.target.value)} /></Field><Field label={c.policies}><select className={inputCls} value={stateFilter} onChange={e => setStateFilter(e.target.value)}><option value="">{c.all}</option>{['draft', 'published', 'retired'].map(s => <option key={s} value={s}>{c[s]}</option>)}</select></Field><button className={buttonCls} disabled={disabled} onClick={() => openEditor(blankPolicy(scope))}>{c.new}</button></div>
+      {loading ? <p role="status">{c.loading}</p> : !error && !scopedPolicies.length ? <p>{c.empty}</p> : <><div className="overflow-x-auto"><table className="w-full text-sm text-start"><thead><tr>{[c.name, c.type, c.scope, c.version, c.policies, c.actions].map((h, i) => <th key={i} className="p-2 text-start">{h}</th>)}</tr></thead><tbody>{pager.pageRows.map(p => <tr key={p.id} className="border-t border-[var(--hairline)]"><td className="p-2">{p.name}</td><td className="p-2">{c[p.entity_type]}</td><td className="p-2">{[p.match_country, p.match_site, p.match_role, users[p.match_user_id]?.full_name].filter(Boolean).join(' · ') || c.anyScope}</td><td className="p-2">{p.version}</td><td className="p-2">{c[p.state]}{p.effective_at && <time className="block text-xs text-[var(--text-muted)]" dateTime={p.effective_at}>{new Date(p.effective_at).toLocaleString(language)}</time>}</td><td className="p-2"><div className="flex flex-wrap gap-2"><button className={buttonCls} disabled={disabled} onClick={() => openEditor(p.state === 'draft' ? structuredClone(p) : { ...structuredClone(p), id: undefined, updated_at: undefined, state: 'draft', change_reason: '' })}>{p.state === 'draft' ? c.edit : c.clone}</button><button className={buttonCls} disabled={disabled} onClick={() => showHistory(p)}>{c.history}</button>{p.state !== 'retired' && <button className={buttonCls} disabled={disabled || (dirty && form?.id === p.id)} onClick={() => { setReason(''); setEffectiveAt(''); setReview({ policy: p, action: p.state === 'draft' ? 'publish' : 'retire' }) }}>{p.state === 'draft' ? c.publish : c.retire}</button>}</div></td></tr>)}</tbody></table></div><TablePagination {...pager} /></>}
+    </section>
+    {form && <section ref={editorRef} tabIndex={-1} className="card space-y-4" aria-label={c.editor}><div className="flex justify-between"><h2 className="font-bold">{c.editor}</h2><button className={buttonCls} disabled={busy} onClick={() => { setForm(null); setIncludeDraft(false); setPreview(null) }}>{c.close}</button></div><fieldset disabled={disabled} className="space-y-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <Field label={c.name}><input className={inputCls} value={form.name} maxLength={160} onChange={e => patch({ name: e.target.value })} /></Field>
+      <Field label={c.type}><select className={inputCls} value={form.entity_type} onChange={e => patch({ entity_type: e.target.value })}>{['inspection', 'checklist', 'work_order', 'tyre_change'].map(t => <option key={t} value={t}>{c[t]}</option>)}</select></Field>
+      <Field label={c.priority} hint={c.priorityHint}><input className={inputCls} type="number" step="1" value={form.priority} onChange={e => patch({ priority: Number(e.target.value) })} /></Field>
+      <Field label={c.country}><select className={inputCls} value={form.match_country || ''} onChange={e => patch({ match_country: e.target.value || null, match_site: null })}><option value="">{c.anyCountry}</option>{COUNTRIES.map(t => <option key={t}>{t}</option>)}</select></Field>
+      <Field label={c.site} hint={c.countryFirst}><select className={inputCls} disabled={!form.match_country} value={form.match_site || ''} onChange={e => patch({ match_site: e.target.value || null })}><option value="">{c.anySite}</option>{siteOptions(form.match_country).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></Field>
+      <Field label={c.role}><select className={inputCls} value={form.match_role || ''} onChange={e => patch({ match_role: e.target.value || null })}><option value="">{c.anyRole}</option>{roles.map(r => <option key={r}>{r}</option>)}</select></Field>
+      <PersonPicker label={c.person} value={form.match_user_id} onChange={id => patch({ match_user_id: id })} people={people} copy={c} blank={c.anyPerson} />
+    </div><h3 className="font-bold">{c.stages}</h3><p className="text-sm text-[var(--text-muted)]">{c.eligibilityHint}</p>{form.stages.map((s, i) => <div key={i} className="rounded-lg border border-[var(--hairline)] p-3 space-y-3"><div className="flex justify-between items-center"><h4>{c.stage} {i + 1}</h4><button className={buttonCls} disabled={form.stages.length === 1} onClick={() => patch({ stages: form.stages.filter((_, n) => n !== i) })}>{c.removeStage}</button></div><div className="grid gap-3 sm:grid-cols-2">
+      <Field label={c.stageName}><input className={inputCls} value={s.name} onChange={e => patch({ stages: form.stages.map((v, n) => n === i ? { ...v, name: e.target.value } : v) })} /></Field>
+      <Field label={c.reviewerRole}><select className={inputCls} value={s.approver_role || ''} onChange={e => patch({ stages: form.stages.map((v, n) => n === i ? { ...v, approver_role: e.target.value || null, approver_user_id: null } : v) })}><option value="">{c.none}</option>{roles.map(r => <option key={r}>{r}</option>)}</select></Field>
+      <PersonPicker label={c.reviewerPerson} value={s.approver_user_id} onChange={id => patch({ stages: form.stages.map((v, n) => n === i ? { ...v, approver_user_id: id, approver_role: null } : v) })} people={people} copy={c} />
+      <Field label={c.sla} hint={c.slaHint}><input className={inputCls} type="number" min="1" value={s.sla_hours ?? ''} onChange={e => patch({ stages: form.stages.map((v, n) => n === i ? { ...v, sla_hours: e.target.value === '' ? null : Number(e.target.value) } : v) })} /></Field>
+    </div><p className="text-sm text-[var(--text-secondary)]">{c.signature} · {c.self} · {c.distinct}</p></div>)}<button className={buttonCls} disabled={form.stages.length >= 5} onClick={() => patch({ stages: [...form.stages, newStage()] })}>{c.addStage}</button><Field label={c.reason} hint={c.reasonHint}><textarea className={inputCls} value={form.change_reason || ''} maxLength={2000} onChange={e => patch({ change_reason: e.target.value })} /></Field><button className={buttonCls} onClick={save}>{busy ? c.saving : c.save}</button></fieldset></section>}
+    {review && <section className="card space-y-3" aria-label={c.reviewTitle}><h2 className="font-bold">{c.reviewTitle}: {c[review.action]}</h2><p>{review.policy.name} · {c.version} {review.policy.version}</p><p className="text-sm">{c.reviewHint}</p>{renderStages(review.policy.stages)}{review.action === 'publish' && <><p className="text-sm">{c.separatePublisher}</p><Field label={c.effective} hint={c.effectiveHint}><input type="datetime-local" className={inputCls} value={effectiveAt} onChange={e => setEffectiveAt(e.target.value)} /></Field></>}<Field label={c.reason}><textarea className={inputCls} value={reason} onChange={e => setReason(e.target.value)} maxLength={2000} /></Field><div className="flex gap-2"><button className={buttonCls} disabled={disabled || !reason.trim() || (review.action === 'publish' && review.policy.created_by === profile?.id)} onClick={commitReview}>{c.confirm}</button><button className={buttonCls} disabled={busy} onClick={() => setReview(null)}>{c.cancel}</button></div></section>}
+    {history && <section className="card space-y-3" aria-label={c.history}><div className="flex justify-between"><h2>{c.history}: {history.policy.name}</h2><button className={buttonCls} onClick={() => setHistory(null)}>{c.close}</button></div>{!history.events.length ? <p>{c.eventsEmpty}</p> : <ol className="space-y-3">{history.events.map(event => <li key={event.id} className="border-b border-[var(--hairline)] pb-2"><p>{c[event.action] || event.action} · {new Date(event.created_at).toLocaleString(language)}</p><p>{c.actor}: {users[event.actor_id]?.full_name || c.userUnknown}</p><p>{event.reason}</p></li>)}</ol>}</section>}
+    <section className="card space-y-3" aria-label={c.simulation}><h2 className="font-bold">{c.simulation}</h2><p className="text-sm text-[var(--text-muted)]">{c.simulationHint}</p><fieldset disabled={disabled} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><Field label={c.type}><select className={inputCls} value={test.entity_type} onChange={e => changeTest({ entity_type: e.target.value })}>{['inspection', 'checklist', 'work_order', 'tyre_change'].map(t => <option key={t} value={t}>{c[t]}</option>)}</select></Field><Field label={c.country}><select className={inputCls} value={test.country} onChange={e => changeTest({ country: e.target.value, site: '' })}><option value="">{c.anyCountry}</option>{COUNTRIES.map(t => <option key={t}>{t}</option>)}</select></Field><Field label={c.site}><select className={inputCls} disabled={!test.country} value={test.site} onChange={e => changeTest({ site: e.target.value })}><option value="">{c.anySite}</option>{siteOptions(test.country).map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></Field><Field label={c.role}><select className={inputCls} value={test.role} onChange={e => changeTest({ role: e.target.value })}><option value="">{c.anyRole}</option>{roles.map(r => <option key={r}>{r}</option>)}</select></Field><PersonPicker label={c.person} value={test.user_id} onChange={id => changeTest({ user_id: id })} people={people} copy={c} blank={c.anyPerson} /></fieldset>{form?.id && <label className="flex gap-2 min-h-11 items-center"><input type="checkbox" disabled={disabled || dirty} checked={includeDraft} onChange={e => { ++previewGeneration.current; setPreview(null); setIncludeDraft(e.target.checked) }} />{c.includeDraft}</label>}{form && dirty && <p className="text-sm">{c.unsaved}</p>}<button className={buttonCls} disabled={disabled || (includeDraft && dirty)} onClick={simulate}>{busy ? c.saving : c.run}</button>{preview && <div role="status" className="space-y-3"><p>{c.mode}: {c[preview.mode] || preview.mode}</p><p>{c[preview.status]}</p>{preview.policy && <><p className="font-bold">{preview.policy.name} · {c.version} {preview.policy.version}</p>{renderStages(preview.policy.stages)}</>}<p>{c.candidates}: {preview.candidates?.length || 0}</p><ul className="space-y-2 text-sm">{preview.candidates?.map(candidate => <li key={candidate.id} className="border-t border-[var(--hairline)] pt-2"><b>{candidate.name}</b> ? {c.priority}: {candidate.priority} ? {c.matchStrength}: {candidate.specificity} ? {candidate.rank === 1 ? c.topRank : c.lowerRank}</li>)}</ul></div>}</section>
+  </div>
 }

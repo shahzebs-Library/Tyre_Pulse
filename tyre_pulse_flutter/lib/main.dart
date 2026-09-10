@@ -3,6 +3,7 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
@@ -28,6 +29,7 @@ import 'package:tyre_pulse/core/telemetry/telemetry_service.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/'
     'accidents_screen_registrations.dart';
+import 'package:tyre_pulse/features/admin/admin_screen_registrations.dart';
 import 'package:tyre_pulse/features/alerts/alerts_screen_registrations.dart';
 import 'package:tyre_pulse/features/approvals/'
     'checklist_approvals_screen_registrations.dart';
@@ -38,6 +40,7 @@ import 'package:tyre_pulse/features/auth/auth_screen_registrations.dart';
 import 'package:tyre_pulse/features/calendar/calendar_screen_registrations.dart';
 import 'package:tyre_pulse/features/checklists/'
     'checklists_screen_registrations.dart';
+import 'package:tyre_pulse/features/fleet_ai/fleet_ai_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
 import 'package:tyre_pulse/features/inspections/'
     'inspections_screen_registrations.dart';
@@ -168,6 +171,8 @@ Future<void> main() async {
   FlutterError.onError = telemetry.reportFlutterError;
   PlatformDispatcher.instance.onError = telemetry.reportPlatformDispatcherError;
 
+  final preferences = await SharedPreferences.getInstance();
+
   await initializeSupabase(config: config, localStorage: secureStore);
 
   await registerBackgroundSync();
@@ -177,6 +182,9 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         ...authLayerOverrides,
+        displaySettingsStoreProvider.overrideWithValue(
+          SharedPreferencesDisplaySettingsStore(preferences),
+        ),
         secureStoreProvider.overrideWithValue(secureStore),
         telemetryReporterProvider.overrideWithValue(telemetry),
         currentAppVersionProvider.overrideWithValue(_fallbackAppVersion),
@@ -285,17 +293,9 @@ Future<void> main() async {
         // existed in `routes.dart`/`app_router.dart`/`route_access.dart`
         // before this feature's screen was written.
         //
-        // `globalSearchScreenRegistrations` (spec section 34, the global
-        // cross-entity search feature) is joined here for the SAME reason
-        // as every entry above it - but unlike all of them, it is still
-        // genuinely UNREACHABLE after this line, because no
-        // `TpRouteId.globalSearch`, no path template and no `GoRoute` entry
-        // exist yet in `app/router/routes.dart`/`app_router.dart`/
-        // `route_access.dart` (those three files were off limits to the
-        // agent that built this feature). See
-        // `features/search/domain/global_search_route.dart`'s own doc
-        // comment for exactly what a human adds to those files to finish
-        // the wiring; nothing in THIS file will need to change when they do.
+        // Global Search opens from Home using Navigator, preserving result
+        // round trips. Its registry remains empty until typed deep links are
+        // added to the protected router by its owner.
         //
         // `authScreenRegistrations` ([TpRouteId.login]) and
         // `profileScreenRegistrations` ([TpRouteId.profile]) close the one
@@ -320,6 +320,8 @@ Future<void> main() async {
               .withAll(inspectionsScreenRegistrations)
               .withAll(calendarScreenRegistrations)
               .withAll(managementScreenRegistrations)
+              .withAll(fleetAiScreenRegistrations)
+              .withAll(adminScreenRegistrations)
               .withAll(checklistsScreenRegistrations)
               .withAll(inspectionApprovalsScreenRegistrations)
               .withAll(checklistApprovalsScreenRegistrations)

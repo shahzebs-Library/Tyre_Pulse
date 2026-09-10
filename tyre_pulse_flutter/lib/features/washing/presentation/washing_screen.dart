@@ -62,6 +62,8 @@ import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_d
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_evidence.dart';
+import 'package:tyre_pulse/features/washing/presentation/wash_evidence_copy.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_photo_gallery.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_recent_sheet.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
@@ -99,7 +101,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   String? _vehicleType;
   String? _washType;
   String _status = kWashDefaultStatus;
-  final List<String> _photoPaths = <String>[];
+  final List<String> _beforePhotoPaths = <String>[];
+  final List<String> _afterPhotoPaths = <String>[];
+  List<String> get _photoPaths =>
+      <String>[..._beforePhotoPaths, ..._afterPhotoPaths];
+  bool _washCompleted = false;
+  bool _conditionChecked = false;
   bool _capturingPhoto = false;
   bool _submitting = false;
 
@@ -135,6 +142,11 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   }
 
   Future<void> _fillOperatorFromProfile(WorkspaceContext? workspace) async {
+    final String workspaceName = workspace?.fullName?.trim() ?? '';
+    if (workspaceName.isNotEmpty) {
+      _operatorController.text = workspaceName;
+      return;
+    }
     final String userId = workspace?.userId ?? '';
     if (userId.isEmpty) return;
     final String? name =
@@ -201,7 +213,15 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     _siteTouched = true;
   }
 
-  Future<void> _capturePhoto(WashPhotoSource source) async {
+  Future<void> _capturePhoto(
+    WashPhotoSource source, {
+    required bool before,
+  }) async {
+    if (_submitting ||
+        _capturingPhoto ||
+        _photoPaths.length >= WashPhotoCapture.maxPhotos) {
+      return;
+    }
     setState(() => _capturingPhoto = true);
     try {
       final CapturedWashPhoto? photo =
@@ -212,15 +232,21 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
               );
       if (!mounted) return;
       if (photo != null) {
-        setState(() => _photoPaths.add(photo.localPath));
+        setState(
+          () => (before ? _beforePhotoPaths : _afterPhotoPaths)
+              .add(photo.localPath),
+        );
       }
     } finally {
       if (mounted) setState(() => _capturingPhoto = false);
     }
   }
 
-  void _removePhoto(int index) {
-    setState(() => _photoPaths.removeAt(index));
+  void _removePhoto(int index, {required bool before}) {
+    if (_submitting) return;
+    setState(
+      () => (before ? _beforePhotoPaths : _afterPhotoPaths).removeAt(index),
+    );
   }
 
   Future<void> _handleSave() async {
@@ -249,6 +275,17 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       return;
     }
 
+    final evidence = WashEvidence(
+      before: List<String>.of(_beforePhotoPaths),
+      after: List<String>.of(_afterPhotoPaths),
+      washCompleted: _washCompleted,
+      conditionChecked: _conditionChecked,
+    );
+    if (_status == 'Completed' && !evidence.completionConfirmed) {
+      _showSnack(washEvidenceCopy(context, 'required'));
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       await ref.read(washRepositoryProvider).submitWash(
@@ -273,6 +310,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   ? null
                   : _notesController.text.trim(),
               photoLocalPaths: _photoPaths,
+              evidence: evidence,
             ),
           );
       if (!mounted) return;
@@ -306,7 +344,10 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       _vehicleType = null;
       _washType = null;
       _status = kWashDefaultStatus;
-      _photoPaths.clear();
+      _beforePhotoPaths.clear();
+      _afterPhotoPaths.clear();
+      _washCompleted = false;
+      _conditionChecked = false;
       _sessionKey = _uuid.v4();
     });
     // Operator name is deliberately KEPT - the same driver usually logs
@@ -442,32 +483,42 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
           const SizedBox(height: TpSpace.md),
           _WashAuditContext(
             operatorName: _operatorController.text,
-            dateLabel: _nowLabel(),
-          ),
-          const SizedBox(height: TpSpace.md),
-          _WashTypeSelector(
-            label: l10n.washTypeLabel,
-            selected: _washType,
-            labels: <String, String>{
-              for (final String type in kWashTypes)
-                type: _washTypeLabel(l10n, type),
-            },
-            onSelected: (String value) => setState(() => _washType = value),
+            dateLabel: l10n.washDateTodayLine(_todayLabel()),
           ),
           const SizedBox(height: TpSpace.md),
           TpCard(
-            child: TpDropdown<String>(
-              label: l10n.washStatusLabel,
-              value: _status,
-              items: <TpDropdownItem<String>>[
-                for (final String status in kWashStatusChoices)
-                  TpDropdownItem<String>(
-                    value: status,
-                    label: _statusLabel(l10n, status),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _WashTypeSelector(
+                  label: l10n.washTypeLabel,
+                  selected: _washType,
+                  labels: <String, String>{
+                    for (final String type in kWashTypes)
+                      type: _washTypeLabel(l10n, type),
+                  },
+                  onSelected: (String value) => setState(() {
+                    _washType = value;
+                    _washCompleted = false;
+                    _conditionChecked = false;
+                  }),
+                ),
+                const SizedBox(height: TpSpace.md),
+                TpDropdown<String>(
+                  label: l10n.washStatusLabel,
+                  value: _status,
+                  items: <TpDropdownItem<String>>[
+                    for (final String status in kWashStatusChoices)
+                      TpDropdownItem<String>(
+                        value: status,
+                        label: _statusLabel(l10n, status),
+                      ),
+                  ],
+                  onChanged: (String? value) => setState(
+                    () => _status = value ?? kWashDefaultStatus,
                   ),
+                ),
               ],
-              onChanged: (String? value) =>
-                  setState(() => _status = value ?? kWashDefaultStatus),
             ),
           ),
           const SizedBox(height: TpSpace.md),
@@ -481,12 +532,56 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
                 const SizedBox(height: TpSpace.sm),
+                Text(washEvidenceCopy(context, 'optional')),
+                Text(washEvidenceCopy(context, 'limit')),
+                const SizedBox(height: TpSpace.sm),
+                Text(washEvidenceCopy(context, 'before')),
                 WashPhotoGallery(
-                  localPaths: _photoPaths,
-                  isCapturing: _capturingPhoto,
-                  onAdd: _capturePhoto,
-                  onRemove: _removePhoto,
+                  localPaths: _beforePhotoPaths,
+                  isCapturing: _capturingPhoto || _submitting,
+                  canAdd: _photoPaths.length < WashPhotoCapture.maxPhotos,
+                  onAdd: (source) => _capturePhoto(source, before: true),
+                  onRemove: (index) => _removePhoto(index, before: true),
                   addLabel: l10n.washAddPhoto,
+                ),
+                const SizedBox(height: TpSpace.md),
+                Text(washEvidenceCopy(context, 'after')),
+                WashPhotoGallery(
+                  localPaths: _afterPhotoPaths,
+                  isCapturing: _capturingPhoto || _submitting,
+                  canAdd: _photoPaths.length < WashPhotoCapture.maxPhotos,
+                  onAdd: (source) => _capturePhoto(source, before: false),
+                  onRemove: (index) => _removePhoto(index, before: false),
+                  addLabel: l10n.washAddPhoto,
+                ),
+                const SizedBox(height: TpSpace.md),
+                Text(
+                  washEvidenceCopy(context, 'checklist'),
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+                Material(
+                  type: MaterialType.transparency,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(washEvidenceCopy(context, 'washCompleted')),
+                    value: _washCompleted,
+                    onChanged: _submitting
+                        ? null
+                        : (value) =>
+                            setState(() => _washCompleted = value == true),
+                  ),
+                ),
+                Material(
+                  type: MaterialType.transparency,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(washEvidenceCopy(context, 'conditionChecked')),
+                    value: _conditionChecked,
+                    onChanged: _submitting
+                        ? null
+                        : (value) =>
+                            setState(() => _conditionChecked = value == true),
+                  ),
                 ),
               ],
             ),
@@ -502,17 +597,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   style: Theme.of(context).textTheme.labelMedium,
                 ),
                 const SizedBox(height: TpSpace.sm),
-                TpInput(
-                  label: l10n.washOperatorLabel,
-                  controller: _operatorController,
-                  hint: l10n.washOperatorHint,
-                  enabled: false,
-                  suffix: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: TpSpace.md),
-                    child: Icon(Icons.lock_outline_rounded),
-                  ),
-                ),
-                const SizedBox(height: TpSpace.md),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -555,7 +639,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
             icon: Icons.check_circle_outline,
             isBusy: _submitting,
             isFullWidth: true,
-            onPressed: _submitting ? null : _handleSave,
+            onPressed: _submitting || _capturingPhoto ? null : _handleSave,
           ),
         ],
       ),
@@ -568,13 +652,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     final String m = now.month.toString().padLeft(2, '0');
     final String d = now.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
-  }
-
-  static String _nowLabel() {
-    final DateTime now = DateTime.now();
-    final String h = now.hour.toString().padLeft(2, '0');
-    final String m = now.minute.toString().padLeft(2, '0');
-    return '${_todayLabel()}  $h:$m';
   }
 
   static String _washTypeLabel(AppLocalizations l10n, String type) {
@@ -676,87 +753,23 @@ class _WashTypeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(label, style: Theme.of(context).textTheme.labelMedium),
         const SizedBox(height: TpSpace.xs),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final int columns = constraints.maxWidth >= 520 ? 4 : 3;
-            final double tileWidth =
-                (constraints.maxWidth - (columns - 1) * TpSpace.sm) / columns;
-            return Wrap(
-              spacing: TpSpace.sm,
-              runSpacing: TpSpace.sm,
-              children: <Widget>[
-                for (int index = 0; index < labels.length; index++)
-                  Builder(
-                    builder: (BuildContext context) {
-                      final MapEntry<String, String> entry =
-                          labels.entries.elementAt(index);
-                      final bool isSelected = selected == entry.key;
-                      return SizedBox(
-                        width: tileWidth,
-                        height: 100,
-                        child: Material(
-                          color:
-                              isSelected ? palette.info.soft : palette.surface,
-                          shape: RoundedRectangleBorder(
-                            side: BorderSide(
-                              color:
-                                  isSelected ? palette.primary : palette.border,
-                            ),
-                            borderRadius: BorderRadius.circular(TpRadius.md),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => onSelected(entry.key),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: TpSpace.sm,
-                                vertical: TpSpace.md,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: <Widget>[
-                                  Icon(
-                                    _washTypeIcon(entry.key),
-                                    color: isSelected
-                                        ? palette.primary
-                                        : palette.textSecondary,
-                                    size: TpSizing.iconLg,
-                                  ),
-                                  const SizedBox(height: TpSpace.sm),
-                                  Text(
-                                    entry.value,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
-                                          color: isSelected
-                                              ? palette.primary
-                                              : palette.text,
-                                          fontWeight: isSelected
-                                              ? FontWeight.w800
-                                              : FontWeight.w600,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
-            );
-          },
+        Wrap(
+          spacing: TpSpace.sm,
+          runSpacing: TpSpace.xs,
+          children: <Widget>[
+            for (final MapEntry<String, String> entry in labels.entries)
+              ChoiceChip(
+                selected: selected == entry.key,
+                avatar: Icon(_washTypeIcon(entry.key), size: TpSizing.iconSm),
+                label: Text(entry.value),
+                onSelected: (_) => onSelected(entry.key),
+              ),
+          ],
         ),
       ],
     );

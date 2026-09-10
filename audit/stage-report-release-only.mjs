@@ -1,0 +1,2 @@
+﻿import fs from 'node:fs';import {execFileSync} from 'node:child_process';
+const base=JSON.parse(execFileSync('git',['show','HEAD:src/data/releases.json'],{encoding:'utf8'}));const working=JSON.parse(fs.readFileSync('src/data/releases.json','utf8'));base.unshift(working.find(r=>r.id==='2026.09.10.6'));const hash=execFileSync('git',['hash-object','-w','--stdin'],{input:JSON.stringify(base,null,2)+'\n',encoding:'utf8'}).trim();execFileSync('git',['update-index','--cacheinfo','100644',hash,'src/data/releases.json']);

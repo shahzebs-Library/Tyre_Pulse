@@ -1,0 +1,72 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 103.0.0 (105.0.0 available)
+  analyzer 13.3.0 (14.1.0 available)
+  cli_util 0.5.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  geolocator 13.0.4 (14.0.3 available)
+  geolocator_android 4.6.2 (5.0.3 available)
+  hooks 2.0.2 (2.2.0 available)
+  jni 0.14.2 (1.0.3 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  native_toolchain_c 0.19.2 (0.19.4 available)
+  objective_c 9.5.0 (9.6.0 available)
+  package_config 2.2.0 (3.0.0 available)
+  path_provider_android 2.2.23 (2.3.1 available)
+  record_use 0.6.0 (1.1.1 available)
+  shared_preferences_android 2.4.27 (2.4.28 available)
+  signature 5.5.0 (6.4.0 available)
+  source_gen 4.2.4 (4.3.0 available)
+  test 1.31.1 (1.31.2 available)
+  test_api 0.7.12 (0.7.13 available)
+  test_core 0.6.18 (0.6.19 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+22 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Running Gradle task 'assembleDebug'...                          
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if "Windows_NT" == "Windows_NT" setlocal
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set DEFAULT_JVM_OPTS= 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set DIRNAME=C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android\ 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if "C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android\" == "" set DIRNAME=. 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set APP_BASE_NAME=gradlew 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set APP_HOME=C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android\ 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if defined JAVA_HOME goto findJavaFromJavaHome 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set JAVA_HOME=C:\Users\Tyre_Engineer\jdk17_extract\jdk-17.0.20.1+1 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set JAVA_EXE=C:\Users\Tyre_Engineer\jdk17_extract\jdk-17.0.20.1+1/bin/java.exe 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if exist "C:\Users\Tyre_Engineer\jdk17_extract\jdk-17.0.20.1+1/bin/java.exe" goto init 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if not "Windows_NT" == "Windows_NT" goto win9xME_args 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if "@eval[2+2]" == "4" goto 4NT_args 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set CMD_LINE_ARGS= 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set _SKIP=2 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if "x-q" == "x" goto execute 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set CMD_LINE_ARGS=-q -Ptarget-platform=android-arm,android-arm64,android-x64 -Ptarget=lib\main.dart -Pbase-application-name=android.app.Application -Pdart-defines=U1VQQUJBU0VfVVJMPWh0dHBzOi8vamhzc2RtZXJ1eHRybHFud2Zrc2Muc3VwYWJhc2UuY28=,U1VQQUJBU0VfQU5PTl9LRVk9ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW1wb2MzTmtiV1Z5ZFhoMGNteHhibmRtYTNOaklpd2ljbTlzWlNJNkltRnViMjRpTENKcFlYUWlPakUzT0RBMU9EWXlNeklzSW1WNGNDSTZNakE1TmpFMk1qSXpNbjAuVzE4eTRpZkZSdUVrUjItbHNlQW0xY3FjbmpxLW1MNC1PdHBzZ0V5ek1vTQ==,RkxVVFRFUl9CVUlMRF9OQU1FPTAuMS4w,RkxVVFRFUl9CVUlMRF9OVU1CRVI9Mw==,RkxVVFRFUl9WRVJTSU9OPTMuNDcuMQ==,RkxVVFRFUl9DSEFOTkVMPXN0YWJsZQ==,RkxVVFRFUl9HSVRfVVJMPWh0dHBzOi8vZ2l0aHViLmNvbS9mbHV0dGVyL2ZsdXR0ZXIuZ2l0,RkxVVFRFUl9GUkFNRVdPUktfUkVWSVNJT049NjY1NTQ4MmVjMA==,RkxVVFRFUl9FTkdJTkVfUkVWSVNJT049NWQ1MzE3ODg2OQ==,RkxVVFRFUl9EQVJUX1ZFUlNJT049My4xMy4x -Pdart-obfuscation=false -Ptrack-widget-creation=true -Ptree-shake-icons=false -Pflutter.androidSdkRoot=C:\Users\Tyre_Engineer\android_sdk -Pflutter.installedNdkVersions=28.2.13676358 -Pflutter.sdkManagerPath=C:\Users\Tyre_Engineer\android_sdk\cmdline-tools\latest\bin\sdkmanager.bat assembleDebug 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>goto execute 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>set CLASSPATH=C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android\\gradle\wrapper\gradle-wrapper.jar 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>"C:\Users\Tyre_Engineer\jdk17_extract\jdk-17.0.20.1+1/bin/java.exe"    "-Dorg.gradle.appname=gradlew" -classpath "C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android\\gradle\wrapper\gradle-wrapper.jar" org.gradle.wrapper.GradleWrapperMain -q -Ptarget-platform=android-arm,android-arm64,android-x64 -Ptarget=lib\main.dart -Pbase-application-name=android.app.Application -Pdart-defines=U1VQQUJBU0VfVVJMPWh0dHBzOi8vamhzc2RtZXJ1eHRybHFud2Zrc2Muc3VwYWJhc2UuY28=,U1VQQUJBU0VfQU5PTl9LRVk9ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW1wb2MzTmtiV1Z5ZFhoMGNteHhibmRtYTNOaklpd2ljbTlzWlNJNkltRnViMjRpTENKcFlYUWlPakUzT0RBMU9EWXlNeklzSW1WNGNDSTZNakE1TmpFMk1qSXpNbjAuVzE4eTRpZkZSdUVrUjItbHNlQW0xY3FjbmpxLW1MNC1PdHBzZ0V5ek1vTQ==,RkxVVFRFUl9CVUlMRF9OQU1FPTAuMS4w,RkxVVFRFUl9CVUlMRF9OVU1CRVI9Mw==,RkxVVFRFUl9WRVJTSU9OPTMuNDcuMQ==,RkxVVFRFUl9DSEFOTkVMPXN0YWJsZQ==,RkxVVFRFUl9HSVRfVVJMPWh0dHBzOi8vZ2l0aHViLmNvbS9mbHV0dGVyL2ZsdXR0ZXIuZ2l0,RkxVVFRFUl9GUkFNRVdPUktfUkVWSVNJT049NjY1NTQ4MmVjMA==,RkxVVFRFUl9FTkdJTkVfUkVWSVNJT049NWQ1MzE3ODg2OQ==,RkxVVFRFUl9EQVJUX1ZFUlNJT049My4xMy4x -Pdart-obfuscation=false -Ptrack-widget-creation=true -Ptree-shake-icons=false -Pflutter.androidSdkRoot=C:\Users\Tyre_Engineer\android_sdk -Pflutter.installedNdkVersions=28.2.13676358 -Pflutter.sdkManagerPath=C:\Users\Tyre_Engineer\android_sdk\cmdline-tools\latest\bin\sdkmanager.bat assembleDebug 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if "0" == "0" goto mainEnd 
+
+C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\android>if "Windows_NT" == "Windows_NT" endlocal
+Running Gradle task 'assembleDebug'...                             24.3s
+√ Built build\app\outputs\flutter-apk\app-debug.apk

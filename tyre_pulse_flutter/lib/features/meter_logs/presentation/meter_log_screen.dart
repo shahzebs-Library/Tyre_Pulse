@@ -26,14 +26,13 @@
 /// decoded asset code to this form. It does not push another navigation
 /// branch, so any reading already typed remains intact.
 ///
-/// # Site auto-fill: only when not already set by the user
+/// # Location is automatic and locked
 ///
-/// [_siteTouched] mirrors the reference's own `siteTouched` ref: it starts
-/// `true` whenever the route carried an explicit site, or the workspace's
-/// [WorkspaceContext.legacySite] pre-filled one, and flips `true` the
-/// moment the driver edits the site field directly. While `false`, a
-/// resolved asset's own site fills the field ONLY if it is still blank -
-/// never overwriting a value the driver already set.
+/// The selected asset is the authority for its site. Until an asset resolves,
+/// the typed route/workspace site is shown. The field is read-only so a meter
+/// entry cannot be attributed to an arbitrary location, and the signed-in
+/// name, employee number, date and location remain visible as locked audit
+/// context.
 library;
 
 import 'dart:async';
@@ -53,8 +52,10 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
+import 'package:tyre_pulse/features/meter_logs/data/meter_capture_details.dart';
 import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
 import 'package:tyre_pulse/features/meter_logs/meter_logs_providers.dart';
+import 'package:tyre_pulse/features/meter_logs/presentation/meter_capture_copy.dart';
 import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_recent_sheet.dart';
 import 'package:tyre_pulse/features/meter_logs/presentation/widgets/meter_log_review_sheet.dart';
 import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
@@ -85,12 +86,12 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
   final TextEditingController _engineHoursController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
-  bool _siteTouched = false;
   Timer? _lookupDebounce;
   LastOdometerReading? _last;
   VehicleAsset? _master;
   bool _loadingLast = false;
   bool _isProcessingContinue = false;
+  MeterEntrySource _entrySource = MeterEntrySource.manual;
 
   late String _sessionKey;
 
@@ -109,10 +110,10 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     final String? legacySite = workspace?.legacySite?.trim();
     if (routeSite != null && routeSite.trim().isNotEmpty) {
       _siteController.text = routeSite.trim();
-      _siteTouched = true;
     } else if (legacySite != null && legacySite.isNotEmpty) {
       _siteController.text = legacySite;
-      _siteTouched = true;
+    } else if (workspace?.activeSites.length == 1) {
+      _siteController.text = workspace!.activeSites.single;
     }
 
     _assetController.addListener(_onAssetChanged);
@@ -174,23 +175,15 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
     } else if (assetOutcome is VehicleDetailFromCache) {
       resolved = assetOutcome.asset;
     }
+    final String? masterSite = resolved?.site?.trim();
     setState(() {
       _last = last;
       _master = resolved;
       _loadingLast = false;
+      if (masterSite != null && masterSite.isNotEmpty) {
+        _siteController.text = masterSite;
+      }
     });
-
-    final String? masterSite = resolved?.site;
-    final String trimmedMasterSite = masterSite?.trim() ?? '';
-    if (trimmedMasterSite.isNotEmpty &&
-        !_siteTouched &&
-        _siteController.text.trim().isEmpty) {
-      _siteController.text = trimmedMasterSite;
-    }
-  }
-
-  void _onSiteEdited(String _) {
-    _siteTouched = true;
   }
 
   Future<void> _handleContinue() async {
@@ -289,7 +282,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
         country: workspace.activeCountry,
         odometerKm: odometerKm,
         engineHours: hours,
-        notes: notes.isEmpty ? null : notes,
+        notes: meterCaptureNotes(notes, _entrySource),
         sessionKey: _sessionKey,
         flaggedForReview: flaggedForReview,
       ),
@@ -309,12 +302,15 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
   void _resetForm() {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
     final String? legacySite = workspace?.legacySite?.trim();
+    final String? soleActiveSite = workspace?.activeSites.length == 1
+        ? workspace!.activeSites.single
+        : null;
 
     _lookupDebounce?.cancel();
     _assetController.clear();
-    _siteController.text =
-        (legacySite != null && legacySite.isNotEmpty) ? legacySite : '';
-    _siteTouched = legacySite != null && legacySite.isNotEmpty;
+    _siteController.text = (legacySite != null && legacySite.isNotEmpty)
+        ? legacySite
+        : (soleActiveSite ?? '');
     _odometerController.clear();
     _engineHoursController.clear();
     _notesController.clear();
@@ -323,6 +319,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
       _master = null;
       _loadingLast = false;
       _sessionKey = _uuid.v4();
+      _entrySource = MeterEntrySource.manual;
     });
   }
 
@@ -429,7 +426,10 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
               },
             ),
           const SizedBox(height: TpSpace.md),
-          _LockedAuditContext(workspace: ref.watch(workspaceContextProvider)),
+          _LockedAuditContext(
+            workspace: ref.watch(workspaceContextProvider),
+            location: _siteController.text,
+          ),
           const SizedBox(height: TpSpace.md),
           Container(
             padding: const EdgeInsets.symmetric(
@@ -470,6 +470,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                 TpInput(
                   label: l10n.meterLogOdometerLabel,
                   controller: _odometerController,
+                  onChanged: (String _) => setState(() {}),
                   hint: l10n.meterLogOdometerHint,
                   isRequired: true,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -502,7 +503,44 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                 if (_assetController.text.trim().isNotEmpty) ...<Widget>[
                   const SizedBox(height: TpSpace.md),
                   _LastReadingPanel(loading: _loadingLast, last: _last),
+                  const SizedBox(height: TpSpace.sm),
+                  Text(
+                    meterCaptureCopy(context, 'distance'),
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  Text(
+                    switch (distanceSinceLastReading(
+                      _parseNum(_odometerController.text),
+                      _last?.odometerKm,
+                    )) {
+                      final num distance =>
+                        l10n.meterLogRecentKmValue(_formatKm(distance)),
+                      null => meterCaptureCopy(context, 'unknown'),
+                    },
+                  ),
                 ],
+                const SizedBox(height: TpSpace.md),
+                TpDropdown<MeterEntrySource>(
+                  label: meterCaptureCopy(context, 'source'),
+                  value: _entrySource,
+                  items: <TpDropdownItem<MeterEntrySource>>[
+                    TpDropdownItem(
+                      value: MeterEntrySource.manual,
+                      label: meterCaptureCopy(context, 'manual'),
+                    ),
+                    TpDropdownItem(
+                      value: MeterEntrySource.photo,
+                      label: meterCaptureCopy(context, 'photo'),
+                    ),
+                  ],
+                  onChanged: (value) => setState(
+                    () => _entrySource = value ?? MeterEntrySource.manual,
+                  ),
+                ),
+                Text(
+                  meterCaptureCopy(context, 'help'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
@@ -516,7 +554,11 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                   label: l10n.meterLogSiteLabel,
                   controller: _siteController,
                   hint: l10n.meterLogSiteHint,
-                  onChanged: _onSiteEdited,
+                  enabled: false,
+                  suffix: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: TpSpace.md),
+                    child: Icon(Icons.lock_outline_rounded),
+                  ),
                 ),
                 const SizedBox(height: TpSpace.xs),
                 Text(
@@ -571,7 +613,6 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
             ),
           ),
           const SizedBox(height: TpSpace.md),
-          const SizedBox(height: TpSpace.md),
           TpButton.primary(
             label: l10n.meterLogContinueAction,
             icon: Icons.arrow_forward,
@@ -599,9 +640,10 @@ abstract final class MeterLogScreenKeys {
 }
 
 class _LockedAuditContext extends StatelessWidget {
-  const _LockedAuditContext({required this.workspace});
+  const _LockedAuditContext({required this.workspace, required this.location});
 
   final WorkspaceContext? workspace;
+  final String location;
 
   @override
   Widget build(BuildContext context) {
@@ -610,27 +652,62 @@ class _LockedAuditContext extends StatelessWidget {
     final String name = workspace?.fullName?.trim().isNotEmpty == true
         ? workspace!.fullName!.trim()
         : l10n.valueUnavailable;
+    final String employee = workspace?.employeeId?.trim().isNotEmpty == true
+        ? workspace!.employeeId!.trim()
+        : l10n.valueUnavailable;
+    final String site =
+        location.trim().isNotEmpty ? location.trim() : l10n.valueUnavailable;
     return TpCard(
       background: palette.surfaceAlt,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Icon(Icons.badge_outlined, color: palette.primary),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(name, style: Theme.of(context).textTheme.titleSmall),
-                Text(
-                  _MeterLogScreenState._todayLabel(),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
+          Row(
+            children: <Widget>[
+              Icon(Icons.badge_outlined, color: palette.primary),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child:
+                    Text(name, style: Theme.of(context).textTheme.titleSmall),
+              ),
+              Icon(Icons.lock_outline_rounded, color: palette.textMuted),
+            ],
           ),
-          Icon(Icons.lock_outline_rounded, color: palette.textMuted),
+          const SizedBox(height: TpSpace.sm),
+          Wrap(
+            spacing: TpSpace.lg,
+            runSpacing: TpSpace.xs,
+            children: <Widget>[
+              _LockedAuditValue(icon: Icons.numbers_rounded, value: employee),
+              _LockedAuditValue(
+                icon: Icons.calendar_today_outlined,
+                value: _MeterLogScreenState._todayLabel(),
+              ),
+              _LockedAuditValue(icon: Icons.location_on_outlined, value: site),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _LockedAuditValue extends StatelessWidget {
+  const _LockedAuditValue({required this.icon, required this.value});
+
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+        const SizedBox(width: TpSpace.xs),
+        Text(value, style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }

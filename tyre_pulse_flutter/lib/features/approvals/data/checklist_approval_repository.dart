@@ -25,30 +25,12 @@
 /// single-stage inspection-approval flow, would not be honest about that
 /// difference.
 ///
-/// # Why [applyDecision] writes directly, and never through
-/// # `decide_checklist_approval`
-///
-/// `SupabaseRpcs.decideChecklistApproval` is a real, verified RPC name -
-/// but it is the RPC the WEB approvals surface calls
-/// (`docs/audit`/PROJECT_MEMORY records "V597 ... `decide_checklist_
-/// approval`, the RPC the WEB approvals surface calls", and confirms mobile
-/// never has: `mobile/lib/checklists.ts`'s `decideApproval` routes through
-/// `saveCommand('CHECKLIST_APPROVAL', ...)`, a plain table write, not an
-/// RPC call - grep of `mobile/` finds `decide_checklist_approval` nowhere
-/// at all). This port follows the MOBILE architecture, per this whole
-/// migration's stated preference for the mobile shape where the two stacks
-/// diverge, and per `checklist_approval.dart`'s own library comment: "the
-/// server independently re-checks every rule this file models" via the
-/// database trigger `guard_checklist_approval_stages`, which the TS
-/// source's raw `.update()` already relies on - this file's write is a
-/// faithful port of THAT path, strengthened with an optimistic-concurrency
-/// guard the TS source does not have (see [applyDecision]'s own doc
-/// comment).
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/features/approvals/data/approval_review_context.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/data/queued_checklist_approval_decision.dart';
@@ -205,15 +187,20 @@ final class SupabaseChecklistApprovalRepository
 
   @override
   Future<ChecklistApprovalItem?> byId(String id) async {
-    final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
-      () => _client
-          .from(SupabaseTables.checklistSubmissions)
-          .select(checklistApprovalFullColumns)
-          .eq('id', id)
-          .maybeSingle(),
-    );
-    if (row == null) return null;
-    return ChecklistApprovalItem.fromRow(row);
+    return guard(() async {
+      final raw = await _client.rpc<Map<String, dynamic>>(
+        'approval_review_context',
+        params: {'p_entity_type': 'checklist', 'p_entity_id': id},
+      );
+      final document = raw['document'];
+      if (document is! Map) {
+        throw const FormatException('Approval document is unavailable.');
+      }
+      return ChecklistApprovalItem.fromRow({
+        ...Map<String, dynamic>.from(document),
+        'approval_review_context': raw,
+      });
+    });
   }
 
   @override
@@ -309,59 +296,26 @@ final class SupabaseChecklistApprovalRepository
   Future<ChecklistApprovalApplyResult> applyDecision(
     QueuedChecklistApprovalDecision item,
   ) async {
-    final Map<String, Object?> patch = _patchFor(item);
-    final List<Map<String, dynamic>> rows =
-        await guard<List<Map<String, dynamic>>>(() async {
-      return await _client
-          .from(SupabaseTables.checklistSubmissions)
-          .update(patch)
-          .eq('id', item.submissionId)
-          .eq('approval_status', item.priorApprovalStatus)
-          .select('id');
+    if (item.expectedRevision == null || item.expectedStageToken == null) {
+      return ChecklistApprovalApplyResult.conflict;
+    }
+    return guard(() async {
+      final raw = await _client.rpc<Object?>(
+        'decide_approval',
+        params: {
+          'p_entity_type': 'checklist',
+          'p_entity_id': item.submissionId,
+          'p_decision': item.wireDecision,
+          'p_expected_revision': item.expectedRevision,
+          'p_expected_stage': item.expectedStageToken,
+          'p_operation_id': item.id,
+          'p_note': item.reviewNote,
+          'p_signature': item.approverSignature,
+          'p_client_captured_at': item.decidedAt.toUtc().toIso8601String(),
+        },
+      );
+      validateApprovalReceipt(raw, item.id);
+      return ChecklistApprovalApplyResult.applied;
     });
-    return rows.isEmpty
-        ? ChecklistApprovalApplyResult.conflict
-        : ChecklistApprovalApplyResult.applied;
-  }
-
-  /// Field-for-field against `mobile/lib/checklists.ts:459-483`'s
-  /// `decideApproval` - see [QueuedChecklistApprovalDecision]'s own library
-  /// comment and this port's final report for the exact line-by-line
-  /// comparison. A supervisor rung writes the SUPERVISOR columns; every
-  /// other resulting status (both `'approved'` and `'rejected'`) writes
-  /// the APPROVER columns - writing both would make one person look like
-  /// two, which is the entire reason the two column sets exist at all.
-  static Map<String, Object?> _patchFor(QueuedChecklistApprovalDecision item) {
-    final String? nameOrNull = _blankToNull(item.approverName);
-    final String nowIso = item.decidedAt.toIso8601String();
-
-    final Map<String, Object?> stageFields =
-        item.targetStatus == 'pending_area_manager'
-            ? <String, Object?>{
-                'supervisor_name': nameOrNull,
-                'supervisor_signature': item.approverSignature,
-                'supervisor_by': item.approverId,
-                'supervisor_at': nowIso,
-              }
-            : <String, Object?>{
-                'approver_name': nameOrNull,
-                'approver_signature': item.approverSignature,
-                'approved_by': item.approverId,
-                'approved_at': nowIso,
-              };
-
-    return <String, Object?>{
-      'approval_status': item.targetStatus,
-      ...stageFields,
-      'review_note': item.approved ? null : item.reviewNote,
-      // Only a CLOSED sheet locks. A supervisor sign-off must leave it
-      // editable, because the area manager may send it back.
-      'locked': item.targetStatus == 'approved',
-    };
-  }
-
-  static String? _blankToNull(String? raw) {
-    final String trimmed = raw?.trim() ?? '';
-    return trimmed.isEmpty ? null : trimmed;
   }
 }

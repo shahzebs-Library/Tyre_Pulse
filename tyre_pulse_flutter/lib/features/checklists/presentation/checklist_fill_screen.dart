@@ -7,12 +7,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/checklists/data/checklist_draft_repository.dart'
     show ChecklistDraftPhoto;
 import 'package:tyre_pulse/features/checklists/data/checklist_photo_capture.dart';
@@ -26,6 +33,7 @@ import 'package:tyre_pulse/features/checklists/presentation/controllers/checklis
 import 'package:tyre_pulse/features/checklists/presentation/state/checklist_fill_state.dart';
 import 'package:tyre_pulse/features/checklists/presentation/widgets/checklist_field_answer_tile.dart';
 import 'package:tyre_pulse/features/checklists/presentation/widgets/checklist_signature_pad.dart';
+import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
 
 class ChecklistFillScreen extends ConsumerStatefulWidget {
   const ChecklistFillScreen({required this.route, super.key});
@@ -132,10 +140,14 @@ class _FillFormView extends ConsumerWidget {
     final List<ChecklistField> fields = visibleChecklistFields(
       template.fields,
       state.answers,
-    );
+    ).where((ChecklistField field) => !_isHeaderContextField(field)).toList();
     final ChecklistFillController controller = ref.read(
       checklistFillControllerProvider.notifier,
     );
+    final List<VehicleAsset> fleetAssets = _fleetAssets(
+      ref.watch(vehicleFleetListProvider).value,
+    );
+    final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
     final ChecklistSubmitGate? gate = state.submitGate;
     final _ChecklistProgress progress = _ChecklistProgress.fromState(
       state: state,
@@ -195,6 +207,8 @@ class _FillFormView extends ConsumerWidget {
             state: state,
             controller: controller,
             languages: _availableLanguages(template),
+            fleetAssets: fleetAssets,
+            employeeId: workspace?.employeeId,
           ),
           const SizedBox(height: TpSpace.lg),
           if (sections.length > 1) ...<Widget>[
@@ -236,6 +250,8 @@ class _FillFormView extends ConsumerWidget {
             _SignOffCard(
               title: l10n.checklistPrimarySignatureLabel,
               isComplete: (state.primarySignature ?? '').trim().isNotEmpty,
+              signerName: state.printedName,
+              employeeId: workspace?.employeeId,
               child: ChecklistSignaturePad(
                 value: state.primarySignature,
                 onChanged: (capture) =>
@@ -295,11 +311,18 @@ class _FillFormView extends ConsumerWidget {
             ? null
             : (String v) => controller.updateNote(field.id, v),
         noteRequired: noteRequired,
-        showNoteField: field.allowNote != false,
+        // Keep the sheet compact. A note box appears only when the template
+        // explicitly allows it, a chosen mark makes it mandatory, or the
+        // operator already entered a note. Nullable `allow_note` still keeps
+        // its validation semantics; it no longer creates a blank remarks box
+        // under every question.
+        showNoteField: field.allowNote == true ||
+            noteRequired ||
+            (state.notes[field.id]?.toString().trim().isNotEmpty ?? false),
         photos: (state.photosByField[field.id] ?? const <ChecklistDraftPhoto>[])
             .map((ChecklistDraftPhoto p) => p.localPath)
             .toList(growable: false),
-        onCapturePhoto: field.type == 'photo'
+        onCapturePhoto: field.type == 'photo' || field.allowPhoto
             ? (ChecklistPhotoPickSource source) => controller.capturePhoto(
                   fieldId: field.id,
                   capture: () async {
@@ -360,6 +383,23 @@ List<ChecklistLang> _availableLanguages(ChecklistTemplate template) {
           ))
         language,
   ];
+}
+
+bool _isHeaderContextField(ChecklistField field) {
+  if (field.type == 'asset' || field.type == 'site') return true;
+  if (field.type == 'date' && (field.locked || field.autoValue == 'today')) {
+    return true;
+  }
+  return field.type == 'user' && field.autoValue == 'current_user';
+}
+
+List<VehicleAsset> _fleetAssets(VehicleFleetListOutcome? outcome) {
+  return switch (outcome) {
+    VehicleFleetListLoaded(assets: final List<VehicleAsset> assets) => assets,
+    VehicleFleetListFromCache(assets: final List<VehicleAsset> assets) =>
+      assets,
+    VehicleFleetListFailed() || null => const <VehicleAsset>[],
+  };
 }
 
 bool _hasAnswer(Object? value) {
@@ -900,11 +940,15 @@ class _SignOffCard extends StatelessWidget {
   const _SignOffCard({
     required this.title,
     required this.isComplete,
+    required this.signerName,
+    required this.employeeId,
     required this.child,
   });
 
   final String title;
   final bool isComplete;
+  final String signerName;
+  final String? employeeId;
   final Widget child;
 
   @override
@@ -936,6 +980,26 @@ class _SignOffCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (signerName.trim().isNotEmpty ||
+              (employeeId?.trim().isNotEmpty ?? false)) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Wrap(
+              spacing: TpSpace.sm,
+              runSpacing: TpSpace.xs,
+              children: <Widget>[
+                if (signerName.trim().isNotEmpty)
+                  _AuditFact(
+                    icon: Icons.verified_user_outlined,
+                    value: signerName.trim(),
+                  ),
+                if (employeeId?.trim().isNotEmpty ?? false)
+                  _AuditFact(
+                    icon: Icons.badge_outlined,
+                    value: employeeId!.trim(),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: TpSpace.md),
           child,
         ],
@@ -1014,43 +1078,6 @@ class _SubmitDock extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ContextRow extends StatelessWidget {
-  const _ContextRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: TpSpace.md,
-        vertical: TpSpace.sm,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, color: palette.primary, size: TpSizing.iconMd),
-          const SizedBox(width: TpSpace.sm),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1145,11 +1172,15 @@ class _HeaderCard extends StatefulWidget {
     required this.state,
     required this.controller,
     required this.languages,
+    required this.fleetAssets,
+    required this.employeeId,
   });
 
   final ChecklistFillState state;
   final ChecklistFillController controller;
   final List<ChecklistLang> languages;
+  final List<VehicleAsset> fleetAssets;
+  final String? employeeId;
 
   @override
   State<_HeaderCard> createState() => _HeaderCardState();
@@ -1181,22 +1212,151 @@ class _HeaderCardState extends State<_HeaderCard> {
     super.dispose();
   }
 
+  Future<void> _pickAsset() async {
+    final VehicleAsset? selected = await showModalBottomSheet<VehicleAsset>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (BuildContext context) => _ChecklistAssetPickerSheet(
+        assets: widget.fleetAssets,
+      ),
+    );
+    final String? assetNo = selected?.assetNo?.trim();
+    if (assetNo == null || assetNo.isEmpty || !mounted) return;
+    await widget.controller.setAsset(assetNo);
+  }
+
+  Future<void> _scanAsset() async {
+    // Keep the operator on the in-progress checklist. The global scanner is
+    // a navigation surface (it opens asset/tyre actions); this focused camera
+    // surface instead returns the canonical QR payload to its caller.
+    final String? assetNo = await showAssetCameraScanner(context);
+    if (assetNo == null || assetNo.trim().isEmpty || !mounted) return;
+    await widget.controller.setAsset(assetNo);
+  }
+
+  String? _contextAnswer(String type) {
+    final ChecklistTemplate? template = widget.state.templateRecord?.template;
+    if (template == null) return null;
+    for (final ChecklistField field in template.fields) {
+      if (field.type != type) continue;
+      final String value =
+          widget.state.answers[field.id]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  VehicleAsset? get _selectedAsset {
+    final String wanted = widget.state.assetNo?.trim().toLowerCase() ?? '';
+    if (wanted.isEmpty) return null;
+    for (final VehicleAsset asset in widget.fleetAssets) {
+      if (asset.assetNo?.trim().toLowerCase() == wanted) return asset;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ChecklistFillState state = widget.state;
+    final VehicleAsset? selectedAsset = _selectedAsset;
+    final String? selectedPhoto =
+        selectedAsset == null ? null : vehiclePhotoAsset(selectedAsset);
     return TpCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _ContextRow(
-            icon: Icons.directions_car,
-            label: state.assetNo?.trim().isNotEmpty ?? false
-                ? state.assetNo!.trim()
-                : l10n.checklistNoAssetLabel,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              SizedBox.square(
+                dimension: 72,
+                child: selectedPhoto == null
+                    ? const Icon(Icons.local_shipping_outlined, size: 38)
+                    : Image.asset(selectedPhoto, fit: BoxFit.contain),
+              ),
+              const SizedBox(width: TpSpace.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    TpIdentifierText(
+                      state.assetNo?.trim().isNotEmpty ?? false
+                          ? state.assetNo!.trim()
+                          : l10n.checklistNoAssetLabel,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    if (selectedAsset != null)
+                      Text(
+                        <String?>[
+                          selectedAsset.make,
+                          selectedAsset.model,
+                          selectedAsset.vehicleType,
+                        ]
+                            .whereType<String>()
+                            .where((String value) => value.trim().isNotEmpty)
+                            .join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TpButton.secondary(
+                  label: l10n.checklistSelectAssetAction,
+                  icon: Icons.manage_search_rounded,
+                  onPressed: widget.fleetAssets.isEmpty ? null : _pickAsset,
+                  isFullWidth: true,
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: TpButton.secondary(
+                  label: l10n.checklistScanAssetAction,
+                  icon: Icons.qr_code_scanner_rounded,
+                  onPressed: _scanAsset,
+                  isFullWidth: true,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: TpSpace.md),
-          if (state.siteOptions.isNotEmpty)
+          Wrap(
+            spacing: TpSpace.lg,
+            runSpacing: TpSpace.sm,
+            children: <Widget>[
+              if (_contextAnswer('date') case final String date)
+                _AuditFact(icon: Icons.event_outlined, value: date),
+              if (state.printedName.trim().isNotEmpty)
+                _AuditFact(
+                  icon: Icons.badge_outlined,
+                  value: state.printedName.trim(),
+                ),
+              if (widget.employeeId?.trim().isNotEmpty ?? false)
+                _AuditFact(
+                  icon: Icons.verified_user_outlined,
+                  value:
+                      '${l10n.checklistEmployeeIdLabel}: ${widget.employeeId!.trim()}',
+                ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.md),
+          if ((state.assetNo?.trim().isNotEmpty ?? false) &&
+              (state.site?.trim().isNotEmpty ?? false))
+            TpInput(
+              label: l10n.checklistSiteLabel,
+              hint: state.site,
+              enabled: false,
+            )
+          else if (state.siteOptions.isNotEmpty)
             TpDropdown<String>(
               label: l10n.checklistSiteLabel,
               value: state.siteOptions.contains(state.site) ? state.site : null,
@@ -1217,7 +1377,8 @@ class _HeaderCardState extends State<_HeaderCard> {
             label: l10n.checklistPrintedNameLabel,
             controller: _printedNameController,
             hint: l10n.checklistPrintedNamePlaceholder,
-            onChanged: widget.controller.setPrintedName,
+            enabled: false,
+            suffix: const Icon(Icons.lock_outline_rounded),
           ),
           if (widget.languages.length > 1) ...<Widget>[
             const SizedBox(height: TpSpace.md),
@@ -1227,6 +1388,162 @@ class _HeaderCardState extends State<_HeaderCard> {
               onChanged: widget.controller.setReadLang,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditFact extends StatelessWidget {
+  const _AuditFact({required this.icon, required this.value});
+
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surfaceSunken,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: TpSpace.sm,
+          vertical: TpSpace.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 16, color: palette.textMuted),
+            const SizedBox(width: TpSpace.xs),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChecklistAssetPickerSheet extends StatefulWidget {
+  const _ChecklistAssetPickerSheet({required this.assets});
+
+  final List<VehicleAsset> assets;
+
+  @override
+  State<_ChecklistAssetPickerSheet> createState() =>
+      _ChecklistAssetPickerSheetState();
+}
+
+class _ChecklistAssetPickerSheetState
+    extends State<_ChecklistAssetPickerSheet> {
+  final TextEditingController _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String needle = _query.trim().toLowerCase();
+    final List<VehicleAsset> filtered = widget.assets.where((VehicleAsset a) {
+      if (!a.hasNavigableAssetNo) return false;
+      if (needle.isEmpty) return true;
+      return <String?>[
+        a.assetNo,
+        a.fleetNumber,
+        a.registrationNo,
+        a.make,
+        a.model,
+        a.vehicleType,
+        a.site,
+      ].whereType<String>().any(
+            (String value) => value.toLowerCase().contains(needle),
+          );
+    }).toList(growable: false);
+
+    return FractionallySizedBox(
+      heightFactor: 0.88,
+      child: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              TpSpace.lg,
+              TpSpace.md,
+              TpSpace.lg,
+              TpSpace.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  l10n.checklistSelectAssetAction,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: TpSpace.md),
+                TpInput(
+                  label: l10n.checklistSearchAssetHint,
+                  controller: _search,
+                  prefixIcon: Icons.search_rounded,
+                  onChanged: (String value) => setState(() => _query = value),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(
+                TpSpace.lg,
+                TpSpace.sm,
+                TpSpace.lg,
+                TpSpace.xl,
+              ),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: TpSpace.sm),
+              itemBuilder: (BuildContext context, int index) {
+                final VehicleAsset asset = filtered[index];
+                final String? photo = vehiclePhotoAsset(asset);
+                final String subtitle = <String?>[
+                  asset.make,
+                  asset.model,
+                  asset.vehicleType,
+                  asset.site,
+                ]
+                    .whereType<String>()
+                    .where((String value) => value.trim().isNotEmpty)
+                    .join(' · ');
+                return TpCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    minTileHeight: 72,
+                    leading: SizedBox.square(
+                      dimension: 56,
+                      child: photo == null
+                          ? const Icon(Icons.local_shipping_outlined, size: 32)
+                          : Image.asset(photo, fit: BoxFit.contain),
+                    ),
+                    title: TpIdentifierText(
+                      asset.assetNo!,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).pop(asset),
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

@@ -1,9 +1,17 @@
+import { setConfigurationScope } from '../lib/configurationStore'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ── Supabase mock (app_settings key/value store) ─────────────────────────────
 const state = { row: null, selectError: null, upserted: null, upsertError: null }
 vi.mock('../lib/supabase', () => ({
   supabase: {
+    rpc: async (name, args) => {
+      if (name === 'save_organisation_configuration') {
+        state.upserted = args.p_values[0]
+        return { data: { saved: args.p_values.length }, error: state.upsertError }
+      }
+      return { data: state.row ? [state.row] : [], error: state.selectError }
+    },
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: state.row, error: state.selectError }) }) }),
       upsert: async (payload) => { state.upserted = payload; return { error: state.upsertError } },
@@ -13,7 +21,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   validateWebhookUrl, endpointAcceptsEvent, getWebhookEndpoints,
-  saveWebhookEndpoints, dispatchEvent, sendTestEvent, signBody, clearWebhookCache,
+  saveWebhookEndpoints, dispatchEvent, sendTestEvent, clearWebhookCache,
 } from '../lib/webhooks'
 
 const EVENT = Object.freeze({
@@ -222,41 +230,34 @@ describe('dispatchEvent', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // HMAC signature
 // ─────────────────────────────────────────────────────────────────────────────
-describe('signature header', () => {
-  it('adds X-TyrePulse-Signature (hex HMAC-SHA256) when a secret is set', async () => {
-    vi.stubGlobal('crypto', {
-      subtle: {
-        importKey: vi.fn(async () => 'key'),
-        sign: vi.fn(async () => new Uint8Array([0xde, 0xad, 0xbe, 0xef]).buffer),
-      },
-    })
+describe('server-managed signing boundary', () => {
+  it('does not expose a legacy secret and blocks its delivery', async () => {
     setSavedEndpoints([endpoint({ secret: 'shhh' })])
-    await dispatchEvent(EVENT)
-    const [, opts] = fetchMock.mock.calls[0]
-    expect(opts.headers['X-TyrePulse-Signature']).toBe('deadbeef')
+    const [saved] = await getWebhookEndpoints()
+    expect(saved).not.toHaveProperty('secret')
+    expect(saved.requires_server_signing).toBe(true)
+    const [result] = await dispatchEvent(EVENT)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toContain('Server-managed signing')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
-
-  it('omits the header when crypto.subtle is unavailable (still delivers)', async () => {
-    vi.stubGlobal('crypto', {}) // no subtle
-    setSavedEndpoints([endpoint({ secret: 'shhh' })])
-    const [res] = await dispatchEvent(EVENT)
-    const [, opts] = fetchMock.mock.calls[0]
-    expect(opts.headers['X-TyrePulse-Signature']).toBeUndefined()
-    expect(res.ok).toBe(true)
+  it('rejects saving a signing secret before calling persistence', async () => {
+    await expect(saveWebhookEndpoints([endpoint({ secret: 'shhh' })])).rejects.toThrow('cannot store secrets')
+    expect(state.upserted).toBeNull()
   })
-
-  it('omits the header (and warns instead of failing) when signing throws', async () => {
-    vi.stubGlobal('crypto', { subtle: { importKey: vi.fn(async () => { throw new Error('nope') }) } })
-    setSavedEndpoints([endpoint({ secret: 'shhh' })])
-    const [res] = await dispatchEvent(EVENT)
-    expect(fetchMock.mock.calls[0][1].headers['X-TyrePulse-Signature']).toBeUndefined()
-    expect(res.ok).toBe(true)
-  })
-
-  it('signBody returns null without a secret or subtle', async () => {
-    await expect(signBody(null, '{}')).resolves.toBeNull()
+  it('blocks a direct test of a signed endpoint without falling back to unsigned', async () => {
     vi.stubGlobal('crypto', {})
-    await expect(signBody('s', '{}')).resolves.toBeNull()
+    const result = await sendTestEvent(endpoint({ secret: 'shhh' }), 'tyre.created')
+    expect(result.ok).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+  it('retains the signing requirement when editing sanitized legacy settings', async () => {
+    setSavedEndpoints([endpoint({ secret: 'shhh' })])
+    const saved = await saveWebhookEndpoints(await getWebhookEndpoints())
+    expect(saved[0].requires_server_signing).toBe(true)
+    expect(JSON.stringify(state.upserted)).not.toContain('shhh')
+    expect((await dispatchEvent(EVENT))[0].ok).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
@@ -277,4 +278,16 @@ describe('sendTestEvent', () => {
     expect(res.ok).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
+})
+
+
+it('does not send another organisation event to cached endpoints', async () => {
+  setConfigurationScope('webhook-user|org-a')
+  setSavedEndpoints([endpoint()])
+  await getWebhookEndpoints()
+  setConfigurationScope('webhook-user|org-b')
+  state.row = null
+  state.selectError = { message: 'denied' }
+  expect(await dispatchEvent(EVENT)).toEqual([])
+  expect(fetchMock).not.toHaveBeenCalled()
 })

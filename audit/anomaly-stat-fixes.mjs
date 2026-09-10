@@ -1,0 +1,8 @@
+﻿import fs from 'node:fs';const edit=(p,f)=>fs.writeFileSync(p,f(fs.readFileSync(p,'utf8').replaceAll('\r\n','\n')));
+edit('src/lib/anomalyEngine.js',s=>s.replace("import { mean, stdDev, groupBy }", "import { currencyForCountry } from './governedCost'\nimport { mean, stdDev, groupBy }").replace('records.map(r => r.cost_per_tyre).filter(v => v > 0)','records.map(r => Number(r.cost_per_tyre)).filter(v => Number.isFinite(v) && v > 0)').replace('Unusual cost: SAR ${r.cost_per_tyre.toLocaleString()}','Unusual cost: ${currencyForCountry(r.country) || \'\'} ${Number(r.cost_per_tyre).toLocaleString()}').replace('fleet avg SAR ${Math.round(costMean).toLocaleString()}','fleet avg ${currencyForCountry(r.country) || \'\'} ${Math.round(costMean).toLocaleString()}').replaceAll("      asset_no: src.asset_no || null,","      asset_no: src.asset_no || null,\n      country: src.country || null,").replaceAll("    asset_no: src.asset_no || null,","    asset_no: src.asset_no || null,\n    country: src.country || null,").replace("      asset_no: asset,","      asset_no: asset,\n      country: visits[0].items[0]?.country || null,").replace('      asset_no: s.asset_no,','      asset_no: s.asset_no,\n      country: s.country,').replace(/    let peak90 = 0\n    for \(let i = 0; i < times.length; i\+\+\) \{[\s\S]*?      if \(c > peak90\) peak90 = c\n    }/,`    let peak90 = 0
+    let left = 0
+    for (let right = 0; right < times.length; right++) {
+      while (times[right] - times[left] > 90 * DAY_MS) left++
+      peak90 = Math.max(peak90, right - left + 1)
+    }`));
+edit('src/lib/exportUtils.js',s=>s.replace("  doc.save(`${reportFileName('Inspection', safe)}.pdf`)\n}","  if (opts.save !== false) doc.save(`${reportFileName('Inspection', safe)}.pdf`)\n  return doc\n}"));

@@ -11,7 +11,12 @@ import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_screen.dart';
+import 'package:tyre_pulse/features/scanning/presentation/camera_access.dart';
 import 'package:tyre_pulse/features/tyre_diagram/data/tyre_defect_report_repository.dart';
 import 'package:tyre_pulse/features/tyre_diagram/tyre_diagram_providers.dart';
 
@@ -44,25 +49,29 @@ Future<void> _pump(
   WidgetTester tester,
   _FakeDefectRepository repository, {
   Locale locale = const Locale('en'),
+  VehicleDetailOutcome asset = const VehicleDetailNotFound(),
+  ReportIssueRoute route = const ReportIssueRoute(
+    assetNo: AssetNo('PUMP-208'),
+    siteName: SiteName('Qiddiya G2'),
+    tyreSerial: TyreSerial('TY-90'),
+  ),
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         workspaceContextProvider.overrideWithValue(_workspace),
         tyreDefectReportRepositoryProvider.overrideWithValue(repository),
+        vehicleDetailProvider('PUMP-208').overrideWith((ref) async => asset),
+        cameraAccessProvider.overrideWithValue(
+          const CameraAccessDenied(reason: 'Camera permission denied'),
+        ),
       ],
       child: MaterialApp(
         theme: TpTheme.light,
         locale: locale,
         supportedLocales: TpLocalizations.supportedLocales,
         localizationsDelegates: TpLocalizations.delegates,
-        home: const ReportIssueScreen(
-          route: ReportIssueRoute(
-            assetNo: AssetNo('PUMP-208'),
-            siteName: SiteName('Qiddiya G2'),
-            tyreSerial: TyreSerial('TY-90'),
-          ),
-        ),
+        home: ReportIssueScreen(route: route),
       ),
     ),
   );
@@ -70,6 +79,84 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('QR opens the shared scanner and cancelling preserves the draft',
+      (tester) async {
+    await _pump(
+      tester,
+      _FakeDefectRepository(),
+      route: const ReportIssueRoute(),
+    );
+    await tester.enterText(
+      find.byKey(const Key('reportIssue.title')),
+      'Keep my report',
+    );
+    final scan = find.byKey(const Key('reportIssue.scanAsset'));
+    await tester.ensureVisible(scan);
+    await tester.tap(scan);
+    await tester.pumpAndSettle();
+    expect(find.text('Camera permission denied'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('reportIssue.title')))
+          .controller!
+          .text,
+      'Keep my report',
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('reportIssue.asset')))
+          .readOnly,
+      isFalse,
+    );
+  });
+
+  testWidgets('verified asset master uses shared card and marks offline copies',
+      (tester) async {
+    const asset = VehicleAsset(
+      id: 'vehicle-1',
+      assetNo: 'PUMP-208',
+      make: 'Verified make',
+      model: 'Verified model',
+      registrationNo: 'REG-21',
+    );
+    await _pump(
+      tester,
+      _FakeDefectRepository(),
+      asset: const VehicleDetailFromCache(asset: asset),
+    );
+    expect(
+      tester
+          .widget<SelectedVehicleCard>(find.byType(SelectedVehicleCard))
+          .asset,
+      same(asset),
+    );
+    expect(find.textContaining('Verified make'), findsOneWidget);
+    expect(find.textContaining('You are offline.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'missing master data is explained and incident date remains editable',
+      (tester) async {
+    await _pump(tester, _FakeDefectRepository());
+    expect(find.byType(SelectedVehicleCard), findsNothing);
+    expect(
+      find.textContaining('could not be found in the fleet register'),
+      findsOneWidget,
+    );
+    final field = find.byKey(const Key('reportIssue.incidentAt'));
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsNothing);
+    expect(find.textContaining('Incident date and time:'), findsOneWidget);
+  });
+
   testWidgets('prefills route context and submits the complete offline input', (
     WidgetTester tester,
   ) async {
@@ -130,6 +217,13 @@ void main() {
     expect(input.dueDate, isNull);
     expect(input.rootCause, 'mechanical');
     expect(input.description, contains('Can the asset operate safely?'));
+    expect(input.description, contains('Incident date and time: '));
+    final timestamp = input.description
+        .split('Incident date and time: ')
+        .last
+        .split('\n')
+        .first;
+    expect(DateTime.tryParse(timestamp), isNotNull);
     expect(find.text('Issue saved'), findsOneWidget);
   });
 

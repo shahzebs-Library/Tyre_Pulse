@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { listConfiguration, setConfigurationScope } from '../lib/configurationStore'
 import { useAuth } from './AuthContext'
 import { setReportPalette } from '../lib/reportColors'
 import { loadSystemConfig, configBool } from '../lib/api/systemConfig'
@@ -44,8 +45,10 @@ const writeStored = (key, value) => {
 /** Stable identity for a working context; changes whenever the place changes. */
 const keyOf = (ctx) => `${ctx?.country || 'All'}|${ctx?.region || ''}|${ctx?.site || ''}`
 
+const EMPTY_SETTINGS = Object.freeze({ cost_per_tyre: '', company_name: '', currency: '' })
+
 const SettingsContext = createContext({
-  appSettings: { cost_per_tyre: 1200, company_name: 'TyrePulse', currency: 'SAR' },
+  appSettings: EMPTY_SETTINGS,
   activeCountry: 'All',
   setActiveCountry: () => {},
   activeCurrency: 'SAR',
@@ -62,11 +65,10 @@ const SettingsContext = createContext({
 
 export function SettingsProvider({ children }) {
   const { user, profile } = useAuth()
-  const [appSettings, setAppSettings] = useState({
-    cost_per_tyre: 1200,
-    company_name: 'TyrePulse',
-    currency: 'SAR',
-  })
+  const configurationIdentity = `${user?.id ?? ''}|${profile?.organisation_id ?? profile?.org_id ?? ''}`
+  const [configuration, setConfiguration] = useState({ identity: null, values: EMPTY_SETTINGS, status: 'loading' })
+  const appSettings = configuration.identity === configurationIdentity ? configuration.values : EMPTY_SETTINGS
+  const settingsStatus = configuration.identity === configurationIdentity ? configuration.status : 'loading'
   // Persist the admin's country choice so it survives a reload (bug 035 — the
   // Upload page's country-gated actions were disabled after every hard refresh).
   const [activeCountry, setActiveCountryInternal] = useState(
@@ -271,19 +273,27 @@ export function SettingsProvider({ children }) {
     [activeCountry, appSettings.currency],
   )
 
+  useLayoutEffect(() => { setConfigurationScope(configurationIdentity) }, [configurationIdentity])
+  const configurationIdentityRef = useRef(configurationIdentity)
+  configurationIdentityRef.current = configurationIdentity
   const refreshSettings = useCallback(async () => {
-    const { data } = await supabase.from('settings').select('key, value')
-    if (!data) return
+    const { data, error } = await listConfiguration(supabase, 'settings')
+    if (configurationIdentityRef.current !== configurationIdentity) return
+    if (error) {
+      setConfiguration({ identity: configurationIdentity, values: EMPTY_SETTINGS, status: 'error' })
+      throw error
+    }
     const map = {}
-    data.forEach(({ key, value }) => {
+    ;(data ?? []).forEach(({ key, value }) => {
       try { map[key] = JSON.parse(value) } catch { map[key] = value }
     })
-    setAppSettings(prev => ({ ...prev, ...map }))
-  }, [])
+    setConfiguration({ identity: configurationIdentity, values: { ...EMPTY_SETTINGS, ...map }, status: data?.length ? 'ready' : 'unconfigured' })
+  }, [configurationIdentity])
 
   useEffect(() => {
-    if (user) refreshSettings()
-  }, [user, refreshSettings])
+    setConfiguration({ identity: configurationIdentity, values: EMPTY_SETTINGS, status: 'loading' })
+    if (user) refreshSettings().catch(() => { /* Settings page surfaces the failed read. */ })
+  }, [user, configurationIdentity, refreshSettings])
 
   // Global system_config (System Configuration console page). Loaded ONCE per
   // authenticated session and primed into the central systemConfig cache so every
@@ -333,7 +343,7 @@ export function SettingsProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      appSettings, refreshSettings,
+      appSettings, refreshSettings, settingsStatus,
       activeCountry, setActiveCountry,
       activeCurrency,
       systemConfig, refreshSystemConfig, maintenanceActive,
@@ -349,7 +359,7 @@ export function SettingsProvider({ children }) {
       // Reporting scope (analytics). Separate from the working context.
       reportingScope, setReportingScope, allowedScopeCountries: scopeCountryOptions,
     }),
-    [appSettings, refreshSettings, activeCountry, setActiveCountry, activeCurrency,
+    [appSettings, refreshSettings, settingsStatus, activeCountry, setActiveCountry, activeCurrency,
      systemConfig, refreshSystemConfig, maintenanceActive,
      workingContext, setWorkingContext, allowed, canSwitchWorkingContext, contextKey, canSelectAll,
      reportingScope, setReportingScope, scopeCountryOptions],

@@ -20,19 +20,12 @@
 /// because the state it reads never carries accident results; that is a
 /// scope boundary, not an oversight.
 ///
-/// # This screen is not reachable through the real router yet
-///
-/// `widget.route` is a [GlobalSearchRoute], which is presently a structurally
-/// complete but functionally INERT route class - see
-/// `domain/global_search_route.dart`'s own doc comment for exactly what a
-/// human needs to add to the forbidden router files to make it live, and
-/// `global_search_screen_registrations.dart` for the (also inert until then)
-/// screen-registry entry this screen ships under.
+/// Home's services menu opens this screen with a Navigator push. Dedicated
+/// deep-link registration remains dependent on the protected router wiring.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -141,28 +134,28 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
       final VehiclesRoute target = VehiclesRoute(
         assetNo: AssetNo(item.assetNo),
       );
-      GoRouter.of(context).go(target.location);
+      Navigator.of(context).pop<TpRoute>(target);
       return;
     }
     if (item is TyreSearchResult) {
       final SerialSearchRoute target = SerialSearchRoute(
         tyreSerial: TyreSerial(item.serialNo),
       );
-      GoRouter.of(context).go(target.location);
+      Navigator.of(context).pop<TpRoute>(target);
       return;
     }
     if (item is WorkOrderSearchResult) {
       final WorkOrderDetailRoute target = WorkOrderDetailRoute(
         workOrderId: WorkOrderId(item.id),
       );
-      GoRouter.of(context).go(target.location);
+      Navigator.of(context).pop<TpRoute>(target);
       return;
     }
     if (item is InspectionSearchResult) {
       final InspectionDetailRoute target = InspectionDetailRoute(
         inspectionId: InspectionId(item.id),
       );
-      GoRouter.of(context).go(target.location);
+      Navigator.of(context).pop<TpRoute>(target);
     }
   }
 
@@ -175,6 +168,9 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
       GlobalSearchState? previous,
       GlobalSearchState next,
     ) {
+      if (next.phase == GlobalSearchPhase.idle && next.query.isEmpty) {
+        _searchController.clear();
+      }
       final AppError? error = next.lastError;
       if (error == null || identical(error, previous?.lastError)) return;
       ScaffoldMessenger.of(context)
@@ -183,11 +179,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
     });
 
     return TpScaffold(
-      backFallback: TpRoutePaths.home,
       appBar: TpAppBar(
         title: l10n.globalSearchTitle,
         subtitle: l10n.globalSearchSubtitle,
-        backFallback: TpRoutePaths.home,
+        onBack: () => Navigator.of(context).maybePop(),
       ),
       body: ListView(
         padding: const EdgeInsets.all(TpSpace.lg),
@@ -462,6 +457,7 @@ class _ResultRow extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
 
     return TpCard(
+      key: ValueKey('globalSearch.result.${item.kindLabel}.${item.title}'),
       padding: const EdgeInsets.symmetric(
         horizontal: TpSpace.lg,
         vertical: TpSpace.md,

@@ -22,15 +22,19 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_record.dart';
 import 'package:tyre_pulse/features/inspections/domain/queued_inspection.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
+import 'package:tyre_pulse/features/inspections/presentation/reporting/inspection_report_pdf.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_signature_pad.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
+import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
 
 /// One shape both sources ([QueuedInspection] and [InspectionRecord]) are
 /// normalised into, so the render half of this screen does not need to
@@ -38,6 +42,7 @@ import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board
 @immutable
 class _InspectionView {
   const _InspectionView({
+    required this.id,
     required this.assetNo,
     required this.vehicleType,
     required this.site,
@@ -62,6 +67,7 @@ class _InspectionView {
   factory _InspectionView.fromQueued(QueuedInspection q) {
     final InspectionPayload p = q.payload;
     return _InspectionView(
+      id: q.id,
       assetNo: p.assetNo,
       vehicleType: p.vehicleType,
       site: p.site,
@@ -87,6 +93,7 @@ class _InspectionView {
   factory _InspectionView.fromRecord(InspectionRecord r) {
     final DateTime? parsedDate = DateTime.tryParse(r.inspectionDate);
     return _InspectionView(
+      id: r.id,
       assetNo: r.assetNo,
       vehicleType: r.vehicleType,
       site: r.site,
@@ -106,6 +113,7 @@ class _InspectionView {
     );
   }
 
+  final String id;
   final String assetNo;
   final String vehicleType;
   final String site;
@@ -149,6 +157,8 @@ class _InspectionDetailScreenState
   AppError? _error;
   _InspectionView? _view;
   bool _isRetrying = false;
+  bool _isSharing = false;
+  Map<String, TyreFitment> _installedTyres = const <String, TyreFitment>{};
 
   @override
   void didChangeDependencies() {
@@ -168,8 +178,12 @@ class _InspectionDetailScreenState
       final QueuedInspection? queued =
           await ref.read(inspectionSubmissionQueueProvider).byId(id);
       if (queued != null) {
+        final Map<String, TyreFitment> installed =
+            await _loadInstalledTyres(_InspectionView.fromQueued(queued));
+        if (!mounted) return;
         setState(() {
           _view = _InspectionView.fromQueued(queued);
+          _installedTyres = installed;
           _loading = false;
         });
         return;
@@ -177,8 +191,15 @@ class _InspectionDetailScreenState
 
       final InspectionRecord? record =
           await ref.read(inspectionRemoteRepositoryProvider).byId(id);
+      final _InspectionView? nextView =
+          record == null ? null : _InspectionView.fromRecord(record);
+      final Map<String, TyreFitment> installed = nextView == null
+          ? const <String, TyreFitment>{}
+          : await _loadInstalledTyres(nextView);
+      if (!mounted) return;
       setState(() {
-        _view = record == null ? null : _InspectionView.fromRecord(record);
+        _view = nextView;
+        _installedTyres = installed;
         _loading = false;
       });
     } on Object {
@@ -193,6 +214,72 @@ class _InspectionDetailScreenState
         );
         _loading = false;
       });
+    }
+  }
+
+  Future<Map<String, TyreFitment>> _loadInstalledTyres(
+    _InspectionView view,
+  ) async {
+    if (view.assetNo.trim().isEmpty) return const <String, TyreFitment>{};
+    try {
+      final fitments =
+          await ref.read(tyreFitmentRepositoryProvider).activeForAsset(
+                assetNo: view.assetNo,
+                country: ref.read(workspaceContextProvider)?.activeCountry,
+              );
+      return fitmentsByInspectionSlot(
+        vehicleType: view.vehicleType,
+        assetNo: view.assetNo,
+        fitments: fitments,
+      );
+    } on Object {
+      // The historical inspection remains fully readable and shareable. The
+      // report labels current fitment identity as unavailable instead of
+      // substituting the inspection's old serial or exposing a backend error.
+      return const <String, TyreFitment>{};
+    }
+  }
+
+  Future<void> _shareReport() async {
+    final _InspectionView? view = _view;
+    if (view == null || _isSharing) return;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    setState(() => _isSharing = true);
+    try {
+      await shareInspectionReportPdf(
+        InspectionReportData(
+          id: view.id,
+          assetNo: view.assetNo,
+          vehicleType: view.vehicleType,
+          site: view.site,
+          inspector: view.inspector,
+          inspectionDate: view.inspectionDate,
+          status: view.status,
+          approvalStatus: view.approvalStatus,
+          odometerKm: view.odometerKm,
+          hourMeter: view.hourMeter,
+          notes: view.notes,
+          findings: view.findings,
+          gpsLat: view.gpsLat,
+          gpsLng: view.gpsLng,
+          tyreConditions: <String, Map<String, Object?>>{
+            for (final entry in view.tyreConditions.entries)
+              entry.key: entry.value.toEntry(),
+          },
+          installedTyres: _installedTyres,
+        ),
+        _reportCopy(
+          l10n,
+          rtl: Directionality.of(context) == TextDirection.rtl,
+        ),
+      );
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.inspectionReportShareFailedMessage)),
+      );
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
     }
   }
 
@@ -222,6 +309,21 @@ class _InspectionDetailScreenState
       appBar: TpAppBar(
         title: l10n.inspectionDetailTitle,
         backFallback: fallback,
+        actions: _view == null
+            ? null
+            : <Widget>[
+                IconButton(
+                  key: const Key('inspection-detail-share-pdf'),
+                  tooltip: l10n.inspectionReportShareAction,
+                  onPressed: _isSharing ? null : _shareReport,
+                  icon: _isSharing
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_outlined),
+                ),
+              ],
       ),
       body: _body(l10n),
     );
@@ -241,6 +343,41 @@ class _InspectionDetailScreenState
     }
     return _DetailBody(view: view, isRetrying: _isRetrying, onRetry: _retry);
   }
+}
+
+InspectionReportCopy _reportCopy(
+  AppLocalizations l10n, {
+  required bool rtl,
+}) {
+  return InspectionReportCopy(
+    title: l10n.inspectionReportTitle,
+    asset: l10n.serialSearchAsset,
+    vehicleType: l10n.vehiclesFieldType,
+    site: l10n.serialSearchSite,
+    date: l10n.inspectionReportDate,
+    inspector: l10n.inspectionReportInspector,
+    status: l10n.inspectionReportStatus,
+    odometer: l10n.inspectionOdometerLabel,
+    hourMeter: l10n.inspectionHourMeterLabel,
+    location: l10n.inspectionGpsSectionTitle,
+    summary: l10n.inspectionReportSummaryTitle,
+    layout: l10n.inspectionReportLayoutTitle,
+    readings: l10n.inspectionReportReadingsTitle,
+    position: l10n.serialSearchPosition,
+    currentFitment: l10n.inspectionReportCurrentFitment,
+    condition: l10n.inspectionConditionLabel,
+    pressure: l10n.inspectionPressureShort,
+    tread: l10n.inspectionTreadDepthShort,
+    notes: l10n.inspectionNotesLabel,
+    notRecorded: l10n.inspectionNotRecordedYet,
+    notAvailable: l10n.inspectionReportNotAvailable,
+    observations: l10n.inspectionObservationsLabel,
+    generated: l10n.inspectionReportGenerated,
+    good: l10n.tyreConditionGood,
+    worn: l10n.tyreConditionWorn,
+    critical: l10n.statusCritical,
+    rtl: rtl,
+  );
 }
 
 class _DetailBody extends StatelessWidget {

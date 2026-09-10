@@ -16,17 +16,31 @@ import 'package:tyre_pulse/features/calendar/calendar_providers.dart';
 import 'package:tyre_pulse/features/calendar/domain/schedule_item.dart';
 import 'package:tyre_pulse/features/calendar/presentation/calendar_copy.dart';
 
-class CalendarScreen extends ConsumerWidget {
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({required this.route, super.key});
   final CalendarRoute route;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    final DateTime now = DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final CalendarCopy copy = CalendarCopy.of(context);
     final AsyncValue<List<ScheduleItem>> state =
         ref.watch(calendarItemsProvider);
     final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
-    final String fallback = TpBackFallbacks.forRoute(route);
+    final String fallback = TpBackFallbacks.forRoute(widget.route);
     return TpScaffold(
       backFallback: fallback,
       appBar: TpAppBar(
@@ -56,6 +70,9 @@ class CalendarScreen extends ConsumerWidget {
         data: (List<ScheduleItem> items) => _CalendarBody(
           items: items,
           copy: copy,
+          selectedDate: _selectedDate,
+          onDateSelected: (DateTime value) =>
+              setState(() => _selectedDate = value),
           assignee: workspace?.fullName,
           scopeLabel: workspace?.activeSites.isNotEmpty == true
               ? workspace!.activeSites.join(', ')
@@ -74,19 +91,23 @@ class _CalendarBody extends StatelessWidget {
   const _CalendarBody({
     required this.items,
     required this.copy,
+    required this.selectedDate,
+    required this.onDateSelected,
     required this.assignee,
     required this.scopeLabel,
     required this.onRefresh,
   });
   final List<ScheduleItem> items;
   final CalendarCopy copy;
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onDateSelected;
   final String? assignee;
   final String? scopeLabel;
   final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    final DateTime now = DateTime.now();
+    final DateTime now = selectedDate;
     final Map<ScheduleBucket, List<ScheduleItem>> groups =
         <ScheduleBucket, List<ScheduleItem>>{
       for (final ScheduleBucket bucket in ScheduleBucket.values)
@@ -109,6 +130,12 @@ class _CalendarBody extends StatelessWidget {
             title: copy('title'),
             assignee: assignee,
             scopeLabel: scopeLabel,
+            selectedDate: selectedDate,
+          ),
+          const SizedBox(height: TpSpace.md),
+          _AdjacentDaySelector(
+            selectedDate: selectedDate,
+            onSelected: onDateSelected,
           ),
           const SizedBox(height: TpSpace.lg),
           TpCard(
@@ -184,11 +211,13 @@ class _FieldPlanHeader extends StatelessWidget {
     required this.title,
     required this.assignee,
     required this.scopeLabel,
+    required this.selectedDate,
   });
 
   final String title;
   final String? assignee;
   final String? scopeLabel;
+  final DateTime selectedDate;
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +235,7 @@ class _FieldPlanHeader extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.xs),
         Text(
-          localizations.formatFullDate(DateTime.now()),
+          localizations.formatFullDate(selectedDate),
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: palette.textSecondary,
               ),
@@ -241,6 +270,85 @@ class _FieldPlanHeader extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _AdjacentDaySelector extends StatelessWidget {
+  const _AdjacentDaySelector({
+    required this.selectedDate,
+    required this.onSelected,
+  });
+
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime today = DateTime.now();
+    final DateTime base = DateTime(today.year, today.month, today.day);
+    final MaterialLocalizations localizations =
+        MaterialLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: 7,
+        separatorBuilder: (_, __) => const SizedBox(width: TpSpace.sm),
+        itemBuilder: (BuildContext context, int index) {
+          final DateTime date = base.add(Duration(days: index - 3));
+          final bool selected = DateUtils.isSameDay(date, selectedDate);
+          final String weekday = localizations
+              .narrowWeekdays[date.weekday % DateTime.daysPerWeek]
+              .toUpperCase();
+          return Semantics(
+            selected: selected,
+            button: true,
+            label: localizations.formatFullDate(date),
+            child: InkWell(
+              key: Key('calendar.date.${date.toIso8601String()}'),
+              onTap: () => onSelected(date),
+              borderRadius: BorderRadius.circular(TpRadius.md),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 58,
+                padding: const EdgeInsets.symmetric(vertical: TpSpace.sm),
+                decoration: BoxDecoration(
+                  color: selected ? palette.primary : palette.surface,
+                  border: Border.all(
+                    color: selected ? palette.primary : palette.borderStrong,
+                  ),
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      weekday,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: selected
+                                ? palette.onPrimary
+                                : palette.textMuted,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${date.day}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: selected ? palette.onPrimary : palette.text,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -27,6 +27,7 @@ class WashPhotoGallery extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     required this.addLabel,
+    this.canAdd = true,
     super.key,
   });
 
@@ -35,10 +36,12 @@ class WashPhotoGallery extends StatelessWidget {
   final ValueChanged<WashPhotoSource> onAdd;
   final ValueChanged<int> onRemove;
   final String addLabel;
+  final bool canAdd;
 
   @override
   Widget build(BuildContext context) {
-    final bool canAddMore = localPaths.length < WashPhotoCapture.maxPhotos;
+    final bool canAddMore =
+        canAdd && localPaths.length < WashPhotoCapture.maxPhotos;
 
     return Wrap(
       spacing: TpSpace.sm,

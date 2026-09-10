@@ -1,0 +1,76 @@
+  async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const autoTable = await loadAutoTable()
+    setExportLoading(true)
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Inspection Schedule', formatDate(new Date()), company, brand)
+
+    const rows = schedule.filter(s => s.status !== 'Cancelled').map(s => [
+      s.asset_no || '',
+      s.inspection_date || '',
+      s.inspection_time || '',
+      s.inspector_name || '',
+      s.site || '',
+      s.type || '',
+      s.status || '',
+      s.notes || '',
+    ])
+
+    if (rows.length === 0) {
+      pdfEmptyState(doc, 'No scheduled inspections for the selected period')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save('inspection_schedule.pdf')
+      setExportLoading(false)
+      return
+    }
+
+    autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
+      startY: 28,
+      head: [['Asset', 'Date', 'Time', 'Inspector', 'Site', 'Type', 'Status', 'Notes']],
+      body: rows,
+    })
+
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+
+    doc.save('inspection_schedule.pdf')
+    setExportLoading(false)
+  }
+
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
+    setExportLoading(true)
+    const wb = XLSX.utils.book_new()
+
+    // Schedule sheet
+    const schedRows = schedule.map(s => ({
+      'Asset No': s.asset_no,
+      'Date': s.inspection_date,
+      'Time': s.inspection_time,
+      'Inspector': s.inspector_name,
+      'Site': s.site,
+      'Type': s.type,
+      'Status': s.status,
+      'Notes': s.notes,
+    }))
+    const ws1 = XLSX.utils.json_to_sheet(schedRows)
+    XLSX.utils.book_append_sheet(wb, ws1, 'Schedule')
+
+    // Compliance sheet
+    const compRows = gapAnalysis.map(r => ({
+      'Asset No': r.asset_no,
+      'Site': r.site,
+      'Days Since Inspection': r.days_since ?? 'Never',
+      'Recommended Interval': r.recommended,
+      'Gap Status': r.status,
+      'Inspector': r.inspector,
+    }))
+    const ws2 = XLSX.utils.json_to_sheet(compRows)
+    XLSX.utils.book_append_sheet(wb, ws2, 'Compliance Report')
+
+    XLSX.writeFile(wb, 'inspection_planner.xlsx')
+    setExportLoading(false)
+  }
+

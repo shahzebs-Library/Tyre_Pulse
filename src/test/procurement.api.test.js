@@ -38,11 +38,9 @@ beforeEach(() => {
 
 describe('service layer - procurement', () => {
   it('getSetting reads a settings value by key via maybeSingle', async () => {
-    h.state.result = { data: { value: '5000' }, error: null }
+    h.state.rpc = { data: [{ value: '5000' }], error: null }
     const res = await procurement.getSetting('tp_procurement_budget')
-    expect(h.state.last._table).toBe('settings')
-    expect(h.state.last._calls.select).toBe('value')
-    expect(h.state.last._calls.eq).toContainEqual(['key', 'tp_procurement_budget'])
+    expect(h.state.lastRpc.args).toEqual({p_namespace:'settings',p_key:'tp_procurement_budget'})
     expect(res.data.value).toBe('5000')
   })
 
@@ -79,9 +77,9 @@ describe('service layer - procurement', () => {
   })
 
   it('upsertSetting upserts key/value on key', async () => {
-    await procurement.upsertSetting('tp_procurement_budget', '9000')
-    expect(h.state.last._table).toBe('settings')
-    expect(h.state.last._calls.upsert).toEqual({ key: 'tp_procurement_budget', value: '9000' })
-    expect(h.state.last._calls.upsertOpts).toEqual({ onConflict: 'key' })
+    h.state.rpc = { data: { saved: 1 }, error: null }
+    const result = await procurement.upsertSetting('tp_procurement_budget', '9000')
+    expect(result.error).toBeNull()
+    expect(h.state.lastRpc.args).toEqual({p_namespace:'settings',p_values:[{key:'tp_procurement_budget',value:'9000'}]})
   })
 })

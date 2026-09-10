@@ -242,14 +242,14 @@ export async function getAllWorkOrdersMatching(opts = {}, { max = 50000, pageSiz
   return { rows: rows.slice(0, max), total, truncated: total > max }
 }
 
-/** Insert a work order (page mutation - no row returned). */
+/** Return the committed row so server-enforced status cannot be guessed locally. */
 export async function insertWorkOrder(values) {
-  return unwrap(await supabase.from('work_orders').insert(values))
+  return unwrap(await supabase.from('work_orders').insert(values).select(PAGE_COLS).single())
 }
 
-/** Update a work order by id (page mutation - no row returned). */
+/** Return the committed row, including any approval-gated status changes. */
 export async function updateWorkOrderById(id, patch) {
-  return unwrap(await supabase.from('work_orders').update(patch).eq('id', id))
+  return unwrap(await supabase.from('work_orders').update(patch).eq('id', id).select(PAGE_COLS).single())
 }
 
 /** Generate the next sequential work-order number via the DB RPC. */

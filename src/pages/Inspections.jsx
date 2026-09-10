@@ -18,6 +18,7 @@ import SignaturePad from '../components/SignaturePad'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import ApprovalReview from '../components/workflow/ApprovalReview'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import DateField from '../components/ui/DateField'
@@ -2786,6 +2787,11 @@ export default function Inspections() {
 
       {/* ── Approver Modal (opens when landing via ?approve=<id>) ── */}
       {showApproveModal && approveTarget && (
+        <ApprovalReview key={approveTarget.id} entityType="inspection" entityId={approveTarget.id}
+          title={approveTarget.title || approveTarget.asset_no}
+          onClose={() => { setShowApproveModal(false); clearApproveParam() }}
+          onActed={() => { refreshApproveTarget(); load() }}
+          legacy={
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9999,
           background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
@@ -3043,6 +3049,7 @@ export default function Inspections() {
             )}
           </div>
         </div>
+        } />
       )}
 
       {/* Approver Signature Pad. Gated as well as its button: a pad that opens for

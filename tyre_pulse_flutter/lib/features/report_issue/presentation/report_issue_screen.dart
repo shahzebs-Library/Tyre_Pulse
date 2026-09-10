@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -13,10 +14,15 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/widgets/selected_vehicle_card.dart';
 import 'package:tyre_pulse/features/report_issue/data/report_issue_draft_store.dart';
 import 'package:tyre_pulse/features/report_issue/data/report_issue_photo_capture.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
 import 'package:tyre_pulse/features/report_issue/report_issue_providers.dart';
+import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
 import 'package:tyre_pulse/features/tyre_diagram/data/tyre_defect_report_repository.dart';
 import 'package:tyre_pulse/features/tyre_diagram/tyre_diagram_providers.dart';
 
@@ -45,6 +51,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   bool _savingDraft = false;
   bool _restoringDraft = false;
   bool _saving = false;
+  DateTime? _incidentAt = DateTime.now();
 
   @override
   void initState() {
@@ -84,6 +91,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   @override
   Widget build(BuildContext context) {
     final ReportIssueCopy copy = ReportIssueCopy.of(context);
+    final AppLocalizations l10n = AppLocalizations.of(context);
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     return TpScaffold(
       backFallback: fallback,
@@ -139,6 +147,31 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                     );
                   },
                 ),
+                AnimatedBuilder(
+                  animation: _asset,
+                  builder: (context, child) => _AssetMasterSummary(
+                    assetNo: _asset.text.trim(),
+                  ),
+                ),
+                if (widget.route.assetNo == null) ...<Widget>[
+                  TpButton.secondary(
+                    key: const Key('reportIssue.scanAsset'),
+                    label: l10n.checklistScanAssetAction,
+                    icon: Icons.qr_code_scanner_rounded,
+                    onPressed: _saving ? null : () => unawaited(_scanAsset()),
+                  ),
+                  const SizedBox(height: TpSpace.lg),
+                ],
+                OutlinedButton.icon(
+                  key: const Key('reportIssue.incidentAt'),
+                  icon: const Icon(Icons.event_outlined),
+                  onPressed:
+                      _saving ? null : () => unawaited(_pickIncidentAt()),
+                  label: Text(
+                    '${copy('incidentAt')}: ${_incidentAt == null ? copy('chooseDateTime') : _formatIncidentAt(_incidentAt!)}',
+                  ),
+                ),
+                const SizedBox(height: TpSpace.lg),
                 _FieldLabel(copy('category')),
                 _IssueCategoryGrid(
                   selected: _category,
@@ -281,6 +314,50 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     );
   }
 
+  Future<void> _scanAsset() async {
+    final workspace = ref.read(workspaceContextProvider);
+    final assetNo = await showAssetCameraScanner(context);
+    if (!mounted ||
+        workspace != ref.read(workspaceContextProvider) ||
+        assetNo == null ||
+        assetNo.trim().isEmpty) {
+      return;
+    }
+    _asset.text = assetNo.trim();
+  }
+
+  String _formatIncidentAt(DateTime value) {
+    final local = value.toLocal();
+    final material = MaterialLocalizations.of(context);
+    return '${material.formatMediumDate(local)} ${material.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+  }
+
+  Future<void> _pickIncidentAt() async {
+    final now = DateTime.now();
+    final initial = (_incidentAt ?? now).toLocal();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(now) ? now : initial,
+      firstDate: DateTime(2000),
+      lastDate: now,
+    );
+    if (!mounted || date == null) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (!mounted || time == null) return;
+    _change(
+      () => _incidentAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      ),
+    );
+  }
+
   Future<void> _choosePhotoSource(ReportIssueCopy copy) async {
     final ReportIssuePhotoSource? source =
         await TpBottomSheet.show<ReportIssuePhotoSource>(
@@ -391,6 +468,8 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   String _submissionDescription(ReportIssueCopy copy) {
     final List<String> lines = <String>[
       _details.text.trim(),
+      if (_incidentAt != null)
+        '${copy('incidentAt')}: ${_incidentAt!.toUtc().toIso8601String()}',
       '${copy('operation')}: ${copy(_operation)}',
       if (_operation == 'restricted' && _restriction.text.trim().isNotEmpty)
         '${copy('restriction')}: ${_restriction.text.trim()}',
@@ -463,6 +542,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                 ? draft.operation
                 : 'restricted';
         _requestWorkOrder = draft.requestWorkOrder;
+        _incidentAt = draft.incidentAt;
         _draftSaved = true;
       });
     } on Object {
@@ -495,6 +575,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
               requestWorkOrder: _requestWorkOrder,
               photoLocalPaths: List<String>.unmodifiable(_photos),
               savedAt: DateTime.now(),
+              incidentAt: _incidentAt,
             ),
           );
       if (!mounted) return;
@@ -511,6 +592,62 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(value)));
+  }
+}
+
+class _AssetMasterSummary extends ConsumerWidget {
+  const _AssetMasterSummary({required this.assetNo});
+
+  final String assetNo;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (assetNo.isEmpty || ref.watch(workspaceContextProvider) == null) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final detail = ref.watch(vehicleDetailProvider(assetNo));
+    final outcome = detail.asData?.value;
+    final VehicleAsset? asset = switch (outcome) {
+      VehicleDetailLoaded(:final asset) => asset,
+      VehicleDetailFromCache(:final asset) => asset,
+      _ => null,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TpSpace.lg),
+      child: asset == null
+          ? detail.isLoading
+              ? const LinearProgressIndicator()
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      outcome is VehicleDetailNotFound
+                          ? l10n.vehiclesNotFoundMessage
+                          : ReportIssueCopy.of(context)('assetLoadFailed'),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          ref.invalidate(vehicleDetailProvider(assetNo)),
+                      child: Text(l10n.actionRetry),
+                    ),
+                  ],
+                )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SelectedVehicleCard(
+                  asset: asset,
+                  changeLabel: l10n.actionRetry,
+                  unavailableLabel: l10n.valueUnavailable,
+                  onChange: () =>
+                      ref.invalidate(vehicleDetailProvider(assetNo)),
+                ),
+                if (outcome is VehicleDetailFromCache)
+                  Text(l10n.stateOfflineCachedMessage),
+              ],
+            ),
+    );
   }
 }
 

@@ -17,10 +17,12 @@ import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/inspection_approval_review_screen.dart';
-import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
+import 'package:tyre_pulse/features/tyres/data/tyre_fitment_repository.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
+import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
 
 const List<String> _pumpPositions = <String>[
   'F1L',
@@ -52,13 +54,11 @@ Map<String, Object?> _reading(
       'tread_depth_mm': 12,
     };
 
-InspectionApprovalItem _pendingPumpInspection({
-  String vehicleType = 'Concrete pump',
-}) {
+InspectionApprovalItem _pendingPumpInspection() {
   return InspectionApprovalItem(
     id: 'inspection-pump-1',
     assetNo: 'MP083',
-    vehicleType: vehicleType,
+    vehicleType: 'Concrete pump',
     site: 'Site A',
     inspector: 'Inspector',
     createdAt: '2026-08-28T09:00:00.000Z',
@@ -86,16 +86,16 @@ InspectionApprovalItem _pendingPumpInspection({
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Locale locale = const Locale('en'),
-  String vehicleType = 'Concrete pump',
+  TyreFitmentRepository? fitmentRepository,
 }) async {
   final _FakeInspectionApprovalRepository repository =
-      _FakeInspectionApprovalRepository(
-    _pendingPumpInspection(vehicleType: vehicleType),
-  );
+      _FakeInspectionApprovalRepository(_pendingPumpInspection());
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         inspectionApprovalRepositoryProvider.overrideWithValue(repository),
+        if (fitmentRepository != null)
+          tyreFitmentRepositoryProvider.overrideWithValue(fitmentRepository),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -139,6 +139,8 @@ void main() {
       expect(board.positions, _pumpPositions);
       expect(board.width, 900 - (TpSpace.lg * 2));
       expect(board.onPositionTap, isNotNull);
+      expect(board.compact, isTrue);
+      expect(board.captureMode, isTrue);
       expect(board.tyreData['R1Li']?['condition'], 'Flat');
       expect(board.tyreData['R1Li']?['pressure_psi'], 0);
       expect(board.tyreData['R1Ri']?['condition'], 'Puncture');
@@ -151,10 +153,6 @@ void main() {
         board.positions.sublist(6, 10),
         const <String>['R1Lo', 'R1Li', 'R1Ri', 'R1Ro'],
       );
-
-      // Axle count alone cannot identify the actual pump body. The submitted
-      // row has no make, so approval must not invent a Sany reference image.
-      expect(find.byType(VehicleMultiViewBoard), findsNothing);
 
       // Decision controls remain part of the same review after replacing
       // the old, smaller nested rendering.
@@ -169,48 +167,41 @@ void main() {
   );
 
   testWidgets(
-    'approval shows a zoomable reference when the submitted pump identity is known',
+    'approval overlays the current canonical fitment identity on submitted '
+    'readings',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(900, 1400);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await _pumpScreen(tester, vehicleType: 'Sany concrete pump');
-
-      // The reference follows the tyre board in a lazy ListView. Reveal it
-      // before asserting its presence, just as a reviewer scrolls to it.
-      await tester.scrollUntilVisible(
-        find.byType(VehicleMultiViewBoard),
-        300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(find.byType(VehicleMultiViewBoard), findsOneWidget);
-
-      final VehicleMultiViewBoard reference =
-          tester.widget<VehicleMultiViewBoard>(
-        find.byType(VehicleMultiViewBoard),
-      );
-      expect(reference.assetNo, 'MP083');
-      expect(reference.vehicleType, 'Sany concrete pump');
-      expect(reference.model, '5 axle');
-
-      final InkWell zoomAction = tester.widget<InkWell>(
-        find.descendant(
-          of: find.byKey(VehicleMultiViewBoardKeys.board),
-          matching: find.byType(InkWell),
+      await _pumpScreen(
+        tester,
+        fitmentRepository: const _FakeTyreFitmentRepository(
+          <TyreFitment>[
+            TyreFitment(
+              id: 'fitment-r1li',
+              serialNo: 'SER-ACTIVE-88421',
+              positionCode: 'LHR1-I',
+              brand: 'Bridgestone',
+              size: '315/80 R22.5',
+              assetNo: 'MP083',
+              status: 'Active',
+            ),
+          ],
         ),
       );
-      zoomAction.onTap!();
-      await tester.pump();
-      expect(find.byKey(VehicleMultiViewBoardKeys.zoomDialog), findsOneWidget);
-      expect(find.byType(InteractiveViewer), findsOneWidget);
-      Navigator.of(
-        tester.element(find.byKey(VehicleMultiViewBoardKeys.zoomDialog)),
-      ).pop();
-      await tester.pump();
 
-      expect(tester.takeException(), isNull);
+      final TyreDiagramBoard board = tester.widget<TyreDiagramBoard>(
+        find.byType(TyreDiagramBoard),
+      );
+      expect(board.tyreData['R1Li']?['condition'], 'Flat');
+      expect(
+        board.tyreData['R1Li']?['installed_serial'],
+        'SER-ACTIVE-88421',
+      );
+      expect(board.tyreData['R1Li']?['installed_brand'], 'Bridgestone');
+      expect(board.tyreData['R1Li']?['installed_size'], '315/80 R22.5');
     },
   );
 
@@ -291,6 +282,20 @@ void main() {
       matchesGoldenFile('goldens/inspection_approval_wide_ar.png'),
     );
   });
+}
+
+final class _FakeTyreFitmentRepository implements TyreFitmentRepository {
+  const _FakeTyreFitmentRepository(this.fitments);
+
+  final List<TyreFitment> fitments;
+
+  @override
+  Future<List<TyreFitment>> activeForAsset({
+    required String assetNo,
+    String? country,
+  }) async {
+    return fitments;
+  }
 }
 
 final class _FakeInspectionApprovalRepository

@@ -37,6 +37,7 @@ import 'package:tyre_pulse/features/checklists/domain/checklist_marks.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_signature_gate.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_template.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_validation.dart';
+import 'package:tyre_pulse/features/checklists/domain/checklist_visibility.dart';
 
 /// Everything that is wrong with a sheet right now, and whether that adds up
 /// to "may not submit yet".
@@ -126,6 +127,7 @@ ChecklistSubmitGate evaluateChecklistSubmitGate({
   required Map<String, Object?> answers,
   required Map<String, Object?> notes,
   required Map<String, Object?> signatures,
+  Map<String, int> photoCounts = const <String, int>{},
   bool? templateRequiresSignature,
   String? primarySignature,
   String Function(ChecklistField field)? labelFor,
@@ -137,9 +139,23 @@ ChecklistSubmitGate evaluateChecklistSubmitGate({
     labelFor: labelFor,
     optionsFor: optionsFor,
   );
+  final Map<String, String> fieldErrors = <String, String>{
+    ...fieldResult.errors,
+  };
+  for (final ChecklistField field in visibleChecklistFields(
+    template?.fields,
+    answers,
+  )) {
+    final int minimum = _minimumPhotoCount(field);
+    if (minimum > 0 && (photoCounts[field.id] ?? 0) < minimum) {
+      fieldErrors[field.id] = minimum == 1
+          ? 'A photo is required.'
+          : '$minimum photos are required.';
+    }
+  }
 
   return ChecklistSubmitGate(
-    fieldErrors: fieldResult.errors,
+    fieldErrors: fieldErrors,
     signatureFieldErrors: validateSignatureFields(
       template?.fields,
       signatures,
@@ -155,4 +171,18 @@ ChecklistSubmitGate evaluateChecklistSubmitGate({
       primary: primarySignature,
     ),
   );
+}
+
+int _minimumPhotoCount(ChecklistField field) {
+  for (final String key in const <String>['min_photos', 'photo_min']) {
+    final Object? raw = field.extra[key];
+    final int? parsed = switch (raw) {
+      final int value => value,
+      final num value => value.toInt(),
+      final String value => int.tryParse(value.trim()),
+      _ => null,
+    };
+    if (parsed != null && parsed > 0) return parsed;
+  }
+  return field.type == 'photo' && field.required ? 1 : 0;
 }

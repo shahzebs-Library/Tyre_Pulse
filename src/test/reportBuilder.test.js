@@ -31,7 +31,13 @@ const h = vi.hoisted(() => {
     state.last = b
     return b
   }
-  return { state, supabase: { from } }
+  const rpc = async (name, args) => {
+    state.lastRpc = { name, args }
+    return name === 'save_organisation_configuration'
+      ? { data: { saved: args.p_values.length }, error: state.result.error }
+      : { ...state.result, data: Array.isArray(state.result.data) ? state.result.data : state.result.data ? [state.result.data] : [] }
+  }
+  return { state, supabase: { from, rpc } }
 })
 
 const {
@@ -346,8 +352,7 @@ describe('saved reports persistence', () => {
     const stored = [{ id: '1', name: 'A', config: { dataset: 'tyres' } }, { bad: true }, 'junk']
     h.state.result = { data: { value: JSON.stringify(stored) }, error: null }
     const out = await fetchSavedReports(h.supabase)
-    expect(h.state.last._calls.table).toBe('app_settings')
-    expect(h.state.last._calls.eq).toEqual([['key', SAVED_REPORTS_KEY]])
+    expect(h.state.lastRpc).toEqual({ name: 'get_organisation_configuration', args: { p_namespace: 'app_settings', p_key: SAVED_REPORTS_KEY } })
     expect(out).toEqual([{ id: '1', name: 'A', config: { dataset: 'tyres' } }])
   })
 
@@ -361,9 +366,9 @@ describe('saved reports persistence', () => {
   it('persistSavedReports upserts on key with JSON value', async () => {
     const reports = [makeSavedReport({ name: 'B', config: { dataset: 'fleet' }, createdBy: 'u1' })]
     await persistSavedReports(h.supabase, reports)
-    const [row, opts] = h.state.last._calls.upsert
+    const row = h.state.lastRpc.args.p_values[0]
     expect(row.key).toBe(SAVED_REPORTS_KEY)
-    expect(opts).toEqual({ onConflict: 'key' })
+    expect(h.state.lastRpc.name).toBe('save_organisation_configuration')
     const parsed = JSON.parse(row.value)
     expect(parsed[0]).toMatchObject({ name: 'B', created_by: 'u1' })
     expect(parsed[0].id).toBeTruthy()

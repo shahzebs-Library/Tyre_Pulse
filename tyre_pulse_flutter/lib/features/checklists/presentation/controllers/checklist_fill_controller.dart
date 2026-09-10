@@ -92,6 +92,21 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
 
     final ChecklistDraftHeader? existing = await drafts.header(draftKey);
 
+    // The signing identity is owned by the authenticated profile, never by a
+    // free-text field or a stale draft header. Prefer the already-verified
+    // workspace profile and only fall back to the remote profile lookup when
+    // that display value was not hydrated into the workspace.
+    String? authenticatedName = workspace.fullName?.trim();
+    if (authenticatedName == null || authenticatedName.isEmpty) {
+      try {
+        authenticatedName =
+            (await remote.currentUserDisplayName(workspace.userId))?.trim();
+      } on Object {
+        authenticatedName = null;
+      }
+    }
+    if (authenticatedName?.isEmpty ?? false) authenticatedName = null;
+
     Map<String, Object?> answers;
     Map<String, Object?> notes;
     String? site;
@@ -108,7 +123,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       site = existing.site ?? route.siteName?.value;
       assetNo =
           existing.assetNo.isEmpty ? route.assetNo?.value : existing.assetNo;
-      printedName = existing.printedName ?? '';
+      printedName = authenticatedName ?? existing.printedName ?? '';
       readLang = existing.readLang ?? kChecklistDefaultLang;
     } else {
       answers = <String, Object?>{};
@@ -116,26 +131,20 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       site = route.siteName?.value;
       assetNo = route.assetNo?.value;
       printedName = '';
-      readLang = kChecklistDefaultLang;
+      readLang = ref.read(checklistContentLanguageProvider);
 
       // autoValue: seed 'today' / 'current_user' fields ONCE, at open.
       // Never re-resolved on a later resume - see
       // `checklist_auto_value.dart`'s own library comment on why.
-      String? userName;
-      try {
-        userName = await remote.currentUserDisplayName(workspace.userId);
-      } on Object {
-        userName = null;
-      }
       final ChecklistAutoValueContext autoCtx = ChecklistAutoValueContext(
-        userName: userName,
+        userName: authenticatedName,
       );
       for (final field in templateRecord.template.fields) {
         if (isAutoField(field)) {
           answers[field.id] = resolveAutoValue(field, autoCtx);
         }
       }
-      printedName = userName ?? '';
+      printedName = authenticatedName ?? '';
     }
 
     final List<ChecklistDraftPhoto> photos = await drafts.photosFor(draftKey);
@@ -163,8 +172,14 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
     // something the operator already typed (autoFillAnswers' own rule),
     // and a readOnly field always takes the register value.
     if (assetNo != null && assetNo.trim().isNotEmpty) {
+      final String selectedAssetNo = assetNo.trim();
+      for (final field in templateRecord.template.fields) {
+        if (field.type == 'asset') {
+          answers[field.id] = selectedAssetNo;
+        }
+      }
       final ChecklistAssetContext? assetContext = await _loadAssetContext(
-        assetNo,
+        selectedAssetNo,
       );
       if (assetContext != null) {
         final Map<String, String> patch = autoFillAnswers(
@@ -248,6 +263,47 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
 
   // -- Editing ---------------------------------------------------------
 
+  Future<void> setAsset(String rawAssetNo) async {
+    final String assetNo = rawAssetNo.trim();
+    final ChecklistTemplateRecord? templateRecord = state.templateRecord;
+    if (assetNo.isEmpty || templateRecord == null) return;
+
+    Map<String, Object?> answers = <String, Object?>{...state.answers};
+    for (final field in templateRecord.template.fields) {
+      if (field.type == 'asset') {
+        answers[field.id] = assetNo;
+      }
+    }
+
+    final ChecklistAssetContext? assetContext = await _loadAssetContext(
+      assetNo,
+    );
+    String? site = state.site;
+    if (assetContext != null) {
+      answers = <String, Object?>{
+        ...answers,
+        ...autoFillAnswers(templateRecord.template, assetContext, answers),
+      };
+      site = assetContext.site ?? site;
+    }
+
+    ChecklistLastSubmissionInfo? warning;
+    final String? templateId = templateRecord.template.id;
+    if (templateId != null) {
+      warning = await ref
+          .read(checklistRemoteRepositoryProvider)
+          .lastSubmission(templateId: templateId, assetNo: assetNo);
+    }
+    state = state.copyWith(
+      assetNo: assetNo,
+      site: site,
+      answers: answers,
+      lastSubmissionWarning: warning,
+    );
+    _recomputeGate();
+    _scheduleAutosave();
+  }
+
   void updateAnswer(String fieldId, Object? value) {
     final Map<String, Object?> next = <String, Object?>{...state.answers};
     next[fieldId] = value;
@@ -306,6 +362,7 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       byField.putIfAbsent(p.fieldKey, () => <ChecklistDraftPhoto>[]).add(p);
     }
     state = state.copyWith(photosByField: byField);
+    _recomputeGate();
     await _saveHeader();
   }
 
@@ -329,6 +386,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       fieldKey: fieldId,
       payload: svgOrDataUrl,
       source: 'drawn',
+      signerUserId: ref.read(workspaceContextProvider)?.userId,
+      signerName: ref.read(workspaceContextProvider)?.fullName,
+      signerRole: ref.read(workspaceContextProvider)?.role.displayName,
     );
     final Map<String, String> next = <String, String>{
       ...state.signaturesByField,
@@ -358,6 +418,9 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       fieldKey: primarySignatureFieldKey,
       payload: svgOrDataUrl,
       source: 'drawn',
+      signerUserId: ref.read(workspaceContextProvider)?.userId,
+      signerName: ref.read(workspaceContextProvider)?.fullName,
+      signerRole: ref.read(workspaceContextProvider)?.role.displayName,
     );
     state = state.copyWith(primarySignature: svgOrDataUrl);
     _recomputeGate();
@@ -370,6 +433,11 @@ class ChecklistFillController extends Notifier<ChecklistFillState> {
       answers: state.answers,
       notes: state.notes,
       signatures: state.signaturesByField,
+      photoCounts: <String, int>{
+        for (final MapEntry<String, List<ChecklistDraftPhoto>> entry
+            in state.photosByField.entries)
+          entry.key: entry.value.length,
+      },
       templateRequiresSignature: state.templateRecord?.requireSignature,
       primarySignature: state.primarySignature,
       labelFor: (field) => fieldLabel(field, state.readLang),

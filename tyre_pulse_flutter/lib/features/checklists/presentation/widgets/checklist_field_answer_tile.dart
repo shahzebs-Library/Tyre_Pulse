@@ -223,6 +223,11 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               padding: const EdgeInsets.only(top: TpSpace.sm),
               child: _noteField(context),
             ),
+          if (widget.field.allowPhoto && widget.field.type != 'photo')
+            Padding(
+              padding: const EdgeInsets.only(top: TpSpace.md),
+              child: _supportingPhotoField(context),
+            ),
         ],
       ),
     );
@@ -309,6 +314,12 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
     final String? current = widget.value?.toString();
     final bool hasCurrent =
         current != null && widget.options.any((o) => o.value == current);
+    if (widget.options.length >= 2 && widget.options.length <= 8) {
+      return _choiceTileField(
+        context,
+        current: hasCurrent ? current : null,
+      );
+    }
     return TpDropdown<String>(
       label: widget.label,
       isRequired: widget.field.required,
@@ -319,6 +330,73 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
       ],
       errorText: widget.errorText,
       onChanged: _isEditable ? (String? v) => widget.onChanged?.call(v) : null,
+    );
+  }
+
+  Widget _choiceTileField(
+    BuildContext context, {
+    required String? current,
+  }) {
+    final TpPalette palette = TpPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Flexible(
+              child: Text(
+                widget.label,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+            if (widget.field.required) ...<Widget>[
+              const SizedBox(width: TpSpace.xs),
+              Text(
+                AppLocalizations.of(context).fieldRequired,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: palette.critical.base),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: TpSpace.sm),
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            const double gap = TpSpace.sm;
+            final int columns = constraints.maxWidth >= 520 ? 3 : 2;
+            final double width =
+                (constraints.maxWidth - gap * (columns - 1)) / columns;
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: <Widget>[
+                for (final ChecklistFieldOption option in widget.options)
+                  SizedBox(
+                    width: width,
+                    child: _ChecklistChoiceTile(
+                      option: option,
+                      selected: option.value == current,
+                      enabled: _isEditable,
+                      onTap: () => widget.onChanged?.call(option.value),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+        if (widget.errorText != null) ...<Widget>[
+          const SizedBox(height: TpSpace.xs),
+          Text(
+            widget.errorText!,
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: palette.critical.base),
+          ),
+        ],
+      ],
     );
   }
 
@@ -547,6 +625,35 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
     );
   }
 
+  Widget _supportingPhotoField(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          l10n.checklistAddPhotoTitle,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        const SizedBox(height: TpSpace.sm),
+        Wrap(
+          spacing: TpSpace.sm,
+          runSpacing: TpSpace.sm,
+          children: <Widget>[
+            for (final String path in widget.photos)
+              _PhotoThumbnail(
+                path: path,
+                onRemove: widget.onRemovePhoto == null
+                    ? null
+                    : () => widget.onRemovePhoto!(path),
+              ),
+            if (widget.onCapturePhoto != null)
+              _AddPhotoButton(onTap: () => _pickPhotoSource(context)),
+          ],
+        ),
+      ],
+    );
+  }
+
   Future<void> _pickPhotoSource(BuildContext context) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ChecklistPhotoPickSource? source =
@@ -563,12 +670,13 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
               onTap: () => Navigator.of(sheetContext)
                   .pop(ChecklistPhotoPickSource.camera),
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: Text(l10n.checklistPhotoSourceGallery),
-              onTap: () => Navigator.of(sheetContext)
-                  .pop(ChecklistPhotoPickSource.gallery),
-            ),
+            if (widget.field.allowGallery)
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: Text(l10n.checklistPhotoSourceGallery),
+                onTap: () => Navigator.of(sheetContext)
+                    .pop(ChecklistPhotoPickSource.gallery),
+              ),
           ],
         );
       },
@@ -640,6 +748,126 @@ class _ChecklistFieldAnswerTileState extends State<ChecklistFieldAnswerTile> {
       onChanged: widget.onNoteChanged,
     );
   }
+}
+
+class _ChecklistChoiceTile extends StatelessWidget {
+  const _ChecklistChoiceTile({
+    required this.option,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final ChecklistFieldOption option;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final Color foreground = selected ? palette.primary : palette.text;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: option.label,
+      child: Material(
+        color: selected ? palette.primarySoft : palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          side: BorderSide(
+            color: selected ? palette.primary : palette.borderStrong,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 58),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TpSpace.sm,
+                vertical: TpSpace.sm,
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    _optionIcon(option.value, option.label),
+                    size: 22,
+                    color: enabled ? foreground : palette.textMuted,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Text(
+                      option.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: enabled ? foreground : palette.textMuted,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  if (selected)
+                    Icon(Icons.check_circle, size: 18, color: palette.primary),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+IconData _optionIcon(String value, String label) {
+  final String token = '$value $label'.trim().toLowerCase();
+  if (RegExp(r'(^|\s)(yes|pass|passed|good|ok|safe|complete|available)(\s|$)')
+      .hasMatch(token)) {
+    return Icons.check_circle_outline_rounded;
+  }
+  if (RegExp(r'(^|\s)(no|fail|failed|bad|unsafe|damaged|missing)(\s|$)')
+      .hasMatch(token)) {
+    return Icons.cancel_outlined;
+  }
+  if (token.contains('repair') || token.contains('workshop')) {
+    return Icons.build_outlined;
+  }
+  if (token.contains('replace') || token.contains('change')) {
+    return Icons.change_circle_outlined;
+  }
+  if (token.contains('added') ||
+      token.contains('top-up') ||
+      token.contains('top up')) {
+    return Icons.add_circle_outline_rounded;
+  }
+  if (token.contains('adjust')) {
+    return Icons.tune_rounded;
+  }
+  if (token.contains('lubricat') || token.contains('grease')) {
+    return Icons.water_drop_rounded;
+  }
+  if (token.contains('clean') || token.contains('wash')) {
+    return Icons.water_drop_outlined;
+  }
+  if (token.contains('oil') || token.contains('fluid')) {
+    return Icons.oil_barrel_outlined;
+  }
+  if (token.contains('electr') || token.contains('battery')) {
+    return Icons.electrical_services_outlined;
+  }
+  if (token.contains('tyre') ||
+      token.contains('tire') ||
+      token.contains('wheel')) {
+    return Icons.tire_repair_outlined;
+  }
+  if (token.contains('not applicable') || token == 'n/a' || token == 'na') {
+    return Icons.remove_circle_outline;
+  }
+  return Icons.radio_button_unchecked_rounded;
 }
 
 class _SectionHeader extends StatelessWidget {

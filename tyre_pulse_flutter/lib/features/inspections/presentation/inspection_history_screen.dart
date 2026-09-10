@@ -221,8 +221,6 @@ class _InspectionHistoryScreenState
                 title: l10n.inspectionHistoryEmptyTitle,
                 message: l10n.inspectionHistoryEmptyMessage,
                 icon: Icons.assignment_outlined,
-                actionLabel: l10n.inspectionNewInspection,
-                onAction: _startNew,
               ),
             ),
           ],

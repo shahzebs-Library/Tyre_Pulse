@@ -42,47 +42,20 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.47.2"
           cache: true
 
-      - name: Create platform folder
-        # android/ is deliberately not committed (see flutter-ci.yml's
-        # identical step and docs/BOOTSTRAP.md) - generated fresh here just
-        # to get every OTHER file flutter create produces (Gradle wrapper,
-        # manifest, Kotlin scaffold, ios/ for parity). build.gradle.kts is
-        # fully overwritten with known-good content in a later step below,
-        # so nothing here needs to patch that one. MainActivity.kt is a
-        # SEPARATE file with its own package declaration that build.gradle.kts
-        # cannot fix by itself - see the next step.
-        run: flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
-
-      - name: Fix MainActivity.kt's package to match the Gradle namespace
-        # flutter create writes MainActivity.kt under
-        # android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse/ and
-        # declares `package com.shahzebrahman.tyre_pulse` inside the file
-        # itself. The next step overwrites build.gradle.kts's namespace and
-        # applicationId to com.shahzebrahman.tyrepulse, but that alone does
-        # not relocate or repatch this file. Left as-is,
-        # AndroidManifest.xml's android:name=".MainActivity" resolves
-        # against the new Gradle namespace while the compiled class only
-        # exists under the OLD package - Android throws
-        # ClassNotFoundException and the app crashes on the very first
-        # launch. This is the exact bug that crashed the first build this
-        # workflow ever published to Internal Testing (versionCode 1,
-        # reproduced and confirmed on a real device). flutter-ci.yml carries
-        # the identical fix for the identical reason.
+      - name: Verify committed Android project
         run: |
-          old_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse"
-          new_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyrepulse"
-          if [ -d "$old_kt_dir" ]; then
-            mkdir -p "$new_kt_dir"
-            for f in "$old_kt_dir"/*; do
-              sed 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulse/' \
-                "$f" > "$new_kt_dir/$(basename "$f")"
-            done
-            rm -rf "$old_kt_dir"
-          fi
+          test -f android/app/build.gradle.kts
+          test -f android/app/src/main/kotlin/com/shahzebrahman/tyrepulse/MainActivity.kt
 
       - name: Reconstruct the release keystore from secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           # `tr -d '[:space:]'` first: a base64 secret pasted through a browser
           # UI can pick up an embedded newline or trailing whitespace, which
@@ -91,93 +64,27 @@ jobs:
           # time this workflow ran - "Tag number over 30 is not supported"
           # is DER-parsing-speak for "this file's bytes are not a valid
           # keystore").
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | tr -d '[:space:]' | base64 -d > android/app/release.jks
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > android/app/release.jks
           cat > android/key.properties <<EOF
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
           storeFile=release.jks
           EOF
 
       - name: Verify the reconstructed keystore is readable
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         # Fails fast, with a clear message, rather than 6+ minutes into a
         # release build only to fail at the final signing step on a
         # keystore that was never valid to begin with.
         run: |
           keytool -list \
             -keystore android/app/release.jks \
-            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -alias "${{ secrets.ANDROID_KEY_ALIAS }}" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" \
           || { echo "::error::The reconstructed keystore is not readable - ANDROID_KEYSTORE_BASE64 is likely corrupted (a stray newline/whitespace from copy-paste is the usual cause). Re-copy it from a single unbroken line and re-add the secret."; exit 1; }
-
-      - name: Wire the signing config into build.gradle.kts
-        # Written directly rather than patched with a regex on freshly
-        # generated boilerplate - that boilerplate's exact comment text is
-        # not a contract Flutter guarantees to keep stable across versions,
-        # and a regex that silently fails to match would leave the release
-        # build signed with the DEBUG key without erroring. This is the
-        # same content already built and verified locally for this app.
-        run: |
-          cat > android/app/build.gradle.kts <<'EOF'
-          import java.util.Properties
-          import java.io.FileInputStream
-
-          plugins {
-              id("com.android.application")
-              id("dev.flutter.flutter-gradle-plugin")
-          }
-
-          val keystorePropertiesFile = rootProject.file("key.properties")
-          val keystoreProperties = Properties()
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-          }
-
-          android {
-              namespace = "com.shahzebrahman.tyrepulse"
-              compileSdk = 37
-              ndkVersion = flutter.ndkVersion
-
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-
-              defaultConfig {
-                  applicationId = "com.shahzebrahman.tyrepulse"
-                  minSdk = flutter.minSdkVersion
-                  targetSdk = flutter.targetSdkVersion
-                  versionCode = flutter.versionCode
-                  versionName = flutter.versionName
-              }
-
-              signingConfigs {
-                  create("release") {
-                      keyAlias = keystoreProperties["keyAlias"] as String
-                      keyPassword = keystoreProperties["keyPassword"] as String
-                      storeFile = file(keystoreProperties["storeFile"] as String)
-                      storePassword = keystoreProperties["storePassword"] as String
-                  }
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.getByName("release")
-                  }
-              }
-          }
-
-          kotlin {
-              compilerOptions {
-                  jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-              }
-          }
-
-          flutter {
-              source = "../.."
-          }
-          EOF
-          cat android/app/build.gradle.kts
 
       - name: Resolve dependencies
         run: flutter pub get

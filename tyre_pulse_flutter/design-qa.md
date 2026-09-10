@@ -416,6 +416,35 @@ final result: passed
 
 ---
 
+# Profile_2 screenshot implementation QA
+
+Run: 2026-09-07.
+
+## Sources and capture
+
+- Visual reference: `Profile.png` (853 x 1844).
+- Measurement guide: `gemini-code-1788807617247.json`.
+- Flutter render: `test/features/profile/presentation/goldens/profile_screen_853x1844.png`.
+- Side-by-side comparison: `audit/profile-2/profile_reference_comparison.png`.
+
+## Comparison result
+
+- No actionable P0, P1, or P2 visual difference remains in the Profile content.
+- Identity spacing, action widths, card bounds, row density, colors, and section rhythm were corrected against the reference.
+- Profile values come from the existing providers, so user, task, sync, and access values can differ from the static sample shown in the reference.
+- The production bottom navigation remains fixed in `TpAppShell` through its existing `Scaffold.bottomNavigationBar`; the isolated Profile golden excludes that shared shell.
+- Flutter's deterministic golden test uses the Ahem test font, which changes glyph appearance while retaining layout geometry.
+
+## Verification
+
+- `flutter analyze`: passed with no issues.
+- Focused Profile widget and golden tests: passed.
+- No image or icon asset was generated, replaced, cropped, or redrawn. The existing Tyre Pulse brand image, Material icons, theme, routes, providers, and shell navigation are reused.
+
+final result: passed
+
+---
+
 # Accident intake and seven-workspace correction QA
 
 Run: 2026-09-01. Scope covers the compact reporter intake, exact damage

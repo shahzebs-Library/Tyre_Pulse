@@ -1,0 +1,138 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+const { getReview, submit, makeIntent, reviewPeople, recover, reassign, delegate, revoke } = vi.hoisted(() => ({ getReview: vi.fn(), submit: vi.fn(), makeIntent: vi.fn(), reviewPeople: vi.fn(), recover: vi.fn(), reassign: vi.fn(), delegate: vi.fn(), revoke: vi.fn() }))
+vi.mock('../lib/api/approvalDecisions', () => ({
+  delegateApprovalStage: delegate, revokeApprovalDelegation: revoke, listApprovalReviewPeople: reviewPeople, recoverApprovalRoute: recover, reassignApprovalStage: reassign,
+  getApprovalReview: getReview, submitApprovalIntent: submit, createApprovalIntent: makeIntent,
+  isApprovalReviewUnavailable: e => e?.code === 'PGRST202',
+}))
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'reviewer', org_id: 'org', role: 'Admin' } }) }))
+vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: 'KSA' }) }))
+vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: 'en' }) }))
+vi.mock('../lib/api/checklists', () => ({ signChecklistPhotoUrl: value => Promise.resolve(value) }))
+vi.mock('../components/checklist/ChecklistAnswers', () => ({ default: ({ submission }) => <p>Reviewed: {submission.answers.brakes}</p> }))
+vi.mock('../components/inspection/InspectionAnswers', () => ({ default: () => <p>Inspection evidence</p> }))
+vi.mock('../components/checklist/SignatureField', () => ({ default: ({ onChange }) => <button onClick={() => onChange('signed')}>Capture signature</button> }))
+import ApprovalReview from '../components/workflow/ApprovalReview'
+
+const context = { entity_type: 'checklist', entity_id: 'sheet', mode: 'enforced', revision: 4,
+  stage_token: 'request:0', current_stage: 0, can_decide: true, policy: { name: 'Site review', version: 1 },
+  stages: [{ name: 'Supervisor', require_signature: true }], history: [], document: { answers: { brakes: 'fault' } },
+}
+const props = { entityType: 'checklist', entityId: 'sheet', onClose: vi.fn(), legacy: <p>Legacy flow</p> }
+beforeEach(() => { vi.clearAllMocks(); getReview.mockResolvedValue(context); makeIntent.mockReturnValue({ p_operation_id: 'operation-1' }) })
+afterEach(cleanup)
+
+describe('shared approval review', () => {
+  it('renders the snapshot and requires its signature before approval', async () => {
+    render(<ApprovalReview {...props} />)
+    expect(await screen.findByText('Reviewed: fault')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve this stage' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Capture signature' }))
+    expect(screen.getByRole('button', { name: 'Approve this stage' })).not.toBeDisabled()
+  })
+  it('retries the same intent after an unknown result without signing a newer revision', async () => {
+    submit.mockRejectedValueOnce(new Error('Connection lost')).mockResolvedValueOnce({ status: 'pending', ok: true })
+    const onActed = vi.fn()
+    render(<ApprovalReview {...props} onActed={onActed} />)
+    await screen.findByText('Reviewed: fault')
+    fireEvent.click(screen.getByRole('button', { name: 'Capture signature' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Approve this stage' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry the same decision' }))
+    await waitFor(() => expect(onActed).toHaveBeenCalledTimes(1))
+    expect(makeIntent).toHaveBeenCalledTimes(1)
+    expect(submit.mock.calls[0][0]).toBe(submit.mock.calls[1][0])
+    expect(screen.getByText(/Decision recorded. Current status:/)).toHaveTextContent('pending')
+    expect(screen.queryByText('Current stage')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve this stage' })).not.toBeInTheDocument()
+  })
+  it('prevents duplicate submissions while the first decision is pending', async () => {
+    submit.mockImplementation(() => new Promise(() => {}))
+    render(<ApprovalReview {...props} />)
+    await screen.findByText('Reviewed: fault')
+    fireEvent.click(screen.getByRole('button', { name: 'Capture signature' }))
+    const approve = screen.getByRole('button', { name: 'Approve this stage' })
+    fireEvent.click(approve); fireEvent.click(approve)
+    expect(makeIntent).toHaveBeenCalledTimes(1)
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+  it('returns a drifted template for correction without enabling approval or rejection', async () => {
+    getReview.mockResolvedValue({ ...context, can_decide: false, can_return: true })
+    submit.mockResolvedValue({ decision: 'returned', status: 'rejected', ok: true })
+    render(<ApprovalReview {...props} />)
+    await screen.findByText('Reviewed: fault')
+    expect(screen.queryByRole('button', { name: 'Approve this stage' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject', exact: true })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Reason (required to reject or return)'), { target: { value: 'Template changed; review new questions' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Return for correction' }))
+    await screen.findByText(/Returned for correction. A new review is required/)
+    expect(makeIntent).toHaveBeenCalledWith(expect.objectContaining({ can_return: true }), expect.objectContaining({ decision: 'returned', note: 'Template changed; review new questions' }))
+  })
+  it('recovers routing only through the server-authorised action with a reason', async () => {
+    getReview.mockResolvedValue({ ...context, can_decide: false, can_recover: true })
+    recover.mockResolvedValue(context)
+    render(<ApprovalReview {...props} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolve routing exception' }))
+    expect(screen.getByRole('button', { name: 'Confirm routing change' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Routing change reason'), { target: { value: 'Published the missing route' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm routing change' }))
+    await waitFor(() => expect(recover).toHaveBeenCalledWith(expect.objectContaining({ stage_token: 'request:0' }), 'Published the missing route'))
+    expect(submit).not.toHaveBeenCalled()
+  })
+  it('loads eligible replacements before reassignment and sends the selected person', async () => {
+    getReview.mockResolvedValue({ ...context, can_reassign: true })
+    reviewPeople.mockResolvedValue([{ id: 'replacement', full_name: 'Replacement Reviewer', role: 'Manager' }])
+    reassign.mockResolvedValue(context)
+    render(<ApprovalReview {...props} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Reassign current stage' }))
+    fireEvent.change(await screen.findByLabelText('Replacement reviewer'), { target: { value: 'replacement' } })
+    fireEvent.change(screen.getByLabelText('Routing change reason'), { target: { value: 'Reviewer unavailable' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm routing change' }))
+    await waitFor(() => expect(reassign).toHaveBeenCalledWith(expect.objectContaining({ stage_token: 'request:0' }), 'replacement', 'Reviewer unavailable'))
+  })
+  it('allows the server-authorised reviewer to delegate with dates and a reason', async () => {
+    getReview.mockResolvedValue({ ...context, can_delegate: true })
+    reviewPeople.mockResolvedValue([{ id: 'delegate', full_name: 'Delegate Person', role: 'Manager' }])
+    delegate.mockResolvedValue({ id: 'd1', active: true })
+    render(<ApprovalReview {...props} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Delegate current stage' }))
+    fireEvent.change(await screen.findByLabelText('Replacement reviewer'), { target: { value: 'delegate' } })
+    fireEvent.change(screen.getByLabelText('Delegation starts (local time)'), { target: { value: '2026-10-01T09:00' } })
+    fireEvent.change(screen.getByLabelText('Delegation ends (maximum 90 days)'), { target: { value: '2026-10-03T17:00' } })
+    fireEvent.change(screen.getByLabelText('Routing change reason'), { target: { value: 'Leave cover' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm routing change' }))
+    await waitFor(() => expect(delegate).toHaveBeenCalledWith(expect.objectContaining({ stage_token: 'request:0' }), 'delegate', '2026-10-01T09:00', '2026-10-03T17:00', 'Leave cover'))
+  })
+  it('offers revocation only when the server grants it and requires a reason', async () => {
+    getReview.mockResolvedValue({ ...context, delegations: [{ id: 'd1', active: true, can_revoke: true, delegate_name: 'Delegate Person', starts_at: '2026-10-01', ends_at: '2026-10-03' }] })
+    revoke.mockResolvedValue({ id: 'd1', active: false })
+    render(<ApprovalReview {...props} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke delegation' }))
+    expect(screen.getByRole('button', { name: 'Confirm routing change' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Routing change reason'), { target: { value: 'Reviewer returned' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm routing change' }))
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith('d1', 'Reviewer returned'))
+  })
+  it('uses legacy UI only when the new RPC is explicitly absent', async () => {
+    getReview.mockRejectedValue({ code: 'PGRST202' })
+    render(<ApprovalReview {...props} />)
+    expect(await screen.findByText('Legacy flow')).toBeInTheDocument()
+  })
+  it('never falls back to another writer after access is denied', async () => {
+    getReview.mockRejectedValue({ code: '42501', message: 'denied' })
+    render(<ApprovalReview {...props} />)
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByText('Legacy flow')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve this stage' })).not.toBeInTheDocument()
+  })
+  it('ignores a late response for a previously opened record', async () => {
+    let oldResponse
+    getReview.mockImplementationOnce(() => new Promise(resolve => { oldResponse = resolve }))
+      .mockResolvedValueOnce({ ...context, entity_id: 'second', document: { answers: { brakes: 'new record' } } })
+    const { rerender } = render(<ApprovalReview {...props} />)
+    rerender(<ApprovalReview {...props} entityId="second" />)
+    expect(await screen.findByText('Reviewed: new record')).toBeInTheDocument()
+    oldResponse(context)
+    await waitFor(() => expect(screen.queryByText('Reviewed: fault')).not.toBeInTheDocument())
+  })
+})

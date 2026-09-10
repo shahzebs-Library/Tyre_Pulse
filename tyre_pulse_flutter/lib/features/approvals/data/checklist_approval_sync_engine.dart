@@ -1,74 +1,17 @@
-/// Orchestrates one checklist approval decision: durably queue it FIRST,
-/// then try to deliver it, and never deliver a decision that no longer
-/// matches the submission it was made against.
-///
-/// # The commit-then-attempt order
-///
-/// [decideNow] always writes a [QueuedChecklistApprovalDecision] to
-/// [ChecklistApprovalDecisionQueue] BEFORE attempting anything over the
-/// network - the same ordering `features/inspections/data/inspection_sync_
-/// engine.dart`'s `InspectionSyncEngine.submitNow` uses, and for the same
-/// reason: a process kill between a slow request being sent and its catch
-/// block running must not lose a supervisor's signature with no trace
-/// anywhere on the device (AGENTS.md rule 9, "Never remove offline
-/// persistence for convenience"). The queue write, made atomically by
-/// [FileChecklistApprovalDecisionQueue], is the durable commit point; the
-/// immediate delivery attempt that follows is best-effort on top of an
-/// already-safe write, never a substitute for one.
-///
-/// # The one rule this engine exists to enforce, that `InspectionSyncEngine`
-/// # does NOT need to
-///
-/// AGENTS.md: "Approvals and other decisions that depend on current server
-/// state are NOT blindly queued (spec section 14)." An inspection
-/// submission is a plain observation - its payload is equally correct
-/// whenever it finally lands, which is why `InspectionSyncEngine.
-/// flushQueue` retries every non-synced entry, including one that
-/// previously failed, forever. A checklist approval decision is different:
-/// it is a statement about ONE specific rung
-/// ([QueuedChecklistApprovalDecision.stage]) of ONE specific submission,
-/// and it is only correct while that submission is still waiting at that
-/// rung. If somebody else decides the submission first - or it moves on
-/// for any other reason - between when this decision was made and when it
-/// finally reaches the server, applying it unchanged would silently
-/// contradict a decision somebody else already made.
-///
-/// [_attemptDelivery] therefore does something `InspectionSyncEngine`'s
-/// equivalent step does not: on EVERY attempt, first or retried, it
-/// re-reads the submission from the server and recomputes
-/// `stageFor(template, freshSubmission)` before writing anything. If the
-/// submission's CURRENT stage no longer matches the stage this decision
-/// was made against, the write is skipped entirely - nothing is sent - and
-/// the entry moves to [ChecklistApprovalQueueStatus.blocked] with an
-/// [AppError.conflict], which [ChecklistApprovalSyncEngine.flushQueue]
-/// will never retry automatically again (see
-/// [ChecklistApprovalQueueStatus.blocked]'s own doc comment for what
-/// happens to it next). This is the SAME defence `ChecklistApprovalRepository.
-/// applyDecision`'s optimistic-concurrency write adds at the database call
-/// itself - deliberately two independent layers, because the gap between
-/// this engine's own re-check and the write actually reaching Postgres is
-/// exactly the window a single check cannot close on its own.
-///
-/// # Outcomes are named, not booleans
-///
-/// [ChecklistApprovalDecisionOutcome] mirrors `InspectionSubmitOutcome`'s
-/// own reasoning: "delivered now" and "safely queued for later" are both
-/// legitimate successful outcomes from the reviewer's point of view (the
-/// decision is durably recorded on this device either way), and only
-/// [ChecklistApprovalDecisionOutcome.blocked] is something they need to be
-/// told about immediately, because it means either the server refused the
-/// decision outright or this engine detected the submission had already
-/// moved on.
+/// Persists reviewer evidence before attempting the canonical server decision.
+/// Revision and stage are captured at review time, never refreshed on retry.
+/// The server checks current authority and exact revision atomically, returning
+/// the original receipt for a retried operation after a lost response. Legacy
+/// unversioned entries stay visible and require a fresh review.
 library;
 
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_decision_queue.dart';
-import 'package:tyre_pulse/features/approvals/data/checklist_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_repository.dart';
-import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/data/queued_checklist_approval_decision.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
+import 'package:uuid/uuid.dart';
 
 /// What [ChecklistApprovalSyncEngine.decideNow] or
 /// [ChecklistApprovalSyncEngine.retryOne] actually did.
@@ -132,7 +75,7 @@ final class ChecklistApprovalSyncEngine {
   final ChecklistApprovalRepository _repository;
 
   /// Queues a decision and attempts to deliver it once, immediately. Never
-  /// throws - every failure resolves to
+  /// Repository delivery failures resolve to
   /// [ChecklistApprovalDecisionOutcome.queued] or
   /// [ChecklistApprovalDecisionOutcome.blocked], because pressing Approve
   /// or Send back must never leave the reviewer with nothing to show for a
@@ -146,10 +89,13 @@ final class ChecklistApprovalSyncEngine {
   /// `submission.approvalStatus` at that same moment.
   Future<ChecklistApprovalDecisionResult> decideNow({
     required String submissionId,
+    int? expectedRevision,
+    String? expectedStageToken,
     required ApprovalStage stage,
     required String priorApprovalStatus,
     required String targetStatus,
     required bool approved,
+    String? decision,
     String? approverName,
     String? approverSignature,
     String? approverId,
@@ -157,15 +103,15 @@ final class ChecklistApprovalSyncEngine {
   }) async {
     final QueuedChecklistApprovalDecision item =
         QueuedChecklistApprovalDecision(
-      id: QueuedChecklistApprovalDecision.dedupeKeyFor(
-        submissionId: submissionId,
-        targetStatus: targetStatus,
-      ),
+      id: const Uuid().v4(),
+      expectedRevision: expectedRevision,
+      expectedStageToken: expectedStageToken,
       submissionId: submissionId,
       stage: stage,
       priorApprovalStatus: priorApprovalStatus,
       targetStatus: targetStatus,
       approved: approved,
+      decision: decision ?? (approved ? 'approved' : 'returned'),
       decidedAt: DateTime.now(),
       // Already resolved to `approved ? theSignature : null` - a rejection
       // never carries a signature, matching `mobile/lib/checklists.ts`'s
@@ -250,45 +196,15 @@ final class ChecklistApprovalSyncEngine {
     QueuedChecklistApprovalDecision item,
   ) async {
     try {
-      // Re-validate against CURRENT server state before writing anything -
-      // see the library comment. This runs on EVERY attempt, first or
-      // retried, exactly as `InspectionSyncEngine._attemptDelivery`
-      // re-resolves photo paths from the draft on every attempt rather
-      // than trusting a possibly-stale snapshot.
-      final ChecklistApprovalItem? current = await _repository.byId(
-        item.submissionId,
-      );
-      if (current == null) {
-        return await _block(
-          item,
-          const AppError(
-            kind: AppErrorKind.validation,
-            message: 'This checklist could not be found. It may have '
-                'been removed.',
-          ),
-        );
-      }
-
-      ChecklistApprovalTemplateInfo? templateInfo;
-      final String? templateId = current.templateId;
-      if (templateId != null && templateId.isNotEmpty) {
-        templateInfo = await _repository.templateInfo(templateId);
-      }
-      final ApprovalTemplateLike templateLike =
-          templateInfo?.asTemplateLike ?? const ApprovalTemplateLike();
-
-      final ApprovalStage? currentStage = stageFor(
-        templateLike,
-        current.asSubmissionLike,
-      );
-      if (currentStage != item.stage) {
-        // Somebody else already acted on this submission, or it is no
-        // longer at the rung this decision was made against - the exact
-        // situation AGENTS.md rule 14 exists to prevent silently landing.
+      // The server resolves operation replay before checking the frozen
+      // revision/stage. A preflight read would block recovery after a lost
+      // acknowledgement of a committed decision.
+      if (item.expectedRevision == null || item.expectedStageToken == null) {
         return await _block(
           item,
           const AppError.conflict(
-            technical: 'checklist submission stage changed since decision',
+            technical:
+                'Legacy approval evidence needs a fresh review before sending',
           ),
         );
       }

@@ -13,8 +13,11 @@ const h = vi.hoisted(() => {
       order(col, opts) { calls.order.push([col, opts]); return b },
       limit(n) { calls.limit.push(n); return b },
       gte(col, val) { calls.gte.push([col, val]); return b },
+      lte(col, val) { calls.lte = [col, val]; return b },
+      range(from, to) { calls.range = [from, to]; return b },
       then(onF, onR) {
-        const result = state.results[table] ?? state.defaultResult
+        const source = state.results[table] ?? state.defaultResult
+        const result = typeof source === 'function' ? source(calls) : source
         return Promise.resolve(result).then(onF, onR)
       },
     }
@@ -39,6 +42,8 @@ const {
   shapeActivityStats,
   shapeAiUsage,
   fetchDataGrowth,
+  fetchActivityStats,
+  fetchUserStats,
   runTenantReport,
   GROWTH_TABLES,
   WINDOW_DAYS,
@@ -279,6 +284,13 @@ describe('shapeAiUsage', () => {
 // fetchDataGrowth — head-count queries with per-table isolation
 // ─────────────────────────────────────────────────────────────────────────────
 describe('fetchDataGrowth', () => {
+  it('does not convert missing count metadata into zero records', async () => {
+    h.state.defaultResult = { count: null, error: null }
+    const result = await fetchDataGrowth()
+    expect(result.totalRecords).toBeNull()
+    expect(result.complete).toBe(false)
+    expect(result.tables.every(table => table.error)).toBe(true)
+  })
   it('issues head-count queries and isolates a per-table failure', async () => {
     for (const { table } of GROWTH_TABLES) {
       h.state.results[table] = { count: 7, error: null }
@@ -295,8 +307,8 @@ describe('fetchDataGrowth', () => {
     expect(accidents.count).toBeNull()
     expect(accidents.error).toMatch(/does not exist/)
 
-    // 7 healthy tables x 7 rows; failed table contributes 0
-    expect(totalRecords).toBe(7 * (GROWTH_TABLES.length - 1))
+    // An incomplete subtotal must not masquerade as a complete platform total.
+    expect(totalRecords).toBeNull()
 
     // Verify the queries were true head-counts.
     const q = h.state.queries.find(b => b._table === 'vehicle_fleet')
@@ -330,5 +342,27 @@ describe('runTenantReport', () => {
     expect(report.activity.status).toBe('ok')
     expect(report.growth.status).toBe('ok')
     expect(report.adoption.status).toBe('ok')
+  })
+})
+
+
+describe('complete report pagination', () => {
+  it('counts profiles across multiple API pages', async () => {
+    const rows = Array.from({length: 1501}, (_, index) => ({ id: String(index), approved: true, role: 'Driver' }))
+    h.state.results.profiles = calls => ({ data: rows.slice(calls.range[0], calls.range[1]+1), error: null })
+    expect((await fetchUserStats()).total).toBe(1501)
+    expect(h.state.queries.filter(query => query._table === 'profiles')).toHaveLength(2)
+    expect(h.state.queries[0]._calls.order).toContainEqual(['id', undefined])
+  })
+  it('does not report a capped sample as the complete activity total', async () => {
+    const rows = Array.from({length: 11000}, (_, index) => ({ id: String(index), action: 'UPDATE' }))
+    h.state.results.audit_log_v2 = calls => ({ data: rows.slice(calls.range[0], calls.range[1]+1), error: null })
+    await expect(fetchActivityStats()).rejects.toThrow('Totals are unavailable')
+  })
+  it('a later page failure rejects aggregation of earlier successful pages', async () => {
+    h.state.results.audit_log_v2 = calls => calls.range[0] === 0
+      ? { data: Array.from({length: 1000}, (_, index) => ({ id: String(index) })), error: null }
+      : { data: null, error: new Error('Later page failed') }
+    await expect(fetchActivityStats()).rejects.toThrow('Later page failed')
   })
 })

@@ -28,6 +28,7 @@ library;
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:tyre_pulse/features/approvals/data/approval_review_context.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart'
     show TyreEntryPair, readTyreEntries;
 
@@ -251,6 +252,11 @@ final class InspectionApprovalItem {
 
     return InspectionApprovalItem(
       id: rawId,
+      reviewContext: row['approval_review_context'] is Map
+          ? ApprovalReviewContext.fromJson(
+              Map<String, dynamic>.from(row['approval_review_context']! as Map),
+            )
+          : null,
       title: _asString(row['title']),
       site: _asString(row['site']),
       assetNo: _asString(row['asset_no']),
@@ -280,6 +286,7 @@ final class InspectionApprovalItem {
   }
   const InspectionApprovalItem({
     required this.id,
+    this.reviewContext,
     this.title,
     this.site,
     this.assetNo,
@@ -307,6 +314,7 @@ final class InspectionApprovalItem {
   /// invariant, mirroring `InspectionRecord.fromRow`'s own throwing
   /// convention over the same table.
   final String id;
+  final ApprovalReviewContext? reviewContext;
 
   final String? title;
   final String? site;

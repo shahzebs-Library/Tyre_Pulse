@@ -9,9 +9,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/search/data/global_search_repository.dart';
 import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
+
+/// Search uses the same permissions as each result's destination.
+final globalSearchModulesProvider = Provider<Set<ModuleKey>>(
+  (ref) => {
+    for (final module in const [
+      ModuleKey.vehicles,
+      ModuleKey.serial,
+      ModuleKey.workorders,
+      ModuleKey.inspect,
+    ])
+      if (ref.watch(canAccessModuleProvider(module))) module,
+  },
+);
 
 /// The offline cache accessor.
 ///

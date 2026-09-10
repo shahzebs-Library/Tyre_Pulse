@@ -3,14 +3,10 @@ import { supabase } from '../lib/supabase'
 import useLatestRequest from '../lib/useLatestRequest'
 import { fetchAllPages } from '../lib/fetchAll'
 
-// Ceiling on the paged audit-log export. audit_log_v2 is ~503,000 rows, so this
-// export is deliberately a bounded newest-first slice rather than the whole
-// table - it is now the 5,000 rows the old .limit(5000) always claimed.
-const AUDIT_EXPORT_CAP = 5000
+import { auditQuery, uploadHistoryQuery, readAuditExport, matchesAuditSearch } from '../lib/api/auditTrail'
 import { exportToExcel } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
-import { logAuditEvent } from '../lib/auditLogger'
 import { formatDateTime, formatDate } from '../lib/formatters'
 import {
   FileSpreadsheet, ChevronLeft, ChevronRight, ClipboardList, RefreshCw, Search,
@@ -36,7 +32,7 @@ function nonEmpty(obj) {
 }
 
 function hasExpandable(row) {
-  return nonEmpty(row.details) || nonEmpty(row.old_values) || nonEmpty(row.new_values)
+  return nonEmpty(row.details) || nonEmpty(row.old_values) || nonEmpty(row.new_values) || nonEmpty(row.old_data) || nonEmpty(row.new_data)
 }
 
 function fmtVal(v) {
@@ -46,8 +42,8 @@ function fmtVal(v) {
 }
 
 function AuditChangeDetail({ row }) {
-  const oldV = nonEmpty(row.old_values) ? row.old_values : null
-  const newRaw = nonEmpty(row.new_values) ? row.new_values : null
+  const oldV = nonEmpty(row.old_values) ? row.old_values : nonEmpty(row.old_data) ? row.old_data : null
+  const newRaw = nonEmpty(row.new_values) ? row.new_values : nonEmpty(row.new_data) ? row.new_data : null
   const meta = newRaw?._meta
   const newV = newRaw
     ? Object.fromEntries(Object.entries(newRaw).filter(([k]) => k !== '_meta'))
@@ -109,7 +105,7 @@ function SummaryCard({ label, value, color, loading, note }) {
       {loading ? (
         <SummarySkeleton />
       ) : (
-        <p className={`text-3xl font-bold ${colors[color].split(' ')[0]}`}>{value ?? 0}</p>
+        <p className={`text-3xl font-bold ${colors[color].split(' ')[0]}`}>{value ?? 'Unavailable'}</p>
       )}
       <p className="text-sm mt-1 text-gray-400">{label}</p>
       {!loading && note ? <p className="text-[11px] mt-0.5 text-gray-500">{note}</p> : null}
@@ -124,6 +120,11 @@ export default function AuditTrail() {
 
   const [stats, setStats] = useState({ totalEvents: 0, uploadsMonth: 0, recordsMonth: 0, activeUsers: 0, recordsCapped: false, activeCapped: false })
   const [statsLoading, setStatsLoading] = useState(true)
+  const [readError, setReadError] = useState('')
+  const [auditError, setAuditError] = useState('')
+  const [uploadError, setUploadError] = useState('')
+  const [exportError, setExportError] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   const [auditRows, setAuditRows]   = useState([])
   const [auditTotal, setAuditTotal] = useState(0)
@@ -146,6 +147,7 @@ export default function AuditTrail() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
   const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
@@ -173,6 +175,9 @@ export default function AuditTrail() {
             .order('id', { ascending: true }).range(lo, hi), { max: STAT_MAX }),
         ])
 
+        for (const result of [totalRes, uploadsCountRes, monthPaged, activePaged]) {
+          if (result.error) throw result.error
+        }
         const uploadsMonth  = uploadsCountRes.count ?? (monthPaged.data ?? []).length
         const recordsMonth  = (monthPaged.data ?? []).reduce((s, r) => s + (r.record_count ?? 0), 0)
         const activeUsers   = new Set((activePaged.data ?? []).map(r => r.user_id).filter(Boolean)).size
@@ -185,7 +190,10 @@ export default function AuditTrail() {
           recordsCapped: monthPaged.truncated,
           activeCapped: activePaged.truncated,
         })
-      } catch { /* ignore */ }
+      } catch (error) {
+        setStats({ totalEvents: null, uploadsMonth: null, recordsMonth: null, activeUsers: null })
+        setReadError(toUserMessage(error, 'Could not read audit statistics.'))
+      }
       setStatsLoading(false)
     }
     loadStats()
@@ -193,8 +201,14 @@ export default function AuditTrail() {
 
   useEffect(() => {
     async function loadUsers() {
-      const { data } = await supabase.from('profiles').select('id, full_name, username')
-      setUserOptions(data ?? [])
+      try {
+        const { data, error, truncated } = await fetchAllPages((from, to) => supabase.from('profiles')
+          .select('id, full_name, username').order('id').range(from, to), { max: 10000 })
+        if (error) throw error
+        if (truncated) throw new Error('The user filter list exceeds its limit. Use another filter.')
+        setUserOptions(data ?? [])
+      } catch (error) { setReadError(toUserMessage(error, 'Could not load audit user filters.')) }
+
     }
     loadUsers()
   }, [])
@@ -208,58 +222,44 @@ export default function AuditTrail() {
     const stale = latestAudit.begin()
     setAuditLoading(true)
     try {
-      let q = supabase
-        .from('audit_log_v2')
-        .select('*, profiles(full_name, username)', { count: 'exact' })
-        .order('created_at', { ascending: false })
+      const { data, count, error } = await auditQuery({ dateFrom, dateTo, action: actionFilter, user: userFilter })
         .range(auditPage * PAGE_SIZE, (auditPage + 1) * PAGE_SIZE - 1)
-
-      if (dateFrom)      q = q.gte('created_at', dateFrom)
-      if (dateTo)        q = q.lte('created_at', dateTo + 'T23:59:59')
-      if (actionFilter)  q = q.eq('action', actionFilter)
-      if (userFilter)    q = q.eq('user_id', userFilter)
-
-      const { data, count } = await q
+      if (error) throw error
       if (stale()) return
+      setAuditError('')
       setAuditRows(data ?? [])
       setAuditTotal(count ?? 0)
-    } catch { /* ignore */ }
+    } catch (error) {
+      if (!stale()) { setAuditRows([]); setAuditTotal(0); setAuditError(toUserMessage(error, 'Could not load audit events.')) }
+    }
     if (!stale()) setAuditLoading(false)
   }, [auditPage, dateFrom, dateTo, actionFilter, userFilter, latestAudit])
 
   useEffect(() => { if (activeTab === 'audit') loadAudit() }, [loadAudit, activeTab])
 
+  const latestUpload = useLatestRequest()
   const loadUploadHistory = useCallback(async () => {
+    const stale = latestUpload.begin()
     setUploadLoading(true)
     try {
-      const { data, count } = await supabase
-        .from('upload_history')
-        .select('*, profiles(full_name, username)', { count: 'exact' })
-        .order('uploaded_at', { ascending: false })
+      const { data, count, error } = await uploadHistoryQuery({ dateFrom, dateTo })
         .range(uploadPage * PAGE_SIZE, (uploadPage + 1) * PAGE_SIZE - 1)
-
+      if (error) throw error
+      if (stale()) return
+      setUploadError('')
       setUploadRows(data ?? [])
       setUploadTotal(count ?? 0)
-    } catch { /* ignore */ }
-    setUploadLoading(false)
-  }, [uploadPage])
+    } catch (error) { if (!stale()) { setUploadRows([]); setUploadTotal(0); setUploadError(toUserMessage(error, 'Could not load upload history.')) } }
+    if (!stale()) setUploadLoading(false)
+  }, [uploadPage, latestUpload, dateFrom, dateTo])
 
   useEffect(() => { if (activeTab === 'upload') loadUploadHistory() }, [loadUploadHistory, activeTab])
 
   async function exportAuditLog() {
-    // Paged. The old `.limit(5000)` shipped 1,000 rows - the server caps every
-    // response at 1000 whatever a limit says - as a file that reads like the
-    // complete audit log of a ~503,000-row table. `id` is the paging tiebreak;
-    // created_at is not unique.
-    const { data } = await fetchAllPages(
-      (from, to) => supabase
-        .from('audit_log_v2')
-        .select('*, profiles(full_name, username)')
-        .order('created_at', { ascending: false }).order('id')
-        .range(from, to),
-      { max: AUDIT_EXPORT_CAP },
-    )
-
+    if (exporting) return
+    setExporting(true); setExportError('')
+    try {
+    const data = await readAuditExport({ filters: { dateFrom, dateTo, action: actionFilter, user: userFilter }, search: auditSearch })
     const rows = (data ?? []).map(r => ({
       timestamp:  r.created_at ? formatDateTime(r.created_at) : '',
       user:       r.profiles?.full_name ?? r.profiles?.username ?? r.user_id ?? '',
@@ -267,24 +267,26 @@ export default function AuditTrail() {
       table_name: r.table_name ?? '',
       records:    r.record_count ?? '',
       details:    r.details ? JSON.stringify(r.details) : '',
+      old_values: JSON.stringify(r.old_values ?? r.old_data ?? null),
+      new_values: JSON.stringify(r.new_values ?? r.new_data ?? null),
     }))
 
     exportToExcel(
       rows,
-      ['timestamp', 'user', 'action', 'table_name', 'records', 'details'],
-      ['Timestamp', 'User', 'Action', 'Table', 'Records', 'Details'],
+      ['timestamp', 'user', 'action', 'table_name', 'records', 'details', 'old_values', 'new_values'],
+      ['Timestamp', 'User', 'Action', 'Table', 'Records', 'Details', 'Old Values', 'New Values'],
       `TyrePulse_AuditLog_${new Date().toISOString().slice(0, 10)}`,
       'Audit Log'
     )
+    } catch (error) { setExportError(toUserMessage(error, 'Audit export failed.')) }
+    finally { setExporting(false) }
   }
 
   async function exportUploadHistory() {
-    const { data } = await supabase
-      .from('upload_history')
-      .select('*, profiles(full_name, username)')
-      .order('uploaded_at', { ascending: false })
-      .limit(5000)
-
+    if (exporting) return
+    setExporting(true); setExportError('')
+    try {
+    const data = await readAuditExport({ upload: true, filters: { dateFrom, dateTo } })
     const rows = (data ?? []).map(r => ({
       file_names:      Array.isArray(r.file_names) ? r.file_names.join(', ') : (r.file_names ?? ''),
       records_added:   r.records_added ?? 0,
@@ -292,40 +294,37 @@ export default function AuditTrail() {
       uploaded_by:     r.profiles?.full_name ?? r.profiles?.username ?? r.uploaded_by ?? '',
       uploaded_at:     r.uploaded_at ? formatDateTime(r.uploaded_at) : '',
       region:          r.region ?? '',
+      reversed_at:     r.reversed_at ? formatDateTime(r.reversed_at) : '',
+      reversed_count:  r.reversed_count ?? '',
     }))
 
     exportToExcel(
       rows,
-      ['file_names', 'records_added', 'records_skipped', 'uploaded_by', 'uploaded_at', 'region'],
-      ['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region'],
+      ['file_names', 'records_added', 'records_skipped', 'uploaded_by', 'uploaded_at', 'region', 'reversed_at', 'reversed_count'],
+      ['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region', 'Reversed At', 'Reversed Records'],
       `TyrePulse_UploadHistory_${new Date().toISOString().slice(0, 10)}`,
       'Upload History'
     )
+    } catch (error) { setExportError(toUserMessage(error, 'Upload history export failed.')) }
+    finally { setExporting(false) }
   }
 
   async function handleDeleteBatch() {
-    if (deleteConfirm !== 'DELETE') return
+    if (deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3) return
     setDeleting(true)
     setDeleteError('')
     try {
-      const { data: delRows, error: recErr } = await supabase
-        .from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId).select('id')
-      if (recErr) throw recErr
-      const removed = delRows?.length ?? 0
-
-      const { data: histRows, error: histErr } = await supabase
-        .from('upload_history').delete().eq('batch_id', deleteTarget.batchId).select('id')
-      if (histErr) throw histErr
-      if ((histRows?.length ?? 0) === 0 && removed === 0) {
-        throw new Error('Nothing to delete: this batch has no records and no history entry (it may already be removed).')
-      }
-
-      await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: removed, details: { batch_id: deleteTarget.batchId } })
+      const { data, error } = await supabase.rpc('reverse_legacy_upload', { p_batch_id: deleteTarget.batchId, p_reason: deleteReason.trim() })
+      if (error) throw error
+      if (data?.ok !== true || !Number.isInteger(data.removed)) throw new Error('The server did not confirm the reversal. Refresh before retrying.')
       setDeleteTarget(null)
       setDeleteConfirm('')
+      setDeleteReason('')
       loadUploadHistory()
     } catch (e) {
-      setDeleteError(toUserMessage(e, 'Delete failed. Please try again.'))
+      setDeleteError(e?.code === '23503'
+        ? 'This batch has dependent records. Resolve its cleaning or disposal activity before reversal.'
+        : toUserMessage(e, 'Reversal failed. Please try again.'))
     } finally {
       setDeleting(false)
     }
@@ -334,15 +333,7 @@ export default function AuditTrail() {
   const auditPages  = Math.ceil(auditTotal  / PAGE_SIZE)
   const uploadPages = Math.ceil(uploadTotal / PAGE_SIZE)
 
-  const searchTerm = auditSearch.trim().toLowerCase()
-  const visibleAuditRows = searchTerm
-    ? auditRows.filter(row => {
-        const userName = (row.profiles?.full_name ?? row.profiles?.username ?? '').toLowerCase()
-        const action   = (row.action ?? '').toLowerCase()
-        const table    = (row.table_name ?? '').toLowerCase()
-        return userName.includes(searchTerm) || action.includes(searchTerm) || table.includes(searchTerm)
-      })
-    : auditRows
+  const visibleAuditRows = auditRows.filter(row => matchesAuditSearch(row, auditSearch))
 
   // EnterpriseTable columns for audit log
   const auditColumns = useMemo(() => [
@@ -449,9 +440,9 @@ export default function AuditTrail() {
         size: 120,
         enableSorting: false,
         meta: { export: false },
-        cell: ({ row }) => row.original.batch_id ? (
+        cell: ({ row }) => row.original.reversed_at ? <span className="text-xs text-gray-400">Reversed</span> : row.original.batch_id ? (
           <button
-            onClick={() => setDeleteTarget({ batchId: row.original.batch_id, count: row.original.records_added, date: row.original.uploaded_at })}
+            onClick={() => { setDeleteReason(''); setDeleteTarget({ batchId: row.original.batch_id, count: row.original.records_added, date: row.original.uploaded_at }) }}
             className="text-xs text-red-400 border border-red-800/50 hover:bg-red-900/20 px-2 py-1 rounded transition-colors"
           >
             Delete Batch
@@ -464,6 +455,9 @@ export default function AuditTrail() {
 
   return (
     <div className="space-y-4">
+      {[readError, auditError, uploadError, exportError].filter(Boolean).map((message, index) => (
+        <div key={index} role="alert" className="rounded border border-red-800 bg-red-900/20 p-3 text-sm text-red-300">{message}</div>
+      ))}
       <PageHeader
         title="Audit Trail"
         subtitle="Full history of uploads and user activity"
@@ -472,10 +466,10 @@ export default function AuditTrail() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard label="Total Events"             value={stats.totalEvents.toLocaleString()}  color="blue"   loading={statsLoading} />
-        <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth.toLocaleString()}  color="green"  loading={statsLoading} />
-        <SummaryCard label="Records Added This Month" value={stats.recordsMonth.toLocaleString()}  color="purple" loading={statsLoading} note={stats.recordsCapped ? 'At least this many (capped)' : undefined} />
-        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers.toLocaleString()}   color="amber"  loading={statsLoading} note={stats.activeCapped ? 'At least this many (capped)' : undefined} />
+        <SummaryCard label="Total Events"             value={stats.totalEvents?.toLocaleString()}  color="blue"   loading={statsLoading} />
+        <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth?.toLocaleString()}  color="green"  loading={statsLoading} />
+        <SummaryCard label="Records Added This Month" value={stats.recordsMonth?.toLocaleString()}  color="purple" loading={statsLoading} note={stats.recordsCapped ? 'At least this many (capped)' : undefined} />
+        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers?.toLocaleString()}   color="amber"  loading={statsLoading} note={stats.activeCapped ? 'At least this many (capped)' : undefined} />
       </div>
 
       {/* Tabs */}
@@ -541,7 +535,7 @@ export default function AuditTrail() {
                   <input
                     type="text"
                     className="input pl-8 w-48"
-                    placeholder="Action, table, user..."
+                    placeholder="Search this page..."
                     value={auditSearch}
                     onChange={e => setAuditSearch(e.target.value)}
                   />
@@ -550,7 +544,7 @@ export default function AuditTrail() {
               <button onClick={loadAudit} className="btn-secondary flex items-center gap-2 text-sm">
                 <RefreshCw size={14} /> Refresh
               </button>
-              <button onClick={exportAuditLog} className="btn-secondary flex items-center gap-2 text-sm ml-auto">
+              <button onClick={exportAuditLog} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm ml-auto">
                 <FileSpreadsheet size={14} className="text-green-400" /> Export to Excel
               </button>
             </div>
@@ -576,7 +570,7 @@ export default function AuditTrail() {
               enableColumnVisibility={false}
               initialPageSize={50}
               pageSizeOptions={[50]}
-              emptyMessage={auditLoading ? 'Loading...' : 'No audit events found'}
+              emptyMessage={auditError ? 'Audit events could not be loaded' : auditLoading ? 'Loading...' : 'No audit events found'}
             />
           </div>
 
@@ -602,8 +596,14 @@ export default function AuditTrail() {
       {/* ── Upload History tab ─────────────────────────────────────────────── */}
       {activeTab === 'upload' && (
         <div className="space-y-3">
-          <div className="flex justify-end">
-            <button onClick={exportUploadHistory} className="btn-secondary flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">From
+              <input type="date" className="input" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setUploadPage(0); setAuditPage(0) }} />
+            </label>
+            <label className="text-sm">To
+              <input type="date" className="input" value={dateTo} onChange={e => { setDateTo(e.target.value); setUploadPage(0); setAuditPage(0) }} />
+            </label>
+            <button onClick={exportUploadHistory} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm">
               <FileSpreadsheet size={14} className="text-green-400" /> Export to Excel
             </button>
           </div>
@@ -620,7 +620,7 @@ export default function AuditTrail() {
               enableColumnVisibility={false}
               initialPageSize={50}
               pageSizeOptions={[50]}
-              emptyMessage={uploadLoading ? 'Loading...' : 'No upload history found'}
+              emptyMessage={uploadError ? 'Upload history could not be loaded' : uploadLoading ? 'Loading...' : 'No upload history found'}
             />
           </div>
 
@@ -647,19 +647,22 @@ export default function AuditTrail() {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }}>
           <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-3">Delete Upload Batch</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">Reverse Upload Batch</h2>
             <p className="text-gray-400 text-sm mb-4">
-              This will permanently delete <strong className="text-white">{deleteTarget.count} records</strong> uploaded on {formatDate(deleteTarget.date)}. This cannot be undone.
+              This removes the surviving records from the batch uploaded on {formatDate(deleteTarget.date)}. The original upload contained {deleteTarget.count} records. History and a recovery archive are retained; batches with cleaning or disposal activity cannot be reversed here.
             </p>
+            <label className="block text-sm text-gray-400 mb-2">Reason for reversal
+              <textarea className="input mt-1" value={deleteReason} maxLength={2000} onChange={e => setDeleteReason(e.target.value)} />
+            </label>
             <p className="text-sm text-gray-400 mb-2">Type <span className="font-mono text-red-400">DELETE</span> to confirm:</p>
             <input className="input mb-4" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
             {deleteError && (
               <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
             )}
             <div className="flex gap-3">
-              <button onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleting}
+              <button onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleteReason.trim().length < 3 || deleting}
                 className="btn-primary bg-red-700 hover:bg-red-600 disabled:opacity-40 flex-1">
-                {deleting ? 'Deleting...' : 'Delete Permanently'}
+                {deleting ? 'Reversing...' : 'Reverse Batch'}
               </button>
               <button onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }} className="btn-secondary">Cancel</button>
             </div>

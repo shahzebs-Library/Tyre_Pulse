@@ -36,6 +36,7 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/database/query_scope.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -201,11 +202,20 @@ Future<void> _runSelectRecent(
   ProviderContainer container,
   _FakeGlobalSearchRepository repo,
   AppDatabase db,
-}) _harness({WorkspaceContext? workspace}) {
+}) _harness({WorkspaceContext? workspace, Set<ModuleKey>? modules}) {
   final _FakeGlobalSearchRepository repo = _FakeGlobalSearchRepository();
   final AppDatabase db = newMemoryDatabase();
   final ProviderContainer container = ProviderContainer(
     overrides: [
+      globalSearchModulesProvider.overrideWithValue(
+        modules ??
+            {
+              ModuleKey.vehicles,
+              ModuleKey.serial,
+              ModuleKey.workorders,
+              ModuleKey.inspect,
+            },
+      ),
       globalSearchRepositoryProvider.overrideWithValue(repo),
       cacheDaoProvider.overrideWithValue(db.cacheDao),
       workspaceContextProvider.overrideWithValue(
@@ -217,6 +227,35 @@ Future<void> _runSelectRecent(
 }
 
 void main() {
+  test('search does not query modules denied to the user', () async {
+    final (:container, :repo, :db) = _harness(modules: {ModuleKey.vehicles});
+    addTearDown(container.dispose);
+    addTearDown(db.close);
+    container.read(globalSearchControllerProvider.notifier).searchNow('123');
+    await _settle();
+    expect(repo.assetsCalls, 1);
+    expect(repo.tyresCalls, 0);
+    expect(repo.workOrdersCalls, 0);
+    expect(repo.inspectionsCalls, 0);
+  });
+
+  test('losing search permission clears previous results and query', () async {
+    final (:container, :repo, :db) = _harness();
+    addTearDown(container.dispose);
+    addTearDown(db.close);
+    container.read(globalSearchControllerProvider.notifier).searchNow('123');
+    await _settle();
+    container.updateOverrides([
+      globalSearchModulesProvider.overrideWithValue(<ModuleKey>{}),
+      globalSearchRepositoryProvider.overrideWithValue(repo),
+      cacheDaoProvider.overrideWithValue(db.cacheDao),
+      workspaceContextProvider.overrideWithValue(_workspace()),
+    ]);
+    final state = container.read(globalSearchControllerProvider);
+    expect(state.query, isEmpty);
+    expect(state.hasResults, isFalse);
+  });
+
   group('build()', () {
     test('starts idle, empty, with no results and no error', () {
       final (:container, :repo, :db) = _harness();

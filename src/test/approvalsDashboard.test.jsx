@@ -1,10 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, within, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 // The page never touches Supabase directly — it talks to two API boundaries:
 // the V95 workflow engine (`workflows`) and the aggregation service (`queue`).
+// These tests exercise the installed legacy contract; only an absent new RPC enables fallback.
+vi.mock('../lib/api/approvalDecisions', () => ({
+  getApprovalReview: vi.fn().mockRejectedValue({ code: 'PGRST202' }),
+  isApprovalReviewUnavailable: error => error?.code === 'PGRST202',
+  createApprovalIntent: vi.fn(), submitApprovalIntent: vi.fn(),
+}))
+
 vi.mock('../lib/api/workflows', () => ({
   getApprovalDashboard: vi.fn(),
   myPendingApprovals: vi.fn(),
@@ -137,9 +144,11 @@ async function sign() {
   // only once its real pad is ready, as a user would.
   const pad = await screen.findByTestId('signature-capture')
 
-  fireEvent.mouseDown(pad, { clientX: 10, clientY: 12 })
-  fireEvent.mouseMove(pad, { clientX: 60, clientY: 40 })
-  fireEvent.mouseUp(pad, { clientX: 60, clientY: 40 })
+  await act(async () => {
+    fireEvent.mouseDown(pad, { clientX: 10, clientY: 12 })
+    fireEvent.mouseMove(pad, { clientX: 60, clientY: 40 })
+    fireEvent.mouseUp(pad, { clientX: 60, clientY: 40 })
+  })
 }
 
 beforeEach(() => {
@@ -249,7 +258,7 @@ describe('Unified approval dashboard', () => {
 
     fireEvent.click(screen.getByText('Daily Safety Check'))
     await screen.findByRole('dialog')
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Approve' })).toBeDisabled()
     expect(queue.decideChecklist).not.toHaveBeenCalled()
 
     await sign()
@@ -275,7 +284,7 @@ describe('Unified approval dashboard', () => {
 
     fireEvent.click(screen.getByText('Daily Safety Check'))
     await screen.findByRole('dialog')
-    expect(screen.getByText(/passes this sheet to the area manager/i)).toBeInTheDocument()
+    expect(await screen.findByText(/passes this sheet to the area manager/i)).toBeInTheDocument()
 
     await sign()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Sign off' })).not.toBeDisabled())

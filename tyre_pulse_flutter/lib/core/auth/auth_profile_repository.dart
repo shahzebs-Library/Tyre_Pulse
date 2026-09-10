@@ -10,7 +10,7 @@
 /// production column list in `mobile/contexts/AuthContext.tsx`'s `fetchProfile`
 /// (`id,full_name,username,role,email,employee_id,site,country,approved,
 /// locked,is_super_admin,created_at`). This selection intentionally omits
-/// `username`, `email` and `created_at`: nothing in this lane reads them, and
+/// `username` and `created_at`: nothing in this lane reads them, and
 /// AGENTS.md rule 4 ("never hard-code a column list wider than
 /// what is used") is best honoured by asking for exactly what is consumed.
 ///
@@ -34,7 +34,7 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 /// the query and the decoder cannot silently drift apart.
 const String _profileColumns =
     'id, role, country, sites, org_id, organisation_id, is_super_admin, '
-    'approved, locked, site, full_name, employee_id';
+    'approved, locked, site, full_name, employee_id, email';
 
 /// The result of one profile fetch attempt.
 sealed class ProfileFetchOutcome {

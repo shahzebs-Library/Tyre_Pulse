@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // WorkOrders.jsx - Workshop Job Card Management · /work-orders
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -26,6 +26,7 @@ import DateField from '../components/ui/DateField'
 import StatusBadge from '../components/ui/StatusBadge'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
+import WorkOrderApprovalGate from '../components/workorders/WorkOrderApprovalGate'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -197,6 +198,11 @@ export default function WorkOrders() {
   // Approval-engine gate: locks edit/status/delete for the open record while its
   // workflow is active (pending/in_review/returned) or locked (approved).
   const [wfLocked, setWfLocked]     = useState(false)
+  const [executionAllowed, setExecutionAllowed] = useState(false)
+  const [approvalRevision, setApprovalRevision] = useState(0)
+  const [transitioning, setTransitioning] = useState(false)
+  const [transitionError, setTransitionError] = useState('')
+  const transitionLock = useRef(false)
   const [formData, setFormData]     = useState(EMPTY_FORM)
   // An explicit clock for the job card flow. The duration engine takes `now` as
   // an argument on purpose (it stays deterministic and testable), so the page
@@ -289,7 +295,7 @@ export default function WorkOrders() {
 
   // Reset the approval lock whenever a different record (or none) is opened in the
   // detail drawer; EntityApprovalPanel re-reports the true state via onStateChange.
-  useEffect(() => { setWfLocked(false) }, [viewOrder?.id])
+  useEffect(() => { setWfLocked(false); setExecutionAllowed(false); setTransitionError('') }, [viewOrder?.id])
 
   // ── Computed ──────────────────────────────────────────────────────────────
   // The server already returned exactly this page, filtered and sorted.
@@ -492,7 +498,9 @@ export default function WorkOrders() {
       payload.created_by = user?.id || null
 
       if (editOrder) {
-        await workOrders.updateWorkOrderById(editOrder.id, payload)
+        const committed = await workOrders.updateWorkOrderById(editOrder.id, payload)
+        setViewOrder(current => current?.id === editOrder.id ? committed : current)
+        setApprovalRevision(value => value + 1)
         logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: payload })
       } else {
         // The job card number is now an editable field, so only generate one
@@ -502,7 +510,8 @@ export default function WorkOrders() {
           const woNo = await workOrders.generateWorkOrderNo()
           payload.work_order_no = woNo || `WO-${Date.now()}`
         }
-        await workOrders.insertWorkOrder(payload)
+        const committed = await workOrders.insertWorkOrder(payload)
+        setViewOrder(committed)
         logAudit({ action: 'CREATE', entity: 'work_orders', entityId: payload.work_order_no, after: payload })
         publish('workorder.created', { work_order_no: payload.work_order_no, asset_no: payload.asset_no, work_type: payload.work_type, priority: payload.priority })
       }
@@ -518,17 +527,21 @@ export default function WorkOrders() {
   // ── Status transition ─────────────────────────────────────────────────────
   async function transitionStatus(order, newStatus) {
     // Status changes are edits — blocked while the record's approval is active/locked.
-    if (viewOrder?.id === order.id && wfLocked) return
+    if (transitionLock.current || (viewOrder?.id === order.id && wfLocked)) return
+    if (['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(newStatus) && !executionAllowed) return
+    transitionLock.current = true; setTransitioning(true); setTransitionError('')
     const patch = { status: newStatus }
     if (newStatus === 'In Progress' && !order.started_at) patch.started_at = new Date().toISOString()
     if (newStatus === 'Completed') patch.completed_at = new Date().toISOString()
     try {
-      await workOrders.updateWorkOrderById(order.id, patch)
+      const committed = await workOrders.updateWorkOrderById(order.id, patch)
       logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: order.id, before: order, after: patch })
       publish('workorder.status_changed', { id: order.id, work_order_no: order.work_order_no, from_status: order.status, to_status: newStatus })
-    } catch (err) { alert(t('workorders.form.updateFailed', { msg: toUserMessage(err) })); return }
-    await load()
-    if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))
+      setViewOrder(current => current?.id === order.id ? committed : current)
+      setApprovalRevision(value => value + 1)
+      await load()
+    } catch (err) { setTransitionError(t('workorders.form.updateFailed', { msg: toUserMessage(err) })) }
+    finally { transitionLock.current = false; setTransitioning(false) }
   }
 
   // ── PDF Job Card ──────────────────────────────────────────────────────────
@@ -1024,7 +1037,7 @@ export default function WorkOrders() {
                     <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
-                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked}
+                        <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked || transitioning || (!executionAllowed && ['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(ns))}
                           className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             ns === 'Cancelled' ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                             ns === 'Completed' ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
@@ -1034,9 +1047,12 @@ export default function WorkOrders() {
                     </div>
                   </div>
                 )}
+                {transitionError && <p role="alert" className="text-sm text-red-500">{transitionError}</p>}
 
                 {/* Approval & Workflow Engine — status, immutable trail, approver action, start picker */}
-                <EntityApprovalPanel
+                <WorkOrderApprovalGate orderId={viewOrder.id} revision={approvalRevision}
+                  onGateChange={({ canExecute, lockEdits }) => { setExecutionAllowed(canExecute); if (lockEdits !== undefined) setWfLocked(lockEdits) }}
+                  legacy={<EntityApprovalPanel
                   entityType="work_order"
                   entityId={viewOrder.id}
                   entityLabel={viewOrder.work_order_no || viewOrder.id}
@@ -1049,7 +1065,7 @@ export default function WorkOrders() {
                   }}
                   onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
                   title="Work Order Approval"
-                />
+                />} />
 
                 {wfLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">

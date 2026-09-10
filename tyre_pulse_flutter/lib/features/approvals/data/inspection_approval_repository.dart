@@ -55,7 +55,9 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/features/approvals/data/approval_review_context.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
+import 'package:uuid/uuid.dart';
 
 /// The `.or(...)` filter that scopes the pending queue to [country], or
 /// `null` when the whole queue should be read unfiltered.
@@ -80,7 +82,11 @@ String? inspectionApprovalCountryFilter(String? country) {
 final class InspectionApprovalDecision {
   const InspectionApprovalDecision({
     required this.inspectionId,
+    this.reviewContext,
+    this.operationId,
+    this.capturedAt,
     required this.approved,
+    this.decision,
     this.approverSignature,
     this.reviewNote,
     this.approverName,
@@ -88,7 +94,11 @@ final class InspectionApprovalDecision {
   });
 
   final String inspectionId;
+  final ApprovalReviewContext? reviewContext;
+  final String? operationId;
+  final DateTime? capturedAt;
   final bool approved;
+  final String? decision;
 
   /// A drawn signature `data:` URL, or `null`. `decide_inspection_approval`
   /// refuses an APPROVAL that would leave a still-unsigned row with no
@@ -242,52 +252,54 @@ final class SupabaseInspectionApprovalRepository
 
   @override
   Future<InspectionApprovalItem?> byId(String id) async {
-    final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
-      () => _client
-          .from(SupabaseTables.inspections)
-          .select(inspectionApprovalFullColumns)
-          .eq('id', id)
-          .maybeSingle(),
-    );
-    if (row == null) return null;
-    return InspectionApprovalItem.fromRow(row);
+    return guard(() async {
+      final raw = await _client.rpc<Map<String, dynamic>>(
+        'approval_review_context',
+        params: {'p_entity_type': 'inspection', 'p_entity_id': id},
+      );
+      final document = raw['document'];
+      if (document is! Map) {
+        throw const FormatException('Approval document is unavailable.');
+      }
+      return InspectionApprovalItem.fromRow({
+        ...Map<String, dynamic>.from(document),
+        'approval_review_context': raw,
+      });
+    });
   }
 
   @override
   Future<void> decide(InspectionApprovalDecision input) async {
-    final String? note = _trimmedOrNull(input.reviewNote);
-
+    final context = input.reviewContext;
+    if (context == null ||
+        (input.approved
+            ? !context.canDecide
+            : !(context.canReturn || context.canDecide))) {
+      throw const PostgrestException(
+        message: 'Reopen the record to verify approval authority.',
+        code: '42501',
+      );
+    }
+    final operationId = input.operationId ?? const Uuid().v4();
     await guard<void>(() async {
-      await _client.rpc<Object?>(
-        SupabaseRpcs.decideInspectionApproval,
-        params: <String, Object?>{
-          'p_inspection_id': input.inspectionId,
-          'p_decision': input.approved ? 'approved' : 'rejected',
-          'p_note': note,
+      final raw = await _client.rpc<Object?>(
+        'decide_approval',
+        params: {
+          'p_entity_type': 'inspection',
+          'p_entity_id': input.inspectionId,
+          'p_decision':
+              input.decision ?? (input.approved ? 'approved' : 'returned'),
+          'p_expected_revision': context.revision,
+          'p_expected_stage': context.stageToken,
+          'p_operation_id': operationId,
+          'p_note': _trimmedOrNull(input.reviewNote),
           'p_signature': input.approverSignature,
+          'p_client_captured_at':
+              (input.capturedAt ?? DateTime.now()).toUtc().toIso8601String(),
         },
       );
+      validateApprovalReceipt(raw, operationId);
     });
-
-    // Best effort, and deliberately AFTER the RPC has already committed -
-    // see the library comment and this class's own [decide] doc comment.
-    if (!input.approved && note != null) {
-      final String merged = buildReturnedNote(
-        existingNotes: input.existingNotes,
-        approverName: input.approverName,
-        note: note,
-      );
-      try {
-        await guard<void>(() async {
-          await _client.from(SupabaseTables.inspections).update(
-            <String, Object?>{'notes': merged},
-          ).eq('id', input.inspectionId);
-        });
-      } on Object {
-        // The decision stands; the reason is preserved in
-        // inspection_audit_log even when this echo is refused.
-      }
-    }
   }
 
   @override

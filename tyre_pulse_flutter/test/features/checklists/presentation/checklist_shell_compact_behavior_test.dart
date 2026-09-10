@@ -5,6 +5,8 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/checklists/presentation/checklist_fill_screen.dart';
 import 'package:tyre_pulse/features/checklists/presentation/checklist_history_screen.dart';
 import 'package:tyre_pulse/features/checklists/presentation/checklists_home_screen.dart';
@@ -22,6 +24,12 @@ Future<void> _pumpCompact(
     ProviderScope(
       overrides: [
         workspaceContextProvider.overrideWithValue(null),
+        vehicleFleetListProvider.overrideWith(
+          (ref) async => const VehicleFleetListLoaded(
+            assets: [],
+            truncated: false,
+          ),
+        ),
       ],
       child: MaterialApp(
         theme: TpTheme.light,

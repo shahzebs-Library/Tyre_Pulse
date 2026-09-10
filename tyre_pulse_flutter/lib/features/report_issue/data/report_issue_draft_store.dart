@@ -25,6 +25,7 @@ final class ReportIssueDraft {
     required this.requestWorkOrder,
     required this.photoLocalPaths,
     required this.savedAt,
+    this.incidentAt,
   });
 
   factory ReportIssueDraft.fromJson(Map<String, dynamic> json) {
@@ -46,6 +47,7 @@ final class ReportIssueDraft {
           : const <String>[],
       savedAt: DateTime.tryParse(json['savedAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      incidentAt: DateTime.tryParse(json['incidentAt'] as String? ?? ''),
     );
   }
 
@@ -60,6 +62,7 @@ final class ReportIssueDraft {
   final bool requestWorkOrder;
   final List<String> photoLocalPaths;
   final DateTime savedAt;
+  final DateTime? incidentAt;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'title': title,
@@ -73,6 +76,7 @@ final class ReportIssueDraft {
         'requestWorkOrder': requestWorkOrder,
         'photoLocalPaths': photoLocalPaths,
         'savedAt': savedAt.toUtc().toIso8601String(),
+        'incidentAt': incidentAt?.toUtc().toIso8601String(),
       };
 }
 

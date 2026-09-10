@@ -179,450 +179,132 @@ void main() {
     engine = ChecklistApprovalSyncEngine(queue: queue, repository: repository);
   });
 
-  group('decideNow - the commit-then-attempt order', () {
-    test(
-      'the decision is durably enqueued BEFORE any delivery attempt - '
-      'the queue write happens even though delivery never succeeds',
+  Future<ChecklistApprovalDecisionResult> decide(
+          {bool approved = true,
+          int? revision = 7,
+          String? token = 'stage-1'}) =>
+      engine.decideNow(
+        submissionId: 'sub-1',
+        stage: ApprovalStage.supervisor,
+        priorApprovalStatus: 'pending',
+        targetStatus: approved ? 'approved' : 'rejected',
+        approved: approved,
+        expectedRevision: revision,
+        expectedStageToken: token,
+        approverName: 'Reviewer',
+        approverId: 'reviewer-id',
+        approverSignature: 'data:image/png;base64,evidence',
+        reviewNote: approved ? null : 'Repair required',
+      );
+
+  const offline = SupabaseFailure(
+      error: AppError.network(), cause: SupabaseFailureCause.offline);
+
+  test('durable evidence and immutable context survive connectivity failure',
       () async {
-        // A deliberately-failing repository makes this observable: even
-        // though delivery never succeeds, the enqueue call is recorded
-        // first. Thrown as a real SupabaseFailure so `error is
-        // SupabaseFailure` short-circuits inside the engine, exactly as
-        // `inspection_sync_engine_test.dart`'s own equivalent test does.
-        repository.byIdFailWith = const SupabaseFailure(
-          error: AppError.network(),
-          cause: SupabaseFailureCause.offline,
-        );
+    repository.applyFailWith = offline;
+    final result = await decide();
+    expect(result.outcome, ChecklistApprovalDecisionOutcome.queued);
+    final item = queue.store[result.decisionId]!;
+    expect(item.expectedRevision, 7);
+    expect(item.expectedStageToken, 'stage-1');
+    expect(item.approverSignature, 'data:image/png;base64,evidence');
+    expect(item.status, ChecklistApprovalQueueStatus.pending);
+    expect(queue.enqueuedItems, hasLength(1));
+  });
 
-        await engine.decideNow(
-          submissionId: 'sub-1',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'pending_area_manager',
-          approved: true,
-          approverName: 'Ahmed',
-          approverSignature: 'data:image/png;base64,aaa',
-        );
-
-        expect(queue.enqueueCalls, isNotEmpty);
-        expect(queue.enqueueCalls.first, 'approve_sub-1_pending_area_manager');
-      },
-    );
-
-    test(
-        'a successful delivery returns deliveredNow, and the queue entry '
-        'is marked synced and removed', () async {
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.deliveredNow);
-      expect(result.error, isNull);
-      expect(repository.appliedDecisionIds, isNotEmpty);
-      expect(await queue.byId(result.decisionId), isNull);
-    });
-
-    test(
-      'a rejection never carries a signature, whatever was drawn - '
-      'already resolved to null before this ever reaches the queue',
+  test('accepted operation removes durable entry only after confirmation',
       () async {
-        await engine.decideNow(
-          submissionId: 'sub-1',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'rejected',
-          approved: false,
-          approverName: 'Ahmed',
-          approverSignature: 'data:image/png;base64,should-not-be-kept',
-          reviewNote: 'Front left tread not recorded',
-        );
-        // [enqueuedItems] records what was written the moment the durable
-        // commit happened, unaffected by the entry later being removed once
-        // delivery succeeds.
-        expect(queue.enqueuedItems, hasLength(1));
-        expect(queue.enqueuedItems.single.approverSignature, isNull);
-        expect(
-          queue.enqueuedItems.single.reviewNote,
-          'Front left tread not recorded',
-        );
-      },
-    );
-
-    test(
-        'a connectivity failure queues the decision - stays pending, no '
-        'error surfaced other than result.outcome', () async {
-      repository.byIdFailWith = const SupabaseFailure(
-        error: AppError.network(),
-        cause: SupabaseFailureCause.offline,
-      );
-
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.queued);
-
-      final QueuedChecklistApprovalDecision? stillQueued = await queue.byId(
-        result.decisionId,
-      );
-      expect(stillQueued, isNotNull);
-      expect(stillQueued!.status, ChecklistApprovalQueueStatus.pending);
-    });
-
-    test(
-        'a definitive server refusal (e.g. row-level security) is '
-        'blocked, not silently retried', () async {
-      repository.applyFailWith = const SupabaseFailure(
-        error: AppError.authorization(
-          message: 'You are not allowed to sign this off.',
-        ),
-        cause: SupabaseFailureCause.rowLevelSecurity,
-      );
-
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
-      expect(result.error, isNotNull);
-
-      final QueuedChecklistApprovalDecision? stillQueued = await queue.byId(
-        result.decisionId,
-      );
-      expect(stillQueued!.status, ChecklistApprovalQueueStatus.blocked);
-    });
-
-    test('decideNow never throws, whatever the repository does', () async {
-      repository.byIdFailWith = StateError('completely unexpected');
-      await expectLater(
-        engine.decideNow(
-          submissionId: 'sub-1',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'pending_area_manager',
-          approved: true,
-        ),
-        completes,
-      );
-    });
+    final result = await decide();
+    expect(result.outcome, ChecklistApprovalDecisionOutcome.deliveredNow);
+    expect(repository.appliedDecisionIds, [result.decisionId]);
+    expect(queue.store, isEmpty);
+    expect(queue.enqueuedItems, hasLength(1));
   });
 
-  group(
-      'the stage-mismatch conflict check - the rule InspectionSyncEngine '
-      'does not need', () {
-    test(
-        'a submission that has already moved past the decided stage is '
-        'BLOCKED with a conflict error, and NOTHING is written', () async {
-      // The decision was made when the submission was still `pending`
-      // (stage: supervisor). By the time delivery is attempted, somebody
-      // else has already signed it off - the server now reports
-      // `pending_area_manager`, so the CURRENT stage is areaManager, not
-      // the supervisor stage this decision targets.
-      repository.current = _pendingSubmission(
-        approvalStatus: 'pending_area_manager',
-      );
-
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
-      expect(result.error!.kind, AppErrorKind.conflict);
-      expect(repository.appliedDecisionIds, isEmpty);
-    });
-
-    test(
-        'a submission that has already been fully closed (nothing '
-        'outstanding at all) is also blocked, never delivered', () async {
-      repository.current = _pendingSubmission(approvalStatus: 'approved');
-
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.areaManager,
-        priorApprovalStatus: 'pending_area_manager',
-        targetStatus: 'approved',
-        approved: true,
-        approverName: 'Sara',
-        approverSignature: 'data:image/png;base64,bbb',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
-      expect(repository.appliedDecisionIds, isEmpty);
-    });
-
-    test(
-        'a submission that no longer exists at all (removed) is blocked '
-        'with a validation error, not a crash', () async {
-      repository.current = null;
-
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
-      expect(result.error!.kind, AppErrorKind.validation);
-    });
-
-    test(
-        'the stage still matching current state (nobody else acted) '
-        'delivers normally', () async {
-      // repository.current is set by setUp to approval_status: 'pending',
-      // which is exactly the supervisor stage this decision targets.
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.deliveredNow);
-    });
-  });
-
-  group('the server-side optimistic-concurrency guard - the SECOND layer', () {
-    test(
-        'ChecklistApprovalApplyResult.conflict from the repository is '
-        'ALSO blocked, even when this engine\'s own stage re-check saw no '
-        'problem - the narrow window between the two', () async {
-      repository.applyResult = ChecklistApprovalApplyResult.conflict;
-
-      final ChecklistApprovalDecisionResult result = await engine.decideNow(
-        submissionId: 'sub-1',
-        stage: ApprovalStage.supervisor,
-        priorApprovalStatus: 'pending',
-        targetStatus: 'pending_area_manager',
-        approved: true,
-        approverName: 'Ahmed',
-        approverSignature: 'data:image/png;base64,aaa',
-      );
-
-      expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
-      expect(result.error!.kind, AppErrorKind.conflict);
-
-      final QueuedChecklistApprovalDecision? stillQueued = await queue.byId(
-        result.decisionId,
-      );
-      expect(stillQueued!.status, ChecklistApprovalQueueStatus.blocked);
-    });
-  });
-
-  group('flushQueue', () {
-    test(
-      'retries only PENDING entries, skips blocked and synced ones',
+  test('new review intents never reuse a submission/status operation ID',
       () async {
-        await queue.enqueue(
-          QueuedChecklistApprovalDecision(
-            id: 'approve_sub-1_pending_area_manager',
-            submissionId: 'sub-1',
-            stage: ApprovalStage.supervisor,
-            priorApprovalStatus: 'pending',
-            targetStatus: 'pending_area_manager',
-            approved: true,
-            decidedAt: DateTime.utc(2026, 8, 20),
-            approverName: 'Ahmed',
-            approverSignature: 'data:image/png;base64,aaa',
-          ),
-        );
-        await queue.enqueue(
-          QueuedChecklistApprovalDecision(
-            id: 'approve_sub-2_approved',
-            submissionId: 'sub-2',
-            stage: ApprovalStage.areaManager,
-            priorApprovalStatus: 'pending_area_manager',
-            targetStatus: 'approved',
-            approved: true,
-            decidedAt: DateTime.utc(2026, 8, 20),
-            status: ChecklistApprovalQueueStatus.blocked,
-            error: 'previously refused',
-          ),
-        );
-        await queue.enqueue(
-          QueuedChecklistApprovalDecision(
-            id: 'approve_sub-3_rejected',
-            submissionId: 'sub-3',
-            stage: ApprovalStage.supervisor,
-            priorApprovalStatus: 'pending',
-            targetStatus: 'rejected',
-            approved: false,
-            decidedAt: DateTime.utc(2026, 8, 20),
-            status: ChecklistApprovalQueueStatus.synced,
-            syncedAt: DateTime.utc(2026, 8, 20, 1),
-          ),
-        );
-
-        // The one PENDING entry (sub-1) targets a submission whose current
-        // stage matches - it will deliver.
-        final ChecklistApprovalFlushSummary summary = await engine.flushQueue();
-
-        expect(summary.attempted, 1);
-        expect(summary.delivered, 1);
-        expect(summary.blocked, 0);
-        // The blocked and synced entries were never touched.
-        expect(repository.appliedDecisionIds, <String>[
-          'approve_sub-1_pending_area_manager',
-        ]);
-      },
-    );
-
-    test(
-        'an unreadable queue store refuses rather than guessing - '
-        'reports nothing attempted', () async {
-      final ChecklistApprovalSyncEngine engineOverUnreadable =
-          ChecklistApprovalSyncEngine(
-        queue: _UnreadableQueue(),
-        repository: repository,
-      );
-      final ChecklistApprovalFlushSummary summary =
-          await engineOverUnreadable.flushQueue();
-      expect(summary.attempted, 0);
-      expect(summary.delivered, 0);
-      expect(summary.blocked, 0);
-    });
+    repository.applyFailWith = offline;
+    final first = await decide();
+    final second = await decide();
+    expect(first.decisionId, isNot(second.decisionId));
+    expect(
+        RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+            .hasMatch(first.decisionId),
+        isTrue);
+    expect(queue.store, hasLength(2));
   });
 
-  group('retryOne', () {
-    test(
-        'explicitly retries a BLOCKED entry that flushQueue would never '
-        'touch on its own', () async {
-      await queue.enqueue(
-        QueuedChecklistApprovalDecision(
-          id: 'approve_sub-1_pending_area_manager',
-          submissionId: 'sub-1',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'pending_area_manager',
-          approved: true,
-          decidedAt: DateTime.utc(2026, 8, 20),
-          status: ChecklistApprovalQueueStatus.blocked,
-          error: 'checklist submission stage changed since decision',
-        ),
-      );
-
-      // The submission now genuinely matches this decision's stage again
-      // (e.g. the earlier "somebody else acted" turned out to be a false
-      // alarm the reviewer wants to retry).
-      repository.current = _pendingSubmission(approvalStatus: 'pending');
-
-      final ChecklistApprovalDecisionResult? result = await engine.retryOne(
-        'approve_sub-1_pending_area_manager',
-      );
-
-      expect(result, isNotNull);
-      expect(result!.outcome, ChecklistApprovalDecisionOutcome.deliveredNow);
-    });
-
-    test('returns null for an id that is not in the queue at all', () async {
-      expect(await engine.retryOne('ghost'), isNull);
-    });
+  test(
+      'lost acknowledgement retries exact intent even when record already advanced',
+      () async {
+    repository.applyFailWith = offline;
+    final first = await decide();
+    final capturedAt = queue.store[first.decisionId]!.decidedAt;
+    repository.current = _pendingSubmission(approvalStatus: 'approved');
+    repository.byIdFailWith = StateError('No preflight allowed');
+    repository.applyFailWith = null;
+    final retried = await engine.retryOne(first.decisionId);
+    expect(retried!.outcome, ChecklistApprovalDecisionOutcome.deliveredNow);
+    expect(repository.appliedDecisionIds, [first.decisionId]);
+    expect(queue.enqueuedItems.single.decidedAt, capturedAt);
   });
 
-  group('listQueued', () {
-    test('returns every entry not yet synced', () async {
-      await queue.enqueue(
-        QueuedChecklistApprovalDecision(
-          id: 'a',
-          submissionId: 'sub-a',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'pending_area_manager',
-          approved: true,
-          decidedAt: DateTime.utc(2026, 8, 20),
-        ),
-      );
-      await queue.enqueue(
-        QueuedChecklistApprovalDecision(
-          id: 'b',
-          submissionId: 'sub-b',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'pending_area_manager',
-          approved: true,
-          decidedAt: DateTime.utc(2026, 8, 20),
-          status: ChecklistApprovalQueueStatus.synced,
-          syncedAt: DateTime.utc(2026, 8, 20, 1),
-        ),
-      );
-
-      final List<QueuedChecklistApprovalDecision> queued =
-          await engine.listQueued();
-      expect(queued.map((d) => d.id), <String>['a']);
-    });
+  test('server conflict blocks stale signature and preserves it for review',
+      () async {
+    repository.applyResult = ChecklistApprovalApplyResult.conflict;
+    final result = await decide();
+    expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
+    expect(queue.store[result.decisionId]!.status,
+        ChecklistApprovalQueueStatus.blocked);
+    expect(queue.store[result.decisionId]!.approverSignature, isNotNull);
+    await engine.flushQueue();
+    expect(repository.appliedDecisionIds, hasLength(1));
   });
 
-  group('pendingCount', () {
-    test('delegates straight to the queue', () async {
-      await queue.enqueue(
-        QueuedChecklistApprovalDecision(
-          id: 'a',
-          submissionId: 'sub-a',
-          stage: ApprovalStage.supervisor,
-          priorApprovalStatus: 'pending',
-          targetStatus: 'pending_area_manager',
-          approved: true,
-          decidedAt: DateTime.utc(2026, 8, 20),
-        ),
-      );
-      expect(await engine.pendingCount(), 1);
-    });
+  test('unversioned legacy evidence remains durable but never reaches RPC',
+      () async {
+    final result = await decide(revision: null, token: null);
+    expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
+    expect(repository.appliedDecisionIds, isEmpty);
+    expect(queue.store[result.decisionId]!.approverSignature, isNotNull);
   });
-}
 
-class _UnreadableQueue implements ChecklistApprovalDecisionQueue {
-  @override
-  Future<void> enqueue(QueuedChecklistApprovalDecision item) async {}
+  test('missing stage token is not silently refreshed', () async {
+    final result = await decide(token: null);
+    expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
+    expect(repository.appliedDecisionIds, isEmpty);
+  });
 
-  @override
-  Future<ChecklistApprovalQueueReadResult> list() async =>
-      const ChecklistApprovalQueueReadResult.unreadable();
+  test('rejection persists reason without signature', () async {
+    await decide(approved: false);
+    expect(queue.enqueuedItems.single.approverSignature, isNull);
+    expect(queue.enqueuedItems.single.reviewNote, 'Repair required');
+  });
 
-  @override
-  Future<QueuedChecklistApprovalDecision?> byId(String id) async => null;
+  test('server refusal blocks without claiming delivery', () async {
+    repository.applyFailWith = StateError('refused');
+    final result = await decide();
+    expect(result.outcome, ChecklistApprovalDecisionOutcome.blocked);
+    expect(queue.store[result.decisionId], isNotNull);
+  });
 
-  @override
-  Future<void> markSynced(String id, DateTime at) async {}
+  test('flush retries pending and keeps operation identity', () async {
+    repository.applyFailWith = offline;
+    final result = await decide();
+    repository.applyFailWith = null;
+    await engine.flushQueue();
+    expect(repository.appliedDecisionIds, [result.decisionId]);
+    expect(queue.store, isEmpty);
+  });
 
-  @override
-  Future<void> markFailed(
-    String id, {
-    required String error,
-    required ChecklistApprovalQueueStatus status,
-  }) async {}
+  test('retry missing ID returns null', () async {
+    expect(await engine.retryOne('missing'), isNull);
+  });
 
-  @override
-  Future<void> remove(String id) async {}
-
-  @override
-  Future<int> pendingCount() async => 0;
+  test('pending list and count include blocked evidence', () async {
+    await decide(revision: null);
+    expect(await engine.pendingCount(), 1);
+    expect(await engine.listQueued(), hasLength(1));
+  });
 }

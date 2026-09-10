@@ -18,6 +18,7 @@ Map<String, Object?> row({
   Object? locked,
   Object? site = 'NHC',
   Object? employeeId = 'EMP-1048',
+  Object? email = 'operator@example.com',
 }) =>
     <String, Object?>{
       'id': id,
@@ -32,6 +33,7 @@ Map<String, Object?> row({
       'site': site,
       'full_name': 'A Person',
       'employee_id': employeeId,
+      'email': email,
     };
 
 void main() {
@@ -94,6 +96,11 @@ void main() {
         WorkspaceProfile.fromRow(row(employeeId: '  ')).employeeId,
         isNull,
       );
+    });
+
+    test('email is decoded only from the verified profile field', () {
+      expect(WorkspaceProfile.fromRow(row()).email, 'operator@example.com');
+      expect(WorkspaceProfile.fromRow(row(email: '  ')).email, isNull);
     });
 
     test('the two organisation columns are read separately', () {

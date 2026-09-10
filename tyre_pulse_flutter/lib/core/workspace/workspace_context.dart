@@ -60,6 +60,7 @@ final class WorkspaceProfile {
     this.legacySite,
     this.fullName,
     this.employeeId,
+    this.email,
   });
 
   /// Decodes a `profiles` row.
@@ -97,6 +98,7 @@ final class WorkspaceProfile {
       legacySite: _stringOrNull(row['site']),
       fullName: _stringOrNull(row['full_name']),
       employeeId: _stringOrNull(row['employee_id']),
+      email: _stringOrNull(row['email']),
     );
   }
 
@@ -129,6 +131,10 @@ final class WorkspaceProfile {
   /// This is presentation metadata only; authorization continues to use
   /// [userId] and the resolved permission state.
   final String? employeeId;
+
+  /// Verified contact address from `profiles.email`. This is display-only;
+  /// authentication and authorization continue to use [userId].
+  final String? email;
 
   /// True when both organisation columns are populated and DISAGREE.
   ///

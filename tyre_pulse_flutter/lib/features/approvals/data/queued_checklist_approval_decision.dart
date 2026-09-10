@@ -122,11 +122,14 @@ ChecklistApprovalQueueStatus _queueStatusFromWire(String? wire) =>
 class QueuedChecklistApprovalDecision {
   const QueuedChecklistApprovalDecision({
     required this.id,
+    this.expectedRevision,
+    this.expectedStageToken,
     required this.submissionId,
     required this.stage,
     required this.priorApprovalStatus,
     required this.targetStatus,
     required this.approved,
+    this.decision,
     required this.decidedAt,
     this.approverName,
     this.approverSignature,
@@ -138,14 +141,13 @@ class QueuedChecklistApprovalDecision {
     this.attempts = 0,
   });
 
-  /// The dedupe key this decision was built with -
-  /// `'approve_${submissionId}_$targetStatus'`, verbatim against
-  /// `mobile/lib/checklists.ts`'s own `` `approve_${input.id}_${status}` ``.
-  /// Also this queue entry's file name (`<id>.json`) in
-  /// [FileChecklistApprovalDecisionQueue]. A supervisor sign-off and a
-  /// later area-manager approval on the SAME submission carry different
-  /// [targetStatus] values and therefore never collide.
+  /// Unique operation UUID, reused unchanged until the server acknowledges it.
+  /// It also names the durable evidence file. Legacy IDs remain readable.
   final String id;
+
+  /// Frozen at review time. Legacy entries remain readable but cannot replay.
+  final int? expectedRevision;
+  final String? expectedStageToken;
 
   final String submissionId;
 
@@ -181,14 +183,11 @@ class QueuedChecklistApprovalDecision {
   /// the submission back.
   final bool approved;
 
-  /// When the reviewer actually made this decision - captured ONCE, here,
-  /// and written to `approver_at`/`supervisor_at` on every delivery
-  /// attempt (first or retried) rather than re-derived from `DateTime.
-  /// now()` at push time. The timestamp on a signature must say WHEN
-  /// somebody signed, not when the bits eventually reached the server -
-  /// mirroring `mobile/lib/checklists.ts`'s own `const now = new
-  /// Date().toISOString()`, computed once inside `decideApproval` before
-  /// the command is ever enqueued.
+  /// Explicit returned/rejected decision; absent on legacy evidence.
+  final String? decision;
+  String get wireDecision => decision ?? (approved ? 'approved' : 'returned');
+
+  /// Client capture time; accepted actor/time are derived by the server.
   final DateTime decidedAt;
 
   /// `input.approverName || null` in the TS source - a blank name is
@@ -232,11 +231,14 @@ class QueuedChecklistApprovalDecision {
   }) {
     return QueuedChecklistApprovalDecision(
       id: id,
+      expectedRevision: expectedRevision,
+      expectedStageToken: expectedStageToken,
       submissionId: submissionId,
       stage: stage,
       priorApprovalStatus: priorApprovalStatus,
       targetStatus: targetStatus,
       approved: approved,
+      decision: decision,
       decidedAt: decidedAt,
       approverName: approverName,
       approverSignature: approverSignature,
@@ -261,13 +263,16 @@ class QueuedChecklistApprovalDecision {
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'id': id,
+      'expectedRevision': expectedRevision,
+      'expectedStageToken': expectedStageToken,
       'submissionId': submissionId,
       'stage': approvalStageToWire(stage),
       'priorApprovalStatus': priorApprovalStatus,
       'targetStatus': targetStatus,
       'approved': approved,
+      'decision': decision,
       'decidedAt': decidedAt.toIso8601String(),
       'approverName': approverName,
       'approverSignature': approverSignature,
@@ -317,11 +322,14 @@ class QueuedChecklistApprovalDecision {
 
     return QueuedChecklistApprovalDecision(
       id: rawId,
+      expectedRevision: (json['expectedRevision'] as num?)?.toInt(),
+      expectedStageToken: json['expectedStageToken'] as String?,
       submissionId: rawSubmissionId,
       stage: stage,
       priorApprovalStatus: rawPriorStatus,
       targetStatus: rawTargetStatus,
       approved: json['approved'] == true,
+      decision: json['decision'] as String?,
       decidedAt: _dateTimeOrNow(json['decidedAt']),
       approverName: json['approverName'] as String?,
       approverSignature: json['approverSignature'] as String?,

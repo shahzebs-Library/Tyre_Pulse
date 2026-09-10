@@ -109,6 +109,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               _ResultSection(
                 result: state.result,
                 onOpen: _open,
+                onUseAsset: (String assetNo) => context.pop(assetNo),
                 onRetry: _retry,
                 onLookUpAnother: _reset,
               ),
@@ -304,12 +305,14 @@ class _ResultSection extends StatelessWidget {
   const _ResultSection({
     required this.result,
     required this.onOpen,
+    required this.onUseAsset,
     required this.onRetry,
     required this.onLookUpAnother,
   });
 
   final ScanLookupResult result;
   final ValueChanged<TpRoute> onOpen;
+  final ValueChanged<String> onUseAsset;
   final ValueChanged<String> onRetry;
   final VoidCallback onLookUpAnother;
 
@@ -319,11 +322,13 @@ class _ResultSection extends StatelessWidget {
       AssetScanMatch() => _MatchCard(
           result: result,
           onOpen: onOpen,
+          onUseAsset: onUseAsset,
           onLookUpAnother: onLookUpAnother,
         ),
       TyreScanMatch() => _MatchCard(
           result: result,
           onOpen: onOpen,
+          onUseAsset: null,
           onLookUpAnother: onLookUpAnother,
         ),
       ScanNoMatch() => _NoMatchCard(result: result, onOpen: onOpen),
@@ -349,11 +354,13 @@ class _MatchCard extends StatelessWidget {
   const _MatchCard({
     required this.result,
     required this.onOpen,
+    required this.onUseAsset,
     required this.onLookUpAnother,
   });
 
   final ScanLookupResult result;
   final ValueChanged<TpRoute> onOpen;
+  final ValueChanged<String>? onUseAsset;
   final VoidCallback onLookUpAnother;
 
   @override
@@ -389,6 +396,18 @@ class _MatchCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: TpSpace.lg),
+          if (result case AssetScanMatch(asset: final AssetLookupRecord asset))
+            Padding(
+              padding: const EdgeInsets.only(bottom: TpSpace.sm),
+              child: TpButton.primary(
+                label: l10n.scannerUseAssetAction,
+                onPressed: asset.assetNo.trim().isEmpty
+                    ? null
+                    : () => onUseAsset?.call(asset.assetNo),
+                isFullWidth: true,
+                icon: Icons.check_circle_outline_rounded,
+              ),
+            ),
           for (final ScanRouteAction action in actions)
             Padding(
               padding: const EdgeInsets.only(bottom: TpSpace.sm),

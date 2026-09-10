@@ -1,0 +1,10 @@
+﻿import fs from 'node:fs';import {execFileSync} from 'node:child_process';
+const path='CODEX_CONTEXT.md';
+const note='- Operational/report corrections (2026-09-10): commits `8dd9b215` and `bd7e066d` correct web module scope/history, inspection/checklist PDFs and anomaly calculations. User preference: corrected rules apply to new submissions and newly generated reports; preserve historical records, signed PDFs, signatures, photos and audit history. Never rewrite old evidence or guess replacement meter readings. Historical invalid values may be flagged for review. These are React web changes, not an installed-mobile rollout. PM intervals/shift timings and historical reading/photo corrections still need confirmed operational inputs.\n- Verification for those corrections: web lint/build and focused regressions passed. Latest full web run had 9,248 passes and four UI failures; all three affected files passed with one worker (25 tests). No second full-suite run was performed. Reviews: `audit/operational-module-review-2026-09-10.md` and `audit/checklist-report-review/review.md`.\n';
+const insert=s=>s.replace('## Active repository state\n','## Active repository state\n\n'+note);
+const base=execFileSync('git',['show','HEAD:'+path],{encoding:'utf8'}).replaceAll('\r\n','\n');
+const working=fs.readFileSync(path,'utf8').replaceAll('\r\n','\n');
+if(!base.includes('## Active repository state\n')||!working.includes('## Active repository state\n'))throw new Error('Context anchor missing');
+fs.writeFileSync(path,insert(working));
+const hash=execFileSync('git',['hash-object','-w','--stdin'],{input:insert(base),encoding:'utf8'}).trim();
+execFileSync('git',['update-index','--cacheinfo','100644',hash,path]);

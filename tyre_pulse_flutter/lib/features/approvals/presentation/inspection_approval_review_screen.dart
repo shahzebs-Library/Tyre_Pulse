@@ -55,10 +55,10 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_route_actions.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_route_card.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
-import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
-import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
@@ -67,6 +67,8 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board.dart';
+import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
+import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
 
 /// Which decision is currently in flight, so the two action buttons can
 /// each show their own busy indicator without either being pressed twice.
@@ -96,9 +98,12 @@ class InspectionApprovalReviewScreen extends ConsumerStatefulWidget {
 
 class _InspectionApprovalReviewScreenState
     extends ConsumerState<InspectionApprovalReviewScreen> {
+  bool _didStartInitialLoad = false;
   bool _loading = true;
   AppError? _loadError;
   InspectionApprovalItem? _item;
+  Map<String, TyreFitment> _installedTyres = const <String, TyreFitment>{};
+  AppError? _fitmentError;
 
   InspectionApprovalSignatureCapture? _approverSignature;
   final TextEditingController _noteController = TextEditingController();
@@ -108,8 +113,15 @@ class _InspectionApprovalReviewScreenState
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
     unawaited(_loadApproverName());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didStartInitialLoad) return;
+    _didStartInitialLoad = true;
+    unawaited(_load());
   }
 
   @override
@@ -121,6 +133,7 @@ class _InspectionApprovalReviewScreenState
   String get _inspectionId => widget.route.inspectionId.value;
 
   Future<void> _load() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() {
       _loading = true;
       _loadError = null;
@@ -129,9 +142,37 @@ class _InspectionApprovalReviewScreenState
       final InspectionApprovalItem? item = await ref
           .read(inspectionApprovalRepositoryProvider)
           .byId(_inspectionId);
+      Map<String, TyreFitment> installedTyres = const <String, TyreFitment>{};
+      AppError? fitmentError;
+      final String assetNo = item?.assetNo?.trim() ?? '';
+      if (item != null && assetNo.isNotEmpty) {
+        try {
+          final fitments =
+              await ref.read(tyreFitmentRepositoryProvider).activeForAsset(
+                    assetNo: assetNo,
+                    country: ref.read(workspaceContextProvider)?.activeCountry,
+                  );
+          installedTyres = fitmentsByInspectionSlot(
+            vehicleType: item.vehicleType ?? '',
+            assetNo: assetNo,
+            fitments: fitments,
+          );
+        } on AppError catch (error) {
+          fitmentError = error;
+        } on Object catch (error) {
+          fitmentError = AppError(
+            kind: AppErrorKind.unknown,
+            message: l10n.inspectionApprovalFitmentsUnavailable,
+            technical: 'activeForAsset($assetNo) failed: $error',
+            isRetryable: true,
+          );
+        }
+      }
       if (!mounted) return;
       setState(() {
         _item = item;
+        _installedTyres = installedTyres;
+        _fitmentError = fitmentError;
         _loading = false;
       });
     } on Object catch (error) {
@@ -160,7 +201,7 @@ class _InspectionApprovalReviewScreenState
     setState(() => _approverName = name);
   }
 
-  Future<void> _decide(bool approved) async {
+  Future<void> _decide(bool approved, {bool reject = false}) async {
     final InspectionApprovalItem? item = _item;
     if (item == null || _busy != null) return;
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -205,7 +246,10 @@ class _InspectionApprovalReviewScreenState
       await ref.read(inspectionApprovalRepositoryProvider).decide(
             InspectionApprovalDecision(
               inspectionId: item.id,
+              reviewContext: item.reviewContext,
               approved: approved,
+              decision:
+                  approved ? 'approved' : (reject ? 'rejected' : 'returned'),
               approverSignature: _approverSignature?.dataUrl,
               approverName: _approverName,
               reviewNote: trimmedNote.isEmpty ? null : trimmedNote,
@@ -223,12 +267,18 @@ class _InspectionApprovalReviewScreenState
       await _load();
       if (!mounted) return;
 
-      final String outcomeTitle = approved
-          ? l10n.inspectionApprovalApprovedOutcomeTitle
-          : l10n.inspectionApprovalReturnedOutcomeTitle;
-      final String outcomeMessage = approved
-          ? l10n.inspectionApprovalApprovedOutcomeMessage
-          : l10n.inspectionApprovalReturnedOutcomeMessage;
+      final String outcomeTitle =
+          reject || item.reviewContext?.mode == 'enforced'
+              ? approvalDecisionCopy(context, rejection: reject)
+              : approved
+                  ? l10n.inspectionApprovalApprovedOutcomeTitle
+                  : l10n.inspectionApprovalReturnedOutcomeTitle;
+      final String outcomeMessage =
+          reject || item.reviewContext?.mode == 'enforced'
+              ? approvalDecisionCopy(context, rejection: reject, message: true)
+              : approved
+                  ? l10n.inspectionApprovalApprovedOutcomeMessage
+                  : l10n.inspectionApprovalReturnedOutcomeMessage;
       final bool goToList = await TpDialog.confirm(
         context: context,
         title: outcomeTitle,
@@ -270,10 +320,14 @@ class _InspectionApprovalReviewScreenState
     return TpScaffold(
       backFallback: fallback,
       appBar: TpAppBar(title: title, backFallback: fallback),
-      bottomNavigationBar: item?.isPending == true
+      bottomNavigationBar: item?.isPending == true &&
+              (item?.reviewContext == null ||
+                  item!.reviewContext!.canDecide ||
+                  item.reviewContext!.canReturn)
           ? _ApprovalDecisionActionBar(
               busy: _busy,
-              canApprove: evidence!.canApprove,
+              canApprove: evidence!.canApprove &&
+                  (item?.reviewContext?.canDecide ?? true),
               blockedReason: evidence.canApprove
                   ? null
                   : '${l10n.inspectionTyresIncompleteLead(
@@ -282,6 +336,9 @@ class _InspectionApprovalReviewScreenState
                     )} ${evidence.blockingCodes.join(', ')}',
               onApprove: () => _decide(true),
               onReturn: () => _decide(false),
+              onReject: item?.reviewContext?.canDecide == true
+                  ? () => _decide(false, reject: true)
+                  : null,
             )
           : null,
       body: _body(l10n),
@@ -303,6 +360,9 @@ class _InspectionApprovalReviewScreenState
     }
     return _ReviewBody(
       item: item,
+      onRefresh: _load,
+      installedTyres: _installedTyres,
+      fitmentError: _fitmentError,
       approverName: _approverName,
       approverSignature: _approverSignature,
       noteController: _noteController,
@@ -405,6 +465,9 @@ String? _formatDateTime(String? iso) {
 class _ReviewBody extends StatelessWidget {
   const _ReviewBody({
     required this.item,
+    required this.onRefresh,
+    required this.installedTyres,
+    required this.fitmentError,
     required this.approverName,
     required this.approverSignature,
     required this.noteController,
@@ -413,6 +476,9 @@ class _ReviewBody extends StatelessWidget {
   });
 
   final InspectionApprovalItem item;
+  final Future<void> Function() onRefresh;
+  final Map<String, TyreFitment> installedTyres;
+  final AppError? fitmentError;
   final String? approverName;
   final InspectionApprovalSignatureCapture? approverSignature;
   final TextEditingController noteController;
@@ -423,10 +489,6 @@ class _ReviewBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final List<TyreEntryPair> entries = readTyreEntries(item.tyreConditions);
-    final Map<String, Map<String, Object?>> tyreData =
-        <String, Map<String, Object?>>{
-      for (final TyreEntryPair pair in entries) pair.key: pair.entry,
-    };
     // Rebuild the complete resolved capture layout while retaining each
     // submitted spelling as the data key for the slot it belongs to. This is
     // important for partially completed legacy rows: using only the submitted
@@ -440,17 +502,14 @@ class _ReviewBody extends StatelessWidget {
       assetNo: item.assetNo,
       submitted: entries,
     );
-    final _ApprovalEvidenceSummary evidence = _approvalEvidenceSummary(item);
-    final String? multiViewModelHint = _multiViewAxleHint(
+    final Map<String, Map<String, Object?>> tyreData = _approvalTyreData(
       vehicleType: item.vehicleType ?? '',
       assetNo: item.assetNo,
+      positions: positions,
+      submitted: entries,
+      installedTyres: installedTyres,
     );
-    final bool hasMultiViewReference = vehicleMultiViewAssetFor(
-          assetNo: item.assetNo,
-          vehicleType: item.vehicleType,
-          model: multiViewModelHint,
-        ) !=
-        null;
+    final _ApprovalEvidenceSummary evidence = _approvalEvidenceSummary(item);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -460,6 +519,14 @@ class _ReviewBody extends StatelessWidget {
         TpSpace.xxl,
       ),
       children: <Widget>[
+        if (item.reviewContext != null)
+          ApprovalRouteCard(review: item.reviewContext!),
+        if (item.reviewContext != null)
+          ApprovalRouteActions(
+              type: 'inspection',
+              entityId: item.id,
+              review: item.reviewContext!,
+              onRefresh: onRefresh),
         _SummaryCard(item: item),
         const SizedBox(height: TpSpace.lg),
         Text(
@@ -484,16 +551,14 @@ class _ReviewBody extends StatelessWidget {
             positions: positions,
             tyreData: tyreData,
           ),
-        if (hasMultiViewReference) ...<Widget>[
+        if (fitmentError != null) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
-          VehicleMultiViewBoard.reference(
-            assetNo: item.assetNo,
-            vehicleType: item.vehicleType,
-            model: multiViewModelHint,
-            title: l10n.vehiclesMultiViewTitle,
-            hint: l10n.vehiclesMultiViewHint,
-            zoomLabel: l10n.vehiclesMultiViewZoom,
-            closeLabel: l10n.actionClose,
+          TpCard(
+            background: TpPalette.of(context).forStatus(TpStatus.warning).soft,
+            child: Text(
+              l10n.inspectionApprovalFitmentsUnavailable,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ],
         if (entries.any(_isImmediateTyreFinding)) ...<Widget>[
@@ -552,6 +617,42 @@ class _ReviewBody extends StatelessWidget {
       ],
     );
   }
+}
+
+Map<String, Map<String, Object?>> _approvalTyreData({
+  required String vehicleType,
+  required String? assetNo,
+  required List<String> positions,
+  required List<TyreEntryPair> submitted,
+  required Map<String, TyreFitment> installedTyres,
+}) {
+  final Map<String, Map<String, Object?>> result =
+      <String, Map<String, Object?>>{
+    for (final TyreEntryPair pair in submitted)
+      pair.key: <String, Object?>{...pair.entry},
+  };
+  if (installedTyres.isEmpty) return result;
+
+  final String resolvedKey = resolveVehicleType(vehicleType, assetNo);
+  final DiagramLayout layout =
+      kTyreDiagramLayouts[resolvedKey] ?? kTyreDiagramLayouts['Pickup']!;
+  for (final MatchedTyreSlot matched
+      in matchPositionsToLayout(layout, positions)) {
+    final TyreFitment? fitment = installedTyres[matched.id];
+    if (fitment == null) continue;
+    final Map<String, Object?> merged = <String, Object?>{
+      ...?result[matched.positionId],
+      if (fitment.serialNo != null) 'installed_serial': fitment.serialNo,
+      if (fitment.brand != null) 'installed_brand': fitment.brand,
+      if (fitment.size != null) 'installed_size': fitment.size,
+    };
+    result[matched.positionId] = merged;
+    // The shared diagram deliberately double-looks up the caller spelling
+    // and the geometry slot id. Supplying both keeps list/layout mode and the
+    // read-only detail sheet on the same authoritative fitment identity.
+    result[matched.id] = merged;
+  }
+  return result;
 }
 
 @immutable
@@ -747,24 +848,6 @@ List<String> _approvalPositions({
 /// canonical tyre layout. This is especially important for pump inspections:
 /// the class name alone cannot truthfully distinguish the incompatible
 /// four- and five-axle reference boards, while the inspected slot layout can.
-String? _multiViewAxleHint({
-  required String vehicleType,
-  required String? assetNo,
-}) {
-  if (isTyrelessEquipment(vehicleType)) return null;
-  final String resolvedKey = resolveVehicleType(vehicleType, assetNo);
-  final DiagramLayout? layout = kTyreDiagramLayouts[resolvedKey];
-  if (layout == null) return null;
-
-  final Set<String> axles = <String>{};
-  final RegExp axlePrefix = RegExp(r'^([FR]\d*)', caseSensitive: false);
-  for (final TyreSlot slot in layout.tyres) {
-    final String? axle = axlePrefix.firstMatch(slot.id)?.group(1);
-    if (axle != null && axle.isNotEmpty) axles.add(axle.toUpperCase());
-  }
-  return axles.isEmpty ? null : '${axles.length} axle';
-}
-
 bool _isImmediateTyreFinding(TyreEntryPair pair) {
   final TyreCondition condition = normaliseCondition(
     pair.entry['condition']?.toString(),
@@ -1012,6 +1095,7 @@ class _TyreConditionsSection extends StatelessWidget {
           // underlying engine was shared.
           width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 2),
           compact: true,
+          captureMode: true,
         ),
       ],
     );
@@ -1595,6 +1679,7 @@ class _ApprovalDecisionActionBar extends StatelessWidget {
     required this.blockedReason,
     required this.onApprove,
     required this.onReturn,
+    this.onReject,
   });
 
   final _DecisionBusy? busy;
@@ -1602,6 +1687,7 @@ class _ApprovalDecisionActionBar extends StatelessWidget {
   final String? blockedReason;
   final VoidCallback onApprove;
   final VoidCallback onReturn;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -1670,6 +1756,11 @@ class _ApprovalDecisionActionBar extends StatelessWidget {
                   ),
                 ],
               ),
+              if (onReject != null)
+                TextButton(
+                    onPressed: isBusy ? null : onReject,
+                    child:
+                        Text(approvalDecisionCopy(context, rejection: true))),
             ],
           ),
         ),

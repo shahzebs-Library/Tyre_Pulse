@@ -36,6 +36,8 @@
 /// two-column-sets-one-decoder shape.
 library;
 
+import 'package:tyre_pulse/features/approvals/data/approval_review_context.dart';
+
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart'
     show ApprovalSubmissionLike;
 
@@ -116,6 +118,14 @@ final class ChecklistApprovalItem {
 
     return ChecklistApprovalItem(
       id: rawId,
+      reviewTemplate: row['checklist_templates'] is Map
+          ? Map<String, Object?>.from(row['checklist_templates']! as Map)
+          : null,
+      reviewContext: row['approval_review_context'] is Map
+          ? ApprovalReviewContext.fromJson(
+              Map<String, dynamic>.from(row['approval_review_context']! as Map),
+            )
+          : null,
       templateId: _asString(row['template_id']),
       templateName: _asString(row['template_name']),
       templateVersion: _asInt(row['template_version']),
@@ -148,6 +158,8 @@ final class ChecklistApprovalItem {
   }
   const ChecklistApprovalItem({
     required this.id,
+    this.reviewContext,
+    this.reviewTemplate,
     this.templateId,
     this.templateName,
     this.templateVersion,
@@ -182,6 +194,8 @@ final class ChecklistApprovalItem {
   /// mirrors `InspectionApprovalItem.fromRow`'s own throwing convention
   /// over the analogous table.
   final String id;
+  final ApprovalReviewContext? reviewContext;
+  final Map<String, Object?>? reviewTemplate;
 
   final String? templateId;
   final String? templateName;

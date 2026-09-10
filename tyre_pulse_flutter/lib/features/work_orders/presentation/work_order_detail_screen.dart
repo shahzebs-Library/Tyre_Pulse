@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/features/approvals/presentation/execution_approval_review_screen.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
@@ -90,6 +91,10 @@ class _WorkOrderDetailScreenState extends ConsumerState<WorkOrderDetailScreen> {
 
     setState(() => _advancing = true);
     try {
+      if (nextWorkOrderStatus(item.status) == kWorkOrderStatusInProgress) {
+        final allowed = await ensureWorkOrderApproval(context, ref, item.id);
+        if (!allowed || !mounted) return;
+      }
       await ref
           .read(workOrderRepositoryProvider)
           .advanceStatus(workspace: workspace, current: item);

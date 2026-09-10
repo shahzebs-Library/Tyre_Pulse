@@ -4,14 +4,8 @@
 /// language provider is re-exported from the localisation layer so a feature
 /// can import it from where it expects to find it.
 ///
-/// PERSISTENCE IS A STUB, DELIBERATELY AND VISIBLY.
-///
-/// [TpDisplaySettingsStore] is an interface with an in-memory implementation.
-/// Changing the language or the theme takes effect immediately, which is the
-/// behaviour a user can see; it does not yet survive a restart, which is the
-/// behaviour they cannot. The durable implementation belongs to whoever owns
-/// device storage, and it plugs in by overriding [displaySettingsStoreProvider]
-/// in the root `ProviderScope`.
+/// Production preloads [SharedPreferencesDisplaySettingsStore] before the
+/// first frame. Tests can use the isolated in-memory implementation.
 ///
 /// The interface is deliberately SYNCHRONOUS. Reading a preference must not be
 /// a future the first frame has to wait on, or the app opens on a flash of the
@@ -19,8 +13,11 @@
 /// `runApp` and then answers synchronously.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Reads and writes the user's display preferences.
 abstract interface class TpDisplaySettingsStore {
@@ -34,6 +31,64 @@ abstract interface class TpDisplaySettingsStore {
 
   /// Pass null to go back to following the device language.
   void writeLocale(Locale? locale);
+}
+
+/// Non-sensitive device preferences, available synchronously after preload.
+class SharedPreferencesDisplaySettingsStore implements TpDisplaySettingsStore {
+  SharedPreferencesDisplaySettingsStore(this._preferences);
+
+  final SharedPreferences _preferences;
+  static const String themeKey = 'display.theme';
+  static const String localeKey = 'display.locale';
+
+  @override
+  ThemeMode? readThemeMode() => switch (_preferences.get(themeKey)) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        'system' => ThemeMode.system,
+        _ => null,
+      };
+
+  @override
+  Locale? readLocale() => switch (_preferences.get(localeKey)) {
+        'en' => const Locale('en'),
+        'ar' => const Locale('ar'),
+        'ur' => const Locale('ur'),
+        _ => null,
+      };
+
+  @override
+  void writeThemeMode(ThemeMode mode) {
+    unawaited(_persist(_preferences.setString(themeKey, mode.name)));
+  }
+
+  @override
+  void writeLocale(Locale? locale) {
+    unawaited(
+      _persist(
+        locale == null
+            ? _preferences.remove(localeKey)
+            : _preferences.setString(localeKey, locale.languageCode),
+      ),
+    );
+  }
+
+  Future<void> _persist(Future<bool> write) async {
+    try {
+      if (!await write) {
+        throw StateError('Display preferences could not be saved.');
+      }
+    } on Object catch (error, stack) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'display preferences',
+          context: ErrorDescription('while saving display preferences'),
+        ),
+      );
+    }
+  }
 }
 
 /// The default store. Holds the choice for this run of the app and no longer.

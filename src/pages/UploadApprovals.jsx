@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import * as imports from '../lib/api/imports'
+import { decidePendingUpload } from '../lib/api/pendingUploadDecisions'
 import PageHeader from '../components/ui/PageHeader'
 import { toUserMessage } from '../lib/safeError'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
@@ -18,7 +19,6 @@ const TYPE_META = {
   stock: { label: 'Stock',        icon: Package,         color: '#0891b2' },
 }
 
-const BATCH = 500
 
 export default function UploadApprovals() {
   const { profile } = useAuth()
@@ -87,24 +87,12 @@ export default function UploadApprovals() {
   async function approve(p) {
     if (acting) return
     setActing(p.id); setError('')
-    const rows = Array.isArray(p.rows) ? p.rows : []
-    let inserted = 0
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const chunk = rows.slice(i, i + BATCH)
-      const { error: insErr } = await supabase.from(p.target_table).insert(chunk)
-      if (insErr) {
-        console.error(`[UploadApprovals] approve insert into ${p.target_table} failed:`, insErr)
-        setError(t('uploadapprovals.legacy.insertFailed', { file: p.file_name, inserted, total: rows.length, message: toUserMessage(insErr, t('uploadapprovals.intake.unknownError')) }))
-        setActing(null); return
-      }
-      inserted += chunk.length
-    }
-    const { error: updErr } = await supabase.from('pending_uploads')
-      .update({ status: 'approved', reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
-      .eq('id', p.id)
-    setActing(null)
-    if (updErr) { setError(toUserMessage(updErr, t('uploadapprovals.intake.unknownError'))); return }
-    await load()
+    try {
+      await decidePendingUpload(p.id, true)
+      await load()
+    } catch (err) {
+      setError(toUserMessage(err, t('uploadapprovals.intake.unknownError')))
+    } finally { setActing(null) }
   }
 
   async function reject(p) {
@@ -112,12 +100,12 @@ export default function UploadApprovals() {
     const note = window.prompt(t('uploadapprovals.legacy.rejectPrompt', { file: p.file_name, count: p.row_count }), '')
     if (note === null) return
     setActing(p.id); setError('')
-    const { error: err } = await supabase.from('pending_uploads')
-      .update({ status: 'rejected', reviewed_by: profile?.id, reviewed_at: new Date().toISOString(), review_note: note || null })
-      .eq('id', p.id)
-    setActing(null)
-    if (err) { console.error('[UploadApprovals] reject failed:', err); setError(toUserMessage(err, 'Something went wrong. Please try again.')); return }
-    await load()
+    try {
+      await decidePendingUpload(p.id, false, note || null)
+      await load()
+    } catch (err) {
+      setError(toUserMessage(err, 'Something went wrong. Please try again.'))
+    } finally { setActing(null) }
   }
 
   // Permanently remove an approval point (the staged upload batch). RLS allows

@@ -133,6 +133,61 @@ void main() {
       expect(gate.fieldErrors, contains('km'));
     });
 
+    test('a required photo field blocks until evidence is attached', () {
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
+          ChecklistField(
+            id: 'evidence',
+            type: 'photo',
+            label: 'Evidence',
+            required: true,
+          ),
+        ],
+      );
+
+      final ChecklistSubmitGate missing = evaluateChecklistSubmitGate(
+        template: template,
+        answers: const <String, Object?>{},
+        notes: const <String, Object?>{},
+        signatures: const <String, Object?>{},
+      );
+      final ChecklistSubmitGate attached = evaluateChecklistSubmitGate(
+        template: template,
+        answers: const <String, Object?>{},
+        notes: const <String, Object?>{},
+        signatures: const <String, Object?>{},
+        photoCounts: const <String, int>{'evidence': 1},
+      );
+
+      expect(missing.canSubmit, isFalse);
+      expect(missing.fieldErrors, contains('evidence'));
+      expect(attached.canSubmit, isTrue);
+    });
+
+    test('configured per-field minimum photo count is enforced', () {
+      const ChecklistTemplate template = ChecklistTemplate(
+        fields: <ChecklistField>[
+          ChecklistField(
+            id: 'damage',
+            type: 'select',
+            label: 'Damage',
+            options: <String>['OK', 'Defect'],
+            allowPhoto: true,
+            extra: <String, dynamic>{'min_photos': 2},
+          ),
+        ],
+      );
+      final ChecklistSubmitGate gate = evaluateChecklistSubmitGate(
+        template: template,
+        answers: const <String, Object?>{'damage': 'Defect'},
+        notes: const <String, Object?>{},
+        signatures: const <String, Object?>{},
+        photoCounts: const <String, int>{'damage': 1},
+      );
+      expect(gate.canSubmit, isFalse);
+      expect(gate.fieldErrors['damage'], contains('2'));
+    });
+
     test('the SAME required field, hidden by visibleWhen, does not block', () {
       const ChecklistTemplate template = ChecklistTemplate(
         fields: <ChecklistField>[

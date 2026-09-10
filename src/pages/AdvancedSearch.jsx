@@ -11,7 +11,7 @@
  * with pin/re-run, create/edit modal, Excel/PDF export, and loading/empty/error
  * states throughout. Pure roll-ups live in `src/lib/advancedSearch.js`.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import {
   Search, X, Filter, FileSpreadsheet, FileText, Plus, Pencil, Trash2, Pin,
@@ -75,6 +75,7 @@ function fmtDateTime(v) {
 }
 
 function isMissingRelation(err) {
+  if (['42P01', 'PGRST205'].includes(err?.code || err?.cause?.code)) return true
   const m = String(err?.message || '').toLowerCase()
   return m.includes('does not exist') || m.includes('relation') ||
     m.includes('schema cache') || m.includes('could not find the table')
@@ -99,6 +100,9 @@ export default function AdvancedSearch() {
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
   const [ranTerm, setRanTerm] = useState('')
+  const [ranScope, setRanScope] = useState('all')
+  const requestVersion = useRef(0)
+  useEffect(() => { requestVersion.current += 1; setResults(null); setSearching(false); setRanTerm('') }, [activeCountry])
 
   // ── Modal state ─────────────────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false)
@@ -108,19 +112,23 @@ export default function AdvancedSearch() {
   const [formError, setFormError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const savedRequest = useRef(0)
 
   const load = useCallback(async () => {
+    const version = ++savedRequest.current
     setRefreshing(true); setError(''); setNotProvisioned(false)
     try {
       const data = await listSavedSearches({ country: activeCountry })
+      if (version !== savedRequest.current) return
       setSaved(Array.isArray(data) ? data : [])
       setUpdatedAt(new Date())
     } catch (err) {
+      if (version !== savedRequest.current) return
       if (isMissingRelation(err)) setNotProvisioned(true)
       else setError(toUserMessage(err, 'Could not load saved searches.'))
       setSaved([])
     } finally {
-      setRefreshing(false)
+      if (version === savedRequest.current) setRefreshing(false)
     }
   }, [activeCountry])
 
@@ -146,23 +154,26 @@ export default function AdvancedSearch() {
     const t = String(rawTerm ?? term).trim()
     const s = rawScope ?? scope
     setSearchError('')
-    if (!t) { setResults(null); setRanTerm(''); return null }
+    if (!t) { requestVersion.current += 1; setSearching(false); setResults(null); setRanTerm(''); return null }
+    const version = ++requestVersion.current
     setSearching(true)
     try {
       const out = await runGlobalSearch({ term: t, entity: s, country: activeCountry, limitPer: 25 })
-      setResults(out); setRanTerm(t)
+      if (version !== requestVersion.current) return null
+      setResults(out); setRanTerm(t); setRanScope(s)
       return out
     } catch (err) {
+      if (version !== requestVersion.current) return null
       setSearchError(toUserMessage(err, 'Search failed.'))
-      setResults({ assets: [], tyres: [], workOrders: [], inspections: [], total: 0 })
+      setResults(null)
       return null
     } finally {
-      setSearching(false)
+      if (version === requestVersion.current) setSearching(false)
     }
   }, [term, scope, activeCountry])
 
   const onSubmitSearch = (e) => { e?.preventDefault?.(); runSearch(term, scope) }
-  const clearSearch = () => { setTerm(''); setResults(null); setRanTerm(''); setSearchError('') }
+  const clearSearch = () => { requestVersion.current += 1; setSearching(false); setTerm(''); setResults(null); setRanTerm(''); setSearchError('') }
 
   // Re-run a saved search inside the live builder and stamp its run metadata.
   const rerunSaved = useCallback(async (row) => {
@@ -171,10 +182,10 @@ export default function AdvancedSearch() {
     const out = await runSearch(row.query_text || '', row.entity || 'all')
     if (out && !notProvisioned) {
       try {
-        await markSavedSearchRun(row.id, out.total)
+        await markSavedSearchRun(row.id, out.complete ? out.totalMatches : null)
         setSaved((prev) => (prev || []).map((r) =>
-          r.id === row.id ? { ...r, last_run_at: new Date().toISOString(), result_count: out.total } : r))
-      } catch { /* non-fatal: run still succeeded */ }
+          r.id === row.id ? { ...r, last_run_at: new Date().toISOString(), result_count: out.complete ? out.totalMatches : null } : r))
+      } catch (err) { setError(toUserMessage(err, 'Search results loaded, but run history could not be saved.')) }
     }
   }, [runSearch, notProvisioned])
 
@@ -194,7 +205,7 @@ export default function AdvancedSearch() {
     { label: 'Saved searches', value: summary.totalSaved, icon: Bookmark, tone: 'text-[var(--text-primary)]' },
     { label: 'Pinned', value: summary.pinnedCount, icon: Pin, tone: 'text-amber-400' },
     { label: 'Entities covered', value: summary.distinctEntities, icon: Layers, tone: 'text-sky-400' },
-    { label: 'Results indexed', value: summary.totalResultsIndexed.toLocaleString(), icon: Database, tone: 'text-green-400' },
+    { label: 'Last recorded matches', value: summary.totalResultsIndexed.toLocaleString(), icon: Database, tone: 'text-green-400' },
   ]
 
   // ── Export (saved-search library) ───────────────────────────────────────
@@ -233,7 +244,7 @@ export default function AdvancedSearch() {
         entity: form.entity,
         query_text: form.query_text,
         notes: form.notes,
-        result_count: (results && ranTerm && ranTerm === form.query_text.trim()) ? results.total : undefined,
+        result_count: (results?.complete && ranTerm === form.query_text.trim() && ranScope === form.entity) ? results.totalMatches : null,
         country: activeCountry !== 'All' ? activeCountry : null,
       }
       if (editing) await updateSavedSearch(editing.id, payload)
@@ -245,7 +256,7 @@ export default function AdvancedSearch() {
     } finally {
       setSaving(false)
     }
-  }, [form, editing, activeCountry, results, ranTerm, load])
+  }, [form, editing, activeCountry, results, ranTerm, ranScope, load])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
@@ -297,7 +308,7 @@ export default function AdvancedSearch() {
           <div>
             <p className="text-amber-300 font-medium">Saved searches aren’t enabled on this database yet.</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V198_SAVED_SEARCHES.sql</span>, then reload. Live search still works below.
+              Saved-search storage is unavailable. Live search results below show which sources can be reached.
             </p>
           </div>
         </div>
@@ -353,6 +364,8 @@ export default function AdvancedSearch() {
           </div>
         )}
 
+        {results && Object.keys(results.errors ?? {}).length > 0 && <div role="alert" className="text-sm text-amber-400 space-y-1"><p>Search is incomplete. Some sources could not be checked:</p>{RESULT_GROUPS.filter(group => results.errors[group.key]).map(group => <p key={group.key}>{ENTITY_META[group.entity].label}: {results.errors[group.key]}</p>)}</div>}
+
         {searching ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {[0, 1, 2, 3].map((i) => <div key={i} className="h-28 bg-[var(--input-bg)] rounded-lg animate-pulse" />)}
@@ -362,16 +375,18 @@ export default function AdvancedSearch() {
             <Globe size={26} className="mx-auto mb-2 opacity-60" />
             <p className="text-sm">Enter a term and search to query assets, tyres, work orders and inspections at once.</p>
           </div>
+        ) : totalResults === 0 && Object.keys(results.errors ?? {}).length > 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No results returned from the available sources. Failed sources may contain matches.</p>
         ) : totalResults === 0 ? (
           <div className="text-center py-8 text-[var(--text-muted)]">
             <Search size={26} className="mx-auto mb-2 opacity-60" />
-            <p className="text-sm">No matches for <span className="font-semibold text-[var(--text-primary)]">“{ranTerm}”</span>{scope !== 'all' ? ` in ${ENTITY_META[scope].label.toLowerCase()}` : ''}.</p>
+            <p className="text-sm">No matches for <span className="font-semibold text-[var(--text-primary)]">“{ranTerm}”</span>{ranScope !== 'all' ? ` in ${ENTITY_META[ranScope].label.toLowerCase()}` : ''}.</p>
             <p className="text-xs mt-1">Try a shorter term, widen the scope, or check a different country.</p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[var(--text-muted)]">{totalResults} match{totalResults === 1 ? '' : 'es'} for</span>
+              <span className="text-[var(--text-muted)]">{totalResults} shown{results.totalMatches !== null ? ` of ${results.totalMatches} matches` : ' (total unavailable)'} for</span>
               <span className="font-semibold text-[var(--text-primary)]">“{ranTerm}”</span>
               {RESULT_GROUPS.map((g) => {
                 const n = results[g.key]?.length || 0
@@ -379,7 +394,7 @@ export default function AdvancedSearch() {
                 const Icon = g.icon
                 return (
                   <span key={g.key} className="inline-flex items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-2 py-0.5">
-                    <Icon size={12} className={g.tone} /> {ENTITY_META[g.entity].short} {n}
+                    <Icon size={12} className={g.tone} /> {ENTITY_META[g.entity].short} {n}{results.coverage?.[g.key]?.truncated ? '+' : ''}
                   </span>
                 )
               })}
@@ -394,7 +409,7 @@ export default function AdvancedSearch() {
                     <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--input-border)] bg-[var(--input-bg)]/40">
                       <div className="flex items-center gap-2">
                         <Icon size={15} className={g.tone} />
-                        <span className="text-sm font-semibold text-[var(--text-primary)]">{ENTITY_META[g.entity].label}</span>
+                        <span className="text-sm font-semibold text-[var(--text-primary)]">{ENTITY_META[g.entity].label}{results.coverage?.[g.key]?.truncated ? ` ? showing ${list.length} of ${results.coverage[g.key].count ?? 'more'} matches` : ''}</span>
                       </div>
                       <span className="text-xs text-[var(--text-muted)]">{list.length}{list.length >= 25 ? '+' : ''}</span>
                     </div>
@@ -497,7 +512,7 @@ export default function AdvancedSearch() {
               ) : filteredSaved.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--text-muted)]">
                   <Filter size={22} className="mx-auto mb-2 opacity-60" />
-                  {(saved.length === 0 && !notProvisioned) ? 'No saved searches yet — run a search above and save it.' : notProvisioned ? 'Enable saved searches to build a reusable library.' : 'No saved searches match these filters.'}
+                  {error ? 'Saved searches could not be loaded. Refresh to retry.' : (saved.length === 0 && !notProvisioned) ? 'No saved searches yet — run a search above and save it.' : notProvisioned ? 'Enable saved searches to build a reusable library.' : 'No saved searches match these filters.'}
                 </td></tr>
               ) : (
                 savedPager.pageRows.map((r) => {

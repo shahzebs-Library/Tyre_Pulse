@@ -227,7 +227,7 @@ export default function TenantHealth() {
         <StatCard
           label={`Active Users (${WINDOW_DAYS}d)`}
           value={activity?.status === 'ok' ? formatNumber(activity.data.activeUsers) : '—'}
-          sub={activity?.status === 'ok' ? `${formatNumber(activity.data.totalEvents)} events` : null}
+          sub={activity?.status === 'ok' ? `${formatNumber(activity.data.totalEvents)} recorded audit events` : null}
           icon={Activity}
         />
         <StatCard
@@ -309,6 +309,7 @@ export default function TenantHealth() {
 
         {/* Data growth */}
         <Section title="Data Growth" icon={Database} slice={growth} loading={loading}>
+          {growth?.data?.complete === false && <p className="text-sm text-amber-400 mb-3">Some table counts failed. The combined total is unavailable.</p>}
           <div className="grid grid-cols-2 gap-3">
             {(growth?.data?.tables ?? []).map((t) => (
               <div

@@ -63,6 +63,7 @@ import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/admin/presentation/admin_copy.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
@@ -70,6 +71,8 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/search/presentation/global_search_deps.dart';
+import 'package:tyre_pulse/features/search/presentation/global_search_navigation.dart';
 import 'package:tyre_pulse/features/tasks/data/task_item.dart';
 import 'package:tyre_pulse/features/tasks/domain/task_board.dart';
 import 'package:tyre_pulse/features/tasks/presentation/tasks_copy.dart';
@@ -182,9 +185,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
     final bool canScan = ref.watch(
       canAccessModuleProvider(ModuleKey.scan),
-    );
-    final bool canWash = ref.watch(
-      canAccessModuleProvider(ModuleKey.washing),
     );
     final bool canSeeVehicles = ref.watch(
       canAccessModuleProvider(ModuleKey.vehicles),
@@ -366,11 +366,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const SizedBox(height: 10),
                   _DashboardQuickActions(
                     l10n: l10n,
-                    canWash: canWash,
                     canSeeVehicles: canSeeVehicles,
                     canReportIssue: canReportIssue,
                     canReportAccident: canReportAccident,
-                    onWashing: () => context.go(const WashingRoute().location),
                     onAsset: () => context.push(const VehiclesRoute().location),
                     onReportIssue: () =>
                         context.push(const ReportIssueRoute().location),
@@ -416,6 +414,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final String query = raw.trim();
     context.push(
       VehiclesRoute(assetNo: query.isEmpty ? null : AssetNo(query)).location,
+    );
+  }
+
+  Future<void> _openGlobalSearch() {
+    final workspace = ref.read(workspaceContextProvider);
+    return openGlobalSearch(
+      context,
+      canRestore: () =>
+          mounted &&
+          workspace != null &&
+          ref.read(workspaceContextProvider) == workspace &&
+          ref.read(globalSearchModulesProvider).isNotEmpty,
     );
   }
 
@@ -469,6 +479,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 8),
+              Consumer(
+                builder: (context, ref, child) {
+                  if (!ref.watch(canAccessModuleProvider(ModuleKey.admin))) {
+                    return const SizedBox.shrink();
+                  }
+                  return ListTile(
+                    leading: const Icon(Icons.admin_panel_settings_outlined),
+                    title: Text(AdminCopy(context).title),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      this.context.push(const AdminConsoleRoute().location);
+                    },
+                  );
+                },
+              ),
+              Consumer(
+                builder: (context, ref, child) {
+                  if (ref.watch(globalSearchModulesProvider).isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return ListTile(
+                    key: const Key('home.globalSearch'),
+                    leading: const Icon(Icons.search_rounded),
+                    title: Text(l10n.globalSearchTitle),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _openGlobalSearch();
+                    },
+                  );
+                },
+              ),
               for (final HomeSectionSpec section in sections)
                 for (final HomeTileSpec tile in section.tiles)
                   ListTile(
@@ -2297,22 +2340,18 @@ class _MyWorkPreview extends StatelessWidget {
 class _DashboardQuickActions extends StatelessWidget {
   const _DashboardQuickActions({
     required this.l10n,
-    required this.canWash,
     required this.canSeeVehicles,
     required this.canReportIssue,
     required this.canReportAccident,
-    required this.onWashing,
     required this.onAsset,
     required this.onReportIssue,
     required this.onAccident,
   });
 
   final AppLocalizations l10n;
-  final bool canWash;
   final bool canSeeVehicles;
   final bool canReportIssue;
   final bool canReportAccident;
-  final VoidCallback onWashing;
   final VoidCallback onAsset;
   final VoidCallback onReportIssue;
   final VoidCallback onAccident;
@@ -2321,13 +2360,6 @@ class _DashboardQuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final actions =
         <({String id, String label, IconData icon, VoidCallback onTap})>[
-      if (canWash)
-        (
-          id: 'washing',
-          label: l10n.tabWashing,
-          icon: Icons.local_car_wash_rounded,
-          onTap: onWashing,
-        ),
       if (canSeeVehicles)
         (
           id: 'asset',

@@ -133,7 +133,6 @@ final class SubmitMeterLogInput {
     this.engineHours,
     this.hoursPhotoLocalPath,
     this.notes,
-    this.signatureDataUrl,
   });
 
   final String assetNo;
@@ -159,13 +158,6 @@ final class SubmitMeterLogInput {
 
   final String? hoursPhotoLocalPath;
   final String? notes;
-
-  /// A self-contained signature payload (see
-  /// `meter_log_signature_pad.dart`), or `null`. Only included in either
-  /// write's payload when non-blank - mirroring the reference's
-  /// `...(signature ? { signature } : {})` spread, which OMITS the key
-  /// entirely rather than sending an explicit empty value.
-  final String? signatureDataUrl;
 }
 
 /// The narrow surface this feature needs from Supabase for its two READS.
@@ -276,7 +268,6 @@ final class SupabaseMeterLogRepository
   }) async {
     final String asset = input.assetNo.trim();
     final String date = input.readingDate ?? todayIsoDate();
-    final String? signature = _trimmedOrNull(input.signatureDataUrl);
     final String? site = _trimmedOrNull(input.site);
     final String? notes = _trimmedOrNull(input.notes);
 
@@ -288,9 +279,6 @@ final class SupabaseMeterLogRepository
       'country': input.country,
       'created_by': workspace.userId,
       'notes': notes,
-      // Included only when non-blank - see [SubmitMeterLogInput
-      // .signatureDataUrl]'s own doc comment.
-      if (signature != null) 'signature': signature,
     };
 
     final DateTime now = DateTime.now();
@@ -311,6 +299,7 @@ final class SupabaseMeterLogRepository
           : <QueuedMediaAttachment>[
               QueuedMediaAttachment(
                 localPath: input.odometerPhotoLocalPath!,
+                bucket: 'tyre-photos',
                 fileName: _basename(input.odometerPhotoLocalPath!),
                 orderIndex: 0,
               ),
@@ -344,6 +333,7 @@ final class SupabaseMeterLogRepository
             : <QueuedMediaAttachment>[
                 QueuedMediaAttachment(
                   localPath: input.hoursPhotoLocalPath!,
+                  bucket: 'tyre-photos',
                   fileName: _basename(input.hoursPhotoLocalPath!),
                   orderIndex: 0,
                 ),

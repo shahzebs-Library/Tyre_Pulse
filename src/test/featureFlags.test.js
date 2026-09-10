@@ -1,3 +1,4 @@
+import { setConfigurationScope } from '../lib/configurationStore'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Shared, hoisted Supabase mock: chainable, thenable query builder that records
@@ -23,7 +24,16 @@ const h = vi.hoisted(() => {
     state.last = b
     return b
   }
-  return { state, supabase: { from } }
+  function rpc(name,args) {
+    state.last = {name,args}
+    if (name.startsWith('save_')) {
+      state.upserts.push({namespace:args.p_namespace,row:args.p_values[0]})
+      return Promise.resolve({data:{saved:args.p_values.length},error:state.upsertResult?.error??null})
+    }
+    const data=state.result.data
+    return Promise.resolve({...state.result,data:data==null?[]:Array.isArray(data)?data:[data]})
+  }
+  return { state, supabase: { from, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -149,8 +159,7 @@ describe('fetchFlags', () => {
   it('reads app_settings by the feature_flags key and merges the value', async () => {
     h.state.result = { data: [{ value: JSON.stringify({ erp_sync: false }) }], error: null }
     const flags = await fetchFlags()
-    expect(h.state.last._table).toBe('app_settings')
-    expect(h.state.last._calls.eq).toContainEqual(['key', FEATURE_FLAGS_SETTINGS_KEY])
+    expect(h.state.last).toEqual({name:'get_organisation_configuration',args:{p_namespace:'app_settings',p_key:FEATURE_FLAGS_SETTINGS_KEY}})
     expect(flags.erp_sync).toBe(false)
     expect(flags.ai_tools).toBe(true)
   })
@@ -184,10 +193,9 @@ describe('saveFlags', () => {
     unsubscribe()
 
     expect(h.state.upserts).toHaveLength(1)
-    const { table, row, opts } = h.state.upserts[0]
-    expect(table).toBe('app_settings')
+    const { namespace, row } = h.state.upserts[0]
+    expect(namespace).toBe('app_settings')
     expect(row.key).toBe(FEATURE_FLAGS_SETTINGS_KEY)
-    expect(opts).toEqual({ onConflict: 'key' })
 
     const stored = JSON.parse(row.value)
     expect(stored.accidents_module).toBe(false)
@@ -213,5 +221,30 @@ describe('saveFlags', () => {
     await expect(saveFlags({ ai_tools: false })).rejects.toThrow(/could not save feature flags/i)
     unsubscribe()
     expect(seen).toHaveLength(0)
+  })
+})
+
+
+describe('tenant cache isolation', () => {
+  it('discards cached flags when organisation changes', async () => {
+    setConfigurationScope('user-a|org-a')
+    h.state.result = { data: { value: JSON.stringify({ automation_platform: !DEFAULT_FLAGS.automation_platform }) }, error: null }
+    expect((await fetchFlags()).automation_platform).toBe(!DEFAULT_FLAGS.automation_platform)
+    setConfigurationScope('user-a|org-b')
+    h.state.result = { data: null, error: { message: 'denied' } }
+    expect((await fetchFlags()).automation_platform).toBe(DEFAULT_FLAGS.automation_platform)
+  })
+  it('cannot repopulate the cache with an old tenant response', async () => {
+    setConfigurationScope('pending|org-a')
+    let resolve
+    const spy = vi.spyOn(h.supabase, 'rpc').mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    const pending = fetchFlags({ force: true })
+    setConfigurationScope('pending|org-b')
+    h.state.result = { data: null, error: null }
+    await fetchFlags()
+    resolve({ data: [{ value: JSON.stringify({ automation_platform: !DEFAULT_FLAGS.automation_platform }) }], error: null })
+    expect((await pending).automation_platform).toBe(DEFAULT_FLAGS.automation_platform)
+    expect((await fetchFlags()).automation_platform).toBe(DEFAULT_FLAGS.automation_platform)
+    spy.mockRestore()
   })
 })

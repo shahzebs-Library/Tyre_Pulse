@@ -70,21 +70,29 @@ describe('support ticket service', () => {
     expect(h.state.last._calls.or[0]).toMatch(/country\.eq\.KSA/)
   })
 
-  it('updateTicket stamps resolved_at on resolve and clears it on reopen', async () => {
+  it('updateTicket sends status and leaves trusted timestamps to the database', async () => {
     h.state.result = { data: { id: 't1' }, error: null }
     await svc.updateTicket('t1', { status: 'resolved' })
-    expect(h.state.last._calls.update.resolved_at).toBeTruthy()
+    expect(h.state.last._calls.update).toEqual({ status: 'resolved' })
     await svc.updateTicket('t1', { status: 'open' })
-    expect(h.state.last._calls.update.resolved_at).toBeNull()
+    expect(h.state.last._calls.update).toEqual({ status: 'open' })
   })
 
-  it('respondToTicket attaches response + responder and moves to in_progress', async () => {
+  it('respondToTicket attaches response and moves to in_progress without client identity', async () => {
     h.state.result = { data: { id: 't1' }, error: null }
     await svc.respondToTicket('t1', 'We are on it')
     const up = h.state.last._calls.update
     expect(up.admin_response).toBe('We are on it')
-    expect(up.responded_by).toBe('user-1')
+    expect(up.responded_by).toBeUndefined()
+    expect(up.responded_at).toBeUndefined()
     expect(up.status).toBe('in_progress')
+  })
+
+  it('ignores mass-assigned identity/scope fields and rejects invalid statuses', async () => {
+    await svc.updateTicket('t1', { status: 'open', organisation_id: 'other', responded_by: 'spoof', resolved_at: '2000-01-01', country: 'UAE' })
+    expect(h.state.last._calls.update).toEqual({ status: 'open' })
+    await expect(svc.updateTicket('t1', { status: 'invented' })).rejects.toThrow(/status/i)
+    await expect(svc.updateTicket('t1', { responded_by: 'spoof' })).rejects.toThrow(/editable/i)
   })
 
   it('summarizeTickets counts by status', () => {

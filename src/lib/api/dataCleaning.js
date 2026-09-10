@@ -10,7 +10,7 @@
  * return the raw result (the page checks `.error`). Explicit column lists.
  * Additive only - mirrors dailyOps.js / analyticsReads.js pass-through style.
  */
-import { supabase, fetchAllPages } from './_client'
+import { supabase, fetchAllPages, unwrap } from './_client'
 
 /** Apply strict country equality (only for a specific, non-"All" country). */
 /**
@@ -78,36 +78,42 @@ export function listUncleanedSites({ country } = {}) {
 export function listPendingRecords({ country, site, from, to } = {}) {
   let q = supabase
     .from('tyre_records')
-    .select('id, description, remarks, site, asset_no, brand, issue_date', { count: 'exact' })
+    .select('id, description, remarks, site, asset_no, brand, issue_date, category, risk_level, remarks_cleaned, cleaned', { count: 'exact' })
     .eq('cleaned', false)
     .order('created_at', { ascending: false })
+    .order('id')
     .range(from, to)
   q = scope(q, country)
   if (site) q = q.eq('site', site)
   return q
 }
 
-/** Already-cleaned records (newest first, capped). Not country-scoped (matches page). */
-export function listCleanedRecords({ limit = 500 } = {}) {
-  return supabase
+/** Already-cleaned records in the selected country and site (newest first, capped). */
+export function listCleanedRecords({ country, site, limit = 500 } = {}) {
+  let q = scope(supabase
     .from('tyre_records')
-    .select('id, asset_no, brand, site, category, risk_level, remarks_cleaned, issue_date, description, remarks')
+    .select('id, asset_no, brand, site, category, risk_level, remarks_cleaned, cleaned, issue_date, description, remarks')
     .eq('cleaned', true)
     .order('created_at', { ascending: false })
-    .limit(limit)
+    .order('id')
+    .limit(limit), country)
+  if (site) q = q.eq('site', site)
+  return q
 }
 
 /**
  * One page of uncleaned records for the "Approve All" sweep (minimal columns),
- * optionally site-filtered. Not country-scoped (replicates the page exactly).
- * @param {{site?:string, from:number, to:number}} opts
+ * scoped to the selected country and site, with stable pagination.
+ * @param {{country?:string, site?:string, from:number, to:number}} opts
  */
-export function listPendingForApproveAll({ site, from, to } = {}) {
+export function listPendingForApproveAll({ country, site, from, to } = {}) {
   let q = supabase
     .from('tyre_records')
-    .select('id, description, remarks')
+    .select('id, description, remarks, category, risk_level, remarks_cleaned, cleaned')
     .eq('cleaned', false)
+    .order('id')
     .range(from, to)
+  q = scope(q, country)
   if (site) q = q.eq('site', site)
   return q
 }
@@ -160,12 +166,12 @@ export function listAssetNumbers({ country } = {}) {
   ))
 }
 
-/** Inspections on/after a cutoff date (asset + date only). Not country-scoped. */
-export function listRecentInspections({ cutoff } = {}) {
-  return pageAll(() => supabase
+/** Inspections on/after a cutoff date in the same selected country. */
+export function listRecentInspections({ cutoff, country } = {}) {
+  return pageAll(() => scope(supabase
     .from('inspections')
     .select('asset_no, inspection_date')
-    .gte('inspection_date', cutoff))
+    .gte('inspection_date', cutoff), country))
 }
 
 /** Fitment/removal odometer rows (both present) for odometer-consistency checks, country-scoped. */
@@ -185,7 +191,7 @@ export function listLifeRecords({ country } = {}) {
   return pageAll(() => scope(
     supabase
       .from('tyre_records')
-      .select('id, tyre_serial, asset_no, site, km_at_fitment, km_at_removal, cost_per_tyre, issue_date')
+      .select('id, tyre_serial, asset_no, site, km_at_fitment, km_at_removal, cost_per_tyre, issue_date, remarks')
       .not('km_at_removal', 'is', null)
       .not('km_at_fitment', 'is', null),
     country,
@@ -194,40 +200,32 @@ export function listLifeRecords({ country } = {}) {
 
 // ── Bulk fixes / mutations ────────────────────────────────────────────────────
 
-/** Set a record's tyre_serial (duplicate-serial fix). Returns raw `{ error }`. */
-export function updateTyreSerial(id, tyreSerial) {
-  return supabase.from('tyre_records').update({ tyre_serial: tyreSerial }).eq('id', id)
+/** Apply a bounded correction transaction and require every requested ID back.
+ * There is deliberately no direct-write fallback when the RPC is unavailable.
+ */
+export async function correctTyreRecords(changes, { country, site, action = 'classify' } = {}) {
+  const requested = changes.map(change => change.id)
+  if (!requested.length || requested.length > 200 || new Set(requested).size !== requested.length) {
+    throw new Error('Select between 1 and 200 distinct records.')
+  }
+  const result = unwrap(await supabase.rpc('admin_clean_tyre_records', {
+    p_changes: changes,
+    p_country: country && country !== 'All' ? country : null,
+    p_site: site || null,
+    p_action: action,
+  }))
+  const ids = result?.ids
+  if (!Array.isArray(ids) || ids.length !== requested.length || new Set(ids).size !== requested.length || ids.some(id => !requested.includes(id))) {
+    throw new Error('Correction confirmation was incomplete. Refresh before retrying.')
+  }
+  return ids
 }
 
-/** Patch a record's odometer values. Returns raw `{ error }`. */
-export function updateTyreOdometer(id, updates) {
-  return supabase.from('tyre_records').update(updates).eq('id', id)
-}
-
-/** Overwrite a record's remarks (e.g. prefixing "[NEEDS REVIEW]"). Returns raw `{ error }`. */
-export function updateTyreRemarks(id, remarks) {
-  return supabase.from('tyre_records').update({ remarks }).eq('id', id)
-}
-
-/** Upsert classified tyre records by id (approve / re-classify). */
-export function upsertTyreRecords(rows) {
-  return supabase.from('tyre_records').upsert(rows, { onConflict: 'id' })
-}
-
-/** Insert cleaning_log audit entries. */
-export function insertCleaningLog(entries) {
-  return supabase.from('cleaning_log').insert(entries)
-}
-
-/** Revert a record back to pending (clears classification). Returns raw `{ error }`. */
-export function resetTyreClassification(id) {
-  return supabase
-    .from('tyre_records')
-    .update({ category: null, risk_level: null, remarks_cleaned: null, cleaned: false })
-    .eq('id', id)
-}
-
-/** Delete cleaning_log rows for one tyre record (undo). Returns raw `{ error }`. */
-export function deleteCleaningLog(tyreRecordId) {
-  return supabase.from('cleaning_log').delete().eq('tyre_record_id', tyreRecordId)
+/** Build an optimistic snapshot from exactly the fields the user reviewed. */
+export function classificationChange(record, result, undo = false) {
+  const patch = undo
+    ? { category: null, risk_level: null, remarks_cleaned: null, cleaned: false }
+    : { category: result.category, risk_level: result.risk_level, remarks_cleaned: result.remarks_cleaned ?? null, cleaned: true }
+  const expected = Object.fromEntries(['category', 'risk_level', 'remarks_cleaned', 'cleaned', 'description', 'remarks'].map(key => [key, record[key] ?? null]))
+  return { id: record.id, patch, expected }
 }

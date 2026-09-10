@@ -10,6 +10,7 @@
  * (nav item, route element, header widget) and render null when it's false.
  */
 
+import { subscribeConfigurationScope, configurationGeneration } from '../lib/configurationStore'
 import { useCallback, useEffect, useState } from 'react'
 import {
   DEFAULT_FLAGS,
@@ -25,17 +26,27 @@ export function useFeatureFlags() {
   useEffect(() => {
     let active = true
     const unsubscribe = subscribe((next) => { if (active) setFlags(next) })
-    fetchFlags()
-      .then((next) => { if (active) setFlags(next) })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false; unsubscribe() }
+    const load = () => {
+      const generation = configurationGeneration()
+      return fetchFlags()
+        .then((next) => { if (active && generation === configurationGeneration()) setFlags(next) })
+        .finally(() => { if (active && generation === configurationGeneration()) setLoading(false) })
+    }
+    const unsubscribeScope = subscribeConfigurationScope(() => {
+      setFlags(DEFAULT_FLAGS)
+      setLoading(true)
+      load()
+    })
+    load()
+    return () => { active = false; unsubscribe(); unsubscribeScope() }
   }, [])
 
   const isEnabled = useCallback((key) => isFlagEnabled(flags, key), [flags])
 
   const refresh = useCallback(async () => {
+    const generation = configurationGeneration()
     const next = await fetchFlags({ force: true })
-    setFlags(next)
+    if (generation === configurationGeneration()) setFlags(next)
     return next
   }, [])
 

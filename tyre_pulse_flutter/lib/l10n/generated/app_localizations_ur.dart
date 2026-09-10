@@ -9,6 +9,68 @@ class AppLocalizationsUr extends AppLocalizations {
   AppLocalizationsUr([String locale = 'ur']) : super(locale);
 
   @override
+  String get profileDisplayPreferences => 'نمائش کی ترجیحات';
+
+  @override
+  String get profileLanguage => 'زبان';
+
+  @override
+  String get profileTheme => 'تھیم';
+
+  @override
+  String get profileThemeLight => 'روشن';
+
+  @override
+  String get profileThemeDark => 'تاریک';
+
+  @override
+  String get profileDeviceSetting => 'آلے کی ترتیب استعمال کریں';
+
+  @override
+  String get inspectionReportTitle => 'ٹائر معائنہ رپورٹ';
+
+  @override
+  String get inspectionReportShareAction => 'معائنہ PDF شیئر کریں';
+
+  @override
+  String get inspectionReportShareFailedTitle => 'رپورٹ تیار نہیں ہو سکی';
+
+  @override
+  String get inspectionReportShareFailedMessage =>
+      'معائنہ PDF تیار یا شیئر نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get inspectionReportSummaryTitle => 'حالت کا خلاصہ';
+
+  @override
+  String get inspectionReportLayoutTitle => 'گاڑی کے ٹائروں کی ترتیب';
+
+  @override
+  String get inspectionReportReadingsTitle => 'ٹائر ریڈنگز';
+
+  @override
+  String get inspectionReportCurrentFitment => 'موجودہ نصب ٹائر';
+
+  @override
+  String get inspectionReportNotAvailable => 'دستیاب نہیں';
+
+  @override
+  String get inspectionReportGenerated => 'تیار کیا گیا';
+
+  @override
+  String get inspectionReportStatus => 'حالت';
+
+  @override
+  String get inspectionReportDate => 'معائنہ کی تاریخ';
+
+  @override
+  String get inspectionReportInspector => 'معائنہ کار';
+
+  @override
+  String get inspectionApprovalFitmentsUnavailable =>
+      'فی الحال نصب ٹائروں کی تفصیلات عارضی طور پر دستیاب نہیں ہیں۔ جمع شدہ ریڈنگز اب بھی دکھائی جا رہی ہیں۔';
+
+  @override
   String get appTitle => 'Tyre Pulse';
 
   @override
@@ -483,6 +545,9 @@ class AppLocalizationsUr extends AppLocalizations {
   String get scannerViewAssetAction => 'اثاثہ دیکھیں';
 
   @override
+  String get scannerUseAssetAction => 'یہ اثاثہ استعمال کریں';
+
+  @override
   String get scannerStartInspectionAction => 'معائنہ شروع کریں';
 
   @override
@@ -711,7 +776,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get inspectionVehicleSearchPlaceholder =>
-      'اثاثہ نمبر یا قسم سے تلاش کریں';
+      'اثاثہ، میک، ماڈل، نمبر پلیٹ یا قسم تلاش کریں';
 
   @override
   String get inspectionSearchToBeginHint =>
@@ -1055,6 +1120,21 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get checklistNoAssetLabel => 'ابھی تک کوئی اثاثہ منتخب نہیں کیا گیا';
+
+  @override
+  String get checklistSelectAssetAction => 'اثاثہ منتخب کریں';
+
+  @override
+  String get checklistScanAssetAction => 'QR اسکین کریں';
+
+  @override
+  String get checklistSearchAssetHint => 'اثاثہ، پلیٹ، میک یا ماڈل تلاش کریں';
+
+  @override
+  String get checklistVerifiedOperatorLabel => 'تصدیق شدہ آپریٹر';
+
+  @override
+  String get checklistEmployeeIdLabel => 'ملازم آئی ڈی';
 
   @override
   String checklistResumeProgress(int filled, int total) {
@@ -2666,6 +2746,21 @@ class AppLocalizationsUr extends AppLocalizations {
   String get profileNavTitle => 'پروفائل';
 
   @override
+  String get profileMyActivityAction => 'میری سرگرمی';
+
+  @override
+  String get profileNotificationsAction => 'اطلاعات';
+
+  @override
+  String get profileWorkspaceTitle => 'ورک اسپیس';
+
+  @override
+  String get profileOfflineDataTitle => 'آف لائن اور ڈیٹا';
+
+  @override
+  String get profileProfileDataLabel => 'پروفائل ڈیٹا';
+
+  @override
   String get profileRoleLabel => 'کردار';
 
   @override
@@ -2725,7 +2820,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get reportIssueCopyCatalog =>
-      'title=مسئلہ رپورٹ کریں~problem=کیا خرابی ہے؟~problemHint=مسئلے کی مختصر وضاحت کریں~priority=ترجیح~low=کم~medium=درمیانی~high=زیادہ~critical=سنگین~site=سائٹ~siteHint=جہاں مسئلہ ملا~asset=اثاثہ~assetHint=اثاثہ نمبر~due=مقررہ مدت~noDate=کوئی تاریخ نہیں~threeDays=3 دن~oneWeek=1 ہفتہ~twoWeeks=2 ہفتے~details=تفصیل~detailsHint=علامات، درست مقام اور فوری کارروائی درج کریں~photos=ثبوت~optional=(اختیاری)~addPhoto=تصویر شامل کریں~camera=کیمرہ~gallery=گیلری سے~photoFailed=تصویر شامل نہیں ہو سکی۔~submit=مسئلہ جمع کریں~titleRequired=محفوظ کرنے سے پہلے خرابی درج کریں۔~workspaceUnavailable=آپ کی ورک اسپیس لوڈ ہو رہی ہے۔ کچھ دیر بعد دوبارہ کوشش کریں۔~savedTitle=مسئلہ محفوظ ہو گیا~savedBody=مسئلہ میرے کام میں شامل ہے اور خودکار طور پر سنک ہو گا۔~stay=یہیں رہیں~viewTasks=میرا کام دیکھیں~saveFailed=مسئلہ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~category=مسئلے کی قسم~mechanical=مکینیکل~electrical=برقی~hydraulic=ہائیڈرولک~tyre=ٹائر~body=باڈی~washing=دھلائی~safety=حفاظت~other=دیگر~operation=کیا اثاثہ محفوظ طریقے سے چل سکتا ہے؟~yes=ہاں~restricted=محدود~no=نہیں~restriction=آپریٹنگ پابندی~saveDraft=مسودہ محفوظ کریں~draftSaved=مسودہ محفوظ ہو گیا~createWorkOrder=سپروائزر کے جائزے کے بعد ورک آرڈر بنائیں~notifyTeam=فلیٹ سپروائزر اور ورکشاپ ٹیم کو اطلاع دی جائے گی';
+      'title=مسئلہ رپورٹ کریں~problem=کیا خرابی ہے؟~problemHint=مسئلے کی مختصر وضاحت کریں~priority=ترجیح~low=کم~medium=درمیانی~high=زیادہ~critical=سنگین~site=سائٹ~siteHint=جہاں مسئلہ ملا~asset=اثاثہ~assetHint=اثاثہ نمبر~due=مقررہ مدت~noDate=کوئی تاریخ نہیں~threeDays=3 دن~oneWeek=1 ہفتہ~twoWeeks=2 ہفتے~details=تفصیل~detailsHint=علامات، درست مقام اور فوری کارروائی درج کریں~photos=ثبوت~optional=(اختیاری)~addPhoto=تصویر شامل کریں~camera=کیمرہ~gallery=گیلری سے~photoFailed=تصویر شامل نہیں ہو سکی۔~submit=مسئلہ جمع کریں~titleRequired=محفوظ کرنے سے پہلے خرابی درج کریں۔~workspaceUnavailable=آپ کی ورک اسپیس لوڈ ہو رہی ہے۔ کچھ دیر بعد دوبارہ کوشش کریں۔~savedTitle=مسئلہ محفوظ ہو گیا~savedBody=مسئلہ میرے کام میں شامل ہے اور خودکار طور پر سنک ہو گا۔~stay=یہیں رہیں~viewTasks=میرا کام دیکھیں~saveFailed=مسئلہ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~category=مسئلے کی قسم~mechanical=مکینیکل~electrical=برقی~hydraulic=ہائیڈرولک~tyre=ٹائر~body=باڈی~washing=دھلائی~safety=حفاظت~other=دیگر~operation=کیا اثاثہ محفوظ طریقے سے چل سکتا ہے؟~yes=ہاں~restricted=محدود~no=نہیں~restriction=آپریٹنگ پابندی~saveDraft=مسودہ محفوظ کریں~draftSaved=مسودہ محفوظ ہو گیا~createWorkOrder=سپروائزر کے جائزے کے بعد ورک آرڈر بنائیں~notifyTeam=فلیٹ سپروائزر اور ورکشاپ ٹیم کو اطلاع دی جائے گی~incidentAt=واقعے کی تاریخ اور وقت~chooseDateTime=تاریخ اور وقت منتخب کریں~assetLoadFailed=گاڑی کی تفصیلات کی تصدیق نہیں ہو سکی۔ رابطہ بحال ہونے پر دوبارہ کوشش کریں۔';
 
   @override
   String get rcaCopyCatalog =>
@@ -2757,4 +2852,37 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get accidentCopyCatalog =>
       'loadFailed=حادثہ ریکارڈ لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~notRecorded=درج نہیں~dashboardTitle=حادثہ کمانڈ سینٹر~dashboardSubtitle=اجازت کے مطابق براہ راست رجسٹر~reportAction=حادثہ رپورٹ کریں~reportShort=رپورٹ~loadingRegister=حادثہ رجسٹر لوڈ ہو رہا ہے…~dashboardEyebrow=PMV حادثہ کنٹرول~dashboardHeroTitle=ہر کیس، ایک جواب دہ راستہ~dashboardHeroMessage=فلیٹ، انشورنس، ورکشاپ، QC، حوالگی اور ریکوری بغیر فرضی KPI کے واضح رہتے ہیں۔~searchHint=اثاثہ، حوالہ، سائٹ یا مقام تلاش کریں~allCases=تمام کیس~reportedByMe=میری رپورٹس~anyStatus=کوئی بھی حالت~open=کھلا~closed=بند~noMatches=کوئی مماثل کیس نہیں~noMatchesMessage=فلٹر بدلیں یا نئی حادثہ رپورٹ بنائیں۔~loadMore=مزید کیس لوڈ کریں~loading=لوڈ ہو رہا ہے…~detailTitle=حادثے کی تفصیل~loadingFacts=کیس کے حقائق لوڈ ہو رہے ہیں…~notFound=حادثہ نہیں ملا~notFoundMessage=یہ ریکارڈ آپ کی رسائی سے باہر ہے یا موجود نہیں۔~openFlow=جواب دہ کیس فلو کھولیں~incidentFacts=حادثے کے حقائق~incidentFactsHint=رپورٹر کے ثبوت اور گاڑی کی شناخت~liability=ذمہ داری اور ادائیگی~liabilityHint=قصوروار، ذمہ دار اور ادائیگی کرنے والا~insurance=انشورنس اور ریکوری~insuranceHint=دعویٰ اور ریکوری بندش سے الگ ہیں~workshopRelease=ورکشاپ اور ریلیز~workshopReleaseHint=تشخیص، مرمت، QC اور گاڑی کی واپسی~closure=بندش کے کنٹرول~closureHint=پرانا منظوری عمل اور جدید کیس حالت الگ ہیں~vehicleType=گاڑی کی قسم~plate=پلیٹ / فلیٹ نمبر~type=حادثے کی قسم~severity=شدت~reporter=رپورٹر~evidenceFiles=ثبوت فائلیں~description=تفصیل~damage=نقصان~fault=غلطی کی حالت~responsible=قصوروار فریق~liable=ذمہ دار فریق~payer=ادائیگی کرنے والا~insurer=انشورنس کمپنی~policy=پالیسی~claimNo=دعویٰ نمبر~claimStatus=دعویٰ حالت~claimed=دعویٰ رقم~approved=منظور رقم~recoveryStatus=ریکوری حالت~recovered=وصول رقم~repairType=مرمت کی قسم~workshop=ورکشاپ~repairCost=مرمت لاگت~expectedRelease=متوقع ریلیز~actualRelease=اصل ریلیز~nextAction=اگلا اقدام~workflowStage=ورک فلو مرحلہ~caseStatus=کیس حالت~closureRequest=بندش درخواست~closureLevel=بندش سطح~caseTitle=کیس جواب دہی~caseId=کیس آئی ڈی~incidentDateLabel=واقعے کی تاریخ~damageMapTitle=نقصان کا نقشہ~damageMapHint=نقصان کی نشاندہی کے لیے حصے پر ٹیپ کریں~damageMapZonesLabel=حصے نشان زد~damageMapNoneMarked=ابھی تک کوئی حصہ نشان زد نہیں~damageViewFront=سامنے~damageViewRear=پیچھے~damageViewLeft=بائیں جانب~damageViewRight=دائیں جانب~damageViewTop=اوپر سے~zoneFrontBumper=اگلا بمپر~zoneHood=بونٹ~zoneWindshield=اگلا شیشہ~zoneLeftHeadlight=بائیں ہیڈلائٹ~zoneRightHeadlight=دائیں ہیڈلائٹ~zoneRearBumper=پچھلا بمپر~zoneTailgate=پچھلا دروازہ~zoneRearWindshield=پچھلا شیشہ~zoneLeftTailLight=بائیں ٹیل لائٹ~zoneRightTailLight=دائیں ٹیل لائٹ~zoneFrontFender=اگلا فینڈر~zoneFrontDoor=اگلا دروازہ~zoneRearDoor=پچھلا دروازہ~zoneRearFender=پچھلا فینڈر~zoneMirror=سائیڈ مرر~zoneRoof=چھت~damageMarkSeverityLabel=شدت~damageMarkNoteLabel=نوٹ (اختیاری)~damageMarkSave=نشان محفوظ کریں~damageMarkRemove=نشان ہٹائیں~loadingWorkstreams=ورک اسٹریم لوڈ ہو رہے ہیں…~caseNotFound=کیس نہیں ملا~caseNotFoundMessage=یہ حادثہ آپ کی اجازت سے باہر ہے یا موجود نہیں۔~endToEnd=مکمل کیس فلو~notActivated=کیس ورک فلو فعال نہیں~notActivatedMessage=حادثہ موجود ہے لیکن ورک اسٹریم ماڈل تیار نہیں۔ کوئی پیش رفت فرض نہیں کی گئی۔~noWorkstreams=کوئی ورک اسٹریم مقرر نہیں~noWorkstreamsMessage=کیس ماڈل دستیاب ہے لیکن ابھی راستہ مقرر نہیں ہوا۔~timeline=جواب دہ ٹائم لائن~timelineHint=کیس ورک اسٹریم لیجر کی صرف پڑھنے والی حقیقت~boundary=کنٹرول حد~boundaryHint=اقدامات فرض نہیں کیے گئے~boundaryMessage=انشورنس، تشخیص، مرمت، QC، حوالگی، بندش اور ریکوری فیصلوں کے لیے تصدیق شدہ سرور عمل ضروری ہیں۔ غیر محفوظ براہ راست ترمیم نہیں۔~done=مکمل~inProgress=جاری~pending=زیر التوا~notRequired=ضروری نہیں~reason=وجہ~wsIncident=حادثہ اور ثبوت~wsFleet=فلیٹ تصدیق~wsLiability=ذمہ داری اور حفاظت~wsInsurance=انشورنس دعویٰ~wsAssessment=ورکشاپ تشخیص~wsRepair=مرمت عمل~wsQc=ورکشاپ QC~wsHandover=گاڑی حوالگی~wsFinance=ریکوری اور مالیات~wsCorrective=اصلاحی اقدامات~selectAsset=فلیٹ اثاثہ منتخب کریں~changeAsset=اثاثہ بدلیں~assetSearch=اثاثہ، فلیٹ نمبر، پلیٹ یا ماڈل~unrecordedAsset=غیر درج اثاثہ~photoFailed=ثبوت تصویر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~workspaceLoading=ورک اسپیس ابھی لوڈ ہو رہی ہے۔ دوبارہ کوشش کریں۔~required=اثاثہ، سائٹ، تفصیل اور کم از کم ایک ثبوت تصویر ضروری ہے۔~fieldsDropped=تمام فیلڈ محفوظ نہیں ہوئے۔ رپورٹ جمع شدہ نہیں دکھائی گئی۔~saveFailed=رپورٹ اس آلے پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~saved=رپورٹ محفوظ~savedTitle=حادثہ رپورٹ محفوظ ہو گئی~savedMessage=رپورٹ اور ثبوت آلے کی سنک قطار میں ہیں اور فعال ورک اسپیس کے تحت اپلوڈ ہوں گے۔~backRegister=حادثہ رجسٹر واپس جائیں~reportTitle=حادثہ رپورٹ کریں~reportSubtitle=آف لائن محفوظ ثبوت~firstResponse=پہلا ردعمل~captureFacts=موقع پر حقائق درج کریں~captureFactsMessage=پہلے اثاثہ منتخب کریں تاکہ PMV ماسٹر سائٹ اور شناخت بھرے۔ کم از کم ایک ثبوت تصویر لازمی ہے۔~assetLocation=1. اثاثہ اور مقام~assetLocationHint=دستیاب ہونے پر فلیٹ ماسٹر مستند ہے~fleetUnavailable=فلیٹ تلاش دستیاب نہیں۔ دستی اندراج دستیاب ہے۔~assetNo=اثاثہ نمبر~site=سائٹ~exactLocation=حادثے کا درست مقام~classification=2. درجہ بندی~classificationHint=ابتدائی میدانی درجہ بندی بعد میں دیکھی جا سکتی ہے~minor=معمولی~moderate=درمیانہ~severe=شدید~fatal=جان لیوا~collision=تصادم~rollover=الٹنا~propertyDamage=املاک نقصان~other=دیگر~whatHappened=کیا ہوا؟~notes=فوری نوٹس~evidence=3. ثبوت~evidenceAttached=ثبوت تصاویر منسلک • کم از کم 1~camera=کیمرہ~gallery=گیلری~evidencePhoto=ثبوت تصویر~removePhoto=تصویر ہٹائیں~saveReport=حادثہ رپورٹ محفوظ کریں';
+
+  @override
+  String get checklistsAssetSearchHint =>
+      'QR اسکین کریں یا اثاثہ نمبر درج کریں';
+
+  @override
+  String get checklistsLanguageStorageHint =>
+      'جوابات تمام زبانوں میں یکساں طور پر محفوظ ہوتے ہیں';
+
+  @override
+  String get checklistsRequiredForAsset => 'اس اثاثے کے لیے درکار';
+
+  @override
+  String get checklistsGeneralLibraryTitle => 'عام چیک لسٹ لائبریری';
+
+  @override
+  String get checklistsGeneralLibrarySubtitle =>
+      'حفاظت، شفٹ، آلات اور دھلائی کی چیک لسٹیں';
+
+  @override
+  String get checklistsTyreInspectionTitle => 'ٹائر معائنہ';
+
+  @override
+  String get checklistsTyreInspectionSubtitle =>
+      'ایکسل/اندرونی/بیرونی ٹائر کا مخصوص ورک فلو';
+
+  @override
+  String checklistsAssetHistoryTitle(String assetNo) {
+    return '$assetNo کے لیے چیک لسٹ کی تاریخ';
+  }
+
+  @override
+  String get checklistsMasterDataVerified => 'ماسٹر ڈیٹا تصدیق شدہ';
 }

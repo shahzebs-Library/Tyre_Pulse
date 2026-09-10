@@ -66,7 +66,7 @@ class SelectedVehicleCard extends StatelessWidget {
                     photo,
                     width: double.infinity,
                     height: double.infinity,
-                    fit: BoxFit.cover,
+                    fit: BoxFit.contain,
                     filterQuality: FilterQuality.high,
                     semanticLabel: identity,
                   ),

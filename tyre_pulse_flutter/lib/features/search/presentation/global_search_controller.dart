@@ -61,6 +61,7 @@ import 'package:tyre_pulse/core/database/dao/cache_dao.dart';
 import 'package:tyre_pulse/core/database/query_scope.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart'
@@ -90,7 +91,12 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
 
   @override
   GlobalSearchState build() {
-    ref.onDispose(() => _debounce?.cancel());
+    ref.watch(workspaceContextProvider);
+    ref.watch(globalSearchModulesProvider);
+    ref.onDispose(() {
+      _debounce?.cancel();
+      _generation++;
+    });
     unawaited(_loadRecentSearches());
     return const GlobalSearchState();
   }
@@ -152,6 +158,18 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
     final GlobalSearchRepository repository =
         ref.read(globalSearchRepositoryProvider);
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    final modules = ref.read(globalSearchModulesProvider);
+    if (workspace == null || modules.isEmpty) {
+      state = state.copyWith(
+        phase: GlobalSearchPhase.error,
+        clearResults: true,
+        lastError: const AppError(
+          kind: AppErrorKind.authorization,
+          message: 'Search is not available in your current workspace.',
+        ),
+      );
+      return;
+    }
     final WorkspaceScopeFilter? scope = vehicleCacheScopeFor(workspace);
 
     // All four identifier types are looked up TOGETHER, not one after
@@ -162,22 +180,30 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
     final Future<_SourceOutcome<AssetSearchResult>> assetsFuture =
         _runSource<AssetSearchResult>(
       'assets',
-      () => repository.searchAssets(term, scope: scope),
+      () => modules.contains(ModuleKey.vehicles)
+          ? repository.searchAssets(term, scope: scope)
+          : Future.value(const <AssetSearchResult>[]),
     );
     final Future<_SourceOutcome<TyreSearchResult>> tyresFuture =
         _runSource<TyreSearchResult>(
       'tyres',
-      () => repository.searchTyres(term),
+      () => modules.contains(ModuleKey.serial)
+          ? repository.searchTyres(term)
+          : Future.value(const <TyreSearchResult>[]),
     );
     final Future<_SourceOutcome<WorkOrderSearchResult>> workOrdersFuture =
         _runSource<WorkOrderSearchResult>(
       'workOrders',
-      () => repository.searchWorkOrders(term),
+      () => modules.contains(ModuleKey.workorders)
+          ? repository.searchWorkOrders(term)
+          : Future.value(const <WorkOrderSearchResult>[]),
     );
     final Future<_SourceOutcome<InspectionSearchResult>> inspectionsFuture =
         _runSource<InspectionSearchResult>(
       'inspections',
-      () => repository.searchInspections(term),
+      () => modules.contains(ModuleKey.inspect)
+          ? repository.searchInspections(term)
+          : Future.value(const <InspectionSearchResult>[]),
     );
 
     final _SourceOutcome<AssetSearchResult> assetsOutcome = await assetsFuture;
@@ -196,7 +222,7 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
       if (inspectionsOutcome.failed) inspectionsOutcome.source,
     };
 
-    if (failed.length == 4) {
+    if (failed.length == modules.length) {
       // Every source failed - this is not "no matches", this is "could
       // not search at all" (no connection, or no signed-in workspace).
       state = state.copyWith(
@@ -248,6 +274,7 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
   /// Loads the locally saved recent searches for the signed-in user in the
   /// active workspace, shown when the search field is empty or focused.
   Future<void> _loadRecentSearches() async {
+    final generation = _generation;
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
     if (workspace == null) return;
 
@@ -257,7 +284,9 @@ class GlobalSearchController extends Notifier<GlobalSearchState> {
         userId: workspace.userId,
         workspaceId: workspace.companyId ?? '',
       );
-      state = state.copyWith(recentSearches: rows);
+      if (generation == _generation) {
+        state = state.copyWith(recentSearches: rows);
+      }
     } on Object {
       // A failure to load recent searches is not worth surfacing as a
       // search error - the field is simply shown with no recent-search

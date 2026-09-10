@@ -90,6 +90,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/features/approvals/presentation/execution_approval_review_screen.dart';
+import 'package:tyre_pulse/features/tyre_exchange/presentation/tyre_execution_approval_screen.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -103,7 +105,6 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/tyre_exchange/data/tyre_replacement_photo_capture.dart';
-import 'package:tyre_pulse/features/tyre_exchange/data/tyre_replacement_repository.dart';
 import 'package:tyre_pulse/features/tyre_exchange/domain/tyre_replacement_position.dart';
 import 'package:tyre_pulse/features/tyre_exchange/presentation/widgets/tyre_replacement_photo_gallery.dart';
 import 'package:tyre_pulse/features/tyre_exchange/presentation/widgets/tyre_replacement_position_picker.dart';
@@ -316,77 +317,31 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref.read(tyreReplacementRepositoryProvider).submitTyreReplacement(
-            workspace: workspace,
-            input: SubmitTyreReplacementInput(
-              assetNo: asset,
-              position: position,
-              site: _siteController.text.trim().isEmpty
-                  ? null
-                  : _siteController.text.trim(),
-              country: workspace.activeCountry,
-              brand: _brandController.text.trim().isEmpty
-                  ? null
-                  : _brandController.text.trim(),
-              size: _sizeController.text.trim().isEmpty
-                  ? null
-                  : _sizeController.text.trim(),
-              serialNo: _serialController.text.trim().isEmpty
-                  ? null
-                  : _serialController.text.trim(),
-              costPerTyre: _parseNum(_costController.text),
-              kmAtFitment: _parseNum(_kmController.text),
-              treadDepthMm: _parseNum(_treadController.text),
-              removalReason: _reasonController.text.trim().isEmpty
-                  ? null
-                  : _reasonController.text.trim(),
-              photoLocalPaths: _photoPaths,
-            ),
-          );
+      if (_master == null || _master!.assetNo != asset) await _performLookup(asset);
       if (!mounted) return;
-
-      final AppLocalizations currentL10n = AppLocalizations.of(context);
-      final bool leave = await TpDialog.confirm(
-        context: context,
-        title: currentL10n.tyreReplaceSavedTitle,
-        message: currentL10n.tyreReplaceSavedMessage,
-        cancelLabel: currentL10n.tyreReplaceAddAnotherAction,
-        confirmLabel: currentL10n.tyreReplaceDoneAction,
-      );
-      if (!mounted) return;
-      if (leave) {
-        TpBack.pop(context, fallback: TpBackFallbacks.forRoute(widget.route));
-      } else {
-        _resetForm();
+      final vehicle = _master;
+      if (vehicle == null || vehicle.assetNo != asset) {
+        await _showInfoDialog(title: l10n.tyreReplaceSaveFailedTitle, message: executionApprovalCopy(context, 'Select a verified vehicle before creating an approval proposal.', '???? ????? ????? ??? ????? ????? ????????.', '?????? ?? ????? ????? ?? ???? ????? ??? ???? ????? ?????'));
+        return;
       }
+      final nextProposal = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => TyreExecutionApprovalScreen(
+        vehicleId: vehicle.id,
+        captureId: _sessionKey,
+        capture: {
+          'asset_no': asset, 'position': position, 'site': _siteController.text.trim(),
+          'country': workspace.activeCountry, 'brand': _brandController.text.trim(),
+          'size': _sizeController.text.trim(), 'serial_no': _serialController.text.trim(),
+          'cost_per_tyre': _parseNum(_costController.text), 'km_at_fitment': _parseNum(_kmController.text),
+          'tread_depth': _parseNum(_treadController.text), 'removal_reason': _reasonController.text.trim(),
+          'photo_paths': List<String>.from(_photoPaths), 'issue_date': DateTime.now().toIso8601String().split('T').first,
+        },
+      )));
+      if (nextProposal == true && mounted) setState(() => _sessionKey = _uuid.v4());
     } on Object {
-      if (!mounted) return;
-      await _showInfoDialog(
-        title: l10n.tyreReplaceSaveFailedTitle,
-        message: l10n.tyreReplaceTryAgainFallback,
-      );
+      if (mounted) await _showInfoDialog(title: l10n.tyreReplaceSaveFailedTitle, message: l10n.tyreReplaceTryAgainFallback);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
-  }
-
-  /// "Add another": clears every SINGLE-TYRE field, but keeps asset and
-  /// site - see the library comment for why, and for the one deliberate
-  /// divergence from the reference's own reset list (removal reason IS
-  /// cleared here).
-  void _resetForm() {
-    _positionController.clear();
-    _brandController.clear();
-    _sizeController.clear();
-    _serialController.clear();
-    _costController.clear();
-    _kmController.clear();
-    _treadController.clear();
-    _reasonController.clear();
-    setState(() {
-      _photoPaths.clear();
-      _sessionKey = _uuid.v4();
-    });
   }
 
   Future<void> _showInfoDialog({
@@ -431,7 +386,7 @@ class _TyreReplacementScreenState extends ConsumerState<TyreReplacementScreen> {
 
     return TpScaffold(
       backFallback: fallback,
-      appBar: TpAppBar(title: l10n.tyreReplaceNavTitle, backFallback: fallback),
+      appBar: TpAppBar(title: l10n.tyreReplaceNavTitle, backFallback: fallback, actions: [IconButton(onPressed: _submitting ? null : () => Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => const SavedTyreApprovalDraftsScreen())), icon: const Icon(Icons.history), tooltip: executionApprovalCopy(context, 'Saved proposals', '????????? ????????', '????? ??????'))]),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           TpSpace.lg,

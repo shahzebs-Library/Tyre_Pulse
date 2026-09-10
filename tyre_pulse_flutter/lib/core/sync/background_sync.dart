@@ -69,6 +69,7 @@ import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
 import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 import 'package:tyre_pulse/core/sync/accident_evidence_command_pusher.dart';
+import 'package:tyre_pulse/core/sync/meter_wash_evidence_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
 import 'package:uuid/uuid.dart';
@@ -177,6 +178,7 @@ Future<bool> _runBackgroundSync() async {
 
     final SupabaseClient client = Supabase.instance.client;
     if (client.auth.currentUser?.id != workspace.userId) return true;
+    await prepareMeterWashMedia(db, workspace.workspaceId);
     final SyncEngine engine = SyncEngine(
       queueDao: db.queueDao,
       mediaDao: ScopedMediaDao(
@@ -186,7 +188,11 @@ Future<bool> _runBackgroundSync() async {
         currentUserId: () => client.auth.currentUser?.id,
       ),
       pusher: AccidentEvidenceCommandPusher(
-        delegate: SupabaseCommandPusher(client),
+        delegate: MeterWashEvidenceCommandPusher(
+          delegate: SupabaseCommandPusher(client),
+          queueDao: db.queueDao,
+          mediaDao: db.mediaDao,
+        ),
         queueDao: db.queueDao,
         mediaDao: db.mediaDao,
       ),

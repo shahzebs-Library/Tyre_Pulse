@@ -92,6 +92,8 @@ import 'package:tyre_pulse/features/approvals/data/checklist_approval_sync_engin
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/domain/approval_decision_requirements.dart';
 import 'package:tyre_pulse/features/approvals/domain/checklist_approval.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_route_actions.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_route_card.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_approval_status_chip.dart';
@@ -157,7 +159,12 @@ class _ChecklistApprovalReviewScreenState
           .byId(_submissionId);
       ChecklistApprovalTemplateInfo? templateInfo;
       final String? templateId = item?.templateId;
-      if (templateId != null && templateId.isNotEmpty) {
+      if (item?.reviewTemplate != null) {
+        templateInfo =
+            ChecklistApprovalTemplateInfo.fromRow(item!.reviewTemplate!);
+      } else if (item?.reviewContext == null &&
+          templateId != null &&
+          templateId.isNotEmpty) {
         // Best-effort - see the library comment: labels degrade to field
         // ids and the ladder is treated as single-stage when this fails.
         templateInfo = await ref
@@ -201,9 +208,13 @@ class _ChecklistApprovalReviewScreenState
   ApprovalTemplateLike get _templateLike =>
       _templateInfo?.asTemplateLike ?? const ApprovalTemplateLike();
 
-  ApprovalStage? get _stage => stageFor(_templateLike, _item?.asSubmissionLike);
+  ApprovalStage? get _stage => _item?.reviewContext?.mode == 'enforced'
+      ? ((_item!.reviewContext!.canDecide || _item!.reviewContext!.canReturn)
+          ? ApprovalStage.supervisor
+          : null)
+      : stageFor(_templateLike, _item?.asSubmissionLike);
 
-  Future<void> _decide(bool approved) async {
+  Future<void> _decide(bool approved, {bool reject = false}) async {
     final ChecklistApprovalItem? item = _item;
     final ApprovalStage? stage = _stage;
     if (item == null || _busy != null) return;
@@ -244,10 +255,14 @@ class _ChecklistApprovalReviewScreenState
       final ChecklistApprovalDecisionResult result =
           await ref.read(checklistApprovalSyncEngineProvider).decideNow(
                 submissionId: item.id,
+                expectedRevision: item.reviewContext?.revision,
+                expectedStageToken: item.reviewContext?.stageToken,
                 stage: stage!,
                 priorApprovalStatus: priorStatus,
                 targetStatus: targetStatus,
                 approved: approved,
+                decision:
+                    approved ? 'approved' : (reject ? 'rejected' : 'returned'),
                 approverName: trimmedName.isEmpty ? null : trimmedName,
                 approverSignature: _approverSignature?.dataUrl,
                 approverId: approverId,
@@ -267,8 +282,15 @@ class _ChecklistApprovalReviewScreenState
           if (!mounted) return;
           final bool goToList = await TpDialog.confirm(
             context: context,
-            title: _outcomeTitle(l10n, approved, targetStatus),
-            message: _outcomeMessage(l10n, approved, targetStatus),
+            title: reject || item.reviewContext?.mode == 'enforced'
+                ? approvalDecisionCopy(context, rejection: reject)
+                : _outcomeTitle(
+                    l10n, approved, _item?.approvalStatus ?? targetStatus),
+            message: reject || item.reviewContext?.mode == 'enforced'
+                ? approvalDecisionCopy(context,
+                    rejection: reject, message: true)
+                : _outcomeMessage(
+                    l10n, approved, _item?.approvalStatus ?? targetStatus),
             cancelLabel: l10n.checklistApprovalStayHereAction,
             confirmLabel: l10n.checklistApprovalBackToListAction,
           );
@@ -375,12 +397,16 @@ class _ChecklistApprovalReviewScreenState
     final ApprovalStage? stage = _stage;
     final ApprovalStatusSummary summary =
         statusSummary(_templateLike, item.asSubmissionLike);
-    final bool myTurn = canDecide(
-      _templateLike,
-      item.asSubmissionLike,
-      workspace?.role.rawValue,
-      isSuperAdmin: workspace?.isSuperAdmin ?? false,
-    );
+    final bool myTurn = (item.reviewContext == null
+            ? null
+            : (item.reviewContext!.canDecide ||
+                item.reviewContext!.canReturn)) ??
+        canDecide(
+          _templateLike,
+          item.asSubmissionLike,
+          workspace?.role.rawValue,
+          isSuperAdmin: workspace?.isSuperAdmin ?? false,
+        );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -390,6 +416,14 @@ class _ChecklistApprovalReviewScreenState
         TpSpace.xxl,
       ),
       children: <Widget>[
+        if (item.reviewContext != null)
+          ApprovalRouteCard(review: item.reviewContext!),
+        if (item.reviewContext != null)
+          ApprovalRouteActions(
+              type: 'checklist',
+              entityId: item.id,
+              review: item.reviewContext!,
+              onRefresh: _load),
         _ApprovalSummaryCard(item: item, summary: summary),
         const SizedBox(height: TpSpace.lg),
         Text(
@@ -397,7 +431,8 @@ class _ChecklistApprovalReviewScreenState
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: TpSpace.sm),
-        _SignOffLadder(item: item, templateInfo: _templateInfo, l10n: l10n),
+        if (item.reviewContext?.mode != 'enforced')
+          _SignOffLadder(item: item, templateInfo: _templateInfo, l10n: l10n),
         const SizedBox(height: TpSpace.lg),
         _ApprovalOutcomeCard(item: item),
         const SizedBox(height: TpSpace.lg),
@@ -429,6 +464,7 @@ class _ChecklistApprovalReviewScreenState
         else
           _DecisionForm(
             l10n: l10n,
+            canApprove: item.reviewContext?.canDecide ?? true,
             closing:
                 nextStatusFor(_templateLike, item.asSubmissionLike, true) ==
                     'approved',
@@ -440,6 +476,9 @@ class _ChecklistApprovalReviewScreenState
             busy: _busy,
             onApprove: () => _decide(true),
             onReturn: () => _decide(false),
+            onReject: item.reviewContext?.canDecide == true
+                ? () => _decide(false, reject: true)
+                : null,
           ),
       ],
     );
@@ -1500,7 +1539,9 @@ class _DecisionForm extends StatelessWidget {
     required this.noteController,
     required this.busy,
     required this.onApprove,
+    this.canApprove = true,
     required this.onReturn,
+    this.onReject,
   });
 
   final AppLocalizations l10n;
@@ -1511,7 +1552,9 @@ class _DecisionForm extends StatelessWidget {
   final TextEditingController noteController;
   final _DecisionBusy? busy;
   final VoidCallback onApprove;
+  final bool canApprove;
   final VoidCallback onReturn;
+  final VoidCallback? onReject;
 
   @override
   Widget build(BuildContext context) {
@@ -1576,11 +1619,15 @@ class _DecisionForm extends StatelessWidget {
                     : l10n.checklistApprovalSignOffButton,
                 icon: Icons.check_circle_outline,
                 isBusy: busy == _DecisionBusy.approving,
-                onPressed: isBusy ? null : onApprove,
+                onPressed: isBusy || !canApprove ? null : onApprove,
               ),
             ),
           ],
         ),
+        if (onReject != null)
+          TextButton(
+              onPressed: isBusy ? null : onReject,
+              child: Text(approvalDecisionCopy(context, rejection: true))),
       ],
     );
   }

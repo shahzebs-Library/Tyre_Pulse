@@ -1,0 +1,7 @@
+PAGES: 2
+
+PAGE 1
+Fleet Transit Mixer Checklist |  | Asset: BH006 |  | Generated Sep 10, 2026 |  | Identification |  | Document no |  | FTM-BH006-2026-0001 |  | Date |  | 2026-08-19 |  | Transit mixer |  | BH006 |  | Location |  | KSP-TP |  | Registration / fleet No |  | 9 |  | Km reading |  | 1 |  | Hour meter reading |  | -3 |  | Shift |  | Day shift |  | Submitted |  | 8/19/2026, 8:55:51 AM |  | Country |  | KSA | Items needing attention |  | # |   | Check |   | Status |   | Remarks |  | 4 |   | Check engine abnormal noise |   | Not OK |   | minor issue | 6 checks on this sheet: 5 OK, 1 needing attention. |  | Photographs (6) |  | 1. Check tyre pressure and wheel nuts |   | 2. Check engine oil level |   | 3. Check radiator coolant level |  | 4. Check engine abnormal noise |   | 5. Check all leaf springs |   | 6. Check for fluid leakages |  | Sign off |  | Driver name |  | shah | Signatures |  | confidinetial |   | Page 1 of 2
+
+PAGE 2
+Fleet Transit Mixer Checklist |  | Asset: BH006 |  | Generated Sep 10, 2026 |  | Signed by |  | shahzeb Rahman |  | Driver signature |  | shah |  | Fleet foreman / supervisor signature |  | Name not recorded |  | confidinetial |   | Page 2 of 2

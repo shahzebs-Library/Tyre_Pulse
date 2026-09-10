@@ -12,12 +12,11 @@ import {
 
 /**
  * Outbound webhooks — admin panel for the event-driven bus (roadmap #15+#25).
- * Register https endpoints, pick which business events they receive, optionally
- * sign deliveries with a shared secret, and send a test delivery. Honest about
+ * Register https endpoints, pick which business events they receive, and send a test delivery. Signed delivery requires a server-managed integration. Honest about
  * the browser-side limitation: receivers must allow CORS or sit behind a relay
  * (n8n / edge function), and delivery happens while the app is open.
  */
-const EMPTY_FORM = { id: null, url: '', events: ['*'], enabled: true, secret: '', description: '' }
+const EMPTY_FORM = { id: null, url: '', events: ['*'], enabled: true, description: '' }
 
 export default function WebhooksPanel() {
   const { profile } = useAuth()
@@ -64,7 +63,6 @@ export default function WebhooksPanel() {
     if (!check.ok) { setMsg({ type: 'err', text: check.reason }); return }
     const entry = {
       ...form,
-      secret: form.secret || null,
       created_by: form.created_by ?? profile?.id ?? null,
     }
     const next = form.id
@@ -103,7 +101,7 @@ export default function WebhooksPanel() {
           <Webhook size={15} className="text-[var(--accent)]" /> Outbound webhooks
         </h2>
         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">
-          {endpoints.filter((e) => e.enabled).length} active / {endpoints.length}
+          {endpoints.filter((e) => e.enabled && !e.requires_server_signing).length} enabled for browser delivery / {endpoints.length}
         </span>
       </div>
 
@@ -136,7 +134,7 @@ export default function WebhooksPanel() {
                     className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] disabled:opacity-50">
                     {testing === ep.id ? <Loader2 size={14} className="animate-spin" /> : <SendHorizonal size={14} />}
                   </button>
-                  <button type="button" title="Edit" onClick={() => { setForm({ ...EMPTY_FORM, ...ep, secret: ep.secret || '' }); setMsg(null) }}
+                  <button type="button" title="Edit" onClick={() => { setForm({ ...EMPTY_FORM, ...ep }); setMsg(null) }}
                     className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)]"><Pencil size={14} /></button>
                   <button type="button" title="Delete" disabled={saving} onClick={() => removeEndpoint(ep.id)}
                     className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-red-400 disabled:opacity-50"><Trash2 size={14} /></button>
@@ -154,7 +152,7 @@ export default function WebhooksPanel() {
                 {t === '*' ? 'All events' : (EVENT_TYPES[t]?.label || t)}
               </span>
             ))}
-            {ep.secret && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-muted)] flex items-center gap-1"><KeyRound size={10} /> signed</span>}
+            {ep.requires_server_signing && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-muted)] flex items-center gap-1"><KeyRound size={10} /> blocked: server signing required</span>}
           </div>
           {ep.description && <p className="text-[11px] text-[var(--text-muted)]">{ep.description}</p>}
           {testResults[ep.id] && (
@@ -197,11 +195,6 @@ export default function WebhooksPanel() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Signing secret (optional)</span>
-              <input className="input w-full mt-1 font-mono text-sm" type="password" value={form.secret} autoComplete="off"
-                onChange={(e) => setF('secret', e.target.value)} placeholder="shared secret" />
-            </label>
-            <label className="block">
               <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)]">Description</span>
               <input className="input w-full mt-1" value={form.description}
                 onChange={(e) => setF('description', e.target.value)} placeholder="e.g. n8n fleet workflow" />
@@ -209,8 +202,7 @@ export default function WebhooksPanel() {
           </div>
           <p className="text-[11px] text-[var(--text-muted)] flex items-start gap-1.5">
             <KeyRound size={12} className="mt-0.5 shrink-0" />
-            With a secret set, every delivery carries <code className="font-mono">X-TyrePulse-Signature</code>, a hex
-            HMAC-SHA256 of the JSON body, so your receiver can verify it came from TyrePulse.
+            These browser deliveries are unsigned. Use a server-managed integration when the receiver requires a signature; signing secrets cannot be stored here.
           </p>
           <button type="submit" disabled={saving} className="btn-primary text-sm disabled:opacity-60">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} {form.id ? 'Save changes' : 'Add webhook'}
@@ -234,9 +226,7 @@ export default function WebhooksPanel() {
         <p>Deliveries are sent <b>from the browser</b> the moment an event happens, so they are best-effort:
           the receiving endpoint must allow cross-origin (CORS) POSTs from this app's domain, and events fire only
           while someone has TyrePulse open.</p>
-        <p>For guaranteed, server-side delivery point the webhook at a relay, such as an <b>n8n webhook node</b>, a
-          Supabase edge function, or any serverless proxy, which accepts the signed POST and forwards it to
-          systems that don't allow CORS.</p>
+        <p>Signed delivery and guaranteed retries require a server-managed event integration. A relay receiving browser events cannot guarantee events that occur while the app is closed. Existing endpoints that require signing are blocked here until their server integration is configured.</p>
       </div>
     </div>
   )

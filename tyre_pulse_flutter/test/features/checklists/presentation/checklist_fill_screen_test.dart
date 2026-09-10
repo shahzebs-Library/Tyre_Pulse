@@ -119,12 +119,14 @@ ChecklistSubmitGate _gate({
   required Map<String, Object?> answers,
   Map<String, String> signatures = const <String, String>{},
   String? primarySignature,
+  Map<String, int> photoCounts = const <String, int>{},
 }) {
   return evaluateChecklistSubmitGate(
     template: _record.template,
     answers: answers,
     notes: const <String, Object?>{},
     signatures: signatures,
+    photoCounts: photoCounts,
     templateRequiresSignature: _record.requireSignature,
     primarySignature: primarySignature,
   );
@@ -170,6 +172,8 @@ ChecklistFillState _state({
       answers: answers,
       signatures: signatures,
       primarySignature: primarySignature,
+      photoCounts:
+          complete ? const <String, int>{'evidence': 1} : const <String, int>{},
     ),
   );
 }
@@ -273,12 +277,14 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Daily PMV Inspection'), findsOneWidget);
-      expect(find.text('TM-514'), findsNWidgets(2));
+      expect(find.text('TM-514'), findsOneWidget);
       expect(find.text('2 of 5 answered'), findsNWidgets(2));
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      // The compact viewport builds the horizontal section rail immediately;
-      // the matching in-form headings remain lazy until the list reaches them.
+      // Asset selection and verified identity occupy the first viewport.
+      // Scroll to build the section rail before checking its labels.
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pump();
       expect(find.text('PRE-START'), findsOneWidget);
       expect(find.text('SAFETY & EVIDENCE'), findsOneWidget);
 
@@ -383,7 +389,7 @@ void main() {
       // has not been built yet.
       await tester.drag(find.byType(ListView), const Offset(0, -1800));
       await tester.pump();
-      expect(find.textContaining('1 field(s) need attention'), findsOneWidget);
+      expect(find.textContaining('2 field(s) need attention'), findsOneWidget);
       expect(
         find.textContaining('1 signature(s) are required'),
         findsOneWidget,
@@ -407,8 +413,8 @@ void main() {
   );
 
   testWidgets(
-    'field, printed-name, site and language controls remain wired to the '
-    'controller after the presentation enrichment',
+    'field and language stay editable while verified identity and linked '
+    'asset context stay locked',
     (WidgetTester tester) async {
       final _TestChecklistFillController controller =
           await _pump(tester, state: _state());
@@ -422,26 +428,18 @@ void main() {
       expect(controller.answerUpdates.last.key, 'engine');
       expect(controller.answerUpdates.last.value, 'Needs service');
 
-      final Iterable<DropdownButton<String>> dropdowns =
-          tester.widgetList<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
-      );
-      final DropdownButton<String> sitePicker = dropdowns.singleWhere(
-        (DropdownButton<String> item) => item.value == 'North Yard',
-      );
-      sitePicker.onChanged!('South Yard');
-      await tester.pump();
-      expect(controller.siteUpdates, <String?>['South Yard']);
-
       final Iterable<TextField> fields = tester.widgetList<TextField>(
         find.byType(TextField),
       );
       final TextField printedName = fields.singleWhere(
         (TextField field) => field.controller?.text == 'Operator One',
       );
-      printedName.onChanged!('Operator Two');
-      await tester.pump();
-      expect(controller.printedNameUpdates, <String>['Operator Two']);
+      expect(printedName.enabled, isFalse);
+      expect(controller.printedNameUpdates, isEmpty);
+      expect(controller.siteUpdates, isEmpty);
+      expect(find.text('North Yard'), findsOneWidget);
+      expect(find.text('Select asset'), findsOneWidget);
+      expect(find.text('Scan QR'), findsOneWidget);
     },
   );
 

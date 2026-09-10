@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -323,6 +324,7 @@ class _QueuedRow extends StatelessWidget {
 
     return TpCard(
       margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      onTap: () => _showQueuedDetail(context, item),
       child: Row(
         children: <Widget>[
           Expanded(
@@ -382,6 +384,7 @@ class _CompletedRow extends StatelessWidget {
 
     return TpCard(
       margin: const EdgeInsets.only(bottom: TpSpace.sm),
+      onTap: () => _showCompletedDetail(context, row, tone, label),
       child: Row(
         children: <Widget>[
           Expanded(
@@ -411,4 +414,184 @@ class _CompletedRow extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _showCompletedDetail(
+  BuildContext context,
+  ChecklistHistoryRow row,
+  TpStatus tone,
+  String statusLabel,
+) {
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  return showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (BuildContext context) => _HistoryDetailSheet(
+      title: row.documentNo ?? row.templateName ?? l10n.checklistHistoryTitle,
+      subtitle: row.templateName,
+      status: TpStatusChip(
+        status: tone,
+        label: statusLabel,
+        isCompact: true,
+      ),
+      facts: <_HistoryFact>[
+        if (row.assetNo != null)
+          _HistoryFact(Icons.local_shipping_outlined, row.assetNo!),
+        if (row.site != null)
+          _HistoryFact(Icons.location_on_outlined, row.site!),
+        if (row.submittedAt != null)
+          _HistoryFact(Icons.event_outlined, row.submittedAt!),
+        if (row.scorePct != null)
+          _HistoryFact(Icons.speed_outlined, '${row.scorePct}%'),
+        if (row.submittedBy != null)
+          _HistoryFact(Icons.badge_outlined, row.submittedBy!),
+        if (row.supervisorName != null)
+          _HistoryFact(
+            Icons.engineering_outlined,
+            <String?>[row.supervisorName, row.supervisorAt]
+                .whereType<String>()
+                .join(' - '),
+          ),
+        if (row.approverName != null)
+          _HistoryFact(
+            Icons.verified_user_outlined,
+            <String?>[row.approverName, row.approvedAt]
+                .whereType<String>()
+                .join(' - '),
+          ),
+      ],
+      note: row.reviewNote,
+    ),
+  );
+}
+
+Future<void> _showQueuedDetail(
+  BuildContext context,
+  QueuedChecklistSubmission item,
+) {
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  final bool failed = item.needsAttention;
+  return showModalBottomSheet<void>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (BuildContext context) => _HistoryDetailSheet(
+      title: item.templateName ?? l10n.checklistHistoryTitle,
+      subtitle: item.title,
+      status: TpStatusChip(
+        status: failed ? TpStatus.critical : TpStatus.info,
+        label: failed
+            ? l10n.checklistQueueFailedLabel
+            : l10n.checklistQueuePendingLabel,
+        isCompact: true,
+      ),
+      facts: <_HistoryFact>[
+        if (item.assetNo != null)
+          _HistoryFact(Icons.local_shipping_outlined, item.assetNo!),
+        if (item.site != null)
+          _HistoryFact(Icons.location_on_outlined, item.site!),
+        _HistoryFact(Icons.event_outlined, item.createdAt.toLocal().toString()),
+      ],
+      note: item.lastError,
+    ),
+  );
+}
+
+class _HistoryDetailSheet extends StatelessWidget {
+  const _HistoryDetailSheet({
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.facts,
+    this.note,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget status;
+  final List<_HistoryFact> facts;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        TpSpace.lg,
+        TpSpace.sm,
+        TpSpace.lg,
+        TpSpace.xl + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    TpIdentifierText(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    if (subtitle?.trim().isNotEmpty ?? false)
+                      Text(
+                        subtitle!,
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: palette.textSecondary),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              status,
+            ],
+          ),
+          const SizedBox(height: TpSpace.lg),
+          for (final _HistoryFact fact in facts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: TpSpace.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(fact.icon, size: 20, color: palette.textMuted),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(child: Text(fact.value)),
+                ],
+              ),
+            ),
+          if (note?.trim().isNotEmpty ?? false)
+            Container(
+              padding: const EdgeInsets.all(TpSpace.md),
+              decoration: BoxDecoration(
+                color: palette.surfaceSunken,
+                borderRadius: BorderRadius.circular(TpRadius.md),
+                border: Border.all(color: palette.border),
+              ),
+              child: Text(note!.trim()),
+            ),
+          const SizedBox(height: TpSpace.md),
+          TpButton.secondary(
+            label: AppLocalizations.of(context).actionClose,
+            onPressed: () => Navigator.of(context).pop(),
+            isFullWidth: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _HistoryFact {
+  const _HistoryFact(this.icon, this.value);
+
+  final IconData icon;
+  final String value;
 }

@@ -1,0 +1,23 @@
+node:internal/fs/watchers:323
+    const error = new UVException({
+                  ^
+
+Error: EBUSY: resource busy or locked, watch 'C:\Users\Tyre_Engineer\New folder\Tyre_Pulse\tyre_pulse_flutter\build\native_assets\windows\3f3333b2'
+    at FSWatcher.<computed> (node:internal/fs/watchers:323:19)
+    at Object.watch (node:fs:3062:36)
+    at createFsWatchInstance (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:9201:16)
+    at setFsWatchListener (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:9243:14)
+    at NodeFsHandler._watchWithNodeFs (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:9358:20)
+    at NodeFsHandler._handleFile (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:9402:24)
+    at NodeFsHandler._addToNodeFs (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:9576:26)
+Emitted 'error' event on FSWatcher instance at:
+    at FSWatcher._handleError (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:10375:146)
+    at NodeFsHandler._addToNodeFs (file:///C:/Users/Tyre_Engineer/New%20folder/Tyre_Pulse/node_modules/vite/dist/node/chunks/node.js:9581:18) {
+  errno: -4082,
+  syscall: 'watch',
+  code: 'EBUSY',
+  path: 'C:\\Users\\Tyre_Engineer\\New folder\\Tyre_Pulse\\tyre_pulse_flutter\\build\\native_assets\\windows\\3f3333b2',
+  filename: 'C:\\Users\\Tyre_Engineer\\New folder\\Tyre_Pulse\\tyre_pulse_flutter\\build\\native_assets\\windows\\3f3333b2'
+}
+
+Node.js v26.7.0

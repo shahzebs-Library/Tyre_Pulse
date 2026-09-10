@@ -51,6 +51,7 @@ import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_evidence.dart';
 import 'package:uuid/uuid.dart';
 
 const String _washColumns = 'id,asset_no,vehicle_type,wash_date,wash_time,'
@@ -94,6 +95,7 @@ final class SubmitWashInput {
     this.odometerKm,
     this.notes,
     this.photoLocalPaths = const <String>[],
+    this.evidence,
   });
 
   final String assetNo;
@@ -123,6 +125,7 @@ final class SubmitWashInput {
 
   /// Up to [WashPhotoCapture.maxPhotos] local file paths, in display order.
   final List<String> photoLocalPaths;
+  final WashEvidence? evidence;
 }
 
 /// The narrow surface this feature needs from Supabase. Abstract so a
@@ -194,10 +197,17 @@ final class SupabaseWashRepository
     final String asset = input.assetNo.trim();
     final String date = input.washDate ?? todayIsoDate();
     final List<String> photos = <String>[
-      for (final String path in input.photoLocalPaths)
+      for (final String path in input.evidence?.photos ?? input.photoLocalPaths)
         if (path.trim().isNotEmpty) path,
     ];
     final String status = _trimmedOrNull(input.status) ?? kWashDefaultStatus;
+    if (status == 'Completed' &&
+        input.evidence != null &&
+        !input.evidence!.completionConfirmed) {
+      throw ArgumentError(
+        'Completion checks are required for a completed wash',
+      );
+    }
 
     final EnqueueResult result = await _commands.enqueue(
       type: CommandType.washRecord,
@@ -214,7 +224,8 @@ final class SupabaseWashRepository
         'bay': _trimmedOrNull(input.bay),
         'odometer_km': input.odometerKm,
         'status': status,
-        'notes': _trimmedOrNull(input.notes),
+        'notes': input.evidence?.notesWithEvidence(input.notes) ??
+            _trimmedOrNull(input.notes),
         'photos': photos.isEmpty ? null : photos,
         // Deliberately absent: cost, water_liters, duration_min. See the
         // library comment.
@@ -225,6 +236,7 @@ final class SupabaseWashRepository
         for (int i = 0; i < photos.length; i++)
           QueuedMediaAttachment(
             localPath: photos[i],
+            bucket: 'tyre-photos',
             fileName: _basename(photos[i]),
             orderIndex: i,
           ),

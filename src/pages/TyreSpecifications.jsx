@@ -22,7 +22,7 @@ import {
   VEHICLE_TYPES, POSITIONS, SPEED_INDICES, PLY_RATINGS, APPROVED_BRANDS, SMART_DEFAULTS,
   BRAND_META, brandMeta,
 } from '../lib/tyreSpecCatalog'
-import { buildPolicySections, renderTyreSpecPolicyPdf } from '../lib/tyreSpecPolicy'
+import { buildPolicySections, renderTyreSpecPolicyPdf, buildSizeInventoryRows } from '../lib/tyreSpecPolicy'
 import { normalizePosition } from '../lib/tyrePositions'
 import * as procurementApi from '../lib/api/tyreProcurement'
 import { recommend, LIFECYCLE_DEFAULTS } from '../lib/tyreValueAdvisor'
@@ -962,6 +962,7 @@ export default function TyreSpecifications() {
   // Fitment Policy PDF generation state
   const [policyBusy, setPolicyBusy] = useState(false)
   const [policyError, setPolicyError] = useState('')
+  const [sizeSearch, setSizeSearch] = useState('')
 
   // ── In-session audit log (DB does not persist spec history) ──────────────────
 
@@ -1474,10 +1475,69 @@ export default function TyreSpecifications() {
 
   // ── Fitment Policy (branded standard document) ─────────────────────────────────
 
+  // Current fleet tyres, grouped by tyre size (works across every vehicle type,
+  // position, site and country in scope - it groups on the tyre's own `size`
+  // field rather than on vehicle-type derivation, which is often incomplete).
+  const sizeInventory = useMemo(() => {
+    try {
+      return buildSizeInventoryRows({ complianceRows: complianceData, specs }) || []
+    } catch {
+      return []
+    }
+  }, [complianceData, specs])
+
+  const filteredSizeInventory = useMemo(() => {
+    const q = sizeSearch.trim().toLowerCase()
+    if (!q) return sizeInventory
+    return sizeInventory.filter(r =>
+      r.size.toLowerCase().includes(q) ||
+      r.brandsLabel.toLowerCase().includes(q) ||
+      r.approvedBrandsLabel.toLowerCase().includes(q) ||
+      r.vehicleTypesLabel.toLowerCase().includes(q)
+    )
+  }, [sizeInventory, sizeSearch])
+
+  async function exportSizeInventoryExcel() {
+    if (filteredSizeInventory.length === 0) return
+    const XLSX = await import('xlsx')
+    const rows = filteredSizeInventory.map(r => ({
+      'Tyre Size': r.size,
+      'Fitted Qty': r.count,
+      'Brands In Use': r.brandsLabel,
+      'Approved Brands': r.approvedBrandsLabel,
+      'Ply Rating': r.plyRating,
+      'Min Tread (mm)': r.minTreadDepth,
+      'Load Index': r.minLoadIndex,
+      'Speed Index': r.minSpeedIndex,
+      'Recommended Pressure (PSI)': r.recommendedPressure,
+      'Vehicle Types': r.vehicleTypesLabel,
+      'Positions': r.positionsLabel,
+      'Sites Fitted': r.sites.length,
+      'Approved Fitment Standards Matched': r.specCount,
+      'Approved (fitments)': r.compliance.approved,
+      'Non-Standard Size (fitments)': r.compliance.nonStandardSize,
+      'Non-Approved Brand (fitments)': r.compliance.nonApprovedBrand,
+      'Multiple Violations (fitments)': r.compliance.multipleViolations,
+      'No Spec Defined (fitments)': r.compliance.noSpec,
+      'Brands Fitted But Not Approved': r.brandsFittedNotApproved.join(', '),
+    }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{
+      'Report': 'Current Fleet Tyre Inventory by Size',
+      'Sizes included': filteredSizeInventory.length,
+      'Sizes in fleet': sizeInventory.length,
+      'Search applied': sizeSearch.trim() || 'None (whole fleet)',
+      'Scope': country || 'All Countries',
+    }]), 'Report Scope')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Tyre Size Inventory')
+    XLSX.writeFile(wb, 'TyrePulse_Tyre_Size_Inventory.xlsx')
+  }
+
   const policySections = useMemo(() => {
     try {
       return buildPolicySections({
         specs,
+        complianceRows: complianceData,
         company,
         country,
         generatedBy: profile?.email,
@@ -1486,7 +1546,7 @@ export default function TyreSpecifications() {
     } catch {
       return []
     }
-  }, [specs, company, country, profile?.email])
+  }, [specs, complianceData, company, country, profile?.email])
 
   async function downloadPolicyPdf() {
     setPolicyBusy(true)
@@ -1494,6 +1554,7 @@ export default function TyreSpecifications() {
     try {
       await renderTyreSpecPolicyPdf({
         specs,
+        complianceRows: complianceData,
         company,
         branding,
         country,
@@ -2116,6 +2177,89 @@ export default function TyreSpecifications() {
                 the Specification Library will populate the Approved Fitment Standards table.
               </div>
             )}
+
+            {/* Current Fleet Tyres by Size */}
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex-1 flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-[var(--input-bg)] text-purple-400 shrink-0 mt-0.5">
+                    <Gauge size={15} />
+                  </div>
+                  <div>
+                    <p className="text-[var(--text-primary)] font-medium text-sm">Current Fleet Tyres by Size</p>
+                    <p className="text-[var(--text-muted)] text-xs mt-0.5">
+                      Every tyre size currently fitted anywhere in the fleet, with the brands in use,
+                      the approved brand list and the ply rating, minimum tread, load index, speed
+                      index and recommended pressure that apply. Grouped from live tyre records
+                      directly, so it covers every vehicle type, site and country in scope. Included as
+                      an appendix in the downloaded policy PDF.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <input
+                      value={sizeSearch}
+                      onChange={e => setSizeSearch(e.target.value)}
+                      placeholder="Search size, brand, type..."
+                      className="pl-8 pr-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-xs w-48 focus:border-blue-500 outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={exportSizeInventoryExcel}
+                    disabled={filteredSizeInventory.length === 0}
+                    title={filteredSizeInventory.length === 0 ? 'No rows to export' : `Exports ${filteredSizeInventory.length} size(s)`}
+                    className="flex items-center gap-1.5 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-xs px-3 py-1.5 rounded-lg border border-[var(--input-border)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <FileSpreadsheet size={13} /> Export
+                  </button>
+                </div>
+              </div>
+
+              {loadingRecords ? (
+                <div className="p-6 text-center text-[var(--text-muted)] text-sm">Loading current tyre fitments...</div>
+              ) : filteredSizeInventory.length === 0 ? (
+                <div className="p-6 text-center text-[var(--text-muted)] text-sm">
+                  {sizeInventory.length === 0
+                    ? 'No current tyre fitments are on record yet for this scope.'
+                    : 'No sizes match your search.'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[var(--input-border)]">
+                        {['Tyre Size', 'Fitted Qty', 'Brands In Use', 'Approved Brands', 'Ply Rating', 'Min Tread (mm)', 'Load Idx', 'Speed', 'Pressure (PSI)', 'Vehicle Types', 'Non-Conforming'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left text-[10px] uppercase tracking-wide text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSizeInventory.map(r => (
+                        <tr key={r.size} className="border-b border-[var(--input-border)] last:border-0 hover:bg-[var(--input-bg)]/40">
+                          <td className="px-3 py-2 text-[var(--text-primary)] text-xs font-semibold whitespace-nowrap">{r.size}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs">{r.count}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[220px]" title={r.brandsLabel}>{r.brandsLabel}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[220px]" title={r.approvedBrandsLabel}>{r.approvedBrandsLabel}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.plyRating}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minTreadDepth}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minLoadIndex}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.minSpeedIndex}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs whitespace-nowrap">{r.recommendedPressure}</td>
+                          <td className="px-3 py-2 text-[var(--text-secondary)] text-xs max-w-[200px]" title={r.vehicleTypesLabel}>{r.vehicleTypesLabel}</td>
+                          <td className="px-3 py-2 text-xs whitespace-nowrap">
+                            {r.nonConformingCount > 0
+                              ? <span className="text-orange-400 font-medium">{r.nonConformingCount}</span>
+                              : <span className="text-green-400">0</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
             {/* Live preview */}
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">

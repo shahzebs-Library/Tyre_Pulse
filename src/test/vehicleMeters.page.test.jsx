@@ -1,0 +1,102 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+
+const h = vi.hoisted(() => ({ country: 'KSA', load: vi.fn(), save: vi.fn(), correct: vi.fn(), audit: vi.fn() }))
+vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ activeCountry: h.country }) }))
+vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ t: key => key }) }))
+vi.mock('../lib/api/vehicleMeters', () => ({ loadVehicleMeters: h.load, saveVehicleMeters: h.save, correctVehicleMeter: h.correct, meterCorrectionHistory: h.audit }))
+vi.mock('../components/ui/PageHeader', () => ({ default: ({ title, onRefresh }) => <div><h1>{title}</h1><button onClick={onRefresh}>Refresh</button></div> }))
+vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn() }))
+import OdometerLogs from '../pages/OdometerLogs'
+const fleet = { id: 'v1', organisation_id: 'org', country: 'KSA', asset_no: 'TM651', fleet_number: '6633 GXA', region: 'Western', site: 'JEDDAH', vehicle_type: 'TR-MIXER', current_km: 111316 }
+const bundle = () => ({ fleet: [fleet], odometer: [], hours: [] })
+const view = () => <MemoryRouter><OdometerLogs /></MemoryRouter>
+beforeEach(() => { h.country = 'KSA'; h.load.mockReset().mockResolvedValue(bundle()); h.save.mockReset(); h.audit.mockReset().mockResolvedValue([]) })
+describe('vehicle row meter workflow', () => {
+  it('combines vehicle type and meter applicability, preserves drafts, and clears all filters', async () => {
+    h.load.mockResolvedValue({ fleet: [fleet,
+      { ...fleet, id: 'g1', asset_no: 'GEN1', vehicle_type: 'GENERATOR', current_km: null },
+      { ...fleet, id: 't1', asset_no: 'TR1', vehicle_type: 'TRAILER' }], odometer: [], hours: [] })
+    render(view()); await screen.findByLabelText('TM651 new km')
+    fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '111400' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Applicable meters', exact: true }), { target: { value: 'hours' } })
+    expect(screen.getByRole('button', { name: 'Save TM651' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save GEN1' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Save TR1' })).toBeNull()
+    fireEvent.change(screen.getByLabelText('Vehicle type'), { target: { value: 'GENERATOR' } })
+    expect(screen.queryByRole('button', { name: 'Save TM651' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save GEN1' })).toBeTruthy()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Applicable meters', exact: true }), { target: { value: 'both' } })
+    expect(screen.getByText('No vehicles match these filters.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByLabelText('TM651 new km').value).toBe('111400')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Applicable meters', exact: true }), { target: { value: 'hours_only' } })
+    expect(screen.getByRole('button', { name: 'Save GEN1' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Save TM651' })).toBeNull()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Applicable meters', exact: true }), { target: { value: 'km_only' } })
+    expect(screen.getByRole('button', { name: 'Save TR1' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Save GEN1' })).toBeNull()
+  })
+  it('filters history by fleet type and reading unit without hiding the other entry field', async () => {
+    h.load.mockResolvedValue({ fleet: [fleet],
+      odometer: [{ ...fleet, id: 'o1', odometer_km: 111316, reading_date: '2026-09-10' }],
+      hours: [{ ...fleet, id: 'h1', engine_hours: 700, reading_date: '2026-09-10' }] })
+    render(view()); await screen.findByLabelText('TM651 new km')
+    fireEvent.change(screen.getByLabelText('Vehicle type'), { target: { value: 'TR-MIXER' } })
+    fireEvent.change(screen.getByLabelText('Reading unit'), { target: { value: 'hours' } })
+    expect(screen.getByLabelText('TM651 new km')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'All readings', exact: true }))
+    expect(screen.getByText('700 hours')).toBeTruthy()
+    expect(screen.queryByText('111,316 km')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Vehicle type'), { target: { value: '__unknown' } })
+    expect(screen.getByText('No readings match these filters.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('111,316 km')).toBeTruthy()
+    expect(screen.getByText('700 hours')).toBeTruthy()
+  })
+  it('searches by registration and saves kilometres and hours directly in one row', async () => {
+    h.save.mockResolvedValue({ vehicle: { ...fleet, current_km: 111400, current_engine_hours: 700 }, odometer: { ...fleet, id: 'o1', odometer_km: 111400, source: 'Web Manual', reading_date: '2026-09-10' }, hours: { ...fleet, id: 'h1', engine_hours: 700, source: 'Web Manual', reading_date: '2026-09-10' } })
+    render(view())
+    await screen.findByRole('button', { name: 'Save TM651' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search vehicles and readings' }), { target: { value: '6633 GXA' } })
+    fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '111400' } })
+    fireEvent.change(screen.getByLabelText('TM651 new hours'), { target: { value: '700' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save TM651' }))
+    await screen.findByText(/Saved 111,400 km \+ 700 hours/)
+    expect(h.save).toHaveBeenCalledTimes(1)
+    expect(h.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'v1', country: 'KSA' }), expect.objectContaining({ km: '111400', hours: '700', requestId: expect.any(String) }))
+    expect(screen.getByLabelText('TM651 new km').value).toBe('')
+  })
+  it('retains failed entries and reuses the request key on retry', async () => {
+    h.save.mockRejectedValue(new Error('Network error'))
+    render(view()); await screen.findByLabelText('TM651 new km')
+    fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '111400' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save TM651' }))
+    await screen.findByRole('alert')
+    expect(screen.getByLabelText('TM651 new km').value).toBe('111400')
+    const key = h.save.mock.calls[0][1].requestId
+    fireEvent.click(screen.getByRole('button', { name: 'Save TM651' }))
+    await waitFor(() => expect(h.save).toHaveBeenCalledTimes(2))
+    expect(h.save.mock.calls[1][1].requestId).toBe(key)
+  })
+  it('keeps drafts while filtering and prevents unconfirmed lower readings', async () => {
+    render(view()); await screen.findByLabelText('TM651 new km')
+    fireEvent.change(screen.getByLabelText('TM651 new km'), { target: { value: '100' } })
+    expect(screen.getByRole('button', { name: 'Save TM651' }).disabled).toBe(true)
+    const search = screen.getByRole('textbox', { name: 'Search vehicles and readings' })
+    fireEvent.change(search, { target: { value: 'no-match' } })
+    fireEvent.change(search, { target: { value: 'TM651' } })
+    expect(screen.getByLabelText('TM651 new km').value).toBe('100')
+    expect(h.save).not.toHaveBeenCalled()
+  })
+  it('does not leak an old country response or draft into the next country', async () => {
+    let finishOld
+    h.load.mockImplementation(country => country === 'KSA' ? new Promise(resolve => { finishOld = resolve }) : Promise.resolve({ ...bundle(), fleet: [{ ...fleet, id: 'v2', country: 'UAE', asset_no: 'UAE1' }] }))
+    const rendered = render(view())
+    h.country = 'UAE'; rendered.rerender(view())
+    await screen.findByLabelText('UAE1 new km')
+    await act(async () => { finishOld(bundle()) })
+    expect(screen.queryByLabelText('TM651 new km')).toBeNull()
+  })
+})

@@ -1,0 +1,56 @@
+import { JUMP_MIN_KM } from '../../lib/odometerAnalytics'
+import { meterToday, meterSource, readingDate, receivedDate } from '../../lib/vehicleMeters'
+
+const number = value => value == null ? 'No reading' : Number(value).toLocaleString()
+
+export default function MeterRow({ vehicle, draft, status, onChange, onSave, onHistory }) {
+  const row = vehicle
+  const mode = draft?.mode ?? (row.supportsKm && row.supportsHours ? 'both' : row.supportsKm ? 'km' : row.supportsHours ? 'hours' : '')
+  const value = draft || { km: '', hours: '', date: meterToday(row.country), notes: '', confirmed: false }
+  const warning = (value.km !== '' && row.km != null && (Number(value.km) < row.km || Number(value.km) - row.km >= JUMP_MIN_KM)) ||
+    (value.hours !== '' && row.engineHours != null && Number(value.hours) < row.engineHours)
+  const saving = status?.saving
+  const change = (field, input) => onChange(row, field, input)
+  function meterCell(kind, label, current, last) {
+    const enabled = mode === kind || mode === 'both'
+    const matchesCurrent = last && Number(last[kind === 'km' ? 'odometer_km' : 'engine_hours']) === current
+    return <td className="px-4 py-3 align-top min-w-[180px]">
+      <div className="font-semibold tabular-nums text-[var(--text-primary)]">{number(current)} {current == null ? '' : label}</div>
+      <div className="text-xs text-[var(--text-muted)] mt-1">{matchesCurrent ? readingDate(last.reading_date) : 'Measurement date not recorded'}</div>
+      {matchesCurrent && <div className="text-xs text-[var(--text-muted)]" title={`Received ${receivedDate(last.created_at, row.country)}`}>{meterSource(last.source)}</div>}
+      {enabled ? <input className="input w-full mt-2" aria-label={`${row.asset_no} new ${label}`} type="number" min="0" step={kind === 'km' ? '1' : '0.1'} inputMode="decimal"
+        placeholder={`New ${label}`} value={value[kind]} disabled={saving} onChange={e => change(kind, e.target.value)} />
+        : <div className="text-xs text-[var(--text-muted)] mt-3">Not selected</div>}
+    </td>
+  }
+  return <>
+    <tr className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]/40">
+      <td className="px-4 py-3 align-top min-w-[190px]">
+        <button className="font-semibold text-[var(--text-primary)] underline decoration-dotted underline-offset-4" onClick={() => onHistory(row)}>{row.asset_no}</button>
+        <div className="text-xs text-[var(--text-muted)] mt-1">{row.registration_no || row.fleet_number || 'No registration'} · {row.vehicle_type || 'Type not recorded'}</div>
+        <label className="block text-xs text-[var(--text-muted)] mt-2">Applicable meters
+          <select className="input w-full mt-1 text-xs" aria-label={`${row.asset_no} applicable meters`} value={mode} disabled={saving} onChange={e => change('mode', e.target.value)}>
+            <option value="">Choose meters</option><option value="km">Kilometres</option><option value="hours">Engine hours</option><option value="both">Kilometres + hours</option>
+          </select>
+        </label>
+      </td>
+      <td className="px-4 py-3 align-top text-sm"><div>{row.region || 'Region not recorded'}</div><div className="text-xs text-[var(--text-muted)] mt-1">{row.site || 'Site not recorded'} · {row.country || 'Country not recorded'}</div></td>
+      {meterCell('km', 'km', row.km, row.kmLog)}
+      {meterCell('hours', 'hours', row.engineHours, row.hoursLog)}
+      <td className="px-4 py-3 align-top min-w-[180px]">
+        <input className="input w-full" aria-label={`${row.asset_no} reading date`} type="date" max={meterToday(row.country)} value={value.date} disabled={saving} onChange={e => change('date', e.target.value)} />
+        <input className="input w-full mt-2" aria-label={`${row.asset_no} notes`} placeholder="Optional note" maxLength={4000} value={value.notes} disabled={saving} onChange={e => change('notes', e.target.value)} />
+        {warning && <label className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-300 mt-2">
+          <input type="checkbox" checked={value.confirmed} disabled={saving} onChange={e => change('confirmed', e.target.checked)} />
+          I checked this lower reading or large increase. Lower readings may be flagged and may not lower the fleet meter.
+        </label>}
+      </td>
+      <td className="px-4 py-3 align-top min-w-[155px]">
+        <button className="btn-primary w-full disabled:opacity-50" aria-label={`Save ${row.asset_no}`} disabled={saving || !mode || row.duplicate || (value.km === '' && value.hours === '') || (warning && !value.confirmed)} onClick={() => onSave(row)}>{saving ? 'Saving…' : 'Save'}</button>
+        <button className="btn-secondary w-full mt-2 text-xs" onClick={() => onHistory(row)}>History</button>
+        {row.duplicate && <p className="text-xs text-amber-600 mt-2">Duplicate fleet identity; saving disabled.</p>}
+        {status?.message && <p role={status.error ? 'alert' : 'status'} className={`text-xs mt-2 ${status.error ? 'text-red-600 dark:text-red-300' : 'text-[var(--text-secondary)]'}`}>{status.message}</p>}
+      </td>
+    </tr>
+  </>
+}
